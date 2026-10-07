@@ -170,12 +170,15 @@
       + '</div>';
     var look = d.look || [];
     if (look.length) h += '<h4>Needs a look</h4>' + look.map(function (v) { return row(v, true); }).join('');
-    var recent = d.recent || [];
+    /* wave210b (Steel, 06/10/26: "there's 2 sections with the same list of meetings ... Can we combine the 2?"):
+       a filed meeting is in the Archive below, so this card lists only what Loom sent that was not filed */
+    var recent = (d.recent || []).filter(function (v) { return v.status !== 'filed'; });
     if (recent.length) {
       var shown = S.showAll ? recent : recent.slice(0, 6);
-      h += '<h4>Latest from Loom</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
+      h += '<h4>Not filed</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
       if (recent.length > 6) h += '<button type="button" class="more" data-w162more="1">' + (S.showAll ? 'Show fewer' : 'Show all ' + recent.length) + '</button>';
     }
+    h += '<p class="s" style="margin:8px 0 0">Meetings filed from Loom are in the Archive below.</p>';
     h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, one-on-ones for the people speaking in them and nobody else (you see yours only), and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
       + (d.archive_only ? plural(d.archive_only, 'older meeting is', 'older meetings are') + ' kept for the archive and Ask the Hub only (no tasks came from them). ' : '')
       + (c.personal ? plural(c.personal, 'personal recording was', 'personal recordings were') + ' left out; nothing about them is kept. ' : '')

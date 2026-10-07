@@ -78,8 +78,7 @@ const LOOM = {
       const row = (id) => { const el = c.querySelector('[data-w162row="' + id + '"]'); return el ? { text: el.innerText.replace(/\s+/g, ' '), open: !!el.querySelector('a[href^="#tx/"]'), loom: !!el.querySelector('a.out') } : null; };
       return { masked: row('d4'.repeat(16)), team: row('e5'.repeat(16)), foot: (c.querySelector('.foot') || {}).innerText || '' };
     });
-    ok('the Loom card shows an admin who was not in a one-on-one only that one was filed: no title, names, link or Open', card && card.masked && /Only its speakers/i.test(card.masked.text) && /A one-on-one/.test(card.masked.text) && /only the people speaking in it see it/.test(card.masked.text) && !card.masked.open && !card.masked.loom, card);
-    ok('a team meeting still shows its title, people, Open and Loom', card && card.team && /Marketing Meeting/.test(card.team.text) && card.team.open && card.team.loom, card);
+    ok('wave210b: filed meetings (a masked one-on-one, a team meeting) are not repeated in the Loom card', card && !card.masked && !card.team && /one-on-ones for the people speaking in them/.test(card.foot), card);
     ok('the card says one-on-ones go to the people speaking in them, and counts the older meetings kept for the archive and Ask the Hub only', card && /one-on-ones for the people speaking in them and nobody else/.test(card.foot) && /73 older meetings are kept for the archive and Ask the Hub only \(no tasks came from them\)/.test(card.foot), card && card.foot);
     const fileOpts = await f.ev(async () => {
       const b = document.querySelector('#w162loom [data-w162file]'); if (!b) return null; b.click();

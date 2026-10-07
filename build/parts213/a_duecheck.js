@@ -1,0 +1,189 @@
+/* =====================================================================
+   WA v213 The due-date check (06/10/26)
+   =====================================================================
+   Steel (06/10/26), after wave210 showed 52 of 62 recent meeting tasks had no due date: "I'd rather a pop up when the
+   user gets on to the hub that they should [set] their due dates for the tasks or confirm the due dates provided make
+   sense" (new and existing open tasks); then "it should pop with the best assumptions of due dates and allow the user
+   to make edits if needed but they [should not] be able to exit until they confirm their due dates. Also overdue tasks
+   should also pop to ask if items are done and if they aren't to push the due date to a realistic date".
+
+   - On opening the Hub, a pop-up (#w213pop) lists the person's open tasks that are overdue, have no due date, or
+     carry a date a meeting set that nobody confirmed (my_due_date_check(): owner by first name, or assigned).
+   - Each comes filled with the best guess: their team's next meeting from the Hub calendar, or the one after when
+     the next is less than two days away (a date the meeting set stays as it is). Next meeting / Following meeting
+     buttons and a date field change it. An overdue task asks Done or Still open (push to a date).
+   - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
+     offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
+     change_log line; the pop-up comes back next visit only for what is still overdue or undated.
+   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
+(function () {
+  'use strict';
+  if (window.__wa213) return; window.__wa213 = true;
+  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
+
+  var css = ''
+    + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
+    + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
+    + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
+    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
+    + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
+    + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
+    + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
+    + '#w213pop .row.isdone{opacity:.6;}'
+    + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
+    + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
+    + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
+    + '#w213pop .ctl input[type=date]{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;}'
+    + '#w213pop .chip{border:1px solid var(--wa-line,#d8d4c8);background:#FFFAF2;border-radius:14px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:#333;}'
+    + '#w213pop .chip.on{background:' + GREEN + ';border-color:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .seg{display:inline-flex;border:1px solid var(--wa-line,#d8d4c8);border-radius:8px;overflow:hidden;}'
+    + '#w213pop .seg button{border:0;background:#FFFAF2;font:inherit;font-size:12.5px;padding:4px 10px;cursor:pointer;}'
+    + '#w213pop .seg button.on{background:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .ft{padding:12px 22px;border-top:1px solid var(--wa-line,#e4e0d4);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    + '#w213pop .save{background:' + GOLD + ';color:#1F201E;border:0;border-radius:9px;padding:9px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}'
+    + '#w213pop .save[disabled]{opacity:.6;cursor:default;}'
+    + '#w213pop .later{background:none;border:0;color:#555;text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;}'
+    + '#w213pop .err{color:' + FLAG + ';font-size:12.5px;flex-basis:100%;}'
+    + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
+    + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
+  function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function busyElsewhere() {
+    var p = document.getElementById('w177pop'); if (p && p.offsetParent !== null && getComputedStyle(p).display !== 'none') return true;
+    var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
+    return false;
+  }
+
+  async function load() {
+    try {
+      var r = await db.rpc('my_due_date_check');
+      if (r && r.error) return null;
+      return (r && r.data) || [];
+    } catch (e) { return null; }
+  }
+
+  function rowHtml(r) {
+    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
+    var meta = [team(r.department)];
+    if (isOver) meta.push('was due ' + day(r.due_date));
+    else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
+    if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
+    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' · ')) + '</div><div class="ctl">';
+    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
+    if (!dn) {
+      h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
+        + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting · ' + E(day(r.next_meeting, true)) + '</button>'
+        + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following · ' + E(day(r.following_meeting, true)) + '</button>';
+    }
+    return h + '</div></div>';
+  }
+
+  function html() {
+    var rows = S.rows || [];
+    var over = rows.filter(function (r) { return r.why === 'overdue'; });
+    var none = rows.filter(function (r) { return r.why === 'no_date'; });
+    var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
+    var bits = [];
+    if (over.length) bits.push(over.length + ' overdue');
+    if (none.length) bits.push(none.length + ' with no due date');
+    if (set.length) bits.push(set.length + ' dated by a meeting');
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
+      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team’s next meeting. Change any that don’t fit'
+      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
+    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
+    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
+    var n = rows.length;
+    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
+      + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
+      + '<span class="note">You can change any date later on the task itself.</span>'
+      + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
+    return h;
+  }
+
+  function paint() {
+    var el = document.getElementById('w213pop');
+    if (!el) { el = document.createElement('div'); el.id = 'w213pop'; document.body.appendChild(el); wire(el); }
+    var sc = el.querySelector('.bd'), top = sc ? sc.scrollTop : 0;
+    el.innerHTML = html();
+    var sc2 = el.querySelector('.bd'); if (sc2) sc2.scrollTop = top;
+  }
+  function close() { var el = document.getElementById('w213pop'); if (el) el.remove(); S.gone = true; document.removeEventListener('keydown', trapKey, true); }
+  function trapKey(e) {
+    if (!document.getElementById('w213pop')) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); }
+  }
+
+  function wire(el) {
+    el.addEventListener('click', function (e) {
+      var t = e.target, b;
+      if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
+      if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
+      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
+      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
+      if (t.closest('[data-w213save]')) { save(); return; }
+      if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
+    });
+    el.addEventListener('change', function (e) {
+      var i = e.target.closest('[data-w213date]'); if (!i) return;
+      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
+    });
+    document.addEventListener('keydown', trapKey, true);
+  }
+
+  async function save() {
+    if (S.busy) return;
+    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    (S.rows || []).forEach(function (r) {
+      var id = r.task_id;
+      if (S.done[id]) { items.push({ id: id, done: true }); return; }
+      var v = S.pick[id];
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
+      items.push({ id: id, due: v });
+    });
+    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
+    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
+    if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
+    S.busy = true; S.err = ''; paint();
+    try {
+      var r = await db.rpc('confirm_due_dates', { p: items });
+      if (r && r.error) throw new Error(r.error.message || 'could not save');
+      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
+      close();
+      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
+      try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
+    } catch (e) {
+      S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
+    }
+  }
+
+  async function start() {
+    if (S.shown || S.gone) return;
+    if (!staff()) return;
+    var rows = await load();
+    if (!rows || !rows.length) return;
+    S.rows = rows; S.pick = {}; S.done = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
+    var tries = 0;
+    (function wait() {
+      if (S.shown || S.gone) return;
+      if (busyElsewhere() && tries++ < 120) { setTimeout(wait, 1000); return; }
+      S.shown = true; paint();
+      try { var f = document.querySelector('#w213pop [data-w213save]'); if (f) f.focus(); } catch (e) { /* fine */ }
+    })();
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa = startApp;
+    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 1500); };
+  }
+  window.w213 = { start: start, state: function () { return S; } };
+})();

@@ -50,25 +50,18 @@ const HOOK = `(function(){ window.__rpcLog = []; window.__fnLog = []; window.__f
   ok('the Loom card sits at the top of the Transcript archive, after the masthead and before Add a transcript', b && b.inSection && /w118mast/.test(b.prev || '') && /Add a transcript/.test(b.next || ''), b && [b.prev, b.next]);
   ok('it says when the last pull ran, what it did and when the next one is', b && /Last pull Friday, September 25 at 7:30 AM: 3 meetings filed, 2 need a look, 1 waiting for its transcript, 1 skipped\. Next pull: Monday, September 28 at 7:30 AM\./.test(b.when || ''), b && b.when);
   ok('the counts since the start date', b && b.tiles.join('|') === '7filed since Sep 2|2need a look|1waiting for Loom|3skipped', b && b.tiles);
-  ok('Needs a look comes first, then the latest from Loom', b && b.heads.join('|') === 'Needs a look|Latest from Loom', b && b.heads);
+  ok('Needs a look comes first, then what was not filed (wave210b)', b && b.heads.join('|') === 'Needs a look|Not filed', b && b.heads);
   const board = b && b.rows.find(r => r.id === 'a'.repeat(32));
   ok('a recording that needs a look: its reason, date, length and speakers, File it and Skip', board && board.chip === 'Needs a look' && /A board meeting: an admin decides where it goes/.test(board.s.join(' ')) && /Sep 20 · 1 h/.test(board.s[0]) && /Steel MacDonald, Suhaib Abdillahi, Board Member One, Board Member Two and 1 more/.test(board.s[0]) && board.acts.join('|') === 'Loom|File it|Skip', board);
-  const ops = b && b.rows.find(r => r.id === 'c'.repeat(32));
-  ok('a team meeting shows Everyone, its team and opens in the archive', ops && ops.chip === 'Everyone' && /Operations Montreal\. Team meeting, so everyone sees it/.test(ops.s.join(' ')) && ops.open === '#tx/170' && ops.acts.indexOf('File it') < 0, ops);
-  const one = b && b.rows.find(r => r.id === 'd'.repeat(32));
-  ok('a one-on-one shows Confidential with how many people', one && /^Confidential · 6$/.test(one.chip), one && one.chip);
-  const lead = b && b.rows.find(r => r.id === 'e'.repeat(32));
-  ok('a leadership meeting shows Leaders', lead && lead.chip === 'Leaders' && lead.s.indexOf('Leadership meeting, so the leaders see it') >= 0, lead);
+  /* wave210b: filed meetings are in the Archive, not repeated in the card */
+  ok('filed meetings are not listed in the card (they are in the Archive)', b && !b.rows.some(r => ['c', 'd', 'e', '2', '3'].some(k => r.id === k.repeat(32))), b && b.rows.map(r => r.id));
+  ok('the card says filed meetings are in the Archive', await f.ev(() => /Meetings filed from Loom are in the Archive below\./.test(document.getElementById('w162loom').textContent)));
   const solo = b && b.rows.find(r => r.id === 'f'.repeat(32));
   ok('a skipped recording can still be filed', solo && solo.chip === 'Skipped' && solo.acts.join('|') === 'Loom|File it', solo);
-  ok('six of the latest show, with Show all', b && b.rows.filter(r => !/^[ab]+$/.test(r.id)).length === 6 && b.more === 'Show all 7', b && [b.rows.length, b.more]);
+  ok('the two not filed show (skipped, waiting), no Show all', b && b.rows.filter(r => !/^[ab]+$/.test(r.id)).length === 2 && b.more === null, b && [b.rows.length, b.more]);
   ok('the note says what is filed how, the personal recordings left out, that Loom is only read and that it is not connected yet', b && /weekly team meetings are filed for everyone/.test(b.foot) && /1 personal recording was left out; nothing about them is kept/.test(b.foot) && /only reads Loom, as hub@welfareavenue\.com/.test(b.foot) && /Not connected through Atlassian yet\./.test(b.foot), b && b.foot);
   ok('not connected: a Connect Loom button beside Pull now', await f.ev(() => { const x = document.querySelector('#w162loom .hd [data-w162connect]'); return !!x && /Connect Loom/.test(x.textContent); }));
   if (SHOTS) await f.page.screenshot({ path: SP + 'w162_card.png', fullPage: false });
-  await f.ev(() => document.querySelector('[data-w162more]').click());
-  await f.page.waitForTimeout(150);
-  b = await f.ev(read);
-  ok('Show all shows the seven', b && b.rows.length === 9 && b.more === 'Show fewer', b && [b.rows.length, b.more]);
   /* File it */
   await f.ev(() => document.querySelector('[data-w162row="' + 'b'.repeat(32) + '"] [data-w162file]').click());
   await f.page.waitForTimeout(150);
