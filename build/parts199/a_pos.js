@@ -219,7 +219,7 @@
 
   function sortGrade() { return !!P.sortGrade; }
   function gradeAvg(c) { var a = avgOf(c.id); return a ? a.avg : -1; }
-  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (window.w209 ? w209.barBits() : '') + (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
+  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (window.w209 ? w209.barBits() : '') + (window.w211 && w211.barBits ? w211.barBits() : '') + (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
 
   /* ---------- interviews: a day and a time (Steel, 03/10/26: "Those in interview stage should have a day and time") ---------- */
   function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }

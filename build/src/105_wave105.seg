@@ -104,12 +104,13 @@
       var fy = w105FY();
       var r = await db.from('wa_timeoff').select('*').order('created_at', { ascending: false });
       var rows = (r.data) || [];
+      window.__w105rows = rows;   /* wave215: the walkthroughs watch the list */
       var pend = rows.filter(function (t) { return t.status === 'requested'; });
       var html = '';
       if (pend.length) {
         html += '<h3 class="block">Waiting on a decision (' + pend.length + ')</h3><table><tbody>';
         pend.forEach(function (t) {
-          html += '<tr><td><b>' + esc(t.name) + '</b><div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + (t.note ? ': ' + esc(t.note) : '') + '</div></td>'
+          html += '<tr><td><b>' + esc(t.name) + '</b>' + (t.practice ? ' <span class="w215prac">Practice</span>' : '') + '<div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + (t.note ? ': ' + esc(t.note) : '') + '</div></td>'
             + '<td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + '<div class="w105mut">' + t.days + ' day' + (t.days === 1 ? '' : 's') + '</div></td>'
             + '<td style="white-space:nowrap"><button class="btn mini" data-w105ap="' + t.id + '">Approve</button> <button class="btn ghost mini" data-w105de="' + t.id + '">Decline</button></td></tr>';
         });
@@ -117,7 +118,7 @@
       } else {
         html += '<p class="read">No requests waiting.</p>';
       }
-      var appr = rows.filter(function (t) { return t.status === 'approved' && t.start_date >= fy.start; });
+      var appr = rows.filter(function (t) { return t.status === 'approved' && !t.practice && t.start_date >= fy.start; });   /* wave215: practice never counts */
       var per = {};
       appr.forEach(function (t) {
         var p = per[t.name] = per[t.name] || {};
@@ -191,6 +192,7 @@
       var st = document.getElementById('w212lst').value, n = document.getElementById('w212ln').value.trim();
       var row = { email: sel.value, name: opt.getAttribute('data-name') || 'unknown', category: document.getElementById('w212lc').value || 'other', start_date: s, end_date: e, days: w105Days(s, e), status: st, note: n || null };
       if (st === 'approved') { row.decided_by = w105Me().email; row.decided_at = new Date().toISOString(); }
+      if (window.w215 && w215.practice()) row.practice = true;
       this.disabled = true;
       var ins = await db.from('wa_timeoff').insert(row);
       if (ins.error) { this.disabled = false; toast('Could not save it'); return; }
@@ -367,9 +369,10 @@
       var n = (document.getElementById('w105rn') || {}).value || '';
       if (!s || !e || e < s) { toast('Pick valid dates'); return; }
       this.disabled = true;
-      var ins = await db.from('wa_timeoff').insert({ email: me.email, name: me.name, category: c, start_date: s, end_date: e, days: w105Days(s, e), status: 'requested', note: n || null });
+      var prac = !!(window.w215 && w215.practice());   /* wave215: a request made in a walkthrough is practice */
+      var ins = await db.from('wa_timeoff').insert({ email: me.email, name: me.name, category: c, start_date: s, end_date: e, days: w105Days(s, e), status: 'requested', note: n || null, practice: prac });
       if (ins.error) { this.disabled = false; toast('Could not send it'); return; }
-      try {
+      if (!prac) try {
         await db.from('dept_requests').insert({
           type_key: 'time-off', department: 'hr',
           title: 'Time off: ' + me.name + ', ' + s + ' to ' + e + ' (' + (TO_CATS[c] || c) + ')',
@@ -377,8 +380,9 @@
         });
       } catch (e2) { /* the wa_timeoff row is the source of truth */ }
       closeModal();
-      toast('Request sent to HR');
+      toast(prac ? 'Practice request saved' : 'Request sent to HR');
       w105MyRender();
+      if (document.getElementById('w105tobody')) w105TimeRender();   /* wave215: asked from the HR centre's Time off */
     });
   }
   window.w105ReqModal = w105ReqModal; /* wave123: the Requests page opens the time off form */

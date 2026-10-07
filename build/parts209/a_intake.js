@@ -148,9 +148,9 @@
         }
         var lk = [cvUrl, val('w209l')].filter(Boolean);
         var res2 = await db.rpc('wa209_intake', { p: { name: name, email: email || null, phone: phone || null, position_id: val('w209pos') || null, role: val('w209r') || null, source: src, applied_at: applied,
-          message: msg || null, links: lk } });
+          message: msg || null, links: lk, practice: !!(window.w215 && w215.practice()) } });   /* wave215: added in a walkthrough = practice */
         if (res2 && res2.error) throw res2.error; r = (res2 && res2.data) || {};
-        if (cvUrl && r.candidate_id && r.to !== 'volunteers' && !r.duplicate) {
+        if (cvUrl && r.candidate_id && r.to !== 'volunteers' && !r.duplicate && !r.practice) {   /* wave215: practice leaves the Resumes folders alone */
           try { var fc = await recruit({ action: 'file_cv', id: r.candidate_id, url: cvUrl }); r.cvNote = fc && fc.ok ? (fc.filed ? (fc.copied ? 'CV filed in ' + fc.where : 'CV already in ' + fc.where) : (fc.note || '')) : ('CV not filed: ' + ((fc && fc.error) || 'unknown')); }
           catch (x) { r.cvNote = 'CV not filed: ' + (x.message || x); }
         }

@@ -43,7 +43,7 @@
   /* ---------- the card and the sheet ---------- */
   function cardBits(c) {
     if (!c) return '';
-    var a = answered(c), out = '';
+    var a = answered(c), out = c.practice ? '<span class="w215prac" title="Made in an Avenue Academy walkthrough: never sent to Slack or texted">Practice</span>' : '';
     if (a === 'yes') out += '<span class="w211pill ok">Said yes</span>';
     else if (c.interest_texted_at && (c.status === 'new' || c.status === 'reviewing')) out += '<span class="w211pill">Texted ' + E(short(c.interest_texted_at)) + '</span>';
     if (c.offer_sent_at && (c.status === 'offer' || c.status === 'hired')) out += '<span class="w211pill ok">Offer sent ' + E(short(c.offer_sent_at)) + '</span>';
@@ -116,32 +116,46 @@
   function defaults(c) {
     var d = new Date(); d.setDate(d.getDate() + 7);
     var fr = /\b(Fran\u00e7ais|French)\b/i.test(String(c.summary || ''));
-    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: 4, start: '', respond_by: iso(d), signer: myName(), signer_title: '', note: '' };
+    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: 4, start: '', respond_by: iso(d), signer_email: '', signer_title: '', note: '' };
   }
   function askOffer(id) {
     var c = cand(id); if (!c || !staff()) return;
     M = { kind: 'offer', id: c.id, data: null, busy: false, err: '', f: defaults(c), preview: '' }; paintOffer();
-    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; M.data = r; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; if (!M.f.signer) M.f.signer = r.signer; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
+    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; M.data = r; if (!M.f.signer_email) M.f.signer_email = r.signer_email || ''; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
   }
   function readOffer() {
-    ['email', 'lang', 'reports_to', 'hours', 'start', 'respond_by', 'signer', 'signer_title', 'note'].forEach(function (k) { var x = document.getElementById('w211o_' + k); if (x) M.f[k] = x.value; });
+    ['email', 'lang', 'reports_to', 'hours', 'start', 'respond_by', 'signer_email', 'signer_title', 'note'].forEach(function (k) { var x = document.getElementById('w211o_' + k); if (x) M.f[k] = x.value; });
   }
   function paintOffer() {
     if (M.kind !== 'offer') return;
     var c = cand(M.id) || {}, f = M.f, d = M.data;
     var inp = function (k, label, type, extra) { return '<label for="w211o_' + k + '">' + label + '</label><input id="w211o_' + k + '" type="' + (type || 'text') + '" value="' + E(f[k]) + '"' + (extra || '') + '>'; };
-    var test = d && d.mail_mode !== 'live';
-    panel('<h3 id="w211h">Send the offer letter to ' + E(c.name || '') + '?</h3><p class="w197note">' + E((d && d.role) || c.role || '') + '. The letter is saved as a Google Doc in Recruitment > Offer Letters and emailed as a PDF with your note.</p>' +
+    var test = d && d.mail_mode !== 'live' && !d.practice;
+    var signers = (d && d.signers) || (f.signer_email ? [{ email: f.signer_email, name: f.signer_email, has_sig: true }] : []);
+    panel('<h3 id="w211h">Send the offer letter to ' + E(c.name || '') + '?</h3><p class="w197note">' + E((d && d.role) || c.role || '') + '. The letter is a signed PDF in the Welfare Avenue brand, saved in Recruitment > Offer Letters and emailed with your note; the signer gets a copy and their replies.</p>' +
+      (d && d.practice ? '<p class="w211warn">Practice: the letter is saved as PRACTICE and emailed to the practice applicant\u2019s own address (yours), even while email is in test mode.</p>' : '') +
       (test ? '<p class="w211warn">Email is in test mode: the email goes to the test inboxes (' + E(d.test_to) + '), not to them. Turning email on is an admin setting (CRM).</p>' : '') +
       '<div class="w211two">' + inp('email', 'Their email', 'email') + '<div><label for="w211o_lang">Language</label><select id="w211o_lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></div></div>' +
       '<div class="w211two">' + inp('reports_to', 'Reports to (optional)') + inp('hours', 'Hours a week', 'number', ' min="1" max="40"') + '</div>' +
       '<div class="w211two">' + inp('start', 'Start date (optional)', 'date') + inp('respond_by', 'Reply by', 'date') + '</div>' +
-      '<div class="w211two">' + inp('signer', 'Signed by') + inp('signer_title', 'Their title') + '</div>' +
+      '<div class="w211two"><div><label for="w211o_signer_email">Signed by</label><select id="w211o_signer_email">' + signers.map(function (x) { return '<option value="' + E(x.email) + '"' + (x.email === f.signer_email ? ' selected' : '') + '>' + E(x.name) + (x.has_sig ? '' : ' (no signature yet)') + (d && x.email === d.default_signer ? ' \u00b7 default' : '') + '</option>'; }).join('') + '</select></div>' + inp('signer_title', 'Their title') + '</div>' +
+      (d && d.signers && f.signer_email && d.default_signer !== f.signer_email ? '<div class="acts">' + btn('Make ' + E((signers.filter(function (x) { return x.email === f.signer_email; })[0] || {}).name || 'them') + ' the default signer', 'data-w211a="osigner"', 'sm') + '</div>' : '') +
+      (d && d.signer_email === f.signer_email && !d.signer_has_sig ? '<p class="w211warn">' + E(d.signer || 'The signer') + ' has not saved a signature yet, so the letter has their name only. Save it in Volunteer Manager &gt; Sign-offs &gt; My signature.</p>' : '') +
       '<label for="w211o_note">The offer note (in the letter and the email)</label><textarea id="w211o_note" rows="4" placeholder="A personal line: why them, what comes next">' + E(f.note) + '</textarea>' +
       (M.err ? '<p class="w211err" role="alert">' + E(M.err) + '</p>' : '') +
       '<div class="acts">' + btn('Preview the letter', 'data-w211a="oprev"', 'sm') + '</div>' +
       (M.preview ? '<iframe class="w211prev" title="The offer letter" sandbox="" srcdoc="' + E(M.preview) + '"></iframe>' : '') +
       '<div class="acts">' + btn(M.busy ? 'Working\u2026' : 'Create the letter and email it', 'data-w211a="osend" data-mail="1"' + (M.busy ? ' disabled' : ''), 'pri') + btn('Create the letter only', 'data-w211a="osend" data-mail="0"' + (M.busy ? ' disabled' : '')) + btn('Not now', 'data-w211a="shut"') + '</div>');
+  }
+  async function signerChanged() {
+    readOffer(); M.f.signer_title = ''; M.preview = '';
+    try { var r = await fn({ action: 'offer_preview', id: M.id, f: M.f }); M.data = r; M.f.signer_title = r.signer_title || ''; } catch (e) { M.err = e.message; }
+    paintOffer();
+  }
+  async function makeDefaultSigner() {
+    readOffer();
+    try { await fn({ action: 'offer_signer_set', email: M.f.signer_email }); if (M.data) M.data.default_signer = M.f.signer_email; toastS('Default signer saved'); } catch (e) { M.err = e.message; }
+    paintOffer();
   }
   async function previewOffer() {
     readOffer(); M.err = '';
@@ -155,7 +169,7 @@
     M.busy = true; M.err = ''; paintOffer();
     try {
       var r = await fn({ action: 'offer_send', id: M.id, f: M.f, email: !!mail }); var id = M.id; shut();
-      toastS(r.emailed ? (r.emailed.mode === 'live' ? 'Offer letter emailed' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters');
+      toastS(r.emailed ? (r.emailed.mode === 'live' || r.emailed.mode === 'practice' ? 'Offer letter emailed (a copy to ' + (r.signer || 'the signer') + ')' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters');
       await reload(id);
     } catch (e) { M.busy = false; M.err = e.message; paintOffer(); }
   }
@@ -172,6 +186,18 @@
   }
 
   /* the selection bar (w199): several at once */
+  /* wave215: practice cards (Academy walkthroughs) can be cleared from the bar: your own, or an admin everyone's */
+  function isAdm() { try { return !!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function barBits() {
+    var n = cands().filter(function (c) { return c.practice; }).length;
+    return n && staff() ? btn('Clear practice (' + n + ')', 'data-w211a="pclear" title="Remove the applications made in Avenue Academy walkthroughs' + (isAdm() ? ' (everyone\u2019s)' : ' (yours)') + '"', 'sm') : '';
+  }
+  async function clearPractice() {
+    var all = isAdm();
+    if (!window.confirm(all ? 'Remove every practice application (made in the Avenue Academy walkthroughs, by anyone)?' : 'Remove your practice applications?')) return;
+    try { var r = await db.rpc('wa215_clear_practice', { p_all: all }); if (r && r.error) throw r.error; var d = r.data || {}; toastS('Removed ' + (d.applications || 0) + (d.applications === 1 ? ' practice application' : ' practice applications')); await reload(null); }
+    catch (e) { toastS('Could not clear: ' + (e.message || e)); }
+  }
   function bulkBits(ids) { return staff() ? btn('Text: still interested?', 'data-w211a="intbulk"' + (ids && ids.length ? '' : ' disabled'), 'sm') : ''; }
   function selected() { try { var s = w199.state().sel || {}; return Object.keys(s).filter(function (k) { return s[k]; }).map(Number); } catch (e) { return []; } }
 
@@ -180,14 +206,17 @@
     var a = t.getAttribute('data-w211a');
     if (a === 'shut') { shut(); return; }
     if (a === 'intsend') { sendInt(); return; }
+    if (a === 'pclear') { clearPractice(); return; }
     if (a === 'intbulk') { var ids = selected(); if (ids.length) askInterest(ids); return; }
     if (a === 'oprev') { previewOffer(); return; }
+    if (a === 'osigner') { makeDefaultSigner(); return; }
     if (a === 'osend') { sendOffer(t.getAttribute('data-mail') === '1'); return; }
     if (t.hasAttribute('data-w211int')) { askInterest([Number(t.getAttribute('data-w211int'))]); return; }
     if (t.hasAttribute('data-w211offer')) { askOffer(t.getAttribute('data-w211offer')); return; }
     if (t.hasAttribute('data-w211cv')) { readCv(t.getAttribute('data-w211cv')); return; }
     if (t.hasAttribute('data-w211name')) { useName(t.getAttribute('data-w211name')); return; }
   });
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'w211o_signer_email' && M.kind === 'offer') signerChanged(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { var s = document.getElementById('w211m'); if (s && s.classList.contains('open')) shut(); } });
 
   var css = document.createElement('style'); css.id = 'w211css';
@@ -205,7 +234,7 @@
     '.w211prev{width:100%;height:420px;border:1px solid rgba(16,63,57,.18);border-radius:8px;margin-top:10px;background:#FFFAF2;}';
   (document.head || document.documentElement).appendChild(css);
 
-  window.w211 = { cardBits: cardBits, sheetBits: sheetBits, bulkBits: bulkBits, askOffer: askOffer, askInterest: askInterest, state: function () { return M; } };
+  window.w211 = { barBits: barBits, cardBits: cardBits, sheetBits: sheetBits, bulkBits: bulkBits, askOffer: askOffer, askInterest: askInterest, state: function () { return M; } };
 })();
 /* =====================================================================
    WA v211b Stage gates: what a card needs before it can move on (Steel, 06/10/26)

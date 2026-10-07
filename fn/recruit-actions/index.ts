@@ -1,13 +1,18 @@
-// Welfare Avenue: recruit-actions (v2, 06/10/26, wave211; v2: quo_calls, quo_log, cv_check and file_cv, the French text reads "pour notre poste bénévole : <role>")
+// Welfare Avenue: recruit-actions (v4, 07/10/26, wave215b: the offer letter is a PDF in the Welfare Avenue brand, signed with the
+// signer's saved signature (app_config offer_signer_email, set by HR or an admin: offer_signer_set {email}); the email is the CRM's
+// layout with the signer's sign-off, a blind copy to the signer, replies to the signer. v3, 07/10/26, wave215: a practice applicant (Academy walkthrough) gets the offer letter at
+// their own address even while email is in test mode, the letter's name starts PRACTICE, and practice cards are never texted;
+// v2, 06/10/26, wave211; v2: quo_calls, quo_log, cv_check and file_cv, the French text reads "pour notre poste bénévole : <role>")
 // The HR meeting of 06/10/26 (Steel, Valex, Samson): what the Applications board does for the HR team.
 //   interest_text {ids[], dry_run?, force?}   "Still interested?" texts: one personal link each (hub.welfareavenue.com/i/<token>,
 //                                             answered by candidate-confirm: yes moves the card to Reviewing, no to Withdrawn),
 //                                             in their language, from the ops line through Quo (quo_messages kind manual: the
 //                                             drain sends them between 9 am and 7 pm). dry_run shows the texts and sends nothing.
 //                                             Nobody is texted twice in 7 days unless force; answered cards are skipped.
-//   offer_preview {id, f}                     the offer letter, as it will read (HTML), and whether email is in test mode
-//   offer_send {id, f, email?}                the letter as a Google Doc in Recruitment > Offer Letters, its PDF, and (email) an
-//                                             email to them with the PDF and the note. mail_mode test sends it to the test inboxes.
+//   offer_preview {id, f}                     the offer letter, as it will read (HTML), whether email is in test mode, the signers
+//   offer_send {id, f, email?}                the signed letter as a PDF in Recruitment > Offer Letters and (email) an email to
+//                                             them with the PDF and the note. mail_mode test sends it to the test inboxes.
+//   offer_signer_set {email}                  who signs offer letters by default (HR or an admin)
 //   stage_moved {id, old, new, by}            (trigger) a card moved to Interview, Offer or Hired, or closed after an interview:
 //                                             a line in the HR channel and a DM to the person handling it
 //   quo_calls {id}                            the calls Quo has with their number (every Quo line, the last 60 days), with Quo's
@@ -23,6 +28,8 @@
 //                                             role, experience, education, a summary and skills; empty email or phone are filled
 // Auth: a staff sign-in, or x-wa-secret (the trigger and the cron).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import * as PDFLib from 'npm:pdf-lib@1.17.1';
+import fontkit from 'npm:@pdf-lib/fontkit@1.1.1';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -92,7 +99,7 @@ async function interestText(c: any, roleTitle: string): Promise<{ lang: string; 
   return { lang, link, body };
 }
 async function interest(ids: number[], dry: boolean, force: boolean, who: Who) {
-  const { data: cs } = await svc.from('hub_candidates').select('id,name,email,phone,role,position_id,source,status,summary,notes,interest_texted_at').in('id', ids);
+  const { data: cs } = await svc.from('hub_candidates').select('id,name,email,phone,role,position_id,source,status,summary,notes,interest_texted_at,practice').in('id', ids);
   const { data: ps } = await svc.from('hub_positions').select('id,title');
   const pos = new Map((ps || []).map(p => [Number(p.id), String(p.title)]));
   const out: unknown[] = []; const batch = crypto.randomUUID(); let queued = 0;
@@ -100,7 +107,8 @@ async function interest(ids: number[], dry: boolean, force: boolean, who: Who) {
     const phone = e164(c.phone);
     const s = String(c.summary || '');
     let skip = '';
-    if (!phone) skip = 'no phone number';
+    if (c.practice) skip = 'a practice record (Academy walkthrough)';
+    else if (!phone) skip = 'no phone number';
     else if (!['new', 'reviewing'].includes(String(c.status))) skip = 'not at New or Reviewing';
     else if (s.startsWith('✅ Still interested') || s.startsWith('❌ No longer interested')) skip = 'already answered';
     else if (!force && c.interest_texted_at && Date.now() - new Date(c.interest_texted_at).getTime() < 7 * 86400000) skip = 'texted in the last 7 days';
@@ -298,40 +306,212 @@ async function exportAs(id: string, mime: string): Promise<Uint8Array> {
 }
 async function trash(id: string) { try { await gfetch(DRIVE + '/files/' + encodeURIComponent(id) + '?supportsAllDrives=true', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) }); } catch (_) { /* fine */ } }
 
-/* ---------- the offer letter ---------- */
-type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; note?: string; email?: string };
+/* ---------- the offer letter (v4, wave215b: in the Welfare Avenue brand, signed with the signer's saved signature) ----------
+   Steel, 07/10/26: "branded similar to how we do our crm emails. As well as the offer letter and if it needs my signature you can
+   pull it from the volunteer recognition letter section ... my sign off and come in to my inbox (this should be a setting as it
+   may be Suhaib or someone else that needs to sign)". The signer is app_config offer_signer_email (HR or an admin changes it);
+   their name, title and signature come from volunteer_signers (Volunteer Manager > Sign-offs > My signature, bucket signoffs).
+   The letter is a PDF drawn here (the green band and lockup of the sign-off letters), kept in Recruitment > Offer Letters; the
+   email is the CRM's layout (mail-send) with the signer's sign-off, a blind copy to the signer, and replies going to them. */
+type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; signer_email?: string; note?: string; email?: string };
+type Signer = { email: string; name: string; title: string; title_fr: string; sig: Uint8Array | null; has_sig: boolean };
 function esc(s: unknown): string { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)); }
 function dLong(iso: string | undefined, fr: boolean): string {
   const d = iso ? new Date(iso.length === 10 ? iso + 'T12:00:00' : iso) : new Date();
   return d.toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Toronto' });
 }
-function letterHtml(name: string, role: string, f: OfferF, who: Who): string {
+const DEFAULT_SIGNER = 'steel.macdonald@welfareavenue.com';
+const ADMINS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+const SIG_BUCKET = 'signoffs';
+async function signerList(): Promise<{ email: string; name: string; title: string; has_sig: boolean }[]> {
+  const { data } = await svc.from('volunteer_signers').select('email,name,title,signature_path');
+  const out = (data || []).map((r: any) => ({ email: String(r.email).toLowerCase(), name: r.name || '', title: r.title || '', has_sig: !!r.signature_path }));
+  const def = ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase();
+  for (const e of [def, ...ADMINS.filter(x => x.endsWith('@welfareavenue.com'))]) if (!out.find((x: any) => x.email === e)) out.push({ email: e, name: '', title: '', has_sig: false });
+  for (const s of out) if (!s.name || !s.title) {
+    const { data: m } = await svc.from('team_members').select('name, role').ilike('email', s.email).maybeSingle();
+    if (m) { s.name = s.name || (m as any).name || ''; s.title = s.title || (m as any).role || ''; }
+    if (!s.name) s.name = s.email.split('@')[0];
+  }
+  return out;
+}
+async function signerFor(f: OfferF): Promise<Signer> {
+  const email = String(f.signer_email || (await cfg('offer_signer_email')) || DEFAULT_SIGNER).trim().toLowerCase();
+  const { data: r } = await svc.from('volunteer_signers').select('email,name,title,title_fr,signature_path').ilike('email', email).maybeSingle();
+  const { data: m } = await svc.from('team_members').select('name, role').ilike('email', email).maybeSingle();
+  let sig: Uint8Array | null = null;
+  if ((r as any)?.signature_path) { const dl = await svc.storage.from(SIG_BUCKET).download((r as any).signature_path); if (!dl.error && dl.data) sig = new Uint8Array(await dl.data.arrayBuffer()); }
+  const name = String(f.signer || (r as any)?.name || (m as any)?.name || email.split('@')[0]).trim();
+  const title = String(f.signer_title || (r as any)?.title || (m as any)?.role || '').trim();
+  return { email, name, title, title_fr: String(f.signer_title || (r as any)?.title_fr || title), sig, has_sig: !!sig };
+}
+/* the words, once, for the PDF and the preview */
+function offerWords(name: string, role: string, f: OfferF) {
   const fr = f.lang === 'fr';
   const hours = Number(f.hours || 4) || 4;
-  const sig = esc(f.signer || who.name), title = esc(f.signer_title || who.title || '');
   const note = String(f.note || '').trim();
-  const P = (s: string) => '<p>' + s + '</p>';
-  const head = '<p style="color:#103F39"><b>Welfare Avenue</b><br>8200 Avenue Bloomfield<br>Montréal, QC H3N 2H9<br>(438) 808-7754<br>info@welfareavenue.com</p>' + P(dLong(undefined, fr));
-  const body = fr ? [
-    P('Bonjour ' + esc(name) + ','),
-    P('Nous avons le plaisir de vous offrir le poste de ' + esc(role) + (f.reports_to ? ', sous la responsabilité directe de ' + esc(f.reports_to) : '') + '.'),
-    P('Il s’agit d’un poste bénévole, non rémunéré. Un engagement minimum de ' + hours + ' heures par semaine est demandé, avec de la souplesse au besoin.' + (f.start ? ' Votre date de début serait le ' + esc(dLong(f.start, true)) + '.' : '')),
-    note ? P(esc(note).replace(/\n/g, '<br>')) : '',
-    P('Des réunions d’équipe hebdomadaires seront planifiées; les détails suivront.'),
-    P('Merci de confirmer votre acceptation d’ici le ' + esc(dLong(f.respond_by, true)) + '. Une fois votre acceptation reçue, nous vous contacterons pour les prochaines étapes.'),
-    P('Pour toute question, n’hésitez pas à nous écrire. Nous avons très hâte de vous accueillir dans l’équipe!'),
-    P('Cordialement,<br>' + sig + (title ? '<br>' + title : '') + '<br>Welfare Avenue')
+  const paras = fr ? [
+    'Nous avons le plaisir de vous offrir le poste de ' + role + (f.reports_to ? ', sous la responsabilité directe de ' + f.reports_to : '') + '.',
+    'Il s’agit d’un poste bénévole, non rémunéré. Un engagement minimum de ' + hours + ' heures par semaine est demandé, avec de la souplesse au besoin.' + (f.start ? ' Votre date de début serait le ' + dLong(f.start, true) + '.' : ''),
+    ...(note ? note.split(/\n{2,}/) : []),
+    'Des réunions d’équipe hebdomadaires seront planifiées; les détails suivront.',
+    'Merci de confirmer votre acceptation d’ici le ' + dLong(f.respond_by, true) + '. Une fois votre acceptation reçue, nous vous contacterons pour les prochaines étapes.',
+    'Pour toute question, n’hésitez pas à nous écrire. Nous avons très hâte de vous accueillir dans l’équipe!'
   ] : [
-    P('Dear ' + esc(name) + ','),
-    P('We are pleased to offer you the position of ' + esc(role) + (f.reports_to ? ', reporting directly to ' + esc(f.reports_to) : '') + '.'),
-    P('This is a non-paid, volunteer position. A minimum commitment of ' + hours + ' hours per week is required, with flexibility as needed.' + (f.start ? ' Your start date would be ' + esc(dLong(f.start, false)) + '.' : '')),
-    note ? P(esc(note).replace(/\n/g, '<br>')) : '',
-    P('Weekly team meetings will be scheduled, with further details to follow.'),
-    P('Please confirm your acceptance by ' + esc(dLong(f.respond_by, false)) + '. Upon acceptance, you will be contacted with next steps.'),
-    P('If you have any questions, feel free to reach out. We look forward to working with you and are excited to welcome you to the team!'),
-    P('Best regards,<br>' + sig + (title ? '<br>' + title : '') + '<br>Welfare Avenue')
+    'We are pleased to offer you the position of ' + role + (f.reports_to ? ', reporting directly to ' + f.reports_to : '') + '.',
+    'This is a non-paid, volunteer position. A minimum commitment of ' + hours + ' hours per week is required, with flexibility as needed.' + (f.start ? ' Your start date would be ' + dLong(f.start, false) + '.' : ''),
+    ...(note ? note.split(/\n{2,}/) : []),
+    'Weekly team meetings will be scheduled, with further details to follow.',
+    'Please confirm your acceptance by ' + dLong(f.respond_by, false) + '. Upon acceptance, you will be contacted with next steps.',
+    'If you have any questions, feel free to reach out. We look forward to working with you and are excited to welcome you to the team!'
   ];
-  return '<html><head><meta charset="utf-8"></head><body style="font-family:Arial,sans-serif;font-size:11pt;line-height:1.45">' + head + body.join('') + '</body></html>';
+  return { fr, title: fr ? 'Offre de poste bénévole' : 'Offer of a volunteer position', place: (fr ? 'Montréal, le ' : 'Montreal, ') + dLong(undefined, fr),
+    dear: (fr ? 'Bonjour ' : 'Dear ') + name + ',', paras, close: fr ? 'Cordialement,' : 'Best regards,', charity: fr ? 'Organisme de bienfaisance enregistré' : 'Registered charity' };
+}
+const ORG_ADDR = '8200 av Bloomfield, Montreal QC H3N 2H9', ORG_CHARITY = '713048502RR0001';
+const LOCKUP = SUPABASE_URL + '/storage/v1/object/public/content-images/brand/logo-lockup-cream-600.png';
+const LOGO = SUPABASE_URL + '/storage/v1/object/public/content-images/brand/logo-primary-cream-600.png';
+/* the preview: the same letter as HTML (the signature shown from its own bytes) */
+function letterHtml(name: string, role: string, f: OfferF, s: Signer, practice: boolean): string {
+  const w = offerWords(name, role, f);
+  const sig = s.sig ? '<img alt="Signature" src="data:image/png;base64,' + b64(s.sig) + '" style="display:block;max-width:190px;max-height:54px;margin:6px 0 4px -4px">'
+    : '<div style="width:190px;height:44px;border:1px dashed #c9c2b6;color:#79776f;font-size:12px;display:flex;align-items:center;padding-left:10px;margin:6px 0">' + (w.fr ? 'Pas encore de signature' : 'No saved signature yet') + '</div>';
+  const t = w.fr ? s.title_fr : s.title;
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet"></head>' +
+    '<body style="margin:0;background:#FFFAF2;font-family:\'Space Grotesk\',Arial,sans-serif;color:#1F201E;font-size:14px;line-height:1.55">' +
+    '<div style="background:#103F39;padding:22px 36px;display:flex;justify-content:space-between;align-items:center;gap:16px"><img src="' + LOCKUP + '" alt="Welfare Avenue" style="height:44px">' +
+    '<div style="text-align:right;color:#FFFAF2;font-size:11px;line-height:1.5"><b>Welfare Avenue</b><br>' + esc(ORG_ADDR) + '<br>' + esc(w.charity) + ' ' + ORG_CHARITY + '<br>welfareavenue.com · info@welfareavenue.com</div></div>' +
+    '<div style="padding:30px 36px 24px;position:relative">' + (practice ? '<div style="position:absolute;top:120px;left:0;right:0;text-align:center;font:600 90px \'Barlow Condensed\',sans-serif;color:rgba(179,64,46,.12);transform:rotate(-28deg)">PRACTICE</div>' : '') +
+    '<h1 style="margin:0 0 8px;font:600 28px \'Barlow Condensed\',Arial Narrow,sans-serif;text-transform:uppercase;color:#103F39">' + esc(w.title) + '</h1>' +
+    '<div style="width:46px;height:3px;background:#DCA527;margin-bottom:16px"></div><p style="color:#79776f;font-size:12px;margin:0 0 18px">' + esc(w.place) + '</p>' +
+    '<p style="font-weight:700">' + esc(w.dear) + '</p>' + w.paras.map(p => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>').join('') +
+    '<p style="margin-bottom:0">' + esc(w.close) + '</p>' + sig + '<div style="font-weight:700">' + esc(s.name) + '</div>' + (t ? '<div style="color:#79776f;font-size:12.5px">' + esc(t) + '</div>' : '') + '<div style="color:#79776f;font-size:12.5px">Welfare Avenue</div>' +
+    '</div><div style="margin:0 36px;border-top:1px solid #e6e0d6;padding:10px 0 24px;color:#79776f;font-size:10.5px">Welfare Avenue · ' + esc(ORG_ADDR) + ' · ' + esc(w.charity) + ' ' + ORG_CHARITY + '</div></body></html>';
+}
+/* the PDF: fonts and lockup fetched once per start (Helvetica if the fonts fail) */
+let ASSETS: { fonts: Record<string, Uint8Array> | null; lockup: Uint8Array | null } | null = null;
+async function assets() {
+  if (ASSETS) return ASSETS;
+  const a: { fonts: Record<string, Uint8Array> | null; lockup: Uint8Array | null } = { fonts: null, lockup: null };
+  try {
+    const css = await (await fetch('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&family=Space+Grotesk:wght@400;700&display=swap', { headers: { 'User-Agent': 'curl/7.0' } })).text();
+    const blocks = css.split('@font-face').slice(1);
+    const pick = (fam: string, wt: number) => { const b = blocks.find(x => x.indexOf("'" + fam + "'") >= 0 && x.indexOf('font-weight: ' + wt) >= 0); const m = b && b.match(/url\((https:[^)]+\.ttf)\)/); return m ? m[1] : null; };
+    const urls: Record<string, string | null> = { head: pick('Barlow Condensed', 600), body: pick('Space Grotesk', 400), bold: pick('Space Grotesk', 700) };
+    const f: Record<string, Uint8Array> = {};
+    for (const k of Object.keys(urls)) { if (!urls[k]) throw new Error('font ' + k); const r = await fetch(urls[k]!); if (!r.ok) throw new Error('font ' + k); f[k] = new Uint8Array(await r.arrayBuffer()); }
+    a.fonts = f;
+  } catch (e) { console.warn('offer fonts', String(e)); }
+  try { const r = await fetch(LOCKUP); if (r.ok) a.lockup = new Uint8Array(await r.arrayBuffer()); } catch (_) { /* the band stands without it */ }
+  ASSETS = a; return a;
+}
+const WINANSI = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'.split(''));
+// deno-lint-ignore no-explicit-any
+function safeText(F: any, s: unknown): string {
+  const t = String(s == null ? '' : s).replace(/[\u0000-\u001f]/g, ' ');
+  return F.std ? Array.from(t).map(ch => (ch.charCodeAt(0) <= 255 || WINANSI.has(ch)) ? ch : '?').join('') : t;
+}
+// deno-lint-ignore no-explicit-any
+function wrapText(F: any, font: any, text: string, size: number, width: number): string[] {
+  const out: string[] = [];
+  String(text || '').split(/\n/).forEach(par => {
+    const words = safeText(F, par).split(/\s+/).filter(Boolean); let line = '';
+    words.forEach(wd => { const t = line ? line + ' ' + wd : wd; if (font.widthOfTextAtSize(t, size) <= width || !line) line = t; else { out.push(line); line = wd; } });
+    out.push(line);
+  });
+  return out;
+}
+async function letterPdf(name: string, role: string, f: OfferF, s: Signer, practice: boolean): Promise<Uint8Array> {
+  const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
+  const GREEN = rgb(16 / 255, 63 / 255, 57 / 255), CREAM = rgb(1, 250 / 255, 242 / 255), GOLD = rgb(220 / 255, 165 / 255, 39 / 255);
+  const INK = rgb(31 / 255, 32 / 255, 30 / 255), MUTED = rgb(121 / 255, 119 / 255, 115 / 255), LINE = rgb(0.9, 0.88, 0.84), RED = rgb(0.70, 0.25, 0.18);
+  const PW = 612, PH = 792, L = 54, R = 558;
+  const w = offerWords(name, role, f);
+  const pdf = await PDFDocument.create();
+  pdf.setTitle(w.title + ' - ' + name); pdf.setAuthor('Welfare Avenue'); pdf.setCreator('Welfare Avenue Hub (recruit-actions)');
+  pdf.registerFontkit(fontkit);
+  const a = await assets();
+  // deno-lint-ignore no-explicit-any
+  let F: any = null;
+  if (a.fonts) { try { F = { head: await pdf.embedFont(a.fonts.head, { subset: true }), body: await pdf.embedFont(a.fonts.body, { subset: true }), bold: await pdf.embedFont(a.fonts.bold, { subset: true }), std: false }; } catch (_) { F = null; } }
+  if (!F) F = { head: await pdf.embedFont(StandardFonts.HelveticaBold), body: await pdf.embedFont(StandardFonts.Helvetica), bold: await pdf.embedFont(StandardFonts.HelveticaBold), std: true };
+  // deno-lint-ignore no-explicit-any
+  let lockup: any = null; if (a.lockup) { try { lockup = await pdf.embedPng(a.lockup); } catch (_) { lockup = null; } }
+  // deno-lint-ignore no-explicit-any
+  const ctx: { page: any; y: number } = { page: null, y: 0 };
+  const band = (first: boolean) => {
+    const page = pdf.addPage([PW, PH]); ctx.page = page;
+    const bh = first ? 92 : 46;
+    page.drawRectangle({ x: 0, y: PH - bh, width: PW, height: bh, color: GREEN });
+    if (lockup) { const lh = first ? 40 : 22, lw = lh * lockup.width / lockup.height; page.drawImage(lockup, { x: L, y: PH - bh / 2 - lh / 2, width: lw, height: lh }); }
+    if (first) {
+      let y = PH - 26;
+      ([['Welfare Avenue', F.bold, 10], [ORG_ADDR, F.body, 8], [w.charity + ' ' + ORG_CHARITY, F.body, 8], ['welfareavenue.com  ·  info@welfareavenue.com', F.body, 8]] as [string, any, number][])
+        .forEach(([t, fo, sz]) => { const tt = safeText(F, t); page.drawText(tt, { x: R - fo.widthOfTextAtSize(tt, sz), y, size: sz, font: fo, color: CREAM }); y -= sz + 4; });
+    }
+    page.drawLine({ start: { x: L, y: 62 }, end: { x: R, y: 62 }, thickness: 0.6, color: LINE });
+    page.drawText(safeText(F, 'Welfare Avenue  ·  ' + ORG_ADDR + '  ·  ' + w.charity + ' ' + ORG_CHARITY), { x: L, y: 46, size: 7.5, font: F.body, color: MUTED });
+    if (practice) { const t = 'PRACTICE', sz = 96, tw = F.head.widthOfTextAtSize(t, sz); page.drawText(t, { x: PW / 2 - (tw * Math.cos(Math.PI / 5)) / 2, y: PH / 2 - (tw * Math.sin(Math.PI / 5)) / 2, size: sz, font: F.head, color: RED, opacity: 0.13, rotate: degrees(36) }); }
+    ctx.y = PH - bh - (first ? 46 : 34);
+  };
+  const ensure = (h: number) => { if (ctx.y - h < 84) band(false); };
+  // deno-lint-ignore no-explicit-any
+  const para = (text: string, size = 10.5, font: any = F.body, color: any = INK, gap = 9) => {
+    wrapText(F, font, text, size, R - L).forEach(l => { ensure(size + 5); ctx.page.drawText(l, { x: L, y: ctx.y, size, font, color }); ctx.y -= size + 5; });
+    ctx.y -= gap;
+  };
+  band(true);
+  const title = safeText(F, w.title.toUpperCase());
+  let ts = 25; while (F.head.widthOfTextAtSize(title, ts) > R - L && ts > 14) ts -= 1;
+  ctx.page.drawText(title, { x: L, y: ctx.y, size: ts, font: F.head, color: GREEN }); ctx.y -= 12;
+  ctx.page.drawRectangle({ x: L, y: ctx.y, width: 46, height: 3, color: GOLD }); ctx.y -= 20;
+  ctx.page.drawText(safeText(F, w.place), { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED }); ctx.y -= 26;
+  para(w.dear, 10.5, F.bold, INK, 10);
+  w.paras.forEach(p => para(p.trim()));
+  if (ctx.y - 120 < 84) band(false);
+  ctx.page.drawText(safeText(F, w.close), { x: L, y: ctx.y, size: 10.5, font: F.body, color: INK }); ctx.y -= 12;
+  if (s.sig) {
+    try { const img = await pdf.embedPng(s.sig); const k = Math.min(190 / img.width, 54 / img.height); ctx.page.drawImage(img, { x: L - 4, y: ctx.y - img.height * k, width: img.width * k, height: img.height * k }); ctx.y -= img.height * k + 6; }
+    catch (_) { ctx.y -= 20; }
+  } else ctx.y -= 14;
+  ctx.page.drawText(safeText(F, s.name), { x: L, y: ctx.y, size: 11, font: F.bold, color: INK }); ctx.y -= 14;
+  const t = w.fr ? s.title_fr : s.title;
+  if (t) { ctx.page.drawText(safeText(F, t), { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED }); ctx.y -= 13; }
+  ctx.page.drawText('Welfare Avenue', { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED });
+  const pages = pdf.getPages();
+  if (pages.length > 1) pages.forEach((p, i) => { const pt = (i + 1) + ' / ' + pages.length; p.drawText(pt, { x: R - F.body.widthOfTextAtSize(pt, 7.5), y: 46, size: 7.5, font: F.body, color: MUTED }); });
+  return await pdf.save();
+}
+/* the email: the CRM's layout (mail-send), the signer's sign-off */
+const E_CREAM = '#FFFAF2', E_GREEN = '#103F39', E_INK = '#1F201E', E_GOLD = '#DCA527';
+const E_HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", E_BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preheader: string): string {
+  const fr = f.lang === 'fr';
+  const P = (x: string) => `<p style="margin:0 0 16px;font-family:${E_BODY};font-size:16px;line-height:26px;color:${E_INK};">${x}</p>`;
+  const B = (x: string) => `<strong style="color:${E_GREEN};font-weight:700;">${x}</strong>`;
+  const note = String(f.note || '').trim();
+  const t = fr ? s.title_fr : s.title;
+  const inner =
+    `<h1 style="margin:0 0 18px;font-family:${E_HEAD};font-weight:500;font-size:40px;line-height:44px;text-transform:uppercase;letter-spacing:.5px;color:${E_GREEN};">${fr ? 'Votre offre' : 'Your offer'}</h1>` +
+    P((fr ? 'Bonjour ' : 'Hi ') + esc(first0) + ',') +
+    (note ? note.split(/\n{2,}/).map(p => P(esc(p.trim()).replace(/\n/g, '<br>'))).join('') : '') +
+    P(fr ? 'Nous serions ravis de vous accueillir comme ' + B(esc(role)) + '. Votre lettre d’offre est jointe à ce courriel (PDF).' : 'We would love to welcome you as our ' + B(esc(role)) + '. Your offer letter is attached to this email as a PDF.') +
+    P(fr ? 'Merci de nous donner votre réponse d’ici le ' + B(esc(dLong(f.respond_by, true))) + ' : il suffit de répondre à ce courriel.' : 'Please let us know your answer by ' + B(esc(dLong(f.respond_by, false))) + ': just reply to this email.') +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;"><tr><td style="width:40px;height:3px;background-color:${E_GOLD};font-size:0;line-height:0;">&nbsp;</td></tr></table>` +
+    P((fr ? 'Au plaisir,' : 'Warmly,') + '<br>' + B(esc(s.name)) + (t ? '<br>' + esc(t) : '') + '<br>Welfare Avenue');
+  const small = `font-family:${E_BODY};font-size:13px;line-height:20px;color:${E_CREAM};`;
+  return `<!DOCTYPE html><html lang="${fr ? 'fr' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${fr ? 'Votre offre' : 'Your offer'}</title>` +
+    `<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">` +
+    `<style>body{margin:0;padding:0;background:${E_CREAM};}table{border-collapse:collapse;}img{border:0;line-height:100%;}@media only screen and (max-width:620px){.wa-wrap{width:100% !important;}.wa-pad{padding-left:20px !important;padding-right:20px !important;}h1{font-size:32px !important;line-height:36px !important;}}</style></head>` +
+    `<body style="margin:0;padding:0;background-color:${E_CREAM};"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${E_CREAM};font-size:1px;line-height:1px;">${esc(preheader)}</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:${E_CREAM};"><tr><td align="center" style="padding:24px 12px;">` +
+    `<table role="presentation" class="wa-wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">` +
+    `<tr><td class="wa-pad" style="background-color:${E_GREEN};border-radius:8px 8px 0 0;padding:28px 36px 24px 36px;"><img src="${LOGO}" width="170" height="57" alt="Welfare Avenue" style="display:block;border:0;width:170px;height:auto;">` +
+    `<div style="padding:20px 0 0;font-family:${E_BODY};font-weight:700;font-size:11px;line-height:14px;letter-spacing:2px;color:${E_GOLD};text-transform:uppercase;">${fr ? 'Le bénévolat à Welfare Avenue' : 'Volunteering at Welfare Avenue'}</div></td></tr>` +
+    `<tr><td class="wa-pad" style="background-color:${E_CREAM};padding:32px 36px 20px 36px;border-left:1px solid rgba(16,63,57,.12);border-right:1px solid rgba(16,63,57,.12);">${inner}</td></tr>` +
+    `<tr><td class="wa-pad" style="background-color:${E_GREEN};border-radius:0 0 8px 8px;padding:26px 36px 28px 36px;"><img src="${LOCKUP}" width="140" height="63" alt="Welfare Avenue, building pathways in our community" style="display:block;border:0;width:140px;height:auto;">` +
+    `<div style="padding:16px 0 0;${small}opacity:.85;">Welfare Avenue is a registered charity, no. ${ORG_CHARITY}. Welfare Avenue, ${esc(ORG_ADDR)}.<br>You are receiving this email because you applied to volunteer with Welfare Avenue.</div>` +
+    `<div style="padding-top:12px;${small}"><a href="https://welfareavenue.com" style="color:${E_CREAM};text-decoration:underline;">welfareavenue.com</a></div></td></tr></table></td></tr></table></body></html>`;
 }
 // deno-lint-ignore no-explicit-any
 async function offerFor(id: number): Promise<{ c: any; role: string }> {
@@ -341,45 +521,76 @@ async function offerFor(id: number): Promise<{ c: any; role: string }> {
   if (c.position_id) { const { data: p } = await svc.from('hub_positions').select('title').eq('id', c.position_id).maybeSingle(); if (p?.title) role = p.title; }
   return { c, role };
 }
+async function uploadPdf(name: string, parent: string, bytes: Uint8Array): Promise<{ id: string; webViewLink?: string }> {
+  const bnd = 'wa' + crypto.randomUUID().replace(/-/g, '');
+  const meta = JSON.stringify({ name: name + '.pdf', mimeType: 'application/pdf', parents: [parent] });
+  const head = new TextEncoder().encode('--' + bnd + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + bnd + '\r\nContent-Type: application/pdf\r\n\r\n');
+  const tail = new TextEncoder().encode('\r\n--' + bnd + '--');
+  const body = new Uint8Array(head.length + bytes.length + tail.length); body.set(head, 0); body.set(bytes, head.length); body.set(tail, head.length + bytes.length);
+  const r = await gfetch(UPLOAD + '/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink', { method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + bnd }, body });
+  const j = await r.json(); if (!r.ok) throw new Error('Drive upload ' + r.status + ': ' + JSON.stringify(j).slice(0, 200));
+  return j;
+}
 async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
   const { c, role } = await offerFor(id);
   const fr = f.lang === 'fr';
-  const html = letterHtml(c.name, role, f, who);
+  const s = await signerFor(f);
+  const pdf = await letterPdf(c.name, role, f, s, !!c.practice);
   const folder = (await cfg('offer_folder')) || '1IKMWxdu8NvrN14cUmnRaPFyGGNNx4Gxa';
   const stamp = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }).split('-').reverse().map((x, i) => i === 2 ? x.slice(2) : x).join('-');
-  const docName = 'Offer letter - ' + c.name + ' - ' + role + ' - ' + stamp;
-  const doc = await uploadAsDoc(docName, folder, new TextEncoder().encode(html), 'text/html');
-  const docUrl = doc.webViewLink || 'https://docs.google.com/document/d/' + doc.id + '/edit';
+  const docName = (c.practice ? 'PRACTICE - ' : '') + 'Offer letter - ' + c.name + ' - ' + role + ' - ' + stamp;
+  const doc = await uploadPdf(docName, folder, pdf);
+  const docUrl = doc.webViewLink || 'https://drive.google.com/file/d/' + doc.id + '/view';
   let emailed: Record<string, unknown> | null = null;
   const to = String(f.email || c.email || '').trim().toLowerCase();
   if (sendEmail) {
     if (!to) throw new Error('They have no email address');
-    const pdf = await exportAs(doc.id, 'application/pdf');
     const mode = (await cfg('mail_mode')) || 'test';
     const testTo = (await cfg('mail_test_recipients')).split(/[,\s]+/).filter(Boolean);
-    const rcpt = mode === 'live' ? [to] : testTo;
+    /* wave215: a practice applicant is the learner themselves, so the letter goes to that address even in test mode */
+    const own = !!c.practice && to === String(c.email || '').toLowerCase();
+    const rcpt = mode === 'live' || own ? [to] : testTo;
     if (!rcpt.length) throw new Error('Email is in test mode and there are no test recipients');
+    /* the signer gets their own copy (a blind copy), and replies go to them (and whoever sent it) */
+    const low = rcpt.map(x => x.toLowerCase());
+    const bcc = low.includes(s.email) ? [] : [s.email];
+    const replyTo = Array.from(new Set([s.email, who.email].filter(e => e && e !== 'hub@welfareavenue.com')));
     const fromName = (await cfg('mail_from_name')) || 'Welfare Avenue', fromEmail = (await cfg('mail_from_email')) || 'info@welfareavenue.com';
-    const subject = (mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
+    const subject = (own ? '[PRACTICE] ' : mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
     const note = String(f.note || '').trim();
+    const t = fr ? s.title_fr : s.title;
     const text = fr
-      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Vous trouverez votre lettre d’offre pour le poste de ' + role + ' en pièce jointe. Merci de nous confirmer votre réponse d’ici le ' + dLong(f.respond_by, true) + ' en répondant à ce courriel.\n\nAu plaisir,\n' + (f.signer || who.name) + '\nWelfare Avenue'
-      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Your offer letter for the ' + role + ' position is attached. Please confirm your answer by ' + dLong(f.respond_by, false) + ' by replying to this email.\n\nWarmly,\n' + (f.signer || who.name) + '\nWelfare Avenue';
+      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Nous serions ravis de vous accueillir comme ' + role + '. Votre lettre d’offre est jointe à ce courriel (PDF).\n\nMerci de nous donner votre réponse d’ici le ' + dLong(f.respond_by, true) + ' : il suffit de répondre à ce courriel.\n\nAu plaisir,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com'
+      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'We would love to welcome you as our ' + role + '. Your offer letter is attached to this email as a PDF.\n\nPlease let us know your answer by ' + dLong(f.respond_by, false) + ': just reply to this email.\n\nWarmly,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com';
+    const html = offerEmailHtml(first(c.name), role, f, s, fr ? 'Votre lettre d’offre pour le poste de ' + role : 'Your offer letter for the ' + role + ' position');
     const key = Deno.env.get('RESEND_API_KEY') || await getSecret('RESEND_API_KEY');
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({
-      from: fromName + ' <' + fromEmail + '>', to: rcpt, reply_to: who.email, subject, text,
+      from: fromName + ' <' + fromEmail + '>', to: rcpt, ...(bcc.length ? { bcc } : {}), reply_to: replyTo, subject, html, text,
       attachments: [{ filename: docName.replace(/[\/\\:]/g, '-') + '.pdf', content: b64(pdf) }]
     }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error('The email was not sent: ' + String(j?.message || r.status));
-    emailed = { mode, to: rcpt, id: j?.id || null };
+    emailed = { mode: own ? 'practice' : mode, to: rcpt, copy_to: s.email, id: j?.id || null };
   }
   const now = new Date();
   await svc.from('hub_candidates').update({ offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
-    notes: (String(c.notes || '') + '\nOffer letter ' + (emailed ? (emailed.mode === 'live' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
+    notes: (String(c.notes || '') + '\nOffer letter (signed by ' + s.name + ') ' + (emailed ? (emailed.mode === 'live' || emailed.mode === 'practice' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
     updated_at: now.toISOString(), updated_by: who.name }).eq('id', id);
-  await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: 'offer_letter', old_value: null, new_value: (emailed ? 'emailed (' + emailed.mode + ')' : 'created') + ': ' + docUrl, changed_by: who.name });
-  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed };
+  await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: 'offer_letter', old_value: null, new_value: (emailed ? 'emailed (' + emailed.mode + ')' : 'created') + ', signed by ' + s.name + ': ' + docUrl, changed_by: who.name });
+  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig };
+}
+/* the offer signer setting: HR (the Time off access) or an admin */
+async function signerSet(email: string, who: Who, auth: string) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@welfareavenue\.com$/.test(e)) throw new Error('A welfareavenue.com address, please');
+  let ok = ADMINS.includes(who.email);
+  if (!ok) { const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } }); const { data } = await asUser.rpc('wa_can_timeoff'); ok = data === true; }
+  if (!ok) throw new Error('Only HR or an admin can change who signs offer letters');
+  const old = await cfg('offer_signer_email');
+  const { error } = await svc.from('app_config').upsert({ key: 'offer_signer_email', value: e }, { onConflict: 'key' });
+  if (error) throw new Error(error.message);
+  await svc.from('change_log').insert({ entity_type: 'app_config', entity_id: 'offer_signer_email', field: 'value', old_value: old || null, new_value: e, changed_by: who.name });
+  return { ok: true, signer_email: e };
 }
 
 /* ---------- a CV link (applicants added by hand) ---------- */
@@ -510,9 +721,12 @@ Deno.serve(async (req) => {
     }
     if (action === 'offer_preview') {
       const { c, role } = await offerFor(Number(b.id));
-      return json({ ok: true, html: letterHtml(c.name, role, b.f || {}, who), role, email: c.email, mail_mode: (await cfg('mail_mode')) || 'test', test_to: await cfg('mail_test_recipients'), signer: who.name, signer_title: who.title });
+      const s = await signerFor(b.f || {});
+      return json({ ok: true, html: letterHtml(c.name, role, b.f || {}, s, !!c.practice), role, email: c.email, practice: !!c.practice, mail_mode: (await cfg('mail_mode')) || 'test', test_to: await cfg('mail_test_recipients'),
+        signer: s.name, signer_title: s.title, signer_email: s.email, signer_has_sig: s.has_sig, default_signer: ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase(), signers: await signerList() });
     }
     if (action === 'offer_send') return json(await offerSend(Number(b.id), b.f || {}, !!b.email, who));
+    if (action === 'offer_signer_set') { if (bySecret) return json({ error: 'staff only' }, 403); return json(await signerSet(String(b.email || ''), who, req.headers.get('Authorization') || '')); }
     if (action === 'stage_moved') { if (!bySecret) return json({ error: 'system only' }, 403); return json(await stageMoved(b)); }
     if (action === 'quo_calls') return json(await quoCalls(Number(b.id)));
     if (action === 'quo_log') return json(await quoLog(Number(b.id), String(b.call_id || ''), String(b.stage || ''), who));

@@ -17,8 +17,10 @@
     var res = await Promise.all([
       q(db.from('hub_checkins').select('email,name,department,started_at,ended_at,minutes,auto_closed').gte('started_at', since).order('started_at', { ascending: false }).limit(3000)),
       q(db.from('hub_settings').select('value').eq('key', 'hours_minimums').limit(1)),
-      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })()
+      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })(),
+      q(db.from('slack_hours').select('member_name,week_start,hours,sessions').gte('week_start', since.slice(0, 10)).limit(2000))   /* wave215: Slack check-ins count too (Steel, 07/10/26) */
     ]);
+    S.sh = res[3] || [];
     S.ck = res[0]; var mv = res[1][0] && res[1][0].value; if (mv && typeof mv === 'object') S.mins = { member: Number(mv.member) || 3, manager: Number(mv.manager) || 5 };
     S.feed = res[2]; S.ckAt = Date.now();
   }
@@ -65,6 +67,19 @@
       if (t >= m0) o.week += mn; else if (t >= m0 - wk) o.last += mn;
       if (t < m0 && t >= m0 - wk * aw) o.past += mn;
       o.sessions++; if (!c.ended_at) o.open = true; if (!o.lastAt || c.started_at > o.lastAt) o.lastAt = c.started_at;
+    });
+    /* wave215 (Steel, 07/10/26: "Slack activity can count toward hours"): the weekly hours hours-pull reads from people's own
+       "in" and "out" messages in the Slack check-in channels (slack_hours; the Hub's own Loop posts are never counted there),
+       added to the person's Loop time for the same week. o.slackWeek / o.slackPast say how much of it came from Slack. */
+    (S.sh || []).forEach(function (r) {
+      var mm = members().filter(function (m) { return lower(m.name) === lower(r.member_name) || lower(String(m.name).split(' ')[0]) === lower(String(r.member_name).split(' ')[0]); })[0];
+      if (!mm || !mm.email) return;
+      var em = lower(mm.email), mins = Math.round(Number(r.hours || 0) * 60); if (!mins) return;
+      var o = out[em] || (out[em] = { email: em, name: mm.name, dept: mm.department, week: 0, last: 0, past: 0, sessions: 0, open: false, lastAt: null });
+      var t = new Date(String(r.week_start) + 'T12:00:00').getTime();
+      if (t >= m0) { o.week += mins; o.slackWeek = (o.slackWeek || 0) + mins; } else if (t >= m0 - wk) { o.last += mins; o.slackLast = (o.slackLast || 0) + mins; }
+      if (t < m0 && t >= m0 - wk * aw) { o.past += mins; o.slackPast = (o.slackPast || 0) + mins; }
+      o.sessions += Number(r.sessions || 0);
     });
     return out;
   }

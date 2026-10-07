@@ -191,11 +191,11 @@
       rows.map(function (r) {
         var pct = r.min ? Math.min(100, Math.round(r.avg / r.min * 100)) : 100;
         return '<tr class="' + (r.low ? 'low' : '') + '"><td><b>' + E(r.m.name) + '</b><br><small style="color:var(--wa-muted)">' + E(teamLabel(r.m.department)) + (r.h.open ? ' · in now' : '') + '</small></td>' +
-          '<td>' + fmtH(r.h.week) + '</td><td class="hp">' + fmtH(r.h.last) + '</td>' +
+          '<td>' + fmtH(r.h.week) + (r.h.slackWeek ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackWeek) + ' from Slack</small>' : '') + '</td><td class="hp">' + fmtH(r.h.last) + (r.h.slackLast ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackLast) + ' from Slack</small>' : '') + '</td>' +
           '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:' + pct + '%"></i></div><span>' + (Math.round(r.avg * 10) / 10) + 'h</span></div></td>' +
           '<td>' + (r.min ? r.min + 'h' : '<span class="w197pill mut">exempt</span>') + '</td><td class="hp">' + (r.min ? (!S.avgW ? '<span class="w197pill mut">too early</span>' : r.low ? '<span class="w197pill low">below</span>' : '<span class="w197pill">on track</span>') : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="w197note">From The Loop: a session counts from I’m in to Close the loop; a session still open counts at most eight hours. Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
+      '<p class="w197note">From The Loop and Slack: a Loop session counts from I’m in to Close the loop (a session still open counts at most eight hours), and the hours people log with their own “in” and “out” messages in the Slack check-in channels are added (read every morning; the Hub’s own Loop posts there are not counted twice). Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
     var feed = S.feed.slice(0, 25);
     html += '<div class="w197card"><h2>What people shared in The Loop</h2><p class="w197note" style="margin:0 0 8px">What moved, as people chose to share it when they closed the loop (last 30 days). Never times or hours.</p>' +
       (feed.length ? '<ul class="w197feed">' + feed.map(function (f) {

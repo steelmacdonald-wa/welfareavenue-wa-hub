@@ -46,7 +46,7 @@
     });
     (S.cands || []).forEach(function (c) {
       var at = c.stage_at || c.created_at;
-      if (c.status === 'new' && c.created_at && now - new Date(c.created_at).getTime() < 3 * 86400000) out.push({ k: 'new', at: c.created_at, ic: '✉', t: 'New application: ' + (c.name || 'someone'), s: (window.w199 ? w199.roleOf(c) : c.role) || '', id: c.id });
+      if (c.status === 'new' && !c.practice && c.created_at && now - new Date(c.created_at).getTime() < 3 * 86400000) out.push({ k: 'new', at: c.created_at, ic: '✉', t: 'New application: ' + (c.name || 'someone'), s: (window.w199 ? w199.roleOf(c) : c.role) || '', id: c.id });
       if (!mine(c)) return;
       if ((c.status === 'new' || c.status === 'reviewing') && !callsOf(c.id).length) out.push({ k: 'call', at: at, ic: '☎', t: 'Call ' + (c.name || 'them'), s: 'You handle this application; no call logged yet', id: c.id });
       if (c.status === 'interview' && c.interview_at && (day(c.interview_at) === tod || day(c.interview_at) === tom)) out.push({ k: 'iv', at: at, ic: '🗓', t: 'Interview: ' + (c.name || 'someone'), s: when(c.interview_at), id: c.id });

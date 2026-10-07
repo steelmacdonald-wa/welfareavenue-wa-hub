@@ -242,6 +242,8 @@
 212_wave212
 # 213_wave213: the due-date check: on opening the Hub, a pop-up (that stays until saved) for the person's overdue, undated and meeting-dated open tasks, suggested from their team's next meeting (my_due_date_check, confirm_due_dates). Built from build/parts213.
 213_wave213
+# 215_wave215: the HR centre walkthroughs (Steel, 07/10/26): a hands-on coach (w215: a card and a gold ring on the real page; the card moves on when the Hub shows the step is done) and seven walkthroughs in the Avenue Academy Learning Avenue The HR centre (getting around, recruitment with yourself as the applicant and the offer letter in your inbox, onboarding yourself, time off both sides, team/hours/recognition, training and the onboarding plan, policies and discipline). Practice records (hub_candidates.practice, wa_timeoff.practice) never reach Slack, texts or the calendar; Clear practice. Built from build/parts215; hooks in parts122 startTour, 105, 209, 211, 212.
+215_wave215
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

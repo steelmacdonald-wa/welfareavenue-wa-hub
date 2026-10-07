@@ -221,8 +221,10 @@
     var res = await Promise.all([
       q(db.from('hub_checkins').select('email,name,department,started_at,ended_at,minutes,auto_closed').gte('started_at', since).order('started_at', { ascending: false }).limit(3000)),
       q(db.from('hub_settings').select('value').eq('key', 'hours_minimums').limit(1)),
-      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })()
+      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })(),
+      q(db.from('slack_hours').select('member_name,week_start,hours,sessions').gte('week_start', since.slice(0, 10)).limit(2000))   /* wave215: Slack check-ins count too (Steel, 07/10/26) */
     ]);
+    S.sh = res[3] || [];
     S.ck = res[0]; var mv = res[1][0] && res[1][0].value; if (mv && typeof mv === 'object') S.mins = { member: Number(mv.member) || 3, manager: Number(mv.manager) || 5 };
     S.feed = res[2]; S.ckAt = Date.now();
   }
@@ -269,6 +271,19 @@
       if (t >= m0) o.week += mn; else if (t >= m0 - wk) o.last += mn;
       if (t < m0 && t >= m0 - wk * aw) o.past += mn;
       o.sessions++; if (!c.ended_at) o.open = true; if (!o.lastAt || c.started_at > o.lastAt) o.lastAt = c.started_at;
+    });
+    /* wave215 (Steel, 07/10/26: "Slack activity can count toward hours"): the weekly hours hours-pull reads from people's own
+       "in" and "out" messages in the Slack check-in channels (slack_hours; the Hub's own Loop posts are never counted there),
+       added to the person's Loop time for the same week. o.slackWeek / o.slackPast say how much of it came from Slack. */
+    (S.sh || []).forEach(function (r) {
+      var mm = members().filter(function (m) { return lower(m.name) === lower(r.member_name) || lower(String(m.name).split(' ')[0]) === lower(String(r.member_name).split(' ')[0]); })[0];
+      if (!mm || !mm.email) return;
+      var em = lower(mm.email), mins = Math.round(Number(r.hours || 0) * 60); if (!mins) return;
+      var o = out[em] || (out[em] = { email: em, name: mm.name, dept: mm.department, week: 0, last: 0, past: 0, sessions: 0, open: false, lastAt: null });
+      var t = new Date(String(r.week_start) + 'T12:00:00').getTime();
+      if (t >= m0) { o.week += mins; o.slackWeek = (o.slackWeek || 0) + mins; } else if (t >= m0 - wk) { o.last += mins; o.slackLast = (o.slackLast || 0) + mins; }
+      if (t < m0 && t >= m0 - wk * aw) { o.past += mins; o.slackPast = (o.slackPast || 0) + mins; }
+      o.sessions += Number(r.sessions || 0);
     });
     return out;
   }
@@ -468,11 +483,11 @@
       rows.map(function (r) {
         var pct = r.min ? Math.min(100, Math.round(r.avg / r.min * 100)) : 100;
         return '<tr class="' + (r.low ? 'low' : '') + '"><td><b>' + E(r.m.name) + '</b><br><small style="color:var(--wa-muted)">' + E(teamLabel(r.m.department)) + (r.h.open ? ' \u00b7 in now' : '') + '</small></td>' +
-          '<td>' + fmtH(r.h.week) + '</td><td class="hp">' + fmtH(r.h.last) + '</td>' +
+          '<td>' + fmtH(r.h.week) + (r.h.slackWeek ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackWeek) + ' from Slack</small>' : '') + '</td><td class="hp">' + fmtH(r.h.last) + (r.h.slackLast ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackLast) + ' from Slack</small>' : '') + '</td>' +
           '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:' + pct + '%"></i></div><span>' + (Math.round(r.avg * 10) / 10) + 'h</span></div></td>' +
           '<td>' + (r.min ? r.min + 'h' : '<span class="w197pill mut">exempt</span>') + '</td><td class="hp">' + (r.min ? (!S.avgW ? '<span class="w197pill mut">too early</span>' : r.low ? '<span class="w197pill low">below</span>' : '<span class="w197pill">on track</span>') : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="w197note">From The Loop: a session counts from I\u2019m in to Close the loop; a session still open counts at most eight hours. Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
+      '<p class="w197note">From The Loop and Slack: a Loop session counts from I\u2019m in to Close the loop (a session still open counts at most eight hours), and the hours people log with their own \u201cin\u201d and \u201cout\u201d messages in the Slack check-in channels are added (read every morning; the Hub\u2019s own Loop posts there are not counted twice). Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
     var feed = S.feed.slice(0, 25);
     html += '<div class="w197card"><h2>What people shared in The Loop</h2><p class="w197note" style="margin:0 0 8px">What moved, as people chose to share it when they closed the loop (last 30 days). Never times or hours.</p>' +
       (feed.length ? '<ul class="w197feed">' + feed.map(function (f) {

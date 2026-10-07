@@ -337,6 +337,7 @@
   function startTour(key) {
     var d = TOURS[key];
     if (!d || !tourAvail(key)) { toastS('That tour is not available for your account'); return; }
+    if (d.w215 && window.w215 && w215.owns(key)) { closeSheet(true); endTour(true); w215.start(key); return; }   /* wave215: the hands-on walkthroughs run in their own coach */
     closeSheet(true); endTour(true);
     var steps = (typeof d.steps === 'function' ? d.steps() : d.steps).slice();
     T = { key: key, d: d, steps: steps, i: -1, max: 0, tr: A.byKey['tour:' + key] || null, busy: false, navAt: performance.now() };

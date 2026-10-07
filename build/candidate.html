@@ -25399,12 +25399,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var fy = w105FY();
       var r = await db.from('wa_timeoff').select('*').order('created_at', { ascending: false });
       var rows = (r.data) || [];
+      window.__w105rows = rows;   /* wave215: the walkthroughs watch the list */
       var pend = rows.filter(function (t) { return t.status === 'requested'; });
       var html = '';
       if (pend.length) {
         html += '<h3 class="block">Waiting on a decision (' + pend.length + ')</h3><table><tbody>';
         pend.forEach(function (t) {
-          html += '<tr><td><b>' + esc(t.name) + '</b><div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + (t.note ? ': ' + esc(t.note) : '') + '</div></td>'
+          html += '<tr><td><b>' + esc(t.name) + '</b>' + (t.practice ? ' <span class="w215prac">Practice</span>' : '') + '<div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + (t.note ? ': ' + esc(t.note) : '') + '</div></td>'
             + '<td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + '<div class="w105mut">' + t.days + ' day' + (t.days === 1 ? '' : 's') + '</div></td>'
             + '<td style="white-space:nowrap"><button class="btn mini" data-w105ap="' + t.id + '">Approve</button> <button class="btn ghost mini" data-w105de="' + t.id + '">Decline</button></td></tr>';
         });
@@ -25412,7 +25413,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       } else {
         html += '<p class="read">No requests waiting.</p>';
       }
-      var appr = rows.filter(function (t) { return t.status === 'approved' && t.start_date >= fy.start; });
+      var appr = rows.filter(function (t) { return t.status === 'approved' && !t.practice && t.start_date >= fy.start; });   /* wave215: practice never counts */
       var per = {};
       appr.forEach(function (t) {
         var p = per[t.name] = per[t.name] || {};
@@ -25486,6 +25487,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var st = document.getElementById('w212lst').value, n = document.getElementById('w212ln').value.trim();
       var row = { email: sel.value, name: opt.getAttribute('data-name') || 'unknown', category: document.getElementById('w212lc').value || 'other', start_date: s, end_date: e, days: w105Days(s, e), status: st, note: n || null };
       if (st === 'approved') { row.decided_by = w105Me().email; row.decided_at = new Date().toISOString(); }
+      if (window.w215 && w215.practice()) row.practice = true;
       this.disabled = true;
       var ins = await db.from('wa_timeoff').insert(row);
       if (ins.error) { this.disabled = false; toast('Could not save it'); return; }
@@ -25662,9 +25664,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var n = (document.getElementById('w105rn') || {}).value || '';
       if (!s || !e || e < s) { toast('Pick valid dates'); return; }
       this.disabled = true;
-      var ins = await db.from('wa_timeoff').insert({ email: me.email, name: me.name, category: c, start_date: s, end_date: e, days: w105Days(s, e), status: 'requested', note: n || null });
+      var prac = !!(window.w215 && w215.practice());   /* wave215: a request made in a walkthrough is practice */
+      var ins = await db.from('wa_timeoff').insert({ email: me.email, name: me.name, category: c, start_date: s, end_date: e, days: w105Days(s, e), status: 'requested', note: n || null, practice: prac });
       if (ins.error) { this.disabled = false; toast('Could not send it'); return; }
-      try {
+      if (!prac) try {
         await db.from('dept_requests').insert({
           type_key: 'time-off', department: 'hr',
           title: 'Time off: ' + me.name + ', ' + s + ' to ' + e + ' (' + (TO_CATS[c] || c) + ')',
@@ -25672,8 +25675,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         });
       } catch (e2) { /* the wa_timeoff row is the source of truth */ }
       closeModal();
-      toast('Request sent to HR');
+      toast(prac ? 'Practice request saved' : 'Request sent to HR');
       w105MyRender();
+      if (document.getElementById('w105tobody')) w105TimeRender();   /* wave215: asked from the HR centre's Time off */
     });
   }
   window.w105ReqModal = w105ReqModal; /* wave123: the Requests page opens the time off form */
@@ -40539,6 +40543,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function startTour(key) {
     var d = TOURS[key];
     if (!d || !tourAvail(key)) { toastS('That tour is not available for your account'); return; }
+    if (d.w215 && window.w215 && w215.owns(key)) { closeSheet(true); endTour(true); w215.start(key); return; }   /* wave215: the hands-on walkthroughs run in their own coach */
     closeSheet(true); endTour(true);
     var steps = (typeof d.steps === 'function' ? d.steps() : d.steps).slice();
     T = { key: key, d: d, steps: steps, i: -1, max: 0, tr: A.byKey['tour:' + key] || null, busy: false, navAt: performance.now() };
@@ -70084,21 +70089,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - The header button is #w192go. Wave116j's #w116jck stays underneath, hidden: it still owns the session row (its
      toggle inserts the row; I'm in uses it) and the presence ring. Clicks on #w192go, #w116jck and the person page's
      link are taken at the window, before wave116q's handlers, so its sheet never opens.
-   - I'm in starts a session (wave212: a line in #check-in-out-wa says so). Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
+   - I'm in starts a session and posts nothing. Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
      from the person's own records; private work never pre-filled), Anything the Hub could not see (say it or type it,
-     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Where it goes
-     (#check-in-out-wa since wave214; until then Who sees it: My team, Everyone, Just the Hub), Close the loop or Close
-     without a note. The minutes show to the person only.
+     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Who sees it
+     (My team with the real channel, Everyone with the Loop channel, Just the Hub), Close the loop or Close without a
+     note. The minutes show to the person only.
    - Home: In the loop, the week's notes from everyone, read through loop_feed() (no times, no hours). The person page:
      Their loop (Your loop on your own). Hours on someone else's page are for HR, leaders and admins (wave116k).
    - The walkthrough: the page tour "loop" (the Academy row tour:loop). It opens the sheet in preview (nothing read or
      written) to show each part, and the preview closes with the tour. The chrome tour's step lives in 122.
    - window.w192: start, open, openRow (wave118b's "as of" close), preview, endPreview, feed, state.
-   wave212 (06/10/26, checkin-post v5): I'm in posts a line in #check-in-out-wa ("is in the loop", never the time).
-   wave214 (06/10/26), Steel: "All closed loops should be done in the check in out channel"; asked where a note goes, he
-   chose only #check-in-out-wa. Who sees it is gone: the sheet's Where it goes names the channel (app_config
-   checkinout_channel, or the draft's everyone_channel), every note posts there (checkin-post v6 ignores share_to), and
-   Close without a note posts the one line "closed the loop" there. The tour and the button's words say so.
    ===================================================================== */
 (function () {
   if (window.__wa192) return; window.__wa192 = true;
@@ -70107,7 +70107,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto';
   var Q = { row: null, busy: false, preview: false, rec: null, listening: false, finalText: '', text: '', bullets: [], suggest: [], others: [], picked: {},
-    share: 'everyone', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'check-in-out-wa', sig: '' };
+    share: 'team', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'the-loop', sig: '' };
   var F = { rows: null, at: 0, p: null };
 
   var css = document.createElement('style');
@@ -70139,8 +70139,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .bul .b .rm:hover{color:' + FLAG + ';}' +
     '.w192m .addl{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;display:inline-block;margin:2px 0 4px;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
     '.w192m .quiet{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
-    '.w192m .where{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;background:' + GREEN + ';color:' + CREAM + ';margin:0;}' +
-    '.w192m .where small{font-weight:500;opacity:.85;}' +
     '.w192m .empty{font-size:13px;color:var(--wa-muted);margin:4px 0 6px;line-height:1.5;}' +
     '.w192m textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px 14px;border:1px solid rgba(16,63,57,.2);border-radius:14px;font-size:15px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
     '.w192m textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
@@ -70163,6 +70161,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .tk label b{display:block;font-weight:600;color:var(--wa-text);}' +
     '.w192m .tk label span{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;}' +
     '.w192m .more{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;margin:6px 0 0;display:inline-block;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
+    '.w192m .share{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w192m .share label{position:relative;display:inline-flex;align-items:center;gap:6px;border:1.5px solid rgba(16,63,57,.18);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;color:' + GREEN + ';cursor:pointer;background:var(--wa-card);}' +
+    '.w192m .share label.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
+    '.w192m .share label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
+    '.w192m .share label input{position:absolute;opacity:0;width:1px;height:1px;}' +
+    '.w192m .share label small{font-weight:500;opacity:.8;}' +
     '.w192m .w113acts{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
     '.w192m .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
     '.w192m .w113acts .skip{background:none;border:none;color:var(--wa-muted);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:6px 4px;font-family:' + BODY + ';}' +
@@ -70230,9 +70234,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return r.data;
   }
   function SR() { return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
-  /* wave214: every closed loop goes to the check-in-out channel (app_config checkinout_channel; the draft's everyone_channel) */
-  function loopName() { return Q.allCh || Q.loopName || 'check-in-out-wa'; }
-  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'checkinout_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
+  function loopName() { return Q.allCh || Q.loopName || 'the-loop'; }
+  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'loop_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
   function onPerson() { return (/^#person\/(\d+)/.exec(location.hash || '') || [])[1] || null; }
   function repaintPerson() { var id = onPerson(); if (id && typeof window.w116Person === 'function') { try { window.w116Person(id); } catch (e) { /* fine */ } } }
 
@@ -70255,7 +70258,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       label = 'Close the loop';
     } else {
       cls = ''; html = '<span class="dot"></span>I’m in';
-      title = 'Starting work for Welfare Avenue? Press I’m in. A line in #' + loopName() + ' says you are in (never the time); the ring on your photo shows teammates you are around.';
+      title = 'Starting work for Welfare Avenue? Press I’m in. Nothing is posted; the ring on your photo shows teammates you are around.';
       label = 'I’m in';
     }
     if (b.className !== cls) b.className = cls;
@@ -70266,7 +70269,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   setInterval(render, 2000);
   render(); setTimeout(render, 800); setTimeout(render, 2500);
 
-  /* ---------- I'm in: wave116j's toggle inserts the row; checkin-post start posts "is in the loop" in the check-in-out channel (wave212) ---------- */
+  /* ---------- I'm in: wave116j's toggle inserts the row; nothing is posted ---------- */
   async function start() {
     var c = ck(); if (!c || Q.busy || c.open()) return; Q.busy = true;
     try {
@@ -70275,7 +70278,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       render(); try { c.presence(); } catch (e) { /* fine */ }
       if (row) {
         toastS('You’re in. Close the loop when you finish.');
-        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* the session runs either way */ } }
+        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* nothing is posted anyway */ } }
         repaintPerson();
       }
     } catch (e) { toastS('Could not start your session: ' + (e.message || e)); }
@@ -70309,6 +70312,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; });
     var ta = document.getElementById('w192say'); if (ta) Q.text = ta.value;
   }
+  function shareOpts() {
+    var o = [];
+    if (Q.teamCh) o.push({ k: 'team', t: 'My team', s: '#' + Q.teamCh });
+    o.push({ k: 'everyone', t: 'Everyone', s: '#' + loopName() });
+    o.push({ k: 'hub', t: 'Just the Hub', s: 'no Slack post' });
+    return o;
+  }
   function sheetHtml() {
     var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w192b="' + i + '" value="' + E(b) + '" aria-label="Line ' + (i + 1) + ' of your note"><button type="button" class="rm" data-w192rm="' + i + '" title="Take this line out" aria-label="Take this line out">&#10005;</button></div>'; }).join('');
     var draft = !Q.loaded ? '<p class="empty">Reading what moved…</p>'
@@ -70316,6 +70326,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var hidden = Q.hidden ? '<p class="quiet">' + Q.hidden + (Q.hidden === 1 ? ' private item is' : ' private items are') + ' left out (confidential, board or one-on-one work). Add a line yourself if it should be shared.</p>' : '';
     var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w192t="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
     var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w192t="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
+    var opts = shareOpts();
+    if (!opts.some(function (o) { return o.k === Q.share; })) Q.share = opts[0].k;
+    var share = opts.map(function (o) { return '<label class="' + (Q.share === o.k ? 'on' : '') + '"><input type="radio" name="w192s" data-w192s="' + o.k + '"' + (Q.share === o.k ? ' checked' : '') + '>' + E(o.t) + ' <small>&middot; ' + E(o.s) + '</small></label>'; }).join('');
     return '<div class="w113modal w192m" id="w192sheet" role="dialog" aria-labelledby="w192h"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
       '<p class="m-sub"><span class="hrs">' + E(fmtMins(Q.minutes)) + '</span> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
       '<div id="w192draftbox"><h4>What moved <span class="k">From your records</span></h4>' + draft + hidden +
@@ -70325,8 +70338,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="sayrow">' + (SR() ? '<button type="button" class="mic" id="w192mic"><span class="ic"></span>Talk instead</button>' : '') + '<button type="button" class="addb" id="w192tidy">Add to the note</button><span class="quiet" id="w192hint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</span></div></div>' +
       (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk" id="w192sug">' + sug + '</div>' : '') +
       (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
-      '<div id="w192sharebox"><h4>Where it goes</h4><p class="where">#' + E(loopName()) + ' <small>&middot; in Slack, for the whole team</small></p>' +
-      '<p class="quiet">Every closed loop goes there, with no clock time and no hours. Every note also shows on Home, in the loop.</p></div>' +
+      '<div id="w192sharebox"><h4>Who sees it</h4><div class="share" role="radiogroup" aria-label="Who sees it">' + share + '</div>' +
+      '<p class="quiet">No clock time and no hours in the post. Every note also shows on Home, in the loop.</p></div>' +
       '<div class="w113acts"><span class="w113ok" id="w192ok"></span><span style="flex:1"></span><button type="button" class="skip" id="w192skip">Close without a note</button><button class="btn primary" id="w192close">Close the loop</button></div></div>';
   }
   function paint() {
@@ -70335,7 +70348,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function begin(row) {
     Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false;
-    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';   /* wave214: one place for every note */
+    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';
     var endMs = row.ended_at ? new Date(row.ended_at).getTime() : Date.now();
     Q.minutes = Math.max(1, Math.round((endMs - new Date(row.started_at).getTime()) / 60000));
   }
@@ -70350,7 +70363,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       Q.bullets = drafted.concat(mine.filter(function (b) { return drafted.indexOf(b) < 0; }));
       Q.hidden = Number(r.hidden || 0); Q.minutes = r.minutes || Q.minutes;
       Q.others = (r.open_tasks || []).slice();
-      Q.allCh = r.everyone_channel || null;
+      Q.teamCh = r.team_channel || null; Q.allCh = r.everyone_channel || null;
+      if (!Q.touched) Q.share = Q.teamCh ? 'team' : 'everyone';
       Q.loaded = true; paint();
     } catch (e) {
       if (Q.row !== row) return;
@@ -70380,7 +70394,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function finish(skipped) {
     var c = ck(); if (!c || !Q.row || Q.busy || Q.preview) return;
     keep(); stopRec();
-    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : 'everyone';
+    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : Q.share;
     if (!skipped && String(Q.text || '').trim().length >= 3) bullets.push(String(Q.text).trim().slice(0, 220));   /* words typed but not folded in still go */
     var ok = document.getElementById('w192ok');
     if (!skipped && !bullets.length) { if (ok) ok.textContent = 'Add a line, or close without a note.'; return; }
@@ -70390,7 +70404,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await fn('checkin-post', { action: 'close', checkin_id: Q.row.id, bullets: bullets, close_task_ids: closeIds, share_to: share, skipped: !!skipped });
       c.clear(); closeModal(); Q.sig = '';
-      var where = skipped ? (r.posted ? 'Loop closed. #' + r.channel + ' shows you closed it, with no note.' : 'Loop closed, no note shared.')
+      var where = skipped ? 'Loop closed, no note shared.'
+        : r.share_to === 'hub' ? 'Loop closed. Your note is on Home.'
         : r.posted ? 'Loop closed and shared in #' + r.channel + '.'
         : 'Loop closed. Your note is on Home; Slack did not take it (' + (r.error || 'unknown') + ').';
       var n = (r.closed_ids || []).length;
@@ -70410,8 +70425,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the walkthrough's preview of the sheet (nothing is read or written) ---------- */
   function preview() {
+    var d = (me() || {}).department;
     begin({ id: 0, started_at: new Date(Date.now() - 95 * 60000).toISOString() });
-    Q.preview = true; Q.loaded = true; Q.hidden = 1; Q.share = 'everyone';
+    Q.preview = true; Q.loaded = true; Q.hidden = 1;
+    var chans = { opsmtl: 'operations-mtl', opsto: 'general-toronto', progdev: 'program-development', marketing: 'social-media', fundraising: 'fundraising', hr: 'human-resources', board: 'board-of-directors' };
+    Q.teamCh = chans[d] || 'operations-mtl'; Q.share = 'team';
     Q.bullets = ['Closed: Book the kitchen for Sunday; Send the volunteer reminder', 'Commented on: Flyers for the gift basket drive', 'Joined: Operations Montreal meeting'];
     Q.suggest = [{ id: -1, title: 'Confirm the drivers for Sunday', why: 'you said the drivers are confirmed' }]; Q.picked = { '-1': true }; Q.others = [];
     paint();
@@ -70440,6 +70458,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
     var rm = t.closest('[data-w192rm]'); if (rm) { keep(); Q.bullets.splice(Number(rm.getAttribute('data-w192rm')), 1); paint(); return; }
     if (t.closest('#w192more')) { var o = document.getElementById('w192oth'); if (o) o.style.display = o.style.display === 'none' ? '' : 'none'; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var s = e.target && e.target.closest && e.target.closest('[data-w192s]'); if (!s) return;
+    Q.share = s.getAttribute('data-w192s'); Q.touched = true;
+    document.querySelectorAll('#w192sheet .share label').forEach(function (l) { var i = l.querySelector('[data-w192s]'); l.classList.toggle('on', !!(i && i.checked)); });
   });
 
   /* ---------- the shared notes: loop_feed() returns what moved, never a time or hours ---------- */
@@ -70531,12 +70554,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (T.loop) return true;
       T.loop = { tab: 'mypage', icon: 'refresh', hash: '#mypage', steps: [
         { c: 1, t: 'The Loop', p: 'Two buttons, one habit: I’m in when you start working for Welfare Avenue, Close the loop when you finish. This one-minute walkthrough shows both. It is not a timeclock: the note you share carries what moved, never your hours.' },
-        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. A short line in #check-in-out-wa says you are in, never the time. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
+        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. Nothing is posted anywhere. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
         { s: '#w192draftbox', t: 'What moved', p: 'When you close the loop, the Hub drafts your note from your own records: tasks closed or opened, requests, meetings joined, Academy modules finished. Keep what matters and change any line. Private work (confidential, board, one-on-ones) is never pre-filled.', go: function () { preview(); } },
         { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Add to the note turns it into lines and spots the tasks you finished.' },
         { s: '#w192sug', t: 'Tick what is finished', p: 'The tasks your words show are done are suggested here. Ticked tasks close themselves when you close the loop.', opt: 1 },
-        { s: '#w192sharebox', t: 'Where it goes', p: 'Every closed loop goes to #check-in-out-wa in Slack, for the whole team. Every note also shows on Home, so nothing is lost.' },
-        { s: '#w192close', t: 'Close the loop', p: 'Your note goes to #check-in-out-wa, with no clock time and no hours. Close without a note ends your session and posts only that you closed the loop.' },
+        { s: '#w192sharebox', t: 'Who sees it', p: 'Your team’s channel by default, everyone in the Loop channel, or just the Hub. Every note also shows on Home, so nothing is lost.' },
+        { s: '#w192close', t: 'Close the loop', p: 'Your note goes where you chose, with no clock time and no hours. Close without a note ends your session and shares nothing.' },
         { c: 1, t: 'Your hours are yours', p: 'They show on your own page and to HR, for your records and your balance. They never go in the post. That is the whole thing: I’m in, close the loop.' }
       ] };
       return true;
@@ -73650,8 +73673,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var res = await Promise.all([
       q(db.from('hub_checkins').select('email,name,department,started_at,ended_at,minutes,auto_closed').gte('started_at', since).order('started_at', { ascending: false }).limit(3000)),
       q(db.from('hub_settings').select('value').eq('key', 'hours_minimums').limit(1)),
-      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })()
+      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })(),
+      q(db.from('slack_hours').select('member_name,week_start,hours,sessions').gte('week_start', since.slice(0, 10)).limit(2000))   /* wave215: Slack check-ins count too (Steel, 07/10/26) */
     ]);
+    S.sh = res[3] || [];
     S.ck = res[0]; var mv = res[1][0] && res[1][0].value; if (mv && typeof mv === 'object') S.mins = { member: Number(mv.member) || 3, manager: Number(mv.manager) || 5 };
     S.feed = res[2]; S.ckAt = Date.now();
   }
@@ -73698,6 +73723,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (t >= m0) o.week += mn; else if (t >= m0 - wk) o.last += mn;
       if (t < m0 && t >= m0 - wk * aw) o.past += mn;
       o.sessions++; if (!c.ended_at) o.open = true; if (!o.lastAt || c.started_at > o.lastAt) o.lastAt = c.started_at;
+    });
+    /* wave215 (Steel, 07/10/26: "Slack activity can count toward hours"): the weekly hours hours-pull reads from people's own
+       "in" and "out" messages in the Slack check-in channels (slack_hours; the Hub's own Loop posts are never counted there),
+       added to the person's Loop time for the same week. o.slackWeek / o.slackPast say how much of it came from Slack. */
+    (S.sh || []).forEach(function (r) {
+      var mm = members().filter(function (m) { return lower(m.name) === lower(r.member_name) || lower(String(m.name).split(' ')[0]) === lower(String(r.member_name).split(' ')[0]); })[0];
+      if (!mm || !mm.email) return;
+      var em = lower(mm.email), mins = Math.round(Number(r.hours || 0) * 60); if (!mins) return;
+      var o = out[em] || (out[em] = { email: em, name: mm.name, dept: mm.department, week: 0, last: 0, past: 0, sessions: 0, open: false, lastAt: null });
+      var t = new Date(String(r.week_start) + 'T12:00:00').getTime();
+      if (t >= m0) { o.week += mins; o.slackWeek = (o.slackWeek || 0) + mins; } else if (t >= m0 - wk) { o.last += mins; o.slackLast = (o.slackLast || 0) + mins; }
+      if (t < m0 && t >= m0 - wk * aw) { o.past += mins; o.slackPast = (o.slackPast || 0) + mins; }
+      o.sessions += Number(r.sessions || 0);
     });
     return out;
   }
@@ -73897,11 +73935,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       rows.map(function (r) {
         var pct = r.min ? Math.min(100, Math.round(r.avg / r.min * 100)) : 100;
         return '<tr class="' + (r.low ? 'low' : '') + '"><td><b>' + E(r.m.name) + '</b><br><small style="color:var(--wa-muted)">' + E(teamLabel(r.m.department)) + (r.h.open ? ' \u00b7 in now' : '') + '</small></td>' +
-          '<td>' + fmtH(r.h.week) + '</td><td class="hp">' + fmtH(r.h.last) + '</td>' +
+          '<td>' + fmtH(r.h.week) + (r.h.slackWeek ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackWeek) + ' from Slack</small>' : '') + '</td><td class="hp">' + fmtH(r.h.last) + (r.h.slackLast ? '<br><small style="color:var(--wa-muted)">' + fmtH(r.h.slackLast) + ' from Slack</small>' : '') + '</td>' +
           '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:' + pct + '%"></i></div><span>' + (Math.round(r.avg * 10) / 10) + 'h</span></div></td>' +
           '<td>' + (r.min ? r.min + 'h' : '<span class="w197pill mut">exempt</span>') + '</td><td class="hp">' + (r.min ? (!S.avgW ? '<span class="w197pill mut">too early</span>' : r.low ? '<span class="w197pill low">below</span>' : '<span class="w197pill">on track</span>') : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="w197note">From The Loop: a session counts from I\u2019m in to Close the loop; a session still open counts at most eight hours. Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
+      '<p class="w197note">From The Loop and Slack: a Loop session counts from I\u2019m in to Close the loop (a session still open counts at most eight hours), and the hours people log with their own \u201cin\u201d and \u201cout\u201d messages in the Slack check-in channels are added (read every morning; the Hub\u2019s own Loop posts there are not counted twice). Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
     var feed = S.feed.slice(0, 25);
     html += '<div class="w197card"><h2>What people shared in The Loop</h2><p class="w197note" style="margin:0 0 8px">What moved, as people chose to share it when they closed the loop (last 30 days). Never times or hours.</p>' +
       (feed.length ? '<ul class="w197feed">' + feed.map(function (f) {
@@ -74948,7 +74986,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   function sortGrade() { return !!P.sortGrade; }
   function gradeAvg(c) { var a = avgOf(c.id); return a ? a.avg : -1; }
-  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (window.w209 ? w209.barBits() : '') + (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
+  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (window.w209 ? w209.barBits() : '') + (window.w211 && w211.barBits ? w211.barBits() : '') + (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
 
   /* ---------- interviews: a day and a time (Steel, 03/10/26: "Those in interview stage should have a day and time") ---------- */
   function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
@@ -80904,9 +80942,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         }
         var lk = [cvUrl, val('w209l')].filter(Boolean);
         var res2 = await db.rpc('wa209_intake', { p: { name: name, email: email || null, phone: phone || null, position_id: val('w209pos') || null, role: val('w209r') || null, source: src, applied_at: applied,
-          message: msg || null, links: lk } });
+          message: msg || null, links: lk, practice: !!(window.w215 && w215.practice()) } });   /* wave215: added in a walkthrough = practice */
         if (res2 && res2.error) throw res2.error; r = (res2 && res2.data) || {};
-        if (cvUrl && r.candidate_id && r.to !== 'volunteers' && !r.duplicate) {
+        if (cvUrl && r.candidate_id && r.to !== 'volunteers' && !r.duplicate && !r.practice) {   /* wave215: practice leaves the Resumes folders alone */
           try { var fc = await recruit({ action: 'file_cv', id: r.candidate_id, url: cvUrl }); r.cvNote = fc && fc.ok ? (fc.filed ? (fc.copied ? 'CV filed in ' + fc.where : 'CV already in ' + fc.where) : (fc.note || '')) : ('CV not filed: ' + ((fc && fc.error) || 'unknown')); }
           catch (x) { r.cvNote = 'CV not filed: ' + (x.message || x); }
         }
@@ -81367,7 +81405,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- the card and the sheet ---------- */
   function cardBits(c) {
     if (!c) return '';
-    var a = answered(c), out = '';
+    var a = answered(c), out = c.practice ? '<span class="w215prac" title="Made in an Avenue Academy walkthrough: never sent to Slack or texted">Practice</span>' : '';
     if (a === 'yes') out += '<span class="w211pill ok">Said yes</span>';
     else if (c.interest_texted_at && (c.status === 'new' || c.status === 'reviewing')) out += '<span class="w211pill">Texted ' + E(short(c.interest_texted_at)) + '</span>';
     if (c.offer_sent_at && (c.status === 'offer' || c.status === 'hired')) out += '<span class="w211pill ok">Offer sent ' + E(short(c.offer_sent_at)) + '</span>';
@@ -81440,32 +81478,46 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function defaults(c) {
     var d = new Date(); d.setDate(d.getDate() + 7);
     var fr = /\b(Fran\u00e7ais|French)\b/i.test(String(c.summary || ''));
-    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: 4, start: '', respond_by: iso(d), signer: myName(), signer_title: '', note: '' };
+    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: 4, start: '', respond_by: iso(d), signer_email: '', signer_title: '', note: '' };
   }
   function askOffer(id) {
     var c = cand(id); if (!c || !staff()) return;
     M = { kind: 'offer', id: c.id, data: null, busy: false, err: '', f: defaults(c), preview: '' }; paintOffer();
-    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; M.data = r; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; if (!M.f.signer) M.f.signer = r.signer; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
+    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; M.data = r; if (!M.f.signer_email) M.f.signer_email = r.signer_email || ''; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
   }
   function readOffer() {
-    ['email', 'lang', 'reports_to', 'hours', 'start', 'respond_by', 'signer', 'signer_title', 'note'].forEach(function (k) { var x = document.getElementById('w211o_' + k); if (x) M.f[k] = x.value; });
+    ['email', 'lang', 'reports_to', 'hours', 'start', 'respond_by', 'signer_email', 'signer_title', 'note'].forEach(function (k) { var x = document.getElementById('w211o_' + k); if (x) M.f[k] = x.value; });
   }
   function paintOffer() {
     if (M.kind !== 'offer') return;
     var c = cand(M.id) || {}, f = M.f, d = M.data;
     var inp = function (k, label, type, extra) { return '<label for="w211o_' + k + '">' + label + '</label><input id="w211o_' + k + '" type="' + (type || 'text') + '" value="' + E(f[k]) + '"' + (extra || '') + '>'; };
-    var test = d && d.mail_mode !== 'live';
-    panel('<h3 id="w211h">Send the offer letter to ' + E(c.name || '') + '?</h3><p class="w197note">' + E((d && d.role) || c.role || '') + '. The letter is saved as a Google Doc in Recruitment > Offer Letters and emailed as a PDF with your note.</p>' +
+    var test = d && d.mail_mode !== 'live' && !d.practice;
+    var signers = (d && d.signers) || (f.signer_email ? [{ email: f.signer_email, name: f.signer_email, has_sig: true }] : []);
+    panel('<h3 id="w211h">Send the offer letter to ' + E(c.name || '') + '?</h3><p class="w197note">' + E((d && d.role) || c.role || '') + '. The letter is a signed PDF in the Welfare Avenue brand, saved in Recruitment > Offer Letters and emailed with your note; the signer gets a copy and their replies.</p>' +
+      (d && d.practice ? '<p class="w211warn">Practice: the letter is saved as PRACTICE and emailed to the practice applicant\u2019s own address (yours), even while email is in test mode.</p>' : '') +
       (test ? '<p class="w211warn">Email is in test mode: the email goes to the test inboxes (' + E(d.test_to) + '), not to them. Turning email on is an admin setting (CRM).</p>' : '') +
       '<div class="w211two">' + inp('email', 'Their email', 'email') + '<div><label for="w211o_lang">Language</label><select id="w211o_lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></div></div>' +
       '<div class="w211two">' + inp('reports_to', 'Reports to (optional)') + inp('hours', 'Hours a week', 'number', ' min="1" max="40"') + '</div>' +
       '<div class="w211two">' + inp('start', 'Start date (optional)', 'date') + inp('respond_by', 'Reply by', 'date') + '</div>' +
-      '<div class="w211two">' + inp('signer', 'Signed by') + inp('signer_title', 'Their title') + '</div>' +
+      '<div class="w211two"><div><label for="w211o_signer_email">Signed by</label><select id="w211o_signer_email">' + signers.map(function (x) { return '<option value="' + E(x.email) + '"' + (x.email === f.signer_email ? ' selected' : '') + '>' + E(x.name) + (x.has_sig ? '' : ' (no signature yet)') + (d && x.email === d.default_signer ? ' \u00b7 default' : '') + '</option>'; }).join('') + '</select></div>' + inp('signer_title', 'Their title') + '</div>' +
+      (d && d.signers && f.signer_email && d.default_signer !== f.signer_email ? '<div class="acts">' + btn('Make ' + E((signers.filter(function (x) { return x.email === f.signer_email; })[0] || {}).name || 'them') + ' the default signer', 'data-w211a="osigner"', 'sm') + '</div>' : '') +
+      (d && d.signer_email === f.signer_email && !d.signer_has_sig ? '<p class="w211warn">' + E(d.signer || 'The signer') + ' has not saved a signature yet, so the letter has their name only. Save it in Volunteer Manager &gt; Sign-offs &gt; My signature.</p>' : '') +
       '<label for="w211o_note">The offer note (in the letter and the email)</label><textarea id="w211o_note" rows="4" placeholder="A personal line: why them, what comes next">' + E(f.note) + '</textarea>' +
       (M.err ? '<p class="w211err" role="alert">' + E(M.err) + '</p>' : '') +
       '<div class="acts">' + btn('Preview the letter', 'data-w211a="oprev"', 'sm') + '</div>' +
       (M.preview ? '<iframe class="w211prev" title="The offer letter" sandbox="" srcdoc="' + E(M.preview) + '"></iframe>' : '') +
       '<div class="acts">' + btn(M.busy ? 'Working\u2026' : 'Create the letter and email it', 'data-w211a="osend" data-mail="1"' + (M.busy ? ' disabled' : ''), 'pri') + btn('Create the letter only', 'data-w211a="osend" data-mail="0"' + (M.busy ? ' disabled' : '')) + btn('Not now', 'data-w211a="shut"') + '</div>');
+  }
+  async function signerChanged() {
+    readOffer(); M.f.signer_title = ''; M.preview = '';
+    try { var r = await fn({ action: 'offer_preview', id: M.id, f: M.f }); M.data = r; M.f.signer_title = r.signer_title || ''; } catch (e) { M.err = e.message; }
+    paintOffer();
+  }
+  async function makeDefaultSigner() {
+    readOffer();
+    try { await fn({ action: 'offer_signer_set', email: M.f.signer_email }); if (M.data) M.data.default_signer = M.f.signer_email; toastS('Default signer saved'); } catch (e) { M.err = e.message; }
+    paintOffer();
   }
   async function previewOffer() {
     readOffer(); M.err = '';
@@ -81479,7 +81531,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     M.busy = true; M.err = ''; paintOffer();
     try {
       var r = await fn({ action: 'offer_send', id: M.id, f: M.f, email: !!mail }); var id = M.id; shut();
-      toastS(r.emailed ? (r.emailed.mode === 'live' ? 'Offer letter emailed' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters');
+      toastS(r.emailed ? (r.emailed.mode === 'live' || r.emailed.mode === 'practice' ? 'Offer letter emailed (a copy to ' + (r.signer || 'the signer') + ')' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters');
       await reload(id);
     } catch (e) { M.busy = false; M.err = e.message; paintOffer(); }
   }
@@ -81496,6 +81548,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* the selection bar (w199): several at once */
+  /* wave215: practice cards (Academy walkthroughs) can be cleared from the bar: your own, or an admin everyone's */
+  function isAdm() { try { return !!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function barBits() {
+    var n = cands().filter(function (c) { return c.practice; }).length;
+    return n && staff() ? btn('Clear practice (' + n + ')', 'data-w211a="pclear" title="Remove the applications made in Avenue Academy walkthroughs' + (isAdm() ? ' (everyone\u2019s)' : ' (yours)') + '"', 'sm') : '';
+  }
+  async function clearPractice() {
+    var all = isAdm();
+    if (!window.confirm(all ? 'Remove every practice application (made in the Avenue Academy walkthroughs, by anyone)?' : 'Remove your practice applications?')) return;
+    try { var r = await db.rpc('wa215_clear_practice', { p_all: all }); if (r && r.error) throw r.error; var d = r.data || {}; toastS('Removed ' + (d.applications || 0) + (d.applications === 1 ? ' practice application' : ' practice applications')); await reload(null); }
+    catch (e) { toastS('Could not clear: ' + (e.message || e)); }
+  }
   function bulkBits(ids) { return staff() ? btn('Text: still interested?', 'data-w211a="intbulk"' + (ids && ids.length ? '' : ' disabled'), 'sm') : ''; }
   function selected() { try { var s = w199.state().sel || {}; return Object.keys(s).filter(function (k) { return s[k]; }).map(Number); } catch (e) { return []; } }
 
@@ -81504,14 +81568,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var a = t.getAttribute('data-w211a');
     if (a === 'shut') { shut(); return; }
     if (a === 'intsend') { sendInt(); return; }
+    if (a === 'pclear') { clearPractice(); return; }
     if (a === 'intbulk') { var ids = selected(); if (ids.length) askInterest(ids); return; }
     if (a === 'oprev') { previewOffer(); return; }
+    if (a === 'osigner') { makeDefaultSigner(); return; }
     if (a === 'osend') { sendOffer(t.getAttribute('data-mail') === '1'); return; }
     if (t.hasAttribute('data-w211int')) { askInterest([Number(t.getAttribute('data-w211int'))]); return; }
     if (t.hasAttribute('data-w211offer')) { askOffer(t.getAttribute('data-w211offer')); return; }
     if (t.hasAttribute('data-w211cv')) { readCv(t.getAttribute('data-w211cv')); return; }
     if (t.hasAttribute('data-w211name')) { useName(t.getAttribute('data-w211name')); return; }
   });
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'w211o_signer_email' && M.kind === 'offer') signerChanged(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { var s = document.getElementById('w211m'); if (s && s.classList.contains('open')) shut(); } });
 
   var css = document.createElement('style'); css.id = 'w211css';
@@ -81529,7 +81596,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w211prev{width:100%;height:420px;border:1px solid rgba(16,63,57,.18);border-radius:8px;margin-top:10px;background:#FFFAF2;}';
   (document.head || document.documentElement).appendChild(css);
 
-  window.w211 = { cardBits: cardBits, sheetBits: sheetBits, bulkBits: bulkBits, askOffer: askOffer, askInterest: askInterest, state: function () { return M; } };
+  window.w211 = { barBits: barBits, cardBits: cardBits, sheetBits: sheetBits, bulkBits: bulkBits, askOffer: askOffer, askInterest: askInterest, state: function () { return M; } };
 })();
 /* =====================================================================
    WA v211b Stage gates: what a card needs before it can move on (Steel, 06/10/26)
@@ -81855,7 +81922,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     });
     (S.cands || []).forEach(function (c) {
       var at = c.stage_at || c.created_at;
-      if (c.status === 'new' && c.created_at && now - new Date(c.created_at).getTime() < 3 * 86400000) out.push({ k: 'new', at: c.created_at, ic: '\u2709', t: 'New application: ' + (c.name || 'someone'), s: (window.w199 ? w199.roleOf(c) : c.role) || '', id: c.id });
+      if (c.status === 'new' && !c.practice && c.created_at && now - new Date(c.created_at).getTime() < 3 * 86400000) out.push({ k: 'new', at: c.created_at, ic: '\u2709', t: 'New application: ' + (c.name || 'someone'), s: (window.w199 ? w199.roleOf(c) : c.role) || '', id: c.id });
       if (!mine(c)) return;
       if ((c.status === 'new' || c.status === 'reviewing') && !callsOf(c.id).length) out.push({ k: 'call', at: at, ic: '\u260e', t: 'Call ' + (c.name || 'them'), s: 'You handle this application; no call logged yet', id: c.id });
       if (c.status === 'interview' && c.interview_at && (day(c.interview_at) === tod || day(c.interview_at) === tom)) out.push({ k: 'iv', at: at, ic: '\ud83d\uddd3', t: 'Interview: ' + (c.name || 'someone'), s: when(c.interview_at), id: c.id });
@@ -81941,6 +82008,591 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   setInterval(function () { var a = document.querySelector('#hrcentre > .w118mast .w197acts'); if (a && document.getElementById('w212bell')) bell(a); }, 20000);
 
   window.w212 = { bell: bell, items: items, toggle: toggle, state: function () { return B; } };
+})();
+/* =====================================================================
+   WA v213 The due-date check (06/10/26)
+   =====================================================================
+   Steel (06/10/26), after wave210 showed 52 of 62 recent meeting tasks had no due date: "I'd rather a pop up when the
+   user gets on to the hub that they should [set] their due dates for the tasks or confirm the due dates provided make
+   sense" (new and existing open tasks); then "it should pop with the best assumptions of due dates and allow the user
+   to make edits if needed but they [should not] be able to exit until they confirm their due dates. Also overdue tasks
+   should also pop to ask if items are done and if they aren't to push the due date to a realistic date".
+
+   - On opening the Hub, a pop-up (#w213pop) lists the person's open tasks that are overdue, have no due date, or
+     carry a date a meeting set that nobody confirmed (my_due_date_check(): owner by first name, or assigned).
+   - Each comes filled with the best guess: their team's next meeting from the Hub calendar, or the one after when
+     the next is less than two days away (a date the meeting set stays as it is). Next meeting / Following meeting
+     buttons and a date field change it. An overdue task asks Done or Still open (push to a date).
+   - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
+     offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
+     change_log line; the pop-up comes back next visit only for what is still overdue or undated.
+   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
+(function () {
+  'use strict';
+  if (window.__wa213) return; window.__wa213 = true;
+  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
+
+  var css = ''
+    + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
+    + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
+    + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
+    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
+    + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
+    + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
+    + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
+    + '#w213pop .row.isdone{opacity:.6;}'
+    + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
+    + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
+    + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
+    + '#w213pop .ctl input[type=date]{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;}'
+    + '#w213pop .chip{border:1px solid var(--wa-line,#d8d4c8);background:#FFFAF2;border-radius:14px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:#333;}'
+    + '#w213pop .chip.on{background:' + GREEN + ';border-color:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .seg{display:inline-flex;border:1px solid var(--wa-line,#d8d4c8);border-radius:8px;overflow:hidden;}'
+    + '#w213pop .seg button{border:0;background:#FFFAF2;font:inherit;font-size:12.5px;padding:4px 10px;cursor:pointer;}'
+    + '#w213pop .seg button.on{background:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .ft{padding:12px 22px;border-top:1px solid var(--wa-line,#e4e0d4);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    + '#w213pop .save{background:' + GOLD + ';color:#1F201E;border:0;border-radius:9px;padding:9px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}'
+    + '#w213pop .save[disabled]{opacity:.6;cursor:default;}'
+    + '#w213pop .later{background:none;border:0;color:#555;text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;}'
+    + '#w213pop .err{color:' + FLAG + ';font-size:12.5px;flex-basis:100%;}'
+    + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
+    + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
+  function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function busyElsewhere() {
+    var p = document.getElementById('w177pop'); if (p && p.offsetParent !== null && getComputedStyle(p).display !== 'none') return true;
+    var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
+    return false;
+  }
+
+  async function load() {
+    try {
+      var r = await db.rpc('my_due_date_check');
+      if (r && r.error) return null;
+      return (r && r.data) || [];
+    } catch (e) { return null; }
+  }
+
+  function rowHtml(r) {
+    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
+    var meta = [team(r.department)];
+    if (isOver) meta.push('was due ' + day(r.due_date));
+    else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
+    if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
+    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' \u00b7 ')) + '</div><div class="ctl">';
+    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
+    if (!dn) {
+      h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
+        + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting \u00b7 ' + E(day(r.next_meeting, true)) + '</button>'
+        + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following \u00b7 ' + E(day(r.following_meeting, true)) + '</button>';
+    }
+    return h + '</div></div>';
+  }
+
+  function html() {
+    var rows = S.rows || [];
+    var over = rows.filter(function (r) { return r.why === 'overdue'; });
+    var none = rows.filter(function (r) { return r.why === 'no_date'; });
+    var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
+    var bits = [];
+    if (over.length) bits.push(over.length + ' overdue');
+    if (none.length) bits.push(none.length + ' with no due date');
+    if (set.length) bits.push(set.length + ' dated by a meeting');
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
+      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team\u2019s next meeting. Change any that don\u2019t fit'
+      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
+    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
+    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
+    var n = rows.length;
+    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
+      + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
+      + '<span class="note">You can change any date later on the task itself.</span>'
+      + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
+    return h;
+  }
+
+  function paint() {
+    var el = document.getElementById('w213pop');
+    if (!el) { el = document.createElement('div'); el.id = 'w213pop'; document.body.appendChild(el); wire(el); }
+    var sc = el.querySelector('.bd'), top = sc ? sc.scrollTop : 0;
+    el.innerHTML = html();
+    var sc2 = el.querySelector('.bd'); if (sc2) sc2.scrollTop = top;
+  }
+  function close() { var el = document.getElementById('w213pop'); if (el) el.remove(); S.gone = true; document.removeEventListener('keydown', trapKey, true); }
+  function trapKey(e) {
+    if (!document.getElementById('w213pop')) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); }
+  }
+
+  function wire(el) {
+    el.addEventListener('click', function (e) {
+      var t = e.target, b;
+      if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
+      if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
+      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
+      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
+      if (t.closest('[data-w213save]')) { save(); return; }
+      if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
+    });
+    el.addEventListener('change', function (e) {
+      var i = e.target.closest('[data-w213date]'); if (!i) return;
+      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
+    });
+    document.addEventListener('keydown', trapKey, true);
+  }
+
+  async function save() {
+    if (S.busy) return;
+    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    (S.rows || []).forEach(function (r) {
+      var id = r.task_id;
+      if (S.done[id]) { items.push({ id: id, done: true }); return; }
+      var v = S.pick[id];
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
+      items.push({ id: id, due: v });
+    });
+    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
+    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
+    if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
+    S.busy = true; S.err = ''; paint();
+    try {
+      var r = await db.rpc('confirm_due_dates', { p: items });
+      if (r && r.error) throw new Error(r.error.message || 'could not save');
+      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
+      close();
+      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
+      try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
+    } catch (e) {
+      S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
+    }
+  }
+
+  async function start() {
+    if (S.shown || S.gone) return;
+    if (!staff()) return;
+    var rows = await load();
+    if (!rows || !rows.length) return;
+    S.rows = rows; S.pick = {}; S.done = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
+    var tries = 0;
+    (function wait() {
+      if (S.shown || S.gone) return;
+      if (busyElsewhere() && tries++ < 120) { setTimeout(wait, 1000); return; }
+      S.shown = true; paint();
+      try { var f = document.querySelector('#w213pop [data-w213save]'); if (f) f.focus(); } catch (e) { /* fine */ }
+    })();
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa = startApp;
+    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 1500); };
+  }
+  window.w213 = { start: start, state: function () { return S; } };
+})();
+/* =====================================================================
+   WA v215 Hands-on walkthroughs: the HR centre, step by step, on the real page (07/10/26)
+   =====================================================================
+   Steel (07/10/26): "a walkthrough of the entire HR center to be done in the trainings and learning avenue ... really, really
+   comprehensive, every step of the way ... one walkthrough is the entire recruitment process and you're helping whoever is
+   going through this walkthrough literally click the buttons of a test subject ... put themselves as a test subject in their
+   own email so that they get the offer letter ... Same thing with onboarding and for the other sections as well."
+   - The coach: a card in the corner and a gold ring around the button or field to use next. Unlike the page tours (wave122),
+     nothing is blocked: the learner clicks the real buttons, and the card moves on by itself when the Hub shows it is done
+     (a card moved, a call logged, a letter sent). Every step can be skipped, and the card can be folded out of the way.
+     Back, Skip, Next, Fold, End; Esc does not end it (the Hub's own panels use Esc). The run survives a page reload
+     (localStorage w215run, per browser).
+   - Practice: while a walkthrough that makes records runs, what the learner adds is marked practice (hub_candidates.practice,
+     wa_timeoff.practice): never sent to Slack, never texted, never on the calendar, and the offer letter goes to their own
+     address even while email is in test mode (recruit-actions v3). The last step clears them (wa215_clear_practice), and an
+     admin can clear everyone's from Applications.
+   - In the Avenue Academy: the Learning Avenue "The HR centre" (academy_paths hrcentre): the lesson How the HR centre works
+     and seven walkthroughs (trainings kind tour, key tour:hrwalk-*). The walkthroughs register in wave122's TOURS so the
+     Academy lists and opens them; wave122's startTour hands them to this coach. Finishing one completes the training.
+   API: window.w215 = { start, end, owns, practice, defs, state, me }. Definitions: parts215/b_walks.js. */
+(function () {
+  'use strict';
+  if (window.w215) return;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', INK = '#1F201E', TEAL = '#2A8C7A';
+  var DEFS = {};
+  var R = null;   /* the run: { key, i, done:{}, ctx:{}, at } */
+  var timer = null, okAt = 0, folded = false;
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function me() { try { return { name: (typeof USER !== 'undefined' && USER && USER.name) || '', email: lower(typeof USER !== 'undefined' && USER && USER.email) }; } catch (e) { return { name: '', email: '' }; } }
+  function save() { try { if (R) localStorage.setItem('w215run', JSON.stringify(R)); else localStorage.removeItem('w215run'); } catch (e) { /* fine */ } }
+  function q(sel) {
+    if (!sel) return null;
+    if (typeof sel === 'function') { try { return sel(R.ctx) || null; } catch (e) { return null; } }
+    var parts = String(sel).split(' || ');
+    for (var i = 0; i < parts.length; i++) { var all = document.querySelectorAll(parts[i]); for (var k = 0; k < all.length; k++) if (vis(all[k])) return all[k]; }
+    return null;
+  }
+  function vis(el) { if (!el || !el.isConnected) return false; var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; }
+  function val(v) { return typeof v === 'function' ? v(R.ctx) : v; }
+
+  /* ---------- the card and the ring ---------- */
+  function layer() {
+    var c = document.getElementById('w215c');
+    if (!c) {
+      c = document.createElement('div'); c.id = 'w215c'; c.setAttribute('role', 'dialog'); c.setAttribute('aria-live', 'polite'); c.setAttribute('aria-label', 'Walkthrough');
+      document.body.appendChild(c);
+      var r = document.createElement('div'); r.id = 'w215r'; r.setAttribute('aria-hidden', 'true'); document.body.appendChild(r);
+    }
+    return c;
+  }
+  function paint() {
+    if (!R) return;
+    var d = DEFS[R.key], st = d.steps[R.i]; if (!st) return;
+    var n = d.steps.length, isDone = !!R.done[R.i];
+    var c = layer();
+    c.className = (folded ? 'fold' : '') + (isDone ? ' ok' : '');
+    var body = val(st.p) || '';
+    var extra = '';
+    if (st.copy) { var cp = val(st.copy); if (cp && cp.text) extra += '<div class="w215cp"><span>' + E(cp.label || 'Copy') + '</span><code>' + E(cp.text) + '</code><button type="button" data-w215a="copy">Copy</button></div>'; }
+    if (st.fill) extra += '<button type="button" class="w215b soft" data-w215a="fill">' + E(val(st.fillLabel) || 'Fill it in for me') + '</button>';
+    if (st.act) extra += '<button type="button" class="w215b" data-w215a="act">' + E(val(st.actLabel) || 'Do it') + '</button>';
+    var wait = st.done ? (isDone ? '<p class="w215st ok">' + (R.hold === R.i ? 'Done.' : 'Done. Moving on\u2026') + '</p>' : '<p class="w215st">' + E(val(st.waitText) || 'Waiting for you to do it on the page\u2026') + '</p>') : '';
+    c.innerHTML = '<div class="w215h"><span class="w215k">' + E(d.title) + '</span><span class="w215n">' + (R.i + 1) + ' of ' + n + '</span>' +
+      '<button type="button" data-w215a="fold" title="' + (folded ? 'Open the card' : 'Fold the card out of the way') + '" aria-label="' + (folded ? 'Open the card' : 'Fold the card') + '">' + (folded ? '\u25b4' : '\u25be') + '</button>' +
+      '<button type="button" data-w215a="end" title="End the walkthrough" aria-label="End the walkthrough">\u00d7</button></div>' +
+      '<div class="w215bar"><i style="width:' + Math.round(100 * (R.i + (isDone ? 1 : 0)) / n) + '%"></i></div>' +
+      (folded ? '<p class="w215ft">' + E(st.t) + '</p>' :
+        '<h4>' + E(st.t) + '</h4><div class="w215p">' + body + '</div>' + extra + wait +
+        '<div class="w215f">' + (R.i > 0 ? '<button type="button" class="w215b soft" data-w215a="back">Back</button>' : '') + '<span class="sp"></span>' +
+        (st.done && !isDone ? '<button type="button" class="w215b link" data-w215a="skip">Skip this step</button>' : '') +
+        (!st.done || isDone ? '<button type="button" class="w215b" data-w215a="next">' + (R.i >= n - 1 ? 'Finish' : 'Next') + '</button>' : '') + '</div>');
+    ring();
+  }
+  function ring() {
+    var r = document.getElementById('w215r'); if (!r || !R) return;
+    var st = DEFS[R.key].steps[R.i], el = st && !folded ? q(st.s) : null;
+    if (!el || R.done[R.i]) { r.style.display = 'none'; return; }
+    var b = el.getBoundingClientRect(), pad = 6;
+    r.style.display = 'block';
+    r.style.left = Math.round(b.left - pad) + 'px'; r.style.top = Math.round(b.top - pad) + 'px';
+    r.style.width = Math.round(b.width + pad * 2) + 'px'; r.style.height = Math.round(b.height + pad * 2) + 'px';
+  }
+  function scrollTo(st) {
+    var el = q(st.s); if (!el) return;
+    var b = el.getBoundingClientRect();
+    if (b.top < 70 || b.bottom > innerHeight - 40) { try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ } }
+  }
+
+  /* ---------- moving through ---------- */
+  async function show(i) {
+    if (!R) return;
+    var d = DEFS[R.key];
+    if (i >= d.steps.length) return finish();
+    if (i < 0) i = 0;
+    R.i = i; okAt = 0; save();
+    var st = d.steps[i];
+    if (st.hash) { var h = val(st.hash); if (h && location.hash !== h) { location.hash = h; await wait(900); } }
+    if (st.go) { try { await st.go(R.ctx); } catch (e) { /* the step still shows */ } await wait(500); }
+    if (st.skipIf) { var sk = false; try { sk = !!st.skipIf(R.ctx); } catch (e) { sk = false; } if (sk) return show(i + 1); }
+    folded = false;
+    paint();
+    setTimeout(function () { if (R && R.i === i) scrollTo(st); }, 250);
+  }
+  function wait(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
+  function tick() {
+    if (!R) return;
+    var st = DEFS[R.key].steps[R.i]; if (!st) return;
+    ring();
+    if (st.done && !R.done[R.i]) {
+      var ok = false; try { ok = !!st.done(R.ctx); } catch (e) { ok = false; }
+      if (ok) { R.done[R.i] = 1; okAt = performance.now(); save(); paint(); }
+    } else if (st.done && R.done[R.i]) {
+      if (R.hold === R.i) return;   /* came back with Back: stay until Next */
+      if (!okAt) okAt = performance.now();   /* done before (a reload): move on after a beat */
+      else if (performance.now() - okAt > 1100) { okAt = 0; show(R.i + 1); }
+    }
+  }
+  function start(key) {
+    var d = DEFS[key]; if (!d) { toastS('That walkthrough is not available'); return; }
+    if (d.avail && !d.avail()) { toastS('That walkthrough is for the HR team'); return; }
+    end(true);
+    R = { key: key, i: 0, done: {}, ctx: { started: new Date().toISOString() }, at: Date.now() };
+    try { if (d.init) d.init(R.ctx); } catch (e) { /* fine */ }
+    if (!timer) timer = setInterval(tick, 400);
+    show(0);
+  }
+  function end(silent) {
+    var c = document.getElementById('w215c'), r = document.getElementById('w215r');
+    if (c) c.remove(); if (r) r.remove();
+    var was = R; R = null; save();
+    if (timer) { clearInterval(timer); timer = null; }
+    if (was && !silent) {
+      var d = DEFS[was.key];
+      toastS(d && d.practice ? 'Walkthrough ended. Your practice records stay until you clear them (the last step of the walkthrough, or Clear practice on Applications).' : 'Walkthrough ended. Pick it up again from the Avenue Academy.');
+    }
+  }
+  async function finish() {
+    var key = R && R.key; end(true);
+    var tr = null; try { tr = window.w122 && w122.A && w122.A.byKey ? w122.A.byKey['tour:' + key] : null; } catch (e) { tr = null; }
+    if (tr && window.w122 && w122.complete) { try { await w122.complete(tr, { last_step: DEFS[key].steps.length }); return; } catch (e) { /* fine */ } }
+    toastS('Walkthrough complete');
+  }
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('#w215c [data-w215a]') : null; if (!t || !R) return;
+    var a = t.getAttribute('data-w215a'), st = DEFS[R.key].steps[R.i];
+    if (a === 'end') { if (window.confirm('End this walkthrough? You can start it again from the Avenue Academy.')) end(false); return; }
+    if (a === 'fold') { folded = !folded; paint(); return; }
+    if (a === 'back') { R.hold = R.i - 1; show(R.i - 1); return; }
+    if (a === 'next' || a === 'skip') { show(R.i + 1); return; }
+    if (a === 'copy') { var cp = val(st.copy); try { await navigator.clipboard.writeText(cp.text); toastS('Copied'); } catch (x) { toastS('Select the text and copy it'); } return; }
+    if (a === 'fill' && st.fill) { try { await st.fill(R.ctx); } catch (x) { toastS(String((x && x.message) || x)); } return; }
+    if (a === 'act' && st.act) { t.disabled = true; try { await st.act(R.ctx); } catch (x) { toastS(String((x && x.message) || x)); } t.disabled = false; return; }
+  });
+  window.addEventListener('scroll', function () { if (R) ring(); }, { passive: true });
+  window.addEventListener('resize', function () { if (R) ring(); });
+
+  /* a run in progress picks up again after a reload (once the page has drawn) */
+  setTimeout(function () {
+    if (R) return;   /* a walkthrough already started */
+    var saved = null; try { saved = JSON.parse(localStorage.getItem('w215run') || 'null'); } catch (e) { saved = null; }
+    if (!saved || !DEFS[saved.key] || Date.now() - (saved.at || 0) > 6 * 3600000) { try { localStorage.removeItem('w215run'); } catch (e) { /* fine */ } return; }
+    R = saved; R.ctx = R.ctx || {}; if (!timer) timer = setInterval(tick, 400); show(R.i);
+  }, 3500);
+
+  var css = document.createElement('style'); css.id = 'w215css';
+  css.textContent =
+    '#w215c{position:fixed;left:16px;bottom:16px;z-index:9700;width:min(380px,calc(100vw - 32px));max-height:min(72vh,560px);overflow:auto;background:' + CREAM + ';color:' + INK + ';border:2px solid ' + GREEN + ';border-radius:18px;box-shadow:0 24px 60px -18px rgba(16,63,57,.6);padding:12px 14px 14px;font-family:inherit;box-sizing:border-box;}' +
+    '#w215c.ok{border-color:' + TEAL + ';}#w215c.fold{max-height:none;padding-bottom:10px;}' +
+    '#w215c .w215h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:' + GREEN + ';}#w215c .w215k{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}#w215c .w215n{color:#5b6b67;font-weight:600;}' +
+    '#w215c .w215h button{border:1px solid rgba(16,63,57,.25);background:transparent;color:' + GREEN + ';width:28px;height:28px;border-radius:999px;cursor:pointer;font-size:15px;line-height:1;}' +
+    '#w215c .w215bar{height:5px;border-radius:999px;background:rgba(16,63,57,.1);margin:8px 0 10px;overflow:hidden;}#w215c .w215bar i{display:block;height:100%;background:' + GOLD + ';transition:width .3s;}' +
+    '#w215c h4{margin:0 0 6px;font-size:17px;color:' + GREEN + ';}#w215c .w215p{font-size:14px;line-height:1.5;}#w215c .w215p p{margin:0 0 8px;}#w215c .w215p ul,#w215c .w215p ol{margin:4px 0 8px;padding-left:20px;}#w215c .w215p li{margin:3px 0;}' +
+    '#w215c .w215p b{color:' + GREEN + ';}#w215c .w215ft{margin:0;font-size:14px;font-weight:600;}' +
+    '#w215c .w215st{font-size:13px;margin:8px 0 0;padding:7px 10px;border-radius:10px;background:rgba(220,165,39,.18);color:#5c4408;}#w215c .w215st.ok{background:rgba(42,140,122,.16);color:#1d6b5d;}' +
+    '#w215c .w215cp{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;padding:8px;border-radius:10px;background:rgba(16,63,57,.06);font-size:12.5px;}#w215c .w215cp code{flex:1 1 100%;overflow-wrap:anywhere;font-size:12px;}#w215c .w215cp button{border:none;background:' + GREEN + ';color:' + CREAM + ';border-radius:999px;padding:4px 10px;cursor:pointer;font-size:12px;}' +
+    '#w215c .w215f{display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;}#w215c .sp{flex:1;}' +
+    '.w215b{border:none;border-radius:999px;padding:8px 14px;background:' + GREEN + ';color:' + CREAM + ';font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px;}.w215b.soft{background:rgba(16,63,57,.1);color:' + GREEN + ';}.w215b.link{background:none;color:' + GREEN + ';text-decoration:underline;padding:8px 4px;font-weight:600;}' +
+    '#w215r{position:fixed;z-index:9690;pointer-events:none;border:3px solid ' + GOLD + ';border-radius:12px;box-shadow:0 0 0 4px rgba(220,165,39,.28);display:none;animation:w215p 1.6s ease-in-out infinite;}' +
+    '@keyframes w215p{0%,100%{box-shadow:0 0 0 4px rgba(220,165,39,.28);}50%{box-shadow:0 0 0 10px rgba(220,165,39,.08);}}' +
+    '@media (prefers-reduced-motion: reduce){#w215r{animation:none;}}' +
+    '@media (max-width:600px){#w215c{left:8px;right:8px;bottom:8px;width:auto;max-height:46vh;}}' +
+    '.w215prac{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:1px 7px;margin:2px 4px 0 0;}';
+  (document.head || document.documentElement).appendChild(css);
+
+  window.w215 = {
+    start: start, end: end, defs: DEFS, me: me, q: q,
+    owns: function (key) { return !!DEFS[key]; },
+    practice: function () { return !!(R && DEFS[R.key] && DEFS[R.key].practice); },
+    state: function () { return R; },
+    add: function (key, d) { DEFS[key] = d; }
+  };
+})();
+/* wave215 b_walks: the seven HR centre walkthroughs. Each step: t (title), p (what to do, HTML), s (what to ring),
+   hash (open a page first), go (do something first), done (true when the learner has done it: the card moves on),
+   skipIf, copy {label, text}, fill / act (a helper button). Selectors are the live ones (waves 46, 105, 116p, 169, 197, 199,
+   209, 211, 212); test/w215drive.js walks every one of them. */
+(function () {
+  'use strict';
+  if (!window.w215) return;
+  var W = window.w215;
+  var SAMPLE_CV = 'https://docs.google.com/document/d/1loqe66CRVkBYTTmsJ0TQbjzlZ6UEZSDSbCisQ2Ktd3k/edit';
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function P() { return Array.prototype.slice.call(arguments).map(function (x) { return x.charAt(0) === '<' ? x : '<p>' + x + '</p>'; }).join(''); }
+  function L(items) { return '<ul>' + items.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>'; }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function S() { try { return w197.state(); } catch (e) { return { cands: [], data: null }; } }
+  function cands() { return S().cands || []; }
+  function mine() { var em = W.me().email; return cands().filter(function (c) { return c.practice && lower(c.email) === em; }).sort(function (a, b) { return b.id - a.id; })[0] || null; }
+  function cand() { var c = mine(); return c ? cands().filter(function (x) { return x.id === c.id; })[0] : null; }
+  function open() { var s = document.getElementById('w197sheet'); return !!(s && s.classList.contains('open')); }
+  function sheetFor(c) { return !!c && open() && String(S().open) === String(c.id); }
+  function hr() { try { return typeof window.wa46IsHr === 'function' ? !!wa46IsHr() : false; } catch (e) { return false; } }
+  function modalOpen() { var m = document.getElementById('modalBack'); return !!(m && getComputedStyle(m).display !== 'none'); }
+  function setVal(id, v) { var x = document.getElementById(id); if (!x) return false; x.value = v; x.dispatchEvent(new Event('input', { bubbles: true })); x.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+  function iso(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function local(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return iso(d) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function openMine() { var c = cand(); if (c && !sheetFor(c)) { try { w197.openSheet(c.id); } catch (e) { /* fine */ } } }
+  async function clearPractice() {
+    var r = await db.rpc('wa215_clear_practice', { p_all: false });
+    if (r && r.error) throw new Error('Could not clear: ' + r.error.message);
+    try { await w197.loadCands(true); w197.paintBoard(); } catch (e) { /* fine */ }
+    try { if (window.w105TimeRender) w105TimeRender(); } catch (e) { /* fine */ }
+    var d = (r && r.data) || {};
+    toastS('Cleared ' + (d.applications || 0) + (d.applications === 1 ? ' practice application' : ' practice applications') + ' and ' + (d.timeoff || 0) + ' practice time off');
+    W.state() && (W.state().ctx.cleared = true);
+  }
+  var CLEAR = function (what) {
+    return { t: 'Clear your practice records', p: P('That is the whole flow. Your practice ' + what + ' is marked <b>Practice</b>: it never reached Slack, a text, an applicant or the calendar.',
+      'Press <b>Clear my practice records</b> to remove it now. (If you stop part way, you can always clear it later with <b>Clear practice</b> on Applications.)'),
+      act: clearPractice, actLabel: 'Clear my practice records', done: function (x) { return !!x.cleared; }, waitText: 'Press Clear my practice records' };
+  };
+
+  /* ================= 1. Getting around ================= */
+  W.add('hrwalk-start', { title: 'HR centre: getting around', avail: hr, steps: [
+    { t: 'Welcome to the HR centre', p: P('The HR centre is where Welfare Avenue looks after its people: who is on the team, the hours they give, time off, recognition, hiring, onboarding, training, policies and discipline.',
+      'This walkthrough takes three minutes. A gold ring shows what to look at or click; the card moves on by itself when you have done it. Fold the card (\u25be) if it is in the way, and use <b>Skip this step</b> whenever you like.') },
+    { hash: '#hrcentre/overview', s: '#w153rail .w153sec || #w153rail', t: 'The rail: every page of the HR centre', p: P('The pages are grouped the way the work flows:') + L(['<b>People</b>: Team, Hours, Time off, Recognition', '<b>Hiring</b>: Applications, Positions, Playbook', '<b>Growth</b>: Onboarding, Onboarding plan, Training', '<b>Records</b>: Policies, Discipline (the HR access list only)']) + P('Each page has its own walkthrough in the Avenue Academy, under the Learning Avenue <b>The HR centre</b>.') },
+    { s: '#w197ov .w197tiles', t: 'Overview: the numbers that matter', p: P('Six tiles: people on the roster, people in The Loop this week, new applications, people onboarding now, people with a training overdue, and time off waiting for a decision.', 'A tile with something to act on is highlighted. <b>Click any tile</b> to go to its page.'),
+      done: function (x) { return location.hash !== '#hrcentre/overview' && /^#hrcentre\//.test(location.hash); }, waitText: 'Click a tile' },
+    { hash: '#hrcentre/overview', s: '#w197ov .w197todo', t: 'Needs HR', p: P('The list of what is waiting on HR right now, oldest first. Every line has <b>Open</b>, which takes you straight to it. When this list is empty, HR is up to date.') },
+    { s: '#w212bell', t: 'The bell: what needs you', p: P('The bell counts what needs <b>you</b> since you last opened it: time off waiting, applicants you handle who need a call, interviews today and tomorrow, offer letters not sent yet, and new applications.', '<b>Click the bell.</b>'),
+      done: function () { try { return !!w212.state().open; } catch (e) { return false; } }, waitText: 'Click the bell' },
+    { s: '#w212box', t: 'Each line opens what it is about', p: P('Click a line to jump to the card or the page. Click anywhere else to close the list. The count resets when you open it.') },
+    { s: '#hrcentre > .w118mast .w43help', t: 'How this page works', p: P('Every page of the HR centre has this button. It explains the page you are on in a few lines.') },
+    { t: 'Where to go next', p: P('Carry on with the other walkthroughs in <b>The HR centre</b> Learning Avenue:') + L(['Recruitment, from posting to hired (you are the test applicant and get the offer letter)', 'Onboarding a new person (you are the test person)', 'Time off (you request it and approve it)', 'Team, hours and recognition', 'Training and the onboarding plan', 'Policies and discipline']) }
+  ] });
+
+  /* ================= 2. Recruitment ================= */
+  W.add('hrwalk-recruit', { title: 'HR centre: recruitment, start to finish', avail: hr, practice: true, steps: [
+    { t: 'You are the applicant', p: P('In this walkthrough you hire yourself. You add yourself as an applicant with <b>your own Welfare Avenue email</b>, then take your card through every stage: Reviewing, a call, an interview, an offer letter (which arrives in your inbox) and Hired.',
+      'Everything you add is marked <b>Practice</b>: it never goes to Slack, is never texted, and is cleared at the end. About 12 minutes.') },
+    { hash: '#hrcentre/positions', s: '#w199pos', t: 'Positions: where hiring starts', p: P('Every role at Welfare Avenue is a position, with its own folder in Google Drive: the job description, older versions and a <b>Resumes</b> folder.', 'A CV dropped into a position\u2019s Resumes folder becomes a New application on its own within about ten minutes.') },
+    { s: '.w199card', t: 'Open a position', p: P('<b>Click any position.</b>'), done: function () { try { return !!w199.state().open; } catch (e) { return false; } }, waitText: 'Click a position' },
+    { s: '#w197sheet .pn', t: 'Inside a position', p: P('Here you see:') + L(['its stage (requested, defined, posted, interviewing, offer, filled)', 'the job description and older versions', 'the applications for it', 'the CVs in its Resumes folder, with <b>Add to Applications</b> for one that is not on the board yet', 'the people who hold the role']) + P('Close it when you are ready.'),
+      done: function () { return !open(); }, waitText: 'Close the position (Close, or Esc)' },
+    { hash: '#hrcentre/applications', s: '#w197board', t: 'Applications: the board', p: P('Every application is a card in its stage: <b>New, Reviewing, Interview, Offer, Hired</b>. Declined and withdrawn cards are kept below the board.', 'Drag a card to move it, or open it and use its stage buttons. Each stage asks for what it needs before the card can move, so nobody skips a step.') },
+    { s: '[data-w209a="add"]', t: 'Add yourself as an applicant', p: P('Applications from job@, CABM and Je B\u00e9n\u00e9vole arrive by themselves. Someone who applied another way (LinkedIn, a referral) is added by hand.', '<b>Click Add an applicant.</b>'),
+      done: function () { var a = document.getElementById('w209add'); return !!(a && a.classList.contains('open')); }, waitText: 'Click Add an applicant' },
+    { s: '#w209add .pn', t: 'Fill in the form, as you', p: P('Use <b>your own name and Welfare Avenue email</b>, so the offer letter comes to you.') + L(['<b>Position</b>: choose any real one (the interview step needs a position).', '<b>Their CV</b>: the link is required. Use the sample CV below (copy it), or one of your own in Google Drive (Share, then Copy link).', 'Then <b>Add the applicant</b>.']) + P('Normally the Hub copies the CV into the position\u2019s Resumes folder; for practice it leaves the folders alone.'),
+      copy: { label: 'Sample CV link', text: SAMPLE_CV },
+      fill: function () { var m = W.me(); setVal('w209n', (m.name || 'Me') ); setVal('w209e', m.email); setVal('w209cv', SAMPLE_CV); setVal('w209m', 'Practice application from the HR centre walkthrough.'); toastS('Filled in. Choose a position, then Add the applicant.'); },
+      fillLabel: 'Fill in my name, email and the sample CV',
+      done: function () { return !!cand(); }, waitText: 'Choose a position, then Add the applicant' },
+    { go: openMine, s: '#w197sheet .pn', t: 'Your card', p: P('A new card opens on its own. From top to bottom:') + L(['the <b>stage buttons</b> and what to do next', 'contact details, the CV and the original email', '<b>Handled by</b>: who looks after this applicant', 'calls, the grade, the interview time, the position', 'what the CV says (the Hub reads every CV, scanned ones too)', 'what they wrote, and your notes']) + P('Your card says <b>Practice</b> on the board.') },
+    { go: openMine, s: '#w197own1', t: 'Choose who handles it', p: P('Every applicant needs someone handling them before they move to Reviewing. That person gets a Slack message when the card moves on (practice cards never do).', '<b>Choose yourself.</b>'),
+      done: function () { var c = cand(); return !!(c && c.owner); }, waitText: 'Choose yourself in Handled by' },
+    { go: openMine, s: '#w197sheet .stg button[data-w197st="reviewing"]', t: 'Move to Reviewing', p: P('Reviewing means: read the application and the CV, and call them.', '<b>Click Reviewing.</b> It moves straight away because Handled by is filled. Had it been empty, a form would have asked for it.'),
+      done: function () { var c = cand(); return !!(c && c.status === 'reviewing'); }, waitText: 'Click Reviewing' },
+    { go: openMine, s: '[data-w211int] || #w197sheet .w211box', t: 'Still interested? (a text)', p: P('For applicants who applied a while ago, <b>Text: still interested?</b> sends one text from the ops line with their own link. Yes moves the card to Reviewing, No to Withdrawn. You see the exact text before anything is sent.', 'Practice cards are never texted, so just read this and press <b>Next</b>.') },
+    { go: openMine, s: '.w199calls', t: 'Log the call', p: P('After you call them, log it. With a real applicant you can also pick the call from Quo when you move them to Interview: its summary and transcript are saved on the card.', 'Pretend you just reached yourself: <b>click Reached</b>. (The note box above saves what was said.)'),
+      done: function () { var c = cand(); try { return !!c && (w199.state().calls || []).some(function (k) { return String(k.candidate_id) === String(c.id); }); } catch (e) { return false; } }, waitText: 'Click Reached' },
+    { go: openMine, s: '#w199iv', t: 'Book the interview', p: P('Set the day and time of the interview here (or in the form when you move the card).', 'For practice, <b>set it to earlier today</b>, as if the interview already happened: the Offer stage needs a past interview.'),
+      fill: function () { var d = new Date(Date.now() - 2 * 3600000); setVal('w199iv', local(d)); toastS('Set to two hours ago'); }, fillLabel: 'Set it to two hours ago',
+      done: function () { var c = cand(); return !!(c && c.interview_at); }, waitText: 'Set the interview day and time' },
+    { go: openMine, s: '#w197sheet .stg button[data-w197st="interview"]', t: 'Move to Interview', p: P('<b>Click Interview.</b> Interview needs: who handles it, the position, a call logged and the interview time. If anything is missing, a form opens and asks for exactly that.'),
+      done: function () { var c = cand(); return !!(c && c.status === 'interview'); }, waitText: 'Click Interview (and fill the form if one opens)' },
+    { go: openMine, s: '.w199star || #w197sheet .w199grade', t: 'Grade the interview (optional)', p: P('After an interview, give your grade (one to five stars) with a note. Each interviewer grades on their own, and the board can sort by the best grade.', 'If the interview was recorded, its transcript links to the card from the Transcript archive and is reviewed against the job description and the MCC framework.') },
+    { go: openMine, s: '#w197sheet .stg button[data-w197st="offer"]', t: 'Move to Offer', p: P('<b>Click Offer.</b> A form asks for what an offer needs:') + L(['their email (yours is already there)', 'that the interview happened', '<b>Interview impressions</b>: a few lines on how it went and why an offer']) + P('Then <b>Move to Offer</b>.'),
+      done: function () { var c = cand(); return !!(c && c.status === 'offer'); }, waitText: 'Click Offer, fill the impressions, then Move to Offer' },
+    { s: '#w211m .pn', go: function () { var c = cand(), m = document.getElementById('w211m'); if (c && !c.offer_sent_at && !(m && m.classList.contains('open'))) { try { w211.askOffer(c.id); } catch (e) { /* fine */ } } },
+      t: 'Send the offer letter (to yourself)', p: P('The offer letter opens on its own at Offer. Fill it in:') + L(['who they report to, the hours a week, the start date', 'the <b>reply-by</b> date (required)', 'who signs it, and a personal note']) + P('Press <b>Preview the letter</b> to read it, then <b>Create the letter and email it</b>. It is saved as a Google Doc in Recruitment > Offer Letters (as PRACTICE) and emailed as a PDF to <b>' + E(W.me().email) + '</b>.'),
+      done: function () { var c = cand(); return !!(c && c.offer_sent_at); }, waitText: 'Create the letter and email it' },
+    { t: 'Check your inbox', p: P('Open your Welfare Avenue email: <b>[PRACTICE] Your offer from Welfare Avenue</b>, with the letter attached as a PDF. A real applicant gets the same email without the PRACTICE mark, and replies to you.', 'The card now says <b>Offer sent</b>, and its notes record when and to whom.') },
+    { go: openMine, s: '#w197sheet .stg button[data-w197st="hired"]', t: 'They said yes: move to Hired', p: P('<b>Click Hired.</b> The form asks for the day they accepted and their start date (the offer letter is already there). Then <b>Move to Hired</b>.'),
+      done: function () { var c = cand(); return !!(c && c.status === 'hired'); }, waitText: 'Click Hired and fill the two dates' },
+    { go: openMine, s: '#w197sheet .next', t: 'Next: onboarding', p: P('At Hired, the card points to <b>Go to Onboarding</b>: the next walkthrough. HR assigns their onboarding plan and sends the Welcome kit there.') },
+    { go: openMine, s: '#w197sheet .stg button.cl', t: 'When it is a no', p: P('<b>Declined</b> (we said no) and <b>Withdrawn</b> (they said no) close an application. Both ask for a reason, which stays on the card. A closed card can be moved back to a stage if things change.', 'Nothing to click here.') },
+    CLEAR('application')
+  ] });
+
+  /* ================= 3. Onboarding ================= */
+  function onbs() { try { return (window.WA37 && WA37.onbs) || []; } catch (e) { return []; } }
+  function myOnb(x) { return onbs().filter(function (o) { return x.base && x.base.indexOf(o.id) < 0 && lower(o.person_name) === lower(W.me().name); })[0] || null; }
+  W.add('hrwalk-onboard', { title: 'HR centre: onboarding a new person', avail: hr,
+    init: function (x) { x.base = onbs().map(function (o) { return o.id; }); },
+    steps: [
+      { t: 'You are the new person', p: P('When someone is hired, HR gives them an onboarding plan: the master onboarding, week by week, with due dates. In this walkthrough you give <b>yourself</b> a practice plan, look around it as HR and as the new person, then remove it.', 'About 8 minutes.') },
+      { hash: '#hrcentre/onboarding', s: '#hrcentre .w46sec[data-w197s~="onboarding"] || #hrcentre [data-w197s~="onboarding"]', t: 'Who is onboarding', p: P('Everyone in their onboarding, with a progress bar, how many steps are done and what is overdue. Leaders see the same on their Home page for their own people.') },
+      { s: 'select[data-w46assign]', t: 'Assign an onboarding (to yourself)', p: P('<b>Open this list and choose yourself.</b> The plan starts today: every step of the master onboarding is copied in, with its due date, and what you already did in the Avenue Academy is ticked for you.', 'If your name is not in the list, you are already onboarding: press <b>Skip this step</b> and the rest is look-only.'),
+        done: function (x) { return !!myOnb(x); }, waitText: 'Choose yourself in Assign an onboarding' },
+      { s: '#modalBox', t: 'The Welcome kit', p: P('Assigning opens the Welcome kit: the welcome email (with the Hub\u2019s address and their first steps) and the Slack message, ready to copy. Read it, then press <b>Done</b>.'),
+        skipIf: function () { return !(document.getElementById('modalBack') && getComputedStyle(document.getElementById('modalBack')).display !== 'none'); },
+        done: function () { return !modalOpen(); }, waitText: 'Press Done' },
+      { s: function (x) { var o = myOnb(x); return o ? document.querySelector('[data-w37open="' + o.id + '"]') : null; }, t: 'Open the checklist', p: P('<b>Click checklist</b> on your row. This is the plan as HR sees it: every step, its week and its due date.'),
+        skipIf: function (x) { return !myOnb(x); }, done: function () { return !!document.getElementById('w37modal'); }, waitText: 'Click checklist on your row' },
+      { s: '#w37modal', t: 'Tick a step', p: P('HR (or the person) ticks steps here. Steps learned in the Avenue Academy tick themselves when the person finishes them there.', '<b>Tick any step</b>, then close the checklist.'),
+        skipIf: function (x) { return !myOnb(x); }, done: function (x) { if (document.getElementById('w37modal')) { x.chk = 1; return false; } return !!x.chk; }, waitText: 'Tick a step, then close the checklist' },
+      { s: function (x) { var o = myOnb(x); return o ? document.querySelector('[data-w39hr="' + o.id + '"]') : null; }, t: 'HR setup', p: P('Next to the checklist, <b>HR setup</b> is HR\u2019s own list for this person: the Google account (first.last@welfareavenue.com), Slack, the Hub, the policies to sign. Open it to look, then close it.'),
+        skipIf: function (x) { return !myOnb(x); } },
+      { s: function (x) { var o = myOnb(x); return o ? document.querySelector('[data-w169preview="' + o.id + '"]') : null; }, t: 'See it as they do', p: P('<b>Journey</b> shows the onboarding exactly as the new person sees it in the Avenue Academy: each week\u2019s photo, goals, why it matters and the lesson that opens it.', 'Click it, look around, then press <b>Back to the master onboarding</b> (or come back to the HR centre) and press Next.'),
+        skipIf: function (x) { return !myOnb(x); } },
+      { hash: '#hrcentre/onboarding', s: function (x) { var o = myOnb(x); return o ? document.querySelector('[data-w39del="' + o.id + '"]') : null; }, t: 'Remove your practice plan', p: P('<b>Click remove</b> on <b>your practice row</b> (the one you just made), then confirm. This removes the plan and its progress; use it only for a plan given by mistake.'),
+        skipIf: function (x) { return !myOnb(x); }, done: function (x) { return !myOnb(x); }, waitText: 'Click remove on your practice row, then confirm' },
+      { t: 'Onboarding, in short', p: L(['<b>Hired</b> on Applications, then <b>Assign an onboarding</b> here.', 'Send the <b>Welcome kit</b>.', 'Watch the progress bar; leaders see their people on Home.', 'The plan completes itself when the last step is ticked.', 'The <b>Onboarding plan</b> page (the next walkthrough, Training) is where the master onboarding is edited.']) }
+    ] });
+
+  /* ================= 4. Time off ================= */
+  function rows() { return window.__w105rows || []; }
+  function myReq() { var em = W.me().email; return rows().filter(function (t) { return t.practice && lower(t.email) === em; }).sort(function (a, b) { return b.id - a.id; })[0] || null; }
+  W.add('hrwalk-timeoff', { title: 'HR centre: time off', avail: hr, practice: true, steps: [
+    { t: 'Time off, both sides', p: P('You will ask for time off as a team member, then decide it as HR. Your request is marked <b>Practice</b>: Valex and Samson are not messaged, it never goes on the calendar, and it is cleared at the end. About 5 minutes.') },
+    { hash: '#hrcentre/timeoff', s: '#w105to', t: 'The Time off page', p: P('From the top:') + L(['<b>Waiting on a decision</b>: requests with Approve and Decline', '<b>Log time off</b> and <b>Request time off for myself</b>', '<b>Days taken this fiscal year</b> (October to September): each type, a total, and the sick days left of 7', '<b>Recent decisions</b>, folded']) },
+    { s: '#w212mine', t: 'Ask for time off', p: P('Team members ask from their My page (or the Requests page); you can ask from here too. <b>Click Request time off for myself.</b>'),
+      done: function () { return !!document.getElementById('w105rc'); }, waitText: 'Click Request time off for myself' },
+    { s: '#modalBox', t: 'Fill in the request', p: P('Choose the type (its policy shows under it), the dates and a note. Use dates in the future. Then <b>Send the request</b>.'),
+      fill: function () { var d = new Date(Date.now() + 60 * 86400000); setVal('w105rs', iso(d)); var e = new Date(d.getTime() + 2 * 86400000); setVal('w105re', iso(e)); setVal('w105rn', 'Practice request from the HR walkthrough'); toastS('Dates filled. Press Send the request.'); }, fillLabel: 'Fill in practice dates',
+      done: function () { return !!myReq(); }, waitText: 'Send the request' },
+    { s: function () { var r = myReq(); return r ? document.querySelector('[data-w105ap="' + r.id + '"]') : null; }, t: 'Now decide it, as HR', p: P('Your request is waiting. In real life Valex and Samson get a Slack message the moment it arrives.', '<b>Click Approve</b> on your request. (Decline asks for a reason, which the person sees.)'),
+      done: function () { var r = myReq(); return !!(r && r.status === 'approved'); }, waitText: 'Click Approve on your request' },
+    { s: '#w105to .w212past || #w105to', t: 'What approving does', p: P('An approved request:') + L(['counts in the person\u2019s days taken this year (practice ones do not)', 'goes on the <b>hub@welfareavenue.com calendar</b> as an all-day event, with the person as a guest so it shows on their calendar too', 'shows as approved on their My page']) + P('Declining or reopening it takes it off the calendar.') },
+    { s: '#w212log', t: 'Log time off for someone', p: P('For time off agreed in a conversation or an email: <b>Log time off</b> opens a form with the person, the type, the dates and whether it is already approved or still to decide.', 'Open it to look, then press <b>Cancel</b>.') },
+    CLEAR('time off')
+  ] });
+
+  /* ================= 5. Team, hours, recognition ================= */
+  W.add('hrwalk-people', { title: 'HR centre: team, hours and recognition', avail: hr, steps: [
+    { t: 'The people pages', p: P('Team, Hours and Recognition: who is on the team, the time they give, and saying thank you. About 4 minutes, nothing is changed.') },
+    { hash: '#hrcentre/team', s: '#w116ppeople', t: 'Team', p: P('Everyone on the roster, by team. Search by name, filter by team, and <b>Open profile</b> for a person\u2019s page (their role, their work, their hours).', 'HR can set a start date by hand here. <b>Add someone</b> (top right) goes to the Admin panel, where accounts are made.') },
+    { s: '#w116pq', t: 'Find someone', p: P('<b>Type a name</b> to filter the roster.'), done: function () { var x = document.getElementById('w116pq'); return !!(x && x.value.trim().length >= 2); }, waitText: 'Type a name' },
+    { hash: '#hrcentre/hours', s: '#w197hours .w197tiles || #w197hours', t: 'Hours', p: P('Hours come from two places:') + L(['<b>The Loop</b>: from I\u2019m in to Close the loop (a session left open counts at most eight hours)', '<b>Slack</b>: the hours people log with their own \u201cin\u201d and \u201cout\u201d messages in the Slack check-in channels, read every morning']) + P('The tiles show this week at a glance.') },
+    { s: '#w197hours .w197tbl', t: 'Hours by person', p: P('This week, last week and the average a week against each person\u2019s minimum; people below their minimum come first. Hours from Slack say so under the number.') },
+    { s: '#w197mmgr', t: 'The weekly minimums', p: P('Managers and up, and everyone else. The board is exempt; the operational executives give 8 hours. Only HR and admins can change them.') },
+    { s: '#w197hours .w197feed || #w197hours .w197card + .w197card || #w197hours', t: 'What people shared in The Loop', p: P('When people close the loop they can share what moved. It lands in #check-in-out-wa and here. Never times or hours.') },
+    { s: '#w144hr', t: 'Meeting attendance', p: P('Who came to which team meeting, from Google Meet. Refresh it with the button.') },
+    { hash: '#hrcentre/recognition', s: '#w116psf', t: 'Recognition', p: P('Shout-outs for someone who did something worth noticing. They show here and on the Hub\u2019s loading screen for everyone.', 'Post one now for someone who earned it, or press <b>Next</b>. Your own shout-outs can be taken down.') },
+    { s: '#w116pshouts .ls || #w116pshouts', t: 'Recent shout-outs', p: P('Newest first. Admins can take any down, and authors their own.') }
+  ] });
+
+  /* ================= 6. Training and the onboarding plan ================= */
+  function assignList() { try { return (w169.state().list || []); } catch (e) { return []; } }
+  function myAssign(x) { return assignList().filter(function (a) { return x.abase && x.abase.indexOf(a.id) < 0; })[0] || null; }
+  W.add('hrwalk-training', { title: 'HR centre: training and the onboarding plan', avail: hr,
+    init: function (x) { x.abase = assignList().map(function (a) { return a.id; }); },
+    steps: [
+      { t: 'Training and the master onboarding', p: P('How HR assigns trainings from the Avenue Academy, follows who did them, and edits the onboarding every new person gets. You will assign a short training to yourself, then stop it. About 6 minutes.') },
+      { hash: '#hrcentre/training', s: '#w169cardT', t: 'Trainings assigned to the organization', p: P('Each assignment: what, to whom (everyone, teams or people), the due date, and a bar of who finished. <b>See who</b> lists them by name.') },
+      { s: '[data-w169assign]', t: 'Assign a training', p: P('<b>Click Assign a training.</b>'), done: function () { return !!document.getElementById('w169aq'); }, waitText: 'Click Assign a training' },
+      { s: '#modalBox', t: 'Choose what and who', p: L(['Search and pick a short module (or a whole Learning Avenue).', 'Who: choose <b>People</b> and tick <b>yourself</b>.', 'A due date (one of the quick buttons) and a note if you like.', 'Then <b>Assign</b>.']) + P('People who join later can get it too, when it is for everyone or a team.'),
+        done: function (x) { return !!myAssign(x); }, waitText: 'Assign it to yourself' },
+      { s: function (x) { var a = myAssign(x); return a ? document.querySelector('[data-w169stopask="' + a.id + '"]') : null; }, t: 'Stop it', p: P('It now shows in your Avenue Academy under <b>Assigned to you</b>. To take it back, <b>click Stop</b>, then <b>Yes, stop it</b>. Rows nobody started go; progress already made stays with the person.'),
+        skipIf: function (x) { return !myAssign(x); }, done: function (x) { var a = myAssign(x); return !!a && a.active === false; }, waitText: 'Click Stop, then Yes, stop it' },
+      { s: '#hrcentre .w44tbl', t: 'Trainings across the team', p: P('Everyone\u2019s training, person by person: done, in progress, assigned and overdue. <b>Assign</b> on a row picks trainings for that one person.') },
+      { hash: '#hrcentre/plan', s: '#w46master', t: 'The onboarding plan', p: P('The <b>master onboarding</b>: every week and step a new person gets. What you change here reaches everyone still onboarding: a step moved to another week takes that week\u2019s due date in every plan in progress.') },
+      { s: '.w169see [data-w169week] || #w46master details.w46wk', t: 'Each week, as people see it', p: P('<b>Edit what people see</b> sets a week\u2019s title, photo, goals, why it matters and the lesson that opens it, with a live preview. Each step can be edited, retired or linked to the Avenue Academy, so it ticks itself when done there.') },
+      { s: '[data-w169preview="w169sample"]', t: 'Preview what a new person sees', p: P('The journey on day one, read only. Try it whenever you change the plan.') }
+    ] });
+
+  /* ================= 7. Policies and discipline ================= */
+  W.add('hrwalk-policies', { title: 'HR centre: policies and discipline', avail: hr, steps: [
+    { t: 'The records pages', p: P('Policies and the discipline tracker are for the HR access list only. You will look, not change: nothing is saved in this walkthrough. About 3 minutes.') },
+    { hash: '#hrcentre/policies', s: '#w105pol', t: 'Policies and sign-offs', p: P('Each policy links to its document in Google Drive, with how many people signed it and who has not yet.') },
+    { s: '#w105pt', t: 'Add a policy', p: P('A title and the Drive link, then <b>Add</b>. Required policies go to everyone to sign: on their My page and at the top of their Avenue Academy.') },
+    { s: '.w104edit[data-w105pe] || #w105pol .w104edit', t: 'Edit or retire', p: P('Change a policy\u2019s title or link, or retire it when it no longer applies. A retired policy stays in the record.') },
+    { t: 'How people sign', p: P('On their My page (and in the Avenue Academy), each policy to sign has its document and <b>I have read and reviewed this</b>. The table here updates when they sign.') },
+    { hash: '#hrcentre/discipline', s: '#w105disc', t: 'The discipline tracker', p: P('Each person\u2019s record, step by step, with <b>clean slate</b> when nothing is open. It follows the handbook\u2019s steps for each kind of issue.') },
+    { s: '#w105dp', t: 'Recording an entry', p: L(['<b>Person</b>, <b>category</b> (acknowledging messages, time commitment, missed meetings, conduct, other)', 'the <b>step</b>, which depends on the category', 'the <b>date</b> and a note', '<b>Record</b>, or <b>Clean slate</b> to close it']) + P('Do not record anything now. Entries are permanent, and only HR sees them.') }
+  ] });
+
+  /* ---------- the Academy lists and opens them (wave122's TOURS) ---------- */
+  function register() {
+    if (!window.w122 || !w122.tours) return false;
+    Object.keys(W.defs).forEach(function (k) {
+      var d = W.defs[k];
+      w122.tours[k] = { tab: 'hrcentre', icon: 'people', hash: '#hrcentre/overview', avail: d.avail, w215: true,
+        steps: d.steps.map(function (s) { return { c: 1, t: s.t, p: String(s.p || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) }; }) };
+    });
+    return true;
+  }
+  if (!register()) { var n = 0, t = setInterval(function () { if (register() || ++n > 40) clearInterval(t); }, 500); }
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)
@@ -82540,195 +83192,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- test hook ---------- */
   window.w163 = { state: function () { return G; }, ready: function () { return G.ready; }, settle: settle,
     phone: { state: function () { return PH; }, open: openSheet, close: closeSheet, bar: paintBar, key: barKey, team: myTeamId, items: hubItems } };
-})();
-/* =====================================================================
-   WA v213 The due-date check (06/10/26)
-   =====================================================================
-   Steel (06/10/26), after wave210 showed 52 of 62 recent meeting tasks had no due date: "I'd rather a pop up when the
-   user gets on to the hub that they should [set] their due dates for the tasks or confirm the due dates provided make
-   sense" (new and existing open tasks); then "it should pop with the best assumptions of due dates and allow the user
-   to make edits if needed but they [should not] be able to exit until they confirm their due dates. Also overdue tasks
-   should also pop to ask if items are done and if they aren't to push the due date to a realistic date".
-
-   - On opening the Hub, a pop-up (#w213pop) lists the person's open tasks that are overdue, have no due date, or
-     carry a date a meeting set that nobody confirmed (my_due_date_check(): owner by first name, or assigned).
-   - Each comes filled with the best guess: their team's next meeting from the Hub calendar, or the one after when
-     the next is less than two days away (a date the meeting set stays as it is). Next meeting / Following meeting
-     buttons and a date field change it. An overdue task asks Done or Still open (push to a date).
-   - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
-     offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
-     change_log line; the pop-up comes back next visit only for what is still overdue or undated.
-   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
-(function () {
-  'use strict';
-  if (window.__wa213) return; window.__wa213 = true;
-  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
-  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
-
-  var css = ''
-    + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
-    + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
-    + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
-    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
-    + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
-    + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
-    + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
-    + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
-    + '#w213pop .row.isdone{opacity:.6;}'
-    + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
-    + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
-    + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
-    + '#w213pop .ctl input[type=date]{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;}'
-    + '#w213pop .chip{border:1px solid var(--wa-line,#d8d4c8);background:#FFFAF2;border-radius:14px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:#333;}'
-    + '#w213pop .chip.on{background:' + GREEN + ';border-color:' + GREEN + ';color:#FFFAF2;}'
-    + '#w213pop .seg{display:inline-flex;border:1px solid var(--wa-line,#d8d4c8);border-radius:8px;overflow:hidden;}'
-    + '#w213pop .seg button{border:0;background:#FFFAF2;font:inherit;font-size:12.5px;padding:4px 10px;cursor:pointer;}'
-    + '#w213pop .seg button.on{background:' + GREEN + ';color:#FFFAF2;}'
-    + '#w213pop .ft{padding:12px 22px;border-top:1px solid var(--wa-line,#e4e0d4);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
-    + '#w213pop .save{background:' + GOLD + ';color:#1F201E;border:0;border-radius:9px;padding:9px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}'
-    + '#w213pop .save[disabled]{opacity:.6;cursor:default;}'
-    + '#w213pop .later{background:none;border:0;color:#555;text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;}'
-    + '#w213pop .err{color:' + FLAG + ';font-size:12.5px;flex-basis:100%;}'
-    + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
-    + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
-  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
-
-  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
-  function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
-  function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
-  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
-  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
-  function busyElsewhere() {
-    var p = document.getElementById('w177pop'); if (p && p.offsetParent !== null && getComputedStyle(p).display !== 'none') return true;
-    var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
-    return false;
-  }
-
-  async function load() {
-    try {
-      var r = await db.rpc('my_due_date_check');
-      if (r && r.error) return null;
-      return (r && r.data) || [];
-    } catch (e) { return null; }
-  }
-
-  function rowHtml(r) {
-    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
-    var meta = [team(r.department)];
-    if (isOver) meta.push('was due ' + day(r.due_date));
-    else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
-    if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
-    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
-      + '<div class="m">' + E(meta.filter(Boolean).join(' \u00b7 ')) + '</div><div class="ctl">';
-    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
-    if (!dn) {
-      h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
-        + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting \u00b7 ' + E(day(r.next_meeting, true)) + '</button>'
-        + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following \u00b7 ' + E(day(r.following_meeting, true)) + '</button>';
-    }
-    return h + '</div></div>';
-  }
-
-  function html() {
-    var rows = S.rows || [];
-    var over = rows.filter(function (r) { return r.why === 'overdue'; });
-    var none = rows.filter(function (r) { return r.why === 'no_date'; });
-    var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
-    var bits = [];
-    if (over.length) bits.push(over.length + ' overdue');
-    if (none.length) bits.push(none.length + ' with no due date');
-    if (set.length) bits.push(set.length + ' dated by a meeting');
-    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
-      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team\u2019s next meeting. Change any that don\u2019t fit'
-      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
-    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
-    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
-    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
-    var n = rows.length;
-    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
-      + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
-      + '<span class="note">You can change any date later on the task itself.</span>'
-      + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
-    return h;
-  }
-
-  function paint() {
-    var el = document.getElementById('w213pop');
-    if (!el) { el = document.createElement('div'); el.id = 'w213pop'; document.body.appendChild(el); wire(el); }
-    var sc = el.querySelector('.bd'), top = sc ? sc.scrollTop : 0;
-    el.innerHTML = html();
-    var sc2 = el.querySelector('.bd'); if (sc2) sc2.scrollTop = top;
-  }
-  function close() { var el = document.getElementById('w213pop'); if (el) el.remove(); S.gone = true; document.removeEventListener('keydown', trapKey, true); }
-  function trapKey(e) {
-    if (!document.getElementById('w213pop')) return;
-    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); }
-  }
-
-  function wire(el) {
-    el.addEventListener('click', function (e) {
-      var t = e.target, b;
-      if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
-      if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
-      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
-      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
-      if (t.closest('[data-w213save]')) { save(); return; }
-      if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
-    });
-    el.addEventListener('change', function (e) {
-      var i = e.target.closest('[data-w213date]'); if (!i) return;
-      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
-    });
-    document.addEventListener('keydown', trapKey, true);
-  }
-
-  async function save() {
-    if (S.busy) return;
-    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
-    (S.rows || []).forEach(function (r) {
-      var id = r.task_id;
-      if (S.done[id]) { items.push({ id: id, done: true }); return; }
-      var v = S.pick[id];
-      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
-      items.push({ id: id, due: v });
-    });
-    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
-    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
-    if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
-    S.busy = true; S.err = ''; paint();
-    try {
-      var r = await db.rpc('confirm_due_dates', { p: items });
-      if (r && r.error) throw new Error(r.error.message || 'could not save');
-      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
-      close();
-      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
-      try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
-    } catch (e) {
-      S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
-    }
-  }
-
-  async function start() {
-    if (S.shown || S.gone) return;
-    if (!staff()) return;
-    var rows = await load();
-    if (!rows || !rows.length) return;
-    S.rows = rows; S.pick = {}; S.done = {};
-    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
-    var tries = 0;
-    (function wait() {
-      if (S.shown || S.gone) return;
-      if (busyElsewhere() && tries++ < 120) { setTimeout(wait, 1000); return; }
-      S.shown = true; paint();
-      try { var f = document.querySelector('#w213pop [data-w213save]'); if (f) f.focus(); } catch (e) { /* fine */ }
-    })();
-  }
-
-  if (typeof startApp === 'function') {
-    var __sa = startApp;
-    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 1500); };
-  }
-  window.w213 = { start: start, state: function () { return S; } };
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
