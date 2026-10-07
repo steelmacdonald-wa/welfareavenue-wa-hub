@@ -2056,13 +2056,13 @@
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
   LOADERS.cfields = function () { return db.from('crm_fields').select('*').order('sort', { ascending: true }).order('id', { ascending: true }); };
   LOADERS.fevents = function () { return db.from('volunteer_events').select('id,event_date,status,kind,location,title').eq('status', 'planned').gte('event_date', today()).order('event_date', { ascending: true }).limit(24); };
-  var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED] };
+  var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED], application: ['Join the team (HR centre)', GREEN] };
   /* wave168: every form's page opens with a photo from the Photo library behind the logo and the title (crm_forms.cover_photo_id;
      none uses the kind's default, as form-submit does) */
   var COVER_KIND = { volunteer: 9, newsletter: 3, general: 26 };
   var PSTORE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
   var LOCKUP_IMG = PSTORE + 'brand/logo-lockup-cream-600.png';
-  var EYEBROW = { en: { volunteer: 'Volunteer with us', newsletter: 'Stay in touch', general: 'Welfare Avenue' }, fr: { volunteer: 'B\u00e9n\u00e9volat', newsletter: 'Restez au courant', general: 'Welfare Avenue' } };
+  var EYEBROW = { en: { volunteer: 'Volunteer with us', newsletter: 'Stay in touch', general: 'Welfare Avenue', application: 'Join our team' }, fr: { volunteer: 'B\u00e9n\u00e9volat', newsletter: 'Restez au courant', general: 'Welfare Avenue', application: 'Rejoindre l\u2019\u00e9quipe' } };
   function photoById(id) { return (S.wphotos || []).filter(function (p) { return String(p.id) === String(id); })[0] || null; }
   function coverOf(f) { return (f && f.cover_photo_id ? photoById(f.cover_photo_id) : null) || photoById(COVER_KIND[f && f.kind] || 26); }
   function loadPhotos168() {
@@ -2087,7 +2087,10 @@
   }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
-  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)']];
+  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)'], ['positions', 'The open positions (HR centre)'], ['file', 'A file (their CV)']];
+  /* wave216: an application form (kind application) puts each person on the HR centre's Applications board: the open positions
+     (Posted or Interviewing, live from the HR centre, plus a general application), their CV as a file, links and why */
+  var APP_ONLY = { positions: 1, file: 1 };
   var FTYPE_OF = { text: 'text', long_text: 'long_text', email: 'text', phone: 'text', choice: 'choice', multi: 'multi', yes_no: 'yes_no', date: 'date', number: 'number' };
   var FTYPE_NAME = { text: 'Short answer', long_text: 'Long answer', number: 'Number', date: 'Date', choice: 'One choice', multi: 'Several choices', yes_no: 'Yes or no' };
   var CONTACT_TO = { 'contact.first_name': 'First name', 'contact.last_name': 'Last name', 'contact.email': 'Email', 'contact.phone': 'Phone', 'contact.city': 'City', 'contact.province': 'Province', 'contact.postal_code': 'Postal code', 'contact.address': 'Address', 'contact.language': 'Language (en or fr)' };
@@ -2118,6 +2121,10 @@
     if (to === 'volunteer.roles') return 'Their volunteer roles';
     if (to === 'volunteer.dates') return 'A sign-up for each date (to confirm)';
     if (to === 'note') return 'The note on their timeline';
+    if (to === 'application.position') return 'The role on their Applications card';
+    if (to === 'application.cv') return 'The CV on their Applications card';
+    if (to === 'application.why') return 'Why us, on their Applications card';
+    if (to === 'application.links') return 'Links on their Applications card';
     if (/^field:/.test(to)) { var f = fieldByKey(to.slice(6)); return 'Field: ' + (f ? f.label : to.slice(6)); }
     return to;
   }
@@ -2132,6 +2139,10 @@
     if (t === 'choice') add('contact.language');
     if (t === 'multi' && kind === 'volunteer') add('volunteer.roles');
     if (t === 'serving_dates') add('volunteer.dates');
+    if (t === 'positions') add('application.position');
+    if (t === 'file') add('application.cv');
+    if (t === 'long_text' && kind === 'application') add('application.why');
+    if (t === 'text' && kind === 'application') add('application.links');
     var ft = FTYPE_OF[t];
     if (ft) (S.cfields || []).filter(function (f) { return !f.archived_at && f.type === ft; }).forEach(function (f) { add('field:' + f.key); });
     if (ft) out.push(['__new', 'A new field on the contact, named after the question']);
@@ -2172,14 +2183,14 @@
   /* ---------- the editor ---------- */
   function editCopy(f) {
     var c = JSON.parse(JSON.stringify(f));
-    c.questions = (c.questions || []).map(function (q) { q._opts = optsText(q); return q; });
+    c.questions = (c.questions || []).map(function (q) { q._opts = optsText(q); if (q.source === 'positions') q.type = 'positions'; return q; });
     c.consent = c.consent || {}; c.settings = c.settings || {};
     c._tags = (c.settings.tags || []).join(', ');
     return c;
   }
   function qHtml(q, i, n, kind) {
     var hasOpts = q.type === 'choice' || q.type === 'multi';
-    var types = QTYPES.map(function (t) { return '<option value="' + t[0] + '"' + (t[0] === q.type ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('');
+    var types = QTYPES.filter(function (t) { return !APP_ONLY[t[0]] || kind === 'application' || t[0] === q.type; }).map(function (t) { return '<option value="' + t[0] + '"' + (t[0] === q.type ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('');
     var tos = toChoices(q, kind).map(function (o) { return '<option value="' + E(o[0]) + '"' + (o[0] === (q.to || '') ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('');
     return '<div class="w156q" data-w156qi="' + i + '"><div class="w156qh"><b>' + (i + 1) + '</b>' +
       '<select class="w152sel" data-w156qk="type" aria-label="Kind of answer">' + types + '</select>' +
@@ -2189,6 +2200,8 @@
       '<input class="w152in" data-w156qk="label" value="' + E(q.label) + '" placeholder="The question, as people will read it" aria-label="The question">' +
       '<input class="w152in" data-w156qk="help" value="' + E(q.help || '') + '" placeholder="A line of help under it (optional)" aria-label="Help">' +
       (hasOpts ? '<textarea class="w152in" data-w156qk="_opts" rows="4" placeholder="One choice per line. To save a code instead of the words: code | words" aria-label="Choices">' + E(q._opts || '') + '</textarea>' : '') +
+      (q.type === 'positions' ? '<p class="m">People choose from the positions at Posted or Interviewing in the HR centre (serving roles apply on the volunteer form), or a general application. Close a position and it leaves the form.</p>' : '') +
+      (q.type === 'file' ? '<p class="m">A PDF, Word document or photo, up to 10 MB, kept privately and read by the Hub\u2019s CV reader.</p>' : '') +
       (q.type === 'serving_dates' ? '<p class="m">People see the planned servings in the Volunteer Manager from today on; each date they tick becomes a sign-up on that event\u2019s roster, to be confirmed by the team.</p>' : '') +
       '<label class="w155lb">Saves to<select class="w152sel" data-w156qk="to">' + tos + '</select></label></div>';
   }
@@ -2240,6 +2253,8 @@
     var one = function (q) {
       var head = '<div class="w156pl">' + E(q.label || 'Question') + (q.required ? '<span class="w156req">*</span>' : ' <span class="m">(optional)</span>') + '</div>' + (q.help ? '<div class="m">' + E(q.help) + '</div>' : '');
       if (q.type === 'long_text') return head + '<textarea class="w152in" disabled rows="2"></textarea>';
+      if (q.type === 'file') return head + '<div class="w156pc"><span class="w156pb">' + (f.lang === 'fr' ? 'Choisir un fichier' : 'Choose a file') + '</span></div>';
+      if (q.type === 'positions') return head + '<div class="m">The open positions from the HR centre, then \u201c' + (f.lang === 'fr' ? 'Je ne sais pas encore : une candidature g\u00e9n\u00e9rale' : 'Not sure yet: a general application') + '\u201d.</div>';
       if (q.type === 'yes_no') return head + '<div class="w156pc"><span class="w156pr">Yes</span><span class="w156pr">No</span></div>';
       if (q.type === 'choice' || q.type === 'multi') { var os = optsOf({ options: parseOpts(q._opts) }); return head + '<div class="w156pc">' + (os.length ? os.map(function (o) { return '<span class="' + (q.type === 'multi' ? 'w156pb' : 'w156pr') + '">' + E(o.l) + '</span>'; }).join('') : '<span class="m">No choices yet</span>') + '</div>'; }
       if (q.type === 'serving_dates') {
@@ -2273,6 +2288,7 @@
       if (r.volunteer_created) bits.push('a new volunteer record to review'); else if (r.volunteer_id) bits.push('their volunteer record updated');
       var ro = (r.roster || []).filter(function (x) { return !x.already; }); if (ro.length) bits.push('signed up for ' + ro.map(function (x) { return fmtDay(x.date); }).join(', '));
       if (r.consent) bits.push('email permission recorded');
+      if (r.candidate_id) bits.push('a card in Applications (HR centre)');
       return bits.length ? 'The Hub: ' + bits.join('; ') + '.' : '';
     };
     return '<div class="w154card wide"><h3>' + I('list') + ' Answers to \u201c' + E(f.title) + '\u201d <span class="w155sub">' + plural(rows.length, 'answer', 'answers') + '</span></h3>' +
@@ -2329,6 +2345,7 @@
       var out = { id: id, type: q.type, label: String(q.label || '').trim(), required: !!q.required, to: q.to || '' };
       if (String(q.help || '').trim()) out.help = String(q.help).trim();
       if (q.type === 'choice' || q.type === 'multi') out.options = parseOpts(q._opts);
+      if (q.type === 'positions') { out.type = 'choice'; out.source = 'positions'; }
       if (!out.to) delete out.to;
       return out;
     });
@@ -2489,7 +2506,7 @@
     if (t.hasAttribute('data-w156qk')) {
       i = qAt(t); if (i < 0) return; key = t.getAttribute('data-w156qk'); var q = f.questions[i];
       q[key] = t.type === 'checkbox' ? t.checked : t.value;
-      if (key === 'type') { q.to = (toChoices(q, f.kind).filter(function (o) { return o[0] === q.to; })[0] || [''])[0]; if (q.type === 'email') q.to = 'contact.email'; if (q.type === 'phone') q.to = 'contact.phone'; if (q.type === 'serving_dates') q.to = 'volunteer.dates'; }
+      if (key === 'type') { q.to = (toChoices(q, f.kind).filter(function (o) { return o[0] === q.to; })[0] || [''])[0]; if (q.type === 'email') q.to = 'contact.email'; if (q.type === 'phone') q.to = 'contact.phone'; if (q.type === 'serving_dates') q.to = 'volunteer.dates'; if (q.type === 'positions') q.to = 'application.position'; if (q.type === 'file') q.to = 'application.cv'; }
       if (key === 'type' || (key === 'to' && e.type === 'change') || key === 'required') paint();
       else if (key === 'label' || key === '_opts' || key === 'help') previewSoon156();
     }

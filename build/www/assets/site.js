@@ -6,8 +6,10 @@
   'use strict';
   var B = document.body, LANG = B.getAttribute('data-lang') || 'en', SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
   var T = {
-    en: { nextServing: 'Next serving: ', serving: 'Sunday serving', sign: 'Sign up', none: 'New dates will be posted soon. Sign up and we will tell you when they are set.', event: 'Fundraiser', more: 'Details', close: 'Close', prev: 'Previous', next: 'Next', menu: 'Menu', photo: 'Photo' },
-    fr: { nextServing: 'Prochain repas : ', serving: 'Repas du dimanche', sign: 'S’inscrire', none: 'Les prochaines dates seront publiées bientôt. Inscrivez-vous et nous vous écrirons dès qu’elles seront fixées.', event: 'Collecte de fonds', more: 'Détails', close: 'Fermer', prev: 'Précédente', next: 'Suivante', menu: 'Menu', photo: 'Photo' }
+    en: { nextServing: 'Next serving: ', serving: 'Sunday serving', sign: 'Sign up', none: 'New dates will be posted soon. Sign up and we will tell you when they are set.', event: 'Fundraiser', more: 'Details', close: 'Close', prev: 'Previous', next: 'Next', menu: 'Menu', photo: 'Photo',
+      apply: 'Apply for this role', noRoles: 'No roles are open right now. Send a general application and we will reach out when one fits.', dept: { marketing: 'Marketing', hr: 'Human resources', opsmtl: 'Operations, Montreal', opsto: 'Operations, Toronto', fundraising: 'Fundraising', finance: 'Finance', exec: 'Leadership', board: 'Board', tech: 'Technology', programs: 'Programs' } },
+    fr: { nextServing: 'Prochain repas : ', serving: 'Repas du dimanche', sign: 'S’inscrire', none: 'Les prochaines dates seront publiées bientôt. Inscrivez-vous et nous vous écrirons dès qu’elles seront fixées.', event: 'Collecte de fonds', more: 'Détails', close: 'Fermer', prev: 'Précédente', next: 'Suivante', menu: 'Menu', photo: 'Photo',
+      apply: 'Postuler pour ce poste', noRoles: 'Aucun poste n’est ouvert pour le moment. Envoyez une candidature générale et nous vous écrirons dès qu’un rôle vous conviendra.', dept: { marketing: 'Marketing', hr: 'Ressources humaines', opsmtl: 'Opérations, Montréal', opsto: 'Opérations, Toronto', fundraising: 'Collecte de fonds', finance: 'Finances', exec: 'Direction', board: 'Conseil d’administration', tech: 'Technologie', programs: 'Programmes' } }
   }[LANG === 'fr' ? 'fr' : 'en'];
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function ls(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
@@ -153,6 +155,26 @@
         .then(function (d) { if (d && (d.servings || d.events)) { Array.prototype.forEach.call(boxes, function (b) { paint(b, d); }); paintNext(d); } })
         .catch(function () { /* the build's copy stays */ });
     }
+  }
+
+  /* wave216 (07/10/26): the open roles on the Join our team page, live from the Hub's HR centre (wa216_open_positions:
+     positions at Posted or Interviewing, titles only). "Apply for this role" picks it in the form below. */
+  var roleBoxes = document.querySelectorAll('[data-open-roles]');
+  if (roleBoxes.length && SUPA && KEY && window.fetch) {
+    rpc('wa216_open_positions', {}).then(function (r) {
+      var list = r.ok && Array.isArray(r.body) ? r.body : null; if (!list) return;
+      Array.prototype.forEach.call(roleBoxes, function (box) {
+        box.innerHTML = list.length ? '<ul class="open-roles">' + list.map(function (p) {
+          return '<li><div><h3>' + E(p.title) + '</h3>' + (T.dept[p.dept] ? '<p class="fine mb0">' + E(T.dept[p.dept]) + '</p>' : '') + '</div><a class="textlink" href="#apply" data-pick="p:' + E(p.id) + '">' + E(T.apply) + '</a></li>';
+        }).join('') + '</ul>' : '<p>' + E(T.noRoles) + '</p>';
+      });
+    }, function () { /* the page's own line stays */ });
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('[data-pick]') : null; if (!a) return;
+      var v = a.getAttribute('data-pick');
+      var radio = document.querySelector('#apply input[name="position"][value="' + v + '"]'), sel = document.querySelector('#apply select[name="position"]');
+      if (radio) radio.checked = true; else if (sel) sel.value = v;
+    });
   }
 
   /* The photo viewer (photos and posters) */

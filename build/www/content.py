@@ -28,6 +28,8 @@ PATHS = {
     # wave194 (02/10/26): the website accounts (not in the menu or the sitemap) and the privacy notice
     'account': {'en': '/account/', 'fr': '/fr/compte/'},
     'privacy': {'en': '/privacy/', 'fr': '/fr/confidentialite/'},
+    # wave216 (07/10/26): Join our team, the HR centre's application form (in the footer and on the volunteer page)
+    'join': {'en': '/join/', 'fr': '/fr/rejoindre/'},
 }
 # The menu, in the order of Edison's design (www2, 01/10/26). Contact and Sign up sit in the header's side group.
 NAV = ['home', 'volunteer', 'donate', 'events', 'press', 'about']

@@ -10,7 +10,7 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; } else { fail++; console.log('FAIL ' + m); } }
 const PAGES = { home: ['/', '/fr/'], about: ['/about/', '/fr/a-propos/'], volunteer: ['/volunteer/', '/fr/benevolat/'], events: ['/events/', '/fr/evenements/'],
   press: ['/press/', '/fr/presse/'], contact: ['/contact/', '/fr/contact/'], donate: ['/donate/', '/fr/donner/'],
-  account: ['/account/', '/fr/compte/'], privacy: ['/privacy/', '/fr/confidentialite/'] }; // wave194: the account page and the privacy notice
+  account: ['/account/', '/fr/compte/'], privacy: ['/privacy/', '/fr/confidentialite/'], join: ['/join/', '/fr/rejoindre/'] }; // wave194: the account page and the privacy notice; wave216: Join our team
 const ALL = Object.values(PAGES).flat();
 const FORM = { slug: 'newsletter', title: 'Get the Welfare Avenue newsletter', intro: 'About once a month.', lang: 'en', thank_you: 'You are on the list.',
   consent: { ask: true, required: true, label: 'Yes, email me.' },
@@ -22,7 +22,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   // ---------- static checks on the build ----------
   const htmlFiles = [];
   (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) walk(p); else if (f.endsWith('.html')) htmlFiles.push(p); } })(OUT);
-  ok(htmlFiles.length === 19, 'nineteen pages built (' + htmlFiles.length + ')');
+  ok(htmlFiles.length === 21, 'twenty-one pages built (' + htmlFiles.length + ')');
   for (const f of htmlFiles) {
     const s = fs.readFileSync(f, 'utf8'), rel = path.relative(OUT, f);
     ok(!/—/.test(s), rel + ': no em dash');
@@ -40,7 +40,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   ok(!/'unsafe-inline'|'unsafe-eval'/.test(headers), '_headers: no unsafe-inline or unsafe-eval');
   ok(/Disallow: \//.test(fs.readFileSync(path.join(OUT, 'robots.txt'), 'utf8')), 'robots.txt: preview disallows');
   const sitemap = fs.readFileSync(path.join(OUT, 'sitemap.xml'), 'utf8');
-  ok((sitemap.match(/<loc>/g) || []).length === 16 && /hreflang="fr"/.test(sitemap) && !/account|compte/.test(sitemap), 'sitemap: 16 pages with alternates, never the account page');
+  ok((sitemap.match(/<loc>/g) || []).length === 18 && /hreflang="fr"/.test(sitemap) && !/account|compte/.test(sitemap), 'sitemap: 18 pages with alternates, never the account page');
 
   // ---------- in the browser ----------
   const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY } });

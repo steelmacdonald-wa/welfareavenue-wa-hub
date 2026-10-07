@@ -146,7 +146,7 @@ def head(lang, key, title, desc, image=None):
             % (lang, e(t), e(desc), '' if (LAUNCH and key != 'account') else '<meta name="robots" content="noindex">\n', e(canon), alt, e(t), e(desc), e(canon), og,
                'fr_CA' if lang == 'fr' else 'en_CA', V['site.css'], ld,
                V['site.js'], ('<script src="/assets/signin.js?v=%s" defer></script>\n' % V['signin.js']) +
-               (('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else '') +
+               (('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact', 'join') else '') +
                (('<script src="/assets/account.js?v=%s" defer></script>\n' % V['account.js']) if key == 'account' else '')))
 
 def header(lang, key):
@@ -176,7 +176,8 @@ def footer(lang):
     u = C.UI[lang]; en = lang == 'en'
     explore = ''.join('<li><a href="%s">%s</a></li>' % (e(url(k, lang)), e(u['nav'][k])) for k in ('home', 'events', 'volunteer', 'press', 'about', 'donate'))
     about = [('about#mission', 'Our mission' if en else 'Notre mission'), ('about#story', 'Our story' if en else 'Notre histoire'),
-             ('about#team', 'Our team' if en else 'Notre équipe'), ('contact#newsletter', 'Newsletter' if en else 'Infolettre'), ('contact', u['nav']['contact'])]
+             ('about#team', 'Our team' if en else 'Notre équipe'), ('join', 'Join our team' if en else 'Rejoindre l’équipe'),
+             ('contact#newsletter', 'Newsletter' if en else 'Infolettre'), ('contact', u['nav']['contact'])]
     aboutl = ''.join('<li><a href="%s">%s</a></li>' % (e(url(k, lang)), e(t)) for k, t in about)
     aboutl += '<li data-acct-link hidden><a href="%s">%s</a></li>' % (e(url('account', lang)), e(u['account']))
     soc = ''.join('<a href="%s" rel="noopener">%s</a>' % (e(h), e(n)) for n, h in C.SOCIAL)
@@ -465,6 +466,10 @@ def volunteer(lang):
         'groups_p': 'Schools, clubs and companies can serve together, 10 to 15 people at a time. Write to us at least four weeks ahead and we will find a Sunday that works.' if en else
                     'Écoles, clubs et entreprises peuvent servir ensemble, de 10 à 15 personnes à la fois. Écrivez-nous au moins quatre semaines à l’avance et nous trouverons un dimanche qui convient.',
         'groups_btn': 'Plan a group serving' if en else 'Planifier un service de groupe',
+        'team_h': 'Want to do more? Join our team' if en else 'Envie d’en faire plus? Rejoignez l’équipe',
+        'team_p': 'Our team runs Welfare Avenue behind the servings: operations, marketing, fundraising, HR and more, a few hours a week. See the open roles and apply with your CV.' if en else
+                  'Notre équipe fait vivre Welfare Avenue au-delà des repas : opérations, marketing, collecte de fonds, RH et plus, quelques heures par semaine. Voyez les postes ouverts et postulez avec votre CV.',
+        'team_btn': 'See the open roles' if en else 'Voir les postes ouverts',
     }
     city = C.CITY[lang]['Montreal']
     roles = ''.join('<li class="role"><div class="hd"><h3>%s</h3><ul class="tags"><li class="tag">%s</li></ul></div><p>%s</p><ul class="chips2"><li>%s</li></ul>%s</li>'
@@ -488,9 +493,63 @@ def volunteer(lang):
         '<details class="more"><summary>%s</summary><div class="in">%s</div></details></div></div></section>\n'
         % (e(T['to_h']), e(T['to_p']), e(T['to_btn']), form_box('toronto-volunteer', fb, lang, heading=False)) +
         '<section class="band on-white"><div class="wrap">%s</div></section>\n' % quote(C.QUOTE_VOLUNTEER, lang) +
+        '<section class="band on-grey" id="team"><div class="wrap cta"><div><h2>%s</h2><p class="mb0">%s</p></div><div class="btns">%s</div></div></section>\n'
+        % (e(T['team_h']), e(T['team_p']), btn(url('join', lang), T['team_btn'])) +
         '<section class="band on-dark" id="groups"><div class="wrap cta"><div><h2>%s</h2><p class="lede mb0">%s</p></div><div class="btns">%s</div></div></section>\n'
         % (e(T['groups_h']), e(T['groups_p']), btn(url('contact', lang), T['groups_btn'])) + seed_script())
     return page(lang, 'volunteer', T['title'], T['desc'], body)
+
+def join(lang):
+    """wave216 (07/10/26), Steel: "I'd like for individuals to also have a spot to apply to join our team on the website. It should be a
+    form built through the CRM that links new applicants to the applications section of the hr center." The open roles come live
+    from the HR centre (site.js, wa216_open_positions); the form is the CRM's join / rejoindre (kind application), whose answers
+    land on the Applications board with the CV."""
+    en = lang == 'en'
+    T = {
+        'title': 'Join our team' if en else 'Rejoindre l’équipe',
+        'desc': 'Join the Welfare Avenue team: volunteer roles in operations, marketing, fundraising and HR. See the open roles and apply with your CV.' if en else
+                'Rejoignez l’équipe de Welfare Avenue : des rôles bénévoles en opérations, marketing, collecte de fonds et RH. Voyez les postes ouverts et postulez avec votre CV.',
+        'lede': 'Welfare Avenue is youth-powered. The people who plan the servings, run the kitchen, tell our story and raise the funds are volunteers like you.' if en else
+                'Welfare Avenue est porté par les jeunes. Les personnes qui planifient les repas, font tourner la cuisine, racontent notre histoire et collectent les fonds sont des bénévoles comme vous.',
+        'hero_btn': 'See the open roles' if en else 'Voir les postes ouverts',
+        'why_over': 'Why join' if en else 'Pourquoi nous rejoindre',
+        'why_h': 'Lead, learn and make it happen' if en else 'Diriger, apprendre et passer à l’action',
+        'why_p': 'Team roles take about four hours a week, mostly online, with a weekly team meeting. You get real responsibility, a team that has your back and work you can point to.' if en else
+                 'Les rôles d’équipe demandent environ quatre heures par semaine, surtout en ligne, avec une réunion d’équipe chaque semaine. Vous avez de vraies responsabilités, une équipe qui vous soutient et un travail dont vous serez fier.',
+        'ticks': (['Real responsibility from your first week', 'Leadership and project experience for your CV', 'A reference letter and a record of your hours'] if en else
+                  ['De vraies responsabilités dès la première semaine', 'De l’expérience en leadership et en gestion de projet', 'Une lettre de référence et un relevé de vos heures']),
+        'roles_h': 'Open roles' if en else 'Postes ouverts',
+        'roles_fb': 'The roles we are recruiting for are in the form below. Not sure which fits? Send a general application.' if en else
+                    'Les postes que nous recrutons sont dans le formulaire ci-dessous. Vous hésitez? Envoyez une candidature générale.',
+        'how_h': 'How it works' if en else 'Comment ça marche',
+        'how': ([('Apply', 'Pick a role, attach your CV and tell us why Welfare Avenue.'), ('We get in touch', 'Our HR team reads every application and calls or texts to set up a conversation.'),
+                 ('Meet the team', 'A short interview with the people you would work with.'), ('Welcome aboard', 'An offer, then onboarding with your team lead.')] if en else
+                [('Postulez', 'Choisissez un poste, joignez votre CV et dites-nous pourquoi Welfare Avenue.'), ('Nous vous écrivons', 'Notre équipe des RH lit chaque candidature et vous appelle ou vous texte pour fixer une conversation.'),
+                 ('Rencontrez l’équipe', 'Une courte entrevue avec les personnes avec qui vous travailleriez.'), ('Bienvenue', 'Une offre, puis l’intégration avec votre responsable d’équipe.')]),
+        'apply_over': 'Apply' if en else 'Postuler',
+        'apply_h2': 'Ready to join us?' if en else 'Prêt à nous rejoindre?',
+        'apply_p': 'It takes about five minutes. Have your CV ready as a PDF, a Word document or a photo.' if en else
+                   'Cela prend environ cinq minutes. Ayez votre CV sous la main en PDF, en document Word ou en photo.',
+        'apply_fb': ('Applications open here soon. In the meantime, send your CV to' if en else 'Les candidatures ouvriront ici bientôt. D’ici là, envoyez votre CV à'),
+        'serve_h': 'Rather serve on Sundays?' if en else 'Vous préférez servir le dimanche?',
+        'serve_p': 'Serving, cooking and driving at our Sunday servings needs no application: sign up on the volunteer page.' if en else
+                   'Servir, cuisiner ou conduire lors de nos repas du dimanche ne demande pas de candidature : inscrivez-vous sur la page Bénévolat.',
+        'serve_btn': 'Volunteer at a serving' if en else 'Faire du bénévolat',
+    }
+    how = ''.join('<li><p class="n" aria-hidden="true">0%d</p><h3>%s</h3><p>%s</p></li>' % (i + 1, e(t), e(d)) for i, (t, d) in enumerate(T['how']))
+    ticks = ''.join('<li>%s</li>' % e(t) for t in T['ticks'])
+    fb = '<h3>%s</h3><p class="waf-note">%s %s.</p>' % (e(T['apply_over']), e(T['apply_fb']), mail(lang))
+    body = (hero(h1(T['title']), T['lede'], '2025-12-gift-baskets-the-crew', alt_of('2025-12-gift-baskets-the-crew', lang), btn('#roles', T['hero_btn'])) +
+        '<section class="band on-grey"><div class="wrap split"><div><p class="over">%s</p><h2>%s</h2><p class="mt1">%s</p><ul class="ticks">%s</ul></div><div class="pic">%s</div></div></section>\n'
+        % (e(T['why_over']), e(T['why_h']), e(T['why_p']), ticks, img('2022-10-autumn-crew-at-the-tent', alt_of('2022-10-autumn-crew-at-the-tent', lang))) +
+        '<section class="band on-white" id="roles"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><div data-open-roles><p>%s</p></div></div></section>\n'
+        % (mark(), e(T['roles_h']), e(T['roles_fb'])) +
+        '<section class="band on-grey"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><ol class="steps">%s</ol></div></section>\n' % (mark(), e(T['how_h']), how) +
+        '<section class="band on-white" id="apply"><div class="wrap split top"><div><p class="over">%s</p><h2>%s</h2><p class="mt1">%s</p></div><div>%s</div></div></section>\n'
+        % (e(T['apply_over']), e(T['apply_h2']), e(T['apply_p']), form_box('join' if en else 'rejoindre,join', fb, lang)) +
+        '<section class="band on-dark"><div class="wrap cta"><div><h2>%s</h2><p class="lede mb0">%s</p></div><div class="btns">%s</div></div></section>\n'
+        % (e(T['serve_h']), e(T['serve_p']), btn(url('volunteer#apply', lang), T['serve_btn'])))
+    return page(lang, 'join', T['title'], T['desc'], body)
 
 def fmt_date(iso, lang):
     d = datetime.date.fromisoformat(iso)
@@ -709,7 +768,7 @@ def notfound():
 
 # ---------- build ----------
 BUILDERS = {'home': home, 'about': about, 'volunteer': volunteer, 'events': events, 'press': press, 'contact': contact, 'donate': donate,
-            'account': account, 'privacy': privacy}
+            'account': account, 'privacy': privacy, 'join': join}
 for key, fn in BUILDERS.items():
     for lang in ('en', 'fr'):
         p = C.PATHS[key][lang].strip('/')
@@ -727,6 +786,8 @@ REDIRECTS = [
     ('/login', '/account/'), ('/profile', '/account/'),
     ('/gallery', '/events/#photos'), ('/give', C.GIVE), ('/fr/donate', '/fr/donner/'),
     ('/activities', '/events/'), ('/fr/activites', '/fr/evenements/'),
+    # wave216: the usual addresses for jobs
+    ('/careers', '/join/'), ('/jobs', '/join/'), ('/fr/carrieres', '/fr/rejoindre/'), ('/fr/emplois', '/fr/rejoindre/'),
 ]
 put('_redirects', '# Welfare Avenue website (wave162, www2): the old website\'s addresses\n' + ''.join('%s  %s  301\n' % (a, b) for a, b in REDIRECTS))
 

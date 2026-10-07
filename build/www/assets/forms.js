@@ -1,4 +1,5 @@
-/* Welfare Avenue website (wave162, 28/09/26): the Hub's forms inside the website's pages. Each
+/* Welfare Avenue website (wave162, 28/09/26; wave216 07/10/26: a file question, the CV of an application form, uploaded on
+   send through form-submit's one-time upload link): the Hub's forms inside the website's pages. Each
    <div data-wa-form="slug[,fallback]"> asks the Hub's form-submit function for the published form (drafts are not
    found, so the page keeps its own message until staff put the form live in the CRM), shows the questions in the
    form's language, and posts the answers back with the signed token, the hidden field and the timing checks that
@@ -22,7 +23,8 @@
       yes: 'Yes', no: 'No', thanks: 'Thank you!', closed: 'This form is closed for now. You can reach us at ', select: 'Choose…',
       privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.', privacyLink: 'Privacy',
       acctIn: 'Signed in as {n}. We filled in what we have, and what you change here is saved to your profile.', acctMine: 'My account', acctNot: 'Not you?',
-      acctOffer: 'Have an account? {a} and this form fills in for you.', acctSignIn: 'Sign in', saved: 'Your profile is updated too.' },
+      acctOffer: 'Have an account? {a} and this form fills in for you.', acctSignIn: 'Sign in', saved: 'Your profile is updated too.',
+      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.' },
     fr: { optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous avons actualisé le formulaire. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
@@ -30,7 +32,8 @@
       yes: 'Oui', no: 'Non', thanks: 'Merci!', closed: 'Ce formulaire est fermé pour le moment. Vous pouvez nous écrire à ', select: 'Choisir…',
       privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.', privacyLink: 'Confidentialité',
       acctIn: 'Connexion : {n}. Nous avons rempli ce que nous avons, et ce que vous changez ici est enregistré dans votre profil.', acctMine: 'Mon compte', acctNot: 'Ce n’est pas vous?',
-      acctOffer: 'Vous avez un compte? {a} et ce formulaire se remplit pour vous.', acctSignIn: 'Connectez-vous', saved: 'Votre profil est aussi à jour.' }
+      acctOffer: 'Vous avez un compte? {a} et ce formulaire se remplit pour vous.', acctSignIn: 'Connectez-vous', saved: 'Votre profil est aussi à jour.',
+      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.' }
   };
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function call(method, slug, body, token) {
@@ -60,7 +63,7 @@
     return Promise.race([look, new Promise(function (res) { setTimeout(res, 2500); })]);
   })();
   function Form(box, n) {
-    var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, banner: '' };
+    var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, banner: '', files: {}, uploaded: {} };
     var slugs = (box.getAttribute('data-wa-form') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     var fallback = box.innerHTML, pfx = 'w' + n + '_';
     function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
@@ -89,6 +92,13 @@
         var type = { text: 'text', email: 'email', phone: 'tel', number: 'number', date: 'date' }[q.type];
         var ac = q.type === 'email' ? ' autocomplete="email"' : q.type === 'phone' ? ' autocomplete="tel"' : /first/i.test(q.id) ? ' autocomplete="given-name"' : /last/i.test(q.id) ? ' autocomplete="family-name"' : '';
         return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<input id="' + id + '" name="' + E(q.id) + '" type="' + type + '"' + ac + aria + ' value="' + E(v || '') + '" maxlength="200">' + e + '</div>';
+      }
+      /* wave216: a file (a CV for an application form): the chosen file is kept in S.files so a re-render keeps it, and it is
+         uploaded when the form is sent (form-submit action upload gives a one-time link into private storage) */
+      if (q.type === 'file') {
+        var f0 = S.files[q.id];
+        return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<input id="' + id + '" name="' + E(q.id) + '" type="file"' + (q.accept ? ' accept="' + E(q.accept) + '"' : '') + aria + '>' +
+          '<p class="waf-file small" data-waf-file="' + E(q.id) + '"' + (f0 ? '' : ' hidden') + '>' + (f0 ? E(t('attached') + f0.name) : '') + '</p>' + e + '</div>';
       }
       if (q.type === 'long_text') return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<textarea id="' + id + '" name="' + E(q.id) + '"' + aria + ' maxlength="2000">' + E(v || '') + '</textarea>' + e + '</div>';
       var opts = q.type === 'yes_no' ? [{ v: 'yes', l: t('yes') }, { v: 'no', l: t('no') }] : (q.options || []).map(function (o) { return typeof o === 'string' ? { v: o, l: o } : o; });
@@ -124,6 +134,13 @@
         '<button type="submit" class="btn waf-send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button>' +
         '<p class="waf-privacy">' + E(t('privacy')) + ' <a href="' + PRIV_URL + '">' + E(t('privacyLink')) + '</a></p></form>';
       box.querySelector('form').addEventListener('submit', submit);
+      Array.prototype.forEach.call(box.querySelectorAll('input[type="file"]'), function (inp) {
+        inp.addEventListener('change', function () {
+          var f0 = inp.files && inp.files[0]; if (!f0) return;
+          S.files[inp.name] = f0;
+          var line = box.querySelector('[data-waf-file="' + inp.name + '"]'); if (line) { line.textContent = t('attached') + f0.name; line.hidden = false; }
+        });
+      });
       var out = box.querySelector('[data-waf-out]');
       if (out) out.addEventListener('click', function () { if (window.WA) window.WA.signOut(); ACCT = null; FORMS.forEach(function (fn) { fn(); }); });
     }
@@ -133,6 +150,7 @@
       S.form.questions.forEach(function (q) {
         if (q.type === 'multi' || q.type === 'serving_dates') out[q.id] = Array.prototype.map.call(form.querySelectorAll('input[name="' + q.id + '"]:checked'), function (i) { return i.value; });
         else if (q.type === 'choice' || q.type === 'yes_no') { var sel = form.querySelector('select[name="' + q.id + '"]'); var r = form.querySelector('input[name="' + q.id + '"]:checked'); out[q.id] = sel ? sel.value : (r ? r.value : ''); }
+        else if (q.type === 'file') out[q.id] = S.files[q.id] ? S.files[q.id].name : '';
         else { var el = form.querySelector('[name="' + q.id + '"]'); out[q.id] = el ? el.value : ''; }
       });
       var cb = form.querySelector('input[name="_consent"]'); out._consent = !!(cb && cb.checked);
@@ -146,6 +164,11 @@
         if (empty) { if (q.required && !(q.type === 'serving_dates' && !(q.options || []).length)) errs[q.id] = t('required'); return; }
         if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim())) errs[q.id] = t('email');
         if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) errs[q.id] = t('phone');
+        if (q.type === 'file') {
+          var f0 = S.files[q.id], ext = (f0.name.match(/\.[a-z0-9]{2,5}$/i) || [''])[0].toLowerCase();
+          if (q.accept && q.accept.split(',').indexOf(ext) < 0) errs[q.id] = t('fileType');
+          else if (q.max_mb && f0.size > q.max_mb * 1048576) errs[q.id] = t('fileBig').replace('{n}', q.max_mb);
+        }
       });
       if (S.form.consent && S.form.consent.ask && S.form.consent.required && !a._consent) errs._consent = t('consent');
       return errs;
@@ -161,9 +184,34 @@
       S.errors = validate(a);
       if (Object.keys(S.errors).length) { S.banner = t('fix'); render(a); focusFirst(); return; }
       var answers = {}; S.form.questions.forEach(function (q) { answers[q.id] = a[q.id]; });
-      S.sending = true; S.banner = ''; render(a);
+      var fileQs = S.form.questions.filter(function (q) { return q.type === 'file' && S.files[q.id]; });
+      S.sending = true; S.banner = fileQs.length ? t('uploading') : ''; render(a);
+      var failed = null;
+      var up = fileQs.reduce(function (p, q) {
+        return p.then(function () {
+          if (failed) return;
+          var f0 = S.files[q.id], done = S.uploaded[q.id];
+          if (done && done.file === f0) { answers[q.id] = done.id; return; }
+          return call('POST', S.form.slug, { action: 'upload', slug: S.form.slug, token: S.token, qid: q.id, name: f0.name, size: f0.size, mime: f0.type }).then(function (r) {
+            if (r.status !== 200 || !r.body.url) { failed = r; return; }
+            return fetch(r.body.url, { method: 'PUT', headers: { 'Content-Type': r.body.mime || f0.type || 'application/octet-stream' }, body: f0 }).then(function (pr) {
+              if (!pr.ok) { failed = { status: 500, body: { error: 'upload' } }; return; }
+              S.uploaded[q.id] = { file: f0, id: r.body.upload_id }; answers[q.id] = r.body.upload_id;
+            });
+          });
+        });
+      }, Promise.resolve()).catch(function () { failed = { status: 0, body: {} }; });
+      up.then(function () {
+        if (!failed) return;
+        S.sending = false; S.errors = (failed.body && failed.body.fields) || {};
+        S.banner = failed.status === 0 ? t('offline') : failed.status === 429 ? t('rate') : failed.body && failed.body.error === 'expired' ? t('expired') : Object.keys(S.errors).length ? t('fix') : t('fileFail');
+        if (failed.body && failed.body.error === 'expired') { load(slugs.indexOf(S.form.slug), a); return; }
+        render(a); focusFirst();
+      });
+      up.then(function () { if (failed) return Promise.reject('stop'); })
+      .then(function () {
       // wave194: a signed-in account sends its own sign-in, so form-submit saves the answers to that person's record
-      (ACCT && window.WA ? window.WA.session() : Promise.resolve(null)).then(function (s) {
+      return (ACCT && window.WA ? window.WA.session() : Promise.resolve(null)).then(function (s) {
         var tok = s && window.WA.isAccount(s) ? s.access_token : null;
         return call('POST', S.form.slug, { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }, tok);
       }).then(function (r) {
@@ -174,6 +222,8 @@
         if (r.status === 404 || r.status === 410) { box.innerHTML = fallback; return; }
         S.banner = r.status === 429 ? t('rate') : t('server'); S.errors = {}; render(a);
       }).catch(function () { S.sending = false; S.banner = t('offline'); render(a); });
+      }, function () { /* the upload failed: already shown */ })
+      .catch(function () { S.sending = false; S.banner = t('offline'); render(a); });
     }
     function thanks(msg, saved) {
       box.innerHTML = '<div class="waf-done" role="status" tabindex="-1"><h3>' + E(t('thanks')) + '</h3><p class="mb0">' + E(msg) + '</p>' + (saved ? '<p class="small">' + E(t('saved')) + '</p>' : '') + '</div>';

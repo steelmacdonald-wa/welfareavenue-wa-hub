@@ -58566,13 +58566,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
   LOADERS.cfields = function () { return db.from('crm_fields').select('*').order('sort', { ascending: true }).order('id', { ascending: true }); };
   LOADERS.fevents = function () { return db.from('volunteer_events').select('id,event_date,status,kind,location,title').eq('status', 'planned').gte('event_date', today()).order('event_date', { ascending: true }).limit(24); };
-  var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED] };
+  var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED], application: ['Join the team (HR centre)', GREEN] };
   /* wave168: every form's page opens with a photo from the Photo library behind the logo and the title (crm_forms.cover_photo_id;
      none uses the kind's default, as form-submit does) */
   var COVER_KIND = { volunteer: 9, newsletter: 3, general: 26 };
   var PSTORE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
   var LOCKUP_IMG = PSTORE + 'brand/logo-lockup-cream-600.png';
-  var EYEBROW = { en: { volunteer: 'Volunteer with us', newsletter: 'Stay in touch', general: 'Welfare Avenue' }, fr: { volunteer: 'B\u00e9n\u00e9volat', newsletter: 'Restez au courant', general: 'Welfare Avenue' } };
+  var EYEBROW = { en: { volunteer: 'Volunteer with us', newsletter: 'Stay in touch', general: 'Welfare Avenue', application: 'Join our team' }, fr: { volunteer: 'B\u00e9n\u00e9volat', newsletter: 'Restez au courant', general: 'Welfare Avenue', application: 'Rejoindre l\u2019\u00e9quipe' } };
   function photoById(id) { return (S.wphotos || []).filter(function (p) { return String(p.id) === String(id); })[0] || null; }
   function coverOf(f) { return (f && f.cover_photo_id ? photoById(f.cover_photo_id) : null) || photoById(COVER_KIND[f && f.kind] || 26); }
   function loadPhotos168() {
@@ -58597,7 +58597,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
-  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)']];
+  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)'], ['positions', 'The open positions (HR centre)'], ['file', 'A file (their CV)']];
+  /* wave216: an application form (kind application) puts each person on the HR centre's Applications board: the open positions
+     (Posted or Interviewing, live from the HR centre, plus a general application), their CV as a file, links and why */
+  var APP_ONLY = { positions: 1, file: 1 };
   var FTYPE_OF = { text: 'text', long_text: 'long_text', email: 'text', phone: 'text', choice: 'choice', multi: 'multi', yes_no: 'yes_no', date: 'date', number: 'number' };
   var FTYPE_NAME = { text: 'Short answer', long_text: 'Long answer', number: 'Number', date: 'Date', choice: 'One choice', multi: 'Several choices', yes_no: 'Yes or no' };
   var CONTACT_TO = { 'contact.first_name': 'First name', 'contact.last_name': 'Last name', 'contact.email': 'Email', 'contact.phone': 'Phone', 'contact.city': 'City', 'contact.province': 'Province', 'contact.postal_code': 'Postal code', 'contact.address': 'Address', 'contact.language': 'Language (en or fr)' };
@@ -58628,6 +58631,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (to === 'volunteer.roles') return 'Their volunteer roles';
     if (to === 'volunteer.dates') return 'A sign-up for each date (to confirm)';
     if (to === 'note') return 'The note on their timeline';
+    if (to === 'application.position') return 'The role on their Applications card';
+    if (to === 'application.cv') return 'The CV on their Applications card';
+    if (to === 'application.why') return 'Why us, on their Applications card';
+    if (to === 'application.links') return 'Links on their Applications card';
     if (/^field:/.test(to)) { var f = fieldByKey(to.slice(6)); return 'Field: ' + (f ? f.label : to.slice(6)); }
     return to;
   }
@@ -58642,6 +58649,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t === 'choice') add('contact.language');
     if (t === 'multi' && kind === 'volunteer') add('volunteer.roles');
     if (t === 'serving_dates') add('volunteer.dates');
+    if (t === 'positions') add('application.position');
+    if (t === 'file') add('application.cv');
+    if (t === 'long_text' && kind === 'application') add('application.why');
+    if (t === 'text' && kind === 'application') add('application.links');
     var ft = FTYPE_OF[t];
     if (ft) (S.cfields || []).filter(function (f) { return !f.archived_at && f.type === ft; }).forEach(function (f) { add('field:' + f.key); });
     if (ft) out.push(['__new', 'A new field on the contact, named after the question']);
@@ -58682,14 +58693,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- the editor ---------- */
   function editCopy(f) {
     var c = JSON.parse(JSON.stringify(f));
-    c.questions = (c.questions || []).map(function (q) { q._opts = optsText(q); return q; });
+    c.questions = (c.questions || []).map(function (q) { q._opts = optsText(q); if (q.source === 'positions') q.type = 'positions'; return q; });
     c.consent = c.consent || {}; c.settings = c.settings || {};
     c._tags = (c.settings.tags || []).join(', ');
     return c;
   }
   function qHtml(q, i, n, kind) {
     var hasOpts = q.type === 'choice' || q.type === 'multi';
-    var types = QTYPES.map(function (t) { return '<option value="' + t[0] + '"' + (t[0] === q.type ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('');
+    var types = QTYPES.filter(function (t) { return !APP_ONLY[t[0]] || kind === 'application' || t[0] === q.type; }).map(function (t) { return '<option value="' + t[0] + '"' + (t[0] === q.type ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('');
     var tos = toChoices(q, kind).map(function (o) { return '<option value="' + E(o[0]) + '"' + (o[0] === (q.to || '') ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('');
     return '<div class="w156q" data-w156qi="' + i + '"><div class="w156qh"><b>' + (i + 1) + '</b>' +
       '<select class="w152sel" data-w156qk="type" aria-label="Kind of answer">' + types + '</select>' +
@@ -58699,6 +58710,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<input class="w152in" data-w156qk="label" value="' + E(q.label) + '" placeholder="The question, as people will read it" aria-label="The question">' +
       '<input class="w152in" data-w156qk="help" value="' + E(q.help || '') + '" placeholder="A line of help under it (optional)" aria-label="Help">' +
       (hasOpts ? '<textarea class="w152in" data-w156qk="_opts" rows="4" placeholder="One choice per line. To save a code instead of the words: code | words" aria-label="Choices">' + E(q._opts || '') + '</textarea>' : '') +
+      (q.type === 'positions' ? '<p class="m">People choose from the positions at Posted or Interviewing in the HR centre (serving roles apply on the volunteer form), or a general application. Close a position and it leaves the form.</p>' : '') +
+      (q.type === 'file' ? '<p class="m">A PDF, Word document or photo, up to 10 MB, kept privately and read by the Hub\u2019s CV reader.</p>' : '') +
       (q.type === 'serving_dates' ? '<p class="m">People see the planned servings in the Volunteer Manager from today on; each date they tick becomes a sign-up on that event\u2019s roster, to be confirmed by the team.</p>' : '') +
       '<label class="w155lb">Saves to<select class="w152sel" data-w156qk="to">' + tos + '</select></label></div>';
   }
@@ -58750,6 +58763,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var one = function (q) {
       var head = '<div class="w156pl">' + E(q.label || 'Question') + (q.required ? '<span class="w156req">*</span>' : ' <span class="m">(optional)</span>') + '</div>' + (q.help ? '<div class="m">' + E(q.help) + '</div>' : '');
       if (q.type === 'long_text') return head + '<textarea class="w152in" disabled rows="2"></textarea>';
+      if (q.type === 'file') return head + '<div class="w156pc"><span class="w156pb">' + (f.lang === 'fr' ? 'Choisir un fichier' : 'Choose a file') + '</span></div>';
+      if (q.type === 'positions') return head + '<div class="m">The open positions from the HR centre, then \u201c' + (f.lang === 'fr' ? 'Je ne sais pas encore : une candidature g\u00e9n\u00e9rale' : 'Not sure yet: a general application') + '\u201d.</div>';
       if (q.type === 'yes_no') return head + '<div class="w156pc"><span class="w156pr">Yes</span><span class="w156pr">No</span></div>';
       if (q.type === 'choice' || q.type === 'multi') { var os = optsOf({ options: parseOpts(q._opts) }); return head + '<div class="w156pc">' + (os.length ? os.map(function (o) { return '<span class="' + (q.type === 'multi' ? 'w156pb' : 'w156pr') + '">' + E(o.l) + '</span>'; }).join('') : '<span class="m">No choices yet</span>') + '</div>'; }
       if (q.type === 'serving_dates') {
@@ -58783,6 +58798,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (r.volunteer_created) bits.push('a new volunteer record to review'); else if (r.volunteer_id) bits.push('their volunteer record updated');
       var ro = (r.roster || []).filter(function (x) { return !x.already; }); if (ro.length) bits.push('signed up for ' + ro.map(function (x) { return fmtDay(x.date); }).join(', '));
       if (r.consent) bits.push('email permission recorded');
+      if (r.candidate_id) bits.push('a card in Applications (HR centre)');
       return bits.length ? 'The Hub: ' + bits.join('; ') + '.' : '';
     };
     return '<div class="w154card wide"><h3>' + I('list') + ' Answers to \u201c' + E(f.title) + '\u201d <span class="w155sub">' + plural(rows.length, 'answer', 'answers') + '</span></h3>' +
@@ -58839,6 +58855,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var out = { id: id, type: q.type, label: String(q.label || '').trim(), required: !!q.required, to: q.to || '' };
       if (String(q.help || '').trim()) out.help = String(q.help).trim();
       if (q.type === 'choice' || q.type === 'multi') out.options = parseOpts(q._opts);
+      if (q.type === 'positions') { out.type = 'choice'; out.source = 'positions'; }
       if (!out.to) delete out.to;
       return out;
     });
@@ -58999,7 +59016,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.hasAttribute('data-w156qk')) {
       i = qAt(t); if (i < 0) return; key = t.getAttribute('data-w156qk'); var q = f.questions[i];
       q[key] = t.type === 'checkbox' ? t.checked : t.value;
-      if (key === 'type') { q.to = (toChoices(q, f.kind).filter(function (o) { return o[0] === q.to; })[0] || [''])[0]; if (q.type === 'email') q.to = 'contact.email'; if (q.type === 'phone') q.to = 'contact.phone'; if (q.type === 'serving_dates') q.to = 'volunteer.dates'; }
+      if (key === 'type') { q.to = (toChoices(q, f.kind).filter(function (o) { return o[0] === q.to; })[0] || [''])[0]; if (q.type === 'email') q.to = 'contact.email'; if (q.type === 'phone') q.to = 'contact.phone'; if (q.type === 'serving_dates') q.to = 'volunteer.dates'; if (q.type === 'positions') q.to = 'application.position'; if (q.type === 'file') q.to = 'application.cv'; }
       if (key === 'type' || (key === 'to' && e.type === 'change') || key === 'required') paint();
       else if (key === 'label' || key === '_opts' || key === 'help') previewSoon156();
     }
@@ -82026,23 +82043,29 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
      offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
      change_log line; the pop-up comes back next visit only for what is still overdue or undated.
+   wave213c (07/10/26): each task can also be Done, sent To the bank (until a day; bank_task) or Discarded (deleted, the
+   row kept in change_log); saved through confirm_due_check (confirm_due_dates stays for pages still open).
    Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
 (function () {
   'use strict';
   if (window.__wa213) return; window.__wa213 = true;
-  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var S = { rows: null, pick: {}, act: {}, bank: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
   var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
 
   var css = ''
     + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
     + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
     + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
-    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:26px;letter-spacing:.2px;color:' + GREEN + ';}'
     + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
     + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
     + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
     + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
-    + '#w213pop .row.isdone{opacity:.6;}'
+    + '#w213pop .row.isdone .t{opacity:.6;}'
+    + '#w213pop .row.a-discard .t{text-decoration:line-through;}'
+    + '#w213pop .hint{font-size:12px;color:#6b6a65;}'
+    + '#w213pop .hint.warn{color:' + FLAG + ';}'
+    + '#w213pop .bk{font-size:12.5px;display:inline-flex;gap:6px;align-items:center;}'
     + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
     + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
     + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
@@ -82064,6 +82087,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
   function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
+  /* wave213d (Steel, 07/10/26): a friendlier, clearer title than "Check your due dates" */
+  function hello() { try { var n = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) ? String(WA_ME.name).trim().split(/\s+/)[0] : ''; return n ? 'Hi ' + n + ', ' : 'Hi, '; } catch (e) { return 'Hi, '; } }
   function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
   function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
   function busyElsewhere() {
@@ -82080,21 +82105,49 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     } catch (e) { return null; }
   }
 
+  /* wave213c (Steel, 07/10/26): "members should have the ability to discard a task, complete a task (it's done), or
+     move the task to the task bank". Each task: Keep (with its date), Done, To the bank (until a day), Discard. */
+  var ACTS = [['keep', 'Keep'], ['done', 'Done'], ['bank', 'To the bank'], ['discard', 'Discard']];
+  function plusDays(n) { var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+  function actOf(id) { return S.act[id] || 'keep'; }
+
   function rowHtml(r) {
-    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
+    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], a = actOf(id);
     var meta = [team(r.department)];
     if (isOver) meta.push('was due ' + day(r.due_date));
     else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
     if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
-    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
-      + '<div class="m">' + E(meta.filter(Boolean).join(' \u00b7 ')) + '</div><div class="ctl">';
-    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
-    if (!dn) {
+    var h = '<div class="row a-' + a + (a === 'done' || a === 'discard' ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' \u00b7 ')) + '</div><div class="ctl">'
+      + '<span class="seg" role="group" aria-label="What to do with it">' + ACTS.map(function (x) {
+          return '<button type="button" data-w213act="' + id + '" data-a="' + x[0] + '" class="' + (a === x[0] ? 'on' : '') + '" aria-pressed="' + (a === x[0]) + '">' + (x[0] === 'keep' && isOver ? 'Keep, push to' : x[1]) + '</button>';
+        }).join('') + '</span>';
+    if (a === 'keep') {
       h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
         + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting \u00b7 ' + E(day(r.next_meeting, true)) + '</button>'
         + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following \u00b7 ' + E(day(r.following_meeting, true)) + '</button>';
+    } else if (a === 'bank') {
+      h += '<label class="bk">Back on <input type="date" aria-label="Back from the bank on" data-w213bank="' + id + '" value="' + E(S.bank[id]) + '"></label><span class="hint">It leaves your boards and comes back by itself on that day.</span>';
+    } else if (a === 'discard') {
+      h += '<span class="hint warn">It will be deleted, like Delete on the task.</span>';
+    } else {
+      h += '<span class="hint">Marked done.</span>';
     }
     return h + '</div></div>';
+  }
+
+  function counts() {
+    var c = { keep: 0, done: 0, bank: 0, discard: 0 };
+    (S.rows || []).forEach(function (r) { c[actOf(r.task_id)]++; });
+    return c;
+  }
+  function saveLabel() {
+    var c = counts(), bits = [];
+    if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' date' : ' dates'));
+    if (c.done) bits.push(c.done + ' done');
+    if (c.bank) bits.push(c.bank + ' to the bank');
+    if (c.discard) bits.push(c.discard + ' discarded');
+    return 'Save: ' + bits.join(', ');
   }
 
   function html() {
@@ -82103,19 +82156,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var none = rows.filter(function (r) { return r.why === 'no_date'; });
     var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
     var bits = [];
-    if (over.length) bits.push(over.length + ' overdue');
-    if (none.length) bits.push(none.length + ' with no due date');
-    if (set.length) bits.push(set.length + ' dated by a meeting');
-    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
-      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team\u2019s next meeting. Change any that don\u2019t fit'
-      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
-    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
-    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
-    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
-    var n = rows.length;
-    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
+    if (over.length) bits.push(over.length + (over.length === 1 ? ' overdue task' : ' overdue tasks'));
+    if (none.length) bits.push(none.length + (none.length === 1 ? ' task' : ' tasks') + ' with no due date');
+    if (set.length) bits.push(set.length + (set.length === 1 ? ' task' : ' tasks') + ' with a date a meeting set');
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">' + E(hello()) + 'let\u2019s get your tasks on track</h2>'
+      + '<p class="lead">You have ' + E(bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits.join('')) + '. We\u2019ve suggested a due date for each one, usually your team\u2019s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it. Then save, and you\u2019re all set.</p></div><div class="bd">';
+    if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + over.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet: here\u2019s our suggestion</h3>' + none.map(rowHtml).join('');
+    if (set.length) h += '<h3>Dates a meeting set: do they still work?</h3>' + set.map(rowHtml).join('');
+    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : E(saveLabel())) + '</button>'
       + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
-      + '<span class="note">You can change any date later on the task itself.</span>'
+      + '<span class="note">You can change any of this later on the task itself.</span>'
       + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
     return h;
   }
@@ -82138,38 +82189,49 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var t = e.target, b;
       if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
       if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
-      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
-      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
+      if ((b = t.closest('[data-w213act]'))) { S.act[b.getAttribute('data-w213act')] = b.getAttribute('data-a'); S.err = ''; paint(); return; }
       if (t.closest('[data-w213save]')) { save(); return; }
       if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
     });
     el.addEventListener('change', function (e) {
-      var i = e.target.closest('[data-w213date]'); if (!i) return;
-      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
+      var i = e.target.closest('[data-w213date]'); if (i) { S.pick[i.getAttribute('data-w213date')] = i.value; paint(); return; }
+      var k = e.target.closest('[data-w213bank]'); if (k) { S.bank[k.getAttribute('data-w213bank')] = k.value; paint(); }
     });
     document.addEventListener('keydown', trapKey, true);
   }
 
   async function save() {
     if (S.busy) return;
-    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    var items = [], missing = 0, past = 0, bankBad = 0, today = new Date(); today.setHours(0, 0, 0, 0);
     (S.rows || []).forEach(function (r) {
-      var id = r.task_id;
-      if (S.done[id]) { items.push({ id: id, done: true }); return; }
+      var id = r.task_id, a = actOf(id);
+      if (a === 'done') { items.push({ id: id, action: 'done' }); return; }
+      if (a === 'discard') { items.push({ id: id, action: 'discard' }); return; }
+      if (a === 'bank') {
+        var u = S.bank[id];
+        if (!u || !/^\d{4}-\d{2}-\d{2}$/.test(u) || new Date(u + 'T12:00:00') <= today) { bankBad++; return; }
+        items.push({ id: id, action: 'bank', until: u }); return;
+      }
       var v = S.pick[id];
       if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
+      if (new Date(v + 'T12:00:00') < today) { past++; return; }
       items.push({ id: id, due: v });
     });
-    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
-    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
+    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or choose Done, To the bank or Discard.' : missing + ' tasks have no date: pick one for each, or choose Done, To the bank or Discard.'; paint(); return; }
     if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
+    if (bankBad) { S.err = 'A task going to the bank needs a day in the future to come back on.'; paint(); return; }
     S.busy = true; S.err = ''; paint();
     try {
-      var r = await db.rpc('confirm_due_dates', { p: items });
+      var r = await db.rpc('confirm_due_check', { p: items });
       if (r && r.error) throw new Error(r.error.message || 'could not save');
-      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
+      var res = (r && r.data) || {}, skipped = Array.isArray(res.skipped) ? res.skipped : [];
+      var c = counts(), bits = [];
+      if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' due date' : ' due dates'));
+      if (c.done) bits.push(c.done + ' done');
+      if (c.bank) bits.push(c.bank + ' to the bank');
+      if (c.discard) bits.push(c.discard + ' discarded');
       close();
-      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
+      toastS('Saved: ' + bits.join(', ') + '.' + (skipped.length ? ' ' + skipped.length + (skipped.length === 1 ? ' task' : ' tasks') + ' could not be changed (' + String(skipped[0].why || '') + ').' : ''));
       try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
     } catch (e) {
       S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
@@ -82181,8 +82243,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!staff()) return;
     var rows = await load();
     if (!rows || !rows.length) return;
-    S.rows = rows; S.pick = {}; S.done = {};
-    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
+    S.rows = rows; S.pick = {}; S.act = {}; S.bank = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); });
     var tries = 0;
     (function wait() {
       if (S.shown || S.gone) return;

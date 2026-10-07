@@ -1,4 +1,12 @@
-// Welfare Avenue: form-submit (v5, 02/10/26, wave194; v4 wave168: the form's cover photo; v3 wave162: the website preview origin)
+// Welfare Avenue: form-submit (v6, 07/10/26, wave216: application forms (kind application, "Join our team"): a choice question
+//   with source "positions" lists the open positions live (wa216_open_positions) plus a general application; a file question
+//   takes a CV: POST {action: 'upload', slug, token, qid, name, mime, size} checks the token and the file (PDF, Word, ODT, RTF,
+//   PNG or JPEG, at most 10 MB, at most 10 uploads per IP hash in 10 minutes), keeps a crm_form_uploads row and answers a
+//   one-time signed upload URL into the private bucket hub-mail (applications/web/<month>/<uuid>.<ext>); the answer is the
+//   upload's id, checked on submit (same form, unused, under 24 hours, the file really there and under 10 MB). Targets
+//   application.position, application.cv, application.links and application.why go to mapped.application, and crm_form_apply
+//   puts the person on the Applications board.
+// v5, 02/10/26, wave194; v4 wave168: the form's cover photo; v3 wave162: the website preview origin)
 // The public side of the CRM's forms, shown at hub.welfareavenue.com/f/<slug> (Steel, 28/09/26).
 //   GET  ?slug=<slug>  The published form: questions, the email permission question, the thank-you, the open serving
 //        dates for a serving_dates question, the charity's name and address (CASL), and a signed token. A draft is
@@ -34,15 +42,18 @@ const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 // v3 (wave162, 28/09/26): the new website's preview address may show the forms too
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://welfareavenue.com', 'https://www.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app', 'https://welfareavenue-www.netlify.app'];
 const MIN_SECONDS = 3, MAX_AGE = 86400, PER_IP = 20, PER_IP_WINDOW = 10, PER_EMAIL = 3, MAX_BODY = 32000;
-const TYPES = ['text', 'long_text', 'email', 'phone', 'choice', 'multi', 'yes_no', 'date', 'number', 'serving_dates'];
+const TYPES = ['text', 'long_text', 'email', 'phone', 'choice', 'multi', 'yes_no', 'date', 'number', 'serving_dates', 'file'];
+const CV_BUCKET = 'hub-mail', MAX_FILE = 10 * 1024 * 1024, PER_IP_UPLOADS = 10;
+const FILE_EXT: Record<string, string> = { pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  odt: 'application/vnd.oasis.opendocument.text', rtf: 'application/rtf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' };
 const FILLS = ['first_name', 'last_name', 'email', 'phone', 'city', 'province', 'postal_code', 'address', 'language'];
 const MON_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MON_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const T = {
-  en: { required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission' },
-  fr: { required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel' }
+  en: { required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application' },
+  fr: { required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale' }
 };
 
 // deno-lint-ignore no-explicit-any
@@ -84,6 +95,11 @@ async function openDates(form: Json): Promise<Array<{ v: string; l: string }>> {
     .eq('location', loc).gte('event_date', torontoDay()).order('event_date', { ascending: true }).limit(12);
   return (data || []).map((e: Json) => ({ v: String(e.id), l: longDate(String(e.event_date), form.lang) }));
 }
+// v6 (wave216): the open positions for a choice question with source "positions", and a general application
+async function positionOpts(lang: string): Promise<Array<{ v: string; l: string }>> {
+  const { data } = await svc.rpc('wa216_open_positions');
+  return [...((data || []) as Json[]).map((p: Json) => ({ v: 'p:' + p.id, l: String(p.title) })), { v: 'general', l: T[lang === 'fr' ? 'fr' : 'en'].general }];
+}
 async function org(): Promise<Json> {
   const { data } = await svc.from('app_config').select('key,value').in('key', ['mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number']);
   const m: Record<string, string> = {}; (data || []).forEach((r: Json) => { m[r.key] = r.value; });
@@ -107,13 +123,15 @@ async function coverOf(form: Json): Promise<Json> {
 }
 async function publicForm(form: Json): Promise<Json> {
   const dates = (form.questions || []).some((q: Json) => q.type === 'serving_dates') ? await openDates(form) : [];
+  const positions = (form.questions || []).some((q: Json) => q && q.source === 'positions') ? await positionOpts(form.lang) : [];
   return {
     slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '', cover: await coverOf(form),
     questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => {
       const to = String(q.to || ''), fill = to.startsWith('contact.') && FILLS.includes(to.slice(8)) ? to.slice(8) : '';
       return {
         id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
-        options: q.type === 'serving_dates' ? dates : opts(q), ...(fill ? { fill } : {})
+        options: q.type === 'serving_dates' ? dates : q.source === 'positions' ? positions : opts(q), ...(fill ? { fill } : {}),
+        ...(q.type === 'file' ? { accept: Object.keys(FILE_EXT).map(x => '.' + x).join(','), max_mb: MAX_FILE / 1048576 } : {})
       };
     }),
     consent: form.consent && form.consent.ask ? { ask: true, required: !!form.consent.required, label: String(form.consent.label || '') } : { ask: false }
@@ -151,7 +169,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
     const raw = answers ? answers[pq.id] : undefined;
     let val: Json = null, shown = '';
     const empty = raw == null || (typeof raw === 'string' && raw.trim() === '') || (Array.isArray(raw) && raw.length === 0);
-    if (empty) { if (pq.required) errors[pq.id] = t.required; continue; }
+    if (empty) { if (pq.required) errors[pq.id] = pq.type === 'file' ? t.file : t.required; continue; }
     const s = typeof raw === 'string' ? raw.trim() : '';
     switch (pq.type) {
       case 'text': if (typeof raw !== 'string') { errors[pq.id] = t.required; break; } if (s.length > 200) { errors[pq.id] = t.long; break; } val = s; shown = s; break;
@@ -162,6 +180,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
       case 'date': { if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) { errors[pq.id] = t.date; break; } val = s; shown = s; break; }
       case 'yes_no': { if (s !== 'yes' && s !== 'no') { errors[pq.id] = t.choice; break; } val = s === 'yes'; shown = val ? t.yes : t.no; break; }
       case 'choice': { const o = pq.options.find((x: Json) => x.v === s); if (!o) { errors[pq.id] = t.choice; break; } val = o.v; shown = o.l; break; }
+      case 'file': { if (!raw || typeof raw !== 'object' || !raw.path) { errors[pq.id] = t.file; break; } val = { path: String(raw.path), name: String(raw.name || 'CV') }; shown = String(raw.name || 'CV'); break; }
       case 'multi': case 'serving_dates': {
         const list = Array.isArray(raw) ? raw.map((x: Json) => String(x)) : [];
         const picked = pq.options.filter((o: Json) => list.includes(o.v));
@@ -179,6 +198,12 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
     else if (to === 'volunteer.dates') mapped.dates = Array.isArray(val) ? val : [val];
     else if (to.startsWith('field:')) mapped.fields[to.slice(6)] = val;
     else if (to === 'note') mapped.note = String(val);
+    else if (to.startsWith('application.')) {
+      mapped.application = mapped.application || {};
+      const k = to.slice(12);
+      if (k === 'links') mapped.application.links = String(val).split(/[\s,]+/).map((x: string) => x.trim()).filter((x: string) => /^https?:\/\/\S+\.\S+/i.test(x) || /^(www\.|linkedin\.com)/i.test(x)).slice(0, 5);
+      else if (k === 'position' || k === 'why' || k === 'cv') mapped.application[k] = val;
+    }
   }
   if (pub.consent.ask) {
     if (pub.consent.required && !consentGiven) errors._consent = t.consent;
@@ -187,6 +212,52 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
   }
   if (!mapped.contact.email && !Object.keys(errors).length) errors._form = 'This form has no email question.';
   return { errors, clean, mapped, display };
+}
+
+// v6 (wave216): a CV for a file question
+async function tokenOk(form: Json, tok: string, fsec: string): Promise<boolean> {
+  const [tsStr, sig] = String(tok || '').split('.'); const ts = Number(tsStr), age = Math.floor(Date.now() / 1000) - ts;
+  return !!sig && isFinite(ts) && age <= MAX_AGE && age >= 0 && same(sig, (await hmac(fsec, 'form|' + form.slug + '|' + ts)).slice(0, 32));
+}
+async function uploadLink(form: Json, pub: Json, body: Json, fsec: string, ipHash: string | null, checks: boolean): Promise<[Json, number]> {
+  const q = pub.questions.find((x: Json) => x.id === String(body.qid || '') && x.type === 'file');
+  if (!q) return [{ error: 'no_question' }, 400];
+  if (checks && !(await tokenOk(form, body.token, fsec))) return [{ error: 'expired' }, 400];
+  const name = String(body.name || '').replace(/[\u0000-\u001f\/\\]/g, ' ').trim().slice(0, 120) || 'CV';
+  const ext = (name.match(/\.([a-z0-9]{2,5})$/i) || ['', ''])[1].toLowerCase();
+  const size = Number(body.size || 0);
+  if (!FILE_EXT[ext] || !(size > 0) || size > MAX_FILE) return [{ error: 'file', fields: { [q.id]: T[form.lang === 'fr' ? 'fr' : 'en'].file } }, 400];
+  if (checks && ipHash) {
+    const since = new Date(Date.now() - PER_IP_WINDOW * 60000).toISOString();
+    const { count } = await svc.from('crm_form_uploads').select('id', { count: 'exact', head: true }).eq('ip_hash', ipHash).gte('created_at', since);
+    if ((count || 0) >= PER_IP_UPLOADS) return [{ error: 'rate' }, 429];
+  }
+  const id = crypto.randomUUID();
+  const path = 'applications/web/' + torontoDay().slice(0, 7) + '/' + id + '.' + ext;
+  const ins = await svc.from('crm_form_uploads').insert({ id, form_id: form.id, question_id: q.id, path, name, mime: FILE_EXT[ext], size_hint: Math.round(size), ip_hash: ipHash });
+  if (ins.error) return [{ error: 'store_failed' }, 500];
+  const signed = await svc.storage.from(CV_BUCKET).createSignedUploadUrl(path);
+  if (signed.error || !signed.data) return [{ error: 'store_failed' }, 500];
+  return [{ ok: true, upload_id: id, url: signed.data.signedUrl, mime: FILE_EXT[ext] }, 200];
+}
+// each file answer (an upload id) becomes {path, name} when the upload is this form's, unused, under a day old and really there
+async function resolveFiles(form: Json, pub: Json, answers: Json): Promise<string[]> {
+  const used: string[] = [];
+  for (const q of pub.questions.filter((x: Json) => x.type === 'file')) {
+    const id = answers[q.id];
+    answers[q.id] = null;
+    if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) continue;
+    const { data: u } = await svc.from('crm_form_uploads').select('*').eq('id', id).eq('form_id', form.id).eq('question_id', q.id).is('used_at', null).maybeSingle();
+    if (!u || Date.now() - new Date(u.created_at).getTime() > MAX_AGE * 1000) continue;
+    const dir = u.path.slice(0, u.path.lastIndexOf('/')), file = u.path.slice(u.path.lastIndexOf('/') + 1);
+    const { data: list } = await svc.storage.from(CV_BUCKET).list(dir, { search: file, limit: 2 });
+    const obj = (list || []).find((o: Json) => o.name === file);
+    const sz = Number(obj && obj.metadata && obj.metadata.size || 0);
+    if (!obj || !(sz > 0) || sz > MAX_FILE) continue;
+    answers[q.id] = { path: u.path, name: u.name };
+    used.push(u.id);
+  }
+  return used;
 }
 
 async function confirmEmail(form: Json, contactId: number) {
@@ -233,6 +304,7 @@ Deno.serve(async (req: Request) => {
       return reply(req, { token: ts + '.' + (await hmac(fsec, 'form|' + form.slug + '|' + ts)).slice(0, 32) });
     }
     const checks = !isTest || body.checks === true;
+    if (body.action === 'upload') return reply(req, ...(await uploadLink(form, pub, body, fsec, ipHash, checks)));
 
     if (checks) {
       // the hidden field and the token's age: a failure is kept as spam and answered like a success
@@ -253,7 +325,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const res = check(form, pub, body.answers || {}, body.consent === true);
+    const answers = body.answers || {};
+    const uploads = await resolveFiles(form, pub, answers);
+    const res = check(form, pub, answers, body.consent === true);
     if (Object.keys(res.errors).length) return reply(req, { error: 'invalid', fields: res.errors }, 400);
     const email = String(res.mapped.contact.email || '');
     if (checks) {
@@ -270,6 +344,7 @@ Deno.serve(async (req: Request) => {
     }).select('id').single();
     if (ins.error || !ins.data) return reply(req, { error: 'store_failed' }, 500);
     const sid = (ins.data as Json).id;
+    if (uploads.length) await svc.from('crm_form_uploads').update({ used_at: new Date().toISOString(), submission_id: sid }).in('id', uploads);
     const applied = await svc.rpc('crm_form_apply', { p_submission_id: sid });
     if (applied.error) {
       await svc.from('crm_form_submissions').update({ status: 'error', error: String(applied.error.message || applied.error).slice(0, 400) }).eq('id', sid);

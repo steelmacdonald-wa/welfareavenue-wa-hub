@@ -194,6 +194,9 @@ section{position:relative}
 
 /* Volunteer roles (Edison's opportunity cards) */
 .roles{display:grid;gap:28px;list-style:none;margin:0;padding:0}
+.open-roles{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.open-roles li{display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;background:var(--white);border:1px solid var(--line);padding:20px 24px}
+.open-roles h3{margin:0 0 4px}
 @media (min-width:860px){.roles{grid-template-columns:1fr 1fr;gap:32px 40px}}
 .role{border:1px solid var(--line);background:var(--white);padding:30px 30px 28px;display:flex;flex-direction:column}
 .role .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px}
@@ -316,6 +319,9 @@ section{position:relative}
 .help{color:var(--muted);font-size:14px;margin:-2px 0 8px}
 .q input[type=text],.q input[type=email],.q input[type=tel],.q input[type=number],.q input[type=date],.q textarea,.q select{width:100%;font:inherit;font-size:16px;color:inherit;background:var(--grey);border:1.5px solid var(--grey);border-radius:0;padding:14px 16px;outline:none}
 .q textarea{min-height:140px;resize:vertical}
+.q input[type=file]{width:100%;font:inherit;font-size:15px;background:var(--grey);border:1.5px dashed var(--line);padding:14px 16px}
+.q input[type=file]::file-selector-button{font:inherit;font-weight:600;background:var(--green);color:var(--cream);border:0;padding:8px 14px;margin-right:12px;cursor:pointer}
+.waf-file{margin:8px 0 0;color:var(--green);font-weight:600}
 .q input:focus,.q textarea:focus,.q select:focus{border-color:var(--green);background:var(--white);box-shadow:0 0 0 3px rgba(220,165,39,.35)}
 .choices{display:grid;gap:8px}
 @media (min-width:560px){.choices.two{grid-template-columns:1fr 1fr}}

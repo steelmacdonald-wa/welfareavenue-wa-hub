@@ -14,6 +14,8 @@
      wave168 (29/09/26): the brand up front: the form's cover photo from the Photo library behind the lockup, a doodle, what
      the form is for and its title; the E that moves on the thank-you; the brand line at the foot. -->
 <style>
+.q input[type=file]{width:100%;font:inherit;font-size:15px;border:1.5px dashed rgba(16,63,57,.3);border-radius:12px;padding:12px;background:rgba(16,63,57,.03)}
+.filepick{color:var(--green);font-weight:600}
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--cream);color:var(--ink);font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.5}
@@ -93,18 +95,20 @@ a{color:var(--green)}
       expired: 'This page was open a long time, so we refreshed it. Please check your answers and send again.', server: 'Something went wrong on our side. Please try again in a minute.',
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
       yes: 'Yes', no: 'No', thanks: 'Thank you!', charity: 'Registered charity', privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.',
-      back: 'Visit welfareavenue.com', select: 'Choose…', ey_volunteer: 'Volunteer with us', ey_newsletter: 'Stay in touch', ey_general: 'Welfare Avenue', brand: 'Service is solidarity, not charity.' },
+      back: 'Visit welfareavenue.com', select: 'Choose…', ey_volunteer: 'Volunteer with us', ey_newsletter: 'Stay in touch', ey_general: 'Welfare Avenue', ey_application: 'Join our team', brand: 'Service is solidarity, not charity.',
+      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.' },
     fr: { loading: 'Chargement du formulaire…', nf: 'Ce formulaire n’est pas disponible.', nfh: 'Il a peut-être été déplacé ou retiré. Vous pouvez nous écrire à ', closed: 'Ce formulaire est fermé.', closedh: 'Il n’accepte plus de réponses. Merci de votre intérêt; vous pouvez nous écrire à ',
       optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous l’avons actualisée. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
       yes: 'Oui', no: 'Non', thanks: 'Merci!', charity: 'Organisme de bienfaisance enregistré', privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.',
-      back: 'Visiter welfareavenue.com', select: 'Choisir…', ey_volunteer: 'Bénévolat', ey_newsletter: 'Restez au courant', ey_general: 'Welfare Avenue', brand: '' }
+      back: 'Visiter welfareavenue.com', select: 'Choisir…', ey_volunteer: 'Bénévolat', ey_newsletter: 'Restez au courant', ey_general: 'Welfare Avenue', ey_application: 'Rejoindre l’équipe', brand: '',
+      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.' }
   };
   var ST = '%%ST%%', COVER = { url: ST + 'photos/web/2024-07-summer-team-under-the-tent.jpg', fx: 0.5, fy: 0.52 };
   var app = document.getElementById('app'), foot = document.getElementById('foot'), band = document.getElementById('band');
-  var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, done: false, banner: '' };
+  var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, done: false, banner: '', files: {}, uploaded: {} };
   function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function slug() {
@@ -174,6 +178,12 @@ a{color:var(--green)}
       var ac = q.type === 'email' ? ' autocomplete="email"' : q.type === 'phone' ? ' autocomplete="tel"' : /first/i.test(q.id) ? ' autocomplete="given-name"' : /last/i.test(q.id) ? ' autocomplete="family-name"' : '';
       return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<input id="' + id + '" name="' + E(q.id) + '" type="' + type + '"' + ac + aria + ' value="' + E(v || '') + '" maxlength="' + (q.type === 'email' ? 200 : 200) + '">' + e + '</div>';
     }
+    /* wave216: a file (an application form's CV), kept in S.files across re-renders and uploaded on send */
+    if (q.type === 'file') {
+      var f0 = S.files[q.id];
+      return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<input id="' + id + '" name="' + E(q.id) + '" type="file"' + (q.accept ? ' accept="' + E(q.accept) + '"' : '') + aria + '>' +
+        '<p class="small filepick" data-waf-file="' + E(q.id) + '"' + (f0 ? '' : ' hidden') + '>' + (f0 ? E(t('attached') + f0.name) : '') + '</p>' + e + '</div>';
+    }
     if (q.type === 'long_text') return '<div class="' + cls + '" data-q="' + E(q.id) + '">' + head('label') + '<textarea id="' + id + '" name="' + E(q.id) + '"' + aria + ' maxlength="2000">' + E(v || '') + '</textarea>' + e + '</div>';
     var opts = q.type === 'yes_no' ? [{ v: 'yes', l: t('yes') }, { v: 'no', l: t('no') }] : (q.options || []);
     var multi = q.type === 'multi' || q.type === 'serving_dates';
@@ -202,12 +212,20 @@ a{color:var(--green)}
       '<button type="submit" id="send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button></form>';
     footer();
     document.getElementById('waf').addEventListener('submit', submit);
+    Array.prototype.forEach.call(app.querySelectorAll('input[type="file"]'), function (inp) {
+      inp.addEventListener('change', function () {
+        var f0 = inp.files && inp.files[0]; if (!f0) return;
+        S.files[inp.name] = f0;
+        var line = app.querySelector('[data-waf-file="' + inp.name + '"]'); if (line) { line.textContent = t('attached') + f0.name; line.hidden = false; }
+      });
+    });
   }
   function collect() {
     var form = document.getElementById('waf'), out = {};
     S.form.questions.forEach(function (q) {
       if (q.type === 'multi' || q.type === 'serving_dates') out[q.id] = Array.prototype.map.call(form.querySelectorAll('input[name="' + q.id + '"]:checked'), function (i) { return i.value; });
       else if (q.type === 'choice' || q.type === 'yes_no') { var sel = form.querySelector('select[name="' + q.id + '"]'); var r = form.querySelector('input[name="' + q.id + '"]:checked'); out[q.id] = sel ? sel.value : (r ? r.value : ''); }
+      else if (q.type === 'file') out[q.id] = S.files[q.id] ? S.files[q.id].name : '';
       else { var el = form.querySelector('[name="' + q.id + '"]'); out[q.id] = el ? el.value : ''; }
     });
     var cb = form.querySelector('input[name="_consent"]'); out._consent = !!(cb && cb.checked);
@@ -221,6 +239,11 @@ a{color:var(--green)}
       if (empty) { if (q.required && !(q.type === 'serving_dates' && !(q.options || []).length)) errs[q.id] = t('required'); return; }
       if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim())) errs[q.id] = t('email');
       if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) errs[q.id] = t('phone');
+      if (q.type === 'file') {
+        var f0 = S.files[q.id], ext = (f0.name.match(/\.[a-z0-9]{2,5}$/i) || [''])[0].toLowerCase();
+        if (q.accept && q.accept.split(',').indexOf(ext) < 0) errs[q.id] = t('fileType');
+        else if (q.max_mb && f0.size > q.max_mb * 1048576) errs[q.id] = t('fileBig').replace('{n}', q.max_mb);
+      }
     });
     if (S.form.consent && S.form.consent.ask && S.form.consent.required && !a._consent) errs._consent = t('consent');
     return errs;
@@ -236,7 +259,34 @@ a{color:var(--green)}
     S.errors = validate(a);
     if (Object.keys(S.errors).length) { S.banner = t('fix'); render(a); focusFirst(); return; }
     var answers = {}; S.form.questions.forEach(function (q) { answers[q.id] = a[q.id]; });
-    S.sending = true; S.banner = ''; render(a);
+    var fileQs = S.form.questions.filter(function (q) { return q.type === 'file' && S.files[q.id]; });
+    S.sending = true; S.banner = fileQs.length ? t('uploading') : ''; render(a);
+    var failed = null;
+    var up = fileQs.reduce(function (p, q) {
+      return p.then(function () {
+        if (failed) return;
+        var f0 = S.files[q.id], done = S.uploaded[q.id];
+        if (done && done.file === f0) { answers[q.id] = done.id; return; }
+        return call('POST', { action: 'upload', slug: S.form.slug, token: S.token, qid: q.id, name: f0.name, size: f0.size, mime: f0.type }).then(function (r) {
+          if (r.status !== 200 || !r.body.url) { failed = r; return; }
+          return fetch(r.body.url, { method: 'PUT', headers: { 'Content-Type': r.body.mime || f0.type || 'application/octet-stream' }, body: f0 }).then(function (pr) {
+            if (!pr.ok) { failed = { status: 500, body: { error: 'upload' } }; return; }
+            S.uploaded[q.id] = { file: f0, id: r.body.upload_id }; answers[q.id] = r.body.upload_id;
+          });
+        });
+      });
+    }, Promise.resolve()).catch(function () { failed = { status: 0, body: {} }; });
+    up.then(function () {
+      if (failed) {
+        S.sending = false; S.errors = (failed.body && failed.body.fields) || {};
+        if (failed.body && failed.body.error === 'expired') { load(a); return; }
+        S.banner = failed.status === 0 ? t('offline') : failed.status === 429 ? t('rate') : Object.keys(S.errors).length ? t('fix') : t('fileFail');
+        render(a); focusFirst(); return;
+      }
+      sendAnswers(a, answers);
+    });
+  }
+  function sendAnswers(a, answers) {
     call('POST', { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }).then(function (r) {
       S.sending = false;
       if (r.status === 200 && r.body.ok) { S.done = true; thanks(r.body.thank_you || S.form.thank_you); return; }
