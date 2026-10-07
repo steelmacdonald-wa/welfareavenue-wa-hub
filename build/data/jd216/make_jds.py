@@ -7,8 +7,10 @@ the PDF linked on welfareavenue.com/join and the application form.
 import html, os
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOCKUP = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/logo-lockup-cream-600.png'
-GREEN, GOLD, INK, MUTED, SAND, CREAM = '#103F39', '#DCA527', '#1F201E', '#585B57', '#F7EDD6', '#FFFAF2'
-HEAD = "font-family:'Barlow Condensed',Arial;font-weight:600;text-transform:uppercase;color:" + GREEN + ';'
+# wave216f (wa-brand v1): only the five brand colours. Purple carries the subtitle, cream the fact labels and the page.
+GREEN, GOLD, INK, PURPLE, CREAM = '#103F39', '#DCA527', '#1F201E', '#6F64AB', '#FFFAF2'
+MUTED, SAND = PURPLE, CREAM
+HEAD = "font-family:'Barlow Condensed',Arial;font-weight:700;text-transform:uppercase;color:" + GREEN + ';'
 BODY = "font-family:'Space Grotesk',Arial;color:" + INK + ';font-size:10.5pt;line-height:1.45;'
 ABOUT = ('Welfare Avenue is a youth-powered registered charity in Montreal. We serve home-cooked meals and connect people experiencing '
          'homelessness and food insecurity with the support they need, carried by a community of volunteers. We champion leadership, '
@@ -20,28 +22,28 @@ LOOK = ('We hire for integrity, curiosity and follow-through, and for people who
 E = html.escape
 
 def doc(r):
-    facts = ''.join('<tr><td style="background:%s;padding:5pt 8pt;width:32%%;%sfont-weight:700;">%s</td><td style="padding:5pt 8pt;%s">%s</td></tr>'
-                    % (SAND, BODY, E(k), BODY, E(v)) for k, v in r['facts'])
+    facts = ''.join('<tr><td style="background:%s;padding:5pt 8pt;width:32%%;%sfont-weight:700;color:#FFFAF2;">%s</td><td style="padding:5pt 8pt;%s">%s</td></tr>'
+                    % (GREEN, BODY.replace('color:' + INK + ';', ''), E(k), BODY, E(v)) for k, v in r['facts'])
     def ul(items): return '<ul>' + ''.join('<li style="%s">%s</li>' % (BODY, E(i)) for i in items) + '</ul>'
-    def h2(t): return '<h2 style="%sfont-size:16pt;margin:16pt 0 4pt;">%s</h2>' % (HEAD, E(t))
-    def h3(t): return '<h3 style="font-family:\'Space Grotesk\',Arial;font-weight:700;color:%s;font-size:11pt;margin:10pt 0 2pt;">%s</h3>' % (GREEN, E(t))
+    def h2(t): return '<h2 style="%sfont-size:16pt;margin:16pt 0 4pt;">%s</h2>' % (HEAD, E(t.upper()))
+    def h3(t): return '<p style="font-family:\'Space Grotesk\',Arial;font-weight:400;letter-spacing:.5pt;color:%s;font-size:11pt;margin:10pt 0 2pt;">%s</p>' % (GREEN, E(t.upper()))  # Docs bolds h3; the brand h3 is Regular
     def p(t): return '<p style="%s">%s</p>' % (BODY, E(t))
     resp = ''.join(h3(t) + ul(items) for t, items in r['resp'])
     quals = ''.join(h3(t) + ul(items) for t, items in r['quals'])
-    return ('<html><head><meta charset="utf-8"><title>%s - Job Description</title></head><body>'
+    return ('<html><head><meta charset="utf-8"><title>%s - Job Description</title></head><body style="background:#FFFAF2;">'
             '<table style="width:100%%;border-collapse:collapse;"><tr><td style="background:%s;padding:14pt 16pt;"><img src="%s" width="170" alt="Welfare Avenue"></td>'
-            '<td style="background:%s;padding:14pt 16pt;text-align:right;%scolor:%s;font-size:12pt;letter-spacing:1pt;">Job description</td></tr></table>'
+            '<td style="background:%s;padding:14pt 16pt;text-align:right;%scolor:%s;font-size:9pt;letter-spacing:1pt;">JOB DESCRIPTION</td></tr></table>'
             '<h1 style="%sfont-size:30pt;margin:14pt 0 2pt;">%s</h1>'
             '<p style="font-family:\'Space Grotesk\',Arial;color:%s;font-size:10pt;margin:0 0 8pt;"><span style="color:%s;font-weight:700;">&#9632;</span> Welfare Avenue &middot; %s</p>'
-            '<table style="width:100%%;border-collapse:collapse;border:1pt solid #D3D9D6;">%s</table>'
+            '<table style="width:100%%;border-collapse:collapse;border:1pt solid #103F39;">%s</table>'
             '%s%s%s%s%s%s%s%s%s%s'
             '<p style="font-family:\'Space Grotesk\',Arial;color:%s;font-size:8.5pt;margin-top:18pt;border-top:1pt solid %s;padding-top:6pt;">Welfare Avenue &middot; Registered charity 713048502RR0001 &middot; welfareavenue.com &middot; Updated 07/10/26</p>'
             '</body></html>'
-            % (E(r['title']), GREEN, LOCKUP, GREEN, HEAD.replace('color:' + GREEN + ';', ''), GOLD,
-               HEAD, E(r['title']), MUTED, GOLD, E(r['team']), facts,
+            % (E(r['title']), GREEN, LOCKUP, GREEN, "font-family:'Space Grotesk',Arial;font-weight:700;text-transform:uppercase;", GOLD,
+               HEAD, E(r['title'].upper()), MUTED, GOLD, E(r['team']), facts,
                h2('About Welfare Avenue'), p(ABOUT), h2('The role'), ''.join(p(x) for x in r['summary']),
                h2('What you will do'), resp, h2('What you bring'), quals, h2('What we look for'), p(LOOK) + h2('How to apply') + p(APPLY),
-               MUTED, GOLD))
+               INK, GOLD))
 
 OPS_SUMMARY = lambda t: [
     'The %s leads operational planning and execution for Welfare Avenue’s volunteering events, so that every event is set up for success and runs smoothly. You lead the logistics and operations team, make sure every event-critical task is done on time, and make sure each event has a complete, accurate itinerary in volunteers’ hands.' % t,

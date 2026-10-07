@@ -23,3 +23,10 @@ Hub 41f9ee39; website deploy 6ac6606e (26 files).
 - Rebranded JDs (no VCSA), new Google Docs in each role's Drive folder: HR Technician (new), Co-Director of Marketing, Operations Manager, Logistics Manager (same text as Operations Manager, retitled, per Steel), Content Manager (6-8 hours kept from its original). Source: build/data/jd216/make_jds.py. The older JDs move to Older JDs through jd-drive.
 - Tests: test/w216join.js 45 checks (JD links, the note hidden until a leadership role is picked, both pages); test/w199drive.js 61 checks (JD link on the card and the PDF in the sheet).
 - Migrations: build/data/wa216c_jd_public.sql, build/data/wa216d_jd_hold_leadership.sql.
+
+## wave216f (07/10/26): JDs checked against wa-brand v1
+
+- Only the five brand colours: cream page (#FFFAF2), dark green band, fact labels and borders (#103F39), purple subtitle (#6F64AB), gold accents (#DCA527), Ground body text (#1F201E). The off-palette sand, grey and border colours are gone.
+- Headings are set in uppercase text (Google Docs ignores CSS text-transform). The overline is Space Grotesk Bold; sub-heads are Space Grotesk Regular, set as styled paragraphs because Docs bolds h3.
+- Docs' HTML import only renders Regular or Bold, so H1/H2 are Barlow Condensed Bold, not the brand's Medium. Medium would need a manual font change in each Doc.
+- The import sometimes drops the brand fonts and leaves a Doc in Arial (3 of 5 on the first try). Check each new Doc's fonts with a PDF export (pdffonts) before relying on it; re-uploading fixed it. The faulty uploads are in Drive's trash.
