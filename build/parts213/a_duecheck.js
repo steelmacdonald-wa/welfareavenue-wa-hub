@@ -28,7 +28,7 @@
     + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
     + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
     + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
-    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:26px;letter-spacing:.2px;color:' + GREEN + ';}'
     + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
     + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
     + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
@@ -59,6 +59,8 @@
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
   function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
+  /* wave213d (Steel, 07/10/26): a friendlier, clearer title than "Check your due dates" */
+  function hello() { try { var n = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) ? String(WA_ME.name).trim().split(/\s+/)[0] : ''; return n ? 'Hi ' + n + ', ' : 'Hi, '; } catch (e) { return 'Hi, '; } }
   function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
   function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
   function busyElsewhere() {
@@ -126,14 +128,14 @@
     var none = rows.filter(function (r) { return r.why === 'no_date'; });
     var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
     var bits = [];
-    if (over.length) bits.push(over.length + ' overdue');
-    if (none.length) bits.push(none.length + ' with no due date');
-    if (set.length) bits.push(set.length + ' dated by a meeting');
-    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
-      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team’s next meeting. For each one, keep it with a date that fits, mark it done, put it in the task bank for later, or discard it. Then save.</p></div><div class="bd">';
-    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
-    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
-    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
+    if (over.length) bits.push(over.length + (over.length === 1 ? ' overdue task' : ' overdue tasks'));
+    if (none.length) bits.push(none.length + (none.length === 1 ? ' task' : ' tasks') + ' with no due date');
+    if (set.length) bits.push(set.length + (set.length === 1 ? ' task' : ' tasks') + ' with a date a meeting set');
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">' + E(hello()) + 'let’s get your tasks on track</h2>'
+      + '<p class="lead">You have ' + E(bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits.join('')) + '. We’ve suggested a due date for each one, usually your team’s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it. Then save, and you’re all set.</p></div><div class="bd">';
+    if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + over.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet: here’s our suggestion</h3>' + none.map(rowHtml).join('');
+    if (set.length) h += '<h3>Dates a meeting set: do they still work?</h3>' + set.map(rowHtml).join('');
     h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : E(saveLabel())) + '</button>'
       + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
       + '<span class="note">You can change any of this later on the task itself.</span>'

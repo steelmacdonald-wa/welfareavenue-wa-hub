@@ -29,8 +29,8 @@ const WRAP = `window.__213calls = []; window.__213fail = 0; (function () { var o
     save: el.querySelector('[data-w213save]').textContent, later: !!el.querySelector('[data-w213later]'), close: !!el.querySelector('[aria-label=Close], .x'), modal: el.querySelector('[role=dialog]').getAttribute('aria-modal'), xss: !!window.__XSS }; });
   ok('the pop-up opens on arriving', !!a, a);
   if (a) {
-    ok('title and what is asked', a.title === 'Check your due dates' && /2 overdue, 2 with no due date, 1 dated by a meeting/.test(a.lead) && /mark it done, put it in the task bank for later, or discard it/.test(a.lead), a.lead);
-    ok('three groups in order', a.heads.join('|') === 'Overdue: done, or push to a realistic date|No due date yet|Dates a meeting set: do they make sense?', a.heads);
+    ok('title and what is asked', /^Hi \w+, let\u2019s get your tasks on track$/.test(a.title) && /You have 2 overdue tasks, 2 tasks with no due date and 1 task with a date a meeting set\./.test(a.lead) && /mark it done, move it to the task bank for later, or discard it/.test(a.lead), a.lead);
+    ok('three groups in order', a.heads.join('|') === 'Overdue: is it done, or does it need a new date?|No due date yet: here\u2019s our suggestion|Dates a meeting set: do they still work?', a.heads);
     const r1 = a.rows.find(r => r.id === '701'), r3 = a.rows.find(r => r.id === '703'), r4 = a.rows.find(r => r.id === '704');
     ok('overdue: was due, where it came from, Done / Still open (open picked), pushed to the next meeting', r1 && /was due Sep 20/.test(r1.m) && /from Marketing Meeting - September 16, 2026/.test(r1.m) && r1.seg.join('|') === 'Keep, push to*|Done|To the bank|Discard' && r1.date === '2026-09-30' && /^Next meeting/.test(r1.chips[0]) && /\*$/.test(r1.chips[0]), r1);
     ok('no date: the best guess filled in, the four choices', r3 && r3.date === '2026-09-30' && r3.seg.join('|') === 'Keep*|Done|To the bank|Discard', r3);
