@@ -1943,6 +1943,15 @@ wave207: the quarterly checkpoints of a yearly target (Q1 to Q4, due Dec 31, Mar
 - `due_date`: When the checkpoint is due (the last day of its quarter unless the owners change it). The page flags it overdue once this day has passed and it is not done.
 - `status`: not started, on track, at risk or done.
 
+### `transcript_tasks`
+
+wave210: the tasks a transcript added, banked or closed when it was processed (a snapshot of title, owner and due date; task_id points at the live task while it exists). Written by apply_transcript_result and by trg_wa209_task_link; read by the Transcript archive.
+
+- `kind`: added (a new open task), banked (a new task put straight in the bank) or closed (an open task the meeting closed)
+- `title`: the title as the meeting made it; the live title is on dept_tasks
+- `owner`: the owner as the meeting named it
+- `due_date`: the due date the meeting set (the bank date for a banked task)
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -2229,4 +2238,10 @@ Functions:
 - `strategy_activity_set(bigint, smallint, boolean, text)`: wave207: anchors an organizational goal on one of the charitable activities (p_on true, with an optional short reason) or takes it off (p_on false; the row is kept with archived_at). Recorded in goal_history by the trigger. Checks inside: the goal's owners or an admin. Returns the row. Access: authenticated.
 - `strategy_link_checkpoint(bigint, bigint)`: wave207: links a department's project to one quarterly checkpoint of an organizational goal (the project then serves that goal too; a milestone of another goal is cleared), or clears the checkpoint (p_checkpoint null). Staff who may comment, as for strategy_link_project; board viewers cannot. Recorded in goal_history by the trigger. Access: authenticated.
 - `strategy_checkpoint_comment_add(bigint, bigint, text)`: wave207: a comment on a quarterly checkpoint of an organizational goal, or an answer in its thread (p_parent). @mentions go through the existing goal_comments trigger (hub_mentions, wave138's Slack DM, Steel's choice of 26/09/26). Checks inside: staff who may comment (not viewers). Access: authenticated.
+- `wa209_volunteer_roles(text)`: wave209: the volunteer role keys a role or offer title names (cook for cook, cuisinier, kitchen; driver; server; dishwasher; photographer; community_debrief for community lead; community_talker; team_leader), or volunteer for a general volunteer application; empty for a team position (anything with coordinator, manager, director, co-lead, assistant, designer, marketing, fundraising and so on), which goes to Applications.
+- `wa209_volunteer_apply(jsonb)`: wave209: files a volunteer application ({name, email, phone, roles | role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, by}): the person found by email or phone in volunteer_people or added there (so they are in the CRM and the directory), roles and tags (volunteer applicant, the source, applied YYYY-MM) merged, last_applied and Review set, a timeline entry in crm_interactions, and the row in volunteer_applications (Applicants received). A source_ref files an application once. Staff and the service role.
+- `wa209_intake(jsonb)`: wave209: a person adds an applicant ({name, email, phone, position_id | role, source, applied_at, message, links, notes, to?}). A volunteer role (wa209_volunteer_roles) or to=volunteers files a volunteer application (wa209_volunteer_apply); anything else is a New card in Applications (the same person and role within 90 days returns their card). Staff only.
+- `wa209_vol_app_status(bigint, text, text)`: wave209: sets a volunteer application received, contacted, welcomed, not_fit or withdrawn; welcomed, not a fit and withdrawn clear the person's Review flag once none of their applications is open (welcomed adds the tag welcomed). Staff only.
+- `transcript_outcomes(bigint[])`: wave210: the tasks each transcript added, banked or closed, with the live owner, due date and state when the reader may see the task
+- `wa209_task_link()`: wave210: links a task the AI inserted or closed (updated_by AI: <title>) to its transcript in transcript_tasks
 

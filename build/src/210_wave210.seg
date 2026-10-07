@@ -1,0 +1,165 @@
+/* =====================================================================
+   WA v210 The Transcript archive shows what each meeting made (06/10/26)
+   =====================================================================
+   Steel (06/10/26): "Can the transcript archive also show what tasks were created with their owner
+   and due date to visualize what it processed".
+   - Numbered wave210 at release (a parallel session shipped applicant intake as wave209 the same day); the
+     database objects keep their wa209 names: wa209_task_link, trg_wa209_task_link, the setting wa209.tx.
+   - transcript_tasks (database) links every task a meeting added, banked or closed to its transcript:
+     apply_transcript_result writes it for the tasks it makes, trg_wa209_task_link catches the tasks
+     process-leadership inserts and the tasks process-transcript closes; the history is backfilled.
+   - Recent meetings only (Steel, 06/10/26): meetings dated from September 1, 2026 on; older rows unchanged.
+   - Each archive row carries a line under its summary: "Made 4 tasks, closed 1", opened into a table of
+     the tasks (title, owner, due date, where it stands today: open, overdue, done, in the bank), each
+     title opening the task's drawer (#task/<id>). Read through transcript_outcomes(), which shows a task
+     only when the reader may see it (the transcript's rule, then the task's own).
+   Hooks: wraps renderTranscripts (after wave62's chips) and loadTranscriptsData (clears the cache). */
+(function () {
+  'use strict';
+  if (window.__wa210) return; window.__wa210 = true;
+  var C = { by: {}, pending: null, want: {} };
+  /* Steel (06/10/26): "Only do it for the recent meetings please": meetings dated from September 1, 2026 on */
+  var SINCE = '2026-09-01';
+  function recent(row) { var d = row.meeting_date || String(row.created_at || '').slice(0, 10); return !!d && d >= SINCE; }
+
+  var css = ''
+    + '.w210line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 16px 10px;font-size:12.5px;color:var(--wa-muted);}'
+    + '.w210line b{color:var(--wa-text);font-weight:600;}'
+    + '.w210line>span{line-height:1.5;}'
+    + '.w210t{background:none;border:1px solid var(--wa-line);border-radius:14px;padding:2px 10px;font:inherit;font-size:12px;color:var(--wa-green);cursor:pointer;}'
+    + '.w210t:hover{background:#F4F2EA;}'
+    + '.w210box{margin:0 16px 12px;border:1px solid var(--wa-line);border-radius:10px;overflow:hidden;background:#FFFAF2;}'
+    + '.w210box table{width:100%;border-collapse:collapse;font-size:12.5px;}'
+    + '.w210box th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);padding:7px 10px;background:#F4F2EA;font-weight:700;}'
+    + '.w210box td{padding:7px 10px;border-top:1px solid var(--wa-line);vertical-align:top;}'
+    + '.w210box td a{color:var(--wa-green);text-decoration:none;font-weight:600;}'
+    + '.w210box td a:hover{text-decoration:underline;}'
+    + '.w210s{display:inline-block;border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700;white-space:nowrap;}'
+    + '.w210s.open{background:#E6EFE9;color:#103F39;}'
+    + '.w210s.late{background:#F9E3DC;color:#8A2E1A;}'
+    + '.w210s.done{background:#EDEBE4;color:#5a5a55;}'
+    + '.w210s.bank{background:#EFEBF7;color:#4b4280;}'
+    + '.w210s.closed{background:#FBF0D5;color:#6b4e07;}'
+    + '.w210k{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);padding:7px 10px 2px;border-top:1px solid var(--wa-line);background:#FCFAF4;}'
+    + '.w210none{font-size:12px;color:var(--wa-muted);padding:8px 10px;}'
+    + '.w210m{display:none;margin-top:4px;font-size:11.5px;color:var(--wa-muted);}'
+    + '@media (max-width:640px){.w210box th:nth-child(n+2),.w210box td:nth-child(n+2){display:none;}.w210m{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;}}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function today() { try { return (typeof WA_TODAY === 'string' && WA_TODAY) || new Date().toISOString().slice(0, 10); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function day(s) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return s; } }
+  function n(k, c) { return c + ' ' + (c === 1 ? k : k + 's'); }
+
+  function status(r) {
+    if (r.kind === 'closed') return ['closed', 'Closed by this meeting'];
+    if (r.banked) return ['bank', 'In the bank' + (r.due_date ? ' until ' + day(r.due_date) : '')];
+    if (r.done) return ['done', 'Done'];
+    if (r.due_date && r.due_date < today()) return ['late', 'Overdue'];
+    return ['open', 'Open'];
+  }
+
+  function line(id) {
+    var rows = C.by[id];
+    if (!rows) return '<div class="w210line">Reading what it made\u2026</div>';
+    var made = rows.filter(function (r) { return r.kind === 'added'; }).length;
+    var banked = rows.filter(function (r) { return r.kind === 'banked'; }).length;
+    var closed = rows.filter(function (r) { return r.kind === 'closed'; }).length;
+    var open = rows.filter(function (r) { return r.kind !== 'closed' && !r.done && !r.banked; }).length;
+    var late = rows.filter(function (r) { return r.kind !== 'closed' && !r.done && !r.banked && r.due_date && r.due_date < today(); }).length;
+    if (!rows.length) return '<div class="w210line">This meeting made no tasks.</div>';
+    var bits = [];
+    if (made) bits.push('<b>' + n('task', made) + '</b> made');
+    if (banked) bits.push('<b>' + banked + '</b> put in the bank');
+    if (closed) bits.push('<b>' + n('task', closed) + '</b> closed');
+    var tail = (open ? open + ' still open' + (late ? ', ' + late + ' overdue' : '') : (made && !banked ? 'all done' : ''));
+    return '<div class="w210line">' + bits.join(', ') + (tail ? ' \u00b7 ' + tail : '')
+      + ' <button type="button" class="w210t" data-w210open="' + id + '">Show the tasks</button></div>';
+  }
+
+  function table(id) {
+    var rows = C.by[id] || [];
+    if (!rows.length) return '';
+    var groups = [['added', 'Tasks this meeting made'], ['banked', 'Put in the bank until later'], ['closed', 'Tasks this meeting closed']];
+    var h = '<div class="w210box" data-w210box="' + id + '"><table><thead><tr><th>Task</th><th>Owner</th><th>Due</th><th>Today</th></tr></thead><tbody>';
+    groups.forEach(function (g) {
+      var rs = rows.filter(function (r) { return r.kind === g[0]; });
+      if (!rs.length) return;
+      h += '<tr><td colspan="4" class="w210k">' + g[1] + ' (' + rs.length + ')</td></tr>';
+      rs.forEach(function (r) {
+        var s = status(r);
+        var title = r.live && r.task_id ? '<a href="#task/' + r.task_id + '">' + E(r.title || 'Untitled') + '</a>' : E(r.title || 'Untitled');
+        var dueTxt = r.due_date ? day(r.due_date) : '<span style="color:var(--wa-muted)">no date</span>';
+        h += '<tr><td>' + title + (r.department && DEPT_LABEL && DEPT_LABEL[r.department] ? ' <span style="color:var(--wa-muted);font-size:11px">' + E(DEPT_LABEL[r.department]) + '</span>' : '')
+          + '<div class="w210m"><span>' + E(r.owner || 'No owner') + '</span><span>' + (r.due_date ? 'Due ' + day(r.due_date) : 'No due date') + '</span><span class="w210s ' + s[0] + '">' + s[1] + '</span></div></td>'
+          + '<td>' + E(r.owner || '\u2014') + '</td>'
+          + '<td>' + dueTxt + '</td>'
+          + '<td><span class="w210s ' + s[0] + '">' + s[1] + '</span></td></tr>';
+      });
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  function paint(list) {
+    list = list || document.getElementById('txList');
+    if (!list) return;
+    list.querySelectorAll('.tx-item[data-tx]').forEach(function (it) {
+      var id = Number(it.getAttribute('data-tx'));
+      var row = (typeof txCache !== 'undefined' ? txCache : []).find(function (r) { return r.id === id; });
+      if (!row || !row.processed || row.archive_only || !recent(row)) return;
+      var old = it.querySelector('.w210line'); if (old) old.remove();
+      var ob = it.querySelector('.w210box'); var wasOpen = !!ob; if (ob) ob.remove();
+      var anchor = it.querySelector('.tx-actions');
+      if (!anchor) return;
+      anchor.insertAdjacentHTML('beforebegin', line(id));
+      if (wasOpen && C.by[id] && C.by[id].length) anchor.insertAdjacentHTML('beforebegin', table(id));
+      var b = it.querySelector('[data-w210open]');
+      if (b) b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var box = it.querySelector('.w210box');
+        if (box) { box.remove(); b.textContent = 'Show the tasks'; return; }
+        anchor.insertAdjacentHTML('beforebegin', table(id));
+        b.textContent = 'Hide the tasks';
+      });
+      if (!C.by[id]) C.want[id] = true;
+    });
+    fetchWanted();
+  }
+
+  async function fetchWanted() {
+    var ids = Object.keys(C.want).map(Number).filter(function (id) { return !C.by[id]; });
+    if (!ids.length || C.pending) return;
+    C.want = {};
+    C.pending = (async function () {
+      try {
+        var r = await db.rpc('transcript_outcomes', { p_ids: ids });
+        var rows = (r && !r.error && r.data) || [];
+        ids.forEach(function (id) { C.by[id] = []; });
+        rows.forEach(function (x) { (C.by[x.transcript_id] = C.by[x.transcript_id] || []).push(x); });
+      } catch (e) { ids.forEach(function (id) { C.by[id] = C.by[id] || []; }); }
+      C.pending = null;
+    })();
+    await C.pending;
+    paint();
+    if (Object.keys(C.want).length) fetchWanted();
+  }
+
+  function wire() {
+    if (typeof renderTranscripts === 'function' && !renderTranscripts.__w210) {
+      var __rt = renderTranscripts;
+      renderTranscripts = function () { __rt.apply(this, arguments); try { paint(); } catch (e) { /* fine */ } };
+      renderTranscripts.__w210 = 1;
+    }
+    if (typeof loadTranscriptsData === 'function' && !loadTranscriptsData.__w210) {
+      var __ld = loadTranscriptsData;
+      loadTranscriptsData = async function () { var r = await __ld.apply(this, arguments); C.by = {}; return r; };
+      loadTranscriptsData.__w210 = 1;
+    }
+  }
+  wire();
+  if (typeof startApp === 'function') {
+    var __sa = startApp;
+    startApp = async function () { await __sa.apply(this, arguments); try { wire(); paint(); } catch (e) { /* fine */ } };
+  }
+  window.w210 = { paint: paint, cache: C, since: SINCE };
+})();
