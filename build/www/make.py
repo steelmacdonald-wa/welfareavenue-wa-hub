@@ -514,8 +514,10 @@ def join(lang):
         'hero_btn': 'See the open roles' if en else 'Voir les postes ouverts',
         'why_over': 'Why join' if en else 'Pourquoi nous rejoindre',
         'why_h': 'Lead, learn and make it happen' if en else 'Diriger, apprendre et passer à l’action',
-        'why_p': 'Team roles take about four hours a week, mostly online, with a weekly team meeting. You get real responsibility, a team that has your back and work you can point to.' if en else
-                 'Les rôles d’équipe demandent environ quatre heures par semaine, surtout en ligne, avec une réunion d’équipe chaque semaine. Vous avez de vraies responsabilités, une équipe qui vous soutient et un travail dont vous serez fier.',
+        'why_p': 'Team roles take between 4 and 6 hours a week, flexible around your work and school schedule, mostly online, with a weekly team meeting. You get real responsibility, a team that has your back and work you can point to.' if en else
+                 'Les rôles d’équipe demandent entre 4 et 6 heures par semaine, avec de la souplesse selon votre horaire de travail et d’études, surtout en ligne, avec une réunion d’équipe chaque semaine. Vous avez de vraies responsabilités, une équipe qui vous soutient et un travail dont vous serez fier.',
+        'lead_note': 'Leadership roles: we typically look for people willing to grow with us and stay at least a year. Most of our leaders stay 1.5 to 2 years on average.' if en else
+                     'Postes de leadership : nous recherchons généralement des personnes prêtes à grandir avec nous et à rester au moins un an. La plupart de nos leaders restent en moyenne de 1,5 à 2 ans.',
         'ticks': (['Real responsibility from your first week', 'Leadership and project experience for your CV', 'A reference letter and a record of your hours'] if en else
                   ['De vraies responsabilités dès la première semaine', 'De l’expérience en leadership et en gestion de projet', 'Une lettre de référence et un relevé de vos heures']),
         'roles_h': 'Open roles' if en else 'Postes ouverts',
@@ -542,8 +544,8 @@ def join(lang):
     body = (hero(h1(T['title']), T['lede'], '2025-12-gift-baskets-the-crew', alt_of('2025-12-gift-baskets-the-crew', lang), btn('#roles', T['hero_btn'])) +
         '<section class="band on-grey"><div class="wrap split"><div><p class="over">%s</p><h2>%s</h2><p class="mt1">%s</p><ul class="ticks">%s</ul></div><div class="pic">%s</div></div></section>\n'
         % (e(T['why_over']), e(T['why_h']), e(T['why_p']), ticks, img('2022-10-autumn-crew-at-the-tent', alt_of('2022-10-autumn-crew-at-the-tent', lang))) +
-        '<section class="band on-white" id="roles"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><div data-open-roles><p>%s</p></div></div></section>\n'
-        % (mark(), e(T['roles_h']), e(T['roles_fb'])) +
+        '<section class="band on-white" id="roles"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><div data-open-roles><p>%s</p></div><p class="fine mt2 mb0">%s</p></div></section>\n'
+        % (mark(), e(T['roles_h']), e(T['roles_fb']), e(T['lead_note'])) +
         '<section class="band on-grey"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><ol class="steps">%s</ol></div></section>\n' % (mark(), e(T['how_h']), how) +
         '<section class="band on-white" id="apply"><div class="wrap split top"><div><p class="over">%s</p><h2>%s</h2><p class="mt1">%s</p></div><div>%s</div></div></section>\n'
         % (e(T['apply_over']), e(T['apply_h2']), e(T['apply_p']), form_box('join' if en else 'rejoindre,join', fb, lang)) +

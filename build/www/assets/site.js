@@ -7,9 +7,9 @@
   var B = document.body, LANG = B.getAttribute('data-lang') || 'en', SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
   var T = {
     en: { nextServing: 'Next serving: ', serving: 'Sunday serving', sign: 'Sign up', none: 'New dates will be posted soon. Sign up and we will tell you when they are set.', event: 'Fundraiser', more: 'Details', close: 'Close', prev: 'Previous', next: 'Next', menu: 'Menu', photo: 'Photo',
-      apply: 'Apply for this role', noRoles: 'No roles are open right now. Send a general application and we will reach out when one fits.', dept: { marketing: 'Marketing', hr: 'Human resources', opsmtl: 'Operations, Montreal', opsto: 'Operations, Toronto', fundraising: 'Fundraising', finance: 'Finance', exec: 'Leadership', board: 'Board', tech: 'Technology', programs: 'Programs' } },
+      apply: 'Apply for this role', lead: 'Leadership role: we look for people ready to grow with us for at least a year', noRoles: 'No roles are open right now. Send a general application and we will reach out when one fits.', dept: { marketing: 'Marketing', hr: 'Human resources', opsmtl: 'Operations, Montreal', opsto: 'Operations, Toronto', fundraising: 'Fundraising', finance: 'Finance', exec: 'Leadership', board: 'Board', tech: 'Technology', programs: 'Programs' } },
     fr: { nextServing: 'Prochain repas : ', serving: 'Repas du dimanche', sign: 'S’inscrire', none: 'Les prochaines dates seront publiées bientôt. Inscrivez-vous et nous vous écrirons dès qu’elles seront fixées.', event: 'Collecte de fonds', more: 'Détails', close: 'Fermer', prev: 'Précédente', next: 'Suivante', menu: 'Menu', photo: 'Photo',
-      apply: 'Postuler pour ce poste', noRoles: 'Aucun poste n’est ouvert pour le moment. Envoyez une candidature générale et nous vous écrirons dès qu’un rôle vous conviendra.', dept: { marketing: 'Marketing', hr: 'Ressources humaines', opsmtl: 'Opérations, Montréal', opsto: 'Opérations, Toronto', fundraising: 'Collecte de fonds', finance: 'Finances', exec: 'Direction', board: 'Conseil d’administration', tech: 'Technologie', programs: 'Programmes' } }
+      apply: 'Postuler pour ce poste', lead: 'Poste de leadership : nous recherchons des personnes prêtes à grandir avec nous au moins un an', noRoles: 'Aucun poste n’est ouvert pour le moment. Envoyez une candidature générale et nous vous écrirons dès qu’un rôle vous conviendra.', dept: { marketing: 'Marketing', hr: 'Ressources humaines', opsmtl: 'Opérations, Montréal', opsto: 'Opérations, Toronto', fundraising: 'Collecte de fonds', finance: 'Finances', exec: 'Direction', board: 'Conseil d’administration', tech: 'Technologie', programs: 'Programmes' } }
   }[LANG === 'fr' ? 'fr' : 'en'];
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function ls(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
@@ -165,7 +165,7 @@
       var list = r.ok && Array.isArray(r.body) ? r.body : null; if (!list) return;
       Array.prototype.forEach.call(roleBoxes, function (box) {
         box.innerHTML = list.length ? '<ul class="open-roles">' + list.map(function (p) {
-          return '<li><div><h3>' + E(p.title) + '</h3>' + (T.dept[p.dept] ? '<p class="fine mb0">' + E(T.dept[p.dept]) + '</p>' : '') + '</div><a class="textlink" href="#apply" data-pick="p:' + E(p.id) + '">' + E(T.apply) + '</a></li>';
+          return '<li><div><h3>' + E(p.title) + '</h3>' + (T.dept[p.dept] ? '<p class="fine mb0">' + E(T.dept[p.dept]) + '</p>' : '') + (/director|manager|\blead\b|head of|chair|president|co-ed/i.test(p.title) ? '<p class="fine mb0">' + E(T.lead) + '</p>' : '') + '</div><a class="textlink" href="#apply" data-pick="p:' + E(p.id) + '">' + E(T.apply) + '</a></li>';
         }).join('') + '</ul>' : '<p>' + E(T.noRoles) + '</p>';
       });
     }, function () { /* the page's own line stays */ });
