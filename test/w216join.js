@@ -8,14 +8,16 @@ const { attach, ORIGIN, OUT } = require('./www_serve.js');
 const SUPA = 'https://zwnmulmnvopclzcvytce.supabase.co';
 let pass = 0, fail = 0;
 function ok(c, m, x) { if (c) pass++; else { fail++; console.log('FAIL ' + m + (x !== undefined ? ' ' + JSON.stringify(x) : '')); } }
-const POS = [{ id: 15, title: 'Co-Director of Marketing', dept: 'marketing', stage: 'interviewing' }, { id: 6, title: 'HR Technician', dept: 'hr', stage: 'posted' }, { id: 31, title: 'Logistics Manager', dept: 'opsmtl', stage: 'posted' }];
+const JD = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/jobs/hr-technician-6.pdf?v=1';
+const POS = [{ id: 15, title: 'Co-Director of Marketing', dept: 'marketing', stage: 'interviewing', leadership: true }, { id: 6, title: 'HR Technician', dept: 'hr', stage: 'posted', jd_url: JD }, { id: 31, title: 'Logistics Manager', dept: 'opsmtl', stage: 'posted', leadership: true }];
+const LEAD = 'For leadership roles, we typically look for people willing to grow with us and stay at least a year.';
 function form(lang) {
   const fr = lang === 'fr';
   return { slug: fr ? 'rejoindre' : 'join', title: fr ? 'Rejoindre l’équipe de Welfare Avenue' : 'Join the Welfare Avenue team', intro: 'Intro', lang, kind: 'application', thank_you: fr ? 'Merci pour votre candidature.' : 'Thank you for applying.',
     consent: { ask: false },
     questions: [{ id: 'first_name', type: 'text', label: fr ? 'Prénom' : 'First name', required: true, fill: 'first_name' }, { id: 'last_name', type: 'text', label: 'Last name', required: true },
       { id: 'email', type: 'email', label: 'Email', required: true }, { id: 'phone', type: 'phone', label: 'Phone', required: true },
-      { id: 'position', type: 'choice', label: 'Which role?', required: true, options: POS.map(p => ({ v: 'p:' + p.id, l: p.title })).concat([{ v: 'general', l: fr ? 'Je ne sais pas encore : une candidature générale' : 'Not sure yet: a general application' }]) },
+      { id: 'position', type: 'choice', label: 'Which role?', required: true, lead_note: LEAD, options: POS.map(p => ({ v: 'p:' + p.id, l: p.title, ...(p.jd_url ? { u: p.jd_url } : {}), ...(p.leadership ? { lead: true } : {}) })).concat([{ v: 'general', l: fr ? 'Je ne sais pas encore : une candidature générale' : 'Not sure yet: a general application' }]) },
       { id: 'cv', type: 'file', label: fr ? 'Votre CV' : 'Your CV', help: 'PDF', required: true, accept: '.pdf,.doc,.docx,.odt,.rtf,.png,.jpg,.jpeg', max_mb: 10 },
       { id: 'why', type: 'long_text', label: 'Why?', required: true }, { id: 'links', type: 'text', label: 'Links', required: false }] };
 }
@@ -35,6 +37,8 @@ const BAD = path.join(TMP, 'notes.txt'); fs.writeFileSync(BAD, 'not a CV');
   ok(/id="team"[\s\S]*href="\/join\/"/.test(vol), 'the volunteer page points to Join our team');
   ok(/href="\/join\/">Join our team/.test(home), 'the footer links Join our team');
   ok(/\/careers\s+\/join\/\s+301/.test(fs.readFileSync(path.join(OUT, '_redirects'), 'utf8')), '/careers redirects to /join/');
+  ok(/between 4 and 8 hours a week, flexible around your work and school schedule/.test(en) && /entre 4 et 8 heures par semaine/.test(fr), 'hours read between 4 and 8 a week, flexible (EN and FR)');
+  ok(!/grow with us|grandir avec nous/.test(en + fr), 'no leadership note in the page itself: only the form shows it');
   ok(/<loc>https:\/\/welfareavenue\.com\/join\/<\/loc>/.test(fs.readFileSync(path.join(OUT, 'sitemap.xml'), 'utf8')), 'the sitemap lists /join/');
 
   const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY } });
@@ -73,6 +77,13 @@ const BAD = path.join(TMP, 'notes.txt'); fs.writeFileSync(BAD, 'not a CV');
   ok(/Human resources/.test(await c.page.textContent('.open-roles')), 'roles show their department');
   await c.page.waitForSelector('#apply form', { timeout: 8000 }).catch(() => console.log('DEBUG', c.calls, c.errors, c.csp));
   ok(await c.page.$$eval('#apply input[name="position"]', l => l.length) === 4, 'the form offers the three roles and a general application');
+  ok(await c.page.$eval('.open-roles', b => [...b.querySelectorAll('a[target="_blank"]')].map(a => a.href + '|' + a.textContent).join()) === JD + '|Read the job description', 'roles list: the HR Technician JD link, none for roles without one');
+  ok(await c.page.$eval('#apply', b => [...b.querySelectorAll('a.jdlink')].map(a => a.href).join()) === JD, 'form: the JD link sits on its option');
+  ok(await c.page.$eval('#apply [data-waf-lead]', n => n.hidden), 'leadership note hidden before a role is picked');
+  await c.page.check('#apply input[name="position"][value="p:31"]'); await c.page.waitForTimeout(100);
+  ok(await c.page.$eval('#apply [data-waf-lead]', n => !n.hidden && /stay at least a year/.test(n.textContent)), 'leadership note shows when a leadership role is picked');
+  await c.page.check('#apply input[name="position"][value="general"]'); await c.page.waitForTimeout(100);
+  ok(await c.page.$eval('#apply [data-waf-lead]', n => n.hidden), 'leadership note hides again for a general application');
   await c.page.click('.open-roles [data-pick="p:6"]'); await c.page.waitForTimeout(300);
   ok(await c.page.$eval('#apply input[name="position"][value="p:6"]', i => i.checked), '"Apply for this role" picks it in the form');
   await c.page.fill('#apply input[name="first_name"]', 'Jordan'); await c.page.fill('#apply input[name="last_name"]', 'Test');
@@ -122,7 +133,12 @@ const BAD = path.join(TMP, 'notes.txt'); fs.writeFileSync(BAD, 'not a CV');
   await c.page.goto('https://hub.welfareavenue.com/f/join'); await c.page.waitForSelector('#waf', { timeout: 8000 });
   ok(/Join our team/.test(await c.page.textContent('#ey')), 'the Hub page says Join our team above the title');
   await c.page.fill('#q_first_name', 'Sam'); await c.page.fill('#q_last_name', 'Test'); await c.page.fill('#q_email', 'sam@example.com'); await c.page.fill('#q_phone', '514 555 0101');
-  await c.page.check('input[name="position"][value="p:15"]'); await c.page.fill('#q_why', 'Marketing is my thing.');
+  ok(await c.page.$eval('[data-waf-lead]', n => n.hidden), 'Hub page: leadership note hidden at first');
+  ok(await c.page.$$eval('a.jdlink', l => l.map(a => a.href).join()) === JD, 'Hub page: the JD link on its option');
+  await c.page.check('input[name="position"][value="p:6"]'); await c.page.waitForTimeout(100);
+  ok(await c.page.$eval('[data-waf-lead]', n => n.hidden), 'Hub page: no note for HR Technician');
+  await c.page.check('input[name="position"][value="p:15"]'); await c.page.waitForTimeout(100);
+  ok(await c.page.$eval('[data-waf-lead]', n => !n.hidden), 'Hub page: note shows for Co-Director of Marketing'); await c.page.fill('#q_why', 'Marketing is my thing.');
   await c.page.click('#send'); await c.page.waitForTimeout(300);
   ok(/Please answer this question/.test(await c.page.textContent('[data-q="cv"]')), 'Hub page: the CV is required');
   await c.page.setInputFiles('#q_cv', CV); await c.page.click('#send'); await c.page.waitForSelector('.done', { timeout: 8000 }).catch(() => {});

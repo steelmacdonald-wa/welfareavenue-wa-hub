@@ -16,6 +16,8 @@
 <style>
 .q input[type=file]{width:100%;font:inherit;font-size:15px;border:1.5px dashed rgba(16,63,57,.3);border-radius:12px;padding:12px;background:rgba(16,63,57,.03)}
 .filepick{color:var(--green);font-weight:600}
+.jdlink{font-size:13px;font-weight:600;margin-left:6px;white-space:nowrap}
+.small.lead{background:rgba(220,165,39,.16);border-radius:10px;padding:10px 12px;color:var(--ink)}
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--cream);color:var(--ink);font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.5}
@@ -96,7 +98,7 @@ a{color:var(--green)}
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
       yes: 'Yes', no: 'No', thanks: 'Thank you!', charity: 'Registered charity', privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.',
       back: 'Visit welfareavenue.com', select: 'Choose…', ey_volunteer: 'Volunteer with us', ey_newsletter: 'Stay in touch', ey_general: 'Welfare Avenue', ey_application: 'Join our team', brand: 'Service is solidarity, not charity.',
-      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.' },
+      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.', jd: 'Job description' },
     fr: { loading: 'Chargement du formulaire…', nf: 'Ce formulaire n’est pas disponible.', nfh: 'Il a peut-être été déplacé ou retiré. Vous pouvez nous écrire à ', closed: 'Ce formulaire est fermé.', closedh: 'Il n’accepte plus de réponses. Merci de votre intérêt; vous pouvez nous écrire à ',
       optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
@@ -104,7 +106,7 @@ a{color:var(--green)}
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
       yes: 'Oui', no: 'Non', thanks: 'Merci!', charity: 'Organisme de bienfaisance enregistré', privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.',
       back: 'Visiter welfareavenue.com', select: 'Choisir…', ey_volunteer: 'Bénévolat', ey_newsletter: 'Restez au courant', ey_general: 'Welfare Avenue', ey_application: 'Rejoindre l’équipe', brand: '',
-      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.' }
+      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.', jd: 'Description du poste' }
   };
   var ST = '%%ST%%', COVER = { url: ST + 'photos/web/2024-07-summer-team-under-the-tent.jpg', fx: 0.5, fy: 0.52 };
   var app = document.getElementById('app'), foot = document.getElementById('foot'), band = document.getElementById('band');
@@ -197,8 +199,8 @@ a{color:var(--green)}
       '<div class="choices' + (opts.length > 3 && opts.every(function (o) { return o.l.length < 28; }) ? ' two' : '') + '">' +
       opts.map(function (o, i) {
         var on = multi ? picked.indexOf(o.v) >= 0 : picked === o.v;
-        return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + '><span>' + E(o.l) + '</span></label>';
-      }).join('') + '</div>' + e + '</fieldset>';
+        return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + '><span>' + E(o.l) + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + '</span></label>';
+      }).join('') + '</div>' + (q.lead_note ? '<p class="small lead" data-waf-lead="' + E(q.id) + '"' + (opts.some(function (o) { return o.lead && picked === o.v; }) ? '' : ' hidden') + '>' + E(q.lead_note) + '</p>' : '') + e + '</fieldset>';
   }
   function render(keep) {
     var f = S.form, c = f.consent || {};
@@ -212,6 +214,13 @@ a{color:var(--green)}
       '<button type="submit" id="send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button></form>';
     footer();
     document.getElementById('waf').addEventListener('submit', submit);
+    /* wave216d: the leadership note shows only while a leadership role is picked */
+    Array.prototype.forEach.call(app.querySelectorAll('[data-waf-lead]'), function (note) {
+      var name = note.getAttribute('data-waf-lead');
+      Array.prototype.forEach.call(app.querySelectorAll('input[name="' + name + '"]'), function (r) {
+        r.addEventListener('change', function () { var on = app.querySelector('input[name="' + name + '"]:checked'); note.hidden = !(on && on.getAttribute('data-lead') === '1'); });
+      });
+    });
     Array.prototype.forEach.call(app.querySelectorAll('input[type="file"]'), function (inp) {
       inp.addEventListener('change', function () {
         var f0 = inp.files && inp.files[0]; if (!f0) return;

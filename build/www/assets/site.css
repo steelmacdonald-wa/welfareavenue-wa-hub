@@ -322,6 +322,9 @@ section{position:relative}
 .q input[type=file]{width:100%;font:inherit;font-size:15px;background:var(--grey);border:1.5px dashed var(--line);padding:14px 16px}
 .q input[type=file]::file-selector-button{font:inherit;font-weight:600;background:var(--green);color:var(--cream);border:0;padding:8px 14px;margin-right:12px;cursor:pointer}
 .waf-file{margin:8px 0 0;color:var(--green);font-weight:600}
+.jdlink{font-size:14px;font-weight:600;margin-left:8px;white-space:nowrap}
+.waf-lead{margin:12px 0 0;background:var(--mist);border-left:3px solid var(--gold);padding:10px 14px;font-size:15px}
+.open-roles .acts{display:flex;gap:18px;flex-wrap:wrap;align-items:center}
 .q input:focus,.q textarea:focus,.q select:focus{border-color:var(--green);background:var(--white);box-shadow:0 0 0 3px rgba(220,165,39,.35)}
 .choices{display:grid;gap:8px}
 @media (min-width:560px){.choices.two{grid-template-columns:1fr 1fr}}

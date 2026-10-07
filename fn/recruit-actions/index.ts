@@ -1,4 +1,7 @@
-// Welfare Avenue: recruit-actions (v4, 07/10/26, wave215b: the offer letter is a PDF in the Welfare Avenue brand, signed with the
+// Welfare Avenue: recruit-actions (v5, 07/10/26, wave216c: jd_publish: the job description of each open position (Posted or
+// Interviewing, wa216_open_positions) as a PDF in public storage (content-images/jobs/), so welfareavenue.com/join/ and the
+// Join our team form can link it while the Drive folders stay private; redone when the JD changes in Drive (hub_positions
+// jd_public_url, jd_public_src); also run by cv_scan's schedule; a held one (jd_public_hold, set by HR) is taken down. v4, 07/10/26, wave215b: the offer letter is a PDF in the Welfare Avenue brand, signed with the
 // signer's saved signature (app_config offer_signer_email, set by HR or an admin: offer_signer_set {email}); the email is the CRM's
 // layout with the signer's sign-off, a blind copy to the signer, replies to the signer. v3, 07/10/26, wave215: a practice applicant (Academy walkthrough) gets the offer letter at
 // their own address even while email is in test mode, the letter's name starts PRACTICE, and practice cards are never texted;
@@ -593,6 +596,49 @@ async function signerSet(email: string, who: Who, auth: string) {
   return { ok: true, signer_email: e };
 }
 
+/* ---------- wave216c: the open positions' job descriptions, public as PDFs ---------- */
+function slugOf(s: string): string { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'role'; }
+async function jdPublish(force: boolean) {
+  const { data: open } = await svc.rpc('wa216_open_positions');
+  const ids = ((open || []) as Array<{ id: number }>).map(p => Number(p.id));
+  if (!ids.length) return { ok: true, published: [] };
+  const { data: ps } = await svc.from('hub_positions').select('id,title,jd_id,jd_mime,jd_modified,jd_public_url,jd_public_src,jd_public_hold').in('id', ids);
+  const out: unknown[] = [];
+  for (const p of (ps || []) as any[]) {
+    /* wave216d: HR can hold a JD back from the website (an old or wrong one): its public copy comes down */
+    if (p.jd_public_hold) {
+      if (p.jd_public_url) { await svc.storage.from('content-images').remove(['jobs/' + slugOf(p.title) + '-' + p.id + '.pdf']); await svc.from('hub_positions').update({ jd_public_url: null, jd_public_src: null }).eq('id', p.id); }
+      out.push({ id: p.id, held: true }); continue;
+    }
+    if (!p.jd_id) { out.push({ id: p.id, skipped: 'no JD in Drive' }); continue; }
+    const src = p.jd_id + '|' + (p.jd_modified || '');
+    if (!force && p.jd_public_src === src && p.jd_public_url) { out.push({ id: p.id, same: true }); continue; }
+    try {
+      let pdf: Uint8Array, tmp = '';
+      if (p.jd_mime === 'application/pdf') {
+        const r = await gfetch(DRIVE + '/files/' + encodeURIComponent(p.jd_id) + '?alt=media&supportsAllDrives=true'); if (!r.ok) throw new Error('Drive download ' + r.status);
+        pdf = new Uint8Array(await r.arrayBuffer());
+      } else if (p.jd_mime === 'application/vnd.google-apps.document') {
+        pdf = await exportAs(p.jd_id, 'application/pdf');
+      } else {
+        /* a Word file: a temporary Google Doc copy, its PDF, then the copy goes to the trash */
+        const parent = (await cfg('cv_read_folder')) || (await cfg('offer_folder')) || '1IKMWxdu8NvrN14cUmnRaPFyGGNNx4Gxa';
+        const r = await gfetch(DRIVE + '/files/' + encodeURIComponent(p.jd_id) + '/copy?supportsAllDrives=true&fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Hub JD export (temporary) ' + p.id, mimeType: 'application/vnd.google-apps.document', parents: [parent] }) });
+        const j = await r.json(); if (!r.ok) throw new Error('Drive copy ' + r.status);
+        tmp = j.id;
+        try { pdf = await exportAs(tmp, 'application/pdf'); } finally { await trash(tmp); }
+      }
+      const path = 'jobs/' + slugOf(p.title) + '-' + p.id + '.pdf';
+      const up = await svc.storage.from('content-images').upload(path, pdf, { contentType: 'application/pdf', upsert: true, cacheControl: '300' });
+      if (up.error) throw new Error(up.error.message);
+      const url = SUPABASE_URL + '/storage/v1/object/public/content-images/' + path + '?v=' + encodeURIComponent(String(p.jd_modified || '').slice(0, 19).replace(/[^0-9]/g, ''));
+      await svc.from('hub_positions').update({ jd_public_url: url, jd_public_src: src }).eq('id', p.id);
+      out.push({ id: p.id, url });
+    } catch (e) { out.push({ id: p.id, error: String((e as Error).message || e).slice(0, 200) }); }
+  }
+  return { ok: true, published: out };
+}
+
 /* ---------- a CV link (applicants added by hand) ---------- */
 function driveId(url: string): string | null {
   const u = String(url || '').trim();
@@ -702,7 +748,8 @@ async function cvScan() {
   const since = new Date(Date.now() - 120 * 86400000).toISOString();
   const { data } = await svc.from('hub_candidates').select('id').is('cv_read_at', null).gte('created_at', since).or('cv_path.not.is.null,drive_file_id.not.is.null').order('created_at', { ascending: false }).limit(5);
   const out = []; for (const r of (data || [])) out.push(await cvRead(Number(r.id)));
-  return { ok: true, read: out };
+  let jd: unknown = null; try { jd = await jdPublish(false); } catch (e) { jd = { error: String((e as Error).message || e).slice(0, 200) }; }   /* wave216c */
+  return { ok: true, read: out, jd };
 }
 
 Deno.serve(async (req) => {
@@ -734,6 +781,7 @@ Deno.serve(async (req) => {
     if (action === 'file_cv') return json(await fileCv(Number(b.id), String(b.url || ''), who));
     if (action === 'cv_read') return json(await cvRead(Number(b.id)));
     if (action === 'cv_scan') return json(await cvScan());
+    if (action === 'jd_publish') return json(await jdPublish(!!b.force));
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);

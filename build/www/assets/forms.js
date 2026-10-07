@@ -24,7 +24,7 @@
       privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.', privacyLink: 'Privacy',
       acctIn: 'Signed in as {n}. We filled in what we have, and what you change here is saved to your profile.', acctMine: 'My account', acctNot: 'Not you?',
       acctOffer: 'Have an account? {a} and this form fills in for you.', acctSignIn: 'Sign in', saved: 'Your profile is updated too.',
-      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.' },
+      fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.', jd: 'Job description' },
     fr: { optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous avons actualisé le formulaire. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
@@ -33,7 +33,7 @@
       privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.', privacyLink: 'Confidentialité',
       acctIn: 'Connexion : {n}. Nous avons rempli ce que nous avons, et ce que vous changez ici est enregistré dans votre profil.', acctMine: 'Mon compte', acctNot: 'Ce n’est pas vous?',
       acctOffer: 'Vous avez un compte? {a} et ce formulaire se remplit pour vous.', acctSignIn: 'Connectez-vous', saved: 'Votre profil est aussi à jour.',
-      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.' }
+      fileType: 'Veuillez joindre un PDF, un document Word ou une photo.', fileBig: 'Ce fichier dépasse {n} Mo. Veuillez en joindre un plus petit.', attached: 'Fichier joint : ', uploading: 'Envoi de votre fichier…', fileFail: 'Votre fichier n’a pas pu être envoyé. Veuillez réessayer.', jd: 'Description du poste' }
   };
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function call(method, slug, body, token) {
@@ -113,8 +113,8 @@
         '<div class="choices' + (opts.length > 3 && opts.every(function (o) { return String(o.l).length < 28; }) ? ' two' : '') + '">' +
         opts.map(function (o, i) {
           var on = multi ? picked.indexOf(o.v) >= 0 : picked === o.v;
-          return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + '><span>' + E(o.l) + '</span></label>';
-        }).join('') + '</div>' + e + '</fieldset>';
+          return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + '><span>' + E(o.l) + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + '</span></label>';
+        }).join('') + '</div>' + (q.lead_note ? '<p class="waf-lead" data-waf-lead="' + E(q.id) + '"' + (opts.some(function (o) { return o.lead && picked === o.v; }) ? '' : ' hidden') + '>' + E(q.lead_note) + '</p>' : '') + e + '</fieldset>';
     }
     function acctLine() {
       if (ACCT) return '<p class="waf-acct">' + E(t('acctIn').replace('{n}', ACCT.name || ACCT.email)) + ' <a href="' + ACCT_URL + '">' + E(t('acctMine')) + '</a> · ' +
@@ -134,6 +134,13 @@
         '<button type="submit" class="btn waf-send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button>' +
         '<p class="waf-privacy">' + E(t('privacy')) + ' <a href="' + PRIV_URL + '">' + E(t('privacyLink')) + '</a></p></form>';
       box.querySelector('form').addEventListener('submit', submit);
+      /* wave216d: the leadership note shows only while a leadership role is picked */
+      Array.prototype.forEach.call(box.querySelectorAll('[data-waf-lead]'), function (note) {
+        var name = note.getAttribute('data-waf-lead');
+        Array.prototype.forEach.call(box.querySelectorAll('input[name="' + name + '"]'), function (r) {
+          r.addEventListener('change', function () { var on = box.querySelector('input[name="' + name + '"]:checked'); note.hidden = !(on && on.getAttribute('data-lead') === '1'); });
+        });
+      });
       Array.prototype.forEach.call(box.querySelectorAll('input[type="file"]'), function (inp) {
         inp.addEventListener('change', function () {
           var f0 = inp.files && inp.files[0]; if (!f0) return;

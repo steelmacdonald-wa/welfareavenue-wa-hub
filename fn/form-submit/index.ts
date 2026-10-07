@@ -1,4 +1,6 @@
-// Welfare Avenue: form-submit (v6, 07/10/26, wave216: application forms (kind application, "Join our team"): a choice question
+// Welfare Avenue: form-submit (v7, 07/10/26, wave216d: each open position option carries its job description's public PDF (u)
+//   and whether it is a leadership role (lead); the positions question carries lead_note, shown by the page only when a
+//   leadership role is picked. v6, 07/10/26, wave216: application forms (kind application, "Join our team"): a choice question
 //   with source "positions" lists the open positions live (wa216_open_positions) plus a general application; a file question
 //   takes a CV: POST {action: 'upload', slug, token, qid, name, mime, size} checks the token and the file (PDF, Word, ODT, RTF,
 //   PNG or JPEG, at most 10 MB, at most 10 uploads per IP hash in 10 minutes), keeps a crm_form_uploads row and answers a
@@ -98,7 +100,7 @@ async function openDates(form: Json): Promise<Array<{ v: string; l: string }>> {
 // v6 (wave216): the open positions for a choice question with source "positions", and a general application
 async function positionOpts(lang: string): Promise<Array<{ v: string; l: string }>> {
   const { data } = await svc.rpc('wa216_open_positions');
-  return [...((data || []) as Json[]).map((p: Json) => ({ v: 'p:' + p.id, l: String(p.title) })), { v: 'general', l: T[lang === 'fr' ? 'fr' : 'en'].general }];
+  return [...((data || []) as Json[]).map((p: Json) => ({ v: 'p:' + p.id, l: String(p.title), ...(p.jd_url ? { u: String(p.jd_url) } : {}), ...(p.leadership ? { lead: true } : {}) })), { v: 'general', l: T[lang === 'fr' ? 'fr' : 'en'].general }];
 }
 async function org(): Promise<Json> {
   const { data } = await svc.from('app_config').select('key,value').in('key', ['mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number']);
@@ -131,6 +133,7 @@ async function publicForm(form: Json): Promise<Json> {
       return {
         id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
         options: q.type === 'serving_dates' ? dates : q.source === 'positions' ? positions : opts(q), ...(fill ? { fill } : {}),
+        ...(q.source === 'positions' && q.lead_note ? { lead_note: String(q.lead_note) } : {}),
         ...(q.type === 'file' ? { accept: Object.keys(FILE_EXT).map(x => '.' + x).join(','), max_mb: MAX_FILE / 1048576 } : {})
       };
     }),

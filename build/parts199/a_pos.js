@@ -32,6 +32,7 @@
   function deptLabel(d) { var x = DEPTS.filter(function (p) { return p[0] === d; })[0]; return x ? x[1] : (d || 'Other'); }
   function stageLabel(s) { var x = PSTAGES.filter(function (p) { return p[0] === s; })[0]; return x ? x[1] : (s || ''); }
   function hiring(p) { return p && p.stage !== 'filled' && p.stage !== 'closed'; }
+  function onSite(p) { return p && (p.stage === 'posted' || p.stage === 'interviewing'); }   /* wave216: on welfareavenue.com/join */
   function btn(label, attrs, kind) { return '<button type="button" class="w197b' + (kind ? ' ' + kind : '') + '" ' + (attrs || '') + '>' + label + '</button>'; }
   function ago(s) { if (!s) return ''; var d = (Date.now() - new Date(s).getTime()) / 60000; if (d < 2) return 'just now'; if (d < 60) return Math.round(d) + ' min ago'; if (d < 1440) return Math.round(d / 60) + ' h ago'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
   function day(s) { if (!s) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(String(s))) s = s + 'T12:00:00'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
@@ -249,11 +250,13 @@
   function card(p) {
     var cvs = filesOf(p.id, 'resume').length, ap = candsOf(p.id).filter(function (c) { return OPEN_C.indexOf(c.status || 'new') >= 0; }).length;
     var ppl = peopleOf(p.id).filter(function (x) { return !x.past; }).map(function (x) { return x.m.name.split(' ')[0]; });
-    return '<button type="button" class="w199card' + (hiring(p) ? ' hire' : '') + '" data-w199open="' + p.id + '"><b>' + E(p.title) + '</b>' +
+    return '<div class="w199cw"><button type="button" class="w199card' + (hiring(p) ? ' hire' : '') + '" data-w199open="' + p.id + '"><b>' + E(p.title) + '</b>' +
       '<span class="st st-' + E(p.stage) + '">' + E(stageLabel(p.stage)) + '</span>' +
       '<span class="m">' + (p.jd_id ? '<span>JD</span>' : '<span class="no">No JD</span>') + (p.older_count ? '<span>' + p.older_count + ' older</span>' : '') +
       '<span>' + cvs + (cvs === 1 ? ' CV' : ' CVs') + '</span>' + (ap ? '<span class="ap">' + ap + (ap === 1 ? ' application' : ' applications') + '</span>' : '') + '</span>' +
-      (ppl.length ? '<span class="ppl">' + E(ppl.join(', ')) + '</span>' : '') + '</button>';
+      (ppl.length ? '<span class="ppl">' + E(ppl.join(', ')) + '</span>' : '') + '</button>' +
+      /* wave216c: the job description one click from the card (Drive), outside the card's button */
+      (p.jd_url ? '<a class="w199jd" href="' + E(p.jd_url) + '" target="_blank" rel="noopener" aria-label="' + E('The job description for ' + p.title) + '">Job description</a>' : '') + '</div>';
   }
   function pageHtml() {
     var qq = lower(P.q);
@@ -304,7 +307,7 @@
     s.innerHTML = '<div class="bk" data-w199a="shut"></div><div class="pn w199pn">' + btn('Close', 'data-w199a="shut"', 'sm x') +
       '<h3>' + E(p.title) + '</h3><p class="role">' + E(deptLabel(p.dept)) + (p.clickup_url ? ' · <a href="' + E(p.clickup_url) + '" target="_blank" rel="noopener">was in ClickUp</a>' : '') + '</p>' +
       '<label>Stage</label><div class="stg">' + PSTAGES.map(function (x) { return '<button type="button" data-w199st="' + x[0] + '" class="' + (x[0] === 'closed' ? 'cl ' : '') + (p.stage === x[0] ? 'on' : '') + '">' + E(x[1]) + '</button>'; }).join('') + '</div>' +
-      '<label>Job description</label><div class="w199links">' + (p.jd_url ? '<a class="w197b sm pri" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">Open the job description</a><small>' + E(p.jd_name || '') + ' · updated ' + E(day(p.jd_modified)) + '</small>' : '<span class="w197pill mut">No job description yet</span><small>Put the JD file in the position\'s folder in Drive, then Sync.</small>') + '</div>' +
+      '<label>Job description</label><div class="w199links">' + (p.jd_url ? '<a class="w197b sm pri" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">Open the job description</a>' + (p.jd_public_url && onSite(p) ? '<a class="w197b sm" href="' + E(p.jd_public_url) + '" target="_blank" rel="noopener">The PDF applicants see</a>' : '') + '<small>' + E(p.jd_name || '') + ' · updated ' + E(day(p.jd_modified)) + (onSite(p) ? (p.jd_public_url ? ' · linked on welfareavenue.com/join and the application form' : ' · goes on the website within 15 minutes') : '') + '</small>' : '<span class="w197pill mut">No job description yet</span><small>Put the JD file in the position\'s folder in Drive, then Sync.</small>') + '</div>' +
       (olds.length ? '<details class="w199old"><summary>' + olds.length + (olds.length === 1 ? ' older version' : ' older versions') + '</summary><ul class="w199files">' + olds.map(function (f) { return '<li><a href="' + E(f.url || '#') + '" target="_blank" rel="noopener">' + E(f.name) + '</a><small>' + E(day(f.modified_time)) + '</small></li>'; }).join('') + '</ul></details>' : '') +
       '<label>In Applications <small>' + apps.length + '</small></label>' + (apps.length ? '<ul class="w199files">' + apps.map(function (c) { return '<li>' + btn(E(c.name || 'Someone'), 'data-w197c="' + c.id + '"', 'sm') + gradePill(c) + '<small>' + E(c.status || 'new') + (c.owner ? ' · ' + E(c.owner) : '') + '</small></li>'; }).join('') + '</ul>' : '<p class="w197note" style="margin:0">Nobody yet. A CV in this position\'s Resumes folder, an upload below, or the position chosen on an application puts them here.</p>') +
       '<label>CVs in Drive <small>' + cvs.length + '</small></label>' + (cvs.length ? '<ul class="w199files">' + cvs.map(fileRow).join('') + '</ul>' : '<p class="w197note" style="margin:0">The Resumes folder is empty.</p>') +
@@ -482,6 +485,7 @@
     '.w199warn{background:rgba(179,64,47,.10);border:1px solid rgba(179,64,47,.3);color:' + INK + ';border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;margin:0 0 12px;}' +
     '.w199dh{font-family:' + HEAD + ';font-size:18px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:18px 0 8px;}.w199dh small{font-family:' + BODY + ';font-size:12px;color:var(--wa-muted);margin-left:4px;}' +
     '.w199grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}' +
+    '.w199cw{display:flex;flex-direction:column;gap:4px;min-width:0;}.w199cw .w199card{flex:1;}.w199jd{font-size:12px;font-weight:600;color:' + GREEN + ';padding:0 6px;align-self:flex-start;}' +
     '.w199card{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;font-family:' + BODY + ';background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px 14px;cursor:pointer;color:' + INK + ';min-width:0;}' +
     '.w199card:hover{border-color:' + GREEN + ';}.w199card.hire{border-left:4px solid ' + GOLD + ';}' +
     '.w199card b{font-size:14.5px;line-height:1.25;}' +

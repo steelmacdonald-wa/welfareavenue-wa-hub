@@ -45632,6 +45632,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    wave192 (01/10/26), The Loop: the notes sit under the I'm in button (#w192go), speak The Loop (I'm in, close the
    loop), and a close "as of" a time ends the session at that time and opens the wrap-up sheet (w192.openRow), so the
    person chooses what to share; nothing is posted on its own. The audit line keeps the time, never the hours.
+   wave217 (07/10/26), Steel: "After an hour, hour and a half, 2 hours, and 2.5 hours being in, I want you to do a light
+   check to confirm if they are still in." His choices: the check is in the Hub (plus one Slack DM to the person at
+   3 hours, sent by checkin-post's still_dm from the cron wa-loop-still-dm); nothing happens when nobody answers; after
+   2.5 hours it keeps asking every half hour. So note 3 now comes an hour in and at every half hour after (1h, 1.5h,
+   2h, 2.5h, 3h ...), once per mark: shown is asked (the x waits for the next mark). Still in, here or in the Welcome
+   back note, writes hub_checkins.still_in_at (the DM skips someone who said so in the last 40 minutes), which also
+   tells the person's other devices that mark is answered. The DM's links land here: ?loop=still answers Still in,
+   ?loop=close opens the wrap-up sheet.
    ===================================================================== */
 (function () {
   if (window.__wa118b) return; window.__wa118b = { version: 1 };
@@ -45639,11 +45647,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var AWAY_MS = 3 * 3600000;      /* "has not opened the hub for a while" */
   var GONE_MS = 20 * 60000;       /* away from the tab or app this long while checked in: offer to check out as of then */
-  var LONG_MS = 3 * 3600000;      /* checked in this long: ask */
-  var REASK_MS = 2 * 3600000;     /* ask about a long session again after this */
+  var FIRST_MS = 60 * 60000;      /* wave217: the first Still in? an hour in */
+  var EVERY_MS = 30 * 60000;      /* wave217: then at every half hour (1h, 1.5h, 2h, 2.5h, 3h ...) */
   var SNOOZE_MS = 4 * 3600000;    /* "Not now" on the check-in nudge */
-  var K = { seen: 'w118bSeen', hid: 'w118bHid', snooze: 'w118bSnooze', asked: 'w118bAsked' };
-  var S = { timer: null, kind: null };
+  var K = { seen: 'w118bSeen', hid: 'w118bHid', snooze: 'w118bSnooze', asked: 'w118bAsked', mark: 'w118bMark' };
+  var S = { timer: null, kind: null, mark: -1 };
 
   var css = document.createElement('style');
   css.id = 'wa118bcss';
@@ -45720,18 +45728,35 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     show('back', '<b><i></i>Welcome back</b><p>You are still in, and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Finished then? Close the loop as of that time and share what moved.</p>'
       + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Close as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Close now</button><button class="link" data-w118b="still">Still working</button></div>');
   }
-  function nudgeLong(row) {
+  /* wave217: the marks. -1 before the first hour, then 0 at 1h, 1 at 1.5h, 2 at 2h, 3 at 2.5h ... */
+  function markAt(row, t) { var age = t - new Date(row.started_at).getTime(); return age < FIRST_MS ? -1 : Math.floor((age - FIRST_MS) / EVERY_MS); }
+  /* the last mark this session has had: shown on this device, or answered Still in on any device (still_in_at) */
+  function markDone(row) {
+    var done = -1;
+    try { var v = String(localStorage.getItem(K.mark) || '').split(':'); if (v[0] === String(row.id)) done = Number(v[1]); } catch (e) { /* fine */ }
+    if (row.still_in_at) done = Math.max(done, markAt(row, new Date(row.still_in_at).getTime()));
+    return isNaN(done) ? -1 : done;
+  }
+  function nudgeLong(row, mark) {
     var mins = (Date.now() - new Date(row.started_at).getTime()) / 60000;
-    show('long', '<b><i></i>Still in?</b><p>You have been in for ' + E(fmtMins(Math.round(mins))) + ' (only you see this). If you finished earlier, set when, then close the loop.</p>'
+    show('long', '<b><i></i>Still in?</b><p>' + E(fmtMins(Math.round(mins))) + ' so far (only you see this). Finished earlier? Set the time, then close the loop.</p>'
       + '<div class="row"><button class="ghost" data-w118b="still">Still in</button><button class="go" data-w118b="out">Close the loop</button><button class="link" data-w118b="settime">Set the time</button></div>');
-    put(K.asked, Date.now());
+    S.mark = mark; put(K.mark, row.id + ':' + mark); put(K.asked, Date.now());
+  }
+  /* Still in: the session row says so (the 3-hour DM skips someone who just answered, and other devices see the mark is done) */
+  function stillIn(row) {
+    if (!row || !row.id) return;
+    var at = new Date().toISOString();
+    row.still_in_at = at;
+    put(K.mark, row.id + ':' + Math.max(markAt(row, Date.now()), markDone(row)));
+    try { db.from('hub_checkins').update({ still_in_at: at }).eq('id', row.id).is('ended_at', null).then(function () { /* fine */ }, function () { /* fine */ }); } catch (e) { /* the note is answered either way */ }
   }
   function timeForm(row) {
     var n = document.getElementById('w118ck'); if (!n) return;
     var guess = num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now();
     n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you finish?</b><p>You were in from ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. Your session ends at this time; then you share what moved.</p>'
       + '<div class="when"><input type="time" id="w118bt" value="' + hhmm(guess) + '" step="60"><span>' + E(dayWord(guess)) + '</span></div><div class="err" id="w118berr"></div>'
-      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="still">Cancel</button></div>';
+      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="x">Cancel</button></div>';
     place();
   }
 
@@ -45767,13 +45792,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!row) { if (reason !== 'tick') nudgeIn(); return; }
     var hid = num(K.hid);
     if (hid && Date.now() - hid > GONE_MS && hid > new Date(row.started_at).getTime()) { drop(K.hid); nudgeBack(row, hid); return; }
-    var age = Date.now() - new Date(row.started_at).getTime();
-    if (age > LONG_MS && Date.now() - num(K.asked) > REASK_MS && S.kind !== 'long') nudgeLong(row);
+    /* wave217: Still in? at each mark not had yet; an unanswered note just moves on to the next mark */
+    var mark = markAt(row, Date.now());
+    if (mark >= 0 && mark > markDone(row) && !(S.kind === 'long' && S.mark === mark) && S.kind !== 'back') nudgeLong(row, mark);
   }
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-w118b]') : null; if (!t) return;
     var a = t.getAttribute('data-w118b'), row = open();
-    if (a === 'x' || a === 'still') { hide(); if (a === 'still') put(K.asked, Date.now()); return; }
+    if (a === 'x' || a === 'still') { hide(); if (a === 'still') { put(K.asked, Date.now()); stillIn(row); } return; }
     if (a === 'later') { put(K.snooze, Date.now() + SNOOZE_MS); hide(); return; }
     if (a === 'in') { hide(); var p = pill(); if (p) p.click(); return; }
     if (a === 'out') { hide(); put(K.asked, Date.now()); var p2 = pill(); if (p2) p2.click(); return; }
@@ -45799,13 +45825,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   });
   window.addEventListener('pagehide', function () { if (open()) put(K.hid, Date.now()); seen(); });
   window.addEventListener('pageshow', function (ev) { if (ev.persisted) setTimeout(function () { decide('back'); }, 400); });
+  /* wave217: the 3-hour DM's links. ?loop=still answers Still in; ?loop=close opens the wrap-up sheet. The query is taken off the address. */
+  function linkAsk() { var m = /[?&]loop=(still|close)(?:&|$)/.exec(location.search || ''); return m ? m[1] : ''; }
+  async function fromLink(ask) {
+    try { var u = new URL(location.href); u.searchParams.delete('loop'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) { /* fine */ }
+    var c = ck(); try { if (c && c.reload) await c.reload(); } catch (e) { /* the row we have */ }
+    var row = open();
+    if (!row) { toastS('Your loop is already closed.'); return; }
+    hide();
+    if (ask === 'still') { stillIn(row); toastS('Got it, you\u2019re still in.'); return; }
+    var p = pill(); if (p) p.click();
+  }
   function boot() {
     /* the first decision waits for wave116j to have loaded the open check-in */
-    var tries = 0;
+    var tries = 0, ask = linkAsk();
     (function wait() {
       tries += 1;
       var c = ck();
-      if ((c && pill()) || tries > 40) { decide('open'); seen(); }
+      if ((c && pill()) || tries > 40) { if (ask) fromLink(ask).then(function () { seen(); }); else { decide('open'); seen(); } }
       else setTimeout(wait, 500);
     })();
     setInterval(function () { if (!document.hidden) { seen(); decide('tick'); } }, 60000);
@@ -45822,7 +45859,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   } else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 3500); });
   else setTimeout(boot, 3500);
 
-  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K };
+  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K, markAt: markAt, markDone: markDone, fromLink: fromLink, state: function () { return { kind: S.kind, mark: S.mark }; } };
 })();
 /* =====================================================================
    WA v118c Photo library (25/09/26)
@@ -70106,16 +70143,21 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - The header button is #w192go. Wave116j's #w116jck stays underneath, hidden: it still owns the session row (its
      toggle inserts the row; I'm in uses it) and the presence ring. Clicks on #w192go, #w116jck and the person page's
      link are taken at the window, before wave116q's handlers, so its sheet never opens.
-   - I'm in starts a session and posts nothing. Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
+   - I'm in starts a session (wave212: a line in #check-in-out-wa says so). Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
      from the person's own records; private work never pre-filled), Anything the Hub could not see (say it or type it,
-     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Who sees it
-     (My team with the real channel, Everyone with the Loop channel, Just the Hub), Close the loop or Close without a
-     note. The minutes show to the person only.
+     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Where it goes
+     (#check-in-out-wa since wave214; until then Who sees it: My team, Everyone, Just the Hub), Close the loop or Close
+     without a note. The minutes show to the person only.
    - Home: In the loop, the week's notes from everyone, read through loop_feed() (no times, no hours). The person page:
      Their loop (Your loop on your own). Hours on someone else's page are for HR, leaders and admins (wave116k).
    - The walkthrough: the page tour "loop" (the Academy row tour:loop). It opens the sheet in preview (nothing read or
      written) to show each part, and the preview closes with the tour. The chrome tour's step lives in 122.
    - window.w192: start, open, openRow (wave118b's "as of" close), preview, endPreview, feed, state.
+   wave212 (06/10/26, checkin-post v5): I'm in posts a line in #check-in-out-wa ("is in the loop", never the time).
+   wave214 (06/10/26), Steel: "All closed loops should be done in the check in out channel"; asked where a note goes, he
+   chose only #check-in-out-wa. Who sees it is gone: the sheet's Where it goes names the channel (app_config
+   checkinout_channel, or the draft's everyone_channel), every note posts there (checkin-post v6 ignores share_to), and
+   Close without a note posts the one line "closed the loop" there. The tour and the button's words say so.
    ===================================================================== */
 (function () {
   if (window.__wa192) return; window.__wa192 = true;
@@ -70124,7 +70166,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto';
   var Q = { row: null, busy: false, preview: false, rec: null, listening: false, finalText: '', text: '', bullets: [], suggest: [], others: [], picked: {},
-    share: 'team', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'the-loop', sig: '' };
+    share: 'everyone', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'check-in-out-wa', sig: '' };
   var F = { rows: null, at: 0, p: null };
 
   var css = document.createElement('style');
@@ -70156,6 +70198,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .bul .b .rm:hover{color:' + FLAG + ';}' +
     '.w192m .addl{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;display:inline-block;margin:2px 0 4px;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
     '.w192m .quiet{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
+    '.w192m .where{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;background:' + GREEN + ';color:' + CREAM + ';margin:0;}' +
+    '.w192m .where small{font-weight:500;opacity:.85;}' +
     '.w192m .empty{font-size:13px;color:var(--wa-muted);margin:4px 0 6px;line-height:1.5;}' +
     '.w192m textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px 14px;border:1px solid rgba(16,63,57,.2);border-radius:14px;font-size:15px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
     '.w192m textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
@@ -70178,12 +70222,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .tk label b{display:block;font-weight:600;color:var(--wa-text);}' +
     '.w192m .tk label span{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;}' +
     '.w192m .more{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;margin:6px 0 0;display:inline-block;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
-    '.w192m .share{display:flex;gap:8px;flex-wrap:wrap;}' +
-    '.w192m .share label{position:relative;display:inline-flex;align-items:center;gap:6px;border:1.5px solid rgba(16,63,57,.18);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;color:' + GREEN + ';cursor:pointer;background:var(--wa-card);}' +
-    '.w192m .share label.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
-    '.w192m .share label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
-    '.w192m .share label input{position:absolute;opacity:0;width:1px;height:1px;}' +
-    '.w192m .share label small{font-weight:500;opacity:.8;}' +
     '.w192m .w113acts{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
     '.w192m .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
     '.w192m .w113acts .skip{background:none;border:none;color:var(--wa-muted);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:6px 4px;font-family:' + BODY + ';}' +
@@ -70251,8 +70289,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return r.data;
   }
   function SR() { return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
-  function loopName() { return Q.allCh || Q.loopName || 'the-loop'; }
-  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'loop_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
+  /* wave214: every closed loop goes to the check-in-out channel (app_config checkinout_channel; the draft's everyone_channel) */
+  function loopName() { return Q.allCh || Q.loopName || 'check-in-out-wa'; }
+  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'checkinout_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
   function onPerson() { return (/^#person\/(\d+)/.exec(location.hash || '') || [])[1] || null; }
   function repaintPerson() { var id = onPerson(); if (id && typeof window.w116Person === 'function') { try { window.w116Person(id); } catch (e) { /* fine */ } } }
 
@@ -70275,7 +70314,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       label = 'Close the loop';
     } else {
       cls = ''; html = '<span class="dot"></span>I’m in';
-      title = 'Starting work for Welfare Avenue? Press I’m in. Nothing is posted; the ring on your photo shows teammates you are around.';
+      title = 'Starting work for Welfare Avenue? Press I’m in. A line in #' + loopName() + ' says you are in (never the time); the ring on your photo shows teammates you are around.';
       label = 'I’m in';
     }
     if (b.className !== cls) b.className = cls;
@@ -70286,7 +70325,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   setInterval(render, 2000);
   render(); setTimeout(render, 800); setTimeout(render, 2500);
 
-  /* ---------- I'm in: wave116j's toggle inserts the row; nothing is posted ---------- */
+  /* ---------- I'm in: wave116j's toggle inserts the row; checkin-post start posts "is in the loop" in the check-in-out channel (wave212) ---------- */
   async function start() {
     var c = ck(); if (!c || Q.busy || c.open()) return; Q.busy = true;
     try {
@@ -70295,7 +70334,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       render(); try { c.presence(); } catch (e) { /* fine */ }
       if (row) {
         toastS('You’re in. Close the loop when you finish.');
-        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* nothing is posted anyway */ } }
+        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* the session runs either way */ } }
         repaintPerson();
       }
     } catch (e) { toastS('Could not start your session: ' + (e.message || e)); }
@@ -70329,13 +70368,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; });
     var ta = document.getElementById('w192say'); if (ta) Q.text = ta.value;
   }
-  function shareOpts() {
-    var o = [];
-    if (Q.teamCh) o.push({ k: 'team', t: 'My team', s: '#' + Q.teamCh });
-    o.push({ k: 'everyone', t: 'Everyone', s: '#' + loopName() });
-    o.push({ k: 'hub', t: 'Just the Hub', s: 'no Slack post' });
-    return o;
-  }
   function sheetHtml() {
     var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w192b="' + i + '" value="' + E(b) + '" aria-label="Line ' + (i + 1) + ' of your note"><button type="button" class="rm" data-w192rm="' + i + '" title="Take this line out" aria-label="Take this line out">&#10005;</button></div>'; }).join('');
     var draft = !Q.loaded ? '<p class="empty">Reading what moved…</p>'
@@ -70343,9 +70375,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var hidden = Q.hidden ? '<p class="quiet">' + Q.hidden + (Q.hidden === 1 ? ' private item is' : ' private items are') + ' left out (confidential, board or one-on-one work). Add a line yourself if it should be shared.</p>' : '';
     var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w192t="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
     var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w192t="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
-    var opts = shareOpts();
-    if (!opts.some(function (o) { return o.k === Q.share; })) Q.share = opts[0].k;
-    var share = opts.map(function (o) { return '<label class="' + (Q.share === o.k ? 'on' : '') + '"><input type="radio" name="w192s" data-w192s="' + o.k + '"' + (Q.share === o.k ? ' checked' : '') + '>' + E(o.t) + ' <small>&middot; ' + E(o.s) + '</small></label>'; }).join('');
     return '<div class="w113modal w192m" id="w192sheet" role="dialog" aria-labelledby="w192h"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
       '<p class="m-sub"><span class="hrs">' + E(fmtMins(Q.minutes)) + '</span> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
       '<div id="w192draftbox"><h4>What moved <span class="k">From your records</span></h4>' + draft + hidden +
@@ -70355,8 +70384,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="sayrow">' + (SR() ? '<button type="button" class="mic" id="w192mic"><span class="ic"></span>Talk instead</button>' : '') + '<button type="button" class="addb" id="w192tidy">Add to the note</button><span class="quiet" id="w192hint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</span></div></div>' +
       (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk" id="w192sug">' + sug + '</div>' : '') +
       (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
-      '<div id="w192sharebox"><h4>Who sees it</h4><div class="share" role="radiogroup" aria-label="Who sees it">' + share + '</div>' +
-      '<p class="quiet">No clock time and no hours in the post. Every note also shows on Home, in the loop.</p></div>' +
+      '<div id="w192sharebox"><h4>Where it goes</h4><p class="where">#' + E(loopName()) + ' <small>&middot; in Slack, for the whole team</small></p>' +
+      '<p class="quiet">Every closed loop goes there, with no clock time and no hours. Every note also shows on Home, in the loop.</p></div>' +
       '<div class="w113acts"><span class="w113ok" id="w192ok"></span><span style="flex:1"></span><button type="button" class="skip" id="w192skip">Close without a note</button><button class="btn primary" id="w192close">Close the loop</button></div></div>';
   }
   function paint() {
@@ -70365,7 +70394,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function begin(row) {
     Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false;
-    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';
+    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';   /* wave214: one place for every note */
     var endMs = row.ended_at ? new Date(row.ended_at).getTime() : Date.now();
     Q.minutes = Math.max(1, Math.round((endMs - new Date(row.started_at).getTime()) / 60000));
   }
@@ -70380,8 +70409,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       Q.bullets = drafted.concat(mine.filter(function (b) { return drafted.indexOf(b) < 0; }));
       Q.hidden = Number(r.hidden || 0); Q.minutes = r.minutes || Q.minutes;
       Q.others = (r.open_tasks || []).slice();
-      Q.teamCh = r.team_channel || null; Q.allCh = r.everyone_channel || null;
-      if (!Q.touched) Q.share = Q.teamCh ? 'team' : 'everyone';
+      Q.allCh = r.everyone_channel || null;
       Q.loaded = true; paint();
     } catch (e) {
       if (Q.row !== row) return;
@@ -70411,7 +70439,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function finish(skipped) {
     var c = ck(); if (!c || !Q.row || Q.busy || Q.preview) return;
     keep(); stopRec();
-    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : Q.share;
+    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : 'everyone';
     if (!skipped && String(Q.text || '').trim().length >= 3) bullets.push(String(Q.text).trim().slice(0, 220));   /* words typed but not folded in still go */
     var ok = document.getElementById('w192ok');
     if (!skipped && !bullets.length) { if (ok) ok.textContent = 'Add a line, or close without a note.'; return; }
@@ -70421,8 +70449,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await fn('checkin-post', { action: 'close', checkin_id: Q.row.id, bullets: bullets, close_task_ids: closeIds, share_to: share, skipped: !!skipped });
       c.clear(); closeModal(); Q.sig = '';
-      var where = skipped ? 'Loop closed, no note shared.'
-        : r.share_to === 'hub' ? 'Loop closed. Your note is on Home.'
+      var where = skipped ? (r.posted ? 'Loop closed. #' + r.channel + ' shows you closed it, with no note.' : 'Loop closed, no note shared.')
         : r.posted ? 'Loop closed and shared in #' + r.channel + '.'
         : 'Loop closed. Your note is on Home; Slack did not take it (' + (r.error || 'unknown') + ').';
       var n = (r.closed_ids || []).length;
@@ -70442,11 +70469,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the walkthrough's preview of the sheet (nothing is read or written) ---------- */
   function preview() {
-    var d = (me() || {}).department;
     begin({ id: 0, started_at: new Date(Date.now() - 95 * 60000).toISOString() });
-    Q.preview = true; Q.loaded = true; Q.hidden = 1;
-    var chans = { opsmtl: 'operations-mtl', opsto: 'general-toronto', progdev: 'program-development', marketing: 'social-media', fundraising: 'fundraising', hr: 'human-resources', board: 'board-of-directors' };
-    Q.teamCh = chans[d] || 'operations-mtl'; Q.share = 'team';
+    Q.preview = true; Q.loaded = true; Q.hidden = 1; Q.share = 'everyone';
     Q.bullets = ['Closed: Book the kitchen for Sunday; Send the volunteer reminder', 'Commented on: Flyers for the gift basket drive', 'Joined: Operations Montreal meeting'];
     Q.suggest = [{ id: -1, title: 'Confirm the drivers for Sunday', why: 'you said the drivers are confirmed' }]; Q.picked = { '-1': true }; Q.others = [];
     paint();
@@ -70475,11 +70499,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
     var rm = t.closest('[data-w192rm]'); if (rm) { keep(); Q.bullets.splice(Number(rm.getAttribute('data-w192rm')), 1); paint(); return; }
     if (t.closest('#w192more')) { var o = document.getElementById('w192oth'); if (o) o.style.display = o.style.display === 'none' ? '' : 'none'; return; }
-  });
-  document.addEventListener('change', function (e) {
-    var s = e.target && e.target.closest && e.target.closest('[data-w192s]'); if (!s) return;
-    Q.share = s.getAttribute('data-w192s'); Q.touched = true;
-    document.querySelectorAll('#w192sheet .share label').forEach(function (l) { var i = l.querySelector('[data-w192s]'); l.classList.toggle('on', !!(i && i.checked)); });
   });
 
   /* ---------- the shared notes: loop_feed() returns what moved, never a time or hours ---------- */
@@ -70571,12 +70590,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (T.loop) return true;
       T.loop = { tab: 'mypage', icon: 'refresh', hash: '#mypage', steps: [
         { c: 1, t: 'The Loop', p: 'Two buttons, one habit: I’m in when you start working for Welfare Avenue, Close the loop when you finish. This one-minute walkthrough shows both. It is not a timeclock: the note you share carries what moved, never your hours.' },
-        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. Nothing is posted anywhere. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
+        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. A short line in #check-in-out-wa says you are in, never the time. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
         { s: '#w192draftbox', t: 'What moved', p: 'When you close the loop, the Hub drafts your note from your own records: tasks closed or opened, requests, meetings joined, Academy modules finished. Keep what matters and change any line. Private work (confidential, board, one-on-ones) is never pre-filled.', go: function () { preview(); } },
         { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Add to the note turns it into lines and spots the tasks you finished.' },
         { s: '#w192sug', t: 'Tick what is finished', p: 'The tasks your words show are done are suggested here. Ticked tasks close themselves when you close the loop.', opt: 1 },
-        { s: '#w192sharebox', t: 'Who sees it', p: 'Your team’s channel by default, everyone in the Loop channel, or just the Hub. Every note also shows on Home, so nothing is lost.' },
-        { s: '#w192close', t: 'Close the loop', p: 'Your note goes where you chose, with no clock time and no hours. Close without a note ends your session and shares nothing.' },
+        { s: '#w192sharebox', t: 'Where it goes', p: 'Every closed loop goes to #check-in-out-wa in Slack, for the whole team. Every note also shows on Home, so nothing is lost.' },
+        { s: '#w192close', t: 'Close the loop', p: 'Your note goes to #check-in-out-wa, with no clock time and no hours. Close without a note ends your session and posts only that you closed the loop.' },
         { c: 1, t: 'Your hours are yours', p: 'They show on your own page and to HR, for your records and your balance. They never go in the post. That is the whole thing: I’m in, close the loop.' }
       ] };
       return true;
@@ -74816,6 +74835,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function deptLabel(d) { var x = DEPTS.filter(function (p) { return p[0] === d; })[0]; return x ? x[1] : (d || 'Other'); }
   function stageLabel(s) { var x = PSTAGES.filter(function (p) { return p[0] === s; })[0]; return x ? x[1] : (s || ''); }
   function hiring(p) { return p && p.stage !== 'filled' && p.stage !== 'closed'; }
+  function onSite(p) { return p && (p.stage === 'posted' || p.stage === 'interviewing'); }   /* wave216: on welfareavenue.com/join */
   function btn(label, attrs, kind) { return '<button type="button" class="w197b' + (kind ? ' ' + kind : '') + '" ' + (attrs || '') + '>' + label + '</button>'; }
   function ago(s) { if (!s) return ''; var d = (Date.now() - new Date(s).getTime()) / 60000; if (d < 2) return 'just now'; if (d < 60) return Math.round(d) + ' min ago'; if (d < 1440) return Math.round(d / 60) + ' h ago'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
   function day(s) { if (!s) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(String(s))) s = s + 'T12:00:00'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
@@ -75033,11 +75053,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function card(p) {
     var cvs = filesOf(p.id, 'resume').length, ap = candsOf(p.id).filter(function (c) { return OPEN_C.indexOf(c.status || 'new') >= 0; }).length;
     var ppl = peopleOf(p.id).filter(function (x) { return !x.past; }).map(function (x) { return x.m.name.split(' ')[0]; });
-    return '<button type="button" class="w199card' + (hiring(p) ? ' hire' : '') + '" data-w199open="' + p.id + '"><b>' + E(p.title) + '</b>' +
+    return '<div class="w199cw"><button type="button" class="w199card' + (hiring(p) ? ' hire' : '') + '" data-w199open="' + p.id + '"><b>' + E(p.title) + '</b>' +
       '<span class="st st-' + E(p.stage) + '">' + E(stageLabel(p.stage)) + '</span>' +
       '<span class="m">' + (p.jd_id ? '<span>JD</span>' : '<span class="no">No JD</span>') + (p.older_count ? '<span>' + p.older_count + ' older</span>' : '') +
       '<span>' + cvs + (cvs === 1 ? ' CV' : ' CVs') + '</span>' + (ap ? '<span class="ap">' + ap + (ap === 1 ? ' application' : ' applications') + '</span>' : '') + '</span>' +
-      (ppl.length ? '<span class="ppl">' + E(ppl.join(', ')) + '</span>' : '') + '</button>';
+      (ppl.length ? '<span class="ppl">' + E(ppl.join(', ')) + '</span>' : '') + '</button>' +
+      /* wave216c: the job description one click from the card (Drive), outside the card's button */
+      (p.jd_url ? '<a class="w199jd" href="' + E(p.jd_url) + '" target="_blank" rel="noopener" aria-label="' + E('The job description for ' + p.title) + '">Job description</a>' : '') + '</div>';
   }
   function pageHtml() {
     var qq = lower(P.q);
@@ -75088,7 +75110,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     s.innerHTML = '<div class="bk" data-w199a="shut"></div><div class="pn w199pn">' + btn('Close', 'data-w199a="shut"', 'sm x') +
       '<h3>' + E(p.title) + '</h3><p class="role">' + E(deptLabel(p.dept)) + (p.clickup_url ? ' \u00b7 <a href="' + E(p.clickup_url) + '" target="_blank" rel="noopener">was in ClickUp</a>' : '') + '</p>' +
       '<label>Stage</label><div class="stg">' + PSTAGES.map(function (x) { return '<button type="button" data-w199st="' + x[0] + '" class="' + (x[0] === 'closed' ? 'cl ' : '') + (p.stage === x[0] ? 'on' : '') + '">' + E(x[1]) + '</button>'; }).join('') + '</div>' +
-      '<label>Job description</label><div class="w199links">' + (p.jd_url ? '<a class="w197b sm pri" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">Open the job description</a><small>' + E(p.jd_name || '') + ' \u00b7 updated ' + E(day(p.jd_modified)) + '</small>' : '<span class="w197pill mut">No job description yet</span><small>Put the JD file in the position\'s folder in Drive, then Sync.</small>') + '</div>' +
+      '<label>Job description</label><div class="w199links">' + (p.jd_url ? '<a class="w197b sm pri" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">Open the job description</a>' + (p.jd_public_url && onSite(p) ? '<a class="w197b sm" href="' + E(p.jd_public_url) + '" target="_blank" rel="noopener">The PDF applicants see</a>' : '') + '<small>' + E(p.jd_name || '') + ' \u00b7 updated ' + E(day(p.jd_modified)) + (onSite(p) ? (p.jd_public_url ? ' \u00b7 linked on welfareavenue.com/join and the application form' : ' \u00b7 goes on the website within 15 minutes') : '') + '</small>' : '<span class="w197pill mut">No job description yet</span><small>Put the JD file in the position\'s folder in Drive, then Sync.</small>') + '</div>' +
       (olds.length ? '<details class="w199old"><summary>' + olds.length + (olds.length === 1 ? ' older version' : ' older versions') + '</summary><ul class="w199files">' + olds.map(function (f) { return '<li><a href="' + E(f.url || '#') + '" target="_blank" rel="noopener">' + E(f.name) + '</a><small>' + E(day(f.modified_time)) + '</small></li>'; }).join('') + '</ul></details>' : '') +
       '<label>In Applications <small>' + apps.length + '</small></label>' + (apps.length ? '<ul class="w199files">' + apps.map(function (c) { return '<li>' + btn(E(c.name || 'Someone'), 'data-w197c="' + c.id + '"', 'sm') + gradePill(c) + '<small>' + E(c.status || 'new') + (c.owner ? ' \u00b7 ' + E(c.owner) : '') + '</small></li>'; }).join('') + '</ul>' : '<p class="w197note" style="margin:0">Nobody yet. A CV in this position\'s Resumes folder, an upload below, or the position chosen on an application puts them here.</p>') +
       '<label>CVs in Drive <small>' + cvs.length + '</small></label>' + (cvs.length ? '<ul class="w199files">' + cvs.map(fileRow).join('') + '</ul>' : '<p class="w197note" style="margin:0">The Resumes folder is empty.</p>') +
@@ -75266,6 +75288,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w199warn{background:rgba(179,64,47,.10);border:1px solid rgba(179,64,47,.3);color:' + INK + ';border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;margin:0 0 12px;}' +
     '.w199dh{font-family:' + HEAD + ';font-size:18px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:18px 0 8px;}.w199dh small{font-family:' + BODY + ';font-size:12px;color:var(--wa-muted);margin-left:4px;}' +
     '.w199grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}' +
+    '.w199cw{display:flex;flex-direction:column;gap:4px;min-width:0;}.w199cw .w199card{flex:1;}.w199jd{font-size:12px;font-weight:600;color:' + GREEN + ';padding:0 6px;align-self:flex-start;}' +
     '.w199card{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;font-family:' + BODY + ';background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px 14px;cursor:pointer;color:' + INK + ';min-width:0;}' +
     '.w199card:hover{border-color:' + GREEN + ';}.w199card.hire{border-left:4px solid ' + GOLD + ';}' +
     '.w199card b{font-size:14.5px;line-height:1.25;}' +

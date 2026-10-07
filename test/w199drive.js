@@ -15,7 +15,7 @@ function fixture() {
   const ahmed = (FX.team_members || []).filter(m => /^ahmed/i.test(m.name || ''))[0] || (FX.team_members || [])[0];
   const now = '2026-09-20T12:00:00Z';
   FX.hub_positions = [
-    { id: 1, title: 'Operations Manager', dept: 'opsmtl', folder_id: 'F1', resumes_id: 'R1', jd_id: 'J1', jd_name: 'Operations Manager - Job Description', jd_url: 'https://docs.google.com/document/d/J1/edit', jd_modified: now, older_count: 0, stage: 'interviewing', gone: false, synced_at: now },
+    { id: 1, title: 'Operations Manager', dept: 'opsmtl', folder_id: 'F1', resumes_id: 'R1', jd_id: 'J1', jd_name: 'Operations Manager - Job Description', jd_url: 'https://docs.google.com/document/d/J1/edit', jd_public_url: 'https://example.test/jobs/operations-manager-1.pdf', jd_modified: now, older_count: 0, stage: 'interviewing', gone: false, synced_at: now },
     { id: 2, title: 'Volunteer Relations Coordinator', dept: 'opsmtl', folder_id: 'F2', resumes_id: 'R2', jd_id: 'J2', jd_name: 'Volunteer Relations Coordinator - Job Description', jd_url: 'https://docs.google.com/document/d/J2/edit', jd_modified: now, older_count: 0, stage: 'closed', gone: false },
     { id: 3, title: 'Outreach Assistant', dept: 'fundraising', folder_id: 'F3', resumes_id: 'R3', older_id: 'O3', jd_id: 'J3', jd_name: 'Outreach Assistant', jd_url: 'https://docs.google.com/document/d/J3/edit', jd_modified: now, older_count: 2, stage: 'closed', gone: false },
     { id: 4, title: 'Logistics Manager', dept: 'opsmtl', folder_id: 'F4', resumes_id: 'R4', jd_id: null, older_count: 0, stage: 'posted', gone: false },
@@ -65,6 +65,13 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   ok('Positions: grouped by department', pg.heads.some(h => /Operations Montreal/.test(h)), pg.heads);
   ok('Positions: a gone folder is not shown', pg.cards.indexOf('Gone Position') < 0);
   ok('Positions: the old hiring-request list is on no page', pg.old === 0, pg.old);
+  const jdl = await f.ev(() => Array.from(document.querySelectorAll('#w199pos .w199cw')).map(w => (w.querySelector('b') || {}).textContent + '|' + ((w.querySelector('a.w199jd') || {}).href || '')));
+  ok('Positions: each card links its job description in Drive (wave216c)', jdl.some(x => x === 'Operations Manager|https://docs.google.com/document/d/J1/edit'), jdl);
+  ok('Positions: the JD link sits outside the card button', await f.ev(() => !document.querySelector('#w199pos .w199card a')));
+  await f.page.click('#w199pos [data-w199open="1"]'); await f.page.waitForTimeout(400);
+  const pub = await f.ev(() => { var s = document.getElementById('w197sheet'); return { pdf: !!(s && s.querySelector('a[href="https://example.test/jobs/operations-manager-1.pdf"]')), note: s && /linked on welfareavenue\.com\/join/.test(s.textContent) }; });
+  ok('Sheet: the PDF applicants see, for a role on the website', pub.pdf && pub.note, pub);
+  await f.page.click('#w197sheet [data-w199a="shut"]'); await f.page.waitForTimeout(200);
   ok('Positions: the privacy check is asked once', pg.calls.filter(c => c === 'privacy').length === 1, pg.calls);
   await shot(f, 'positions_hiring', true);
   /* all positions */

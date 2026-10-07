@@ -14,3 +14,12 @@ Steel, 07/10/26: "I'd like for individuals to also have a spot to apply to join 
 
 ## Live
 Hub 41f9ee39; website deploy 6ac6606e (26 files).
+
+## wave216b-d (07/10/26, same day)
+
+- Copy: team roles take between 4 and 8 hours a week, flexible around work and school (EN/FR on /join and in the form).
+- Leadership note: only on the form, shown only while a leadership role is picked (form-submit v7 `lead`/`lead_note`; forms.js and the Hub's /f page). The static note on the roles list was removed.
+- Job descriptions: linked on /join's roles list, on each option of the form, and on each card in HR centre > Positions (Drive file), with "The PDF applicants see" in the position's sheet. PDFs are published by recruit-actions jd_publish into content-images/jobs/.
+- Rebranded JDs (no VCSA), new Google Docs in each role's Drive folder: HR Technician (new), Co-Director of Marketing, Operations Manager, Logistics Manager (same text as Operations Manager, retitled, per Steel), Content Manager (6-8 hours kept from its original). Source: build/data/jd216/make_jds.py. The older JDs move to Older JDs through jd-drive.
+- Tests: test/w216join.js 45 checks (JD links, the note hidden until a leadership role is picked, both pages); test/w199drive.js 61 checks (JD link on the card and the PDF in the sheet).
+- Migrations: build/data/wa216c_jd_public.sql, build/data/wa216d_jd_hold_leadership.sql.
