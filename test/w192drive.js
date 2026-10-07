@@ -8,6 +8,8 @@
    "loop" opens the sheet in preview, nothing is read or written, the preview closes with the tour); the chrome tour's
    step; wave118b's notes under the new button in The Loop's words, and a close "as of" a time opening the sheet; a phone;
    a board viewer sees no button; no page errors.
+   wave214 (06/10/26): every closed loop goes to #check-in-out-wa. Who sees it is gone; the sheet's Where it goes names the
+   channel, the close always sends everyone (hub when closed without a note), and the tour's step is Where it goes.
    Uses test/boot.js (stubbed Supabase, clock fixed 25/09/26 16:00 Toronto). CAND=<file> tests another build. */
 const path = require('path');
 const { launch, fresh, loadFixture } = require('./boot');
@@ -33,12 +35,12 @@ function fx(open) {
   ]);
   f.hub_checkins = open ? [Object.assign({}, OPEN)] : [];
   f.hub_checkins.push({ id: 700, email: 'ahmedfakhir@welfareavenue.com', name: 'Ahmed', department: 'opsmtl', started_at: '2026-09-24T22:00:00Z', ended_at: '2026-09-25T00:10:00Z', minutes: 130, source: 'hub', summary: { bullets: ['Booked the kitchen'] }, share_to: 'team' });
-  f.trainings = (f.trainings || []).concat([{ id: 1300, key: 'tour:loop', kind: 'tour', title: 'Page tour: The Loop', category: 'Hub tours', path_group: 'Hub page tours', minutes: 1, active: true, sort: 2, description: 'I’m in, close the loop: what moved, who sees it, and what never goes in the post.' }]);
-  f.app_config = (f.app_config || []).filter(r => r.key !== 'loop_channel').concat([{ key: 'loop_channel', value: 'the-loop' }]);
+  f.trainings = (f.trainings || []).concat([{ id: 1300, key: 'tour:loop', kind: 'tour', title: 'Page tour: The Loop', category: 'Hub tours', path_group: 'Hub page tours', minutes: 1, active: true, sort: 2, description: 'I’m in, close the loop: what moved, where it goes, and what never goes in the post.' }]);
+  f.app_config = (f.app_config || []).filter(r => r.key !== 'loop_channel' && r.key !== 'checkinout_channel').concat([{ key: 'loop_channel', value: 'the-loop' }, { key: 'checkinout_channel', value: 'check-in-out-wa' }]);
   return f;
 }
 const RPCS = { loop_feed: FEED, loop_in_now: [{ email: 'ahmedfakhir@welfareavenue.com' }], wa_org_editor: true };
-/* the edge function, stubbed: records each call and answers like checkin-post v13 */
+/* the edge function, stubbed: records each call and answers like checkin-post v15 (wave214: one channel for every note) */
 async function stubFn(f) {
   await f.ev(() => {
     window.__calls = [];
@@ -47,10 +49,10 @@ async function stubFn(f) {
       const b = (opts && opts.body) || {}; window.__calls.push({ name, body: JSON.parse(JSON.stringify(b)) });
       let data = { ok: true };
       if (name === 'checkin-post') {
-        if (b.action === 'draft') data = { ok: true, bullets: ['Closed: Book the kitchen for Sunday', 'Joined: Operations Montreal meeting'], items: 3, hidden: 1, minutes: 95, open_tasks: OPEN_TASKS, department: 'board', team: 'Board', team_channel: 'board-of-directors', everyone_channel: 'check-in-out-wa' };
+        if (b.action === 'draft') data = { ok: true, bullets: ['Closed: Book the kitchen for Sunday', 'Joined: Operations Montreal meeting'], items: 3, hidden: 1, minutes: 95, open_tasks: OPEN_TASKS, department: 'board', team: 'Board', team_channel: null, everyone_channel: 'check-in-out-wa' };
         if (b.action === 'tidy') data = { ok: true, bullets: (b.bullets || []).concat(['Met Amanda about the flyers; she prints Friday']), suggest: [{ id: 501, title: 'Confirm the drivers for Sunday', why: 'the drivers are confirmed' }], open_tasks: OPEN_TASKS };
-        if (b.action === 'close') data = { ok: true, posted: b.share_to !== 'hub' && !b.skipped, error: null, channel: b.share_to === 'team' ? 'board-of-directors' : 'check-in-out-wa', share_to: b.skipped ? 'hub' : b.share_to, closed: [], closed_ids: b.close_task_ids || [], minutes: 95 };
-        if (b.action === 'start') data = { ok: true, posted: false };
+        if (b.action === 'close') data = { ok: true, posted: true, error: null, channel: 'check-in-out-wa', checkinout: true, share_to: b.skipped ? 'hub' : 'everyone', closed: [], closed_ids: b.close_task_ids || [], minutes: 95 };
+        if (b.action === 'start') data = { ok: true, posted: true, error: null };
       }
       return new Promise(r => setTimeout(() => r({ data, error: null }), 60));
     };
@@ -68,14 +70,15 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
   {
     const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx(false), rpcs: RPCS, candidate: cand });
     await stubFn(f);
-    const b = await f.ev(() => { const g = document.getElementById('w192go'), o = document.getElementById('w116jck'); return { has: !!g, text: g && g.textContent.trim(), cls: g && g.className, oldShown: !!o && getComputedStyle(o).display !== 'none', before: g && g.nextElementSibling && g.nextElementSibling.classList.contains('w115pill') }; });
+    const b = await f.ev(() => { const g = document.getElementById('w192go'), o = document.getElementById('w116jck'); return { has: !!g, text: g && g.textContent.trim(), cls: g && g.className, title: g && g.title, oldShown: !!o && getComputedStyle(o).display !== 'none', before: g && g.nextElementSibling && g.nextElementSibling.classList.contains('w115pill') }; });
     ok('the header shows I’m in (the old Check in pill is hidden)', b.has && b.text === 'I’m in' && b.cls === '' && !b.oldShown, b);
     ok('the button sits right before the profile bubble', b.before, b);
+    ok('I’m in says a line goes to #check-in-out-wa, never the time (wave212, wave214)', /A line in #check-in-out-wa says you are in \(never the time\)/.test(b.title), b.title);
     await f.page.click('#w192go'); await f.page.waitForTimeout(700);
     const s = await f.ev(() => ({ open: !!(window.w116jCk && w116jCk.open()), text: document.getElementById('w192go').textContent.trim(), cls: document.getElementById('w192go').className }));
     ok('I’m in starts a session and the button turns into Close the loop', s.open && /^Close the loop/.test(s.text) && s.cls === 'in', s);
     const c1 = await calls(f);
-    ok('starting posts nothing: no old "in" action, and no Slack post asked for', !c1.some(c => c.action === 'in'), c1);
+    ok('starting never calls the old "in" action (the start line in #check-in-out-wa is checkin-post start, wave212)', !c1.some(c => c.action === 'in'), c1);
     ok('the toast says you’re in', /You’re in/.test(await toastText(f)), await toastText(f));
     await f.page.click('#w192go'); await f.page.waitForTimeout(900);
     ok('Close the loop opens the wrap-up sheet', await sheetOpen(f));
@@ -96,7 +99,7 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
       return {
         title: sh.querySelector('h3').textContent, hrs: sh.querySelector('.hrs').textContent, sub: sh.querySelector('.m-sub').textContent,
         lines: [...sh.querySelectorAll('[data-w192b]')].map(i => i.value), hidden: (sh.querySelector('#w192draftbox .quiet') || {}).textContent || '',
-        share: [...sh.querySelectorAll('.share label')].map(l => ({ t: l.textContent.trim(), on: l.classList.contains('on') })),
+        where: (sh.querySelector('#w192sharebox .where') || {}).textContent || '', h4: (sh.querySelector('#w192sharebox h4') || {}).textContent || '', radios: sh.querySelectorAll('input[type=radio]').length,
         quiet: [...sh.querySelectorAll('#w192sharebox .quiet')].map(x => x.textContent).join(' '), font: getComputedStyle(sh.querySelector('h3')).fontFamily
       };
     });
@@ -104,8 +107,8 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
     ok('the minutes show to the person only ("for your eyes only")', s0.hrs === '1h 35m' && /for your eyes only/.test(s0.sub), s0);
     ok('the draft lines from the person’s records are editable', s0.lines.length === 2 && s0.lines[0] === 'Closed: Book the kitchen for Sunday', s0.lines);
     ok('private work is counted, not listed', /1 private item is left out/.test(s0.hidden), s0.hidden);
-    ok('who sees it: My team (#board-of-directors, chosen), Everyone (the Loop channel), Just the Hub', s0.share.length === 3 && /My team.*#board-of-directors/.test(s0.share[0].t) && s0.share[0].on && /Everyone.*#check-in-out-wa/.test(s0.share[1].t) && /Just the Hub/.test(s0.share[2].t), s0.share);
-    ok('the sheet says no clock time and no hours go in the post', /No clock time and no hours in the post/.test(s0.quiet), s0.quiet);
+    ok('where it goes: #check-in-out-wa, for the whole team, with no choice to make', s0.h4 === 'Where it goes' && /^#check-in-out-wa/.test(s0.where) && /for the whole team/.test(s0.where) && s0.radios === 0, s0);
+    ok('the sheet says every closed loop goes there, with no clock time and no hours', /Every closed loop goes there, with no clock time and no hours/.test(s0.quiet), s0.quiet);
     /* + add a line, then take one out */
     await f.page.click('#w192add'); await f.page.waitForTimeout(200);
     await f.page.keyboard.type('Called the shelter back about Sunday');
@@ -126,12 +129,9 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
     ok('the task the words show finished is suggested and ticked', s1.sug.length === 1 && s1.sug[0].id === '501' && s1.sug[0].on, s1.sug);
     await f.page.click('#w192more'); await f.page.waitForTimeout(200);
     ok('Close other tasks too lists the rest of the open tasks', await f.ev(() => { const o = document.getElementById('w192oth'); return !!o && o.style.display !== 'none' && /Order the flyers/.test(o.textContent); }));
-    /* who sees it: Everyone */
-    await f.page.click('#w192sharebox .share label:nth-child(2)'); await f.page.waitForTimeout(200);
-    ok('choosing Everyone moves the choice', await f.ev(() => { const l = [...document.querySelectorAll('#w192sharebox .share label')]; return l[1].classList.contains('on') && !l[0].classList.contains('on') && w192.state().share === 'everyone'; }));
     await f.page.click('#w192close'); await f.page.waitForTimeout(900);
     const cl = (await calls(f)).filter(c => c.action === 'close').pop();
-    ok('Close the loop sends the note, the ticked task and the choice', cl && cl.body.share_to === 'everyone' && cl.body.bullets.length === 3 && JSON.stringify(cl.body.close_task_ids) === '[501]' && cl.body.checkin_id === 901 && !cl.body.skipped, cl);
+    ok('Close the loop sends the note and the ticked task, to everyone', cl && cl.body.share_to === 'everyone' && cl.body.bullets.length === 3 && JSON.stringify(cl.body.close_task_ids) === '[501]' && cl.body.checkin_id === 901 && !cl.body.skipped, cl);
     const s2 = await f.ev(() => ({ sheet: !!document.getElementById('w192sheet') && getComputedStyle(document.getElementById('modalBack')).display !== 'none', open: !!w116jCk.open(), text: document.getElementById('w192go').textContent.trim() }));
     ok('the sheet closes and the button is back to I’m in', !s2.sheet && !s2.open && s2.text === 'I’m in', s2);
     ok('the toast says where it went and that one task closed', /shared in #check-in-out-wa/.test(await toastText(f)) && /1 task closed/.test(await toastText(f)), await toastText(f));
@@ -153,15 +153,15 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
     await f.page.fill('#w192say', 'Sorted the storage unit');
     await f.page.click('#w192close'); await f.page.waitForTimeout(900);
     const cl = (await calls(f)).filter(c => c.action === 'close').pop();
-    ok('words typed but not folded in still go as a line (to my team by default)', cl && JSON.stringify(cl.body.bullets) === '["Sorted the storage unit"]' && cl.body.share_to === 'team', cl);
+    ok('words typed but not folded in still go as a line (to #check-in-out-wa, like every note)', cl && JSON.stringify(cl.body.bullets) === '["Sorted the storage unit"]' && cl.body.share_to === 'everyone', cl);
     await f.close();
     const g = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx(true), rpcs: RPCS, candidate: cand });
     await stubFn(g);
     await g.page.click('#w192go'); await g.page.waitForTimeout(900);
     await g.page.click('#w192skip'); await g.page.waitForTimeout(900);
     const sk = (await calls(g)).filter(c => c.action === 'close').pop();
-    ok('Close without a note ends the session and shares nothing', sk && sk.body.skipped === true && sk.body.share_to === 'hub' && sk.body.bullets.length === 0 && !(await g.ev(() => !!w116jCk.open())), sk);
-    ok('its toast says no note was shared', /no note shared/.test(await toastText(g)), await toastText(g));
+    ok('Close without a note ends the session and sends no note', sk && sk.body.skipped === true && sk.body.share_to === 'hub' && sk.body.bullets.length === 0 && !(await g.ev(() => !!w116jCk.open())), sk);
+    ok('its toast says #check-in-out-wa shows the close, with no note', /#check-in-out-wa shows you closed it, with no note/.test(await toastText(g)), await toastText(g));
     ok('no page errors (closing paths)', f.errs.length === 0 && g.errs.length === 0, f.errs.concat(g.errs));
     await g.close();
   }
@@ -238,7 +238,7 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
       await f.page.click('.w122tp [data-w122tnext]'); await f.page.waitForTimeout(1900);
     }
     const titles = seen.map(s => s.t);
-    ok('the walkthrough runs every step in order', JSON.stringify(titles) === JSON.stringify(['The Loop', 'I’m in', 'What moved', 'Add what the Hub could not see', 'Tick what is finished', 'Who sees it', 'Close the loop', 'Your hours are yours']), titles);
+    ok('the walkthrough runs every step in order', JSON.stringify(titles) === JSON.stringify(['The Loop', 'I’m in', 'What moved', 'Add what the Hub could not see', 'Tick what is finished', 'Where it goes', 'Close the loop', 'Your hours are yours']), titles);
     ok('each part it points at is highlighted (not a centred card)', seen.slice(1, 7).every(s => s.hole === 'hole'), seen.map(s => s.hole));
     ok('it opens the sheet in preview from What moved on, marked Walkthrough', seen.slice(2, 7).every(s => s.sheet && s.pv) && !seen[1].sheet, seen.map(s => [s.sheet, s.pv]));
     const after = await f.ev(() => ({ layer: !!document.querySelector('.w122tp'), sheet: !!document.getElementById('w192sheet') && getComputedStyle(document.getElementById('modalBack')).display !== 'none', open: !!w116jCk.open(), preview: w192.state().preview }));
@@ -300,7 +300,7 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
   }
 
   /* 9. the reading and the Week 1 lesson, as they are in the database (test/fx_w192.json, the live rows of 01/10/26 after the
-        release words), laid over the Academy of test/fx_w190.json */
+        release words; 216 and 226 carry wave214's words of 06/10/26), laid over the Academy of test/fx_w190.json */
   {
     const fs = require('fs');
     const X = JSON.parse(fs.readFileSync(path.join(__dirname, 'fx_w190.json'), 'utf8'));
@@ -318,13 +318,14 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
       const ol = pr && pr.querySelector('ol.w190ol');
       return { title: (sh.querySelector('.hd h2') || {}).textContent, h3: [...pr.querySelectorAll('h3')].map(x => x.textContent), steps: ol ? ol.children.length : 0,
         calls: [...pr.querySelectorAll('.callout b')].map(x => x.textContent.trim()), raw: pr.innerHTML.indexOf('**') >= 0 || /(^|\n)\s*##\s/.test(pr.innerText),
-        old: /Check in|Check out|check-in-out-wa|Loom/.test(sh.textContent), video: !!sh.querySelector('iframe'), tour: !!sh.querySelector('[data-w122starttour="loop"]'),
+        old: /Check in|Check out|Loom|Just the Hub|Choose who sees it/.test(sh.textContent), ch: /#check-in-out-wa/.test(sh.textContent), video: !!sh.querySelector('iframe'), tour: !!sh.querySelector('[data-w122starttour="loop"]'),
         see: /See it for yourself/.test(sh.textContent) };
     });
     ok('the reading is The Loop, with its four headings', r && /^The Loop: I'm in, close the loop/.test(r.title) && JSON.stringify(r.h3.slice(0, 4)) === JSON.stringify(['Two buttons, one habit', 'Why we do it', 'What it is not', 'How to close the loop']), r);
     ok('its six steps are numbered', r && r.steps === 6, r && r.steps);
     ok('Tip, Good to know, Try it and Done when are callouts', r && ['Tip', 'Good to know', 'Try it', 'Done when'].every(k => r.calls.some(c => c.indexOf(k) === 0)), r && r.calls);
     ok('no raw markdown, no Loom video, no old words', r && !r.raw && !r.video && !r.old, r);
+    ok('the reading says notes go to #check-in-out-wa (wave214)', r && r.ch, r);
     ok('the walkthrough card sits under the reading (See it for yourself)', r && r.tour && r.see, r);
     await f.page.click('[data-w122starttour="loop"]'); await f.page.waitForTimeout(3200);
     const t1 = await f.ev(() => { const L2 = document.querySelector('.w122tp'); return L2 ? (L2.querySelector('.pop h4') || {}).textContent : null; });

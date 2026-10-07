@@ -61869,12 +61869,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '</div>';
     var look = d.look || [];
     if (look.length) h += '<h4>Needs a look</h4>' + look.map(function (v) { return row(v, true); }).join('');
-    var recent = d.recent || [];
+    /* wave210b (Steel, 06/10/26: "there's 2 sections with the same list of meetings ... Can we combine the 2?"):
+       a filed meeting is in the Archive below, so this card lists only what Loom sent that was not filed */
+    var recent = (d.recent || []).filter(function (v) { return v.status !== 'filed'; });
     if (recent.length) {
       var shown = S.showAll ? recent : recent.slice(0, 6);
-      h += '<h4>Latest from Loom</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
+      h += '<h4>Not filed</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
       if (recent.length > 6) h += '<button type="button" class="more" data-w162more="1">' + (S.showAll ? 'Show fewer' : 'Show all ' + recent.length) + '</button>';
     }
+    h += '<p class="s" style="margin:8px 0 0">Meetings filed from Loom are in the Archive below.</p>';
     h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, one-on-ones for the people speaking in them and nobody else (you see yours only), and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
       + (d.archive_only ? plural(d.archive_only, 'older meeting is', 'older meetings are') + ' kept for the archive and Ask the Hub only (no tasks came from them). ' : '')
       + (c.personal ? plural(c.personal, 'personal recording was', 'personal recordings were') + ' left out; nothing about them is kept. ' : '')
@@ -70041,16 +70044,21 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - The header button is #w192go. Wave116j's #w116jck stays underneath, hidden: it still owns the session row (its
      toggle inserts the row; I'm in uses it) and the presence ring. Clicks on #w192go, #w116jck and the person page's
      link are taken at the window, before wave116q's handlers, so its sheet never opens.
-   - I'm in starts a session and posts nothing. Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
+   - I'm in starts a session (wave212: a line in #check-in-out-wa says so). Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
      from the person's own records; private work never pre-filled), Anything the Hub could not see (say it or type it,
-     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Who sees it
-     (My team with the real channel, Everyone with the Loop channel, Just the Hub), Close the loop or Close without a
-     note. The minutes show to the person only.
+     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Where it goes
+     (#check-in-out-wa since wave214; until then Who sees it: My team, Everyone, Just the Hub), Close the loop or Close
+     without a note. The minutes show to the person only.
    - Home: In the loop, the week's notes from everyone, read through loop_feed() (no times, no hours). The person page:
      Their loop (Your loop on your own). Hours on someone else's page are for HR, leaders and admins (wave116k).
    - The walkthrough: the page tour "loop" (the Academy row tour:loop). It opens the sheet in preview (nothing read or
      written) to show each part, and the preview closes with the tour. The chrome tour's step lives in 122.
    - window.w192: start, open, openRow (wave118b's "as of" close), preview, endPreview, feed, state.
+   wave212 (06/10/26, checkin-post v5): I'm in posts a line in #check-in-out-wa ("is in the loop", never the time).
+   wave214 (06/10/26), Steel: "All closed loops should be done in the check in out channel"; asked where a note goes, he
+   chose only #check-in-out-wa. Who sees it is gone: the sheet's Where it goes names the channel (app_config
+   checkinout_channel, or the draft's everyone_channel), every note posts there (checkin-post v6 ignores share_to), and
+   Close without a note posts the one line "closed the loop" there. The tour and the button's words say so.
    ===================================================================== */
 (function () {
   if (window.__wa192) return; window.__wa192 = true;
@@ -70059,7 +70067,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto';
   var Q = { row: null, busy: false, preview: false, rec: null, listening: false, finalText: '', text: '', bullets: [], suggest: [], others: [], picked: {},
-    share: 'team', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'the-loop', sig: '' };
+    share: 'everyone', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'check-in-out-wa', sig: '' };
   var F = { rows: null, at: 0, p: null };
 
   var css = document.createElement('style');
@@ -70091,6 +70099,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .bul .b .rm:hover{color:' + FLAG + ';}' +
     '.w192m .addl{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;display:inline-block;margin:2px 0 4px;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
     '.w192m .quiet{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
+    '.w192m .where{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;background:' + GREEN + ';color:' + CREAM + ';margin:0;}' +
+    '.w192m .where small{font-weight:500;opacity:.85;}' +
     '.w192m .empty{font-size:13px;color:var(--wa-muted);margin:4px 0 6px;line-height:1.5;}' +
     '.w192m textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px 14px;border:1px solid rgba(16,63,57,.2);border-radius:14px;font-size:15px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
     '.w192m textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
@@ -70113,12 +70123,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w192m .tk label b{display:block;font-weight:600;color:var(--wa-text);}' +
     '.w192m .tk label span{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;}' +
     '.w192m .more{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;margin:6px 0 0;display:inline-block;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
-    '.w192m .share{display:flex;gap:8px;flex-wrap:wrap;}' +
-    '.w192m .share label{position:relative;display:inline-flex;align-items:center;gap:6px;border:1.5px solid rgba(16,63,57,.18);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;color:' + GREEN + ';cursor:pointer;background:var(--wa-card);}' +
-    '.w192m .share label.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
-    '.w192m .share label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
-    '.w192m .share label input{position:absolute;opacity:0;width:1px;height:1px;}' +
-    '.w192m .share label small{font-weight:500;opacity:.8;}' +
     '.w192m .w113acts{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
     '.w192m .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
     '.w192m .w113acts .skip{background:none;border:none;color:var(--wa-muted);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:6px 4px;font-family:' + BODY + ';}' +
@@ -70186,8 +70190,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return r.data;
   }
   function SR() { return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
-  function loopName() { return Q.allCh || Q.loopName || 'the-loop'; }
-  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'loop_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
+  /* wave214: every closed loop goes to the check-in-out channel (app_config checkinout_channel; the draft's everyone_channel) */
+  function loopName() { return Q.allCh || Q.loopName || 'check-in-out-wa'; }
+  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'checkinout_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
   function onPerson() { return (/^#person\/(\d+)/.exec(location.hash || '') || [])[1] || null; }
   function repaintPerson() { var id = onPerson(); if (id && typeof window.w116Person === 'function') { try { window.w116Person(id); } catch (e) { /* fine */ } } }
 
@@ -70210,7 +70215,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       label = 'Close the loop';
     } else {
       cls = ''; html = '<span class="dot"></span>I’m in';
-      title = 'Starting work for Welfare Avenue? Press I’m in. Nothing is posted; the ring on your photo shows teammates you are around.';
+      title = 'Starting work for Welfare Avenue? Press I’m in. A line in #' + loopName() + ' says you are in (never the time); the ring on your photo shows teammates you are around.';
       label = 'I’m in';
     }
     if (b.className !== cls) b.className = cls;
@@ -70221,7 +70226,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   setInterval(render, 2000);
   render(); setTimeout(render, 800); setTimeout(render, 2500);
 
-  /* ---------- I'm in: wave116j's toggle inserts the row; nothing is posted ---------- */
+  /* ---------- I'm in: wave116j's toggle inserts the row; checkin-post start posts "is in the loop" in the check-in-out channel (wave212) ---------- */
   async function start() {
     var c = ck(); if (!c || Q.busy || c.open()) return; Q.busy = true;
     try {
@@ -70230,7 +70235,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       render(); try { c.presence(); } catch (e) { /* fine */ }
       if (row) {
         toastS('You’re in. Close the loop when you finish.');
-        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* nothing is posted anyway */ } }
+        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* the session runs either way */ } }
         repaintPerson();
       }
     } catch (e) { toastS('Could not start your session: ' + (e.message || e)); }
@@ -70264,13 +70269,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; });
     var ta = document.getElementById('w192say'); if (ta) Q.text = ta.value;
   }
-  function shareOpts() {
-    var o = [];
-    if (Q.teamCh) o.push({ k: 'team', t: 'My team', s: '#' + Q.teamCh });
-    o.push({ k: 'everyone', t: 'Everyone', s: '#' + loopName() });
-    o.push({ k: 'hub', t: 'Just the Hub', s: 'no Slack post' });
-    return o;
-  }
   function sheetHtml() {
     var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w192b="' + i + '" value="' + E(b) + '" aria-label="Line ' + (i + 1) + ' of your note"><button type="button" class="rm" data-w192rm="' + i + '" title="Take this line out" aria-label="Take this line out">&#10005;</button></div>'; }).join('');
     var draft = !Q.loaded ? '<p class="empty">Reading what moved…</p>'
@@ -70278,9 +70276,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var hidden = Q.hidden ? '<p class="quiet">' + Q.hidden + (Q.hidden === 1 ? ' private item is' : ' private items are') + ' left out (confidential, board or one-on-one work). Add a line yourself if it should be shared.</p>' : '';
     var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w192t="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
     var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w192t="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
-    var opts = shareOpts();
-    if (!opts.some(function (o) { return o.k === Q.share; })) Q.share = opts[0].k;
-    var share = opts.map(function (o) { return '<label class="' + (Q.share === o.k ? 'on' : '') + '"><input type="radio" name="w192s" data-w192s="' + o.k + '"' + (Q.share === o.k ? ' checked' : '') + '>' + E(o.t) + ' <small>&middot; ' + E(o.s) + '</small></label>'; }).join('');
     return '<div class="w113modal w192m" id="w192sheet" role="dialog" aria-labelledby="w192h"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
       '<p class="m-sub"><span class="hrs">' + E(fmtMins(Q.minutes)) + '</span> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
       '<div id="w192draftbox"><h4>What moved <span class="k">From your records</span></h4>' + draft + hidden +
@@ -70290,8 +70285,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="sayrow">' + (SR() ? '<button type="button" class="mic" id="w192mic"><span class="ic"></span>Talk instead</button>' : '') + '<button type="button" class="addb" id="w192tidy">Add to the note</button><span class="quiet" id="w192hint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</span></div></div>' +
       (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk" id="w192sug">' + sug + '</div>' : '') +
       (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
-      '<div id="w192sharebox"><h4>Who sees it</h4><div class="share" role="radiogroup" aria-label="Who sees it">' + share + '</div>' +
-      '<p class="quiet">No clock time and no hours in the post. Every note also shows on Home, in the loop.</p></div>' +
+      '<div id="w192sharebox"><h4>Where it goes</h4><p class="where">#' + E(loopName()) + ' <small>&middot; in Slack, for the whole team</small></p>' +
+      '<p class="quiet">Every closed loop goes there, with no clock time and no hours. Every note also shows on Home, in the loop.</p></div>' +
       '<div class="w113acts"><span class="w113ok" id="w192ok"></span><span style="flex:1"></span><button type="button" class="skip" id="w192skip">Close without a note</button><button class="btn primary" id="w192close">Close the loop</button></div></div>';
   }
   function paint() {
@@ -70300,7 +70295,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function begin(row) {
     Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false;
-    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';
+    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';   /* wave214: one place for every note */
     var endMs = row.ended_at ? new Date(row.ended_at).getTime() : Date.now();
     Q.minutes = Math.max(1, Math.round((endMs - new Date(row.started_at).getTime()) / 60000));
   }
@@ -70315,8 +70310,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       Q.bullets = drafted.concat(mine.filter(function (b) { return drafted.indexOf(b) < 0; }));
       Q.hidden = Number(r.hidden || 0); Q.minutes = r.minutes || Q.minutes;
       Q.others = (r.open_tasks || []).slice();
-      Q.teamCh = r.team_channel || null; Q.allCh = r.everyone_channel || null;
-      if (!Q.touched) Q.share = Q.teamCh ? 'team' : 'everyone';
+      Q.allCh = r.everyone_channel || null;
       Q.loaded = true; paint();
     } catch (e) {
       if (Q.row !== row) return;
@@ -70346,7 +70340,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function finish(skipped) {
     var c = ck(); if (!c || !Q.row || Q.busy || Q.preview) return;
     keep(); stopRec();
-    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : Q.share;
+    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : 'everyone';
     if (!skipped && String(Q.text || '').trim().length >= 3) bullets.push(String(Q.text).trim().slice(0, 220));   /* words typed but not folded in still go */
     var ok = document.getElementById('w192ok');
     if (!skipped && !bullets.length) { if (ok) ok.textContent = 'Add a line, or close without a note.'; return; }
@@ -70356,8 +70350,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await fn('checkin-post', { action: 'close', checkin_id: Q.row.id, bullets: bullets, close_task_ids: closeIds, share_to: share, skipped: !!skipped });
       c.clear(); closeModal(); Q.sig = '';
-      var where = skipped ? 'Loop closed, no note shared.'
-        : r.share_to === 'hub' ? 'Loop closed. Your note is on Home.'
+      var where = skipped ? (r.posted ? 'Loop closed. #' + r.channel + ' shows you closed it, with no note.' : 'Loop closed, no note shared.')
         : r.posted ? 'Loop closed and shared in #' + r.channel + '.'
         : 'Loop closed. Your note is on Home; Slack did not take it (' + (r.error || 'unknown') + ').';
       var n = (r.closed_ids || []).length;
@@ -70377,11 +70370,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the walkthrough's preview of the sheet (nothing is read or written) ---------- */
   function preview() {
-    var d = (me() || {}).department;
     begin({ id: 0, started_at: new Date(Date.now() - 95 * 60000).toISOString() });
-    Q.preview = true; Q.loaded = true; Q.hidden = 1;
-    var chans = { opsmtl: 'operations-mtl', opsto: 'general-toronto', progdev: 'program-development', marketing: 'social-media', fundraising: 'fundraising', hr: 'human-resources', board: 'board-of-directors' };
-    Q.teamCh = chans[d] || 'operations-mtl'; Q.share = 'team';
+    Q.preview = true; Q.loaded = true; Q.hidden = 1; Q.share = 'everyone';
     Q.bullets = ['Closed: Book the kitchen for Sunday; Send the volunteer reminder', 'Commented on: Flyers for the gift basket drive', 'Joined: Operations Montreal meeting'];
     Q.suggest = [{ id: -1, title: 'Confirm the drivers for Sunday', why: 'you said the drivers are confirmed' }]; Q.picked = { '-1': true }; Q.others = [];
     paint();
@@ -70410,11 +70400,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
     var rm = t.closest('[data-w192rm]'); if (rm) { keep(); Q.bullets.splice(Number(rm.getAttribute('data-w192rm')), 1); paint(); return; }
     if (t.closest('#w192more')) { var o = document.getElementById('w192oth'); if (o) o.style.display = o.style.display === 'none' ? '' : 'none'; return; }
-  });
-  document.addEventListener('change', function (e) {
-    var s = e.target && e.target.closest && e.target.closest('[data-w192s]'); if (!s) return;
-    Q.share = s.getAttribute('data-w192s'); Q.touched = true;
-    document.querySelectorAll('#w192sheet .share label').forEach(function (l) { var i = l.querySelector('[data-w192s]'); l.classList.toggle('on', !!(i && i.checked)); });
   });
 
   /* ---------- the shared notes: loop_feed() returns what moved, never a time or hours ---------- */
@@ -70506,12 +70491,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (T.loop) return true;
       T.loop = { tab: 'mypage', icon: 'refresh', hash: '#mypage', steps: [
         { c: 1, t: 'The Loop', p: 'Two buttons, one habit: I’m in when you start working for Welfare Avenue, Close the loop when you finish. This one-minute walkthrough shows both. It is not a timeclock: the note you share carries what moved, never your hours.' },
-        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. Nothing is posted anywhere. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
+        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. A short line in #check-in-out-wa says you are in, never the time. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
         { s: '#w192draftbox', t: 'What moved', p: 'When you close the loop, the Hub drafts your note from your own records: tasks closed or opened, requests, meetings joined, Academy modules finished. Keep what matters and change any line. Private work (confidential, board, one-on-ones) is never pre-filled.', go: function () { preview(); } },
         { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Add to the note turns it into lines and spots the tasks you finished.' },
         { s: '#w192sug', t: 'Tick what is finished', p: 'The tasks your words show are done are suggested here. Ticked tasks close themselves when you close the loop.', opt: 1 },
-        { s: '#w192sharebox', t: 'Who sees it', p: 'Your team’s channel by default, everyone in the Loop channel, or just the Hub. Every note also shows on Home, so nothing is lost.' },
-        { s: '#w192close', t: 'Close the loop', p: 'Your note goes where you chose, with no clock time and no hours. Close without a note ends your session and shares nothing.' },
+        { s: '#w192sharebox', t: 'Where it goes', p: 'Every closed loop goes to #check-in-out-wa in Slack, for the whole team. Every note also shows on Home, so nothing is lost.' },
+        { s: '#w192close', t: 'Close the loop', p: 'Your note goes to #check-in-out-wa, with no clock time and no hours. Close without a note ends your session and posts only that you closed the loop.' },
         { c: 1, t: 'Your hours are yours', p: 'They show on your own page and to HR, for your records and your balance. They never go in the post. That is the whole thing: I’m in, close the loop.' }
       ] };
       return true;
@@ -82379,6 +82364,195 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- test hook ---------- */
   window.w163 = { state: function () { return G; }, ready: function () { return G.ready; }, settle: settle,
     phone: { state: function () { return PH; }, open: openSheet, close: closeSheet, bar: paintBar, key: barKey, team: myTeamId, items: hubItems } };
+})();
+/* =====================================================================
+   WA v213 The due-date check (06/10/26)
+   =====================================================================
+   Steel (06/10/26), after wave210 showed 52 of 62 recent meeting tasks had no due date: "I'd rather a pop up when the
+   user gets on to the hub that they should [set] their due dates for the tasks or confirm the due dates provided make
+   sense" (new and existing open tasks); then "it should pop with the best assumptions of due dates and allow the user
+   to make edits if needed but they [should not] be able to exit until they confirm their due dates. Also overdue tasks
+   should also pop to ask if items are done and if they aren't to push the due date to a realistic date".
+
+   - On opening the Hub, a pop-up (#w213pop) lists the person's open tasks that are overdue, have no due date, or
+     carry a date a meeting set that nobody confirmed (my_due_date_check(): owner by first name, or assigned).
+   - Each comes filled with the best guess: their team's next meeting from the Hub calendar, or the one after when
+     the next is less than two days away (a date the meeting set stays as it is). Next meeting / Following meeting
+     buttons and a date field change it. An overdue task asks Done or Still open (push to a date).
+   - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
+     offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
+     change_log line; the pop-up comes back next visit only for what is still overdue or undated.
+   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
+(function () {
+  'use strict';
+  if (window.__wa213) return; window.__wa213 = true;
+  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
+
+  var css = ''
+    + '#w213pop{position:fixed;inset:0;z-index:100000;background:rgba(16,24,22,.55);display:flex;align-items:center;justify-content:center;padding:16px;}'
+    + '#w213pop .dlg{background:' + CREAM + ';border-radius:14px;max-width:760px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;}'
+    + '#w213pop .hd{padding:18px 22px 10px;border-bottom:1px solid var(--wa-line,#e4e0d4);}'
+    + '#w213pop h2{margin:0 0 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:24px;text-transform:uppercase;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w213pop .lead{margin:0;font-size:13.5px;color:#444;line-height:1.45;}'
+    + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
+    + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
+    + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
+    + '#w213pop .row.isdone{opacity:.6;}'
+    + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
+    + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
+    + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
+    + '#w213pop .ctl input[type=date]{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;}'
+    + '#w213pop .chip{border:1px solid var(--wa-line,#d8d4c8);background:#FFFAF2;border-radius:14px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:#333;}'
+    + '#w213pop .chip.on{background:' + GREEN + ';border-color:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .seg{display:inline-flex;border:1px solid var(--wa-line,#d8d4c8);border-radius:8px;overflow:hidden;}'
+    + '#w213pop .seg button{border:0;background:#FFFAF2;font:inherit;font-size:12.5px;padding:4px 10px;cursor:pointer;}'
+    + '#w213pop .seg button.on{background:' + GREEN + ';color:#FFFAF2;}'
+    + '#w213pop .ft{padding:12px 22px;border-top:1px solid var(--wa-line,#e4e0d4);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    + '#w213pop .save{background:' + GOLD + ';color:#1F201E;border:0;border-radius:9px;padding:9px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}'
+    + '#w213pop .save[disabled]{opacity:.6;cursor:default;}'
+    + '#w213pop .later{background:none;border:0;color:#555;text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;}'
+    + '#w213pop .err{color:' + FLAG + ';font-size:12.5px;flex-basis:100%;}'
+    + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
+    + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
+  var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function day(s, wk) { if (!s) return ''; try { return new Date(s + 'T12:00:00').toLocaleDateString(undefined, wk ? { weekday: 'short', month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric' }); } catch (e) { return s; } }
+  function team(k) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k || ''; } catch (e) { return k || ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function busyElsewhere() {
+    var p = document.getElementById('w177pop'); if (p && p.offsetParent !== null && getComputedStyle(p).display !== 'none') return true;
+    var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
+    return false;
+  }
+
+  async function load() {
+    try {
+      var r = await db.rpc('my_due_date_check');
+      if (r && r.error) return null;
+      return (r && r.data) || [];
+    } catch (e) { return null; }
+  }
+
+  function rowHtml(r) {
+    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
+    var meta = [team(r.department)];
+    if (isOver) meta.push('was due ' + day(r.due_date));
+    else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
+    if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
+    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' \u00b7 ')) + '</div><div class="ctl">';
+    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
+    if (!dn) {
+      h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
+        + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting \u00b7 ' + E(day(r.next_meeting, true)) + '</button>'
+        + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following \u00b7 ' + E(day(r.following_meeting, true)) + '</button>';
+    }
+    return h + '</div></div>';
+  }
+
+  function html() {
+    var rows = S.rows || [];
+    var over = rows.filter(function (r) { return r.why === 'overdue'; });
+    var none = rows.filter(function (r) { return r.why === 'no_date'; });
+    var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
+    var bits = [];
+    if (over.length) bits.push(over.length + ' overdue');
+    if (none.length) bits.push(none.length + ' with no due date');
+    if (set.length) bits.push(set.length + ' dated by a meeting');
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
+      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team\u2019s next meeting. Change any that don\u2019t fit'
+      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
+    if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
+    if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
+    var n = rows.length;
+    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
+      + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
+      + '<span class="note">You can change any date later on the task itself.</span>'
+      + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
+    return h;
+  }
+
+  function paint() {
+    var el = document.getElementById('w213pop');
+    if (!el) { el = document.createElement('div'); el.id = 'w213pop'; document.body.appendChild(el); wire(el); }
+    var sc = el.querySelector('.bd'), top = sc ? sc.scrollTop : 0;
+    el.innerHTML = html();
+    var sc2 = el.querySelector('.bd'); if (sc2) sc2.scrollTop = top;
+  }
+  function close() { var el = document.getElementById('w213pop'); if (el) el.remove(); S.gone = true; document.removeEventListener('keydown', trapKey, true); }
+  function trapKey(e) {
+    if (!document.getElementById('w213pop')) return;
+    if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); }
+  }
+
+  function wire(el) {
+    el.addEventListener('click', function (e) {
+      var t = e.target, b;
+      if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
+      if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
+      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
+      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
+      if (t.closest('[data-w213save]')) { save(); return; }
+      if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
+    });
+    el.addEventListener('change', function (e) {
+      var i = e.target.closest('[data-w213date]'); if (!i) return;
+      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
+    });
+    document.addEventListener('keydown', trapKey, true);
+  }
+
+  async function save() {
+    if (S.busy) return;
+    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    (S.rows || []).forEach(function (r) {
+      var id = r.task_id;
+      if (S.done[id]) { items.push({ id: id, done: true }); return; }
+      var v = S.pick[id];
+      if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
+      items.push({ id: id, due: v });
+    });
+    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
+    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
+    if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
+    S.busy = true; S.err = ''; paint();
+    try {
+      var r = await db.rpc('confirm_due_dates', { p: items });
+      if (r && r.error) throw new Error(r.error.message || 'could not save');
+      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
+      close();
+      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
+      try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
+    } catch (e) {
+      S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
+    }
+  }
+
+  async function start() {
+    if (S.shown || S.gone) return;
+    if (!staff()) return;
+    var rows = await load();
+    if (!rows || !rows.length) return;
+    S.rows = rows; S.pick = {}; S.done = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
+    var tries = 0;
+    (function wait() {
+      if (S.shown || S.gone) return;
+      if (busyElsewhere() && tries++ < 120) { setTimeout(wait, 1000); return; }
+      S.shown = true; paint();
+      try { var f = document.querySelector('#w213pop [data-w213save]'); if (f) f.focus(); } catch (e) { /* fine */ }
+    })();
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa = startApp;
+    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 1500); };
+  }
+  window.w213 = { start: start, state: function () { return S; } };
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)

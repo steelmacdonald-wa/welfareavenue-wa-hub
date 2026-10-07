@@ -1,4 +1,6 @@
-// Welfare Avenue: checkin-post (v4 wave192b, 01/10/26: no stored trail, real channel names, private titles never posted;
+// Welfare Avenue: checkin-post (v6 wave214, 06/10/26: every closed loop posts once, in the check-in-out channel only;
+// v5 wave212, 06/10/26: I'm in and Close the loop also post to the check-in-out channel;
+// v4 wave192b, 01/10/26: no stored trail, real channel names, private titles never posted;
 // v3 wave192, 01/10/26: The Loop; v2 25/09/26: channels + say; v1 25/09/26)
 // wave192 (01/10/26), Steel: "I'm questioning whether our checkins should be in our slack channels for everyone to see,
 // I really don't want people to feel like they are tracked but more that work that's being done is shared to keep
@@ -7,21 +9,30 @@
 // posts nothing; a wrap-up goes to the person's team channel by default, or to everyone (#the-loop) or just the Hub,
 // their choice each time; the shared post carries only what moved (no clock time, no hours); the note drafts itself
 // from the records the person changed (loop_trail), never from clicks or pages.
+// wave212 (06/10/26), Steel: "in and out loops should be sent to the check-in-out channels". I'm in posts a line there
+// (and the focus when given); Close the loop posts there too: the note when they shared it (team or everyone), only
+// "closed the loop" when they chose just the Hub. Never the clock time or the hours. The channel is app_config
+// checkinout_channel (default #check-in-out-wa); a close already posted in that channel is not posted twice.
+// wave214 (06/10/26), Steel: "All closed loops should be done in the check in out channel". Asked where a note goes, he
+// chose only #check-in-out-wa: no team channel and no Just the Hub. Close the loop posts once, in the check-in-out
+// channel: the note with the closed tasks, or the one line "closed the loop" when they close without a note. share_to
+// from the page is ignored (a cached older page still sends it). Never the clock time or the hours.
 // wave165 (29/09/26): the tasks a check-out offers to close are the person's own and their team's open ones (one-on-ones
 // are only for the people speaking in them now: visibility speakers; restricted work never reaches someone else's check-out).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at).
 //
 // Actions (staff sign-in; the build can act as a person with the trigger secret and as_email):
 //   The Loop (wave192, the page since wave192):
-//   start     {checkin_id, focus?}          -> keeps the focus on the row; posts nothing anywhere
+//   start     {checkin_id, focus?}          -> keeps the focus on the row; posts "is in the loop" in the check-in-out channel
 //   draft     {checkin_id}                  -> the trail since the session started, drafted as bullets, the hidden count,
-//                                              the open tasks worth closing, the channels a note would go to
-//                                              (team_channel, everyone_channel); nothing is written or kept
+//                                              the open tasks worth closing, the channel the note goes to
+//                                              (everyone_channel: the check-in-out channel; team_channel is null since
+//                                              wave214); nothing is written or kept
 //   tidy      {checkin_id?, bullets[], text} -> the model folds what they said into the draft (their facts only) and names
 //                                              the open tasks their words show are finished
-//   close     {checkin_id, bullets[], close_task_ids[], share_to: team|everyone|hub, skipped?, dry?}
-//             -> closes the ticked tasks, saves the note and where it went, posts it (team channel, the Loop channel, or
-//                nowhere); dry: true answers with the post it would make and changes nothing. A private task (confidential,
+//   close     {checkin_id, bullets[], close_task_ids[], skipped?, dry?}   (share_to is ignored since wave214)
+//             -> closes the ticked tasks, saves the note, posts it once in the check-in-out channel (without a note, the
+//                one line "closed the loop"); dry: true answers with the post it would make and changes nothing. A private task (confidential,
 //                board-only, or not team-visible) closes like any other but is never named in a post ("1 private task").
 //   Privacy (wave192b): the trail is built on demand for the person's own sheet and never stored; the shared post carries
 //   what moved, never the clock time or the hours.
@@ -34,7 +45,7 @@
 //   say       {channel, text}               -> post text to a named channel as the bot (joins a public one)
 // The model call goes through the Hub router (task 'checkin'); Slack goes through the bot (chat.postMessage).
 // Tables: hub_checkins (read, update), dept_tasks (read; done on close), change_log (insert), team_members, wa_slack_ids,
-// hub_settings (team_inbox.channels), app_config (loop_channel), dept_meta; loop_trail() for the draft.
+// app_config (checkinout_channel; loop_channel as the fallback), dept_meta; loop_trail() for the draft.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -100,6 +111,12 @@ async function channelByName(tok: string, name: string): Promise<Chan | null> {
   if (hit && !hit.member) { try { const j = await slack(tok, 'conversations.join', { channel: hit.id }); if (j.ok) hit.member = true; } catch (_) { /* private: someone adds the bot */ } }
   return hit;
 }
+/* the check-in-out channel (wave212): app_config checkinout_channel, default #check-in-out-wa; every closed loop goes here (wave214) */
+async function checkinoutChannel(tok: string): Promise<Chan | null> {
+  let want = OLD_CHANNEL;
+  try { const { data } = await svc.from('app_config').select('value').eq('key', 'checkinout_channel').maybeSingle(); const v = String((data as { value?: string } | null)?.value || '').replace(/^#/, '').trim(); if (v) want = v; } catch (_) { /* default */ }
+  return await channelByName(tok, want);
+}
 async function loopChannelName(): Promise<string> {
   try { const { data } = await svc.from('app_config').select('value').eq('key', 'loop_channel').maybeSingle(); const v = String((data as { value?: string } | null)?.value || '').replace(/^#/, '').trim(); if (v) return v; } catch (_) { /* default */ }
   return 'the-loop';
@@ -108,17 +125,6 @@ async function loopChannelName(): Promise<string> {
 async function everyoneChannel(tok: string): Promise<Chan | null> {
   const want = await loopChannelName();
   return (await channelByName(tok, want)) || (want !== OLD_CHANNEL ? await channelByName(tok, OLD_CHANNEL) : null);
-}
-/* the team's channels (hub_settings team_inbox.channels, wave123): the first one the bot can post in */
-async function teamChannel(tok: string, dept: string | null): Promise<Chan | null> {
-  if (!dept) return null;
-  try {
-    const { data } = await svc.from('hub_settings').select('value').eq('key', 'team_inbox').maybeSingle();
-    const v = (data as { value?: { channels?: Record<string, string[]> } } | null)?.value || {};
-    const list = (v.channels && v.channels[dept]) || [];
-    for (const n of list) { const c = await channelByName(tok, n); if (c && c.member) return c; }
-  } catch (_) { /* no setting */ }
-  return null;
 }
 async function slackUserId(email: string): Promise<string | null> {
   try { const { data } = await svc.from('wa_slack_ids').select('slack_id').ilike('email', email).maybeSingle(); return (data as { slack_id?: string } | null)?.slack_id || null; } catch (_) { return null; }
@@ -293,8 +299,15 @@ Deno.serve(async (req: Request) => {
       if (!row || String(row.email).toLowerCase() !== me.email) return json({ error: 'session not found' }, 404);
       const focus = typeof body.focus === 'string' ? body.focus.trim().slice(0, 300) : '';
       if (focus) await svc.from('hub_checkins').update({ focus }).eq('id', id);
-      /* nothing is posted: the ring on their photo shows teammates they are around */
-      return json({ ok: true, posted: false });
+      /* wave212: a line in the check-in-out channel (no clock time) */
+      let r: { ts: string | null; error: string | null } = { ts: null, error: 'no channel' };
+      try {
+        const tok = await getSecret('SLACK_BOT_TOKEN');
+        const ch = await checkinoutChannel(tok);
+        if (ch) r = await postTo(tok, ch, ':large_green_circle: ' + mention(name, await slackUserId(me.email)) + ' is in the loop' + (focus ? '\n_Today:_ ' + focus : ''));
+        if (r.ts) await svc.from('hub_checkins').update({ slack_ts: r.ts }).eq('id', id);
+      } catch (e) { r = { ts: null, error: String((e as Error).message || e).slice(0, 200) }; }
+      return json({ ok: true, posted: !!r.ts, error: r.ts ? null : r.error });
     }
     if (action === 'draft') {
       const id = Number(body.checkin_id);
@@ -305,10 +318,10 @@ Deno.serve(async (req: Request) => {
       const bullets = draftBullets(tr.items);
       const tasks = await myTasks(m, name);
       const mins = Math.max(1, Math.round((new Date(until).getTime() - new Date(row.started_at).getTime()) / 60000));
-      /* where a note would go: the team's channel the bot can post in, and the Loop channel (or the old one until renamed) */
-      let teamCh: string | null = null, allCh: string | null = null;
-      try { const tok = await getSecret('SLACK_BOT_TOKEN'); const tc = await teamChannel(tok, m ? m.department : null); teamCh = tc ? tc.name : null; const ec = await everyoneChannel(tok); allCh = ec ? ec.name : null; } catch (_) { /* the sheet falls back to the names it knows */ }
-      return json({ ok: true, bullets, items: tr.items.length, hidden: tr.hidden, minutes: mins, open_tasks: tasks.slice(0, 20).map(t => ({ id: t.id, title: t.title, owner: t.owner })), department: m ? m.department : null, team: await teamLabel(m ? m.department : null), team_channel: teamCh, everyone_channel: allCh });
+      /* where the note goes (wave214): the check-in-out channel, for everyone; no team channel */
+      let allCh: string | null = null;
+      try { const tok = await getSecret('SLACK_BOT_TOKEN'); const ec = (await checkinoutChannel(tok)) || (await everyoneChannel(tok)); allCh = ec ? ec.name : null; } catch (_) { /* the sheet falls back to the name it knows */ }
+      return json({ ok: true, bullets, items: tr.items.length, hidden: tr.hidden, minutes: mins, open_tasks: tasks.slice(0, 20).map(t => ({ id: t.id, title: t.title, owner: t.owner })), department: m ? m.department : null, team: await teamLabel(m ? m.department : null), team_channel: null, everyone_channel: allCh });
     }
     if (action === 'tidy') {
       const text = String(body.text || '').trim();
@@ -322,22 +335,20 @@ Deno.serve(async (req: Request) => {
       const { data: row } = await svc.from('hub_checkins').select('id, started_at, ended_at, minutes, email').eq('id', id).maybeSingle();
       if (!row || String(row.email).toLowerCase() !== me.email) return json({ error: 'session not found' }, 404);
       const dry = body.dry === true;
-      const bullets: string[] = (Array.isArray(body.bullets) ? body.bullets : []).map((b: unknown) => String(b).trim()).filter(Boolean).slice(0, 8);
+      const given: string[] = (Array.isArray(body.bullets) ? body.bullets : []).map((b: unknown) => String(b).trim()).filter(Boolean).slice(0, 8);
       const closeIds: number[] = (Array.isArray(body.close_task_ids) ? body.close_task_ids : []).map(Number).filter((n: number) => n > 0).slice(0, 10);
-      const skipped = body.skipped === true || !bullets.length;
-      let shareTo = String(body.share_to || 'team');
-      if (!['team', 'everyone', 'hub'].includes(shareTo)) shareTo = 'team';
-      if (skipped) shareTo = 'hub';
+      const skipped = body.skipped === true || !given.length;
+      const bullets: string[] = skipped ? [] : given;
+      /* wave214: every closed loop goes to the check-in-out channel, once; share_to from the page is ignored.
+         share_to is kept on the row: everyone for a note, hub for a close without one (the one line only) */
+      const shareTo = skipped ? 'hub' : 'everyone';
       const endIso = row.ended_at || new Date().toISOString();
       const mins = row.minutes || Math.max(1, Math.round((new Date(endIso).getTime() - new Date(row.started_at).getTime()) / 60000));
-      /* where it goes */
+      /* where it goes: the check-in-out channel (the Loop channel only if that one cannot be found) */
       let ch: Chan | null = null; let tok = '';
-      if (shareTo !== 'hub') {
-        tok = await getSecret('SLACK_BOT_TOKEN');
-        if (shareTo === 'team') ch = await teamChannel(tok, m ? m.department : null);
-        if (!ch) { ch = await everyoneChannel(tok); if (shareTo === 'team' && ch) shareTo = 'everyone'; }
-      }
-      const label = shareTo === 'everyone' ? await teamLabel(m ? m.department : null) : '';
+      try { tok = await getSecret('SLACK_BOT_TOKEN'); ch = (await checkinoutChannel(tok)) || (await everyoneChannel(tok)); } catch (_) { /* reported below */ }
+      /* one channel for every team, so the post says which team */
+      const label = await teamLabel(m ? m.department : null);
       /* the post: what moved, never the clock or the hours */
       const closed = await closeTasks(closeIds, name, dry);
       let text = ':repeat: *' + name + '*' + (label ? ' (' + label + ')' : '') + ' closed the loop';
@@ -346,17 +357,15 @@ Deno.serve(async (req: Request) => {
       if (dry) return json({ ok: true, dry: true, share_to: shareTo, channel: ch ? ch.name : null, text, minutes: mins });
       if (!row.ended_at) await svc.from('hub_checkins').update({ ended_at: endIso, minutes: mins }).eq('id', id);
       let r: { ts: string | null; error: string | null } = { ts: null, error: null };
-      if (shareTo !== 'hub') {
-        if (!ch) r = { ts: null, error: 'no channel the Hub can post in' };
-        else r = await postTo(tok, ch, text);
-      }
+      if (!ch || !tok) r = { ts: null, error: 'no channel the Hub can post in' };
+      else r = await postTo(tok, ch, text);
       await svc.from('hub_checkins').update({
         slack_out_ts: r.ts, share_to: shareTo, share_channel: r.ts && ch ? ch.name : null,
         summary: bullets.length ? { bullets, closed: closeIds, skipped: false, share_to: shareTo } : null,
         closed_task_ids: closeIds.length ? closeIds : null,
       }).eq('id', id);
-      try { await svc.from('change_log').insert({ entity_type: 'checkin', entity_id: me.email, field: 'loop', old_value: null, new_value: 'closed the loop' + (bullets.length ? ' with a note' : ' without a note') + (shareTo === 'hub' ? ' (the Hub only)' : r.ts && ch ? ' (#' + ch.name + ')' : ' (not posted: ' + (r.error || 'unknown') + ')'), changed_by: name }); } catch (_) { /* audit */ }
-      return json({ ok: true, posted: !!r.ts, error: r.error, channel: r.ts && ch ? ch.name : null, share_to: shareTo, closed: closed.map(c => c.title), closed_ids: closed.map(c => c.id), minutes: mins });
+      try { await svc.from('change_log').insert({ entity_type: 'checkin', entity_id: me.email, field: 'loop', old_value: null, new_value: 'closed the loop' + (bullets.length ? ' with a note' : ' without a note') + (r.ts && ch ? ' (#' + ch.name + ')' : ' (not posted: ' + (r.error || 'unknown') + ')'), changed_by: name }); } catch (_) { /* audit */ }
+      return json({ ok: true, posted: !!r.ts, error: r.error, channel: r.ts && ch ? ch.name : null, checkinout: !!r.ts, share_to: shareTo, closed: closed.map(c => c.title), closed_ids: closed.map(c => c.id), minutes: mins });
     }
 
     /* ---------------- before wave192: the page until the Loop ships ---------------- */
