@@ -1,4 +1,5 @@
-// Welfare Avenue: checkin-post (v6 wave214, 06/10/26: every closed loop posts once, in the check-in-out channel only;
+// Welfare Avenue: checkin-post (v7 wave217, 07/10/26: one Still in? Slack DM to the person at 3 hours;
+// v6 wave214, 06/10/26: every closed loop posts once, in the check-in-out channel only;
 // v5 wave212, 06/10/26: I'm in and Close the loop also post to the check-in-out channel;
 // v4 wave192b, 01/10/26: no stored trail, real channel names, private titles never posted;
 // v3 wave192, 01/10/26: The Loop; v2 25/09/26: channels + say; v1 25/09/26)
@@ -17,6 +18,13 @@
 // chose only #check-in-out-wa: no team channel and no Just the Hub. Close the loop posts once, in the check-in-out
 // channel: the note with the closed tasks, or the one line "closed the loop" when they close without a note. share_to
 // from the page is ignored (a cached older page still sends it). Never the clock time or the hours.
+// wave217 (07/10/26), Steel: "After an hour, hour and a half, 2 hours, and 2.5 hours being in, I want you to do a light
+// check to confirm if they are still in." The checks are in the Hub (118b); his choice for Slack: "slack sent to their own
+// dm after 3 hours". still_dm (trigger secret only; the cron wa-loop-still-dm calls it through wa217_loop_dm_tick when
+// wa217_loop_dm_due() has a session) claims each due session (loop_dm_at), then DMs the person from the Hub bot with two
+// links: Still in (?loop=still) and Close the loop (?loop=close). Once per session; nothing happens when nobody answers.
+// The DM names their own time to them only; nothing is posted in a channel. dry: true lists what it would send, and
+// checkin_id with dry previews one session's message; neither claims nor sends.
 // wave165 (29/09/26): the tasks a check-out offers to close are the person's own and their team's open ones (one-on-ones
 // are only for the people speaking in them now: visibility speakers; restricted work never reaches someone else's check-out).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at).
@@ -41,11 +49,13 @@
 //   summarise {text}                        -> bullets + tasks worth closing, from the person's own words
 //   out       {checkin_id, bullets[], close_task_ids[], skipped?} -> closes the ticked tasks, saves the summary, posts the
 //                                              check-out line (no duration since wave192)
+//   still_dm  {dry?, checkin_id?}           -> (trigger secret only) the one Still in? DM at 3 hours, see wave217 above
 //   channels  {}                            -> the channels the bot can see (name, id, member)
 //   say       {channel, text}               -> post text to a named channel as the bot (joins a public one)
 // The model call goes through the Hub router (task 'checkin'); Slack goes through the bot (chat.postMessage).
 // Tables: hub_checkins (read, update), dept_tasks (read; done on close), change_log (insert), team_members, wa_slack_ids,
-// app_config (checkinout_channel; loop_channel as the fallback), dept_meta; loop_trail() for the draft.
+// app_config (checkinout_channel; loop_channel as the fallback), dept_meta; loop_trail() for the draft;
+// wa217_loop_dm_due() and hub_checkins.loop_dm_at for the 3-hour DM.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -279,9 +289,75 @@ function closedLine(list: Closed[]): string {
 }
 function cut(s: string, n: number): string { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
+/* ---- wave217: the one Still in? DM at 3 hours ---- */
+const HUB = 'https://hub.welfareavenue.com/';
+function inFor(mins: number): string {
+  const half = Math.max(6, Math.floor(mins / 30));   /* whole half hours, 3 hours at least */
+  const h = Math.floor(half / 2);
+  return h + (half % 2 ? ' and a half' : '') + ' hours';
+}
+function stillText(name: string, startedAt: string): string {
+  const first = String(name || '').trim().split(/\s+/)[0] || 'there';
+  const mins = (Date.now() - new Date(startedAt).getTime()) / 60000;
+  return 'Hi ' + first + ', you have been in the loop for ' + inFor(mins) + '. Still going? Tap Still in. All done? Close the loop and share what moved.\n'
+    + '<' + HUB + '?loop=still|Still in>   \u00b7   <' + HUB + '?loop=close|Close the loop>\n'
+    + '_Only you get this message. Nothing changes if you leave it._';
+}
+type Due = { id: number; email: string; name: string | null; started_at: string };
+async function stillDm(dry: boolean, onlyId: number): Promise<Record<string, unknown>> {
+  let due: Due[] = [];
+  if (onlyId && dry) {
+    const { data } = await svc.from('hub_checkins').select('id, email, name, started_at').eq('id', onlyId).maybeSingle();
+    if (data) due = [data as Due];
+  } else {
+    const { data, error } = await svc.rpc('wa217_loop_dm_due');
+    if (error) throw new Error('the due list did not load (' + error.message + ')');
+    due = (data || []) as Due[];
+  }
+  const out: Array<Record<string, unknown>> = [];
+  let tok = '';
+  for (const d of due) {
+    const email = String(d.email || '').toLowerCase();
+    const m = await member(email);
+    const name = (m && m.name) || d.name || email.split('@')[0];
+    const sid = await slackUserId(email);
+    const text = stillText(name, d.started_at);
+    if (dry) { out.push({ id: d.id, email, slack: !!sid, text }); continue; }
+    /* claim it first: a session gets at most one DM, sent or not */
+    const claim = await svc.from('hub_checkins').update({ loop_dm_at: new Date().toISOString() }).eq('id', d.id).is('loop_dm_at', null).is('ended_at', null).select('id');
+    if (claim.error || !claim.data || !claim.data.length) continue;
+    let result = 'sent';
+    if (!sid) result = 'not sent: no Slack account linked';
+    else {
+      try {
+        if (!tok) tok = await getSecret('SLACK_BOT_TOKEN');
+        const im = await slack(tok, 'conversations.open', { users: sid });
+        // deno-lint-ignore no-explicit-any
+        const ch = String(((im.channel || {}) as any).id || '');
+        if (!im.ok || !ch) result = 'not sent: ' + String(im.error || 'no DM channel');
+        else {
+          const r = await slack(tok, 'chat.postMessage', { channel: ch, text, unfurl_links: false, unfurl_media: false });
+          if (!r.ok) result = 'not sent: ' + String(r.error || 'slack refused');
+        }
+      } catch (e) { result = 'not sent: ' + String((e as Error).message || e).slice(0, 160); }
+    }
+    /* the audit line names the check, never the hours */
+    try { await svc.from('change_log').insert({ entity_type: 'checkin', entity_id: email, field: 'still_dm', old_value: null, new_value: 'Still in? Slack DM ' + result, changed_by: 'The Loop' }); } catch (_) { /* audit */ }
+    out.push({ id: d.id, email, result });
+  }
+  return { ok: true, dry, due: due.length, done: out };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const body = await req.json().catch(() => ({}));
+  /* wave217: the 3-hour DM, for the cron (the trigger secret, never a person) */
+  if (body.action === 'still_dm') {
+    let okSecret = false;
+    try { const g = req.headers.get('x-wa-secret'); okSecret = !!g && g === (await getSecret('WA_TRIGGER_SECRET')); } catch (_) { /* no */ }
+    if (!okSecret) return json({ error: 'unauthorized' }, 401);
+    try { return json(await stillDm(body.dry === true, Number(body.checkin_id) || 0)); } catch (e) { return json({ error: String((e as Error).message || e).slice(0, 300) }, 500); }
+  }
   let me = await caller(req);
   if (!me && typeof body.as_email === 'string') {
     /* the build can act as a person with the trigger secret (tests) */

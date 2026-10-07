@@ -25,6 +25,14 @@
    wave192 (01/10/26), The Loop: the notes sit under the I'm in button (#w192go), speak The Loop (I'm in, close the
    loop), and a close "as of" a time ends the session at that time and opens the wrap-up sheet (w192.openRow), so the
    person chooses what to share; nothing is posted on its own. The audit line keeps the time, never the hours.
+   wave217 (07/10/26), Steel: "After an hour, hour and a half, 2 hours, and 2.5 hours being in, I want you to do a light
+   check to confirm if they are still in." His choices: the check is in the Hub (plus one Slack DM to the person at
+   3 hours, sent by checkin-post's still_dm from the cron wa-loop-still-dm); nothing happens when nobody answers; after
+   2.5 hours it keeps asking every half hour. So note 3 now comes an hour in and at every half hour after (1h, 1.5h,
+   2h, 2.5h, 3h ...), once per mark: shown is asked (the x waits for the next mark). Still in, here or in the Welcome
+   back note, writes hub_checkins.still_in_at (the DM skips someone who said so in the last 40 minutes), which also
+   tells the person's other devices that mark is answered. The DM's links land here: ?loop=still answers Still in,
+   ?loop=close opens the wrap-up sheet.
    ===================================================================== */
 (function () {
   if (window.__wa118b) return; window.__wa118b = { version: 1 };
@@ -32,11 +40,11 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var AWAY_MS = 3 * 3600000;      /* "has not opened the hub for a while" */
   var GONE_MS = 20 * 60000;       /* away from the tab or app this long while checked in: offer to check out as of then */
-  var LONG_MS = 3 * 3600000;      /* checked in this long: ask */
-  var REASK_MS = 2 * 3600000;     /* ask about a long session again after this */
+  var FIRST_MS = 60 * 60000;      /* wave217: the first Still in? an hour in */
+  var EVERY_MS = 30 * 60000;      /* wave217: then at every half hour (1h, 1.5h, 2h, 2.5h, 3h ...) */
   var SNOOZE_MS = 4 * 3600000;    /* "Not now" on the check-in nudge */
-  var K = { seen: 'w118bSeen', hid: 'w118bHid', snooze: 'w118bSnooze', asked: 'w118bAsked' };
-  var S = { timer: null, kind: null };
+  var K = { seen: 'w118bSeen', hid: 'w118bHid', snooze: 'w118bSnooze', asked: 'w118bAsked', mark: 'w118bMark' };
+  var S = { timer: null, kind: null, mark: -1 };
 
   var css = document.createElement('style');
   css.id = 'wa118bcss';
@@ -113,18 +121,35 @@
     show('back', '<b><i></i>Welcome back</b><p>You are still in, and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Finished then? Close the loop as of that time and share what moved.</p>'
       + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Close as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Close now</button><button class="link" data-w118b="still">Still working</button></div>');
   }
-  function nudgeLong(row) {
+  /* wave217: the marks. -1 before the first hour, then 0 at 1h, 1 at 1.5h, 2 at 2h, 3 at 2.5h ... */
+  function markAt(row, t) { var age = t - new Date(row.started_at).getTime(); return age < FIRST_MS ? -1 : Math.floor((age - FIRST_MS) / EVERY_MS); }
+  /* the last mark this session has had: shown on this device, or answered Still in on any device (still_in_at) */
+  function markDone(row) {
+    var done = -1;
+    try { var v = String(localStorage.getItem(K.mark) || '').split(':'); if (v[0] === String(row.id)) done = Number(v[1]); } catch (e) { /* fine */ }
+    if (row.still_in_at) done = Math.max(done, markAt(row, new Date(row.still_in_at).getTime()));
+    return isNaN(done) ? -1 : done;
+  }
+  function nudgeLong(row, mark) {
     var mins = (Date.now() - new Date(row.started_at).getTime()) / 60000;
-    show('long', '<b><i></i>Still in?</b><p>You have been in for ' + E(fmtMins(Math.round(mins))) + ' (only you see this). If you finished earlier, set when, then close the loop.</p>'
+    show('long', '<b><i></i>Still in?</b><p>' + E(fmtMins(Math.round(mins))) + ' so far (only you see this). Finished earlier? Set the time, then close the loop.</p>'
       + '<div class="row"><button class="ghost" data-w118b="still">Still in</button><button class="go" data-w118b="out">Close the loop</button><button class="link" data-w118b="settime">Set the time</button></div>');
-    put(K.asked, Date.now());
+    S.mark = mark; put(K.mark, row.id + ':' + mark); put(K.asked, Date.now());
+  }
+  /* Still in: the session row says so (the 3-hour DM skips someone who just answered, and other devices see the mark is done) */
+  function stillIn(row) {
+    if (!row || !row.id) return;
+    var at = new Date().toISOString();
+    row.still_in_at = at;
+    put(K.mark, row.id + ':' + Math.max(markAt(row, Date.now()), markDone(row)));
+    try { db.from('hub_checkins').update({ still_in_at: at }).eq('id', row.id).is('ended_at', null).then(function () { /* fine */ }, function () { /* fine */ }); } catch (e) { /* the note is answered either way */ }
   }
   function timeForm(row) {
     var n = document.getElementById('w118ck'); if (!n) return;
     var guess = num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now();
     n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you finish?</b><p>You were in from ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. Your session ends at this time; then you share what moved.</p>'
       + '<div class="when"><input type="time" id="w118bt" value="' + hhmm(guess) + '" step="60"><span>' + E(dayWord(guess)) + '</span></div><div class="err" id="w118berr"></div>'
-      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="still">Cancel</button></div>';
+      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="x">Cancel</button></div>';
     place();
   }
 
@@ -160,13 +185,14 @@
     if (!row) { if (reason !== 'tick') nudgeIn(); return; }
     var hid = num(K.hid);
     if (hid && Date.now() - hid > GONE_MS && hid > new Date(row.started_at).getTime()) { drop(K.hid); nudgeBack(row, hid); return; }
-    var age = Date.now() - new Date(row.started_at).getTime();
-    if (age > LONG_MS && Date.now() - num(K.asked) > REASK_MS && S.kind !== 'long') nudgeLong(row);
+    /* wave217: Still in? at each mark not had yet; an unanswered note just moves on to the next mark */
+    var mark = markAt(row, Date.now());
+    if (mark >= 0 && mark > markDone(row) && !(S.kind === 'long' && S.mark === mark) && S.kind !== 'back') nudgeLong(row, mark);
   }
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-w118b]') : null; if (!t) return;
     var a = t.getAttribute('data-w118b'), row = open();
-    if (a === 'x' || a === 'still') { hide(); if (a === 'still') put(K.asked, Date.now()); return; }
+    if (a === 'x' || a === 'still') { hide(); if (a === 'still') { put(K.asked, Date.now()); stillIn(row); } return; }
     if (a === 'later') { put(K.snooze, Date.now() + SNOOZE_MS); hide(); return; }
     if (a === 'in') { hide(); var p = pill(); if (p) p.click(); return; }
     if (a === 'out') { hide(); put(K.asked, Date.now()); var p2 = pill(); if (p2) p2.click(); return; }
@@ -192,13 +218,24 @@
   });
   window.addEventListener('pagehide', function () { if (open()) put(K.hid, Date.now()); seen(); });
   window.addEventListener('pageshow', function (ev) { if (ev.persisted) setTimeout(function () { decide('back'); }, 400); });
+  /* wave217: the 3-hour DM's links. ?loop=still answers Still in; ?loop=close opens the wrap-up sheet. The query is taken off the address. */
+  function linkAsk() { var m = /[?&]loop=(still|close)(?:&|$)/.exec(location.search || ''); return m ? m[1] : ''; }
+  async function fromLink(ask) {
+    try { var u = new URL(location.href); u.searchParams.delete('loop'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) { /* fine */ }
+    var c = ck(); try { if (c && c.reload) await c.reload(); } catch (e) { /* the row we have */ }
+    var row = open();
+    if (!row) { toastS('Your loop is already closed.'); return; }
+    hide();
+    if (ask === 'still') { stillIn(row); toastS('Got it, you\u2019re still in.'); return; }
+    var p = pill(); if (p) p.click();
+  }
   function boot() {
     /* the first decision waits for wave116j to have loaded the open check-in */
-    var tries = 0;
+    var tries = 0, ask = linkAsk();
     (function wait() {
       tries += 1;
       var c = ck();
-      if ((c && pill()) || tries > 40) { decide('open'); seen(); }
+      if ((c && pill()) || tries > 40) { if (ask) fromLink(ask).then(function () { seen(); }); else { decide('open'); seen(); } }
       else setTimeout(wait, 500);
     })();
     setInterval(function () { if (!document.hidden) { seen(); decide('tick'); } }, 60000);
@@ -215,5 +252,5 @@
   } else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 3500); });
   else setTimeout(boot, 3500);
 
-  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K };
+  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K, markAt: markAt, markDone: markDone, fromLink: fromLink, state: function () { return { kind: S.kind, mark: S.mark }; } };
 })();
