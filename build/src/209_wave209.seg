@@ -72,13 +72,38 @@
       '<div class="w209two"><div><label for="w209s">Where they applied</label><select id="w209s">' + SOURCES.map(function (s) { return '<option value="' + s[0] + '">' + E(s[1]) + '</option>'; }).join('') + '</select></div>' +
       '<div><label for="w209d">Applied on</label><input id="w209d" type="date" value="' + today() + '"></div></div>' +
       '<label for="w209m">' + (vol ? 'What they told us' : 'What they wrote, or your notes') + '</label><textarea id="w209m" rows="4"></textarea>' +
-      (vol ? '' : '<label for="w209l">A link (LinkedIn, portfolio, their CV)</label><input id="w209l" type="url" autocomplete="off" placeholder="https://">') +
+      (vol ? '' : cvField() + '<label for="w209l">LinkedIn or portfolio (optional)</label><input id="w209l" type="url" autocomplete="off" placeholder="https://">') +
       (F.err ? '<p class="w209err" role="alert">' + E(F.err) + '</p>' : '') +
       '<div class="acts">' + btn(F.busy ? 'Adding\u2026' : 'Add the applicant', 'data-w209a="save"' + (F.busy ? ' disabled' : ''), 'pri') + btn('Cancel', 'data-w209a="shut"') + '</div>' +
-      (vol ? '' : '<p class="w197note">After adding, their card opens so you can upload their CV to the position\u2019s Resumes folder.</p>') + '</div>';
+      (vol ? '' : '<p class="w197note">The Hub puts a copy of the CV in the position\u2019s Resumes folder in Google Drive (Unsorted Resumes when there is no position) and reads it.</p>') + '</div>';
+  }
+  /* wave211 (Steel, 06/10/26): "If they add applicants manually the link field should be mandatory and be placed in the right
+     folder on google drive. Please offer guidance if they don't know where to get the link from the uploaded file in google drive" */
+  function resumesFolder() {
+    var pid = val('w209pos') || KEEP.w209pos, p = pid ? positions().filter(function (x) { return String(x.id) === String(pid); })[0] : null;
+    if (p && p.resumes_id) return { id: p.resumes_id, label: p.title + ' > Resumes' };
+    var sv = null; try { sv = w199.state().sync; } catch (e) { sv = null; }
+    return sv && sv.unsorted ? { id: sv.unsorted, label: 'Unsorted Resumes' } : null;
+  }
+  function cvField() {
+    var f = resumesFolder();
+    return '<label for="w209cv">Their CV in Google Drive (link) <i class="w209req">required</i></label><input id="w209cv" type="url" autocomplete="off" placeholder="https://drive.google.com/file/d/\u2026" aria-describedby="w209cvhelp">' +
+      '<p class="w209cvmsg" id="w209cvmsg" aria-live="polite">' + E(F.cvMsg || '') + '</p>' +
+      '<details class="w209help" id="w209cvhelp"' + (F.helpOpen ? ' open' : '') + '><summary>Where do I find the link?</summary><ol>' +
+      '<li><b>The CV is already in Google Drive:</b> right-click the file (or open it), choose <b>Share</b>, then <b>Copy link</b>, and paste it here.</li>' +
+      '<li><b>It came as an email attachment:</b> in Gmail, hover the attachment and click <b>Add to Drive</b> (the triangle icon), then <b>Organize</b> or open it in Drive and Copy link.</li>' +
+      '<li><b>It is on your computer:</b> upload it into the position\u2019s Resumes folder' + (f ? ' (' + E(f.label) + ')' : '') + ', then Share > Copy link. Or skip this form: a CV dropped in a Resumes folder becomes a New card by itself within about 10 minutes.</li>' +
+      '<li>The link must be to the file, not to a folder. If the Hub says it cannot open it, share the file with hub@welfareavenue.com.</li></ol>' +
+      (f ? '<a class="w197b sm" href="https://drive.google.com/drive/folders/' + E(f.id) + '" target="_blank" rel="noopener">Open ' + E(f.label) + '</a>' : '') + '</details>';
+  }
+  function isVolRole() { var pid = val('w209pos'), title = ''; if (pid) { var p = positions().filter(function (x) { return String(x.id) === pid; })[0]; title = p ? p.title : ''; } return volRoles(title || val('w209r')).length > 0; }
+  async function recruit(body) {
+    var r = await db.functions.invoke('recruit-actions', { body: body });
+    if (r && r.error) { var m = r.error.message || String(r.error); try { if (r.error.context && r.error.context.json) { var j = await r.error.context.json(); if (j && j.error) m = j.error; } } catch (e) { /* fine */ } throw new Error(m); }
+    return r ? r.data : null;
   }
   function openForm(ctx) {
-    F = { ctx: ctx || 'applications', busy: false, err: '' };
+    F = { ctx: ctx || 'applications', busy: false, err: '', cvMsg: '', helpOpen: false }; KEEP = {};
     var s = document.getElementById('w209add'); if (!s) { s = document.createElement('div'); s.id = 'w209add'; document.body.appendChild(s); }
     s.innerHTML = formHtml(); s.classList.add('open');
     setTimeout(function () { var n = document.getElementById('w209n'); if (n) try { n.focus(); } catch (e) { /* fine */ } }, 30);
@@ -92,12 +117,18 @@
     var r = volRoles(title || val('w209r'));
     h.innerHTML = r.length ? '<b>' + E(r.map(roleLabel).join(', ')) + '</b> is a volunteer role: this applicant goes to the Volunteer Manager, Applicants received, and into the CRM and the volunteer directory.' : '';
     h.className = 'w209hint' + (r.length ? ' on' : '');
+    var rq = document.querySelector('#w209add .w209req'); if (rq) rq.textContent = r.length ? 'not needed for a volunteer role' : 'required';
   }
   async function save() {
     if (F.busy) return;
     var name = val('w209n'); if (!name) { F.err = 'Their name, please.'; repaintForm(); return; }
     var email = val('w209e'), phone = val('w209p');
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { F.err = 'That email does not look right.'; repaintForm(); return; }
+    var cvUrl = F.ctx === 'volunteers' ? '' : val('w209cv'), volRole = F.ctx !== 'volunteers' && isVolRole();
+    if (F.ctx !== 'volunteers' && !volRole) {
+      if (!cvUrl) { F.err = 'The link to their CV in Google Drive, please. \u201cWhere do I find the link?\u201d shows how.'; F.helpOpen = true; repaintForm(); return; }
+      if (!/^https:\/\/(drive|docs)\.google\.com\//.test(cvUrl)) { F.err = 'That is not a Google Drive link. Open the CV in Drive, then Share > Copy link.'; F.helpOpen = true; repaintForm(); return; }
+    }
     var src = val('w209s') || 'manual', when = val('w209d'), msg = val('w209m');
     var applied = when ? new Date(when + 'T12:00:00').toISOString() : null;
     F.busy = true; F.err = ''; keep(); repaintForm();
@@ -109,9 +140,20 @@
           source: src, applied_at: applied, message: msg || null, source_ref: 'hub:' + Date.now().toString(36) + ':' + lower(email || name) } });
         if (res && res.error) throw res.error; r = (res && res.data) || {};
       } else {
+        if (cvUrl) {   /* the Hub must be able to open the CV before the card is made */
+          F.cvMsg = 'Checking the CV link\u2026'; repaintForm();
+          var chk = await recruit({ action: 'cv_check', url: cvUrl });
+          if (!chk || !chk.ok) { F.busy = false; F.cvMsg = ''; F.err = (chk && chk.error) || 'The Hub could not open that link.'; F.helpOpen = true; repaintForm(); return; }
+          F.cvMsg = 'Found: ' + chk.name;
+        }
+        var lk = [cvUrl, val('w209l')].filter(Boolean);
         var res2 = await db.rpc('wa209_intake', { p: { name: name, email: email || null, phone: phone || null, position_id: val('w209pos') || null, role: val('w209r') || null, source: src, applied_at: applied,
-          message: msg || null, links: val('w209l') ? [val('w209l')] : [] } });
+          message: msg || null, links: lk } });
         if (res2 && res2.error) throw res2.error; r = (res2 && res2.data) || {};
+        if (cvUrl && r.candidate_id && r.to !== 'volunteers' && !r.duplicate) {
+          try { var fc = await recruit({ action: 'file_cv', id: r.candidate_id, url: cvUrl }); r.cvNote = fc && fc.ok ? (fc.filed ? (fc.copied ? 'CV filed in ' + fc.where : 'CV already in ' + fc.where) : (fc.note || '')) : ('CV not filed: ' + ((fc && fc.error) || 'unknown')); }
+          catch (x) { r.cvNote = 'CV not filed: ' + (x.message || x); }
+        }
       }
       F.busy = false; shutForm();
       try { await db.from('change_log').insert({ entity_type: r.to === 'volunteers' ? 'volunteer_application' : 'candidate', entity_id: String(r.application_id || r.candidate_id || ''), field: 'added_by_hand', old_value: null, new_value: name, changed_by: (window.USER && (USER.name || USER.email)) || null }); } catch (x) { /* audit */ }
@@ -119,13 +161,13 @@
         toastS(name + (r.duplicate ? ' was already in Applicants received' : ' added to Applicants received (Volunteer Manager)'));
         V.at = 0; if (onView()) { await load(true); paint(); } else counts();
       } else {
-        toastS(r.duplicate ? name + ' already has a card for this role' : name + ' added to New');
+        toastS(r.duplicate ? name + ' already has a card for this role' : name + ' added to New' + (r.cvNote ? '. ' + r.cvNote : ''));
         try { if (window.w197) { await w197.loadCands(true); w197.paintBoard(); if (r.candidate_id) w197.openSheet(r.candidate_id); } } catch (x) { /* fine */ }
       }
     } catch (e) { F.busy = false; F.err = 'Could not add them: ' + msgOf(e); repaintForm(); }
   }
   var KEEP = {};
-  function keep() { ['w209n', 'w209e', 'w209p', 'w209pos', 'w209r', 'w209s', 'w209d', 'w209m', 'w209l'].forEach(function (id) { var x = document.getElementById(id); if (x) KEEP[id] = x.value; }); KEEP.roles = Array.prototype.slice.call(document.querySelectorAll('#w209add [data-w209role]:checked')).map(function (x) { return x.getAttribute('data-w209role'); }); }
+  function keep() { ['w209n', 'w209e', 'w209p', 'w209pos', 'w209r', 'w209s', 'w209d', 'w209m', 'w209l', 'w209cv'].forEach(function (id) { var x = document.getElementById(id); if (x) KEEP[id] = x.value; }); KEEP.roles = Array.prototype.slice.call(document.querySelectorAll('#w209add [data-w209role]:checked')).map(function (x) { return x.getAttribute('data-w209role'); }); }
   function repaintForm() {
     var s = document.getElementById('w209add'); if (!s) return; keep(); s.innerHTML = formHtml();
     Object.keys(KEEP).forEach(function (id) { if (id === 'roles') return; var x = document.getElementById(id); if (x && KEEP[id] != null) x.value = KEEP[id]; });
@@ -324,9 +366,10 @@
     if (t.id === 'w209q') { V.q = t.value; paint(); }
     if (t.id === 'w209r') hint();
   });
+  document.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'w209cvhelp') F.helpOpen = e.target.open; }, true);   /* wave211: the guidance stays open across repaints */
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t) return;
-    if (t.id === 'w209pos') hint();
+    if (t.id === 'w209pos') { repaintForm(); var ps = document.getElementById('w209pos'); if (ps) try { ps.focus(); } catch (x) { /* fine */ } }   /* wave211: the Resumes folder follows the position */
     if (t.id === 'w209role') { V.role = t.value; paint(); }
     if (t.id === 'w209src') { V.src = t.value; paint(); }
   });
@@ -340,6 +383,8 @@
     '#w209add input[type=text],#w209add input[type=email],#w209add input[type=tel],#w209add input[type=url],#w209add input[type=date],#w209add select,#w209add textarea{width:100%;box-sizing:border-box;font:inherit;font-size:15px;padding:9px 10px;border:1px solid rgba(16,63,57,.25);border-radius:8px;background:#FFFAF2;}' +
     '#w209add .acts{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}.w209two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}@media (max-width:520px){.w209two{grid-template-columns:1fr;}}' +
     '.w209roles{display:flex;flex-wrap:wrap;gap:6px 14px;}#w209add .w209ck{display:inline-flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-weight:500;font-size:14px;color:#1F201E;margin:0;}' +
+    '#w209add .w209req{font-style:normal;text-transform:none;letter-spacing:0;color:' + FLAG + ';margin-left:4px;}.w209cvmsg{font-size:13px;color:#1d6b5d;margin:4px 0 0;min-height:0;}' +
+    '.w209help{margin:6px 0 4px;font-size:13.5px;}.w209help summary{cursor:pointer;color:#103F39;font-weight:600;}.w209help ol{margin:6px 0 8px;padding-left:20px;}.w209help li{margin:4px 0;}' +
     '.w209hint{font-size:13.5px;margin:8px 0 0;min-height:0;}.w209hint.on{background:rgba(42,140,122,.12);border-radius:8px;padding:8px 10px;color:#1d6b5d;}.w209err{color:' + FLAG + ';font-size:14px;margin:10px 0 0;}' +
     '.w209move{margin:10px 0;padding:10px 12px;border-radius:10px;background:rgba(42,140,122,.1);font-size:13.5px;}.w209move .acts{margin-top:8px;}' +
     '#w209v .w209lead{font-size:14px;margin:0 0 10px;color:#3c4a47;}.w209bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px;}' +

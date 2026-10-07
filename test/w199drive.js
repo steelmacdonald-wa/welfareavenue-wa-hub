@@ -170,9 +170,10 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   await f.page.selectOption('#w199bulk select[data-w199bulk="owner"]', 'Valex').catch(async () => { await f.ev(() => { var s = document.querySelector('#w199bulk select[data-w199bulk="owner"]'); s.value = s.options[2].value; s.dispatchEvent(new Event('change', { bubbles: true })); }); });
   await f.page.waitForTimeout(400);
   await f.page.click('#w197board [data-w197c="9003"]'); await f.page.click('#w197board [data-w197c="9004"]'); await f.page.waitForTimeout(200);
-  await f.page.selectOption('#w199bulk select[data-w199bulk="status"]', 'interview'); await f.page.waitForTimeout(500);
+  await f.page.selectOption('#w199bulk select[data-w199bulk="status"]', 'withdrawn'); await f.page.waitForTimeout(400);
+  await f.page.selectOption('#w211g_reason', 'Took another role'); await f.page.click('#w211g [data-w211ga="go"]'); await f.page.waitForTimeout(500);   /* wave211: closing needs a reason */
   const b2 = await f.ev(() => ({ upd: window.__W199UPD.filter(u => u.t === 'hub_candidates').map(u => u.p), st: w197.state().cands.filter(c => c.id === 9003 || c.id === 9004).map(c => c.status + '/' + c.owner) }));
-  ok('Bulk: handled by and stage change every selected application', b2.upd.length === 2 && b2.upd[0].owner && b2.upd[1].status === 'interview' && b2.st.every(s => /^interview\//.test(s)), b2);
+  ok('Bulk: handled by and stage change every selected application', b2.upd.length === 2 && b2.upd[0].owner && b2.upd[1].status === 'withdrawn' && b2.upd[1].close_reason === 'Took another role' && b2.st.every(s => /^withdrawn\//.test(s)), b2);
   await f.page.click('#w199bulk [data-w199a="seloff"]'); await f.page.waitForTimeout(300);
   ok('Bulk: Done closes the bar and clicks open cards again', await f.ev(() => !document.getElementById('w199bulk') && !document.querySelector('#w197board .w199sel')));
 
@@ -198,7 +199,7 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   /* interviews: a day and a time */
   await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
   const ivc = await f.ev(() => { var c = w197.state().cands.filter(x => x.status !== 'interview' && x.status !== 'hired')[0]; return c && c.id; });
-  await f.ev((id) => w197.moveTo(id, 'interview'), ivc); await f.page.waitForTimeout(500);
+  await f.ev(async (id) => { var g = window.w211g; window.w211g = null; await w197.moveTo(id, 'interview'); window.w211g = g; }, ivc); await f.page.waitForTimeout(500);   /* wave211 gates off: the wave199 fallback (a card that reached Interview without a time) */
   const iv1 = await f.ev(() => { var s = document.getElementById('w197sheet'), i = document.getElementById('w199iv'); return { open: s && s.classList.contains('open'), field: !!i, need: i && i.classList.contains('need'), focus: document.activeElement === i, pill: Array.from(document.querySelectorAll('#w197board [data-w197col="interview"] .w199ivno')).length }; });
   ok('Interview: moving a card there opens its sheet on the day and time', iv1.open && iv1.field && iv1.need && iv1.focus, iv1);
   ok('Interview: a card with no time says so', iv1.pill >= 1, iv1);

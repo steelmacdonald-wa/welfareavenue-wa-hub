@@ -105,7 +105,7 @@
       '<div class="w199links">' + (p && p.jd_url ? '<a class="w197b sm" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">The job description</a>' : (p ? '<span class="w197pill mut">No JD in Drive yet</span>' : '')) +
       (p ? btn('The position', 'data-w199open="' + p.id + '"', 'sm') : '') +
       (cv && cv.url ? '<a class="w197b sm" href="' + E(cv.url) + '" target="_blank" rel="noopener">CV in Drive</a>' : (c.drive_file_id ? '<a class="w197b sm" href="https://drive.google.com/file/d/' + E(c.drive_file_id) + '/view" target="_blank" rel="noopener">CV in Drive</a>' : (p ? '<label class="w197b sm w199up">Upload their CV to Drive<input type="file" data-w199upc="' + c.id + '" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' : ''))) + '</div>' +
-      (window.w209 ? w209.sheetBits(c) : '') + (window.w208 ? w208.sheetBits(c) : '');   /* wave209: a volunteer role moves to the Volunteer Manager; wave208: the interview from the transcript archive, and its review */
+      (window.w209 ? w209.sheetBits(c) : '') + (window.w211 ? w211.sheetBits(c) : '') + (window.w208 ? w208.sheetBits(c) : '');   /* wave209: a volunteer role moves to the Volunteer Manager; wave208: the interview from the transcript archive, and its review */
   }
 
   /* ---------- grades: each person gives 1 to 5 stars (Steel, 03/10/26: "grade applicants and have that show as well") ---------- */
@@ -192,19 +192,22 @@
     b.innerHTML = '<b>' + n + ' selected</b>' + btn('Select all shown', 'data-w199a="selall"', 'sm') + (n ? btn('Clear', 'data-w199a="selnone"', 'sm') : '') +
       '<select data-w199bulk="status"' + dis + ' aria-label="Move to stage"><option value="">Move to…</option>' + stages.map(function (s) { return '<option value="' + s[0] + '">' + E(s[1]) + '</option>'; }).join('') + '</select>' +
       '<select data-w199bulk="owner"' + dis + ' aria-label="Handled by"><option value="">Handled by…</option><option value="__none">Nobody</option>' + ms.map(function (m) { return '<option>' + E(m.name) + '</option>'; }).join('') + '</select>' +
-      '<select data-w199bulk="position_id"' + dis + ' aria-label="Position"><option value="">Position…</option>' + pos + '</select>' +
+      '<select data-w199bulk="position_id"' + dis + ' aria-label="Position"><option value="">Position…</option>' + pos + '</select>' + (window.w211 ? w211.bulkBits(selIds()) : '') +
       btn('Done', 'data-w199a="seloff"', 'sm pri');
   }
   function setSelMode(on) { P.selMode = !!on; if (!on) P.sel = {}; try { w197.paintBoard(); } catch (e) { /* fine */ } bulkBar(); }
   async function bulkApply(field, value) {
     var ids = selIds(); if (!ids.length || !value) return;
     var patch = { updated_at: new Date().toISOString(), updated_by: myName() }, label = '';
-    if (field === 'status') { patch.status = value; patch.stage_at = patch.updated_at; label = 'moved to ' + value; }
+    if (field === 'status') {
+      if (window.w211g) { var g = await w211g.bulkGate(ids, value); if (!g || !g.ids.length) { bulkBar(); return; } ids = g.ids; Object.keys(g.patch || {}).forEach(function (k) { patch[k] = g.patch[k]; }); }   /* wave211: each card needs what its stage needs */
+      patch.status = value; patch.stage_at = patch.updated_at; label = 'moved to ' + value;
+    }
     else if (field === 'owner') { patch.owner = value === '__none' ? null : value; label = value === '__none' ? 'handled by nobody' : 'handled by ' + value; }
     else if (field === 'position_id') { var p = byId(value); if (!p) return; patch.position_id = p.id; patch.role = p.title; label = 'linked to ' + p.title; }
     else return;
     var verb = ids.length + (ids.length === 1 ? ' application ' : ' applications ') + label;
-    if (field === 'status' && (value === 'declined' || value === 'withdrawn') && !window.confirm(verb.charAt(0).toUpperCase() + verb.slice(1) + '?')) return;
+    if (field === 'status' && (value === 'declined' || value === 'withdrawn') && !window.w211g && !window.confirm(verb.charAt(0).toUpperCase() + verb.slice(1) + '?')) return;
     try {
       var r = await db.from('hub_candidates').update(patch).in('id', ids); if (r && r.error) throw r.error;
       cands().forEach(function (c) { if (ids.indexOf(Number(c.id)) >= 0) Object.keys(patch).forEach(function (k) { c[k] = patch[k]; }); });
@@ -222,7 +225,7 @@
   function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
   function ivLocal(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function cardBits(c) {
-    var gp = c ? selBits(c) + gradePill(c) + callPill(c) + (window.w208 ? w208.cardBits(c) : '') : '';   /* wave208: the interview's review */
+    var gp = c ? selBits(c) + gradePill(c) + callPill(c) + (window.w208 ? w208.cardBits(c) : '') + (window.w211 ? w211.cardBits(c) : '') : '';   /* wave208: the interview's review; wave211: texted, said yes, offer sent */
     if (!c || c.status !== 'interview') return gp;
     if (!c.interview_at) return gp + '<span class="w199ivno">No interview time</span>';
     var past = new Date(c.interview_at).getTime() < Date.now();

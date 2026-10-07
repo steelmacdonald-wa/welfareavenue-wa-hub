@@ -35,7 +35,10 @@ const WRAP = () => { if (db.__w209) return; window.__RPC = []; var orig = db.rpc
   if (fn === 'wa209_move_to_volunteers') return Promise.resolve({ data: { ok: true, to: 'volunteers', application_id: 97, moved_candidate: args.p_id }, error: null });
   if (fn === 'wa209_vol_app_status') return Promise.resolve({ data: { ok: true }, error: null });
   return orig(fn, args); }; db.__w209 = true; };
-const INIT = '';
+const INIT = `window.__INV = []; window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__INV.push({ name: name, body: b });
+  if (name === 'recruit-actions' && b.action === 'cv_check') return { data: /folders/.test(b.url) ? { ok: false, reason: 'folder', error: 'That link is a folder.' } : { ok: true, id: 'D1', name: 'Ada CV.pdf' }, error: null };
+  if (name === 'recruit-actions' && b.action === 'file_cv') return { data: { ok: true, filed: true, copied: true, where: 'Operations Manager > Resumes' }, error: null };
+  return { data: null, error: null }; };`;
 
 (async () => {
   const browser = await launch();
@@ -56,9 +59,18 @@ const INIT = '';
   ok('Add: a name is required', await f.ev(() => /Their name, please/.test(document.getElementById('w209add').textContent) && !window.__RPC.some(r => r.fn === 'wa209_intake')));
   await f.page.fill('#w209n', 'Ada Lovelace'); await f.page.fill('#w209e', 'ada@example.com'); await f.page.selectOption('#w209pos', '35'); await f.page.selectOption('#w209s', 'linkedin');
   await f.page.fill('#w209m', 'Strong operations background'); await f.page.fill('#w209l', 'https://linkedin.com/in/ada');
-  await f.page.click('#w209add [data-w209a="save"]'); await f.page.waitForTimeout(600);
+  ok('Add (w211): the Resumes folder of the chosen position is offered', await f.ev(() => /folders\/R35/.test(document.querySelector('#w209cvhelp').innerHTML) && /Copy link/.test(document.querySelector('#w209cvhelp').textContent)));
+  await f.page.click('#w209add [data-w209a="save"]'); await f.page.waitForTimeout(300);
+  ok('Add (w211): the CV link is required and the guidance opens', await f.ev(() => /link to their CV in Google Drive/.test(document.getElementById('w209add').textContent) && document.getElementById('w209cvhelp').open && !window.__RPC.some(r => r.fn === 'wa209_intake')));
+  await f.page.fill('#w209cv', 'https://example.com/cv.pdf'); await f.page.click('#w209add [data-w209a="save"]'); await f.page.waitForTimeout(300);
+  ok('Add (w211): a link that is not Google Drive is refused', await f.ev(() => /not a Google Drive link/.test(document.getElementById('w209add').textContent)));
+  await f.page.fill('#w209cv', 'https://drive.google.com/drive/folders/XYZ'); await f.page.click('#w209add [data-w209a="save"]'); await f.page.waitForTimeout(500);
+  ok('Add (w211): the Hub checks the link (a folder is refused)', await f.ev(() => /That link is a folder/.test(document.getElementById('w209add').textContent) && !window.__RPC.some(r => r.fn === 'wa209_intake')));
+  await f.page.fill('#w209cv', 'https://drive.google.com/file/d/D1/view');
+  await f.page.click('#w209add [data-w209a="save"]'); await f.page.waitForTimeout(800);
   const add = await f.ev(() => ({ r: window.__RPC.filter(r => r.fn === 'wa209_intake').pop(), open: document.getElementById('w209add').classList.contains('open') }));
-  ok('Add: saved through wa209_intake with the position, source, message and link', add.r && add.r.args.p.name === 'Ada Lovelace' && add.r.args.p.position_id === '35' && add.r.args.p.source === 'linkedin' && add.r.args.p.links[0] === 'https://linkedin.com/in/ada' && /2026-09-25/.test(add.r.args.p.applied_at) && !add.open, add);
+  ok('Add: saved through wa209_intake with the position, source, message and link', add.r && add.r.args.p.name === 'Ada Lovelace' && add.r.args.p.position_id === '35' && add.r.args.p.source === 'linkedin' && add.r.args.p.links[0] === 'https://drive.google.com/file/d/D1/view' && add.r.args.p.links[1] === 'https://linkedin.com/in/ada' && /2026-09-25/.test(add.r.args.p.applied_at) && !add.open, add);
+  ok('Add (w211): the CV is filed into the position\'s Resumes folder', await f.ev(() => window.__INV.some(x => x.body.action === 'file_cv' && x.body.id === 9301 && /D1/.test(x.body.url))));
   /* a volunteer-role card moves */
   await f.ev(() => { var s = document.getElementById('w197sheet'); if (s) s.classList.remove('open'); });
   await f.ev(() => w197.openSheet(9201)); await f.page.waitForTimeout(500);

@@ -88,6 +88,7 @@ const PAGES = ['overview', 'team', 'hours', 'timeoff', 'recognition', 'applicati
   await f.page.click('#w197board .w197cand[data-w197c="901"]'); await f.page.waitForTimeout(500);
   const sh = await f.ev(() => ({ open: document.getElementById('w197sheet').classList.contains('open'), t: document.querySelector('#w197sheet h3').textContent, cv: !!document.querySelector('#w197sheet [data-w197cv]'), next: document.querySelector('#w197sheet .next').textContent }));
   ok('sheet opens with the applicant', sh.open && sh.t === 'Ada Applicant' && sh.cv && /Read the application/.test(sh.next), sh);
+  await f.page.selectOption('#w197sheet [data-w197f="owner"]', { index: 2 }); await f.page.waitForTimeout(500);   /* wave211: Reviewing needs Handled by first */
   await f.page.click('#w197sheet [data-w197st="reviewing"]'); await f.page.waitForTimeout(700);
   const mv = await f.ev(() => ({ col: Array.from(document.querySelectorAll('#w197board .w197col')).map(c => c.getAttribute('data-w197col') + ':' + c.querySelectorAll('.w197cand').length).join(','), on: (document.querySelector('#w197sheet .stg button.on') || {}).textContent }));
   ok('stage button moves the card', mv.col.indexOf('reviewing:2') >= 0 && mv.on === 'Reviewing', mv);
@@ -99,6 +100,11 @@ const PAGES = ['overview', 'team', 'hours', 'timeoff', 'recognition', 'applicati
   ok('the candidate saved stage, owner and notes', st901.s === 'reviewing' && !!st901.o && st901.n === 'Strong on logistics.', st901);
   /* drag a card to Interview */
   await f.page.dragAndDrop('#w197board .w197cand[data-w197c="903"]', '#w197board .w197col[data-w197col="interview"]'); await f.page.waitForTimeout(700);
+  ok('drag to Interview asks for what the stage needs first (wave211)', await f.ev(() => !!document.querySelector('#w211g.open #w211g_iv') && w197.state().cands.filter(x => x.id === 903)[0].status !== 'interview'));
+  await f.ev(() => { var b = document.querySelector('#w211g [data-w211ga="cancel"]'); if (b) b.click(); });
+  await f.ev(() => { window.__g = window.w211g; window.w211g = null; });   /* the wave199 fallback, gates off */
+  await f.page.dragAndDrop('#w197board .w197cand[data-w197c="903"]', '#w197board .w197col[data-w197col="interview"]'); await f.page.waitForTimeout(700);
+  await f.ev(() => { window.w211g = window.__g; });
   ok('drag moves a card', (await f.ev(() => w197.state().cands.filter(x => x.id === 903)[0].status)) === 'interview');
   /* wave199: a card moved to Interview with no time opens its sheet on the day and time; close it */
   ok('drag to Interview asks for the day and time (wave199)', await f.ev(() => !!document.querySelector('#w197sheet.open #w199iv')));

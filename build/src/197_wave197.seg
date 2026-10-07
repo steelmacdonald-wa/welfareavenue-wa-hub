@@ -435,8 +435,14 @@
   }
   async function moveTo(id, st) {
     var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c || c.status === st) return;
-    var ok = await updateCand(c.id, { status: st }, (c.name || 'Moved') + ': ' + stageLabel(st));
-    if (ok) { paintBoard(); paintRail(); if (S.open === c.id) openSheet(c.id); if (st === 'interview' && !c.interview_at && window.w199) { openSheet(c.id); w199.askTime(); } }   /* wave199: an interview needs its day and time */
+    var extra = {}; if (window.w211g) { extra = await w211g.gate(c, st); if (!extra) return; }   /* wave211: what the stage needs before the card moves */
+    var patch = { status: st }; Object.keys(extra).forEach(function (k) { patch[k] = extra[k]; });
+    var ok = await updateCand(c.id, patch, (c.name || 'Moved') + ': ' + stageLabel(st));
+    if (ok) {
+      paintBoard(); paintRail(); if (S.open === c.id) openSheet(c.id);
+      if (st === 'interview' && !c.interview_at && window.w199) { openSheet(c.id); w199.askTime(); }   /* wave199: an interview needs its day and time */
+      if (st === 'offer' && !c.offer_sent_at && window.w211) w211.askOffer(c.id);   /* wave211: the offer letter, ready to send */
+    }
   }
 
   /* ---------- Hours: The Loop against the minimums ---------- */
