@@ -15,11 +15,13 @@
    - It cannot be closed (no x, no Escape, no click outside) until Save; if saving fails it says so and, only then,
      offers "Try again later" so a fault never locks anyone out. confirm_due_dates() writes each change with a
      change_log line; the pop-up comes back next visit only for what is still overdue or undated.
+   wave213c (07/10/26): each task can also be Done, sent To the bank (until a day; bank_task) or Discarded (deleted, the
+   row kept in change_log); saved through confirm_due_check (confirm_due_dates stays for pages still open).
    Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
 (function () {
   'use strict';
   if (window.__wa213) return; window.__wa213 = true;
-  var S = { rows: null, pick: {}, done: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var S = { rows: null, pick: {}, act: {}, bank: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
   var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
 
   var css = ''
@@ -31,7 +33,11 @@
     + '#w213pop .bd{overflow-y:auto;padding:4px 22px 10px;}'
     + '#w213pop h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#6b6a65;margin:16px 0 6px;font-weight:700;}'
     + '#w213pop .row{border:1px solid var(--wa-line,#e4e0d4);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#FFFAF2;}'
-    + '#w213pop .row.isdone{opacity:.6;}'
+    + '#w213pop .row.isdone .t{opacity:.6;}'
+    + '#w213pop .row.a-discard .t{text-decoration:line-through;}'
+    + '#w213pop .hint{font-size:12px;color:#6b6a65;}'
+    + '#w213pop .hint.warn{color:' + FLAG + ';}'
+    + '#w213pop .bk{font-size:12.5px;display:inline-flex;gap:6px;align-items:center;}'
     + '#w213pop .t{font-weight:600;font-size:13.5px;color:#1F201E;}'
     + '#w213pop .m{font-size:12px;color:#6b6a65;margin-top:2px;}'
     + '#w213pop .ctl{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-top:8px;}'
@@ -69,21 +75,49 @@
     } catch (e) { return null; }
   }
 
+  /* wave213c (Steel, 07/10/26): "members should have the ability to discard a task, complete a task (it's done), or
+     move the task to the task bank". Each task: Keep (with its date), Done, To the bank (until a day), Discard. */
+  var ACTS = [['keep', 'Keep'], ['done', 'Done'], ['bank', 'To the bank'], ['discard', 'Discard']];
+  function plusDays(n) { var d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+  function actOf(id) { return S.act[id] || 'keep'; }
+
   function rowHtml(r) {
-    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], dn = !!S.done[id];
+    var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], a = actOf(id);
     var meta = [team(r.department)];
     if (isOver) meta.push('was due ' + day(r.due_date));
     else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
     if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
-    var h = '<div class="row' + (dn ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
-      + '<div class="m">' + E(meta.filter(Boolean).join(' · ')) + '</div><div class="ctl">';
-    if (isOver) h += '<span class="seg" role="group" aria-label="Is it done?"><button type="button" data-w213done="' + id + '" class="' + (dn ? 'on' : '') + '">Done</button><button type="button" data-w213open="' + id + '" class="' + (dn ? '' : 'on') + '">Still open, push to</button></span>';
-    if (!dn) {
+    var h = '<div class="row a-' + a + (a === 'done' || a === 'discard' ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' · ')) + '</div><div class="ctl">'
+      + '<span class="seg" role="group" aria-label="What to do with it">' + ACTS.map(function (x) {
+          return '<button type="button" data-w213act="' + id + '" data-a="' + x[0] + '" class="' + (a === x[0] ? 'on' : '') + '" aria-pressed="' + (a === x[0]) + '">' + (x[0] === 'keep' && isOver ? 'Keep, push to' : x[1]) + '</button>';
+        }).join('') + '</span>';
+    if (a === 'keep') {
       h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
         + '<button type="button" class="chip' + (v === r.next_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.next_meeting) + '">Next meeting · ' + E(day(r.next_meeting, true)) + '</button>'
         + '<button type="button" class="chip' + (v === r.following_meeting ? ' on' : '') + '" data-w213set="' + id + '" data-d="' + E(r.following_meeting) + '">Following · ' + E(day(r.following_meeting, true)) + '</button>';
+    } else if (a === 'bank') {
+      h += '<label class="bk">Back on <input type="date" aria-label="Back from the bank on" data-w213bank="' + id + '" value="' + E(S.bank[id]) + '"></label><span class="hint">It leaves your boards and comes back by itself on that day.</span>';
+    } else if (a === 'discard') {
+      h += '<span class="hint warn">It will be deleted, like Delete on the task.</span>';
+    } else {
+      h += '<span class="hint">Marked done.</span>';
     }
     return h + '</div></div>';
+  }
+
+  function counts() {
+    var c = { keep: 0, done: 0, bank: 0, discard: 0 };
+    (S.rows || []).forEach(function (r) { c[actOf(r.task_id)]++; });
+    return c;
+  }
+  function saveLabel() {
+    var c = counts(), bits = [];
+    if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' date' : ' dates'));
+    if (c.done) bits.push(c.done + ' done');
+    if (c.bank) bits.push(c.bank + ' to the bank');
+    if (c.discard) bits.push(c.discard + ' discarded');
+    return 'Save: ' + bits.join(', ');
   }
 
   function html() {
@@ -96,15 +130,13 @@
     if (none.length) bits.push(none.length + ' with no due date');
     if (set.length) bits.push(set.length + ' dated by a meeting');
     var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">Check your due dates</h2>'
-      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team’s next meeting. Change any that don’t fit'
-      + (over.length ? ', tell us which overdue ones are done' : '') + ', then save.</p></div><div class="bd">';
+      + '<p class="lead">Before you carry on: ' + E(bits.join(', ')) + '. We filled in our best guess, usually your team’s next meeting. For each one, keep it with a date that fits, mark it done, put it in the task bank for later, or discard it. Then save.</p></div><div class="bd">';
     if (over.length) h += '<h3>Overdue: done, or push to a realistic date</h3>' + over.map(rowHtml).join('');
     if (none.length) h += '<h3>No due date yet</h3>' + none.map(rowHtml).join('');
     if (set.length) h += '<h3>Dates a meeting set: do they make sense?</h3>' + set.map(rowHtml).join('');
-    var n = rows.length;
-    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : 'Save ' + n + (n === 1 ? ' task' : ' tasks')) + '</button>'
+    h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : E(saveLabel())) + '</button>'
       + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
-      + '<span class="note">You can change any date later on the task itself.</span>'
+      + '<span class="note">You can change any of this later on the task itself.</span>'
       + (S.err ? '<p class="err" role="alert">' + E(S.err) + '</p>' : '') + '</div></div>';
     return h;
   }
@@ -127,38 +159,49 @@
       var t = e.target, b;
       if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
       if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
-      if ((b = t.closest('[data-w213done]'))) { S.done[b.getAttribute('data-w213done')] = true; paint(); return; }
-      if ((b = t.closest('[data-w213open]'))) { delete S.done[b.getAttribute('data-w213open')]; paint(); return; }
+      if ((b = t.closest('[data-w213act]'))) { S.act[b.getAttribute('data-w213act')] = b.getAttribute('data-a'); S.err = ''; paint(); return; }
       if (t.closest('[data-w213save]')) { save(); return; }
       if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
     });
     el.addEventListener('change', function (e) {
-      var i = e.target.closest('[data-w213date]'); if (!i) return;
-      S.pick[i.getAttribute('data-w213date')] = i.value; paint();
+      var i = e.target.closest('[data-w213date]'); if (i) { S.pick[i.getAttribute('data-w213date')] = i.value; paint(); return; }
+      var k = e.target.closest('[data-w213bank]'); if (k) { S.bank[k.getAttribute('data-w213bank')] = k.value; paint(); }
     });
     document.addEventListener('keydown', trapKey, true);
   }
 
   async function save() {
     if (S.busy) return;
-    var items = [], missing = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    var items = [], missing = 0, past = 0, bankBad = 0, today = new Date(); today.setHours(0, 0, 0, 0);
     (S.rows || []).forEach(function (r) {
-      var id = r.task_id;
-      if (S.done[id]) { items.push({ id: id, done: true }); return; }
+      var id = r.task_id, a = actOf(id);
+      if (a === 'done') { items.push({ id: id, action: 'done' }); return; }
+      if (a === 'discard') { items.push({ id: id, action: 'discard' }); return; }
+      if (a === 'bank') {
+        var u = S.bank[id];
+        if (!u || !/^\d{4}-\d{2}-\d{2}$/.test(u) || new Date(u + 'T12:00:00') <= today) { bankBad++; return; }
+        items.push({ id: id, action: 'bank', until: u }); return;
+      }
       var v = S.pick[id];
       if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
+      if (new Date(v + 'T12:00:00') < today) { past++; return; }
       items.push({ id: id, due: v });
     });
-    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or mark it done.' : missing + ' tasks have no date: pick one for each, or mark them done.'; paint(); return; }
-    var past = items.filter(function (x) { return x.due && new Date(x.due + 'T12:00:00') < today; }).length;
+    if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or choose Done, To the bank or Discard.' : missing + ' tasks have no date: pick one for each, or choose Done, To the bank or Discard.'; paint(); return; }
     if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
+    if (bankBad) { S.err = 'A task going to the bank needs a day in the future to come back on.'; paint(); return; }
     S.busy = true; S.err = ''; paint();
     try {
-      var r = await db.rpc('confirm_due_dates', { p: items });
+      var r = await db.rpc('confirm_due_check', { p: items });
       if (r && r.error) throw new Error(r.error.message || 'could not save');
-      var nDone = items.filter(function (x) { return x.done; }).length, nDate = items.length - nDone;
+      var res = (r && r.data) || {}, skipped = Array.isArray(res.skipped) ? res.skipped : [];
+      var c = counts(), bits = [];
+      if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' due date' : ' due dates'));
+      if (c.done) bits.push(c.done + ' done');
+      if (c.bank) bits.push(c.bank + ' to the bank');
+      if (c.discard) bits.push(c.discard + ' discarded');
       close();
-      toastS('Saved: ' + (nDate ? nDate + (nDate === 1 ? ' due date' : ' due dates') : '') + (nDate && nDone ? ', ' : '') + (nDone ? nDone + ' marked done' : '') + '.');
+      toastS('Saved: ' + bits.join(', ') + '.' + (skipped.length ? ' ' + skipped.length + (skipped.length === 1 ? ' task' : ' tasks') + ' could not be changed (' + String(skipped[0].why || '') + ').' : ''));
       try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
     } catch (e) {
       S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
@@ -170,8 +213,8 @@
     if (!staff()) return;
     var rows = await load();
     if (!rows || !rows.length) return;
-    S.rows = rows; S.pick = {}; S.done = {};
-    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; });
+    S.rows = rows; S.pick = {}; S.act = {}; S.bank = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); });
     var tries = 0;
     (function wait() {
       if (S.shown || S.gone) return;

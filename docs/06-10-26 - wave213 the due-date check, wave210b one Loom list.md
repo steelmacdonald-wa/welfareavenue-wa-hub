@@ -29,3 +29,7 @@ build/src/MANIFEST.txt is not in this push (the parallel session's wave211/212 M
     213_wave213
 
 and the 162 comment: "wave210b (06/10/26): the card lists only what was not filed; filed meetings are in the Archive." Wave 213 sits before 164/163/110 (startApp wrapper order). build/candidate.html is not pushed either: the live build is live md5 269c4fb5.
+
+## wave213c (07/10/26): Keep, Done, To the bank, Discard
+
+Steel: "members should have the ability to discard a task, complete a task (it's done), or move the task to the task bank". Every task in the pop-up now has four choices: **Keep** (with its date; "Keep, push to" when overdue), **Done**, **To the bank** (a "Back on" day, three months out by default; it leaves the boards and comes back by itself, through bank_task like the board's bank move) and **Discard** (deleted like the board's Delete; the whole row is kept in change_log.old_value so it can be restored by hand). The Save button says what will happen ("Save: 2 dates, 1 done, 1 to the bank, 1 discarded"). Saved through the new `confirm_due_check(jsonb)` (returns saved and skipped; each task is its own step, so one failure does not stop the rest). `confirm_due_dates` stays for pages still open on the old build (changing its return type needed a drop, which the connector holds for approval). Migration wa213c_bank_discard. Live md5 663456fd (on c359b6f1). Test w213drive 21.
