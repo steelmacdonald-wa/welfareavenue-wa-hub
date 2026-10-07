@@ -125,7 +125,7 @@
         step('#w153rail .w153sec', 'The pages', 'Overview first, then People (Team, Hours, Time off, Recognition), Hiring (Applications, Positions, Playbook), Growth (Onboarding, Onboarding plan, Training), Care (Policies, Discipline) and, for HR and admins, Analytics.'),
         step('#w197ov .w197tiles', 'The numbers', 'The team, who is in The Loop this week, new applications, onboarding, overdue trainings and time off to decide. Click one to open its page.'),
         step('#w197ov .w197todo', 'Needs HR', 'Everything waiting on HR, most urgent first, each with Open. When it is empty, nothing is waiting.'),
-        { c: 1, t: 'Applications', p: 'A board by stage: New, Reviewing, Interview, Offer, Hired. Drag a card to move it; open it to read what they wrote, open the CV, choose who handles it, link the position and take notes. Declined and withdrawn are kept below the board.' },
+        { c: 1, t: 'Applications', p: 'A board by stage: New, Reviewing, Interview, Offer, Hired. Drag a card to move it; open it to read what they wrote, open the CV, choose who handles it, link the position and take notes. Declined and withdrawn are kept below the board. Volunteer instead sends someone who would rather volunteer to the Volunteer Manager.' },
         { c: 1, t: 'Hours', p: 'Time given through The Loop against each person’s weekly minimum (below the minimum first), what people shared when they closed the loop, and meeting attendance.' }
       ];
       TT.hrcentre.__w197 = true; TT.hrcentre.__w181 = true;

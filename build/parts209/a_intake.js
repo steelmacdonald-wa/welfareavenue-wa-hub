@@ -181,11 +181,14 @@
     if (!c || !staff()) return '';
     var title = c.role || '';
     try { var p = c.position_id && positions().filter(function (x) { return String(x.id) === String(c.position_id); })[0]; if (p) title = p.title; } catch (e) { /* fine */ }
-    var r = volRoles(title); if (!r.length) return '';
+    var r = volRoles(title);
+    if (window.w218) return w218.sheetBits(c, r);   /* wave218: one step for every card (roles, servings), the card kept as Volunteering */
+    if (!r.length) return '';
     return '<div class="w209move"><b>' + E(r.map(roleLabel).join(', ')) + ' is a volunteer role.</b> Volunteer applicants are handled in the Volunteer Manager, Applicants received, with their record in the CRM and the volunteer directory.' +
       '<div class="acts">' + btn('Move to the Volunteer Manager', 'data-w209move="' + c.id + '"', 'sm pri') + '</div></div>';
   }
   async function moveCard(id) {
+    if (window.w218) { w218.open(id); return; }   /* wave218 */
     var c = null; try { c = w197.state().cands.filter(function (x) { return String(x.id) === String(id); })[0]; } catch (e) { c = null; }
     if (!window.confirm('Move ' + ((c && c.name) || 'this applicant') + ' to the Volunteer Manager? The card leaves Applications; their application, contact and message go to Applicants received.')) return;
     try {

@@ -256,8 +256,8 @@
    summary, transcript, duration. Edge: recruit-actions quo_calls, quo_log. */
 (function () {
   'use strict';
-  var RANK = { 'new': 0, reviewing: 1, interview: 2, offer: 3, hired: 4, declined: -1, withdrawn: -1 };
-  var LABEL = { 'new': 'New', reviewing: 'Reviewing', interview: 'Interview', offer: 'Offer', hired: 'Hired', declined: 'Declined', withdrawn: 'Withdrawn' };
+  var RANK = { 'new': 0, reviewing: 1, interview: 2, offer: 3, hired: 4, declined: -1, withdrawn: -1, volunteering: -1 };
+  var LABEL = { 'new': 'New', reviewing: 'Reviewing', interview: 'Interview', offer: 'Offer', hired: 'Hired', declined: 'Declined', withdrawn: 'Withdrawn', volunteering: 'Volunteering' };
   var REASONS = {
     declined: ['Not the right fit for the role', 'Did not reply after we reached out', 'Not available when we need them', 'The position was filled', 'Did not meet the requirements', 'Other'],
     withdrawn: ['Took another role', 'No longer interested', 'Not available anymore', 'Did not reply after we reached out', 'Other']
@@ -279,7 +279,7 @@
   function local(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function when(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
-  function closed(st) { return st === 'declined' || st === 'withdrawn'; }
+  function closed(st) { return st === 'declined' || st === 'withdrawn' || st === 'volunteering'; }
 
   /* what is missing for a move; [] means it can move now */
   function missing(c, st, v) {

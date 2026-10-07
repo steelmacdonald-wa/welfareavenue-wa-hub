@@ -101,9 +101,9 @@
       list.sort(function (a, b) { if (window.w199 && w199.sortGrade()) { var d = w199.gradeAvg(b) - w199.gradeAvg(a); if (d) return d; } if (s[0] === 'interview') return String(a.interview_at || '9').localeCompare(String(b.interview_at || '9')); return String(a.created_at).localeCompare(String(b.created_at)); });   /* wave199: interviews in date order, the ones with no time last */
       return '<div class="w197col" data-w197col="' + s[0] + '"><h4>' + E(s[1]) + ' <small>' + list.length + '</small></h4>' + (list.length ? list.map(function (c) { return candCard(c); }).join('') : '<p class="w197note" style="margin:4px">' + (s[0] === 'new' ? 'No new applications.' : 'Drop a card here.') + '</p>') + '</div>';
     }).join('');
-    var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn'; });
+    var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn' || c.status === 'volunteering'; });
     return bar + '<div class="w197board" id="w197board">' + cols + '</div>' +
-      '<div class="w197closed">' + (closed.length ? '<button type="button" class="w197b sm" data-w197a="closed">' + (S.showClosed ? 'Hide' : 'Show') + ' the ' + closed.length + ' closed (declined or withdrawn)</button>' + (S.showClosed ? '<div>' + closed.map(function (c) { return candCard(c, true); }).join('') + '</div>' : '') : '') +
+      '<div class="w197closed">' + (closed.length ? '<button type="button" class="w197b sm" data-w197a="closed">' + (S.showClosed ? 'Hide' : 'Show') + ' the ' + closed.length + ' closed (declined, withdrawn or volunteering)</button>' + (S.showClosed ? '<div>' + closed.map(function (c) { return candCard(c, true); }).join('') + '</div>' : '') : '') +
       '<p class="w197note">Applications emailed to hub@ (label Hub/Recruitment) and from the job boards land in New. Hired shows the last 90 days.</p></div>';
   }
   function paintBoard() { var h = host('w197apps'); if (!h) return; var a = document.activeElement, qf = a && a.id === 'w197q'; h.innerHTML = boardHtml(); if (qf) { var x = document.getElementById('w197q'); if (x) { x.focus(); try { x.setSelectionRange(x.value.length, x.value.length); } catch (e) { /* fine */ } } } }
@@ -115,7 +115,7 @@
     interview: 'After the interview, write your impressions here. If it is a yes, move it to Offer and send the offer letter (Playbook).',
     offer: 'When they accept, move it to Hired, then set up their onboarding.',
     hired: 'Set up their onboarding: Onboarding, Assign an onboarding. The Welcome kit there has the email and the account setup.',
-    declined: 'Closed. Move it back to a stage if this changes.', withdrawn: 'Closed. Move it back to a stage if this changes.'
+    declined: 'Closed. Move it back to a stage if this changes.', withdrawn: 'Closed. Move it back to a stage if this changes.', volunteering: 'With the Volunteer Manager: Operations welcomes them from Applicants received.'
   };
   function sheetEl() { var s = document.getElementById('w197sheet'); if (!s) { s = document.createElement('div'); s.id = 'w197sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true'); s.setAttribute('aria-label', 'Application'); document.body.appendChild(s); } return s; }
   function openSheet(id) {
@@ -158,6 +158,7 @@
   }
   async function moveTo(id, st) {
     var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c || c.status === st) return;
+    if (st === 'volunteering') { if (window.w218) w218.open(c); return; }   /* wave218: roles and servings first, in one step */
     var extra = {}; if (window.w211g) { extra = await w211g.gate(c, st); if (!extra) return; }   /* wave211: what the stage needs before the card moves */
     var patch = { status: st }; Object.keys(extra).forEach(function (k) { patch[k] = extra[k]; });
     var ok = await updateCand(c.id, patch, (c.name || 'Moved') + ': ' + stageLabel(st));

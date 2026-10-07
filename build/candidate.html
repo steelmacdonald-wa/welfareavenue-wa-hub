@@ -73531,7 +73531,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var MUTED = 'var(--wa-muted)';
   var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
   var STAGES = [['new', 'New'], ['reviewing', 'Reviewing'], ['interview', 'Interview'], ['offer', 'Offer'], ['hired', 'Hired']];
-  var CLOSED = [['declined', 'Declined'], ['withdrawn', 'Withdrawn']];
+  var CLOSED = [['declined', 'Declined'], ['withdrawn', 'Withdrawn'], ['volunteering', 'Volunteering']];   /* wave218: volunteering = sent to the Volunteer Manager */
 
   /* the pages: key, label, rail icon, group, the older tab whose data it needs, the line under the title */
   var PAGES = [
@@ -73881,9 +73881,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       list.sort(function (a, b) { if (window.w199 && w199.sortGrade()) { var d = w199.gradeAvg(b) - w199.gradeAvg(a); if (d) return d; } if (s[0] === 'interview') return String(a.interview_at || '9').localeCompare(String(b.interview_at || '9')); return String(a.created_at).localeCompare(String(b.created_at)); });   /* wave199: interviews in date order, the ones with no time last */
       return '<div class="w197col" data-w197col="' + s[0] + '"><h4>' + E(s[1]) + ' <small>' + list.length + '</small></h4>' + (list.length ? list.map(function (c) { return candCard(c); }).join('') : '<p class="w197note" style="margin:4px">' + (s[0] === 'new' ? 'No new applications.' : 'Drop a card here.') + '</p>') + '</div>';
     }).join('');
-    var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn'; });
+    var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn' || c.status === 'volunteering'; });
     return bar + '<div class="w197board" id="w197board">' + cols + '</div>' +
-      '<div class="w197closed">' + (closed.length ? '<button type="button" class="w197b sm" data-w197a="closed">' + (S.showClosed ? 'Hide' : 'Show') + ' the ' + closed.length + ' closed (declined or withdrawn)</button>' + (S.showClosed ? '<div>' + closed.map(function (c) { return candCard(c, true); }).join('') + '</div>' : '') : '') +
+      '<div class="w197closed">' + (closed.length ? '<button type="button" class="w197b sm" data-w197a="closed">' + (S.showClosed ? 'Hide' : 'Show') + ' the ' + closed.length + ' closed (declined, withdrawn or volunteering)</button>' + (S.showClosed ? '<div>' + closed.map(function (c) { return candCard(c, true); }).join('') + '</div>' : '') : '') +
       '<p class="w197note">Applications emailed to hub@ (label Hub/Recruitment) and from the job boards land in New. Hired shows the last 90 days.</p></div>';
   }
   function paintBoard() { var h = host('w197apps'); if (!h) return; var a = document.activeElement, qf = a && a.id === 'w197q'; h.innerHTML = boardHtml(); if (qf) { var x = document.getElementById('w197q'); if (x) { x.focus(); try { x.setSelectionRange(x.value.length, x.value.length); } catch (e) { /* fine */ } } } }
@@ -73895,7 +73895,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     interview: 'After the interview, write your impressions here. If it is a yes, move it to Offer and send the offer letter (Playbook).',
     offer: 'When they accept, move it to Hired, then set up their onboarding.',
     hired: 'Set up their onboarding: Onboarding, Assign an onboarding. The Welcome kit there has the email and the account setup.',
-    declined: 'Closed. Move it back to a stage if this changes.', withdrawn: 'Closed. Move it back to a stage if this changes.'
+    declined: 'Closed. Move it back to a stage if this changes.', withdrawn: 'Closed. Move it back to a stage if this changes.', volunteering: 'With the Volunteer Manager: Operations welcomes them from Applicants received.'
   };
   function sheetEl() { var s = document.getElementById('w197sheet'); if (!s) { s = document.createElement('div'); s.id = 'w197sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true'); s.setAttribute('aria-label', 'Application'); document.body.appendChild(s); } return s; }
   function openSheet(id) {
@@ -73938,6 +73938,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   async function moveTo(id, st) {
     var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c || c.status === st) return;
+    if (st === 'volunteering') { if (window.w218) w218.open(c); return; }   /* wave218: roles and servings first, in one step */
     var extra = {}; if (window.w211g) { extra = await w211g.gate(c, st); if (!extra) return; }   /* wave211: what the stage needs before the card moves */
     var patch = { status: st }; Object.keys(extra).forEach(function (k) { patch[k] = extra[k]; });
     var ok = await updateCand(c.id, patch, (c.name || 'Moved') + ': ' + stageLabel(st));
@@ -74277,7 +74278,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         step('#w153rail .w153sec', 'The pages', 'Overview first, then People (Team, Hours, Time off, Recognition), Hiring (Applications, Positions, Playbook), Growth (Onboarding, Onboarding plan, Training), Care (Policies, Discipline) and, for HR and admins, Analytics.'),
         step('#w197ov .w197tiles', 'The numbers', 'The team, who is in The Loop this week, new applications, onboarding, overdue trainings and time off to decide. Click one to open its page.'),
         step('#w197ov .w197todo', 'Needs HR', 'Everything waiting on HR, most urgent first, each with Open. When it is empty, nothing is waiting.'),
-        { c: 1, t: 'Applications', p: 'A board by stage: New, Reviewing, Interview, Offer, Hired. Drag a card to move it; open it to read what they wrote, open the CV, choose who handles it, link the position and take notes. Declined and withdrawn are kept below the board.' },
+        { c: 1, t: 'Applications', p: 'A board by stage: New, Reviewing, Interview, Offer, Hired. Drag a card to move it; open it to read what they wrote, open the CV, choose who handles it, link the position and take notes. Declined and withdrawn are kept below the board. Volunteer instead sends someone who would rather volunteer to the Volunteer Manager.' },
         { c: 1, t: 'Hours', p: 'Time given through The Loop against each person\u2019s weekly minimum (below the minimum first), what people shared when they closed the loop, and meeting attendance.' }
       ];
       TT.hrcentre.__w197 = true; TT.hrcentre.__w181 = true;
@@ -81015,11 +81016,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!c || !staff()) return '';
     var title = c.role || '';
     try { var p = c.position_id && positions().filter(function (x) { return String(x.id) === String(c.position_id); })[0]; if (p) title = p.title; } catch (e) { /* fine */ }
-    var r = volRoles(title); if (!r.length) return '';
+    var r = volRoles(title);
+    if (window.w218) return w218.sheetBits(c, r);   /* wave218: one step for every card (roles, servings), the card kept as Volunteering */
+    if (!r.length) return '';
     return '<div class="w209move"><b>' + E(r.map(roleLabel).join(', ')) + ' is a volunteer role.</b> Volunteer applicants are handled in the Volunteer Manager, Applicants received, with their record in the CRM and the volunteer directory.' +
       '<div class="acts">' + btn('Move to the Volunteer Manager', 'data-w209move="' + c.id + '"', 'sm pri') + '</div></div>';
   }
   async function moveCard(id) {
+    if (window.w218) { w218.open(id); return; }   /* wave218 */
     var c = null; try { c = w197.state().cands.filter(function (x) { return String(x.id) === String(id); })[0]; } catch (e) { c = null; }
     if (!window.confirm('Move ' + ((c && c.name) || 'this applicant') + ' to the Volunteer Manager? The card leaves Applications; their application, contact and message go to Applicants received.')) return;
     try {
@@ -81658,8 +81662,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    summary, transcript, duration. Edge: recruit-actions quo_calls, quo_log. */
 (function () {
   'use strict';
-  var RANK = { 'new': 0, reviewing: 1, interview: 2, offer: 3, hired: 4, declined: -1, withdrawn: -1 };
-  var LABEL = { 'new': 'New', reviewing: 'Reviewing', interview: 'Interview', offer: 'Offer', hired: 'Hired', declined: 'Declined', withdrawn: 'Withdrawn' };
+  var RANK = { 'new': 0, reviewing: 1, interview: 2, offer: 3, hired: 4, declined: -1, withdrawn: -1, volunteering: -1 };
+  var LABEL = { 'new': 'New', reviewing: 'Reviewing', interview: 'Interview', offer: 'Offer', hired: 'Hired', declined: 'Declined', withdrawn: 'Withdrawn', volunteering: 'Volunteering' };
   var REASONS = {
     declined: ['Not the right fit for the role', 'Did not reply after we reached out', 'Not available when we need them', 'The position was filled', 'Did not meet the requirements', 'Other'],
     withdrawn: ['Took another role', 'No longer interested', 'Not available anymore', 'Did not reply after we reached out', 'Other']
@@ -81681,7 +81685,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function local(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function today() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function when(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
-  function closed(st) { return st === 'declined' || st === 'withdrawn'; }
+  function closed(st) { return st === 'declined' || st === 'withdrawn' || st === 'volunteering'; }
 
   /* what is missing for a move; [] means it can move now */
   function missing(c, st, v) {
@@ -82678,6 +82682,181 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return true;
   }
   if (!register()) { var n = 0, t = setInterval(function () { if (register() || ++n > 40) clearInterval(t); }, 500); }
+})();
+/* =====================================================================
+   WA v218 Volunteer instead: an applicant from the HR centre to the Volunteer Manager (Steel, 07/10/26)
+   =====================================================================
+   Steel: "sometimes when we call applicants, they ended up wanting to just do volunteer work ... cook, server, driver,
+   team leader, community lead ... I want the ability to send applicants that come in through the HR center over to the
+   volunteer manager whenever an applicant says that they want to do something outside of the management team."
+   His choices: the card closes as Volunteering (kept, linked to their volunteer record); HR may put them on upcoming
+   servings in the same step (Waiting for response, no text); nobody is notified.
+   - Every open card's sheet has "Volunteer instead" (a card for a volunteer role keeps wave209's box, which now opens
+     the same step). The stage row's Volunteering button opens it too.
+   - The step: the roles (from what they applied for when it is a volunteer role), the next servings (ticked ones put
+     them on the roster as Waiting for response in their first role; nothing is texted), a note for Operations.
+   - Then: one record with the CRM in Volunteers (Review flag, tags), an application in Applicants received (To handle,
+     "Cook, Server (instead of Operations Manager)", with the CV and what they wrote), the card closed as Volunteering.
+   - A closed Volunteering card says what they will do and opens their volunteer record or Applicants received.
+   - Practice cards (Avenue Academy) only close: nothing reaches Volunteers, the CRM or a roster.
+   Database: wa218_to_volunteer (build/data/wa218_to_volunteer.sql), hub_candidates.volunteer_id.
+   Hooks: parts197 (CLOSED, moveTo, the closed list, NEXT), parts209 sheetBits and moveCard, parts211 (closed, labels). */
+(function () {
+  'use strict';
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', INK = '#1F201E';
+  var ROLES = [['cook', 'Cook'], ['server', 'Server'], ['driver', 'Driver'], ['team_leader', 'Team leader'], ['community_debrief', 'Community lead'],
+               ['community_talker', 'Community welcome'], ['photographer', 'Photographer'], ['dishwasher', 'Dishes']];
+  var D = { c: null, roles: [], events: [], picked: [], note: '', busy: false, err: '', evAt: 0, evs: null };
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function btn(label, attrs, kind) { return '<button type="button" class="w197b' + (kind ? ' ' + kind : '') + '" ' + (attrs || '') + '>' + label + '</button>'; }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function cand(id) { try { return (w197.state().cands || []).filter(function (x) { return String(x.id) === String(id); })[0] || null; } catch (e) { return null; } }
+  function label(k) { var x = ROLES.filter(function (r) { return r[0] === k; })[0]; return x ? x[1] : (k === 'volunteer' ? 'Volunteer' : k); }
+  function today() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function dayTxt(iso) { try { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); if (isNaN(d)) return String(iso); return d.toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function msgOf(e) { var m = (e && (e.message || e.error_description || e.details)) || String(e || ''); return String(m).replace(/^.*?ERROR:\s*/, ''); }
+  function titleOf(c) {
+    var t = c.role || '';
+    try { if (window.w199 && w199.roleOf) t = w199.roleOf(c) || t; } catch (e) { /* fine */ }
+    return t;
+  }
+  function suggested(c) { var r = []; try { if (window.w209 && w209.volRoles) r = w209.volRoles(titleOf(c)) || []; } catch (e) { r = []; } return r.filter(function (k) { return k !== 'volunteer'; }); }
+
+  /* ---------- the sheet ---------- */
+  function sheetBits(c, volRole) {
+    if (!c || !staff()) return '';
+    if (c.status === 'volunteering') {
+      return '<div class="w218box done"><b>' + E(c.close_reason || 'Volunteering') + '</b> They are with the Volunteer Manager: in Volunteers, with their contact in the CRM, and in Applicants received for Operations to welcome.' +
+        (c.practice ? ' <span class="w197pill mut">Practice: nothing was added to Volunteers</span>' : '') +
+        '<div class="acts">' + (c.volunteer_id ? btn('Their volunteer record', 'data-w218rec="' + E(c.volunteer_id) + '"', 'sm pri') : '') + btn('Applicants received', 'data-w218go="applicants"', 'sm') + '</div></div>';
+    }
+    if (c.status === 'hired') return '';
+    var lead = volRole && volRole.length ? '<b>' + E(volRole.map(label).join(', ')) + ' is a volunteer role.</b> Volunteer applicants are handled in the Volunteer Manager.'
+      : '<b>Would they rather volunteer?</b> If they want to cook, serve, drive or lead at servings instead of joining the team, send them to the Volunteer Manager.';
+    return '<div class="w218box">' + lead + '<div class="acts">' + btn(volRole && volRole.length ? 'Move to the Volunteer Manager' : 'Volunteer instead', 'data-w218open="' + c.id + '"', 'sm' + (volRole && volRole.length ? ' pri' : '')) + '</div></div>';
+  }
+
+  /* ---------- the step ---------- */
+  async function servings() {
+    if (D.evs && Date.now() - D.evAt < 60000) return D.evs;
+    try {
+      var r = await db.from('volunteer_events').select('id,code,title,event_date,start_time,status,location').eq('kind', 'service').gte('event_date', today())
+        .not('status', 'in', '("cancelled","completed")').order('event_date', { ascending: true }).limit(10);
+      D.evs = ((r && !r.error && r.data) || []).filter(function (e) { return !/^\s*test\b/i.test(e.title || ''); }).slice(0, 6);
+    } catch (e) { D.evs = []; }
+    D.evAt = Date.now();
+    return D.evs;
+  }
+  function dlg() {
+    var d = document.getElementById('w218dlg');
+    if (!d) { d = document.createElement('div'); d.id = 'w218dlg'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'w218h'); document.body.appendChild(d); }
+    return d;
+  }
+  function paint() {
+    var c = D.c; if (!c) return;
+    var d = dlg();
+    var evs = D.events || [];
+    d.innerHTML = '<div class="bk" data-w218x></div><div class="pn">' + btn('Close', 'data-w218x', 'sm x') +
+      '<h3 id="w218h">' + E(c.name || 'This applicant') + ': volunteer instead</h3>' +
+      '<p class="w218lead">They join Volunteers (one record with the CRM) and Applicants received for Operations to welcome. Their card closes as Volunteering. Nobody is notified and nothing is texted.</p>' +
+      '<label>What they would like to do</label><div class="w218roles">' + ROLES.map(function (r) {
+        return '<label class="w218chip"><input type="checkbox" data-w218role="' + r[0] + '"' + (D.roles.indexOf(r[0]) >= 0 ? ' checked' : '') + '> ' + E(r[1]) + '</label>';
+      }).join('') + '</div>' +
+      '<label>Put them on a serving? <small>optional</small></label>' +
+      (D.evs === null ? '<p class="w197note">Loading the servings\u2026</p>' : (evs.length ? '<div class="w218evs">' + evs.map(function (e) {
+        return '<label class="w218ev"><input type="checkbox" data-w218ev="' + e.id + '"' + (D.picked.indexOf(String(e.id)) >= 0 ? ' checked' : '') + '> <b>' + E(dayTxt(e.event_date)) + '</b> <span>' + E([e.code, e.title].filter(Boolean).join(' \u00b7 ')) + '</span></label>';
+      }).join('') + '</div><p class="w197note">They go on the roster as Waiting for response in their first role. Operations confirms them; no text goes from here.</p>'
+        : '<p class="w197note">No upcoming servings. Operations can invite them later with Find volunteers.</p>')) +
+      '<label for="w218note">A note for Operations <small>optional</small></label><textarea id="w218note" placeholder="What they said on the call: availability, a car, languages">' + E(D.note) + '</textarea>' +
+      (D.err ? '<p class="w218err" role="alert">' + E(D.err) + '</p>' : '') +
+      '<div class="acts">' + btn(D.busy ? 'Moving\u2026' : 'Move to the Volunteer Manager', 'data-w218go="send"' + (D.busy || !D.roles.length ? ' disabled' : ''), 'pri') + btn('Cancel', 'data-w218x') + '</div>' +
+      (!D.roles.length ? '<p class="w197note">Pick at least one role.</p>' : '') + '</div>';
+    d.classList.add('open');
+  }
+  async function open(id) {
+    var c = typeof id === 'object' ? id : cand(id); if (!c) return;
+    if (!staff()) { toastS('Staff only'); return; }
+    if (c.status === 'volunteering') { toastS((c.name || 'They') + ' are already with the Volunteer Manager'); return; }
+    D.c = c; D.roles = suggested(c); D.picked = []; D.note = ''; D.err = ''; D.busy = false;
+    if (!D.evs || Date.now() - D.evAt >= 60000) D.evs = null;
+    paint();
+    D.events = await servings(); if (D.c === c) paint();
+    var f = document.querySelector('#w218dlg [data-w218role]'); if (f) { try { f.focus(); } catch (e) { /* fine */ } }
+  }
+  function shut() { var d = document.getElementById('w218dlg'); if (d) d.classList.remove('open'); D.c = null; }
+  function keep() {
+    var d = document.getElementById('w218dlg'); if (!d) return;
+    D.roles = Array.prototype.slice.call(d.querySelectorAll('[data-w218role]:checked')).map(function (x) { return x.getAttribute('data-w218role'); });
+    D.picked = Array.prototype.slice.call(d.querySelectorAll('[data-w218ev]:checked')).map(function (x) { return x.getAttribute('data-w218ev'); });
+    var n = document.getElementById('w218note'); if (n) D.note = n.value;
+  }
+  async function send() {
+    var c = D.c; if (!c || D.busy) return; keep();
+    if (!D.roles.length) { D.err = 'Pick at least one role.'; paint(); return; }
+    D.busy = true; D.err = ''; paint();
+    try {
+      var r = await db.rpc('wa218_to_volunteer', { p_id: Number(c.id), p_roles: D.roles, p_events: D.picked.map(Number), p_note: (D.note || '').slice(0, 1500) || null });
+      if (r && r.error) throw r.error;
+      var res = (r && r.data) || {};
+      c.status = 'volunteering'; c.close_reason = res.close_reason || ('Volunteering: ' + D.roles.map(label).join(', ')); c.volunteer_id = res.person_id || c.volunteer_id;
+      c.stage_at = c.updated_at = new Date().toISOString();
+      shut();
+      try { w197.paintBoard(); } catch (e) { /* fine */ }
+      try { if (String(w197.state().open) === String(c.id)) w197.openSheet(c.id); } catch (e) { /* fine */ }
+      try { if (window.w209) { w209.state().at = 0; w209.counts(); } } catch (e) { /* fine */ }
+      toastS((c.name || 'The applicant') + ' is with the Volunteer Manager: ' + (res.labels || D.roles.map(label).join(', ')) +
+        (res.practice ? ' (practice: nothing added)' : (res.added ? '; on ' + res.added + (res.added === 1 ? ' serving' : ' servings') + ', waiting for their answer' : '')));
+    } catch (e) { D.busy = false; D.err = 'Could not move them: ' + msgOf(e); paint(); }
+  }
+  function openRecord(vid) {
+    location.hash = '#volunteering/people';
+    var tries = 0, tick = function () {
+      var list = (typeof WA_VOL_PEOPLE !== 'undefined' && WA_VOL_PEOPLE) || [];
+      if (list.some(function (x) { return String(x.id) === String(vid); }) && typeof wa26PersonModal === 'function') { try { wa26PersonModal(vid); } catch (x) { /* fine */ } return; }
+      if (++tries < 40) setTimeout(tick, 250);
+    };
+    setTimeout(tick, 250);
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w218open],[data-w218x],[data-w218go],[data-w218rec]') : null; if (!t) return;
+    if (t.hasAttribute('data-w218open')) { e.preventDefault(); open(t.getAttribute('data-w218open')); return; }
+    if (t.hasAttribute('data-w218x')) { e.preventDefault(); shut(); return; }
+    if (t.hasAttribute('data-w218rec')) { e.preventDefault(); var sh = document.getElementById('w197sheet'); if (sh) sh.classList.remove('open'); openRecord(t.getAttribute('data-w218rec')); return; }
+    var g = t.getAttribute('data-w218go');
+    if (g === 'send') { e.preventDefault(); send(); return; }
+    if (g === 'applicants') { e.preventDefault(); var s2 = document.getElementById('w197sheet'); if (s2) s2.classList.remove('open'); location.hash = '#volunteering/applicants'; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w218dlg')) return;
+    if (t.hasAttribute('data-w218role')) { keep(); D.err = ''; paint(); var x = document.querySelector('#w218dlg [data-w218role="' + t.getAttribute('data-w218role') + '"]'); if (x) { try { x.focus(); } catch (y) { /* fine */ } } }
+    else if (t.hasAttribute('data-w218ev')) keep();
+  });
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'w218note') D.note = e.target.value; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && D.c) { var d = document.getElementById('w218dlg'); if (d && d.classList.contains('open')) { e.stopPropagation(); shut(); } } }, true);
+
+  var css = '#w218dlg{position:fixed;inset:0;z-index:10050;display:none;}#w218dlg.open{display:block;}' +
+    '#w218dlg .bk{position:absolute;inset:0;background:rgba(31,32,30,.45);}' +
+    '#w218dlg .pn{position:relative;margin:6vh auto 0;max-width:520px;width:calc(100% - 32px);max-height:88vh;overflow:auto;background:' + CREAM + ';color:' + INK + ';border-radius:16px;padding:20px 22px 18px;box-shadow:0 18px 50px rgba(0,0,0,.25);font-family:\'Space Grotesk\',\'Helvetica Neue\',Arial,sans-serif;}' +
+    '#w218dlg .pn>.x{position:absolute;top:14px;right:14px;}' +
+    '#w218dlg h3{font-family:\'Barlow Condensed\',\'Arial Narrow\',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';font-size:22px;margin:0 70px 6px 0;line-height:1.15;}' +
+    '#w218dlg .w218lead{font-size:13.5px;line-height:1.5;margin:0 0 10px;color:' + INK + ';}' +
+    '#w218dlg label{display:block;font-size:12.5px;font-weight:700;color:' + GREEN + ';margin:12px 0 6px;}#w218dlg label small{font-weight:400;color:var(--wa-muted,#6B6A66);}' +
+    '#w218dlg .w218roles{display:flex;flex-wrap:wrap;gap:6px;}' +
+    '#w218dlg .w218chip{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:500;font-size:13.5px;color:' + INK + ';background:var(--wa-card);border:1px solid rgba(16,63,57,.2);border-radius:999px;padding:6px 12px;cursor:pointer;}' +
+    '#w218dlg .w218chip:has(input:checked){border-color:' + GREEN + ';background:rgba(16,63,57,.08);}' +
+    '#w218dlg .w218evs{display:grid;gap:6px;}#w218dlg .w218ev{display:flex;gap:8px;align-items:center;margin:0;font-weight:400;font-size:13.5px;color:' + INK + ';background:var(--wa-card);border:1px solid rgba(16,63,57,.15);border-radius:10px;padding:8px 10px;cursor:pointer;}' +
+    '#w218dlg .w218ev span{color:var(--wa-muted,#6B6A66);}' +
+    '#w218dlg textarea{width:100%;min-height:64px;font:inherit;font-size:14px;border:1px solid rgba(16,63,57,.25);border-radius:10px;padding:8px 10px;background:var(--wa-card);box-sizing:border-box;}' +
+    '#w218dlg .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}#w218dlg .w218err{color:#B3402F;font-size:13px;margin:10px 0 0;}' +
+    '.w218box{background:rgba(220,165,39,.12);border:1px solid rgba(220,165,39,.45);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;margin:12px 0 4px;}' +
+    '#w197sheet .stg button.cl.on[data-w197st="volunteering"]{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}' +
+    '.w218box.done{background:rgba(16,63,57,.07);border-color:rgba(16,63,57,.25);}.w218box .acts{margin-top:8px;}';
+  try { var st = document.createElement('style'); st.id = 'w218css'; st.textContent = css; document.head.appendChild(st); } catch (e) { /* fine */ }
+
+  window.w218 = { open: open, sheetBits: sheetBits, openRecord: openRecord, label: label, state: function () { return D; } };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

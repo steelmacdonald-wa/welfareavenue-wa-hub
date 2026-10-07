@@ -43,7 +43,7 @@
   var MUTED = 'var(--wa-muted)';
   var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
   var STAGES = [['new', 'New'], ['reviewing', 'Reviewing'], ['interview', 'Interview'], ['offer', 'Offer'], ['hired', 'Hired']];
-  var CLOSED = [['declined', 'Declined'], ['withdrawn', 'Withdrawn']];
+  var CLOSED = [['declined', 'Declined'], ['withdrawn', 'Withdrawn'], ['volunteering', 'Volunteering']];   /* wave218: volunteering = sent to the Volunteer Manager */
 
   /* the pages: key, label, rail icon, group, the older tab whose data it needs, the line under the title */
   var PAGES = [

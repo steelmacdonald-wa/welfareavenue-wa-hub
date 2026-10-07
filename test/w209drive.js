@@ -74,12 +74,13 @@ const INIT = `window.__INV = []; window.__WA_INVOKE = function (name, opts) { va
   /* a volunteer-role card moves */
   await f.ev(() => { var s = document.getElementById('w197sheet'); if (s) s.classList.remove('open'); });
   await f.ev(() => w197.openSheet(9201)); await f.page.waitForTimeout(500);
-  ok('Card: a volunteer role offers Move to the Volunteer Manager', await f.ev(() => !!document.querySelector('#w197sheet [data-w209move="9201"]') && /Cook is a volunteer role/.test(document.getElementById('w197sheet').textContent)));
+  ok('Card: a volunteer role offers Move to the Volunteer Manager (wave218: the one step)', await f.ev(() => !!document.querySelector('#w197sheet [data-w218open="9201"]') && /Cook is a volunteer role/.test(document.getElementById('w197sheet').textContent)));
   await shot(f, 'card_move');
-  await f.page.click('#w197sheet [data-w209move="9201"]'); await f.page.waitForTimeout(500);
-  ok('Card: moving calls wa209_move_to_volunteers and the card leaves the board', await f.ev(() => window.__RPC.some(r => r.fn === 'wa209_move_to_volunteers' && r.args.p_id === 9201) && !document.querySelector('#w197board [data-w197c="9201"]') && !w197.state().cands.some(c => c.id === 9201)));
+  await f.page.click('#w197sheet [data-w218open="9201"]'); await f.page.waitForTimeout(600);
+  ok('Card (wave218): Move opens the step with Cook ticked, nothing moved yet', await f.ev(() => document.getElementById('w218dlg').classList.contains('open') && Array.from(document.querySelectorAll('#w218dlg [data-w218role]:checked')).map(x => x.getAttribute('data-w218role')).join() === 'cook' && !window.__RPC.some(r => r.fn === 'wa209_move_to_volunteers')));
+  await f.ev(() => document.querySelector('#w218dlg [data-w218x].x').click()); await f.page.waitForTimeout(200);
   await f.ev(() => w197.openSheet(9202)); await f.page.waitForTimeout(400);
-  ok('Card: a Kitchen Coordinator stays in Applications', await f.ev(() => !document.querySelector('#w197sheet [data-w209move]')));
+  ok('Card: a Kitchen Coordinator is a team role (Volunteer instead stays optional)', await f.ev(() => !document.querySelector('#w197sheet [data-w209move]') && /Would they rather volunteer/.test(document.getElementById('w197sheet').textContent)));
   ok('Applications: no page errors', f.errs.length === 0, f.errs);
   await f.close();
 
