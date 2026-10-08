@@ -1,3 +1,6 @@
+// v12 (wave219, 07/10/26): Hub notifications. A person who chose Hub notifications only (wa_notify_prefs.prefs.channel 'hub')
+// and has a device on (hub_push_subs) gets no Slack DM for an @mention, a meeting mention, a task handed to them, a request
+// for their team or an accepted suggestion: hub-push sends those to their devices. With no device on, Slack still does.
 // wave165 (29/09/26): a mention from a one-on-one is never sent (the person mentioned did not speak in it) (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
 // reaches the person mentioned).
 // Welfare Avenue: notify (v11, 26/09/26)
@@ -82,6 +85,19 @@ async function optedOut(email: string, event: string): Promise<boolean> {
   const { data } = await svc.from('wa_notify_prefs').select('disabled').eq('email', email).maybeSingle();
   const d = (data?.disabled || []) as string[];
   return Array.isArray(d) && d.indexOf(event) >= 0;
+}
+
+/* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted'];
+async function hubOnly(email: string, event: string): Promise<boolean> {
+  if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
+  try {
+    const e = email.toLowerCase();
+    const { data } = await svc.from('wa_notify_prefs').select('prefs').eq('email', e).maybeSingle();
+    if (String((data?.prefs as Record<string, unknown> | null)?.channel || 'both') !== 'hub') return false;
+    const { count } = await svc.from('hub_push_subs').select('id', { count: 'exact', head: true }).eq('email', e);
+    return (count || 0) > 0;
+  } catch (_) { return false; }
 }
 
 function norm(s: string): string { return (s || '').toLowerCase().replace(/[^a-z]/g, ''); }
@@ -245,6 +261,7 @@ async function commentMention(id: number): Promise<Record<string, unknown>> {
   }
   if (!m.to_email) return done('skipped', null, 'no email on the roster');
   if (await optedOut(String(m.to_email), 'comment_mention')) return done('skipped', null, 'opted out');
+  if (await hubOnly(String(m.to_email), 'comment_mention')) return done('skipped', null, 'Hub notifications only');
   const sid = await slackIdFor(String(m.to_email), m.to_name ? String(m.to_name) : null);
   if (!sid) return done('skipped', null, 'no Slack account found');
   const link = siteLink(String(m.url || ''));
@@ -275,6 +292,7 @@ async function deliver(event: string, personName: string | null, email: string |
     rosterName = data?.name || null;
   }
   if (await optedOut(email, event)) { await log(event, email, 'skipped: opted out'); return 'opted_out'; }
+  if (await hubOnly(email, event)) { await log(event, email, 'skipped: Hub notifications only'); return 'hub_only'; }
   const sid = await slackIdFor(email, rosterName);
   if (!sid) { await log(event, email, 'skipped: no Slack id (not resolvable yet)'); return 'no_slack'; }
   const r = await dm(sid, text);

@@ -1,0 +1,471 @@
+/* =====================================================================
+   WA v219 Hub notifications on computers and phones (Steel, 07/10/26)
+   =====================================================================
+   Steel: "I'm wondering if when I add the Hub website as an app on my Android phone, or if I could do that on Apple, um,
+   and even in the browser, if it can send in-app notifications on updates, I would like to do that if it's possible,
+   especially browser use for those that are using the computer, which is most right now."
+   His choices: mentions and assigned work, and announcements; each person chooses Hub notifications, Slack or both (both
+   by default); one gentle prompt on Home the first time the Hub opens on a device, and a switch in Settings any time (on
+   iPhone, Add to Home Screen first).
+   - The Hub is an app: the manifest (/manifest.webmanifest), the icons (/icons/), the service worker (/sw.js:
+     notifications only, no caching), all deployed by host-sync v12 (build/site). Chrome and Edge offer Install; Settings
+     has an Install button where the browser allows it; on iPhone, Share, Add to Home Screen.
+   - Home (#w219card): "Get Hub notifications on this computer?" (or phone, or iPad) with Turn on and Not now, once per
+     device; on an iPhone in Safari it says to add the Hub to the Home Screen first. Turn on asks the browser's permission
+     (from the tap), subscribes with the Hub's public key (app_config push_vapid_public) and saves the device
+     (wa219_push_save); Turn off and Remove go through hub-push (drop).
+   - Settings, Notifications (#w219set, through wave138's afterPaint): this device on or off, Send me a test, the other
+     devices (remove one), where mentions and work for you arrive (In the Hub and on Slack, In the Hub only, On Slack only:
+     wa219_channel_set), new announcements on or off (wave116j's switch list, key announcement), Install the Hub app.
+   - Every visit re-saves this device when the person turned it on here (localStorage w219on:<email>), and subscribes again
+     if the browser dropped it. Sign out turns this device off first.
+   - A notification click brings the open Hub forward on its link (wa-open), or opens the Hub there. A push that arrives
+     while the Hub is open fires the window event wa-push.
+   Data and sending: build/data/wa219_push.sql, fn/hub-push (v1), notify v12 (Hub only skips Slack when a device is on).
+   window.__wa219: state, check, turnOn, turnOff, test, sync, paintCard, paintSettings, deviceLabel. */
+(function () {
+  'use strict';
+  if (window.__wa219) return;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', INK = '#1F201E';
+  var W = { reg: null, regP: null, sub: null, mine: false, checked: false, checking: null, key: null, keyAt: 0, bip: null, busy: false,
+            channel: 'both', disabled: [], devices: [], prefsAt: 0, installed: false };
+  var BELL = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-1.7 1.7A1 1 0 0 0 4 19.4h16a1 1 0 0 0 .7-1.7Z"/></svg>';
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function say(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function myEmail() { try { return String((USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? !!isStaff() : false; } catch (e) { return false; } }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var UA = navigator.userAgent || '';
+  var IPAD = /iPad/.test(UA) || (/Macintosh/.test(UA) && (navigator.maxTouchPoints || 0) > 1);
+  var IOS = IPAD || /iPhone|iPod/.test(UA);
+  function standalone() { try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (e) { return false; } }
+  function supported() { return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window); }
+  function perm() { try { return window.Notification ? Notification.permission : 'default'; } catch (e) { return 'default'; } }
+  function here() { return IPAD ? 'this iPad' : (/Android|iPhone|iPod|Mobi/.test(UA) ? 'this phone' : 'this computer'); }
+  function evenWhen() { return here() === 'this computer' ? 'even with the Hub in another tab' : 'even when the Hub is closed'; }
+  function deviceLabel() {
+    var b = /Edg[A]?\//.test(UA) ? 'Edge' : /OPR\//.test(UA) ? 'Opera' : /SamsungBrowser/.test(UA) ? 'Samsung Internet' : /Firefox\//.test(UA) ? 'Firefox'
+      : /Chrome\/|CriOS/.test(UA) ? 'Chrome' : /Safari\//.test(UA) ? 'Safari' : 'A browser';
+    var o = IPAD ? 'iPad' : /iPhone|iPod/.test(UA) ? 'iPhone' : /Android/.test(UA) ? 'Android' : /Windows/.test(UA) ? 'Windows'
+      : /CrOS/.test(UA) ? 'Chromebook' : /Mac OS X|Macintosh/.test(UA) ? 'Mac' : /Linux/.test(UA) ? 'Linux' : '';
+    return (standalone() ? 'The Hub app' : b) + (o ? ' on ' + o : '');
+  }
+
+  /* ---------- the head: the app manifest and icons ---------- */
+  function headLinks() {
+    try {
+      var h = document.head; if (!h) return;
+      if (!h.querySelector('link[rel="manifest"]')) { var m = document.createElement('link'); m.rel = 'manifest'; m.href = '/manifest.webmanifest'; h.appendChild(m); }
+      [['apple-mobile-web-app-capable', 'yes'], ['mobile-web-app-capable', 'yes'], ['apple-mobile-web-app-title', 'WA Hub'], ['apple-mobile-web-app-status-bar-style', 'default'], ['application-name', 'WA Hub']].forEach(function (x) {
+        if (h.querySelector('meta[name="' + x[0] + '"]')) return;
+        var t = document.createElement('meta'); t.name = x[0]; t.content = x[1]; h.appendChild(t);
+      });
+      /* iOS reads the touch icon when someone adds the Hub to the Home Screen: the real file (wave118 draws a data: copy) */
+      var ti = h.querySelectorAll('link[rel="apple-touch-icon"]');
+      if (!ti.length) { var l = document.createElement('link'); l.rel = 'apple-touch-icon'; h.appendChild(l); ti = [l]; }
+      Array.prototype.forEach.call(ti, function (l) { if (l.getAttribute('href') !== '/icons/apple-touch-180.png') { l.setAttribute('href', '/icons/apple-touch-180.png'); l.setAttribute('sizes', '180x180'); } });
+    } catch (e) { /* fine */ }
+  }
+  headLinks();
+  document.addEventListener('DOMContentLoaded', headLinks);
+  window.addEventListener('load', function () { headLinks(); setTimeout(headLinks, 3000); setTimeout(headLinks, 9000); });
+
+  /* the browser's own Install offer (Chrome, Edge, Android); kept for the Settings button */
+  window.addEventListener('beforeinstallprompt', function (e) { W.bip = e; paintSettings(); });
+  window.addEventListener('appinstalled', function () { W.bip = null; W.installed = true; say('The Hub is installed. Open it from your apps like any other.'); paintSettings(); });
+
+  /* ---------- the service worker and the subscription ---------- */
+  function register() {
+    if (W.regP) return W.regP;
+    if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+    W.regP = navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function (r) { W.reg = r; return r; }, function () { W.regP = null; return null; });
+    return W.regP;
+  }
+  function ready(ms) {
+    if (!('serviceWorker' in navigator)) return Promise.resolve(null);
+    return Promise.race([navigator.serviceWorker.ready, wait(ms || 8000).then(function () { return null; })]);
+  }
+  function b64ToBytes(s) {
+    var t = String(s || '').replace(/-/g, '+').replace(/_/g, '/'); while (t.length % 4) t += '=';
+    var bin = atob(t), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function sameKey(sub, key) {
+    try {
+      var k = sub && sub.options && sub.options.applicationServerKey; if (!k) return true;
+      var a = new Uint8Array(k), b = b64ToBytes(key); if (a.length !== b.length) return false;
+      for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+      return true;
+    } catch (e) { return true; }
+  }
+  async function publicKey(force) {
+    if (W.key && !force) return W.key;
+    if (!force && W.keyAt && Date.now() - W.keyAt < 60000) return W.key;
+    W.keyAt = Date.now();
+    try { var r = await db.from('app_config').select('value').eq('key', 'push_vapid_public').maybeSingle(); W.key = (r && r.data && r.data.value) || null; } catch (e) { W.key = null; }
+    return W.key;
+  }
+  async function save(sub) {
+    var j = sub.toJSON ? sub.toJSON() : sub;
+    var r = await db.rpc('wa219_push_save', { p_endpoint: j.endpoint, p_p256dh: j.keys && j.keys.p256dh, p_auth: j.keys && j.keys.auth, p_device: deviceLabel() });
+    if (r && r.error) throw new Error(r.error.message || 'Could not save this device');
+    return r && r.data;
+  }
+  async function loadDevices() {
+    try {
+      var r = await db.from('hub_push_subs').select('id, endpoint, device, created_at, last_sent_at, last_error').eq('email', myEmail()).order('created_at', { ascending: true });
+      W.devices = (r && Array.isArray(r.data)) ? r.data : [];
+    } catch (e) { W.devices = []; }
+    W.mine = !!(W.sub && W.devices.some(function (d) { return d.endpoint === W.sub.endpoint; }));
+  }
+  async function loadPrefs() {
+    try {
+      var r = await db.from('wa_notify_prefs').select('disabled, prefs').eq('email', myEmail()).maybeSingle();
+      var d = r && r.data;
+      W.disabled = (d && Array.isArray(d.disabled)) ? d.disabled : [];
+      var ch = d && d.prefs && d.prefs.channel; W.channel = (ch === 'hub' || ch === 'slack') ? ch : 'both';
+    } catch (e) { /* keep */ }
+    W.prefsAt = Date.now();
+  }
+  /* where this device stands: registered, subscribed, and saved for this person */
+  function check() {
+    if (W.checking) return W.checking;
+    W.checking = (async function () {
+      try {
+        await publicKey();
+        if (supported()) {
+          var reg = await register();
+          if (reg) { try { W.sub = await reg.pushManager.getSubscription(); } catch (e) { W.sub = null; } }
+        }
+        if (myEmail()) await Promise.all([loadDevices(), loadPrefs()]);
+      } catch (e) { /* fine */ }
+      W.checked = true; W.checking = null;
+      paintCard(); paintSettings();
+    })();
+    return W.checking;
+  }
+
+  /* Turn on: the permission is asked first, straight from the tap (Safari only allows it there) */
+  function askPermission() {
+    if (!window.Notification) return Promise.resolve('unsupported');
+    if (Notification.permission === 'granted' || Notification.permission === 'denied') return Promise.resolve(Notification.permission);
+    return new Promise(function (resolve) {
+      var done = false; function fin(p) { if (!done) { done = true; resolve(p || Notification.permission); } }
+      try { var ret = Notification.requestPermission(fin); if (ret && typeof ret.then === 'function') ret.then(fin, function () { fin('default'); }); } catch (e) { fin('default'); }
+    });
+  }
+  async function turnOn() {
+    if (W.busy) return false;
+    var permP = askPermission();
+    W.busy = true; paintCard(); paintSettings();
+    var ok = false;
+    try {
+      if (!supported()) throw new Error(IOS && !standalone() ? 'On iPhone and iPad, add the Hub to your Home Screen first, then turn this on in the Hub app.' : 'This browser cannot show Hub notifications.');
+      var p = await permP;
+      if (p !== 'granted') {
+        lsSet('w219ask', 'no');
+        say(p === 'denied' ? 'Notifications are blocked for the Hub in this browser. Settings, Notifications shows how to allow them.' : 'Nothing changed. You can turn them on any time in Settings, Notifications.');
+      } else {
+        var key = await publicKey(true);
+        if (!key) throw new Error('Hub notifications are not set up yet. Try again a little later.');
+        await register();
+        var reg = await ready(10000);
+        if (!reg) throw new Error('This browser did not start the Hub’s notification helper. Reload the Hub and try again.');
+        var sub = await reg.pushManager.getSubscription();
+        if (sub && !sameKey(sub, key)) { try { await sub.unsubscribe(); } catch (e) { /* fine */ } sub = null; }
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+        await save(sub);
+        W.sub = sub; W.mine = true;
+        lsSet('w219on:' + myEmail(), '1'); lsSet('w219ask', 'done');
+        await loadDevices();
+        say('Hub notifications are on for ' + here() + '.');
+        ok = true;
+      }
+    } catch (e) {
+      say(String((e && e.message) || e || 'Could not turn them on').slice(0, 200));
+    }
+    W.busy = false; paintCard(); paintSettings();
+    return ok;
+  }
+  /* a device comes off through hub-push (the caller's own rows only) */
+  async function dropRow(endpoint) {
+    var r = await db.functions.invoke('hub-push', { body: { action: 'drop', endpoint: endpoint } });
+    if (r && r.error) throw new Error(r.error.message || 'failed');
+    return r && r.data;
+  }
+  async function dropThis(quiet) {
+    var sub = W.sub;
+    try { if (!sub && supported()) { var reg = await register(); sub = reg ? await reg.pushManager.getSubscription() : null; } } catch (e) { sub = null; }
+    if (sub) {
+      try { await dropRow(sub.endpoint); } catch (e) { /* fine */ }
+      try { await sub.unsubscribe(); } catch (e) { /* fine */ }
+    }
+    lsSet('w219on:' + myEmail(), null);
+    W.sub = null; W.mine = false;
+    if (!quiet) { await loadDevices(); say('Hub notifications are off for ' + here() + '.'); }
+  }
+  async function turnOff() {
+    if (W.busy) return; W.busy = true; paintSettings();
+    try { await dropThis(false); } catch (e) { say('Could not turn them off'); }
+    W.busy = false; paintCard(); paintSettings();
+  }
+  async function test() {
+    if (W.busy) return; W.busy = true; paintSettings();
+    try {
+      var r = await db.functions.invoke('hub-push', { body: { action: 'test', endpoint: W.sub ? W.sub.endpoint : null } });
+      var d = (r && r.data) || {};
+      if (r && r.error) throw new Error(r.error.message || 'failed');
+      if (d.ok) say('Sent. It should pop up on ' + here() + ' in a moment.');
+      else if (d.gone) { say('This browser no longer has the subscription. Turn it on again.'); W.sub = null; W.mine = false; lsSet('w219on:' + myEmail(), null); }
+      else say('The test did not go through' + (d.error ? ': ' + String(d.error).slice(0, 120) : '.'));
+    } catch (e) { say('The test did not go through: ' + String((e && e.message) || e).slice(0, 120)); }
+    W.busy = false; await loadDevices(); paintSettings();
+  }
+  async function removeDevice(endpoint) {
+    try { await dropRow(endpoint); say('That device will not get Hub notifications any more.'); } catch (e) { say('Could not remove it'); }
+    await loadDevices(); paintSettings();
+  }
+  async function setChannel(ch) {
+    var before = W.channel; W.channel = ch; paintSettings();
+    try { var r = await db.rpc('wa219_channel_set', { p_channel: ch }); if (r && r.error) throw r.error; say(ch === 'hub' ? 'Mentions and work for you now arrive in the Hub only.' : ch === 'slack' ? 'Mentions and work for you now arrive on Slack only.' : 'Mentions and work for you arrive in the Hub and on Slack.'); }
+    catch (e) { W.channel = before; say('Could not save that'); paintSettings(); }
+  }
+  /* every visit: this device stays saved for the person who turned it on here; a dropped subscription is made again */
+  async function sync() {
+    try {
+      if (!staff() || !myEmail() || !supported() || perm() !== 'granted') return;
+      if (lsGet('w219on:' + myEmail()) !== '1') return;
+      var key = await publicKey(); if (!key) return;
+      await register(); var reg = await ready(8000); if (!reg) return;
+      var sub = await reg.pushManager.getSubscription();
+      if (sub && !sameKey(sub, key)) { try { await sub.unsubscribe(); } catch (e) { /* fine */ } sub = null; }
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+      await save(sub); W.sub = sub; W.mine = true;
+    } catch (e) { /* the next visit tries again */ }
+  }
+
+  /* ---------- Home: one gentle prompt per device ---------- */
+  function cardKind() {
+    if (!staff() || !myEmail() || (W.busy && !document.getElementById('w219card'))) return '';
+    var asked = lsGet('w219ask');
+    if (asked === 'no' || asked === 'done') return '';
+    if (IOS && !standalone() && !supported()) return 'ios';
+    if (!supported() || !W.checked || !W.key) return '';
+    if (perm() === 'denied' || W.mine) return '';
+    return 'ask';
+  }
+  function cardHtml(kind) {
+    if (kind === 'ios') return '<div class="w219ic">' + BELL + '</div><div class="w219tx"><b>Hub notifications on your ' + (IPAD ? 'iPad' : 'iPhone') + '</b>'
+      + '<p>Add the Hub to your Home Screen first: tap Share, then Add to Home Screen. Open the Hub from the new icon and tap Turn on there.</p></div>'
+      + '<div class="w219act"><button type="button" class="w219btn" data-w219="later">Got it</button></div>';
+    return '<div class="w219ic">' + BELL + '</div><div class="w219tx"><b>Get Hub notifications on ' + here() + '?</b>'
+      + '<p>When someone mentions you, gives you work or posts an announcement for you, it pops up here, ' + evenWhen() + '.</p></div>'
+      + '<div class="w219act"><button type="button" class="w219btn" data-w219="on"' + (W.busy ? ' disabled' : '') + '>' + (W.busy ? 'Turning on…' : 'Turn on') + '</button>'
+      + '<button type="button" class="w219lnk" data-w219="later">Not now</button></div>';
+  }
+  function paintCard() {
+    try {
+      var body = document.getElementById('mpBody'), el = document.getElementById('w219card');
+      var kind = body ? cardKind() : '';
+      if (!kind) { if (el) el.remove(); return; }
+      if (!el) { el = document.createElement('div'); el.id = 'w219card'; el.className = 'mp-sec'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Hub notifications'); }
+      var anchor = document.getElementById('w180card');
+      if (!anchor || anchor.parentNode !== body) anchor = body.querySelector(':scope > .mp-online') || body.querySelector(':scope > .mp-chips') || body.querySelector(':scope > .mp-head');
+      if (anchor) { if (anchor.nextSibling !== el) body.insertBefore(el, anchor.nextSibling); } else if (el.parentNode !== body) body.insertBefore(el, body.firstChild);
+      var html = cardHtml(kind);
+      if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- Settings, Notifications ---------- */
+  function blockedHelp() {
+    if (IOS) return 'Notifications are blocked for the Hub app. Open the ' + (IPAD ? 'iPad' : 'iPhone') + '’s Settings, then Notifications, then WA Hub, and allow them.';
+    return 'Notifications are blocked for the Hub in this browser. Click the icon at the left of the address bar (a lock or two sliders), set Notifications to Allow, then reload the Hub.';
+  }
+  function deviceRow() {
+    var head = '<div class="w219ic">' + BELL + '</div>';
+    var title = 'Hub notifications on ' + here();
+    var line = '', act = '';
+    if (IOS && !standalone() && !supported()) {
+      line = 'Add the Hub to your Home Screen first: tap Share, then Add to Home Screen. Open the Hub from the new icon and turn them on there.';
+    } else if (!supported()) {
+      line = 'This browser cannot show Hub notifications. Chrome, Edge, Firefox and Safari can.';
+    } else if (perm() === 'denied') {
+      line = blockedHelp();
+    } else if (!W.checked) {
+      line = 'Checking this device…';
+    } else if (W.mine) {
+      line = '<span class="w219on">On.</span> Mentions, work for you and announcements pop up here.';
+      act = '<button type="button" class="w219btn ghost" data-w219="test"' + (W.busy ? ' disabled' : '') + '>Send me a test</button><button type="button" class="w219lnk" data-w219="off"' + (W.busy ? ' disabled' : '') + '>Turn off</button>';
+    } else if (!W.key) {
+      line = 'Hub notifications are being set up. Try again a little later.';
+    } else {
+      line = 'Off. Turn them on to see mentions, work for you and announcements here, ' + evenWhen() + '.';
+      act = '<button type="button" class="w219btn" data-w219="on"' + (W.busy ? ' disabled' : '') + '>' + (W.busy ? 'Turning on…' : 'Turn on') + '</button>';
+    }
+    return '<div class="w219row">' + head + '<div class="w219tx"><b>' + E(title) + '</b><p>' + line + '</p></div>' + (act ? '<div class="w219act">' + act + '</div>' : '') + '</div>';
+  }
+  function devicesHtml() {
+    var mineEp = W.sub && W.sub.endpoint;
+    var others = W.devices.filter(function (d) { return d.endpoint !== mineEp; });
+    if (!others.length) return '';
+    return '<div class="w219devs"><span class="lab">Your other devices with Hub notifications</span>' + others.map(function (d) {
+      return '<div class="w219dev"><span>' + E(d.device || 'A device') + (d.last_error ? ' <i>(not reached lately)</i>' : '') + '</span><button type="button" class="w219lnk" data-w219rm="' + E(d.endpoint) + '">Remove</button></div>';
+    }).join('') + '</div>';
+  }
+  function channelHtml() {
+    var opts = [['both', 'In the Hub and on Slack'], ['hub', 'In the Hub only'], ['slack', 'On Slack only']];
+    var anyDevice = W.devices.length > 0;
+    return '<fieldset class="w219where"><legend>Mentions and work for you arrive</legend>' + opts.map(function (o) {
+      return '<label class="w219radio"><input type="radio" name="w219ch" value="' + o[0] + '"' + (W.channel === o[0] ? ' checked' : '') + ' /> ' + o[1] + '</label>';
+    }).join('') + '<div class="note">Work for you means a task given or handed to you, a request for your team, a meeting suggestion that becomes one. '
+      + (W.channel === 'hub' && !anyDevice ? '<b>None of your devices has Hub notifications on yet, so Slack keeps bringing them until one does.</b>' : 'In the Hub only: Slack stays quiet for these while a device of yours has Hub notifications on.')
+      + '</div></fieldset>';
+  }
+  function installHtml() {
+    if (standalone()) return '<div class="w219inst"><span>You are using the Hub app.</span></div>';
+    if (W.installed) return '<div class="w219inst"><span>The Hub is installed on ' + here() + '.</span></div>';
+    if (W.bip) return '<div class="w219inst"><span>Install the Hub as an app: its own window and icon, like any other app.</span><button type="button" class="w219btn ghost" data-w219="install">Install</button></div>';
+    if (IOS) return '';
+    return '';
+  }
+  function setHtml() {
+    var ann = W.disabled.indexOf('announcement') < 0;
+    return deviceRow() + devicesHtml() + channelHtml()
+      + '<label class="chk w219ann"><input type="checkbox" data-jev="announcement"' + (ann ? ' checked' : '') + ' /> A new announcement for me (Hub notifications; its Slack post and email stay as they are)</label>'
+      + installHtml();
+  }
+  function paintSettings() {
+    try {
+      var box = document.getElementById('modalBox'); if (!box) return;
+      var root = box.querySelector('.w116js'); if (!root) return;
+      var tab = root.querySelector('.tabs a.on'); if (!tab || tab.getAttribute('data-jtab') !== 'notifications') return;
+      var el = document.getElementById('w219set');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'w219set';
+        var tabs = root.querySelector('.tabs'); if (tabs && tabs.nextSibling) root.insertBefore(el, tabs.nextSibling); else root.appendChild(el);
+        /* wave116j's line about Slack now introduces the list that covers both */
+        var n = el.nextElementSibling;
+        if (n && n.classList.contains('note') && /Slack DMs/.test(n.textContent || '')) {
+          n.innerHTML = n.innerHTML.replace('Delivered to your Slack DMs', 'Which of these reach you. On Slack they come to your DMs');
+          n.classList.add('w219what');
+        }
+      }
+      var html = setHtml();
+      if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+    } catch (e) { /* fine */ }
+  }
+  /* wave138's hook runs after wave116j paints Settings */
+  var prevAfter = window.w138AfterPaint;
+  window.w138AfterPaint = function (tab) {
+    var r;
+    try { if (typeof prevAfter === 'function') r = prevAfter.apply(this, arguments); } catch (e) { /* fine */ }
+    if (tab === 'notifications') {
+      paintSettings();
+      if (!W.checking && (!W.checked || !W.prefsAt || Date.now() - W.prefsAt > 15000)) check();   /* fresh each time Settings opens */
+    }
+    return r;
+  };
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w219], [data-w219rm]') : null;
+    if (!t) return;
+    var what = t.getAttribute('data-w219');
+    if (t.hasAttribute('data-w219rm')) { removeDevice(t.getAttribute('data-w219rm')); return; }
+    if (what === 'on') { turnOn(); return; }
+    if (what === 'later') { lsSet('w219ask', 'no'); paintCard(); if (!(IOS && !standalone())) say('You can turn them on any time in Settings, Notifications.'); return; }
+    if (what === 'off') { turnOff(); return; }
+    if (what === 'test') { test(); return; }
+    if (what === 'install' && W.bip) {
+      var ev = W.bip; W.bip = null;
+      try { ev.prompt(); Promise.resolve(ev.userChoice).then(function (c) { if (c && c.outcome === 'accepted') W.installed = true; paintSettings(); }); } catch (x) { /* fine */ }
+      paintSettings();
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var r = e.target && e.target.closest ? e.target.closest('input[name="w219ch"]') : null;
+    if (r && r.checked) { setChannel(r.value); return; }
+    var a = e.target && e.target.closest ? e.target.closest('#w219set [data-jev="announcement"]') : null;
+    if (a) { W.disabled = W.disabled.filter(function (x) { return x !== 'announcement'; }); if (!a.checked) W.disabled.push('announcement'); }   /* wave116j saves it */
+  });
+
+  /* ---------- messages from the service worker ---------- */
+  if ('serviceWorker' in navigator && navigator.serviceWorker && navigator.serviceWorker.addEventListener) {
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      var d = e && e.data; if (!d || typeof d !== 'object') return;
+      if (d.type === 'wa-open' && d.url) {
+        try { var u = new URL(d.url, location.origin); if (u.origin === location.origin) { if (u.hash && u.hash !== location.hash) location.hash = u.hash; else if (!u.hash && location.hash) location.hash = ''; } } catch (x) { /* fine */ }
+      }
+      if (d.type === 'wa-push') { try { window.dispatchEvent(new CustomEvent('wa-push', { detail: { tag: d.tag || '', url: d.url || '' } })); } catch (x) { /* fine */ } }
+    });
+  }
+
+  /* ---------- sign out turns this device off first ---------- */
+  try {
+    if (typeof signOutAll === 'function' && !signOutAll.__w219) {
+      var so = signOutAll;
+      signOutAll = async function () {
+        try { if (W.mine || lsGet('w219on:' + myEmail()) === '1') await Promise.race([dropThis(true), wait(2000)]); } catch (e) { /* proceed */ }
+        return so.apply(this, arguments);
+      };
+      signOutAll.__w219 = true;
+    }
+  } catch (e) { /* fine */ }
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'w219css';
+  css.textContent = ''
+    + '#w219card{display:flex;gap:14px;align-items:center;padding:14px 16px;margin:0 0 14px;border:1px solid rgba(16,63,57,.14);border-left:4px solid ' + GOLD + ';border-radius:14px;background:' + CREAM + ';}'
+    + '#w219card .w219tx,#w219set .w219tx{flex:1 1 auto;min-width:0;}'
+    + '#w219card b,#w219set .w219row b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;letter-spacing:.2px;color:' + GREEN + ';line-height:1.15;}'
+    + '#w219card p,#w219set .w219row p{margin:3px 0 0;font-size:13px;line-height:1.45;color:' + INK + ';}'
+    + '.w219ic{flex:0 0 38px;width:38px;height:38px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;}'
+    + '.w219ic svg{width:19px;height:19px;}'
+    + '.w219act{display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex:0 0 auto;}'
+    + '.w219btn{background:' + GREEN + ';color:' + CREAM + ';border:1px solid ' + GREEN + ';border-radius:999px;padding:8px 16px;font:700 13px/1.1 "Space Grotesk",sans-serif;cursor:pointer;white-space:nowrap;}'
+    + '.w219btn.ghost{background:transparent;color:' + GREEN + ';border-color:rgba(16,63,57,.35);}'
+    + '.w219btn[disabled]{opacity:.6;cursor:default;}'
+    + '.w219lnk{background:none;border:0;padding:4px 2px;color:' + GREEN + ';text-decoration:underline;text-underline-offset:3px;font:600 13px/1.2 "Space Grotesk",sans-serif;cursor:pointer;}'
+    + '#w219set{margin:4px 0 14px;padding:0 0 12px;border-bottom:1px solid rgba(16,63,57,.12);}'
+    + '#w219set .w219row{display:flex;gap:12px;align-items:center;padding:12px 14px;border:1px solid rgba(16,63,57,.14);border-radius:12px;background:' + CREAM + ';}'
+    + '#w219set .w219on{color:' + GREEN + ';font-weight:700;}'
+    + '#w219set .w219devs{margin:10px 2px 0;font-size:13px;}'
+    + '#w219set .w219devs .lab,#w219set legend{display:block;font-weight:700;font-size:12px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 4px;}'
+    + '#w219set .w219dev{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:3px 0;}'
+    + '#w219set .w219dev i{color:rgba(31,32,30,.6);}'
+    + '#w219set .w219where{border:0;margin:12px 0 0;padding:0;}'
+    + '#w219set .w219radio{display:flex;align-items:center;gap:8px;font-size:13.5px;padding:4px 0;cursor:pointer;}'
+    + '#w219set .w219where .note{margin:4px 0 0;}'
+    + '#w219set .w219ann{margin-top:10px;}'
+    + '#w219set .w219inst{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;font-size:13px;}'
+    + '@media (max-width:700px){#w219card{flex-wrap:wrap;}#w219card .w219tx{flex-basis:calc(100% - 52px);}#w219card .w219act{width:100%;justify-content:flex-start;padding-left:52px;}'
+    + '#w219set .w219row{flex-wrap:wrap;}#w219set .w219row .w219tx{flex-basis:calc(100% - 50px);}#w219set .w219row .w219act{width:100%;padding-left:50px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- start: once someone is signed in ---------- */
+  var started = false;
+  function start() {
+    if (started) return;
+    if (!document.documentElement.classList.contains('wa-ready') || !myEmail() || !staff()) return;
+    started = true;
+    if (supported()) register();
+    check().then(function () { return sync(); }).then(function () { return W.mine ? null : loadDevices(); }).then(function () { paintCard(); });
+  }
+  var pend = null;
+  function soon() { if (pend) return; pend = setTimeout(function () { pend = null; start(); if (started) paintCard(); }, 250); }
+  try { new MutationObserver(soon).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] }); } catch (e) { /* fine */ }
+  try { new MutationObserver(function () { if (started && document.getElementById('mpBody') && !document.getElementById('w219card') && cardKind()) soon(); }).observe(document.body || document.documentElement, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  window.addEventListener('hashchange', soon);
+  setTimeout(soon, 1500);
+
+  window.__wa219 = {
+    state: function () { return { supported: supported(), perm: perm(), ios: IOS, standalone: standalone(), checked: W.checked, mine: W.mine, key: !!W.key, channel: W.channel, disabled: W.disabled.slice(), devices: W.devices.length, endpoint: W.sub ? W.sub.endpoint : null, busy: W.busy, bip: !!W.bip, card: cardKind() }; },
+    check: check, turnOn: turnOn, turnOff: turnOff, test: test, sync: sync, paintCard: paintCard, paintSettings: paintSettings, deviceLabel: deviceLabel, here: here
+  };
+})();

@@ -1,4 +1,9 @@
-// Welfare Avenue: host-sync (v10, 30/09/26)
+// Welfare Avenue: host-sync (v12, 07/10/26)
+// v12 (wave219): also deploys what makes the Hub an app with notifications: /manifest.webmanifest, the service worker /sw.js
+// (notifications only: no caching, no fetch handler) and the icons under /icons/ (PNG files kept in site_files as base64 text;
+// every path ending in .png is decoded before upload).
+// v11: also deploys the "still interested" page /i/index.html (served for every /i/<token> by _redirects; the texts to
+// people who applied for a team role through CABM carry those links, see candidate-confirm).
 // v10 (wave175b): also deploys the privacy notice /privacy/index.html (Google's sign-in screen links to it).
 // v9 (wave175): also deploys the volunteer account page /me/index.html (served for /me and /me/* by _redirects).
 // v8 (wave171): also deploys the volunteer confirm page /c/index.html (served for every /c/<token> by _redirects).
@@ -114,11 +119,16 @@ Deno.serve(async (req: Request) => {
     const { data: hd } = await svc.from('site_files').select('part, content').eq('path', '_headers').order('part', { ascending: true });
     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
   } catch (_) { /* headers optional */ }
-  // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page
-  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects']) {
+  // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page; v11: the still-interested page;
+  // v12: the app manifest, the service worker and the icons (the .png files are base64 in site_files)
+  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'i/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects',
+    'manifest.webmanifest', 'sw.js', 'icons/hub-192.png', 'icons/hub-512.png', 'icons/hub-maskable-512.png', 'icons/hub-badge-96.png', 'icons/apple-touch-180.png']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
-      if (ex && ex.length) deployFiles['/' + extra] = new TextEncoder().encode(ex.map((r: { content: string }) => r.content).join(''));
+      if (ex && ex.length) {
+        const text = ex.map((r: { content: string }) => r.content).join('');
+        deployFiles['/' + extra] = /\.png$/.test(extra) ? Uint8Array.from(atob(text.replace(/\s+/g, '')), c => c.charCodeAt(0)) : new TextEncoder().encode(text);
+      }
     } catch (_) { /* optional */ }
   }
 
@@ -128,7 +138,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v10'
+      changed_by: 'host-sync v12'
     });
   } catch (_) { /* audit only */ }
 
