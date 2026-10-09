@@ -299,6 +299,7 @@ Job applicants filed from email by mail-pull, with CV and hiring stage; managed 
 - `request_id`: dept_requests.id of the hiring request (position). Foreign key (on delete set null).
 - `mail_id`: hub_mail.id of the application email. Foreign key (on delete set null).
 - `cv_path`: Object path of the CV in the hub-mail bucket.
+- `member_id`: wave220: the roster row (team_members) this applicant became once hired. Set by wa220_member_contact (wa220_cand_for: the name or WA email matching a hired applicant) or by hand; the hire's phone and personal email then reach the team member's CRM contact through wa220_member_contact.
 
 ## Meetings, agendas, transcripts, calendar
 
@@ -2244,4 +2245,10 @@ Functions:
 - `wa209_vol_app_status(bigint, text, text)`: wave209: sets a volunteer application received, contacted, welcomed, not_fit or withdrawn; welcomed, not a fit and withdrawn clear the person's Review flag once none of their applications is open (welcomed adds the tag welcomed). Staff only.
 - `transcript_outcomes(bigint[])`: wave210: the tasks each transcript added, banked or closed, with the live owner, due date and state when the reader may see the task
 - `wa209_task_link()`: wave210: links a task the AI inserted or closed (updated_by AI: <title>) to its transcript in transcript_tasks
-
+- `wa220_digits(text)`: wave220: the last 10 digits of a phone number (null when none), to compare numbers typed in any format.
+- `wa220_cand_for(bigint)`: wave220: the hired applicant (hub_candidates) behind a team member: the one linked by member_id, else the only hired, unlinked applicant whose name matches the roster name or the WA email (first.last). Null when none or ambiguous.
+- `wa220_member_contact(bigint, boolean)`: wave220: makes sure a team member has one CRM contact (crm_contacts.member_id): links or creates it, merges the same person's other records (the roster email, the hired applicant's email, or the applicant's phone with the same first name; never another team member's), carries the hire's phone and personal email, restores the full name and, with p_volunteer, gives an active non-board member a volunteer record. Called by the team_members and hub_candidates triggers and by wa220_set_member_phone; not callable from the API.
+- `wa220_member_trg()`: wave220: after a team member is added (or their email, name or return changes), keeps their one CRM contact (wa220_member_contact). A failure is a warning, never a failed roster save.
+- `wa220_cand_trg()`: wave220: when an applicant is hired or linked to a team member (or their phone or email changes), their phone and email reach the team member's CRM contact.
+- `wa220_member_phone(bigint)`: wave220: the phone numbers on a team member's CRM contact for their Hub profile (#person/<id>), and can_edit (the person themselves, HR, leaders and admins). Staff only; board viewers and blocked accounts get no row.
+- `wa220_set_member_phone(bigint, text)`: wave220: sets a team member's main phone (the first in crm_contacts.phones) from their Hub profile; the person, HR, leaders and admins only. The CRM and the Volunteer Manager show the same number (one record). change_log records that it changed, not the number.

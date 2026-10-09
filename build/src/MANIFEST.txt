@@ -248,6 +248,8 @@
 218_wave218
 # 219_wave219: Hub notifications on computers and phones (Steel, 07/10/26): the Hub as an installable app (manifest, icons, a notifications-only service worker in build/site, deployed by host-sync v12); one gentle prompt on Home per device (Turn on / Not now; on an iPhone in Safari, Add to Home Screen first); Settings, Notifications: this device on or off, a test, the other devices, where mentions and work for you arrive (Hub and Slack, Hub only, Slack only) and new announcements; re-saved every visit, off on Sign out. Sending: hub-push (Web Push, VAPID) from the triggers next to notify's, data wa219_push.
 219_wave219
+# 220_wave220: phone numbers on the Hub profile (Steel, 09/10/26): the main number on a person's page with Call and Text, edited by the person, HR, leaders and admins (wa220_member_phone, wa220_set_member_phone); one record with the CRM and the Volunteer Manager. Data: build/data/wa220_*.sql.
+220_wave220
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.
