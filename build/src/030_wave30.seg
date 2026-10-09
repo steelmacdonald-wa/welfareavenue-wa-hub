@@ -145,7 +145,7 @@ if (typeof renderGoalsPage === 'function') {
         });
         if (!gs.length) html += '<p class="read" style="margin:4px 0">No goals here yet.</p>';
         if (here.length) {
-          html += '<details class="w30i" open><summary>Suggested goals (AI, from transcripts and the board; nothing is added until you say so)</summary>';
+          html += '<details class="w30i" open><summary>Suggested goals (from the Hub, drawn from transcripts and the board; nothing is added until you say so)</summary>';
           here.forEach(function (s) {
             html += '<div class="w30sug"><b>' + esc(s.title || '') + '</b>'
               + '<div class="m">' + esc(s.detail || '') + (s.measure ? ' Measure: ' + esc(s.measure) : '') + '</div>'

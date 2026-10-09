@@ -1,0 +1,32 @@
+/* =====================================================================
+   WA v221 The Hub, not "AI" (Steel, 09/10/26)
+   =====================================================================
+   Steel: "I'd rather not say AI and use another word ... I'd rather it be more personable rather than AI anywhere in the
+   hub. I just saw it in the comments under meeting AI." His choices: the Hub speaks as "the Hub" (as in Ask the Hub);
+   everywhere except the Admin centre (its model, cost, activity and change pages keep "AI").
+   - The words on the pages, tours and Academy readings were changed in their own segments (and parts folders).
+   - Who did something: the database keeps its markers ("AI: <meeting>" in updated_by, added_by and raised_by, which
+     wa209_task_link and others match), so the pages show them through waWho(): "AI: <meeting>" reads
+     "the Hub, from <meeting>"; "Meeting AI" and "Slack AI" (comment authors, renamed in the data and by the trigger
+     trg_wa221_comment_author) read "The Hub, from the meeting" and "The Hub, from Slack"; "Meeting AI (accepted by X)"
+     reads "X (from a meeting)".
+   window.waWho(text) -> text. */
+(function () {
+  'use strict';
+  if (window.__wa221) return;
+  window.__wa221 = true;
+  function waWho(s) {
+    s = String(s == null ? '' : s);
+    if (!s) return s;
+    var m;
+    if (/^meeting ai$/i.test(s)) return 'The Hub, from the meeting';
+    if (/^slack ai$/i.test(s)) return 'The Hub, from Slack';
+    if ((m = s.match(/^Meeting AI \(accepted by (.+)\)$/))) return m[1] + ' (from a meeting)';
+    if ((m = s.match(/^AI agenda \((.+)\)$/))) return 'the Hub’s agenda (' + m[1] + ')';
+    if ((m = s.match(/^AI recommendation \((.+)\)$/))) return 'the Hub’s recommendation (' + m[1] + ')';
+    if ((m = s.match(/^AI:\s*(.+)$/))) return 'the Hub, from ' + m[1];
+    if (s === 'AI') return 'the Hub';
+    return s.replace(/\bAI\b/g, 'the Hub');
+  }
+  window.waWho = waWho;
+})();

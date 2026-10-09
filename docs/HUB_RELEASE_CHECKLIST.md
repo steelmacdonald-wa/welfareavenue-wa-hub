@@ -59,6 +59,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **Team phones (wave220).** A team member's phone lives on their CRM contact (`crm_contacts.member_id`), the same record as the Volunteer Manager's; never add a phone column to `team_members` or keep a second copy. The Hub profile reads it through `wa220_member_phone` (staff, not board viewers) and changes it only through `wa220_set_member_phone` (the person, HR, leaders, admins). A new way of adding team members or hiring needs nothing more: the triggers on `team_members` and `hub_candidates` link or create the contact, merge older records and carry the hire's phone (`wa220_member_contact`); never merge two team members' contacts.
 
+- **The Hub, not "AI" (wave221).** Outside the Admin centre, the interface never says "AI": the Hub speaks as "the Hub" ("The Hub suggests", "Edit with the Hub", "the Hub's recommendation"). Who-did-it markers stay in the data ("AI: <meeting>" is matched by triggers) and are shown through `waWho()`; a new place that shows updated_by, added_by, raised_by, changed_by or a comment author wraps it the same way. `test/w221drive.js` walks the pages.
+
 ## Hub training
 - Every new page has a page tour (`w122.tours.<key>`) that walks through each section, and a `trainings` row `tour:<key>` in "Hub page tours".
 - Changed pages: the existing tour still highlights every step (`node test/tour1.js all`).

@@ -101,7 +101,7 @@
   function timelineHtml(r) {
     var ev = [];
     ev.push({ at: r.created_at, first: 1, h: '<b>' + E(whoAsked(r)) + '</b> asked ' + E(teamLabel(r.department)) + (r.source === 'email' ? ' (from an email)' : r.source === 'meeting' ? ' (from a meeting)' : '') });
-    (R.logs['r' + r.id] || []).forEach(function (l) { var f = LOGTXT[l.field]; if (!f) return; ev.push({ at: l.changed_at, h: f(l) + (l.changed_by && l.field !== 'slack' ? ' <span class="w">by ' + E(l.changed_by) + '</span>' : '') }); });
+    (R.logs['r' + r.id] || []).forEach(function (l) { var f = LOGTXT[l.field]; if (!f) return; ev.push({ at: l.changed_at, h: f(l) + (l.changed_by && l.field !== 'slack' ? ' <span class="w">by ' + E(window.waWho ? waWho(l.changed_by) : l.changed_by) + '</span>' : '') }); });
     (R.notes[r.id] || []).forEach(function (n) { ev.push({ at: n.created_at, note: true, h: '<b>' + E(n.author) + '</b> <span class="w">added a note</span><div class="bd">' + (window.w138Mark ? window.w138Mark(linkify(n.body)) : linkify(n.body)) + '</div>' }); });
     ev.sort(function (a, b) { if (a.first || b.first) return a.first ? -1 : 1; return String(a.at || '').localeCompare(String(b.at || '')); });
     return '<ol class="w123tl">' + ev.map(function (e) { return '<li' + (e.note ? ' class="note"' : '') + '>' + e.h + ' <span class="w">' + E(fmtWhen(e.at)) + '</span></li>'; }).join('') + '</ol>';
@@ -172,7 +172,7 @@
       out += '<div class="blk"><h4>The email</h4>' + (b === undefined ? '<a class="w123lnk" data-w123mbody="' + E(m.id) + '">Show the email</a>' : b === null ? '<p class="w123sub" style="margin:0">Loading…</p>' : '<div class="prose" style="background:rgba(16,63,57,.035);border-radius:12px;padding:12px 14px;max-height:420px;overflow:auto">' + linkify(clip(b, 12000)) + '</div>') + '</div>';
     }
     var logs = (R.logs['m' + m.id] || []).filter(function (l) { return l.field !== 'delivery'; });
-    if (logs.length) out += '<div class="blk"><h4>Activity</h4><ol class="w123tl">' + logs.map(function (l) { return '<li>' + E(cap(l.field)) + ': ' + E(clip(l.new_value, 160)) + (l.changed_by ? ' <span class="w">by ' + E(l.changed_by) + '</span>' : '') + ' <span class="w">' + E(fmtWhen(l.changed_at)) + '</span></li>'; }).join('') + '</ol></div>';
+    if (logs.length) out += '<div class="blk"><h4>Activity</h4><ol class="w123tl">' + logs.map(function (l) { return '<li>' + E(cap(l.field)) + ': ' + E(clip(l.new_value, 160)) + (l.changed_by ? ' <span class="w">by ' + E(window.waWho ? waWho(l.changed_by) : l.changed_by) + '</span>' : '') + ' <span class="w">' + E(fmtWhen(l.changed_at)) + '</span></li>'; }).join('') + '</ol></div>';
     return out;
   }
   async function loadBody(id) {

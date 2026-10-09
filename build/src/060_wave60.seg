@@ -107,7 +107,7 @@
       cards = [
         card(mTask([['decision', 'vio']], { done: true }), 'Tick = decided; add a short note'),
         card(mPills([['+ Add decision', 'grn']]), 'File a new decision'),
-        card(mDoc(), 'AI recommendation on each one'),
+        card(mDoc(), 'The Hub\u2019s recommendation on each one'),
         card(mBar(64), 'Stat tiles: the org right now')
       ];
     } else if (k === 'dashboard') {
@@ -132,10 +132,10 @@
       fl = ['Pick the type', 'Fill the short form', 'Track the status'];
       cards = [
         card(mPills([['requested', 'gold'], ['in progress'], ['done', 'grn']]), 'Statuses update live, both sides'),
-        card(mTask([['from a meeting', 'vio']]), 'AI-suggested asks: accept or dismiss')
+        card(mTask([['from a meeting', 'vio']]), 'Asks the Hub suggests: accept or dismiss')
       ];
     } else if (k === 'agendas') {
-      sub = 'AI-drafted agendas, grounded in your real work.';
+      sub = 'Agendas the Hub drafts, grounded in your real work.';
       fl = ['Pick type + people', 'Type the purpose', 'Generate'];
       cards = [
         card(mDoc(), 'The purpose box shapes the whole agenda'),
@@ -156,7 +156,7 @@
       cards = [
         card(mBar(58), 'Progress per goal'),
         card(mPills([['project', 'grn'], ['&rarr;'], ['goal', 'vio']]), 'Projects roll up into goals'),
-        card(mDoc(), 'AI-suggested goals per department')
+        card(mDoc(), 'Goals the Hub suggests per department')
       ];
     } else if (k === 'create') {
       sub = 'Branded content in the WA voice.';
@@ -203,7 +203,7 @@
       fl = ['Paste or import', 'Tag the department', 'Save'];
       cards = [
         card(mDoc(), 'Summary, tasks and updates extracted'),
-        card(mPills([['comments', 'vio'], ['requests', 'gold'], ['due dates']]), 'AI suggestions flow to the boards'),
+        card(mPills([['comments', 'vio'], ['requests', 'gold'], ['due dates']]), 'The Hub\u2019s suggestions flow to the boards'),
         card(mPills([['posted to Slack', 'grn']]), 'The team sees the summary')
       ];
     } else if (k === 'activity') {

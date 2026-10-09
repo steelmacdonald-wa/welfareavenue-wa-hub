@@ -275,7 +275,7 @@
 
       var deptView = document.createElement('div');
       deptView.id = 'w68deptview';
-      deptView.insertAdjacentHTML('afterbegin', '<p class="w68sub">Quarterly goals by department; they roll up into the organizational tier. Edit, link projects, and review the AI suggestions here.</p>');
+      deptView.insertAdjacentHTML('afterbegin', '<p class="w68sub">Quarterly goals by department; they roll up into the organizational tier. Edit, link projects, and review the Hub\u2019s suggestions here.</p>');
       rest.forEach(function (ch) { deptView.appendChild(ch); });
 
       var orgView = document.createElement('div');

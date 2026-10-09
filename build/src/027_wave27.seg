@@ -288,7 +288,7 @@ async function wa27Suggest(goalId, forceRefresh) {
           department: g.department, title: String(s.title || '').slice(0, 300),
           owner: '', status: 'Open', flag: false, priority: false, done: false, sort: 999,
           project_id: s.project_id || null,
-          reason_note: 'AI goal gap suggestion: ' + String(s.why || '').slice(0, 300),
+          reason_note: 'Goal gap suggestion from the Hub: ' + String(s.why || '').slice(0, 300),
           updated_by: 'AI: goal gap analysis', opened_at: new Date().toISOString()
         });
         if (ins.error) { b.disabled = false; toast('Could not add it'); return; }

@@ -203,7 +203,7 @@
     var body = { max_tokens: 1200, system: SPEC.system, tools: [SPEC.tool], tool_choice: { type: 'tool', name: SPEC.tool.name },
       messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } }, { type: 'text', text: 'Label this photo.' + (known.length ? ' What we know: ' + known.join('; ') + '.' : '') }] }] };
     var r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'photo_label', 'x-wa-caller': 'photos' }, body: body });
-    if (r.error) { var m = (r.error && r.error.message) || String(r.error); if (/401|unauthor/i.test(m)) m = 'AI labels are not open to this account'; throw new Error(m); }
+    if (r.error) { var m = (r.error && r.error.message) || String(r.error); if (/401|unauthor/i.test(m)) m = 'Suggested labels from the Hub are not open to this account'; throw new Error(m); }
     var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use'; })[0];
     if (!tu || !tu.input) throw new Error((r.data && r.data.error && r.data.error.message) || 'nothing came back');
     var o = normSuggestion(tu.input);

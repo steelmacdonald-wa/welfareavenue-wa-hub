@@ -31,11 +31,11 @@
       S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Avenue Academy.', OPT)
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
-      S('#w116host .w116top', 'Your team’s home', 'The team page brings together the team’s pulse, decisions, updates and meetings. The line under the name is the AI’s read of how the team is doing, from recent meetings.'),
+      S('#w116host .w116top', 'Your team’s home', 'The team page brings together the team’s pulse, decisions, updates and meetings. The line under the name is the Hub’s read of how the team is doing, from recent meetings.'),
       S('#w116host .w116seg', 'The team’s pages', 'Switch between Overview, Agenda, Tasks and any boards the team runs, like Volunteering or the Content calendar.', OPT),
       S('#w116host .w116kpis', 'Key numbers', 'Open and overdue tasks, work finished in the last 30 days, active projects and meetings coming up. Click a number to open the list behind it.', OPT),
       H(/^Where the team is/i, '.w116card', 'Where the team is', 'The pulse score and the high priority list, rebuilt from the latest transcripts. Re-run it after a big meeting.', OPT),
-      H(/^Executive decisions for this team/i, '.w116card', 'Decisions for this team', 'Calls waiting on an executive, with who decides and the AI’s recommendation. Decide them on the Executive dashboard.', OPT),
+      H(/^Executive decisions for this team/i, '.w116card', 'Decisions for this team', 'Calls waiting on an executive, with who decides and the Hub’s recommendation. Decide them on the Executive dashboard.', OPT),
       S('#w123tcard', 'Team inbox', 'Requests to this team, emails the Hub inbox filed for it (Jev pings the team\u2019s Slack channel only when one needs you soon) and asks spotted in its meetings. Open one to set its status, hand it on or mark it done.', OPT),
       S('#w116updcard', 'Updates', 'What each meeting changed for this team, newest first. Add an update or a task from the bottom of the card.', OPT),
       H(/^Mentions from other teams/i, '.w116card', 'Mentions from other teams', 'Where other teams talked about your people or your work, so nothing falls between teams.', OPT),
@@ -59,7 +59,7 @@
       S('#w111folds', 'Folders', 'Decisions waiting, overdue tasks and the delivery numbers, each folded away until you open it.', OPT),
       S('#overview .w28my', 'Your plate', 'Your own open items, so the executive view never hides your to-do list.', OPT),
       S('#decFilters', 'Filter the decisions', 'Narrow the list by category: people, board, strategy, budget and more.', OPT),
-      S('#decisionList', 'Executive decisions', 'Each decision names who decides and carries an AI recommendation. Tick one to record what was decided; you will be asked for a short note.', OPT),
+      S('#decisionList', 'Executive decisions', 'Each decision names who decides and carries the Hub’s recommendation. Tick one to record what was decided; you will be asked for a short note.', OPT),
       S('#overview .add-row', 'Add a decision', 'Anyone can raise a call that needs an executive.', OPT),
       S('#decDoneWrap', 'Decided', 'Every decision made, with its note, stays here for the record.', OPT)
     ] },
@@ -86,7 +86,7 @@
       S('#glBody .tb', 'Pick the quarter', 'This quarter, next quarter or all quarters. Our fiscal year starts October 1.', OPT),
       S('#glBody .w116gg .gh', 'A team’s goals', 'Each team folds open. Use + Add goal to add one.', OPT),
       S('#glBody .w116ggrid', 'Goal cards', 'Status, due date and progress. Open a goal for its SMART detail, tasks and projects, and roll it up to an organizational goal.', OPT),
-      S('#glBody details.w116sug', 'Suggested goals', 'The AI suggests goals it hears in transcripts and board meetings. Nothing is added until someone accepts one.', OPT)
+      S('#glBody details.w116sug', 'Suggested goals', 'The Hub suggests goals it hears in transcripts and board meetings. Nothing is added until someone accepts one.', OPT)
     ] },
     projects: { tab: 'projects', icon: 'box', hash: '#projects', steps: [
       S('#projects .w116ptop', 'Every active project', 'Projects by team, with their status, lead and the goal they serve.'),
@@ -127,14 +127,14 @@
       S('#txDept', 'Pick the department', 'Choose the team the meeting belongs to, or Leadership to spread it across every team.', OPT),
       S('#txBody', 'Paste the transcript', 'Paste the full transcript from Otter, Plaud, Zoom or Meet. Add the date and a title if the Hub cannot read them from the text.', OPT),
       S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, or confidential to the people you pick. Restricted meetings stay sealed, even from the assistant.', OPT),
-      S('#txSave', 'Save and review', 'You get a preview of every task, closure, update, decision and mention the AI wants to file. Nothing saves until you approve it.', OPT),
+      S('#txSave', 'Save and review', 'You get a preview of every task, closure, update, decision and mention the Hub wants to file. Nothing saves until you approve it.', OPT),
       S('#txSearch || #txFilter', 'Find a meeting', 'Search the archive, or filter it by team.', OPT),
       S('#txList', 'The archive', 'Every transcript shows what it contributed. Use Reprocess if something did not land.', OPT)
     ] },
     agendas: { tab: 'agendas', icon: 'list', hash: '#agendas', steps: [
       S('#agendas > .w118mast', 'Agendas', 'Build the agenda, run the meeting, tick items off as they happen.'),
       S('#agendas .ag-new', 'Start a new agenda', 'Pick the meeting type (a department, the leaders, or a one-on-one or group), the team, the people and the date.', OPT),
-      S('#w53purpose', 'Say what the meeting is for', 'A one-line purpose helps the AI pull the right tasks and topics.', OPT),
+      S('#w53purpose', 'Say what the meeting is for', 'A one-line purpose helps the Hub pull the right tasks and topics.', OPT),
       S('#agNewGen', 'Generate', 'Drafts the agenda from recent transcripts and live tasks. Items linked to real tasks carry live checkboxes.', OPT),
       S('#agendas .ag-filters', 'Filter', 'By department or status. You only see agendas you are part of.', OPT),
       S('#agPageBody .ag-row', 'An agenda', 'Open it to reorder items, add your own, mark it final, or share a private link with people outside the Hub.', OPT)
@@ -216,7 +216,7 @@
       S('#contentcal .glance', 'This week', 'Planned and live posts this week, the next post, anything that needs attention, and ideas waiting for a date.', OPT),
       S('#contentcal .mg || #contentcal .lay', 'The calendar', 'Click + on a day to plan a post. Drag posts between days; you can undo a move.', OPT),
       S('#contentcal .tray', 'Ideas', 'Posts without a date. Ideas raised in marketing meetings land here too, with the meeting they came from. Drag one onto a day to plan it, or open it and put it in the bank until later.', OPT),
-      C('The composer', 'Open any post to write the caption (the AI drafts it in the Welfare Avenue voice), add images, check the preview, then plan it, schedule it or publish it now.')
+      C('The composer', 'Open any post to write the caption (the Hub drafts it in the Welfare Avenue voice), add images, check the preview, then plan it, schedule it or publish it now.')
     ] },
     socialstats: { tab: 'socialstats', icon: 'target', hash: '#socialstats', steps: [
       S('#socialstats .w116top', 'Marketing analytics', 'Followers, reach and what worked across Instagram, Facebook, TikTok, LinkedIn and the website.'),

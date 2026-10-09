@@ -65,7 +65,7 @@ function wa34How() {
   openModal('<h3>How work becomes goals here</h3>' +
     '<p class="m-sub">This is the spine of the Hub. Everything starts as a conversation and rolls up to the mission, mostly on its own.</p>' +
     '<div class="w34flow">' +
-    '<div class="w34box"><b>1. Meeting transcripts</b><span>Paste any meeting into the Transcript Archive. The AI reads it within a few minutes.</span></div>' +
+    '<div class="w34box"><b>1. Meeting transcripts</b><span>Paste any meeting into the Transcript Archive. The Hub reads it within a few minutes.</span></div>' +
     '<div class="w34arr">&darr;</div>' +
     '<div class="w34box"><b>2. Tasks</b><span>Every action item from the meeting lands on the right department board, with an owner, a status, and a due date.</span></div>' +
     '<div class="w34arr">&darr;</div>' +
@@ -75,7 +75,7 @@ function wa34How() {
     '<div class="w34arr">&darr;</div>' +
     '<div class="w34box w34org"><b>5. Organizational goals</b><span>The overarching tier at the top of this page. Department goals and their projects roll up here, so anyone can see how the daily work ladders to the mission.</span></div>' +
     '</div>' +
-    '<p class="m-sub">The AI helps at every level: it files tasks into projects, suggests which goal a new project serves, proposes department goals from your meetings, and runs gap analysis on any goal (open one and ask for the missing tasks).</p>' +
+    '<p class="m-sub">The Hub helps at every level: it files tasks into projects, suggests which goal a new project serves, proposes department goals from your meetings, and runs gap analysis on any goal (open one and ask for the missing tasks).</p>' +
     '<div class="m-actions"><button class="btn" id="w34hc">Got it</button></div>');
   var c = document.getElementById('w34hc');
   if (c) c.addEventListener('click', function () { closeModal(); });

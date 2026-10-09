@@ -2252,3 +2252,4 @@ Functions:
 - `wa220_cand_trg()`: wave220: when an applicant is hired or linked to a team member (or their phone or email changes), their phone and email reach the team member's CRM contact.
 - `wa220_member_phone(bigint)`: wave220: the phone numbers on a team member's CRM contact for their Hub profile (#person/<id>), and can_edit (the person themselves, HR, leaders and admins). Staff only; board viewers and blocked accounts get no row.
 - `wa220_set_member_phone(bigint, text)`: wave220: sets a team member's main phone (the first in crm_contacts.phones) from their Hub profile; the person, HR, leaders and admins only. The CRM and the Volunteer Manager show the same number (one record). change_log records that it changed, not the number.
+- `wa221_comment_author()`: wave221: signs the meeting and Slack passes' task comments as the Hub ("The Hub, from the meeting", "The Hub, from Slack") whatever the edge function sends (it still writes Meeting AI or Slack AI).

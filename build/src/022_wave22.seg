@@ -386,7 +386,7 @@ async function waFinMarkDup(id) {
 
 function waFinImportModal() {
   openModal('<h3>Import a bank statement</h3>' +
-    '<p class="m-sub">Paste the statement text (copy everything from the PDF) or choose a CSV export. The AI extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
+    '<p class="m-sub">Paste the statement text (copy everything from the PDF) or choose a CSV export. The Hub extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
     '<label>Statement file name</label><input type="text" id="finFile" placeholder="July 31, 2026.pdf" />' +
     '<label>CSV or text file</label><input type="file" id="finUpload" accept=".csv,.txt" />' +
     '<label>Or paste the statement text</label><textarea id="finText" rows="8" placeholder="Paste the full statement text here"></textarea>' +

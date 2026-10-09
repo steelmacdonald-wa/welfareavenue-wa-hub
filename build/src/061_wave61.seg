@@ -88,16 +88,16 @@
           'A task past its due date turns light yellow everywhere it appears until it is done or re-dated.')
         + '<div class="w61h">Gating and visibility</div>'
         + sec(mPills([['&#9873; flagged', 'red'], ['reason required', 'gold']]), 'Flagged = executive attention',
-          'Flagging a task sends it to the executive decisions flow and requires a category and a short reason; the AI drafts one if you leave it blank.')
+          'Flagging a task sends it to the executive decisions flow and requires a category and a short reason; the Hub drafts one if you leave it blank.')
         + sec(mPills([['board hidden', 'vio']]), 'Confidential stays off the board view',
           'Tick Confidential on a task or update and board viewers never see it. Staff see it with a "board hidden" tag.')
         + sec(mPipe(['open', 'done'], 1), 'Tasks are never deleted',
           'There is no delete. Tasks complete (and can reopen), or move to another department or project. The full history stays in the Activity log, so nothing silently disappears.')
         + '<div class="w61h">Where things come from</div>'
         + sec(mPipe(['meeting', 'transcript', 'this page']), 'Meetings feed the page',
-          'Drop a transcript in the Archive and within minutes the AI files updates and tasks here, tagged to this department, with a summary posted to Slack.')
+          'Drop a transcript in the Archive and within minutes the Hub files updates and tasks here, tagged to this department, with a summary posted to Slack.')
         + sec(mTask([['meeting', 'vio'], ['3 comments']]), 'Comments collect on each task',
-          'The newest note shows on the row. Add your own, or let the AI attach progress notes when a meeting or Slack clearly discusses that task; each links back to its source.')
+          'The newest note shows on the row. Add your own, or let the Hub attach progress notes when a meeting or Slack clearly discusses that task; each links back to its source.')
         + sec(mPills([['List'], ['Board'], ['Calendar'], ['by assignee']]), 'Three views, one truth',
           'Switch between List, Board and Calendar or filter by assignee; it is the same data, so ticking in one view updates all of them.')
         + sec(mPills([['General tasks'], ['Projects', 'grn']]), 'The Projects card',
@@ -116,7 +116,7 @@
       fl = ['Scan the tiles', 'Review decisions', 'Record the call'];
       secs = sec(mTask([['decision', 'vio']], { done: true }), 'Ticking records the decision',
           'You are asked for a short note on what was decided; it moves to the Decided list below with the note and date. Nothing is deleted.')
-        + sec(mDoc(), 'AI recommendation on each',
+        + sec(mDoc(), 'The Hub\u2019s recommendation on each',
           'Each open decision carries a suggested call grounded in recent meetings; treat it as a brief, not an answer.')
         + sec(mPills([['+ Add decision', 'grn']]), 'Anything can become a decision',
           'Add one directly, or flag a task on a department page and it arrives here with its reason.');
@@ -132,10 +132,10 @@
       fl = ['Pick the type', 'Fill the form', 'Track the status'];
       secs = sec(mPipe(['you ask', 'their page', 'done'], 0), 'It routes itself',
           'Pick a request type and it lands on the receiving department&#39;s page with a status both sides see update live.')
-        + sec(mTask([['from a meeting', 'vio']]), 'AI-suggested requests',
+        + sec(mTask([['from a meeting', 'vio']]), 'Requests the Hub suggests',
           'When a meeting clearly contains a cross-team ask, it appears at the top as a suggestion with the exact quote. Nothing is filed until a person clicks Accept; Dismiss makes it go away.');
     } else if (k === 'agendas') {
-      sub = 'AI-drafted agendas, grounded in your real work.';
+      sub = 'Agendas the Hub drafts, grounded in your real work.';
       fl = ['Pick type + people', 'Type the purpose', 'Generate'];
       secs = sec(mDoc(), 'The purpose box is the blueprint',
           'Write what the meeting is for and how it should run ("15 min on numbers, then the calendar, then blockers") and the agenda mirrors that structure, pulling only tasks and topics that fit.')
@@ -155,7 +155,7 @@
       fl = ['Pick the quarter', 'Open a department', 'Link the work'];
       secs = sec(mPipe(['task', 'project', 'goal', 'org'], 2), 'The rollup chain',
           'Tasks live in projects, projects link to department goals, department goals roll into the Organization tier. Link a project from the goal row or from the project itself.')
-        + sec(mDoc(), 'AI-suggested goals',
+        + sec(mDoc(), 'Goals the Hub suggests',
           'Per-department suggestions drawn from recent work; accept the useful ones, ignore the rest.');
     } else if (k === 'create') {
       sub = 'Branded content in the WA voice.';
@@ -195,7 +195,7 @@
     } else if (k === 'transcripts') {
       sub = 'Drop in any meeting; the Hub does the rest.';
       fl = ['Paste or import', 'Tag the department', 'Save'];
-      secs = sec(mPipe(['transcript', 'AI scan', 'boards'], 1), 'What the scan produces',
+      secs = sec(mPipe(['transcript', 'the Hub reads it', 'boards'], 1), 'What the scan produces',
           'A summary posts to Slack, updates and tasks file to the department page, and suggestions appear for requests, task comments and due dates, all confirm-first with quotes.')
         + sec(mDoc(), 'The archive remembers',
           'Every transcript shows what it contributed. Search and filter below; Reprocess if something did not land.');

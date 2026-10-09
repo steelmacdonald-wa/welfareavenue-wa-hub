@@ -528,7 +528,7 @@
       '<div class="w116drs">Comments</div><div id="w116cm"><p class="w116note">Loading...</p></div>' +
       '<div class="w116cmtn"><textarea id="w116cmtx" placeholder="Add a comment..."></textarea><button data-dact="comment">Post</button></div>' +
       '<div class="w116drs">Activity</div><div id="w116acts"><p class="w116note">Loading...</p></div>' +
-      '<p class="w116note">Added ' + E(t.opened_at ? String(t.opened_at).slice(0, 10) : 'earlier') + (t.updated_by ? ' \u00b7 last change by ' + E(t.updated_by) : '') + (t.closed_at ? ' \u00b7 closed ' + E(String(t.closed_at).slice(0, 10)) : '') + '</p>' +
+      '<p class="w116note">Added ' + E(t.opened_at ? String(t.opened_at).slice(0, 10) : 'earlier') + (t.updated_by ? ' \u00b7 last change by ' + E(window.waWho ? waWho(t.updated_by) : t.updated_by) : '') + (t.closed_at ? ' \u00b7 closed ' + E(String(t.closed_at).slice(0, 10)) : '') + '</p>' +
       '</div>' +
       '<div class="w116drf"><button class="pri" data-dact="toggle">' + (t.done ? 'Reopen' : 'Mark done') + '</button><button data-dact="open">Department page</button><button class="warn" data-dact="del">Delete</button></div>';
     els.dr.classList.add('open'); els.bk.classList.add('open');
@@ -550,7 +550,7 @@
       var a = await db.from('change_log').select('field, old_value, new_value, changed_by, changed_at').eq('entity_id', String(t.id)).in('entity_type', ['dept_task', 'task']).order('changed_at', { ascending: false }).limit(20);
       var acts = (a && a.data) || [];
       var el2 = document.getElementById('w116acts'); if (!el2 || B.drawer !== t.id) return;
-      el2.innerHTML = acts.length ? acts.map(function (c) { return '<div class="w116act"><b>' + E(c.field) + '</b>' + (c.old_value ? ' ' + E(String(c.old_value).slice(0, 60)) + ' \u2192' : '') + ' ' + E(String(c.new_value || '').slice(0, 80)) + ' <span>\u00b7 ' + E(c.changed_by || '') + ' \u00b7 ' + E(String(c.changed_at || '').slice(0, 10)) + '</span></div>'; }).join('') : '<p class="w116note">No recorded changes yet.</p>';
+      el2.innerHTML = acts.length ? acts.map(function (c) { return '<div class="w116act"><b>' + E(c.field) + '</b>' + (c.old_value ? ' ' + E(String(c.old_value).slice(0, 60)) + ' \u2192' : '') + ' ' + E(String(c.new_value || '').slice(0, 80)) + ' <span>\u00b7 ' + E((window.waWho ? waWho(c.changed_by) : c.changed_by) || '') + ' \u00b7 ' + E(String(c.changed_at || '').slice(0, 10)) + '</span></div>'; }).join('') : '<p class="w116note">No recorded changes yet.</p>';
     } catch (e) { /* fine */ }
   }
   function closeDrawer() {

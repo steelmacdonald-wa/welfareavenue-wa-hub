@@ -150,7 +150,7 @@
     d.id = 'w91review';
     d.open = true;
     d.innerHTML = '<summary>Needs your review (' + low.length + ')</summary>' +
-      '<div class="fin-note">The AI was not sure about these allocations. Fix the department or category (hover any category for what it means), or hit Looks right to confirm. Fixing one teaches the AI for future imports.</div>' +
+      '<div class="fin-note">The Hub was not sure about these allocations. Fix the department or category (hover any category for what it means), or hit Looks right to confirm. Fixing one teaches the Hub for future imports.</div>' +
       rows + more;
     anchor.insertAdjacentElement('afterend', d);
     d.querySelectorAll('[data-w91d]').forEach(function (el) {
@@ -179,7 +179,7 @@
   function w91LearnPrompt(row) {
     var deptLabel = (WA_FIN_DEPTS.filter(function (x) { return x[0] === row.department; })[0] || ['', row.department])[1];
     var rule = 'Transactions described like "' + String(row.description).slice(0, 80) + '": category "' + row.category + '", department ' + row.department + '.';
-    var s = w91Snack('<span>Teach the AI? Always file <b>' + esc(String(row.description).slice(0, 40)) + '</b> as <b>' + esc(row.category) + '</b> / <b>' + esc(deptLabel) + '</b> on future imports.</span>' +
+    var s = w91Snack('<span>Teach the Hub? Always file <b>' + esc(String(row.description).slice(0, 40)) + '</b> as <b>' + esc(row.category) + '</b> / <b>' + esc(deptLabel) + '</b> on future imports.</span>' +
       '<button class="yes">Save rule</button><button class="no">No thanks</button>');
     var t = setTimeout(function () { s.remove(); }, 15000);
     s.querySelector('.no').addEventListener('click', function () { clearTimeout(t); s.remove(); });

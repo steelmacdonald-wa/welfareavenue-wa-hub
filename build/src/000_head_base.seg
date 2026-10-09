@@ -531,7 +531,7 @@
   <section id="transcripts" class="panel">
     <div class="card">
       <h2>Add a transcript</h2>
-      <p class="read">Paste a meeting transcript, tag the department, and save. The AI processes it automatically: the department page updates itself within a few minutes and a summary posts to #exec-dashboard in Slack. Meetings recorded on the Hub’s Loom account (hub@welfareavenue.com) come in by themselves on Monday, Wednesday and Friday mornings, so there is no need to paste those.</p>
+      <p class="read">Paste a meeting transcript, tag the department, and save. The Hub processes it automatically: the department page updates itself within a few minutes and a summary posts to #exec-dashboard in Slack. Meetings recorded on the Hub’s Loom account (hub@welfareavenue.com) come in by themselves on Monday, Wednesday and Friday mornings, so there is no need to paste those.</p>
       <div class="tx-form-grid">
         <div>
           <label style="font-size:12.5px;color:var(--wa-muted);">Department</label><br/>
@@ -1317,7 +1317,7 @@ function taskModal(deptId, task) {
     '<div id="tmReasonWrap" style="display:' + (isEdit && task.flag ? "block" : "none") + ';">' +
     "<label>Reason category</label><select id=\"tmCat\">" + categoryOptions(isEdit ? task.cat : "") + "</select>" +
     '<input type="text" id="tmCatOther" placeholder="Custom category" style="margin-top:6px;display:none;" />' +
-    '<label>Why this needs an executive (one line)</label><input type="text" id="tmNote" placeholder="Leave blank and the AI writes it on save" value="' + (isEdit ? esc(task.note || "") : "") + '" /></div>' +
+    '<label>Why this needs an executive (one line)</label><input type="text" id="tmNote" placeholder="Leave blank and the Hub writes it on save" value="' + (isEdit ? esc(task.note || "") : "") + '" /></div>' +
     '<div class="m-foot"><button class="btn ghost" id="tmCancel">Cancel</button><button class="btn" id="tmSave">' + (isEdit ? "Save changes" : "Add task") + "</button></div>"
   );
 
@@ -1351,7 +1351,7 @@ async function saveTaskModal(deptId, task) {
     cat = catSel === "__other" ? (document.getElementById("tmCatOther").value.trim() || null) : (catSel || null);
     note = document.getElementById("tmNote").value.trim() || null;
     if (!cat || !note) {
-      toast("Generating the reason with AI...");
+      toast("The Hub is writing the reason...");
       const s = await suggestReason("task", title, DEPT_LABEL[deptId] || "", document.getElementById("tmOwner").value.trim());
       if (s) { cat = cat || s.reason_category; note = note || s.reason_note; }
       if (!cat) cat = "Strategy or direction";
@@ -1411,7 +1411,7 @@ function decisionModal(dec) {
   const areas = Object.keys(AREA_COLORS);
   openModal(
     "<h3>" + (isEdit ? "Edit decision" : "Add an executive decision") + "</h3>" +
-    '<p class="m-sub">Every decision carries a reason category and a one line rationale so the list stays triageable. Leave the reason blank and the AI writes it on save.</p>' +
+    '<p class="m-sub">Every decision carries a reason category and a one line rationale so the list stays triageable. Leave the reason blank and the Hub writes it on save.</p>' +
     '<label>Decision</label><input type="text" id="dmTitle" value="' + (isEdit ? esc(dec.title) : "") + '" placeholder="The call that needs to be made" />' +
     '<div class="m-row"><div><label>Area</label><select id="dmArea">' +
     areas.map(a => '<option value="' + esc(a) + '"' + (isEdit && dec.area === a ? " selected" : "") + ">" + esc(a) + "</option>").join("") +
@@ -1441,7 +1441,7 @@ async function saveDecisionModal(dec) {
   let cat = catSel === "__other" ? (document.getElementById("dmCatOther").value.trim() || null) : (catSel || null);
   let note = document.getElementById("dmNote").value.trim() || null;
   if (!cat || !note) {
-    toast("Generating the reason with AI...");
+    toast("The Hub is writing the reason...");
     const s = await suggestReason("decision", title, document.getElementById("dmArea").value, document.getElementById("dmMove").value.trim());
     if (s) { cat = cat || s.reason_category; note = note || s.reason_note; }
     if (!cat) cat = "Strategy or direction";
@@ -1621,7 +1621,7 @@ function decLi(d) {
   const ageStr = age == null ? "" : (age === 0 ? "opened today" : age + "d open");
   const metaBits = d.done
     ? [d.decidedAt ? "Decided " + fmtDay(d.decidedAt) : "", metaLine(d.by, d.at)].filter(Boolean).join(" &middot; ")
-    : [ageStr, d.raisedBy ? "raised by " + esc(d.raisedBy) : "", "decides: " + esc(d.owner || "Both")].filter(Boolean).join(" &middot; ");
+    : [ageStr, d.raisedBy ? "raised by " + esc(window.waWho ? waWho(d.raisedBy) : d.raisedBy) : "", "decides: " + esc(d.owner || "Both")].filter(Boolean).join(" &middot; ");
   return '<li data-decision="' + d.ref + '" class="' + (d.done ? "done" : "") + '">' +
     '<input type="checkbox" ' + (d.done ? "checked" : "") + (isStaff() ? "" : " disabled") + " />" +
     '<div class="ci-body">' +
@@ -1777,7 +1777,7 @@ function pulseChip(id) {
   const cur = rows[0], prev = rows[1];
   const arrow = prev ? (Number(cur.score) > Number(prev.score) ? " &#8599;" : (Number(cur.score) < Number(prev.score) ? " &#8600;" : " &#8594;")) : "";
   const conf = cur.confidence === "low" ? " (low signal)" : "";
-  return '<div class="meet-band"><span class="info-chip" title="Team pulse from Slack channel tone, scored 1 to 10 by the AI pass against a fixed rubric. The arrow compares the previous reading. Channels only, DMs are never scored."><span class="ic">&#9825;</span><b>Team pulse</b> ' + esc(String(cur.score)) + "/10" + arrow + (cur.note ? " &middot; " + esc(cur.note) : "") + conf + "</span></div>";
+  return '<div class="meet-band"><span class="info-chip" title="Team pulse from Slack channel tone, scored 1 to 10 by the Hub against a fixed rubric. The arrow compares the previous reading. Channels only, DMs are never scored."><span class="ic">&#9825;</span><b>Team pulse</b> ' + esc(String(cur.score)) + "/10" + arrow + (cur.note ? " &middot; " + esc(cur.note) : "") + conf + "</span></div>";
 }
 
 function clickupChip(id) {
@@ -1902,7 +1902,7 @@ function renderSection(id) {
     }).join("");
     const leftovers = openTasks.filter(t => known.indexOf(t.subsection) < 0);
     if (leftovers.length) {
-      itemsBlock += '<div class="subsection" style="--sc:' + col + '"><h3 class="subhead">General and new items</h3><p class="sub-sum">Added by the AI transcript pass or by hand, not yet filed under a workstream.</p><ul class="checklist">' + leftovers.map(itemLi).join("") + "</ul></div>";
+      itemsBlock += '<div class="subsection" style="--sc:' + col + '"><h3 class="subhead">General and new items</h3><p class="sub-sum">Added by the Hub from a meeting, or by hand, not yet filed under a workstream.</p><ul class="checklist">' + leftovers.map(itemLi).join("") + "</ul></div>";
     }
   } else {
     itemsBlock = '<h3 class="block" style="color:' + col + '">Open items (check to mark actioned)</h3>' +

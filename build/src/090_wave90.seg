@@ -294,7 +294,7 @@
 
   function w90BudLineModal() {
     openModal('<h3>Add a budget line</h3>' +
-      '<p class="m-sub">Creates a new category everywhere at once: the budget tables, the allocation dropdowns, the charts, and the AI importer. Set its quarterly budgets in the table afterwards.</p>' +
+      '<p class="m-sub">Creates a new category everywhere at once: the budget tables, the allocation dropdowns, the charts, and the Hub\u2019s importer. Set its quarterly budgets in the table afterwards.</p>' +
       '<label>Name</label><input type="text" id="w90bname" maxlength="60" placeholder="7150 Insurance" />' +
       '<label>Type</label><select id="w90bkind"><option value="expense">Expense</option><option value="income">Income</option></select>' +
       '<div class="m-actions"><button class="btn" id="w90bgo">Add line</button> <button class="btn ghost" id="w90bcancel">Cancel</button></div>');
@@ -336,13 +336,13 @@
   if (typeof waFinImportModal === 'function') {
     waFinImportModal = function () {
       openModal('<h3>Import a bank statement</h3>' +
-        '<p class="m-sub">Choose the statement PDF straight from the bank, a CSV export, or paste the text. The AI extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
+        '<p class="m-sub">Choose the statement PDF straight from the bank, a CSV export, or paste the text. The Hub extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
         '<label>Statement file name</label><input type="text" id="finFile" placeholder="July 31, 2026.pdf" />' +
         '<label>PDF, CSV or text file</label><input type="file" id="finUpload" accept=".pdf,.csv,.txt,application/pdf" />' +
         '<div id="finPdfNote" class="fin-note" style="display:none"></div>' +
         '<div id="finTextWrap"><label>Or paste the statement text</label><textarea id="finText" rows="8" placeholder="Paste the full statement text here"></textarea></div>' +
-        '<details id="w90guide" style="margin:10px 0 2px"><summary style="cursor:pointer;font-size:12px;font-weight:700">Teach the AI how to categorise</summary>' +
-        '<p class="m-sub">The AI already knows the chart of accounts, every budget line you have added, and the usual Welfare Avenue merchants. Add your own rules here, for example: Tim Hortons on event Sundays is volunteer meals, use 6020. E-transfers from board members are 4100 Donation. Saved rules apply to every future import.</p>' +
+        '<details id="w90guide" style="margin:10px 0 2px"><summary style="cursor:pointer;font-size:12px;font-weight:700">Teach the Hub how to categorise</summary>' +
+        '<p class="m-sub">The Hub already knows the chart of accounts, every budget line you have added, and the usual Welfare Avenue merchants. Add your own rules here, for example: Tim Hortons on event Sundays is volunteer meals, use 6020. E-transfers from board members are 4100 Donation. Saved rules apply to every future import.</p>' +
         '<textarea id="w90gtext" rows="5" maxlength="4000" placeholder="Loading current guidance..."></textarea>' +
         '<div style="margin-top:6px"><button class="btn ghost mini" id="w90gsave">Save guidance</button> <span id="w90gout" class="fin-note" style="display:inline"></span></div>' +
         '</details>' +

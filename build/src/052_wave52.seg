@@ -85,7 +85,7 @@
     h += '<a data-w52d="' + tid + '">' + (t.due_date ? 'due ' + esc(wa52Day(t.due_date)) : '+ due date') + '</a>';
     var s = WA52.sug[tid];
     if (s && !t.due_date && !t.done) {
-      h += '<span class="w52sug" title="' + esc(s.quote || '') + '">AI suggests ' + esc(wa52Day(s.due_date))
+      h += '<span class="w52sug" title="' + esc(s.quote || '') + '">The Hub suggests ' + esc(wa52Day(s.due_date))
         + ' <a data-w52ok="' + s.id + '" data-w52task="' + tid + '">accept</a>'
         + '<a data-w52no="' + s.id + '" data-w52task="' + tid + '">dismiss</a></span>';
     }
@@ -203,7 +203,7 @@
       + '<div class="w52quick">'
       + '<a data-w52q="1">Tomorrow</a><a data-w52q="7">In a week</a><a data-w52q="14">In two weeks</a><a data-w52q="eom">End of month</a>'
       + '</div>'
-      + (s && !t.due_date ? '<p class="m-sub" style="margin-top:8px">The AI heard <b>' + esc(wa52Day(s.due_date)) + '</b> in a meeting'
+      + (s && !t.due_date ? '<p class="m-sub" style="margin-top:8px">The Hub heard <b>' + esc(wa52Day(s.due_date)) + '</b> in a meeting'
         + (s.quote ? ': &quot;' + esc(String(s.quote).slice(0, 140)) + '&quot;' : '') + '</p>' : '')
       + '<div class="m-actions"><button class="btn" id="w52dgo">Save</button> '
       + (t.due_date ? '<button class="btn ghost" id="w52dclr">Clear the date</button> ' : '')

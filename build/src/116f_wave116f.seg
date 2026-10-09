@@ -538,7 +538,7 @@
       smartHtml(g) + winHtml(g) + invHtml(g, iv, { taskLimit: 6 }) +
       '<div class="ft">' + (staff() ? '<a data-gact="edit" data-gid="' + E(g.id) + '">Edit</a><a data-gact="newdept" data-gid="' + E(g.id) + '">+ Department goal under this</a>' : '') +
       '<a data-glcmt="' + E(g.id) + '">Comments (' + cm.n + ')</a><a data-gact="map" data-gid="' + E(g.id) + '">See it on the map</a><span class="sp"></span>' +
-      '<span class="mut">' + (g.updated_at ? 'Updated ' + E(fmtDate(g.updated_at)) + (g.updated_by ? ' by ' + E(g.updated_by) : '') : '') + '</span></div>' + cm.html +
+      '<span class="mut">' + (g.updated_at ? 'Updated ' + E(fmtDate(g.updated_at)) + (g.updated_by ? ' by ' + E(window.waWho ? waWho(g.updated_by) : g.updated_by) : '') : '') + '</span></div>' + cm.html +
       '</article>';
   }
   function renderOrg() {
@@ -608,8 +608,8 @@
   function suggestionsHtml(d, q) {
     var ideas = (typeof WA30_IDEAS !== 'undefined' && WA30_IDEAS[d] && WA30_IDEAS[d].suggestions) || [];
     if (!staff()) return '';
-    if (!ideas.length) return '<div class="w116sug"><div class="gen">AI can draft goal ideas for ' + E(label(d)) + ' from recent transcripts and the board: <a data-w30r="' + E(d) + '">generate suggestions</a>. Nothing is added until you review it.</div></div>';
-    return '<details class="w116sug"><summary>' + ideas.length + ' suggested goal' + (ideas.length === 1 ? '' : 's') + ' (AI, from transcripts and the board; nothing is added until you say so)</summary>' +
+    if (!ideas.length) return '<div class="w116sug"><div class="gen">The Hub can draft goal ideas for ' + E(label(d)) + ' from recent transcripts and the board: <a data-w30r="' + E(d) + '">generate suggestions</a>. Nothing is added until you review it.</div></div>';
+    return '<details class="w116sug"><summary>' + ideas.length + ' suggested goal' + (ideas.length === 1 ? '' : 's') + ' (from the Hub, drawn from transcripts and the board; nothing is added until you say so)</summary>' +
       ideas.map(function (s, i) { return '<div class="w30sug"><b>' + E(s.title || '') + '</b><div class="m">' + E(s.detail || '') + (s.measure ? ' Measure: ' + E(s.measure) : '') + '</div><div class="why">' + E(s.why || '') + '</div><div style="margin-top:6px"><button class="btn mini" data-w30a="' + E(d) + '|' + i + '">Review and add</button></div></div>'; }).join('') +
       '<div class="gen" style="margin-top:8px">Generated ' + E(String((WA30_IDEAS[d] && WA30_IDEAS[d].generated) || '').slice(0, 10)) + ' \u00b7 <a data-w30r="' + E(d) + '">refresh suggestions</a></div></details>';
   }

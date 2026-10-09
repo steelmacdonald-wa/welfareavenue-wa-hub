@@ -90,8 +90,8 @@
 
   /* ---- the meeting type picker on the upload form ---- */
   var W62_NOTES = {
-    leadership: 'Only leaders and admins see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
-    private: 'Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
+    leadership: 'Only leaders and admins see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and the Hub\u2019s suggestions; Ask the Hub answers from it only for the people who can see it.',
+    private: 'Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and the Hub\u2019s suggestions; Ask the Hub answers from it only for the people who can see it.',
     speakers: 'A one-on-one: only the people picked see it and what it creates (you are added), not admins or leaders. Tick everyone who spoke in it. Ask the Hub answers from it only for them.'
   };
   function wa62Ensure() {
@@ -115,7 +115,7 @@
             + esc(p.name) + ' <span style="color:#797773;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
         }).join('')
         + '</div>'
-        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.</p>'
+        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and the Hub\u2019s suggestions; Ask the Hub answers from it only for the people who can see it.</p>'
         + '</div>');
       var sel = document.getElementById('w62type');
       sel.addEventListener('change', function () {

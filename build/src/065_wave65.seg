@@ -181,7 +181,7 @@
     if ((p.content_ideas || []).length) h += '<div class="w65sec"><h4>Content ideas for the calendar (' + p.content_ideas.length + ')</h4>'
       + w65PlanRows(p.content_ideas, function (c) { var far = c.for_date && (Date.parse(c.for_date + 'T12:00:00') - Date.now()) >= 90 * 86400000; return '<div class="w65row"><span>' + w65Esc(c.title) + '</span>' + (c.for_date ? '<span class="w65mut" style="margin-left:auto">for ' + w65Esc(c.for_date) + (far ? ', waits in the bank' : '') + '</span>' : '') + '</div>'; }) + '</div>';
     h += '</div>'
-      + '<p class="m-sub" style="margin-top:8px">This is a close estimate from the same AI that will process the meeting; exact wording can differ. Nothing is saved until you approve. Suggested requests, comments and due dates always wait for a human to accept them.</p>'
+      + '<p class="m-sub" style="margin-top:8px">This is a close estimate from the same reading the Hub will do when it processes the meeting; exact wording can differ. Nothing is saved until you approve. Suggested requests, comments and due dates always wait for a human to accept them.</p>'
       + '<div class="m-actions"><button class="btn" id="w65go">Approve: upload and process</button> <button class="btn ghost" id="w65cx">Cancel</button></div>';
     return h;
   }
@@ -404,11 +404,11 @@
     var pill = function (t, c) { return '<span style="display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:1px 3px 1px 0;background:' + (c || '#ECEBE3') + ';color:' + (c ? '#FFFAF2' : '#103F39') + '">' + t + '</span>'; };
     return '<h3>Transcript archive</h3>'
       + '<p class="w60sub">Drop in any meeting; the Hub reads it and runs the boards.</p>'
-      + w65Pipe(['Paste the transcript', 'Preview the actions', 'Approve', 'AI files everything'], 3)
+      + w65Pipe(['Paste the transcript', 'Preview the actions', 'Approve', 'The Hub files everything'], 3)
       + '<div class="w61wrap">'
       + w65Sec(w65Pipe(['transcript', 'preview', 'approve'], 1), 'You approve before anything saves',
         'Saving first shows a popup of every action the system intends to take: new tasks, closures, updates, decisions, suggested requests, goal wins and mentions. Nothing is stored until you approve it.')
-      + w65Sec(pill('summary') + pill('updates') + pill('tasks', '#103F39'), 'What the AI files on the boards',
+      + w65Sec(pill('summary') + pill('updates') + pill('tasks', '#103F39'), 'What the Hub files on the boards',
         'A one line summary (posted to Slack), 1 to 3 update entries, and new tasks with owners from the roster and due dates when the meeting states them. It never edits or deletes existing content, it only adds or closes.')
       + w65Sec(pill('close', '#b3402f') + pill('evidence'), 'Closing needs proof',
         'A task is closed only when the meeting clearly says the work is done, shipped, or dropped, and every closure carries a quote as evidence. Merely discussing a task adds a comment instead, which also stops duplicate tasks.')

@@ -52,7 +52,7 @@
   }
   function whoAsked(r) {
     var s = String(r.requested_by || '');
-    var m = s.match(/^Meeting AI \(accepted by (.+)\)$/); if (m) return m[1] + ' (from a meeting)';
+    var m = s.match(/^Meeting AI \(accepted by (.+)\)$/); if (m) return m[1] + ' (from a meeting)'; if (window.waWho) s = waWho(s);
     var c = s.match(/^Chat \((.+)\)$/); if (c) return (nameByEmail(c[1].indexOf('@') > 0 ? c[1] : c[1] + '@welfareavenue.com') || c[1]) + ' (Ask the Hub)';
     return s || (r.requested_email ? (nameByEmail(r.requested_email) || r.requested_email) : 'someone');
   }
@@ -275,7 +275,7 @@
       if (s.quote) details['From the meeting'] = '"' + s.quote + '"';
       var saved;
       try {
-        saved = await createRequest({ d: s.department, type: t, title: s.title, details: details, source: 'meeting', requested_by: 'Meeting AI (accepted by ' + by + ')', assignee: s.assignee || null });
+        saved = await createRequest({ d: s.department, type: t, title: s.title, details: details, source: 'meeting', requested_by: by + ' (from a meeting)', assignee: s.assignee || null });
       } catch (e) { toastS('Could not file it'); return false; }
       await q(db.from('request_suggestions').update({ status: 'accepted', request_id: saved.id > 0 ? saved.id : null, decided_by: by, decided_at: iso }).eq('id', s.id));
       toastS('Filed to ' + teamLabel(s.department));

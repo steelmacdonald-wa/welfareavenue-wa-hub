@@ -82,7 +82,7 @@
       if (!host) return;
       host.insertAdjacentHTML('beforeend',
         '<textarea id="w53purpose" placeholder="Purpose and structure (optional): what this meeting is for and how it should run. Example: monthly marketing planning, 15 min on last month, then the content calendar, then blockers."></textarea>'
-        + '<p class="w53note">The AI treats this as the blueprint: the agenda follows your structure and only pulls in the tasks and topics that fit it.</p>');
+        + '<p class="w53note">The Hub treats this as the blueprint: the agenda follows your structure and only pulls in the tasks and topics that fit it.</p>');
     } catch (e) { /* non-fatal */ }
   }
 

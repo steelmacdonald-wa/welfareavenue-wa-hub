@@ -27,7 +27,7 @@
   function viewHtml(p) {
     var st = staff(), n = neighbours(), u = USAGE[p.usage] || USAGE.check;
     var useTitle = p.status === 'archived' ? 'Archived' : p.status === 'needs_labels' ? 'Needs a look' : u.long;
-    var useText = p.status === 'archived' ? 'Hidden from the library. ' + (st ? 'Restore it to use it again.' : '') : p.status === 'needs_labels' ? 'New, with first labels from the AI that nobody has confirmed yet. ' + (p.usage && p.usage !== 'check' ? 'The AI thinks: ' + u.long.toLowerCase() + '.' : '') : u.tip;
+    var useText = p.status === 'archived' ? 'Hidden from the library. ' + (st ? 'Restore it to use it again.' : '') : p.status === 'needs_labels' ? 'New, with first labels from the Hub that nobody has confirmed yet. ' + (p.usage && p.usage !== 'check' ? 'The Hub thinks: ' + u.long.toLowerCase() + '.' : '') : u.tip;
     var h = '<div class="bk" data-w118cx="1"></div><aside class="pn" role="dialog" aria-modal="true" aria-label="' + E(p.title) + '">' +
       '<header><h3 title="' + E(p.title) + '">' + E(p.title) + '</h3>' + (n.i >= 0 ? '<span class="ct">' + (n.i + 1) + ' of ' + n.list.length + '</span>' : '') +
       '<button class="ib" data-w118cstep="-1" title="Previous (left arrow)" aria-label="Previous photo"' + (n.i > 0 ? '' : ' disabled') + '>' + ic('left') + '</button>' +
@@ -95,13 +95,13 @@
     if (k === 'focal_x') {
       var ax = Number(e.ai.fields.focal_x), ay = Number(e.ai.fields.focal_y);
       if (Math.abs(Number(e.v.focal_x) - ax) < 0.01 && Math.abs(Number(e.v.focal_y) - ay) < 0.01) return '';
-      return '<div class="aih">' + ic('sparkle') + '<span>AI: the main subject sits ' + Math.round(ax * 100) + '% across and ' + Math.round(ay * 100) + '% down</span><a data-w118cai="focal_x">Use this</a></div>';
+      return '<div class="aih">' + ic('sparkle') + '<span>The Hub suggests: the main subject sits ' + Math.round(ax * 100) + '% across and ' + Math.round(ay * 100) + '% down</span><a data-w118cai="focal_x">Use this</a></div>';
     }
     var s = e.ai.fields[k], cur = e.v[k];
     var same = Array.isArray(s) ? arr(cur).join('|') === s.join('|') : String(cur == null ? '' : cur) === String(s);
     if (same) return '';
     var shownV = Array.isArray(s) ? s.map(function (x) { return k === 'best_for' ? label(BEST, x) : x; }).join(' \u00b7 ') : k === 'usage' ? USAGE[s].label : k === 'season' ? label(SEASONS, s) : k === 'scene' ? label(SCENES, s) : k === 'branding' ? label(BRANDING, s) : String(s);
-    return '<div class="aih">' + ic('sparkle') + '<span>AI: ' + E(shownV) + '</span><a data-w118cai="' + k + '">Use this</a></div>';
+    return '<div class="aih">' + ic('sparkle') + '<span>The Hub suggests: ' + E(shownV) + '</span><a data-w118cai="' + k + '">Use this</a></div>';
   }
   function inp(k, lab, opts) {
     opts = opts || {};
@@ -125,8 +125,8 @@
       '<p class="note" style="margin:0 0 6px">' + ic('target') + ' Click the photo on the main subject: every crop keeps that point in view.</p>' + cropsHtml(p) + aiHint('focal_x') +
       '<div style="height:16px"></div>' +
       (e.aiBusy ? '<div class="busy"><i></i>Looking at the photo...</div>' : '') +
-      (e.aiErr ? '<div class="use u-consent" style="margin:0 0 14px"><b>No AI suggestion</b>' + E(e.aiErr) + '</div>' : '') +
-      (e.ai && e.ai.fields && !e.aiBusy ? '<div class="use u-check" style="margin:0 0 14px"><b>AI suggestion' + (e.ai.model ? ' (' + E(String(e.ai.model).replace(/^[a-z-]+\//, '')) + ')' : '') + '</b>Fields the AI would change show a purple note: Use this takes it. <a data-w118cai="*" style="font-weight:800;cursor:pointer;text-decoration:underline">Use every suggestion</a></div>' : '') +
+      (e.aiErr ? '<div class="use u-consent" style="margin:0 0 14px"><b>No suggestion from the Hub</b>' + E(e.aiErr) + '</div>' : '') +
+      (e.ai && e.ai.fields && !e.aiBusy ? '<div class="use u-check" style="margin:0 0 14px"><b>The Hub\u2019s suggestion' + (e.ai.model ? ' (' + E(String(e.ai.model).replace(/^[a-z-]+\//, '')) + ')' : '') + '</b>Fields the Hub would change show a purple note: Use this takes it. <a data-w118cai="*" style="font-weight:800;cursor:pointer;text-decoration:underline">Use every suggestion</a></div>' : '') +
       '<div class="fs"><h4>What it shows</h4><div class="fg">' +
       inp('title', 'Title', { full: true, ph: 'A few words, no date' }) +
       inp('alt_text', 'Alt text', { full: true, area: true, max: 250, ph: 'Who (by role) and what is visible, and where', hint: 'Read aloud by screen readers. One sentence; describe people by role, not by name.' }) +
@@ -160,7 +160,7 @@
       '</div></div>' +
       '</div><footer>' +
       '<button type="button" class="b" data-w118cact="cancel">Cancel</button>' +
-      '<button type="button" class="b ai" data-w118cact="suggest"' + (e.aiBusy ? ' disabled' : '') + '>' + ic('sparkle') + (e.ai ? 'Ask the AI again' : 'Suggest with AI') + '</button>' +
+      '<button type="button" class="b ai" data-w118cact="suggest"' + (e.aiBusy ? ' disabled' : '') + '>' + ic('sparkle') + (e.ai ? 'Ask the Hub again' : 'Suggest with the Hub') + '</button>' +
       '<span class="sp"></span>' +
       '<button type="button" class="b go" data-w118cact="save">' + ic('check') + (p.status === 'needs_labels' ? (P.rows.filter(function (x) { return x.status === 'needs_labels' && x.key !== p.key; }).length ? 'Save and next' : 'Save and confirm') : 'Save') + '</button>' +
       '</footer></aside>';

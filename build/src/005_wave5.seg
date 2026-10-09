@@ -137,7 +137,7 @@ function renderDeptRequestCards() {
           var statuses = (t && Array.isArray(t.statuses) && t.statuses.length) ? t.statuses : ['Requested', 'In progress', 'Done'];
           return '<div class="req-row" data-req="' + r.id + '">'
             + '<span class="rt">' + esc(r.title) + '</span>'
-            + '<div class="rm">' + esc(t ? t.label : (r.type_key || 'Request')) + ' &middot; from ' + esc(r.requested_by || 'unknown') + ' &middot; ' + fmtDay(r.created_at) + ' &middot; <a style="cursor:pointer;" data-tog="' + r.id + '">details</a></div>'
+            + '<div class="rm">' + esc(t ? t.label : (r.type_key || 'Request')) + ' &middot; from ' + esc((window.waWho ? waWho(r.requested_by) : r.requested_by) || 'unknown') + ' &middot; ' + fmtDay(r.created_at) + ' &middot; <a style="cursor:pointer;" data-tog="' + r.id + '">details</a></div>'
             + '<div class="rd">' + esc(Object.entries(r.details || {}).map(function (kv) { return kv[0] + ': ' + kv[1]; }).join(String.fromCharCode(10)) || 'No details given') + '</div>'
             + '<div class="req-actions">'
             + (isStaff() ? '<select data-rst="' + r.id + '">' + statuses.map(function (s) { return '<option' + (s === r.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>'

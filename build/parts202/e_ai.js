@@ -126,10 +126,10 @@
     var r;
     try { r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'email_studio', 'x-wa-caller': 'email-studio' }, body: body }); }
     catch (e) { return { error: msgOf(e) }; }
-    if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'The Hub’s AI is not open to this account.'; return { error: m }; }
+    if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'Writing with the Hub is not open to this account.'; return { error: m }; }
     var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use' && c.input; })[0];
     var cost = r.data && r.data._wa && typeof r.data._wa.cost === 'number' ? r.data._wa.cost : null;   /* wave204: what this call cost (US dollars) */
-    if (!tu) return { error: 'The Hub’s AI did not send an email back. Try again, or build it yourself.', cost: cost };
+    if (!tu) return { error: 'The Hub did not send an email back. Try again, or build it yourself.', cost: cost };
     return { input: tu.input, photos: photos, cost: cost };
   }
   /* the model's answer made into a studio design: blocks cleaned, photos put back by index */

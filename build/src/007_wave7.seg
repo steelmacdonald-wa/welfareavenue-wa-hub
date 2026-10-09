@@ -27,7 +27,7 @@
     sec.className = 'panel';
     sec.innerHTML = '<div class="card agenda-card ag-page-card">'
       + '<h2 style="color:#6F64AB;">&#128203; Agendas</h2>'
-      + '<p class="read" style="margin-top:2px;">Every meeting agenda in one place, drafted by AI from transcripts, projects and open work. Checking a task off inside an agenda completes the real task on its department page.</p>'
+      + '<p class="read" style="margin-top:2px;">Every meeting agenda in one place, drafted by the Hub from transcripts, projects and open work. Checking a task off inside an agenda completes the real task on its department page.</p>'
       + '<div class="ag-new">'
       + '<select id="agNewType"><option value="department">Department meeting</option><option value="leaders">Leaders team meeting</option><option value="people">1on1 or group (pick attendees)</option></select>'
       + '<select id="agNewDept"></select>'

@@ -804,10 +804,10 @@
     var r;
     try { r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'email_studio', 'x-wa-caller': 'email-studio' }, body: body }); }
     catch (e) { return { error: msgOf(e) }; }
-    if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'The Hub\u2019s AI is not open to this account.'; return { error: m }; }
+    if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'Writing with the Hub is not open to this account.'; return { error: m }; }
     var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use' && c.input; })[0];
     var cost = r.data && r.data._wa && typeof r.data._wa.cost === 'number' ? r.data._wa.cost : null;   /* wave204: what this call cost (US dollars) */
-    if (!tu) return { error: 'The Hub\u2019s AI did not send an email back. Try again, or build it yourself.', cost: cost };
+    if (!tu) return { error: 'The Hub did not send an email back. Try again, or build it yourself.', cost: cost };
     return { input: tu.input, photos: photos, cost: cost };
   }
   /* the model's answer made into a studio design: blocks cleaned, photos put back by index */
@@ -2109,7 +2109,7 @@
     var c = d * 100;
     return (c === 0 ? '0' : c < 0.1 ? 'under 0.1' : c < 10 ? String(Math.round(c * 10) / 10) : String(Math.round(c))) + '\u00a2';
   }
-  function aboutStep(free) { return '<span class="w204about' + (free ? ' free' : '') + '" title="' + (free ? 'No AI: nothing to pay' : 'One call to the Hub\u2019s AI, in US dollars') + '">' + (free ? 'free' : 'about 2\u00a2') + '</span>'; }
+  function aboutStep(free) { return '<span class="w204about' + (free ? ' free' : '') + '" title="' + (free ? 'Done by hand: nothing to pay' : 'One call to the Hub, in US dollars') + '">' + (free ? 'free' : 'about 2\u00a2') + '</span>'; }
   function addCost(ai, cost) {
     ai = ai && typeof ai === 'object' ? ai : {};
     return { calls: (Number(ai.calls) || 0) + 1, cost: Math.round(((Number(ai.cost) || 0) + (Number(cost) || 0)) * 1e6) / 1e6 };
@@ -2163,11 +2163,11 @@
     return '<div class="w202modal" role="dialog" aria-modal="true" aria-label="What it costs"><div class="w202mbox wide w204costs">' +
       '<div class="w202mh"><h3>' + I('coin') + ' What it costs</h3><button class="w202x" data-w204costsx aria-label="Close">' + I('x') + '</button></div>' +
       '<p class="w204first">' + I('alert') + ' <span><b>Your content first.</b> The Hub shapes what you bring: your own words, the facts and your photos. It does not write the email for you, and thin input costs the same and makes a weaker email: bad input, bad output.</span></p>' +
-      '<p class="m">The Hub\u2019s AI is paid for by use (Claude Sonnet 5 through OpenRouter, in US dollars), not by subscription: each call costs a little, and anything done by hand is free.</p>' +
+      '<p class="m">The Hub\u2019s writing help is paid for by use (Claude Sonnet 5 through OpenRouter, in US dollars), not by subscription: each call costs a little, and anything done by hand is free.</p>' +
       '<h4 class="w202h4">Each step</h4><table class="w204ct">' + rows.map(function (r) { return '<tr><td>' + E(r[0]) + '</td><td>' + E(r[1]) + '</td></tr>'; }).join('') + '</table>' +
       '<h4 class="w202h4">What the studio has spent</h4>' + spend +
       '<p class="m">On the emails here now: ' + E(money(team)) + ' across ' + E(plural(teamn, 'email', 'emails')) + (minen ? ', yours ' + E(money(mine)) + ' across ' + E(plural(minen, 'email', 'emails')) : ', none of them yours') + '. Deleted emails and drafts never saved show only in the totals above.</p>' +
-      '<h4 class="w202h4">Sending</h4><p class="m">Sending is separate from the AI: Resend\u2019s free plan covers 3,000 emails a month and 100 a day, and the Hub\u2019s daily cap is set to match.</p></div></div>';
+      '<h4 class="w202h4">Sending</h4><p class="m">Sending is separate from the writing help: Resend\u2019s free plan covers 3,000 emails a month and 100 a day, and the Hub\u2019s daily cap is set to match.</p></div></div>';
   }
   function openCosts() { SS.costs.open = true; loadCosts(true).then(function () { paint(); }); paint(); }
   /* ---------- wave204 (04/10/26): your content first. Steel: "ensure that it is important to come with their content first. It

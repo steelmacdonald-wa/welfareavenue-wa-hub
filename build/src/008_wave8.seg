@@ -41,7 +41,7 @@ saveTranscript = async function () {
   if (r.data) PENDING.add(r.data.id);
   ["txTitle", "txBody", "txDate", "txSource"].forEach(x => document.getElementById(x).value = "");
   if (bo) bo.checked = false;
-  toast(boardOnly ? "Saved as board only. Everything derived from it stays hidden from staff" : "Saved. AI processing started, the department page updates in a few minutes");
+  toast(boardOnly ? "Saved as board only. Everything derived from it stays hidden from staff" : "Saved. The Hub is reading it now; the department page updates in a few minutes");
   await loadTranscripts();
 };
 

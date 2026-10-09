@@ -12,8 +12,8 @@
     var review = P.rows.filter(function (p) { return p.status === 'needs_labels'; }).length;
     var h = '<div class="bk" data-w118cx="1"></div><aside class="pn" role="dialog" aria-modal="true" aria-label="Add photos">' +
       '<header><h3>Add photos</h3><button class="ib" data-w118cx="1" title="Close (Esc)" aria-label="Close">' + ic('close') + '</button></header><div class="bd">' +
-      '<div class="drop" id="w118cdrop">' + ic('camera') + '<b>Drop photos here</b>or <a data-w118cchoose="1">choose files</a> (JPEG or PNG, up to 25 at a time).<br>The hub makes the three sizes, keeps the date, drops the location and camera data, and asks the AI for first labels.<input type="file" id="w118cfile" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" style="display:none"></div>' +
-      '<p class="note">Photos arrive marked <b>Needs a look</b>: open each one, fix what the AI got wrong (above all who is recognizable), set the focal point, and save. Describe people by role, not by name.</p>';
+      '<div class="drop" id="w118cdrop">' + ic('camera') + '<b>Drop photos here</b>or <a data-w118cchoose="1">choose files</a> (JPEG or PNG, up to 25 at a time).<br>The hub makes the three sizes, keeps the date, drops the location and camera data, and asks the Hub for first labels.<input type="file" id="w118cfile" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" style="display:none"></div>' +
+      '<p class="note">Photos arrive marked <b>Needs a look</b>: open each one, fix what the Hub got wrong (above all who is recognizable), set the focal point, and save. Describe people by role, not by name.</p>';
     if (items.length) {
       h += '<div class="ups">' + items.map(function (it, n) {
         var pct = it.state === 'done' || it.state === 'error' ? 100 : Math.round((it.pct || 0) * 100);
@@ -108,16 +108,16 @@
       throw x;
     }
     try { if (typeof logChange === 'function') logChange('photo', key, 'added', null, f.name); } catch (e) { /* audit */ }
-    it.file = null; it.pct = 0.85; it.msg = 'Asking the AI for first labels'; paintUp(); paint();
+    it.file = null; it.pct = 0.85; it.msg = 'Asking the Hub for first labels'; paintUp(); paint();
     try {
       var s = await suggest(byKey(key), cWeb, { file: f.name });
       var fl = s.fields, patch = { ai_suggestion: s };
       ['title', 'alt_text', 'caption', 'description', 'usage', 'usage_note', 'people', 'scene', 'branding', 'tags', 'best_for', 'focal_x', 'focal_y'].forEach(function (k) { if (fl[k] != null) patch[k] = fl[k]; });
       if (!season && fl.season && fl.season !== 'unknown') patch.season = fl.season;
       await update(key, patch, null);
-      it.state = 'done'; it.msg = 'Added, with AI labels to check';
+      it.state = 'done'; it.msg = 'Added, with the Hub\u2019s labels to check';
     } catch (x) {
-      it.state = 'done'; it.msg = 'Added; no AI labels (' + String((x && x.message) || x).slice(0, 80) + '), label it by hand';
+      it.state = 'done'; it.msg = 'Added; no labels from the Hub (' + String((x && x.message) || x).slice(0, 80) + '), label it by hand';
     }
     it.pct = 1; paintUp(); paint();
   }
