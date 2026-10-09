@@ -1,0 +1,223 @@
+/* =====================================================================
+   WA v227 Someone to meet this week (Steel, 09/10/26)
+   =====================================================================
+   Steel: "once every week someone gets a pop-up window when they open up the hub to introduce them to someone that they
+   may have not interacted with that's at Welfare Avenue that might be worth ... introducing themselves to because of
+   potential work or projects that they can work on together".
+   His choices: the team plus the board; the Hub picks the person and writes why; Say hi on Slack, Book a 15-minute
+   coffee chat and Tell the other person too, all on the pop-up.
+   - Every Monday the intros edge function picks, for each person, someone from another team they have not worked with
+     (no shared tasks, meetings or reporting line, no introduction in 12 weeks) whose goals, projects or role overlap, and
+     writes a short note and a first hello in the reader's language (hub_intros; build/data/wa227_intros.sql).
+   - The pop-up (#w227) opens once, the first time the person opens the Hub after it is written, after the loading
+     screen and any other pop-up (the due-date check first). wa227_my_intro gives it; wa227_intro_act records seen,
+     later, slack, coffee, profile and share.
+   - Say hi on Slack copies the hello and opens their Slack profile (Message is one click there). Book a 15-minute
+     coffee chat opens a Google Calendar invite with them, the next weekday at 10:00. Tell <name> too gives them the same
+     introduction from their side in their next pop-up. Maybe later (or Esc, or the x) closes it until next week.
+   - Nothing is posted or sent by the Hub: no Slack message, email or notification. Off switch: app_config intros_on.
+   window.w227: state, check, show, close. */
+(function () {
+  'use strict';
+  if (window.__wa227) return;
+  window.__wa227 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow',Arial,sans-serif", BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SLACK = 'https://welfareavenue.slack.com';
+  var S = { intro: null, open: false, checked: false, busy: false, shared: false, copied: false, timer: null };
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function say(t) { try { if (typeof toast === 'function') toast(t); } catch (e) { /* cosmetic */ } }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('') || '?'; }
+
+  var st = document.createElement('style');
+  st.id = 'w227css';
+  st.textContent = ''
+    + '#w227{position:fixed;inset:0;z-index:9400;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(31,32,30,.55);font-family:' + BODY + ';}'
+    + '#w227 .w227card{position:relative;width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');border-radius:20px;box-shadow:0 24px 60px rgba(0,0,0,.28);}'
+    + '#w227 .w227band{background:' + GREEN + ';color:' + CREAM + ';padding:18px 22px 16px;border-radius:20px 20px 0 0;}'
+    + '#w227 .w227band small{display:block;font-size:11.5px;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 4px;}'
+    + '#w227 .w227band h2{font-family:' + HEAD + ';font-weight:600;font-size:28px;line-height:1.05;letter-spacing:.4px;text-transform:uppercase;margin:0;color:' + CREAM + ';}'
+    + '#w227 .w227x{position:absolute;top:12px;right:12px;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,250,242,.14);color:' + CREAM + ';font-size:18px;line-height:34px;cursor:pointer;}'
+    + '#w227 .w227x:hover{background:rgba(255,250,242,.26);}'
+    + '#w227 .w227who{display:flex;gap:14px;align-items:center;padding:18px 22px 4px;}'
+    + '#w227 .w227av{width:64px;height:64px;border-radius:50%;flex:none;object-fit:cover;display:flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-weight:600;font-size:26px;color:' + CREAM + ';border:3px solid var(--wa-card,' + CREAM + ');box-shadow:0 0 0 2px rgba(16,63,57,.15);}'
+    + '#w227 .w227who div > b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:24px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';line-height:1.1;}'
+    + '#w227 .w227who div > span{display:block;font-size:13px;color:var(--wa-muted,#5d5c58);margin-top:2px;}'
+    + '#w227 .w227who a{color:' + GREEN + ';font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer;}'
+    + '#w227 .w227note{padding:10px 22px 0;font-size:15px;line-height:1.55;margin:0;}'
+    + '#w227 .w227hello{margin:14px 22px 0;padding:12px 14px;border-radius:14px;background:rgba(16,63,57,.06);font-size:13.5px;line-height:1.5;}'
+    + '#w227 .w227hello em{display:block;font-style:normal;font-size:11.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 4px;}'
+    + '#w227 .w227acts{display:flex;flex-wrap:wrap;gap:10px;padding:18px 22px 6px;}'
+    + '#w227 .w227acts button{font:inherit;max-width:none;margin:0;font-size:13.5px;font-weight:700;border-radius:12px;padding:10px 14px;cursor:pointer;border:1px solid ' + GREEN + ';background:transparent;color:' + GREEN + ';display:inline-flex;align-items:center;gap:8px;}'
+    + '#w227 .w227acts button.main{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w227 .w227acts button:hover{filter:brightness(1.08);}'
+    + '#w227 .w227acts button[disabled]{opacity:.7;cursor:default;}'
+    + '#w227 .w227acts button.done{border-color:' + GOLD + ';background:rgba(220,165,39,.14);color:' + GREEN + ';}'
+    + '#w227 .w227acts svg{width:16px;height:16px;flex:none;}'
+    + '#w227 .w227foot{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 22px 18px;font-size:12px;color:var(--wa-muted,#5d5c58);}'
+    + '#w227 .w227foot button{font:inherit;font-size:13px;font-weight:700;border:0;background:none;color:' + GREEN + ';cursor:pointer;text-decoration:underline;padding:6px 0;}'
+    + '@media (max-width:560px){#w227{align-items:flex-end;padding:0;}#w227 .w227card{border-radius:20px 20px 0 0;max-height:92vh;}#w227 .w227acts button{flex:1 1 100%;justify-content:center;}}';
+  (document.head || document.documentElement).appendChild(st);
+
+  var IC = {
+    slack: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12z"/></svg>',
+    cup: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17"/><path d="M8 3v3M12 3v3"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 11a4 4 0 1 0-8 0"/><circle cx="12" cy="6" r="3"/><path d="M19 21v-2a4 4 0 0 0-3-3.9M5 21v-2a4 4 0 0 1 3-3.9"/><path d="M18 8l3 3-3 3"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
+  };
+
+  function act(action) {
+    var it = S.intro; if (!it) return Promise.resolve(null);
+    return db.rpc('wa227_intro_act', { p_id: Number(it.id), p_action: action }).then(function (r) { if (r && r.error) throw r.error; return r && r.data; }).catch(function (e) { console.warn('wave227 act', action, e); return null; });
+  }
+
+  /* the next weekday at 10:00, 15 minutes, as Google Calendar wants it (UTC, compact) */
+  function slot() {
+    var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    var e = new Date(d.getTime() + 15 * 60000);
+    function f(x) { return x.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+    return f(d) + '/' + f(e);
+  }
+  function calLink(it) {
+    var o = it.other || {}, me = (it.me && it.me.name) || '';
+    var q = 'action=TEMPLATE&text=' + encodeURIComponent('Coffee chat: ' + first(me) + ' and ' + first(o.name))
+      + '&dates=' + slot()
+      + '&details=' + encodeURIComponent((it.hello ? it.hello + '\n\n' : '') + 'A 15-minute chat to get to know each other at Welfare Avenue.')
+      + (o.email ? '&add=' + encodeURIComponent(o.email) : '');
+    return 'https://calendar.google.com/calendar/render?' + q;
+  }
+  function slackLink(it) { var id = it.other && it.other.slack_id; return id ? SLACK + '/team/' + encodeURIComponent(id) : SLACK + '/'; }
+
+  function avatar(o) {
+    if (o.avatar_url) return '<img class="w227av" src="' + E(o.avatar_url) + '" alt="">';
+    return '<span class="w227av" style="background:' + E(o.color || GREEN) + '" aria-hidden="true">' + E(initials(o.name)) + '</span>';
+  }
+
+  function html() {
+    var it = S.intro, o = it.other || {}, f = first(o.name);
+    var shared = it.source === 'shared';
+    return '<div class="w227card" role="dialog" aria-modal="true" aria-labelledby="w227h">'
+      + '<div class="w227band"><small>' + (shared ? 'An introduction for you' : 'Someone to meet this week') + '</small>'
+      + '<h2 id="w227h">' + (shared && it.from ? E(first(it.from)) + ' would like to meet you' : 'Say hello to ' + E(f)) + '</h2>'
+      + '<button type="button" class="w227x" data-w227="later" aria-label="Close">&#10005;</button></div>'
+      + '<div class="w227who">' + avatar(o) + '<div><b data-w198skip>' + E(o.name) + '</b><span>' + E(o.role || 'Team member') + (o.team ? ' &middot; ' + E(o.team) : '') + '</span>'
+      + '<a data-w227="profile" role="button" tabindex="0">See ' + E(f) + '\u2019s profile</a></div></div>'
+      + (it.note ? '<p class="w227note" data-w198skip>' + E(it.note) + '</p>' : '')
+      + (it.hello ? '<div class="w227hello"><em>A first hello you could send</em><span data-w198skip>' + E(it.hello) + '</span></div>' : '')
+      + '<div class="w227acts">'
+      + '<button type="button" class="main" data-w227="slack">' + IC.slack + (S.copied ? 'Hello copied: paste it in Slack' : 'Say hi on Slack') + '</button>'
+      + '<button type="button" data-w227="coffee">' + IC.cup + 'Book a 15-minute coffee chat</button>'
+      + (it.can_share ? (S.shared ? '<button type="button" class="done" disabled>' + IC.check + E(f) + ' will see this too</button>' : '<button type="button" data-w227="share"' + (S.busy ? ' disabled' : '') + '>' + IC.share + 'Tell ' + E(f) + ' too</button>') : '')
+      + '</div>'
+      + '<div class="w227foot"><span>A new introduction every Monday.</span><button type="button" data-w227="later">Maybe later</button></div>'
+      + '</div>';
+  }
+
+  function paint() {
+    var box = document.getElementById('w227');
+    if (!S.open || !S.intro) { if (box) box.parentNode.removeChild(box); return; }
+    if (!box) { box = document.createElement('div'); box.id = 'w227'; document.body.appendChild(box); }
+    box.innerHTML = html();
+  }
+
+  function close(action) {
+    if (!S.open) return;
+    S.open = false; paint();
+    if (action) act(action);
+  }
+
+  function show(it) {
+    S.intro = it; S.open = true; S.shared = false; S.copied = false; paint();
+    act('seen');
+    setTimeout(function () { var b = document.querySelector('#w227 [data-w227="slack"]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 60);
+  }
+
+  /* wait for the loading screen and any other pop-up (the due-date check, a meeting pop-up) to be gone */
+  function busyScreen() {
+    if (!document.documentElement.classList.contains('wa-ready')) return true;
+    var gate = document.getElementById('gate'); if (gate && gate.style.display !== 'none' && gate.offsetParent !== null) return true;
+    if (document.getElementById('w213pop')) return true;
+    return Array.prototype.some.call(document.querySelectorAll('[aria-modal="true"], .modal-bg.open, #modalBg.show'), function (el) {
+      if (el.closest && el.closest('#w227')) return false;
+      var cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden';
+    });
+  }
+
+  function watchOthers() {
+    var box = document.getElementById('w227'); if (!box) return;
+    (function tick() {
+      if (!S.open) return;
+      var b = document.getElementById('w227'); if (!b) return;
+      var other = !!document.getElementById('w213pop');
+      b.style.display = other ? 'none' : '';
+      setTimeout(tick, 1000);
+    })();
+  }
+
+  function check() {
+    if (S.checked) return;
+    S.checked = true;
+    var tries = 0;
+    db.rpc('wa227_my_intro').then(function (r) {
+      var it = r && !r.error && r.data;
+      if (!it || !it.id || !it.other) return;
+      var calm = 0;
+      (function wait() {
+        if (S.open) return;
+        /* two quiet checks in a row (3 s) so a pop-up that opens late, like the due-date check, goes first */
+        if (busyScreen()) calm = 0; else calm++;
+        if (calm < 2 && tries++ < 120) { S.timer = setTimeout(wait, 1500); return; }
+        show(it);
+        watchOthers();
+      })();
+    }).catch(function (e) { console.warn('wave227 check', e); });
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t || !t.closest) return;
+    var box = t.closest('#w227'); if (!box) return;
+    if (t === box) { close('later'); return; }
+    var el = t.closest('[data-w227]'); if (!el) return;
+    var a = el.getAttribute('data-w227'), it = S.intro; if (!it) return;
+    ev.preventDefault();
+    if (a === 'later') { close('later'); return; }
+    if (a === 'profile') { act('profile'); close(null); location.hash = '#person/' + it.other.id; return; }
+    if (a === 'slack') {
+      var done = function () { S.copied = true; paint(); say('Your hello is copied. Paste it in a message to ' + first(it.other.name) + ' on Slack.'); };
+      try { window.open(slackLink(it), '_blank', 'noopener'); } catch (e) { /* fine */ }
+      if (it.hello && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(it.hello).then(done, done); else done();
+      act('slack');
+      return;
+    }
+    if (a === 'coffee') { try { window.open(calLink(it), '_blank', 'noopener'); } catch (e) { /* fine */ } act('coffee'); say('Your invite is open in Google Calendar: pick a time that suits you both and send it.'); return; }
+    if (a === 'share') {
+      if (S.busy) return; S.busy = true; paint();
+      act('share').then(function (res) {
+        S.busy = false;
+        if (res && res.ok) { S.shared = true; say(first(it.other.name) + ' will see this introduction the next time they open the Hub.'); }
+        else say('Could not tell ' + first(it.other.name) + ' just now. Try again in a moment.');
+        paint();
+      });
+    }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!S.open) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); close('later'); return; }
+    var t = ev.target;
+    if ((ev.key === 'Enter' || ev.key === ' ') && t && t.matches && t.matches('#w227 a[data-w227]')) { ev.preventDefault(); t.click(); }
+  });
+
+  if (typeof startApp === 'function') {
+    var __sa227 = startApp;
+    startApp = async function () {
+      var r = await __sa227.apply(this, arguments);
+      try { setTimeout(check, 1200); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  window.w227 = { state: function () { return { open: S.open, intro: S.intro, shared: S.shared, copied: S.copied }; }, check: function () { S.checked = false; check(); }, show: show, close: close, calLink: calLink, slackLink: slackLink };
+})();

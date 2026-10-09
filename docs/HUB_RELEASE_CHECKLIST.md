@@ -63,6 +63,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **The loading screen (wave222).** The veil lifts when `startApp` has resolved through every wrapper, the menu has settled and the page is still; never on a clock (the old 9 s cut-off showed half-built pages that rebuilt in front of the reader). Work a page needs at start goes inside the `startApp` chain; a wave that draws after its own fetch outside the chain fills its card in place and must not move or replace what is already drawn. Anything that shows or hides a menu entry reads `wa40Allowed()` (the same list `wa40Enforce` applies): never a looser rule on a watcher, or the two take turns. `test/w222drive.js` checks a slow load; `test/w222probe.js` measures one.
 
+- **The weekly introduction (wave227).** A pop-up that opens on its own waits for the loading screen and for any other pop-up (two quiet checks in a row) and steps aside while the due-date check is open; a new one does the same (see `busyScreen` in 227_wave227.seg). The introductions use open profile facts only (`wa227_profile`: role, team, responsibilities, profile line, projects led, goals owned), never meetings, tasks or HR; the Hub sends nothing for them (no Slack, email or notification). Test with `test/w227drive.js`; a test never calls intros without dry.
+
 ## Hub training
 - Every new page has a page tour (`w122.tours.<key>`) that walks through each section, and a `trainings` row `tour:<key>` in "Hub page tours".
 - Changed pages: the existing tour still highlights every step (`node test/tour1.js all`).

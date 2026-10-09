@@ -2253,3 +2253,25 @@ Functions:
 - `wa220_member_phone(bigint)`: wave220: the phone numbers on a team member's CRM contact for their Hub profile (#person/<id>), and can_edit (the person themselves, HR, leaders and admins). Staff only; board viewers and blocked accounts get no row.
 - `wa220_set_member_phone(bigint, text)`: wave220: sets a team member's main phone (the first in crm_contacts.phones) from their Hub profile; the person, HR, leaders and admins only. The CRM and the Volunteer Manager show the same number (one record). change_log records that it changed, not the number.
 - `wa221_comment_author()`: wave221: signs the meeting and Slack passes' task comments as the Hub ("The Hub, from the meeting", "The Hub, from Slack") whatever the edge function sends (it still writes Meeting AI or Slack AI).
+
+### `hub_intros`
+
+wave227: the weekly introduction. One row per person a week (source weekly: the Hub picked other_id, someone they have not worked with, and wrote note and hello for them; note_back and hello_back are the same introduction seen from the other side), plus source shared when someone pressed Tell <name> too (from_intro). Written by the intros edge function and wa227_intro_act; read by the person through wa227_my_intro, admins read all.
+
+- `week`: The Monday (Toronto) of the week the introduction belongs to.
+- `member_id`: team_members.id of the person who sees the introduction.
+- `other_id`: team_members.id of the person they are introduced to.
+- `note`: Why they might connect, written by the Hub for member_id (their language), from open profile facts only.
+- `hello`: A friendly first line member_id can paste into Slack.
+- `note_back`: The same introduction written for other_id; becomes the note of the shared row when member_id presses Tell <name> too.
+- `signals`: What the match used: shared goals, projects, words, teams, the score. Never confidential meetings.
+- `status`: new (not shown yet), seen (shown), later (Maybe later: not again this week), acted (they said hi, booked a chat or told the other person).
+- `actions`: What they did: slack, coffee, shared, profile.
+
+- `wa227_my_member()`: wave227: the roster id (team_members) of the signed-in person: their team email, or for a director the board_members address they sign in with.
+- `wa227_people()`: wave227: who the weekly introduction runs for: active team members with an address, directors included (their board address when the roster has none).
+- `wa227_together(bigint, bigint)`: wave227: how much two roster members already work together: same team (5), the executive team and the board (5, they meet at board meetings), shared tasks, meetings both spoke in (last 180 days), a reporting line (5), an introduction in the last 12 weeks (10). Read by wa227_intro_plan only.
+- `wa227_profile(bigint)`: wave227: one person for the weekly introduction, from open facts only: role, team, city, responsibilities, the profile line, open projects they lead, organizational goals they own. No meetings, tasks or anything confidential.
+- `wa227_intro_plan(date)`: wave227: the week's introductions: for each person (random order) the one they have not worked with (wa227_together) whose goals, projects and role words overlap most, someone already picked this week a little less likely, never their own team. Returns both profiles and the signals for the intros function to write the notes. Service role only.
+- `wa227_my_intro()`: wave227: the introduction the signed-in person should see (a shared one first, else this week's), with the other person's card (role, team, avatar, Slack id) and whether they can still tell them. It pops up once: only a new one is returned (the page marks it seen). Null when there is none or when app_config intros_on is false.
+- `wa227_intro_act(bigint, text)`: wave227: records what the person did with their introduction (seen, later, slack, coffee, profile) and, for share, gives the other person the same introduction from their side (a shared row with note_back) in their next pop-up. Only the person it is for.
