@@ -1,0 +1,210 @@
+/* =====================================================================
+   WA v226 Ask the Hub speaks Welfare Avenue (Steel, 09/10/26)
+   =====================================================================
+   Steel: "fix the formatting in Ask the Hub to have more of the Welfare Avenue kind of branded Slack emojis and
+   GIFs ... it first of all responds to us in the Welfare Avenue voice skill that I built ... concise, to the point,
+   yet friendly ... hyperlinks to things instead of putting out the full entire link ... a nicer UI overall".
+   His choice: WA brand emojis, light touch (the :wa-...: set from our Slack), the animated ones moving gently.
+   The answers come from ask v15 (fn/ask), which also keeps confidential topics out for everyone (leadership changes,
+   board matters, anyone's personal or HR situation, one-on-ones and leaders-only meetings).
+   This segment only draws what ask sends:
+   - Light Markdown, made safe: the text is escaped first, then **bold**, "- " and "1. " lists, paragraphs, and
+     [label](link) links (https, mailto or a Hub #page; a Hub page link closes the drawer on a phone). A bare address
+     that slips through becomes a short labelled link ("the doc", "the Loom").
+   - Our Slack emojis drawn from the brand kit (content-images/brand): :wa-heart-gold:, :wa-star-pop:, :wa-e-moves:
+     and the rest; :wa-heart-beat:, :wa-star-pop:, :wa-arrow-go: and :wa-e-moves: move gently (still for people who
+     turn motion off). An emoji we do not have is left out, never shown as code.
+   - Sources as small chips under the answer; the confidential reply in a soft purple card; a friendlier error line;
+     the first message in the WA voice. Answers carry data-w198skip so the French layer never treats them as
+     interface words.
+   Wired by a MutationObserver on #wacMsgs (as wave117 does); wave38's send path and wave116o's cards are untouched.
+   window.w226: md(text) for tests. */
+(function () {
+  'use strict';
+  if (window.__wa226) return;
+  window.__wa226 = true;
+
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', GROUND = '#1F201E';
+  var B = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/';
+
+  /* ---------- the emoji set (our Slack names, drawn from the brand kit) ---------- */
+  var IMG = {
+    'wa-heart': 'doodle-heart-purple.png', 'wa-heart-gold': 'doodle-heart-gold.png', 'wa-heart-purple': 'doodle-heart-purple.png',
+    'wa-heart-beat': 'doodle-heart-gold.png', 'wa-heart-chain-gold': 'doodle-heart-chain-gold.png', 'wa-heart-chain-purple': 'doodle-heart-chain-purple.png',
+    'wa-star': 'doodle-star-gold.png', 'wa-star-gold': 'doodle-star-gold.png', 'wa-star-purple': 'doodle-star-purple.png', 'wa-star-pop': 'doodle-star-gold.png',
+    'wa-flowers-gold': 'doodle-flowers-gold.png', 'wa-flowers-purple': 'doodle-flowers-purple.png',
+    'wa-asterisk': 'doodle-asterisk-gold.png', 'wa-asterisk-gold': 'doodle-asterisk-gold.png', 'wa-asterisk-purple': 'doodle-asterisk-purple.png',
+    'wa-arrow': 'doodle-arrow-gold.png', 'wa-arrow-gold': 'doodle-arrow-gold.png', 'wa-arrow-purple': 'doodle-arrow-purple.png', 'wa-arrow-go': 'doodle-arrow-gold.png'
+  };
+  var MOVES = { 'wa-heart-beat': 'beat', 'wa-star-pop': 'pop', 'wa-arrow-go': 'go' };
+  var E_COLOR = { 'wa-e': GREEN, 'wa-e-moves': GREEN, 'wa-e-gold': GOLD, 'wa-e-purple': PURPLE, 'wa-e-tile': GREEN, 'wa-e-tile-gold': GOLD, 'wa-mark': GREEN, 'wa-logo': GREEN };
+  function eSvg(color, moving) {
+    return '<i class="w226e w226E' + (moving ? ' w226moves' : '') + '" aria-hidden="true"><svg viewBox="0 0 30 24" width="20" height="16">'
+      + '<rect x="0" y="0" width="4" height="24" rx="1" fill="' + color + '"/>'
+      + '<rect class="b1" x="0" y="0" width="22" height="4" rx="1" fill="' + color + '"/>'
+      + '<rect class="b2" x="0" y="10" width="17" height="4" rx="1" fill="' + color + '"/>'
+      + '<rect class="b3" x="0" y="20" width="22" height="4" rx="1" fill="' + color + '"/></svg></i>';
+  }
+  function emoji(name) {
+    var n = String(name || '').toLowerCase();
+    if (E_COLOR[n]) return eSvg(E_COLOR[n], n === 'wa-e-moves');
+    if (IMG[n]) return '<img class="w226e' + (MOVES[n] ? ' w226' + MOVES[n] : '') + '" src="' + B + IMG[n] + '" alt="" aria-hidden="true">';
+    return '';
+  }
+
+  /* ---------- light Markdown, made safe ---------- */
+  function escH(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function label(u) {
+    if (/docs\.google\.com\/spreadsheets/.test(u)) return 'the sheet';
+    if (/docs\.google\.com\/presentation/.test(u)) return 'the slides';
+    if (/docs\.google\.com\/forms/.test(u)) return 'the form';
+    if (/docs\.google\.com/.test(u)) return 'the doc';
+    if (/drive\.google\.com/.test(u)) return 'the file in Drive';
+    if (/loom\.com/.test(u)) return 'the Loom';
+    if (/canva\.com/.test(u)) return 'the Canva design';
+    if (/slack\.com/.test(u)) return 'the Slack thread';
+    if (/hub\.welfareavenue\.com/.test(u)) return 'the Hub';
+    if (/welfareavenue\.com/.test(u)) return 'our website';
+    var m = /^https?:\/\/(?:www\.)?([^\/?#]+)/.exec(u);
+    return m ? m[1] : 'the link';
+  }
+  function linkHtml(text, href) {
+    var h = String(href || '').replace(/&amp;/g, '&');
+    var internal = /^#[\w\/-]+$/.test(h);
+    if (!internal && !/^(https?:\/\/|mailto:)/i.test(h)) return text;
+    return '<a class="w226a' + (internal ? ' w226in' : '') + '" href="' + escH(h) + '"' + (internal ? '' : ' target="_blank" rel="noopener noreferrer"') + '>' + text + '</a>';
+  }
+  /* inline: links, then bare addresses, bold, emojis; the input is already escaped */
+  function inline(s) {
+    var keep = [];
+    function stash(html) { keep.push(html); return '\u0000' + (keep.length - 1) + '\u0000'; }
+    s = s.replace(/\[([^\]\n]{1,140})\]\(((?:https?:\/\/|mailto:|#)[^\s)]+)\)/g, function (_m, t, u) { return stash(linkHtml(t, u)); });
+    s = s.replace(/(^|[\s(])((?:https?:\/\/)[^\s<)]+[^\s<).,;:!?'"])/g, function (_m, pre, u) { return pre + stash(linkHtml(escH(label(u.replace(/&amp;/g, '&'))), u)); });
+    s = s.replace(/\*\*([^*\n]{1,200})\*\*/g, '<b>$1</b>');
+    s = s.replace(/(^|[\s(])_([^_\n]{1,120})_(?=[\s.,;:!?)]|$)/g, '$1<em>$2</em>');
+    s = s.replace(/:(wa-[a-z-]{1,30}):/g, function (_m, n) { return stash(emoji(n)); });
+    s = s.replace(/\u0000(\d+)\u0000/g, function (_m, i) { return keep[Number(i)]; });
+    return s;
+  }
+  function md(text) {
+    var src = escH(String(text || '').replace(/\r/g, '').replace(/\s*[\u2014\u2013]\s*/g, ', ')).trim();
+    var lines = src.split('\n'), out = [], para = [], list = null;
+    function flushPara() { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } }
+    function flushList() { if (list) { out.push('<' + list.tag + '>' + list.items.map(function (x) { return '<li>' + inline(x) + '</li>'; }).join('') + '</' + list.tag + '>'); list = null; } }
+    lines.forEach(function (ln) {
+      var t = ln.trim();
+      var ul = /^(?:[-*\u2022])\s+(.*)$/.exec(t), ol = /^\d{1,2}[.)]\s+(.*)$/.exec(t), hd = /^#{1,4}\s+(.*)$/.exec(t);
+      if (!t) { flushPara(); flushList(); return; }
+      if (ul || ol) {
+        flushPara();
+        var tag = ul ? 'ul' : 'ol';
+        if (!list || list.tag !== tag) { flushList(); list = { tag: tag, items: [] }; }
+        list.items.push((ul || ol)[1]);
+        return;
+      }
+      if (hd) { flushPara(); flushList(); out.push('<p class="w226h">' + inline(hd[1]) + '</p>'); return; }
+      if (list && /^\s{2,}/.test(ln)) { list.items[list.items.length - 1] += ' ' + t; return; }
+      flushList();
+      para.push(t);
+    });
+    flushPara(); flushList();
+    return out.join('');
+  }
+
+  /* ---------- the drawer ---------- */
+  var CONF_RE = /^That one's not something I can share here/;
+  var WELCOME = "Hey! Ask me anything about what's happening across Welfare Avenue: tasks, meetings, requests, our story. I can also file a request or add a task for you to confirm. :wa-heart-gold:";
+  function render(d) {
+    if (!d || !d.classList || !d.classList.contains('wac-m') || !d.classList.contains('bot') || d.getAttribute('data-w226') === '1') return;
+    var span = d.querySelector('span');
+    if (!span) return;
+    var raw = span.textContent || '';
+    if (/^Thinking\.\.\.$/.test(raw) || d.classList.contains('w117think') || span.querySelector('.w117load')) return;
+    d.setAttribute('data-w226', '1');
+    if (/^Hi, ask me anything about what is happening across Welfare Avenue/.test(raw)) raw = WELCOME;
+    if (/^Something went wrong, try again\.?$/.test(raw)) { raw = "I couldn't reach the Hub just now. Give it another try in a moment."; d.classList.add('w226err'); }
+    if (CONF_RE.test(raw)) d.classList.add('w226conf');
+    span.classList.add('w226rich');
+    span.setAttribute('data-w198skip', '');
+    span.innerHTML = md(raw);
+    var src = d.querySelector('.wac-src');
+    if (src && src.getAttribute('data-w226') !== '1') {
+      src.setAttribute('data-w226', '1');
+      src.setAttribute('data-w198skip', '');
+      var items = (src.textContent || '').replace(/^Sources:\s*/, '').split(/;\s*/).filter(function (x) { return x && x.trim(); });
+      if (items.length) src.innerHTML = '<b>From</b>' + items.slice(0, 6).map(function (x) { return '<i class="w226chip">' + escH(x.trim().slice(0, 70)) + '</i>'; }).join('');
+      else src.remove();
+    }
+  }
+  var observed = false;
+  function wire() {
+    var m = document.getElementById('wacMsgs');
+    if (!m) return false;
+    m.querySelectorAll('.wac-m.bot').forEach(function (d) { try { render(d); } catch (e) { /* leave it plain */ } });
+    if (!observed && typeof MutationObserver !== 'undefined') {
+      observed = true;
+      new MutationObserver(function (recs) {
+        recs.forEach(function (r) { r.addedNodes.forEach(function (n) { try { render(n); } catch (e) { /* leave it plain */ } }); });
+      }).observe(m, { childList: true });
+    }
+    var inp = document.getElementById('w38in');
+    if (inp && inp.getAttribute('data-w226') !== '1') { inp.setAttribute('data-w226', '1'); inp.placeholder = 'Ask the Hub anything...'; }
+    return true;
+  }
+  /* a Hub page link closes the drawer on a phone, so the page is what you see */
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('a.w226in');
+    if (!a) return;
+    if (window.innerWidth < 900) { var p = document.getElementById('waChatPanel'); if (p) p.style.display = 'none'; }
+  });
+
+  /* ---------- the look ---------- */
+  var css = ''
+    + '#waChatPanel .wac-m.bot span.w226rich{display:block;white-space:normal;max-width:100%;padding:11px 14px;line-height:1.55;font-size:13.5px;}'
+    + '.w226rich p{margin:0 0 8px;}.w226rich p:last-child{margin-bottom:0;}'
+    + '.w226rich p.w226h{font-weight:700;color:' + GREEN + ';margin-top:2px;}'
+    + '.w226rich ul,.w226rich ol{margin:4px 0 8px;padding:0 0 0 18px;}.w226rich ul:last-child,.w226rich ol:last-child{margin-bottom:0;}'
+    + '.w226rich li{margin:3px 0;padding-left:2px;}'
+    + '.w226rich ul{list-style:none;padding-left:4px;}'
+    + '.w226rich ul li{position:relative;padding-left:16px;}'
+    + '.w226rich ul li::before{content:"";position:absolute;left:2px;top:.62em;width:7px;height:7px;border-radius:2px;background:' + GOLD + ';}'
+    + '.w226rich ol li::marker{color:' + PURPLE + ';font-weight:700;}'
+    + '.w226rich b{font-weight:700;color:' + GREEN + ';}'
+    + '.w226rich a.w226a{color:' + GREEN + ';font-weight:600;text-decoration:none;border-bottom:2px solid rgba(220,165,39,.65);padding:0 1px;border-radius:2px;transition:background .15s ease;}'
+    + '.w226rich a.w226a:hover{background:rgba(220,165,39,.18);}'
+    + '.w226rich a.w226a:not(.w226in)::after{content:"";display:inline-block;width:7px;height:7px;margin-left:4px;border-top:2px solid ' + GOLD + ';border-right:2px solid ' + GOLD + ';transform:translateY(-1px) rotate(45deg) scale(.8);}'
+    + '.w226rich a.w226in::after{content:"\\203A";margin-left:3px;color:' + GOLD + ';font-weight:700;}'
+    + 'img.w226e{display:inline-block;height:1.45em;width:auto;vertical-align:-.25em;margin:0 2px;}'
+    + 'i.w226E{display:inline-block;vertical-align:-.15em;margin:0 2px;}i.w226E svg{display:block;}'
+    + '.w226moves .b1,.w226moves .b2,.w226moves .b3{transform-origin:0 50%;animation:w226bar 1.8s cubic-bezier(.65,0,.35,1) infinite;}'
+    + '.w226moves .b2{animation-delay:.12s;}.w226moves .b3{animation-delay:.24s;}'
+    + '@keyframes w226bar{0%,100%{transform:scaleX(1);}45%{transform:scaleX(1.35);}}'
+    + 'img.w226beat{animation:w226beat 1.4s ease-in-out infinite;}'
+    + '@keyframes w226beat{0%,100%{transform:scale(1);}15%{transform:scale(1.18);}30%{transform:scale(1);}45%{transform:scale(1.12);}}'
+    + 'img.w226pop{animation:w226pop 2.6s ease-in-out infinite;}'
+    + '@keyframes w226pop{0%,100%{transform:rotate(0) scale(1);}50%{transform:rotate(18deg) scale(1.15);}}'
+    + 'img.w226go{animation:w226go 1.6s ease-in-out infinite;}'
+    + '@keyframes w226go{0%,100%{transform:translateX(0);}50%{transform:translateX(3px);}}'
+    + '#waChatPanel .wac-src[data-w226]{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin:6px 0 0 2px;font-size:11px;color:#797773;}'
+    + '#waChatPanel .wac-src[data-w226] b{font-weight:700;letter-spacing:1.2px;text-transform:uppercase;font-size:10px;color:' + PURPLE + ';margin-right:2px;}'
+    + '.w226chip{font-style:normal;background:rgba(16,63,57,.06);border:1px solid rgba(16,63,57,.10);color:' + GREEN + ';border-radius:999px;padding:2px 9px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '#waChatPanel .wac-m.bot.w226conf span.w226rich{background:rgba(111,100,171,.10);border:1px solid rgba(111,100,171,.22);color:' + GROUND + ';}'
+    + '#waChatPanel .wac-m.bot.w226conf span.w226rich p:first-child{font-weight:700;color:' + PURPLE + ';}'
+    + '#waChatPanel .wac-m.bot.w226err span.w226rich{background:rgba(220,165,39,.14);}'
+    + '@media (prefers-reduced-motion:reduce){.w226moves .b1,.w226moves .b2,.w226moves .b3,img.w226beat,img.w226pop,img.w226go{animation:none !important;}}';
+  var host = document.getElementById('wa97css');
+  if (host) host.textContent += '\n/* wa226 */\n' + css;
+  else { var st = document.createElement('style'); st.id = 'wa226css'; st.textContent = css; document.head.appendChild(st); }
+
+  /* ---------- wiring ---------- */
+  var tries = 0, iv = setInterval(function () { tries++; if (wire() || tries > 80) clearInterval(iv); }, 400);
+  if (typeof startApp === 'function') {
+    var __sa226 = startApp;
+    startApp = async function () {
+      var r = await __sa226.apply(this, arguments);
+      try { wire(); setTimeout(wire, 1500); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  window.w226 = { md: md, render: render, emoji: emoji };
+})();

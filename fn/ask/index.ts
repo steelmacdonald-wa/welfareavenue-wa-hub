@@ -1,3 +1,21 @@
+// v15c (09/10/26): the answer check keeps what is fine (a line or a sentence at a time) instead of replacing a whole answer
+// over one sentence, and takes out internal ids.
+// v15b (09/10/26): the scrub works a clause at a time (a summary line that lists several things keeps the fine ones); answers
+// lead with a plain sentence, bold only a short phrase, show no internal ids, at most five bullets.
+// v15 (09/10/26, wave226): confidential by design, and in the WA voice. Steel: confidential information, "especially board
+// meetings and my departure", must never be found in Ask the Hub, by anyone, him included; tasks from confidential meetings
+// still exist but stay high level. His choices: no exceptions (everyone, Steel, Suhaib and the board included); off-limits are
+// leadership changes (anyone's ED, co-ED, chair or president role, succession), board meetings and board documents, HR people
+// matters (someone leaving or let go, performance, discipline, pay, health, time off details), and one-on-ones and
+// leaders-only meetings. Four layers: (1) a question about an off-limits topic gets the same friendly answer every time,
+// before any data is read or any model is called, so the answer never confirms or denies anything; (2) the context never
+// holds a restricted meeting (one-on-one, leaders, confidential, board only, the Board team), a board-only, confidential or
+// restricted task or decision, a time-off request, a leadership story row or document, or a board / HR / governance Drive
+// file, whoever asks; (3) every sentence left in the context that touches an off-limits topic is dropped (CONF patterns);
+// (4) the answer is checked again before it leaves, and the chat history sent back is filtered the same way.
+// The voice: Steel's wa-writing skill (concise, warm, first names, no em dashes), light Markdown the Hub renders (bold, bullets,
+// [label](link) links, never a bare address) and at most two of WA's own Slack emojis (:wa-heart-gold: and friends), which
+// wave226's page draws from the brand kit.
 // v14 (29/09/26, wave165): the meetings as the asker may read them. Steel: "1on1s should be confidential and not searchable by
 // anyone except for those that are speaking in the meeting", and the older Loom meetings pulled in to "enhance the Ask the Hub".
 // MEETINGS MATCHING THE QUESTION comes from wa_ask_meetings, run as the asker: any of the question's words, ranked by relevance
@@ -45,6 +63,52 @@ const json = (b, s = 200)=>new Response(JSON.stringify(b), {
     }
   });
 const OPEN_VIS = 'visibility.is.null,visibility.eq.department';
+/* ---------- wave226: what Ask the Hub never talks about, for anyone ---------- */
+const WHO_TOP = String.raw`(?:steel|suhaib|founder|co-?eds?|executive directors?|\beds?\b|chair(?:person|man|woman)?|vice[- ]?(?:chair|president)|president|ceo|leadership team|leaders?hip roles?)`;
+const MOVE = String.raw`(?:leav\w*|left (?:the|welfare|wa\b|us\b|his|her|their|for)|quit\w*|depart\w*|step(?:s|ping|ped)?\s+(?:back|down|away|aside|out)|transition\w*|succe(?:ssion|ssor|ed)\w*|replac\w*|resign\w*|exit\w*|moving on|move on|hand(?:ing)?[- ]?(?:over|off)\w*|retir\w*|going away|role change|new role|takes? over|taking over|handing the reins)`;
+const CONF = [
+  /* leadership changes: Steel, Suhaib, an ED, the chair or the president leaving, stepping back, being replaced */
+  new RegExp(WHO_TOP + String.raw`[^.?!\n]{0,70}\b` + MOVE, 'i'),
+  new RegExp(String.raw`\b` + MOVE + String.raw`[^.?!\n]{0,45}` + WHO_TOP, 'i'),
+  /\bsuccess(?:ion|or)s?\b/i,
+  /\bleadership (?:changes?|transitions?|shake-?ups?|restructur\w*)\b/i,
+  new RegExp(String.raw`\b(?:steel|suhaib)\b[^.?!\n]{0,40}\b(?:be|become|becomes|becoming|named|made|appointed|elected|moving to|move to)\b[^.?!\n]{0,20}\b(?:chair\w*|president|ceo|ed|co-?ed|executive director)\b`, 'i'),
+  /\b(?:new|next|incoming|interim|future|replacement)\s+(?:co-?ed|ed|executive director|chair\w*|president|ceo|leader of the org\w*)\b/i,
+  /\b(?:steel|suhaib)(?:'s|s)?\s+(?:role|future|plans?|position)\b/i,
+  /\bwho(?:'s| is| will)?\s+(?:run|lead|take over)\w*\s+(?:welfare avenue|wa|the org\w*|the charity)\b/i,
+  /* board matters */
+  /\bboard(?:'s)?\s+(?:decid\w*|approv\w*|vot\w*|discuss\w*|said|say\w*|think\w*|want\w*|meetings?|minutes|packs?|decks?|votes?|voted|resolutions?|session|discussion|agenda|retreat|elections?|governance|chair|president|seats?|nominations?|of directors|decided|approved|in[- ]camera)\b/i,
+  /\b(?:in[- ]camera|bylaws?|by-laws?|\bagm\b|annual general meeting|governance committee|executive committee)\b/i,
+  /* HR people matters */
+  /\b(?:fired|firing|let go|laid off|layoffs?|terminat\w*|dismiss\w*|disciplin\w*|warning letter|written warning|probation\w*|underperform\w*|\bpips?\b|performance (?:issues?|reviews?|improvement|concerns?|problems?|plan)|grievance\w*|harass\w*|misconduct|complaints? (?:about|against))\b/i,
+  /\b(?:salar(?:y|ies)|wages?|pay (?:rate|raise|cut|band)s?|compensation|payroll|stipend amounts?|how much (?:is|does) \w+ (?:paid|make|earn))\b/i,
+  /\b(?:resign\w*|quit(?:s|ting)?|stepp(?:ing|ed) down|step(?:s)? down|stepping back|leaving (?:the team|us|wa|welfare avenue|the org\w*|the charity|her role|his role|their role|the role)|last day|notice period|exit interview|offboard\w*)\b/i,
+  /\b(?:(?:on|taking|took|takes|goes on|going on) (?:a )?(?:leave|medical leave|sick leave)|leave of absence)\b/i,
+  /\b(?:medical (?:leave|reasons?|condition|issues?|appointments?)|sick leave|health (?:issue|condition|reasons?)|mental health|burn-?out|personal (?:reasons|commitments|issues|matters|situation|circumstances)|family (?:emergency|reasons|matters)|bereavement|maternity|paternity)\b/i,
+  /\bconfidential\b/i
+];
+const CONF_ANSWER = "That one's not something I can share here :wa-heart-purple:\n\nSome conversations stay with the people they belong to: leadership changes, board matters and anyone's personal or HR situation. If it's something you need, the right person will bring it to you directly.\n\nAnything else I can dig up for you?";
+function confHit(s) { const t = String(s || ''); for (const re of CONF) { if (re.test(t)) return true; } return false; }
+/* drop what touches an off-limits topic, a clause at a time, and keep the rest as written: a sentence that lists several
+   things ("Rami stepping down confirmed, Loyola Day tabling secured, ...") keeps the parts that are fine */
+function confScrub(s) {
+  const t = String(s || '');
+  if (!t || !confHit(t)) return t;
+  return t.split(/(?<=[.!?])\s+|\n+/).map((x)=>{
+    if (!x || !confHit(x)) return x;
+    const parts = x.split(/[,;]\s+/).filter((c)=>c && !confHit(c));
+    return parts.length ? parts.join(', ').replace(/[,;:.!?\s]+$/, '') + '.' : '';
+  }).filter(Boolean).join(' ').replace(/\s{2,}/g, ' ').trim();
+}
+/* a meeting Ask the Hub never reads, whoever asks: one-on-ones, leaders only, confidential, board only, the Board team */
+function confMeeting(m) {
+  const v = String(m.visibility || '').toLowerCase();
+  if (v && v !== 'department') return true;
+  if (m.board_only === true) return true;
+  const d = String(m.department || '').toLowerCase();
+  return d === 'board' || /board|governance/.test(d);
+}
+const CONF_DOC_NAME = /\b(?:board|minutes|bylaws?|by-laws|agm|governance|resolution|in[- ]camera|confidential|succession|salar\w*|payroll|compensation|offer letter|contract|employment|disciplin\w*|performance|interview|hr|human resources|personnel|termination|resignation|1[: ]?on[: ]?1|one[- ]on[- ]one)\b/i;
 async function getSecret(name) {
   const { data } = await svc.rpc('get_secret', {
     secret_name: name
@@ -83,16 +147,7 @@ async function authorize(req) {
     email: ''
   };
 }
-const DEPTS = [
-  'opsmtl',
-  'progdev',
-  'opsto',
-  'marketing',
-  'fundraising',
-  'finance',
-  'hr',
-  'board'
-];
+const DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'finance', 'hr', 'board'];
 const DEPT_LABELS = {
   opsmtl: 'Ops Montreal',
   progdev: 'Program Development',
@@ -103,121 +158,7 @@ const DEPT_LABELS = {
   hr: 'Human Resources',
   board: 'Board'
 };
-const STOPWORDS = [
-  'the',
-  'a',
-  'an',
-  'and',
-  'or',
-  'but',
-  'is',
-  'are',
-  'was',
-  'were',
-  'be',
-  'been',
-  'being',
-  'what',
-  'whats',
-  'when',
-  'where',
-  'which',
-  'who',
-  'whom',
-  'why',
-  'how',
-  'do',
-  'does',
-  'did',
-  'doing',
-  'have',
-  'has',
-  'had',
-  'having',
-  'with',
-  'from',
-  'that',
-  'this',
-  'these',
-  'those',
-  'there',
-  'here',
-  'about',
-  'into',
-  'onto',
-  'over',
-  'under',
-  'again',
-  'then',
-  'than',
-  'them',
-  'they',
-  'their',
-  'theirs',
-  'our',
-  'ours',
-  'your',
-  'yours',
-  'his',
-  'her',
-  'hers',
-  'its',
-  'it',
-  'i',
-  'we',
-  'you',
-  'he',
-  'she',
-  'me',
-  'my',
-  'us',
-  'to',
-  'of',
-  'in',
-  'on',
-  'at',
-  'by',
-  'for',
-  'as',
-  'up',
-  'out',
-  'off',
-  'so',
-  'if',
-  'not',
-  'no',
-  'any',
-  'all',
-  'some',
-  'can',
-  'could',
-  'should',
-  'would',
-  'will',
-  'shall',
-  'may',
-  'might',
-  'must',
-  'happening',
-  'happened',
-  'happen',
-  'going',
-  'recently',
-  'recent',
-  'latest',
-  'update',
-  'updates',
-  'status',
-  'tell',
-  'know',
-  'anything',
-  'something',
-  'much',
-  'many',
-  'please',
-  'request',
-  'task'
-];
+const STOPWORDS = ['the', 'a', 'an', 'and', 'or', 'but', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'what', 'whats', 'when', 'where', 'which', 'who', 'whom', 'why', 'how', 'do', 'does', 'did', 'doing', 'have', 'has', 'had', 'having', 'with', 'from', 'that', 'this', 'these', 'those', 'there', 'here', 'about', 'into', 'onto', 'over', 'under', 'again', 'then', 'than', 'them', 'they', 'their', 'theirs', 'our', 'ours', 'your', 'yours', 'his', 'her', 'hers', 'its', 'it', 'i', 'we', 'you', 'he', 'she', 'me', 'my', 'us', 'to', 'of', 'in', 'on', 'at', 'by', 'for', 'as', 'up', 'out', 'off', 'so', 'if', 'not', 'no', 'any', 'all', 'some', 'can', 'could', 'should', 'would', 'will', 'shall', 'may', 'might', 'must', 'happening', 'happened', 'happen', 'going', 'recently', 'recent', 'latest', 'update', 'updates', 'status', 'tell', 'know', 'anything', 'something', 'much', 'many', 'please', 'request', 'task'];
 function keywords(question) {
   return (question || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w)=>w.length > 2 && STOPWORDS.indexOf(w) < 0).slice(0, 8);
 }
@@ -229,20 +170,15 @@ const ANSWER_TOOL = {
     properties: {
       answer: {
         type: 'string',
-        description: 'The reply, grounded in the provided context, concise, plain text. When you proposed actions this turn, say what is ready and that they need to confirm it below; never claim it is already filed or done.'
+        description: 'The reply in the Welfare Avenue voice: grounded in the context, concise, friendly, light Markdown (bold, - bullets, [label](link) links, never a bare address), at most two :wa-...: emojis, no em dashes. When you proposed actions this turn, say what is ready and that they confirm it below; never claim it is already filed or done.'
       },
       sources: {
         type: 'array',
-        items: {
-          type: 'string'
-        },
-        description: 'Short source references used. Empty if none.'
+        items: { type: 'string' },
+        description: 'Short labels of the sources used (a meeting and its date, a document title). No addresses. Empty if none.'
       }
     },
-    required: [
-      'answer',
-      'sources'
-    ]
+    required: ['answer', 'sources']
   }
 };
 const CLOSE_TASK_TOOL = {
@@ -251,16 +187,10 @@ const CLOSE_TASK_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      task_id: {
-        type: 'integer'
-      },
-      note: {
-        type: 'string'
-      }
+      task_id: { type: 'integer' },
+      note: { type: 'string' }
     },
-    required: [
-      'task_id'
-    ]
+    required: ['task_id']
   }
 };
 const COMPLETE_REQUEST_TOOL = {
@@ -269,13 +199,9 @@ const COMPLETE_REQUEST_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      request_id: {
-        type: 'integer'
-      }
+      request_id: { type: 'integer' }
     },
-    required: [
-      'request_id'
-    ]
+    required: ['request_id']
   }
 };
 const SET_REQUEST_STATUS_TOOL = {
@@ -284,17 +210,10 @@ const SET_REQUEST_STATUS_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      request_id: {
-        type: 'integer'
-      },
-      status: {
-        type: 'string'
-      }
+      request_id: { type: 'integer' },
+      status: { type: 'string' }
     },
-    required: [
-      'request_id',
-      'status'
-    ]
+    required: ['request_id', 'status']
   }
 };
 const CREATE_REQUEST_TOOL = {
@@ -324,12 +243,7 @@ const CREATE_REQUEST_TOOL = {
         description: 'Optional: a team member name from TEAM MEMBERS if the user named who should handle it.'
       }
     },
-    required: [
-      'type_key',
-      'department',
-      'title',
-      'details'
-    ]
+    required: ['type_key', 'department', 'title', 'details']
   }
 };
 const CREATE_TASK_TOOL = {
@@ -359,10 +273,7 @@ const CREATE_TASK_TOOL = {
         description: 'Optional due date YYYY-MM-DD, only if the user gave one.'
       }
     },
-    required: [
-      'department',
-      'title'
-    ]
+    required: ['department', 'title']
   }
 };
 const BANK_TASK_TOOL = {
@@ -371,9 +282,7 @@ const BANK_TASK_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      task_id: {
-        type: 'integer'
-      },
+      task_id: { type: 'integer' },
       title: {
         type: 'string',
         description: 'The task title, copied from the OPEN TASKS list.'
@@ -387,10 +296,7 @@ const BANK_TASK_TOOL = {
         description: 'One short line on why it waits, from what the user said (for example "After the March gala"). Empty if they gave no reason.'
       }
     },
-    required: [
-      'task_id',
-      'bank_until'
-    ]
+    required: ['task_id', 'bank_until']
   }
 };
 const ACTION_TOOLS = [
@@ -401,19 +307,21 @@ const ACTION_TOOLS = [
   CREATE_REQUEST_TOOL,
   CREATE_TASK_TOOL
 ];
-const MODELS = [
-  'claude-sonnet-5',
-  'claude-sonnet-4-5',
-  'claude-sonnet-4-20250514'
-];
-const OR_MODELS = [
-  'z-ai/glm-5.3',
-  'deepseek/deepseek-v4-pro-0813',
-  'qwen/qwen3.8-27b'
-];
-const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. For Welfare Avenue's past (what happened when, where, with whom, how many), use the OUR STORY blocks and KEY FACTS: give dates, say so when two sources disagree, include a source or document link when one is listed, and point to the Our story, Partners or Document finder pages (Resources menu) for more. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only. A meeting marked ONE-ON-ONE, LEADERS or CONFIDENTIAL is restricted: the person asking may read it and most colleagues may not, so answer them from it but never copy its details into a proposed task or request unless they ask for exactly that, and never suggest sharing it.
+const MODELS = ['claude-sonnet-5', 'claude-sonnet-4-5', 'claude-sonnet-4-20250514'];
+const OR_MODELS = ['z-ai/glm-5.3', 'deepseek/deepseek-v4-pro-0813', 'qwen/qwen3.8-27b'];
+const SYSTEM = `You are Ask the Hub, the assistant inside Welfare Avenue's staff Hub. Welfare Avenue is a youth-powered charity in Montreal and Toronto (meals, servings, community). You talk to the team like a warm, switched-on colleague.
 
-You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: for work the user wants to park for three months or more; it comes back on its date), complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
+GROUNDING. Answer ONLY from the provided context. If the context does not hold the answer, say so in one line and point to where to look (a Hub page, a team, a person). Never guess names, numbers or dates. For Welfare Avenue's past, use the OUR STORY blocks and KEY FACTS; give dates and say so when two sources disagree.
+
+CONFIDENTIAL, NO EXCEPTIONS (whoever is asking, the founder and the co-EDs included). Never say, hint at, confirm or deny anything about: leadership changes (anyone's ED, co-ED, chair or president role, someone stepping back, succession, who replaces whom); board meetings, board decisions and board documents; anyone's personal or HR situation (someone leaving, quitting or being let go, performance, discipline, pay, health, time off reasons); one-on-ones and leaders-only meetings. If the question goes there, or the only answer you could give does, reply exactly: "${CONF_ANSWER}". Do not explain what you left out or why. When you draft a task or request that comes from sensitive ground, keep its title and details high level and neutral (for example "Prepare role handover notes", never who is leaving or why).
+
+VOICE (Welfare Avenue's): concise, to the point, friendly. Lead with the answer in the first sentence; no "Great question", no preamble, no sign-off. First names for people. Plain words, short sentences, no charity boilerplate, no hedging. Never use em dashes or en dashes; use commas, colons or parentheses. Aim for 40 to 90 words; go longer only for a list the person asked for. Give credit by name when someone did the work. Never show internal ids (task 646, request 19) unless the person asks to act on one; name the thing instead.
+
+FORMAT (the Hub renders this, so use it): open with a plain sentence that answers; **bold** a short phrase (two to six words) for the one thing that matters most, never a whole sentence; short bullet lists with "- " for three or more items, at most five (say how many more and link the page); a blank line between short paragraphs. Links are always Markdown, [label](address), with a short human label ("the agenda", "the Loom", "the grant doc"), and you NEVER paste a bare web address. Link the Hub's own pages the same way with these addresses: [Home](#mypage), [Avenue Academy](#training), [Calendar](#calendar), [Requests](#requests), [Transcript archive](#transcripts), [Document finder](#documents), [Our story](#ourstory), [Org chart](#orgchart), [The bank](#bank), [Agendas](#agendas), [Important info](#importantinfo), [Projects](#projects), [Goals](#orggoals), and the team pages [Ops Montreal](#opsmtl), [Ops Toronto](#opsto), [Program Development](#progdev), [Marketing](#marketing), [Fundraising](#fundraising), [Human Resources](#hr). When a DRIVE DOCUMENTS or DOCUMENT FINDER entry informs the answer, link it. Cite a meeting inline in plain words, like (Ops MTL meeting, Jul 13).
+
+EMOJIS: at most two per answer, only from Welfare Avenue's own set, written exactly like this: :wa-heart-gold: (thanks, warmth), :wa-heart-purple: (care), :wa-heart-beat: (big love, a win), :wa-star-gold: (a highlight), :wa-star-pop: (a win, a milestone), :wa-e-moves: (momentum, moving forward), :wa-arrow-go: (a next step), :wa-flowers-gold: (welcome, a celebration), :wa-asterisk-gold: (a heads-up, a note). Put an emoji at the end of a sentence, never in the middle of a link or a list label. Skip emojis on bad news or a short factual answer.
+
+ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, or change a request status. Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
 
 Always finish by calling answer_question.`;
 let ASK_AUTH = ''; // the caller's Authorization header, for actions that run as them (bank_task)
@@ -900,9 +808,7 @@ async function runAgent(history, context, question) {
   ];
   const proposals = [];
   for(let round = 0; round < 2; round++){
-    const body = await callModel(key, orKey, messages, allTools, {
-      type: 'auto'
-    });
+    const body = await callModel(key, orKey, messages, allTools, { type: 'auto' });
     const content = body.content || [];
     const actions = content.filter((c)=>c.type === 'tool_use' && c.name !== 'answer_question');
     if (!actions.length) {
@@ -976,6 +882,47 @@ async function runAgent(history, context, question) {
   };
   throw new Error('no final answer returned');
 }
+/* wave226: the last checks before an answer leaves. A bare address becomes a labelled link, dashes become commas, and an answer
+   that touches an off-limits topic is replaced whole by the standard reply (a proposal still shows its card). */
+function linkLabel(u) {
+  const h = (()=>{ try { return new URL(u).hostname.replace(/^www\./, ''); } catch (_) { return ''; } })();
+  if (/docs\.google\.com/.test(u)) return /spreadsheets/.test(u) ? 'the sheet' : /presentation/.test(u) ? 'the slides' : /forms/.test(u) ? 'the form' : 'the doc';
+  if (/drive\.google\.com/.test(h)) return 'the file in Drive';
+  if (/loom\.com/.test(h)) return 'the Loom';
+  if (/canva\.com/.test(h)) return 'the Canva design';
+  if (/welfareavenue\.com$/.test(h) && /^hub\./.test(h)) return 'the Hub';
+  if (/welfareavenue\.com$/.test(h)) return 'our website';
+  if (/slack\.com/.test(h)) return 'the Slack thread';
+  return h ? h : 'the link';
+}
+/* v15c: an answer is checked a line at a time, keeping its Markdown: a line that touches an off-limits topic loses that
+   sentence (a list item that has nothing left goes); only an answer with nothing worth saying left becomes the
+   standard reply. Internal ids the model still shows ("(task 646)", "(open requests 8 and 7)") come out. */
+function answerScrub(t) {
+  const lines = String(t || '').split('\n').map((ln)=>{
+    if (!confHit(ln)) return ln;
+    const m = /^(\s*(?:[-*•]|\d{1,2}[.)])\s+)?(.*)$/.exec(ln) || ['', '', ln];
+    const kept = String(m[2] || '').split(/(?<=[.!?])\s+/).filter((x)=>x && !confHit(x)).join(' ').trim();
+    return kept ? (m[1] || '') + kept : null;
+  }).filter((ln)=>ln !== null);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function finishAnswer(text, proposals) {
+  let t = String(text || '').trim();
+  if (!t) return t;
+  if (t === CONF_ANSWER) return t;
+  if (confHit(t)) {
+    const kept = answerScrub(t);
+    if (kept.replace(/[^a-z]/gi, '').length < 40 || confHit(kept)) return (proposals && proposals.length) ? 'Ready for you to check and confirm below :wa-arrow-go:' : CONF_ANSWER;
+    t = kept;
+  }
+  t = t.replace(/\s*\((?:open\s+)?(?:tasks?|requests?)\s+#?\d+(?:\s*(?:,|and|&)\s*#?\d+)*\)/gi, '');
+  /* bare addresses (not already inside a Markdown link) become labelled links */
+  t = t.replace(/(^|[^(\[\]"'<])(https?:\/\/[^\s)<>\]]+[^\s)<>\].,;:!?'"])/g, (_m, pre, u)=>pre + '[' + linkLabel(u) + '](' + u + ')');
+  /* no em or en dashes (WA voice) */
+  t = t.replace(/\s*[—–]\s*/g, ', ').replace(/,\s*,/g, ',');
+  return t;
+}
 function cleanHistory(raw) {
   if (!Array.isArray(raw)) return [];
   const turns = [];
@@ -983,7 +930,7 @@ function cleanHistory(raw) {
     if (!t || typeof t !== 'object') continue;
     const role = t.role;
     const content = t.content;
-    if ((role === 'user' || role === 'assistant') && typeof content === 'string' && content.trim()) {
+    if ((role === 'user' || role === 'assistant') && typeof content === 'string' && content.trim() && !confHit(content)) {
       turns.push({
         role,
         content: content.slice(0, 2000)
@@ -1113,62 +1060,69 @@ function meetingsText(ms) {
     return bits.length ? ' [' + bits.join('; ') + ']' : '';
   };
   const clean = (t)=>String(t || '').replace(/<\/?b>/g, '').replace(/\s+/g, ' ').trim();
-  return 'MEETINGS MATCHING THE QUESTION (best matches first, each with its summary and the passage that matches the question):\n' + ms.map((m)=>'- ' + (m.title || 'Untitled') + ' (' + (DEPT_LABELS[m.department] || m.department || '') + ', ' + (m.meeting_date || '') + ')' + kind(m) + ': ' + clean(m.ai_summary).slice(0, 1100) + (clean(m.passage) ? ' Passage: "' + clean(m.passage).slice(0, 600) + '"' : '')).join('\n');
+  /* wave226: restricted meetings never reach the context, and what is left is scrubbed sentence by sentence */
+  const open = (ms || []).filter((m)=>!confMeeting(m));
+  if (!open.length) return '';
+  return 'MEETINGS MATCHING THE QUESTION (best matches first, each with its summary and the passage that matches the question):\n' + open.map((m)=>{
+    const sum = confScrub(clean(m.ai_summary).slice(0, 1100));
+    const pas = clean(m.passage);
+    const passage = pas && !confHit(pas) ? ' Passage: "' + pas.slice(0, 600) + '"' : '';
+    return '- ' + (m.title || 'Untitled') + ' (' + (DEPT_LABELS[m.department] || m.department || '') + ', ' + (m.meeting_date || '') + ')' + kind(m) + ': ' + sum + passage;
+  }).join('\n');
 }
 async function buildContext(question, isBoard, acc) {
   const kws = keywords(question);
   const parts = [];
   try {
-    const story = await storyBlock(question, acc || { lead: false, docsLead: false });
-    if (story) parts.push(story);
+    /* wave226: the leaders-only moments and documents never reach Ask the Hub, whoever asks */
+    const story = await storyBlock(question, { lead: false, docsLead: false });
+    if (story) parts.push(story.split('\n').map(confScrub).filter(Boolean).join('\n'));
   } catch (_) {}
   /* v14: the meetings that answer the question best, as the asker may read them (wa_ask_meetings runs as the asker) */
   let meetingsDone = false;
   try {
     if (ASK_AUTH.startsWith('Bearer ') && ASK_WHO && ASK_WHO !== 'system') {
       const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: ASK_AUTH } } });
-      const { data: ms, error: mErr } = await asUser.rpc('wa_ask_meetings', { q: question, lim: 7 });
+      const { data: ms, error: mErr } = await asUser.rpc('wa_ask_meetings', { q: question, lim: 12 });
       if (!mErr && Array.isArray(ms)) {
         meetingsDone = true;
-        if (ms.length) parts.push(meetingsText(ms));
+        const mt = meetingsText(ms);
+        if (mt) parts.push(mt);
       }
     }
   } catch (_) { meetingsDone = false; }
   try {
     if (kws.length && !meetingsDone) {
-      let ftsQ = svc.from('transcripts').select('id,title,meeting_date,department,ai_summary').or(OPEN_VIS).textSearch('fts', kws.join(' '), {
-        type: 'websearch'
-      });
-      if (!isBoard) ftsQ = ftsQ.eq('board_only', false);
+      const ftsQ = svc.from('transcripts').select('id,title,meeting_date,department,ai_summary,visibility,board_only').or(OPEN_VIS).eq('board_only', false).neq('department', 'board').textSearch('fts', kws.join(' '), { type: 'websearch' });
       const { data: hits } = await ftsQ.order('meeting_date', {
         ascending: false
       }).limit(6);
-      if (hits && hits.length) {
-        parts.push('MEETINGS MATCHING THE QUESTION:\n' + hits.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (DEPT_LABELS[h.department] || h.department || '') + ', ' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 900)).join('\n'));
+      const okHits = (hits || []).filter((h)=>!confMeeting(h));
+      if (okHits.length) {
+        parts.push('MEETINGS MATCHING THE QUESTION:\n' + okHits.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (DEPT_LABELS[h.department] || h.department || '') + ', ' + (h.meeting_date || '') + '): ' + confScrub((h.ai_summary || '').slice(0, 900))).join('\n'));
       }
     }
   } catch (_) {}
   try {
-    let recentQ = svc.from('transcripts').select('title,meeting_date,department,ai_summary').or(OPEN_VIS);
-    if (!isBoard) recentQ = recentQ.eq('board_only', false);
-    const { data: recent } = await recentQ.order('meeting_date', {
+    const recentQ = svc.from('transcripts').select('title,meeting_date,department,ai_summary,visibility,board_only').or(OPEN_VIS).eq('board_only', false).neq('department', 'board');
+    const { data: recent0 } = await recentQ.order('meeting_date', {
       ascending: false
-    }).limit(3);
-    if (recent && recent.length) {
-      parts.push('MOST RECENT MEETINGS:\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (DEPT_LABELS[h.department] || h.department || '') + ', ' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 700)).join('\n'));
+    }).limit(6);
+    const recent = (recent0 || []).filter((h)=>!confMeeting(h)).slice(0, 3);
+    if (recent.length) {
+      parts.push('MOST RECENT MEETINGS:\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (DEPT_LABELS[h.department] || h.department || '') + ', ' + (h.meeting_date || '') + '): ' + confScrub((h.ai_summary || '').slice(0, 700))).join('\n'));
     }
   } catch (_) {}
   try {
-    let decQ = svc.from('decisions').select('title,area,owner,suggested_move,recommendation').eq('done', false).or(OPEN_VIS);
-    if (!isBoard) decQ = decQ.eq('board_only', false);
-    const { data: decs } = await decQ.limit(20);
-    if (decs && decs.length) {
+    const decQ = svc.from('decisions').select('title,area,owner,suggested_move,recommendation,confidential').eq('done', false).or(OPEN_VIS).eq('board_only', false).not('confidential', 'is', true);
+    const { data: decs0 } = await decQ.limit(30);
+    const decs = (decs0 || []).filter((d)=>!confHit(d.title)).slice(0, 20);
+    if (decs.length) {
       parts.push('OPEN EXECUTIVE DECISIONS:\n' + decs.map((d)=>'- ' + d.title + ' (area: ' + (d.area || 'unknown') + ', owner: ' + (d.owner || 'Steel and Suhaib') + ')').join('\n'));
     }
   } catch (_) {}
   try {
-    let openQ = svc.from('dept_tasks').select('department,flag').is('banked_at', null).eq('done', false).or(OPEN_VIS);
-    if (!isBoard) openQ = openQ.eq('board_only', false);
+    const openQ = svc.from('dept_tasks').select('department,flag').is('banked_at', null).eq('done', false).or(OPEN_VIS).eq('board_only', false).not('confidential', 'is', true);
     const { data: openTasks } = await openQ.limit(1000);
     if (openTasks && openTasks.length) {
       const counts = DEPTS.map((d)=>{
@@ -1181,34 +1135,34 @@ async function buildContext(question, isBoard, acc) {
     }
     if (kws.length) {
       const orFilter = kws.map((k)=>'title.ilike.%' + k + '%').join(',');
-      let matchedQ = svc.from('dept_tasks').select('id,department,subsection,title,owner,status,flag,priority,due_date').is('banked_at', null).eq('done', false).or(OPEN_VIS).or(orFilter);
-      if (!isBoard) matchedQ = matchedQ.eq('board_only', false);
-      const { data: matched } = await matchedQ.order('id', {
+      const matchedQ = svc.from('dept_tasks').select('id,department,subsection,title,owner,status,flag,priority,due_date').is('banked_at', null).eq('done', false).or(OPEN_VIS).eq('board_only', false).not('confidential', 'is', true).neq('department', 'board').or(orFilter);
+      const { data: matched0 } = await matchedQ.order('id', {
         ascending: false
-      }).limit(8);
-      if (matched && matched.length) {
+      }).limit(12);
+      const matched = (matched0 || []).filter((t)=>!confHit(t.title)).slice(0, 8);
+      if (matched.length) {
         parts.push('OPEN TASKS MATCHING THE QUESTION (numeric ids usable with close_task and bank_task):\n' + matched.map((t)=>t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', owner: ' + (t.owner || 'unowned') + ', status: ' + (t.status || 'open') + ')').join('\n'));
       }
     }
   } catch (_) {}
   try {
-    let bankQ = svc.from('dept_tasks').select('title,department,bank_until,bank_note').not('banked_at', 'is', null).is('bank_project_id', null).eq('done', false).or(OPEN_VIS);
-    if (!isBoard) bankQ = bankQ.eq('board_only', false);
+    const bankQ = svc.from('dept_tasks').select('title,department,bank_until,bank_note').not('banked_at', 'is', null).is('bank_project_id', null).eq('done', false).or(OPEN_VIS).eq('board_only', false).not('confidential', 'is', true).neq('department', 'board');
     const [{ data: banked }, { data: bprojs }] = await Promise.all([
       bankQ.order('bank_until').limit(25),
       svc.from('projects').select('name,department,bank_until,bank_note').not('banked_at', 'is', null).is('parent_id', null).order('bank_until').limit(10)
     ]);
     const lines = [
-      ...(bprojs || []).map((p)=>'- Project: ' + p.name + ' (' + (DEPT_LABELS[p.department] || p.department) + ', back ' + p.bank_until + (p.bank_note ? ': ' + String(p.bank_note).slice(0, 120) : '') + ')'),
-      ...(banked || []).map((t)=>'- ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', back ' + t.bank_until + (t.bank_note ? ': ' + String(t.bank_note).slice(0, 120) : '') + ')')
+      ...(bprojs || []).filter((p)=>p.department !== 'board' && !confHit(p.name)).map((p)=>'- Project: ' + p.name + ' (' + (DEPT_LABELS[p.department] || p.department) + ', back ' + p.bank_until + (p.bank_note ? ': ' + confScrub(String(p.bank_note).slice(0, 120)) : '') + ')'),
+      ...(banked || []).filter((t)=>!confHit(t.title)).map((t)=>'- ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', back ' + t.bank_until + (t.bank_note ? ': ' + confScrub(String(t.bank_note).slice(0, 120)) : '') + ')')
     ];
     if (lines.length) parts.push('IN THE BANK (work parked until a date, out of every board; it comes back by itself on that date; not open tasks, so never propose closing or banking these):\n' + lines.join('\n'));
   } catch (_) {}
   try {
-    const { data: reqs } = await svc.from('dept_requests').select('id,title,department,status,type_key,requested_by,created_at').eq('done', false).order('created_at', {
+    const { data: reqs0 } = await svc.from('dept_requests').select('id,title,department,status,type_key,requested_by,created_at').eq('done', false).neq('type_key', 'time-off').neq('department', 'board').order('created_at', {
       ascending: false
-    }).limit(20);
-    if (reqs && reqs.length) {
+    }).limit(30);
+    const reqs = (reqs0 || []).filter((r)=>!confHit(r.title)).slice(0, 20);
+    if (reqs.length) {
       parts.push('OPEN REQUESTS (ids usable with complete_request and set_request_status):\n' + reqs.map((r)=>r.id + '. ' + (r.title || 'Untitled') + ' (' + (DEPT_LABELS[r.department] || r.department) + ', status: ' + (r.status || 'unknown') + ', type: ' + (r.type_key || '') + ')').join('\n'));
     }
   } catch (_) {}
@@ -1223,24 +1177,37 @@ async function buildContext(question, isBoard, acc) {
     if (members && members.length) {
       parts.push('TEAM MEMBERS (names usable as owner or assignee):\n' + DEPTS.map((d)=>{
         const rows = (members || []).filter((m)=>m.department === d);
-        return rows.length ? (DEPT_LABELS[d] || d) + ': ' + rows.map((m)=>m.name + (m.role ? ' (' + String(m.role).slice(0, 40) + ')' : '')).join(', ') : null;
+        return rows.length ? (DEPT_LABELS[d] || d) + ': ' + rows.map((m)=>{
+          const role = String(m.role || '').slice(0, 40);
+          return m.name + (role && !/board|chair|president|vice|co-?ed|executive director|founder|adviser|advisor/i.test(role) && !confHit(role) ? ' (' + role + ')' : '');
+        }).join(', ') : null;
       }).filter(Boolean).join('\n'));
     }
   } catch (_) {}
   try {
     const { data: metas } = await svc.from('dept_meta').select('department,progress,priorities');
     if (metas && metas.length) {
-      parts.push('DEPARTMENT STATE:\n' + metas.map((m)=>'- ' + (DEPT_LABELS[m.department] || m.department) + ': ' + (m.progress || '').slice(0, 200)).join('\n'));
+      parts.push('DEPARTMENT STATE:\n' + metas.filter((m)=>m.department !== 'board').map((m)=>'- ' + (DEPT_LABELS[m.department] || m.department) + ': ' + confScrub((m.progress || '').slice(0, 200))).join('\n'));
     }
   } catch (_) {}
   try {
     if (kws.length) {
       const nameFilter = kws.map((k)=>'name.ilike.%' + k + '%').join(',');
       const textFilter = kws.map((k)=>'text_content.ilike.%' + k + '%').join(',');
-      const { data: docs } = await svc.from('wa_drive_docs').select('name,url,mime,modified_time,text_content').or(nameFilter + ',' + textFilter).order('modified_time', {
+      const { data: docs0 } = await svc.from('wa_drive_docs').select('file_id,name,url,mime,modified_time,text_content').or(nameFilter + ',' + textFilter).order('modified_time', {
         ascending: false
-      }).limit(5);
-      if (docs && docs.length) {
+      }).limit(12);
+      /* wave226: no board, HR or governance file, and nothing the Document finder keeps for leaders */
+      let lead = new Set();
+      try {
+        const ids = (docs0 || []).map((d)=>d.file_id).filter(Boolean);
+        if (ids.length) {
+          const { data: ld } = await svc.from('wa_documents').select('file_id').in('file_id', ids).neq('visibility', 'everyone');
+          lead = new Set((ld || []).map((x)=>x.file_id));
+        }
+      } catch (_) {}
+      const docs = (docs0 || []).filter((d)=>!CONF_DOC_NAME.test(String(d.name || '')) && !lead.has(d.file_id)).slice(0, 5);
+      if (docs.length) {
         parts.push('DRIVE DOCUMENTS (organization documents in Google Drive; when one informs your answer, include its link):\n' + docs.map((d)=>{
           let snip = '';
           const t = d.text_content || '';
@@ -1256,7 +1223,8 @@ async function buildContext(question, isBoard, acc) {
             }
             snip = (at >= 0 ? t.slice(Math.max(0, at - 200), at + 1000) : t.slice(0, 900)).replace(/\s+/g, ' ');
           }
-          return '## ' + d.name + (d.modified_time ? ' (updated ' + String(d.modified_time).slice(0, 10) + ')' : '') + '\nLink: ' + (d.url || '') + (snip ? '\n' + snip.slice(0, 1200) : '');
+          snip = confScrub(snip.slice(0, 1200));
+          return '## ' + d.name + (d.modified_time ? ' (updated ' + String(d.modified_time).slice(0, 10) + ')' : '') + '\nLink: ' + (d.url || '') + (snip ? '\n' + snip : '');
         }).join('\n\n'));
       }
     }
@@ -1268,7 +1236,7 @@ async function buildContext(question, isBoard, acc) {
     if (kb && kb.length) {
       const terms = storyTerms(question);
       const picked = kb.map((k)=>({ k, b: bestSections(k.body, terms, k.slug === 'wa-key-facts' ? 5000 : 4500) })).filter((x)=>x.b.score > 0 || x.k.slug === 'wa-key-facts').sort((a, b)=>(a.k.slug === 'wa-key-facts' ? -1 : 0) - (b.k.slug === 'wa-key-facts' ? -1 : 0) || b.b.score - a.b.score).slice(0, 3);
-      const txt = picked.map((x)=>'## ' + (x.k.title || '') + '\n' + (x.b.text || (x.k.slug === 'wa-key-facts' ? String(x.k.body || '').slice(0, 2500) : ''))).filter((s)=>s.length > 40);
+      const txt = picked.map((x)=>'## ' + (x.k.title || '') + '\n' + (x.b.text || (x.k.slug === 'wa-key-facts' ? String(x.k.body || '').slice(0, 2500) : '')).split('\n').map(confScrub).filter(Boolean).join('\n')).filter((s)=>s.length > 40);
       if (txt.length) parts.push('ORGANIZATION KNOWLEDGE (KEY FACTS and reference documents, the sections that match the question):\n' + txt.join('\n\n'));
     }
   } catch (_) {}
@@ -1306,16 +1274,23 @@ Deno.serve(async (req)=>{
   if (!question) return json({
     error: 'question required'
   }, 400);
+  /* wave226: an off-limits question gets the same reply every time, before anything is read or any model is called */
+  if (confHit(question)) {
+    return json({ answer: CONF_ANSWER, sources: [], proposals: [], actions_done: 0, confidential: true });
+  }
   const history = cleanHistory(body.history);
   try {
     const acc = await storyAccess(auth.email, isBoard);
     const context = await buildContext(question, isBoard, acc);
     const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question);
+    const answer = finishAnswer(out.answer, out.proposals);
+    const conf = answer === CONF_ANSWER;
     return json({
-      answer: out.answer,
-      sources: out.sources,
+      answer,
+      sources: conf ? [] : (out.sources || []).filter((x)=>!confHit(x)),
       proposals: out.proposals,
-      actions_done: 0
+      actions_done: 0,
+      confidential: conf || undefined
     });
   } catch (e) {
     return json({

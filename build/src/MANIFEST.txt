@@ -252,6 +252,8 @@
 220_wave220
 # 221_wave221: the Hub, not "AI" (Steel, 09/10/26): the words on every page but the Admin centre's, and waWho() for who did something (AI: <meeting> reads the Hub, from <meeting>; Meeting AI and Slack AI comment authors). Data: build/data/wa221_the_hub_words.sql.
 221_wave221
+# 226_wave226: Ask the Hub speaks Welfare Avenue (Steel, 09/10/26): light Markdown made safe (bold, lists, [label](link) links, bare addresses as short labelled links), our Slack emojis (:wa-heart-gold:, :wa-e-moves: and the rest) drawn from the brand kit, source chips, the confidential reply in a soft card, the welcome line in the WA voice. The answers and the confidentiality rules live in ask v15 (fn/ask).
+226_wave226
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

@@ -1,4 +1,9 @@
-// Welfare Avenue: llm (v1.5, 25/09/26)
+// Welfare Avenue: llm (v1.6, 09/10/26)
+// v1.6 (wave226): a route can carry system_add, text the router adds to the end of the job's system prompt. Steel (09/10/26)
+// wants confidential topics (leadership changes, board matters, anyone's personal or HR situation) kept out of everything the
+// Hub's AI writes for the team, while the work itself still gets its task in plain, neutral words; the rule lives once, in
+// ai_routes.system_add, on the routes whose words people read (transcripts, leadership meetings, archive summaries, digests,
+// profiles, shout-outs, drafts, the loading screen lines, check-ins, decisions, goals). Admins change it in SQL; it is logged.
 // The Hub's model router. Every AI job in the Hub sends its request here
 // unchanged (Anthropic Messages format) with an x-wa-task header naming
 // the job. The router looks the job up in ai_routes, sends the request to
@@ -55,11 +60,11 @@ async function who(req: Request): Promise<Who | null> {
   return null;
 }
 
-type Route = { task: string; label: string; chain: string[]; jev: boolean; mode: string; max_tokens: number | null; notes?: string | null };
+type Route = { task: string; label: string; chain: string[]; jev: boolean; mode: string; max_tokens: number | null; notes?: string | null; system_add?: string | null };
 const routeCache: { at: number; rows: Route[] } = { at: 0, rows: [] };
 async function routes(force = false): Promise<Route[]> {
   if (!force && routeCache.rows.length && Date.now() - routeCache.at < 60000) return routeCache.rows;
-  const { data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes').order('task');
+  const { data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add').order('task');
   routeCache.rows = (data || []) as Route[]; routeCache.at = Date.now();
   return routeCache.rows;
 }
@@ -126,6 +131,12 @@ async function chat(task: string, caller: string | null, body: Record<string, un
   delete req.model;
   if (!req.max_tokens) req.max_tokens = 1024;
   if (route.max_tokens && Number(req.max_tokens) > route.max_tokens) req.max_tokens = route.max_tokens;
+  /* v1.6: the route's standing addition to the system prompt (wave226: the confidentiality rule) */
+  const add = typeof route.system_add === 'string' ? route.system_add.trim() : '';
+  if (add) {
+    if (Array.isArray(req.system)) req.system = [...(req.system as unknown[]), { type: 'text', text: add }];
+    else req.system = (typeof req.system === 'string' && req.system ? req.system + '\n\n' : '') + add;
+  }
   const streaming = req.stream === true;
   const baseMax = Number(req.max_tokens);
   let via: string = only ? 'test' : 'chain';
