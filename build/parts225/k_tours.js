@@ -10,7 +10,7 @@
         St('#studio > .w118mast', 'Content Studio', 'Everything for our social media in one app: plan, approve, post, answer comments and see what worked, on Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube.'),
         St('#w225host .kpis', 'At a glance', 'What is scheduled, what waits for approval, comments to answer, the weekly goal and the clicks on our links. Each number opens its page.', OPT),
         St('#w225host .grid2', 'The week ahead', 'The next seven days, anything that needs attention, the goals and how each platform posts.', OPT),
-        Ct('The app menu', 'Calendar to plan and write posts; Queue and schedule for the posting times and goals; Approvals; Comments; Library for templates, hashtags and saved replies; Links and link in bio; Analytics; Report; Connections.'),
+        Ct('The app menu', 'Calendar to plan and write posts; Queue and schedule for the posting times and goals; Approvals; Comments; Library for templates, hashtags and saved replies; Link pages for our link in bio and campaign pages, with who clicks what; Short links; Analytics; Report; Connections.'),
         Ct('Approvals', 'Marketing leads and admins publish. Everyone else presses Send for approval in the composer; a lead approves it or sends it back with a note, and you hear about it in the Hub and on Slack.'),
         Ct('Reminders', 'Where the Hub cannot post yet (LinkedIn, TikTok or YouTube until they are connected), the post’s owner gets a reminder at post time with the caption and the media. Post it in the app, then press Mark posted.')
       ] };

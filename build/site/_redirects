@@ -6,4 +6,6 @@
 /give/*  /give/index.html  200
 /i/*  /i/index.html  200
 /links  /links/index.html  200
+/links/*  /links/index.html  200
+/lp  https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/linkpage  200
 /l/*  https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/go/:splat  200

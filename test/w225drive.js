@@ -181,16 +181,9 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
     ok('Make it writes the short link with its ending', w.some(x => x[0] === 'short_links' && x[1] === 'insert' && x[2].code === 'events26' && x[2].url === 'https://welfareavenue.com/events'), w.slice(-2));
     await p.fill('#w225kurl', 'https://welfareavenue.com/x'); await p.fill('#w225kcode', 'bio-x'); await click(p, '#w225host [data-w225kmake]'); await p.waitForTimeout(300);
     const bt = await f.ev(() => (document.getElementById('toast') || {}).textContent || '');
-    ok('bio- endings are kept for the link in bio', /link in bio/.test(bt), bt);
+    ok('bio- and lp- endings are kept for the link pages', /link pages/.test(bt), bt);
     await f.hash('#studio/links/bio', 1200);
-    const ph = await f.ev(() => ({ btns: [...document.querySelectorAll('#w225host .phone a')].map(a => a.textContent), title: (document.querySelector('#w225host .phone h5') || {}).textContent }));
-    ok('the link in bio: the phone shows the buttons in the saved order', ph.btns.join('|') === 'Volunteer with us|Donate' && ph.title === 'Welfare Avenue', ph);
-    await click(p, '#w225host [data-w225bmove="down|bio-volunteer"]'); await p.waitForTimeout(200);
-    await click(p, '#w225host [data-w225btheme="cream"]'); await p.waitForTimeout(200);
-    await click(p, '#w225host [data-w225bsave]'); await p.waitForTimeout(600);
-    w = await f.ev(W);
-    const ls = w.filter(x => x[0] === 'rpc' && x[1] === 'studio_settings_save' && x[2].p_key === 'link_page')[0];
-    ok('Save the page: the new order, the cream theme, the Instagram icon kept', ls && ls[2].p_value.order.join() === 'bio-donate,bio-volunteer' && ls[2].p_value.theme === 'cream' && ls[2].p_value.socials.instagram, ls);
+    ok('the old link in bio address goes to Link pages', await f.ev(() => location.hash) === '#studio/pages', await f.ev(() => location.hash));
 
     /* report */
     await f.hash('#studio/report/2026-09', 1500);
@@ -265,7 +258,7 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
   /* 4. a phone */
   {
     const f = await fresh(browser, { who: 'admin', width: 390, hash: '#studio', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT, wait: 5000 });
-    const secs = ['#studio', '#studio/queue', '#studio/approvals', '#studio/inbox', '#studio/library', '#studio/links', '#studio/links/bio', '#studio/report', '#studio/connections'];
+    const secs = ['#studio', '#studio/queue', '#studio/approvals', '#studio/inbox', '#studio/library', '#studio/pages', '#studio/links', '#studio/report', '#studio/connections'];
     const over = [];
     for (const s of secs) { await f.hash(s, 1100); const o = await f.ev(() => ({ sw: document.documentElement.scrollWidth, w: window.innerWidth, host: !!document.getElementById('w225host') })); if (o.sw > o.w + 2 || !o.host) over.push([s, o]); }
     ok('a phone: every section fits the width', over.length === 0, over);
@@ -276,7 +269,7 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
   /* 5. screenshots on a computer */
   {
     const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#studio', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT, wait: 5000 });
-    for (const s of ['', '/queue', '/inbox', '/links/bio', '/report', '/connections']) { await f.hash('#studio' + s, 1300); await f.page.screenshot({ path: __dirname + '/shots_w225' + (s.replace(/\//g, '_') || '_overview') + '.png', fullPage: false }); }
+    for (const s of ['', '/queue', '/inbox', '/report', '/connections']) { await f.hash('#studio' + s, 1300); await f.page.screenshot({ path: __dirname + '/shots_w225' + (s.replace(/\//g, '_') || '_overview') + '.png', fullPage: false }); }
     await f.close();
   }
   await browser.close();

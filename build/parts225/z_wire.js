@@ -1,6 +1,6 @@
 
   /* ---------- paint and route ---------- */
-  var KEEP = ['data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote'];
+  var KEEP = ['data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote', 'data-w230b', 'data-w230p', 'data-w230s', 'data-w230so', 'data-w230tc', 'data-w230ab', 'data-w230st'];
   function paint() {
     if (S.sec === 'calendar') return;
     var h = host(); if (!h) return;
@@ -8,17 +8,17 @@
     if (a && h.contains(a)) { for (var i = 0; i < KEEP.length; i++) { if (a.hasAttribute(KEEP[i])) { keep = { attr: KEEP[i], val: a.getAttribute(KEEP[i]), s: a.selectionStart, e: a.selectionEnd }; break; } } }
     /* typed-but-unsent text survives a repaint */
     var held = {}; h.querySelectorAll('[data-w225apnote],[data-w225blabel],[data-w225burl]').forEach(function (el) { var k = ['data-w225apnote', 'data-w225blabel', 'data-w225burl'].filter(function (x) { return el.hasAttribute(x); })[0]; held[k + '=' + el.getAttribute(k)] = el.value; });
-    h.querySelectorAll('input[id^="w225"],textarea[id^="w225"],select[id^="w225"]').forEach(function (el) { if (el.value) held['id=' + el.id] = el.value; });
+    h.querySelectorAll('input[id^="w225"],textarea[id^="w225"],select[id^="w225"],input[id^="w230"],select[id^="w230"]').forEach(function (el) { if (el.value) held['id=' + el.id] = el.value; });
     var html;
     if (!staffOk()) html = '<div class="card"><div class="empty">The Content Studio is for the staff.</div></div>';
     else if (S.err && !S.loaded) html = '<div class="card"><div class="empty">The Content Studio could not load (' + E(clip(S.err, 140)) + '). <a data-w225reload="1" style="cursor:pointer;font-weight:700">Try again</a></div></div>';
     else if (!S.loaded && !W()) html = '<div class="card"><div class="empty">Loading the Content Studio…</div></div>';
     else {
       try {
-        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
+        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
       } catch (e) { console.warn('wave225 paint', e); html = '<div class="card"><div class="empty">Something went wrong drawing this page: ' + E(e.message || e) + '</div></div>'; }
     }
-    h.innerHTML = html;
+    if (!(S.sec === 'pages' && S.sub === 'edit' && lpPatch(h, html))) h.innerHTML = html;
     Object.keys(held).forEach(function (k) { var p = k.split('='), el = h.querySelector('[' + p[0] + '="' + p.slice(1).join('=') + '"]'); if (el && held[k] !== el.value) el.value = held[k]; });
     if (keep) { try { var el = h.querySelector('[' + keep.attr + (keep.val ? '="' + keep.val + '"' : '') + ']'); if (el) { el.focus(); if (keep.s != null && el.setSelectionRange) el.setSelectionRange(keep.s, keep.e); } } catch (e) { /* fine */ } }
   }
@@ -26,10 +26,9 @@
     var raw = String(hh || '').replace(/^#/, ''), qi = raw.indexOf('?'), path = qi >= 0 ? raw.slice(0, qi) : raw;
     var p = path.split('/'), sec = p[1] || 'overview', sub = p[2] || '';
     S.sec = SECTIONS.indexOf(sec) >= 0 ? sec : 'overview';
-    S.sub = sub;
+    S.sub = sub; S.sub2 = p[3] || '';
     if (S.sec === 'library') { if (LIBT.some(function (x) { return x[0] === sub; })) S.f.lib = sub; else S.sub = S.f.lib || 'templates'; if (S.libEdit && S.libEdit.tab !== S.sub) S.libEdit = null; }
     if (S.sec === 'connections' && qi >= 0) connFlash();
-    if (S.sec !== 'links') S.bioDraft = S.bioDraft && S.bioDraft.dirty ? S.bioDraft : null;
   }
   async function show(hh) {
     route(hh || location.hash);
@@ -37,6 +36,7 @@
     if (!S.loaded) paint();
     await loadAll();
     if (S.sec === 'connections' && !S.conn) await loadConn();
+    if (S.sec === 'pages') { try { await lpLoad(); } catch (e) { /* drawn below */ } }
     paint();
     try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* fine */ }
   }
@@ -124,11 +124,6 @@
     if (el.hasAttribute('data-w225kmake')) { makeLinkFromForm(); return; }
     if ((x = arg(el, 'data-w225kcopy'))) { copyText(shortUrl(x)); return; }
     if ((x = arg(el, 'data-w225kact'))) { var ka = x.split('|'); linkActive(ka[1], ka[0] === 'on'); return; }
-    if ((x = arg(el, 'data-w225btheme'))) { var bd = bioDraft(); bd.theme = x; bd.dirty = true; paint(); return; }
-    if ((x = arg(el, 'data-w225bmove'))) { var bm = x.split('|'); bioMove(bm[0], bm.slice(1).join('|')); return; }
-    if (el.hasAttribute('data-w225badd')) { bioAdd(); return; }
-    if (el.hasAttribute('data-w225bsave')) { bioSave(); return; }
-    if (el.hasAttribute('data-w225bcopy')) { copyText(HUB + '/links'); return; }
     /* connections */
     if ((x = arg(el, 'data-w225cx'))) { e.preventDefault(); connAct(x); return; }
     if ((x = arg(el, 'data-w225ccopy'))) { copyText(x); return; }
@@ -144,9 +139,6 @@
     if (t.matches('[data-w225rtext]')) { var id = t.getAttribute('data-w225rtext'); (S.reply[id] = S.reply[id] || {}).text = t.value; return; }
     if (t.matches('[data-w225rnote]')) { S.keys['note-' + t.getAttribute('data-w225rnote')] = t.value; return; }
     if (t.matches('[data-w225lf]')) { if (S.libEdit) { S.libEdit[t.getAttribute('data-w225lf')] = t.value; if (S.libEdit.tab === 'hashtags' && t.getAttribute('data-w225lf') === 'body') soon(); } return; }
-    if (t.matches('[data-w225bf]')) { var d = bioDraft(); d[t.getAttribute('data-w225bf')] = t.value; d.dirty = true; soon(); return; }
-    if (t.matches('[data-w225bsoc]')) { var d2 = bioDraft(); d2.socials[t.getAttribute('data-w225bsoc')] = t.value; d2.dirty = true; return; }
-    if (t.matches('[data-w225blabel],[data-w225burl]')) { bioDraft().dirty = true; return; }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!inApp(t) || !t.matches) return;
@@ -165,9 +157,8 @@
   document.addEventListener('keydown', function (e) {
     var t = e.target; if (!inApp(t) || e.key !== 'Enter') return;
     if (t.matches && t.matches('#w225kurl,#w225klabel,#w225kcode,#w225kcamp')) { e.preventDefault(); makeLinkFromForm(); }
-    else if (t.matches && t.matches('#w225bnl,#w225bnu')) { e.preventDefault(); bioAdd(); }
   });
-  window.addEventListener('beforeunload', function (e) { if (S.bioDraft && S.bioDraft.dirty && S.sec === 'links') { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', function (e) { if (S.lp && S.lp.edit && S.lp.edit.dirty && S.sec === 'pages') { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---------- the page in the Hub ---------- */
   function tabOk(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return false; } }

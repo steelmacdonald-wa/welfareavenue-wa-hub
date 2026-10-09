@@ -8,9 +8,9 @@
    YouTube by the reminder flow until their connections are approved.
 
    - The app (parts153 APPS.studio): Overview, Calendar (wave121, its composer rebuilt by the patches in parts225), Queue and
-     schedule, Approvals, Comments, Library, Links and link in bio, Analytics (wave120), Report, Connections.
+     schedule, Approvals, Comments, Library, Link pages (wave230), Short links, Analytics (wave120), Report, Connections.
    - One page 'studio' with its sections by address: #studio, #studio/queue, #studio/approvals, #studio/inbox,
-     #studio/library[/templates|hashtags|replies|tags], #studio/links[/bio], #studio/report[/YYYY-MM], #studio/connections.
+     #studio/library[/templates|hashtags|replies|tags], #studio/pages[/edit/<id>|insights|sources|people], #studio/links, #studio/report[/YYYY-MM], #studio/connections.
    - Data: content_posts (wave121, wave225 columns), content_tags, content_snippets, content_slots, short_links,
      short_link_clicks, social_comments, hub_settings content_studio and link_page (through studio_settings_save), and
      studio_connections (social-connect). Functions: social-publish v3, social-inbox, social-connect, go.
@@ -21,14 +21,15 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var HUB = 'https://hub.welfareavenue.com';
-  var SECTIONS = ['overview', 'queue', 'approvals', 'inbox', 'library', 'links', 'report', 'connections'];
+  var SECTIONS = ['overview', 'queue', 'approvals', 'inbox', 'library', 'pages', 'links', 'report', 'connections'];
   var SECT = {
     overview: ['Content Studio', 'The week ahead, what waits for you, and how the content is doing.'],
     queue: ['Queue and schedule', 'When each platform posts, the free slots in the next two weeks, and the weekly goals.'],
     approvals: ['Approvals', 'Posts waiting for a marketing lead or an admin, and the ones sent back.'],
     inbox: ['Comments', 'Every comment on our posts, in one place. Reply, hide, resolve.'],
     library: ['Library', 'Templates, hashtag groups, saved replies and tags the whole team shares.'],
-    links: ['Links and link in bio', 'Short links that count clicks, and the page behind the link in our bio.'],
+    pages: ['Link pages', 'Our link in bio and campaign, event and city pages: who clicks what, where they came from, and who signs up or gives.'],
+    links: ['Short links', 'Short links that count clicks, for captions, emails and print.'],
     report: ['Report', 'A month of content on one page, ready to print or share.'],
     connections: ['Connections', 'How the Hub posts to each platform, and what to set up next.']
   };

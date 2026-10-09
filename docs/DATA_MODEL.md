@@ -2275,3 +2275,27 @@ wave227: the weekly introduction. One row per person a week (source weekly: the 
 - `wa227_intro_plan(date)`: wave227: the week's introductions: for each person (random order) the one they have not worked with (wa227_together) whose goals, projects and role words overlap most, someone already picked this week a little less likely, never their own team. Returns both profiles and the signals for the intros function to write the notes. Service role only.
 - `wa227_my_intro()`: wave227: the introduction the signed-in person should see (a shared one first, else this week's), with the other person's card (role, team, avatar, Slack id) and whether they can still tell them. It pops up once: only a new one is returned (the page marks it seen). Null when there is none or when app_config intros_on is false.
 - `wa227_intro_act(bigint, text)`: wave227: records what the person did with their introduction (seen, later, slack, coffee, profile) and, for share, gives the other person the same introduction from their side (a shared row with note_back) in their next pop-up. Only the person it is for.
+
+### `link_pages`
+
+wave230: the link pages (the link in bio is slug main at /links; others at /links/<slug>). Staff read; marketing (wa225_marketing) and admins write.
+
+- `slug`: ^[a-z0-9][a-z0-9-]{0,39}$; main is the bio page.
+- `title`, `title_fr`, `bio`, `bio_fr`, `avatar_url`: the top of the page.
+- `theme`: {preset green|cream|gold|purple|night, bg, btn, accent, shape pill|rounded|square}.
+- `socials`: profile addresses by platform.
+- `blocks`: ordered array of {id, type link|form|donate|header|text|youtube|instagram|events|impact|socials, label, label_fr, sub, icon, thumb, featured, on, start_at, end_at, url and code (link: its short_links row), fallback, form, form_fr, campaign, video, count, stats, ab {on, label, label_fr, winner, started_at}}.
+- `settings`: {lang auto|en|fr-only, fallback_url, seo}.
+- `status`: live, draft or archived.
+
+### `link_page_sources`
+
+wave230: tracked addresses (?s=<code>) per platform bio, QR code, email, print or partner; page_id null means every page. Staff read; marketing writes.
+
+### `link_page_events`
+
+wave230: one row per view or click on a link page, written by the linkpage and go functions only; marketing and publishers read. Columns: page_id, at, kind (view|click), block_id, link_id, variant (a view: the A/B map as JSON; a click: a or b), src, src_detail, visitor (monthly hash), repeat_visit, lang, device, os, browser, country, region, city, tz, ipm (keyed network hash), is_test. No cookie, no address.
+
+- `wa230_conversions(p_days)`: wave230: form submissions and donation attempts matched to the last link page click from the same ipm in the 2 hours before, with the CRM contact when there is one. Service role, marketing or publishers.
+- `short_links.fallback_url` (wave230): where a switched-off link goes.
+

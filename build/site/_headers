@@ -44,8 +44,14 @@
 /manifest.webmanifest
   Content-Type: application/manifest+json; charset=utf-8
   Cache-Control: public, max-age=3600
-# wave225 (09/10/26): the link-in-bio page (/links) reads studio_link_page from Supabase; its buttons go to /l/<code>,
-# which Netlify proxies to the go function (it counts the click and redirects).
+# wave225 (09/10/26): the link-in-bio page (/links); its buttons go to /l/<code>, which Netlify proxies to the go function
+# (it counts the click and redirects).
+# wave230 (09/10/26): the link pages (/links and /links/<slug>) read the linkpage function through Netlify's /lp proxy (so
+# connect-src is only 'self'), show our Instagram pictures (our storage, else Instagram's own picture hosts) and a YouTube
+# video from youtube-nocookie only after a tap; the Hub frames them (same origin) for the Content Studio's live preview.
 /links
-  X-Frame-Options: DENY
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com https://*.cdninstagram.com https://*.fbcdn.net; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'
+/links/*
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com https://*.cdninstagram.com https://*.fbcdn.net; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'

@@ -224,7 +224,8 @@
           { h: '#studio/inbox', l: 'Comments', ic: 'chat', page: 'studio', n: n.inbox }
         ] }, { label: 'Toolkit', items: [
           { h: '#studio/library', l: 'Library', ic: 'book', page: 'studio' },
-          { h: '#studio/links', l: 'Links and link in bio', ic: 'link', page: 'studio' }
+          { h: '#studio/pages', l: 'Link pages', ic: 'link', page: 'studio' },
+          { h: '#studio/links', l: 'Short links', ic: 'link', page: 'studio' }
         ] }, { label: 'Results', items: [
           { h: '#socialstats', l: 'Analytics', ic: 'chart', page: 'socialstats' },
           { h: '#studio/report', l: 'Report', ic: 'print', page: 'studio' }
