@@ -156,6 +156,7 @@
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
   function act(k) {
+    if (S.app === 'studio' && k === 'newpost') { try { if (pageOf(hashNow()) === 'contentcal' && window.w121 && window.w121.compose) window.w121.compose(); else location.hash = '#contentcal/new'; } catch (e) { location.hash = '#contentcal/new'; } return; }   /* wave225 */
     if (S.app === 'volunteer' && k === 'text') { try { if (typeof waTxtModal === 'function') waTxtModal(); } catch (e) { /* fine */ } return; }
     if (S.app === 'crm' && k === 'add') {
       if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';

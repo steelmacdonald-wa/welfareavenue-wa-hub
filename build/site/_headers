@@ -44,3 +44,8 @@
 /manifest.webmanifest
   Content-Type: application/manifest+json; charset=utf-8
   Cache-Control: public, max-age=3600
+# wave225 (09/10/26): the link-in-bio page (/links) reads studio_link_page from Supabase; its buttons go to /l/<code>,
+# which Netlify proxies to the go function (it counts the click and redirects).
+/links
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'

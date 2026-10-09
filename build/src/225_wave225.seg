@@ -1,0 +1,1230 @@
+/* =====================================================================
+   WA v225 the Content Studio (09/10/26)
+   =====================================================================
+   Steel (09/10/26), after the Buffer comparison: "Okay go ahead and build it entirely on the content calendar. Make it the
+   most sophisticated content calendar possible. Consider making it an app in the hub." His choices: an app of its own
+   (the calendar and the analytics move in and leave the Hub menu); marketing leads and admins publish, everyone else sends
+   a post for approval; the marketing team and admins answer comments (deleting is leads and admins); LinkedIn, TikTok and
+   YouTube by the reminder flow until their connections are approved.
+
+   - The app (parts153 APPS.studio): Overview, Calendar (wave121, its composer rebuilt by the patches in parts225), Queue and
+     schedule, Approvals, Comments, Library, Links and link in bio, Analytics (wave120), Report, Connections.
+   - One page 'studio' with its sections by address: #studio, #studio/queue, #studio/approvals, #studio/inbox,
+     #studio/library[/templates|hashtags|replies|tags], #studio/links[/bio], #studio/report[/YYYY-MM], #studio/connections.
+   - Data: content_posts (wave121, wave225 columns), content_tags, content_snippets, content_slots, short_links,
+     short_link_clicks, social_comments, hub_settings content_studio and link_page (through studio_settings_save), and
+     studio_connections (social-connect). Functions: social-publish v3, social-inbox, social-connect, go.
+   ===================================================================== */
+(function () {
+  if (window.__wa225) return; window.__wa225 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', ROSE = '#B4467A';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HUB = 'https://hub.welfareavenue.com';
+  var SECTIONS = ['overview', 'queue', 'approvals', 'inbox', 'library', 'links', 'report', 'connections'];
+  var SECT = {
+    overview: ['Content Studio', 'The week ahead, what waits for you, and how the content is doing.'],
+    queue: ['Queue and schedule', 'When each platform posts, the free slots in the next two weeks, and the weekly goals.'],
+    approvals: ['Approvals', 'Posts waiting for a marketing lead or an admin, and the ones sent back.'],
+    inbox: ['Comments', 'Every comment on our posts, in one place. Reply, hide, resolve.'],
+    library: ['Library', 'Templates, hashtag groups, saved replies and tags the whole team shares.'],
+    links: ['Links and link in bio', 'Short links that count clicks, and the page behind the link in our bio.'],
+    report: ['Report', 'A month of content on one page, ready to print or share.'],
+    connections: ['Connections', 'How the Hub posts to each platform, and what to set up next.']
+  };
+  var PLX = { instagram: ['Instagram', 'IG', '#C13584'], facebook: ['Facebook', 'f', '#1877F2'], threads: ['Threads', '@', '#1F201E'], linkedin: ['LinkedIn', 'in', '#0A66C2'], tiktok: ['TikTok', 'Tk', '#EE1D52'], youtube: ['YouTube', '\u25b6', '#FF0000'] };
+  var PORDER = ['instagram', 'facebook', 'threads', 'linkedin', 'tiktok', 'youtube'];
+  var WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var WDL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  var MODE = { direct: ['Direct', TEAL], make: ['Via Make', TEAL], drafts: ['To TikTok drafts', TEAL], reminder: ['Reminder', '#8a5a00'] };
+
+  var P = {
+    home: '<path d="M4 11.5 12 4.5l8 7"/><path d="M6.5 10.5V19.5h11v-9"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    chat: '<path d="M4.5 5.5h15v10h-9l-4 3.5v-3.5h-2z"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+    refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>', ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>',
+    eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>', heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+    star: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>', bolt: '<path d="M13.5 2.5 5 13.5h6l-1 8 8.5-11h-6z"/>',
+    print: '<path d="M7 9V4.5h10V9"/><rect x="4" y="9" width="16" height="7.5" rx="2"/><path d="M7 14h10v5.5H7z"/>', warn: '<path d="M12 4 21 20H3z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+    up: '<path d="M12 19V5M6 11l6-6 6 6"/>', down: '<path d="M12 5v14M6 13l6 6 6-6"/>', send: '<path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5z"/>',
+    plug: '<path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 17v3.5"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'
+  };
+  function I(n, cls) { return '<svg class="w225i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function num(v) { v = Number(v); if (!isFinite(v)) return '\u2013'; var a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (a >= 1e4) return Math.round(v / 1e3) + 'k'; if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return String(Math.round(v)); }
+  function pct(v) { return isFinite(v) ? Math.round(v * 100) + '%' : '\u2013'; }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function today() { return ymd(new Date()); }
+  function addDays(ds, n) { var d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return ymd(d); }
+  function dowOf(ds) { return (new Date(ds + 'T12:00:00').getDay() + 6) % 7; }
+  function mondayOf(ds) { return addDays(ds, -dowOf(ds)); }
+  function dayOf(iso) { return iso ? ymd(new Date(iso)) : null; }
+  function hm(iso) { if (!iso) return ''; var d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function niceDate(ds, opts) { try { return new Date(ds + 'T12:00:00').toLocaleDateString('en-CA', opts || { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return ds; } }
+  function niceWhen(iso) { if (!iso) return ''; return niceDate(dayOf(iso)) + ', ' + hm(iso); }
+  function ago(iso) { if (!iso) return ''; var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 24) return h + ' h ago'; var d = Math.round(h / 24); return d === 1 ? 'yesterday' : d + ' days ago'; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+  function fn(name, body) { return db.functions.invoke(name, { body: body }).then(function (r) { if (r.error) { var m = r.error.message || String(r.error); try { if (r.error.context && r.error.context.json) return r.error.context.json().then(function (j) { throw new Error((j && j.error) || m); }); } catch (x) { /* below */ } throw new Error(m); } if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
+  function copyText(t) { try { if (navigator.clipboard) { navigator.clipboard.writeText(t); toastS('Copied'); return; } } catch (e) { /* below */ } window.prompt('Copy this', t); }
+  function mark(k, on) { var x = PLX[k]; if (!x) return ''; return '<i class="w225pm' + (on ? ' ok' : '') + '" style="background:' + x[2] + '" title="' + E(x[0]) + '">' + E(x[1]) + '</i>'; }
+
+  /* ---------- who ---------- */
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function myEmail() { try { return lower((typeof USER !== 'undefined' && USER && USER.email) || ''); } catch (e) { return ''; } }
+  function myName() { try { return (typeof USER !== 'undefined' && USER && USER.name) || ''; } catch (e) { return ''; } }
+  function members() { try { return ((typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []).filter(function (m) { return m && m.active !== false && m.name; }); } catch (e) { return []; } }
+  function memberByEmail(e) { e = lower(e); return members().filter(function (m) { return lower(m.email) === e; })[0] || null; }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function isAdmin() { return role() === 'admin'; }
+
+  /* ---------- state ---------- */
+  var S = {
+    sec: 'overview', sub: '', loaded: 0, loading: null, err: null, pub: null, mk: null,
+    comments: [], links: [], clicks: [], social: [], conn: null, cap: null, settings: {}, linkPage: {}, inboxLast: null,
+    f: { inbox: lsGet('w225ib') || 'open', ipl: '', imine: false, iq: '', apr: 'pending', lib: 'templates', lq: '' },
+    reply: {}, busy: {}, reportMonth: null, suggest: null, linkSel: null, bioDraft: null, keys: {}
+  };
+  function W() { return window.w121 || null; }
+  function posts() { var w = W(); return w ? w.posts() : []; }
+  function cap() { var w = W(); return (w && w.cap()) || S.cap; }
+  function tagsAll() { var w = W(); return (w && w.tags()) || []; }
+  function lib() { var w = W(); return (w && w.lib()) || []; }
+  function slots() { var w = W(); return (w && w.slots()) || []; }
+  function modeOf(k) { var w = W(); return w ? w.modeOf(k) : 'reminder'; }
+  function stateOf(p) { var w = W(); return w ? w.stateOf(p) : { cls: 'draft', label: p.status, note: '', attn: false, live: {} }; }
+  function titleOf(p) { var w = W(); return w ? w.titleOf(p) : (p.title || 'Untitled post'); }
+  function thumbOf(p) { var w = W(); return w ? w.thumbOf(p) : null; }
+  function goals() { var g = (S.settings && S.settings.goals) || {}; return g; }
+
+  async function loadAll(force) {
+    if (S.loading) return S.loading;
+    if (!force && S.loaded && Date.now() - S.loaded < 45000) return;
+    S.loading = (async function () {
+      try {
+        var w = W(); if (w) { await w.load(true); if (!w.cap()) await w.loadCap(); await w.studio(); }
+        var since90 = new Date(Date.now() - 90 * 86400000).toISOString(), since30 = new Date(Date.now() - 31 * 86400000).toISOString(), since365 = new Date(Date.now() - 365 * 86400000).toISOString();
+        var rs = await Promise.all([
+          q(db.rpc('wa225_publisher')), q(db.rpc('wa225_marketing')),
+          q(db.from('social_comments').select('*').gte('commented_at', since90).order('commented_at', { ascending: false }).limit(1500)),
+          q(db.from('short_links').select('*').order('created_at', { ascending: false }).limit(500)),
+          q(db.from('short_link_clicks').select('link_id, at, referrer_host, device, country').gte('at', since30).order('at', { ascending: false }).limit(5000)),
+          q(db.from('social_posts').select('id, platform, external_id, url, kind, caption, thumb_url, thumb_cached, published_at, reach, views, likes, comments, shares, saves, engagement').gte('published_at', since365).order('published_at', { ascending: false }).limit(1200)),
+          q(db.from('hub_settings').select('key, value, updated_at').in('key', ['content_studio', 'link_page', 'studio_inbox_sync']))
+        ]);
+        S.pub = rs[0].data === true; S.mk = rs[1].data === true;
+        S.comments = rs[2].data || []; S.links = rs[3].data || []; S.clicks = rs[4].data || []; S.social = rs[5].data || [];
+        (rs[6].data || []).forEach(function (r) { if (r.key === 'content_studio') S.settings = r.value || {}; else if (r.key === 'link_page') S.linkPage = r.value || {}; else if (r.key === 'studio_inbox_sync') S.inboxLast = r.value || null; });
+        S.cap = w ? w.cap() : S.cap;
+        S.err = null; S.loaded = Date.now();
+      } catch (e) { S.err = e.message || String(e); }
+      S.loading = null;
+      try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* the rail counts */ }
+    })();
+    return S.loading;
+  }
+  async function loadConn() { try { S.conn = await fn('social-connect', { action: 'status' }); } catch (e) { S.conn = { error: e.message || String(e) }; } }
+  function counts() {
+    var pend = posts().filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; }).length;
+    var open = S.comments.filter(function (c) { return c.status === 'open' && !c.from_us; }).length;
+    return { approvals: pend || null, inbox: open || null };
+  }
+  /* ---------- the look ---------- */
+  var css = document.createElement('style'); css.id = 'wa225css';
+  css.textContent = ''
+    + '#w225host{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');max-width:1240px;}'
+    + '#w225host .w225i{width:16px;height:16px;flex:none;vertical-align:-3px;}'
+    + '#w225host h3{font-family:' + HEAD + ';font-weight:600;font-size:21px;letter-spacing:.4px;color:' + GREEN + ';margin:0 0 10px;display:flex;align-items:center;gap:8px;}'
+    + '#w225host h3 small{font-family:' + BODY + ';font-size:12px;font-weight:600;color:' + MUTED + ';letter-spacing:0;}'
+    + '#w225host h4{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';font-weight:800;margin:14px 0 6px;}'
+    + '#w225host .card{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:16px 18px;margin:0 0 14px;box-shadow:0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06);}'
+    + '#w225host .grid2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:14px;align-items:start;}'
+    + '#w225host .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start;}'
+    + '#w225host .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px;}'
+    + '#w225host .kpi{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:12px 14px;cursor:default;}'
+    + '#w225host .kpi[data-w225go]{cursor:pointer;}#w225host .kpi[data-w225go]:hover{border-color:' + ROSE + ';}'
+    + '#w225host .kpi b{display:block;font-family:' + HEAD + ';font-size:30px;line-height:1;color:' + GREEN + ';}'
+    + '#w225host .kpi b.warn{color:' + FLAG + ';}#w225host .kpi b.ok{color:' + TEAL + ';}'
+    + '#w225host .kpi span{display:block;font-size:11px;color:' + MUTED + ';letter-spacing:.4px;text-transform:uppercase;font-weight:700;margin-top:5px;}'
+    + '#w225host .kpi em{display:block;font-style:normal;font-size:12px;margin-top:3px;color:var(--wa-text,' + INK + ');}'
+    + '#w225host .w225pm{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;font-style:normal;font-family:' + HEAD + ';font-size:10px;font-weight:800;color:#FFFAF2;margin-right:2px;opacity:.9;}'
+    + '#w225host .w225pm.ok{box-shadow:0 0 0 2px ' + TEAL + ';}'
+    + '#w225host .btn225{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:7px 14px;font:700 12.5px ' + BODY + ';border:1px solid rgba(16,63,57,.2);background:#FFFAF2;color:' + GREEN + ';cursor:pointer;text-decoration:none;}'
+    + '#w225host .btn225.pri{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '#w225host .btn225.rose{background:' + ROSE + ';color:' + CREAM + ';border-color:' + ROSE + ';}'
+    + '#w225host .btn225.bad{color:' + FLAG + ';border-color:rgba(179,64,47,.35);}'
+    + '#w225host .btn225[disabled]{opacity:.5;cursor:default;}'
+    + '#w225host .btn225.sm{padding:4px 10px;font-size:11.5px;}'
+    + '#w225host .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}'
+    + '#w225host .sp{flex:1;}'
+    + '#w225host .muted{color:' + MUTED + ';font-size:12.5px;}'
+    + '#w225host .empty{color:' + MUTED + ';font-size:13px;padding:10px 0;}'
+    + '#w225host input[type=text],#w225host input[type=url],#w225host input[type=search],#w225host input[type=number],#w225host input[type=time],#w225host input[type=password],#w225host select,#w225host textarea{font:13px ' + BODY + ';padding:8px 11px;border:1px solid rgba(16,63,57,.2);border-radius:10px;background:#FFFAF2;color:var(--wa-text,' + INK + ');box-sizing:border-box;}'
+    + '#w225host textarea{width:100%;min-height:70px;resize:vertical;}'
+    + '#w225host .seg{display:inline-flex;gap:3px;background:rgba(16,63,57,.06);border-radius:999px;padding:3px;flex-wrap:wrap;}'
+    + '#w225host .seg a{font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;color:' + GREEN + ';cursor:pointer;}'
+    + '#w225host .seg a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w225host .seg a .n{opacity:.7;margin-left:3px;}'
+    + '#w225host .pill{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;background:rgba(16,63,57,.08);color:' + MUTED + ';white-space:nowrap;}'
+    + '#w225host .pill.ok{background:rgba(42,140,122,.16);color:#1c6b5d;}#w225host .pill.warn{background:rgba(220,165,39,.22);color:#6b4d05;}#w225host .pill.bad{background:rgba(179,64,47,.12);color:' + FLAG + ';}#w225host .pill.appr{background:rgba(111,100,171,.16);color:' + PURPLE + ';}'
+    /* lists of posts */
+    + '#w225host .pl{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px solid rgba(16,63,57,.07);cursor:pointer;}'
+    + '#w225host .pl:first-child{border-top:none;}'
+    + '#w225host .pl img,#w225host .pl .ph{width:54px;height:54px;border-radius:10px;object-fit:cover;background:rgba(16,63,57,.06);display:flex;align-items:center;justify-content:center;color:' + MUTED + ';}'
+    + '#w225host .pl b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '#w225host .pl small{display:block;font-size:12px;color:' + MUTED + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '#w225host .day{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + ROSE + ';font-weight:800;margin:12px 0 2px;}'
+    + '#w225host .slot{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-top:1px dashed rgba(16,63,57,.15);color:' + MUTED + ';font-size:12.5px;}'
+    + '#w225host .slot .ph{width:54px;height:30px;border-radius:8px;border:1.5px dashed rgba(16,63,57,.2);display:flex;align-items:center;justify-content:center;font-size:12px;}'
+    /* bars */
+    + '#w225host .bar{height:8px;border-radius:999px;background:rgba(16,63,57,.08);overflow:hidden;}'
+    + '#w225host .bar i{display:block;height:100%;background:' + TEAL + ';border-radius:999px;}'
+    + '#w225host .bar i.over{background:' + GOLD + ';}'
+    + '#w225host .goal{display:grid;grid-template-columns:110px minmax(0,1fr) 54px;gap:10px;align-items:center;margin:6px 0;font-size:12.5px;}'
+    /* the schedule */
+    + '#w225host .sched{display:grid;grid-template-columns:96px repeat(7,minmax(0,1fr));gap:4px;font-size:12px;}'
+    + '#w225host .sched .h{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';font-weight:800;text-align:center;padding:4px 0;}'
+    + '#w225host .sched .pn{display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;}'
+    + '#w225host .sched .c{min-height:34px;border-radius:10px;background:rgba(16,63,57,.04);padding:4px;display:flex;flex-direction:column;gap:3px;}'
+    + '#w225host .sched .t{display:flex;align-items:center;justify-content:space-between;background:#FFFAF2;border:1px solid rgba(16,63,57,.12);border-radius:7px;padding:2px 6px;font-weight:700;color:' + GREEN + ';}'
+    + '#w225host .sched .t.sug{border-style:dashed;color:' + MUTED + ';}'
+    + '#w225host .sched .t a{cursor:pointer;color:' + MUTED + ';margin-left:4px;}'
+    /* the comments */
+    + '#w225host .cm{display:grid;grid-template-columns:34px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px solid rgba(16,63,57,.07);}'
+    + '#w225host .cm .av{width:34px;height:34px;border-radius:50%;background:rgba(16,63,57,.08);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:' + GREEN + ';}'
+    + '#w225host .cm .who{font-size:12.5px;font-weight:700;}#w225host .cm .who small{font-weight:500;color:' + MUTED + ';margin-left:6px;}'
+    + '#w225host .cm .tx{font-size:13.5px;line-height:1.45;margin:3px 0 6px;white-space:pre-wrap;word-break:break-word;}'
+    + '#w225host .cm .tx.hid{opacity:.55;}'
+    + '#w225host .cm .ours{border-left:3px solid ' + TEAL + ';padding-left:8px;font-size:12.5px;color:#155a4d;margin:4px 0;}'
+    + '#w225host .cm .acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}'
+    + '#w225host .cm .acts a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}'
+    + '#w225host .cm .acts a.bad{color:' + FLAG + ';}'
+    + '#w225host .cm .rbox{margin-top:8px;}'
+    + '#w225host .post{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:center;background:rgba(16,63,57,.04);border-radius:12px;padding:8px 10px;margin-top:12px;}'
+    + '#w225host .post img,#w225host .post .ph{width:44px;height:44px;border-radius:8px;object-fit:cover;background:rgba(16,63,57,.08);}'
+    + '#w225host .post b{font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    /* the library */
+    + '#w225host .lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}'
+    + '#w225host .lib .it{border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px;background:#FFFAF2;display:flex;flex-direction:column;gap:6px;}'
+    + '#w225host .lib .it b{font-size:13.5px;}#w225host .lib .it p{font-size:12.5px;margin:0;color:var(--wa-text);white-space:pre-wrap;max-height:110px;overflow:hidden;}'
+    + '#w225host .tagdot{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:6px;}'
+    /* links */
+    + '#w225host table.lt{width:100%;border-collapse:collapse;font-size:12.5px;}'
+    + '#w225host table.lt th{text-align:left;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';padding:6px;border-bottom:1px solid rgba(16,63,57,.12);}'
+    + '#w225host table.lt td{padding:7px 6px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:middle;}'
+    + '#w225host table.lt td.u{max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '#w225host table.lt tr.sel td{background:rgba(180,70,122,.06);}'
+    + '#w225host .spark{display:flex;align-items:flex-end;gap:2px;height:46px;}'
+    + '#w225host .spark i{flex:1;background:' + ROSE + ';border-radius:2px 2px 0 0;min-height:1px;opacity:.85;}'
+    + '#w225host .phone{width:260px;border-radius:30px;border:8px solid ' + INK + ';padding:22px 14px;min-height:420px;text-align:center;margin:0 auto;}'
+    + '#w225host .phone.green{background:' + GREEN + ';color:' + CREAM + ';}#w225host .phone.cream{background:' + CREAM + ';color:' + GREEN + ';}'
+    + '#w225host .phone .av{width:64px;height:64px;border-radius:50%;margin:0 auto 8px;background:' + GOLD + ';display:flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:28px;color:' + GREEN + ';}'
+    + '#w225host .phone h5{font-family:' + HEAD + ';font-size:22px;margin:0 0 4px;}#w225host .phone p{font-size:12px;margin:0 0 14px;opacity:.85;}'
+    + '#w225host .phone a{display:block;border-radius:999px;padding:10px;margin:0 0 8px;font-size:12.5px;font-weight:700;text-decoration:none;}'
+    + '#w225host .phone.green a{background:' + CREAM + ';color:' + GREEN + ';}#w225host .phone.cream a{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w225host .bl{display:grid;grid-template-columns:24px minmax(0,1fr) minmax(0,1.2fr) auto;gap:6px;align-items:center;margin:6px 0;}'
+    /* connections */
+    + '#w225host .cx{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;}'
+    + '#w225host .cx .card{margin:0;display:flex;flex-direction:column;gap:8px;}'
+    + '#w225host .cx .hd{display:flex;align-items:center;gap:10px;}'
+    + '#w225host .cx .hd .lg{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#FFFAF2;font-family:' + HEAD + ';font-weight:800;font-size:15px;}'
+    + '#w225host .cx .hd b{font-size:15px;display:block;}#w225host .cx .hd small{font-size:12px;color:' + MUTED + ';}'
+    + '#w225host .cx ol{margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;}'
+    + '#w225host .cx .chips{display:flex;gap:4px;flex-wrap:wrap;}'
+    + '#w225host .cx .chips span{font-size:10.5px;border-radius:999px;padding:2px 7px;background:rgba(42,140,122,.12);color:#1c6b5d;}'
+    + '#w225host .cx .chips span.miss{background:rgba(179,64,47,.10);color:' + FLAG + ';}'
+    + '#w225host .cx code{font-size:11px;background:rgba(16,63,57,.06);border-radius:6px;padding:2px 5px;word-break:break-all;}'
+    /* grid preview */
+    + '#w225host .igg{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;max-width:330px;}'
+    + '#w225host .igg div{aspect-ratio:4/5;background:rgba(16,63,57,.08);position:relative;overflow:hidden;}'
+    + '#w225host .igg img{width:100%;height:100%;object-fit:cover;display:block;}'
+    + '#w225host .igg div.next{box-shadow:inset 0 0 0 3px ' + ROSE + ';}'
+    + '#w225host .igg div.next span{position:absolute;left:4px;top:4px;font-size:10px;font-weight:800;background:' + ROSE + ';color:#FFFAF2;border-radius:6px;padding:1px 5px;}'
+    /* the report */
+    + '#w225host .rep{background:#FFFAF2;border-radius:18px;padding:26px 30px;border:1px solid rgba(16,63,57,.1);}'
+    + '#w225host .rep h2{font-family:' + HEAD + ';font-size:34px;color:' + GREEN + ';margin:0;}'
+    + '#w225host .rep .band{height:8px;background:' + GREEN + ';border-radius:999px;margin:10px 0 18px;position:relative;}'
+    + '#w225host .rep .band:after{content:"";position:absolute;right:0;top:0;width:60px;height:8px;background:' + GOLD + ';border-radius:999px;}'
+    + '@media print{body.w225print *{visibility:hidden !important;}body.w225print #w225host .rep,body.w225print #w225host .rep *{visibility:visible !important;}body.w225print #w225host .rep{position:absolute;left:0;top:0;width:100%;border:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;}body.w225print #w225host .rep .noprint{display:none !important;}}'
+    + '@media (max-width:900px){#w225host .grid2,#w225host .grid3{grid-template-columns:minmax(0,1fr);}#w225host .sched{grid-template-columns:70px repeat(7,minmax(0,1fr));font-size:11px;}}'
+    + '@media (max-width:560px){#w225host .sched{display:block;}#w225host .sched .h{display:none;}#w225host .sched .c{margin:2px 0;}#w225host .bl{grid-template-columns:minmax(0,1fr);}#w225host .goal{grid-template-columns:90px minmax(0,1fr) 44px;}#w225host .cx{grid-template-columns:minmax(0,1fr);}#w225host .rep{padding:16px;}}'
+    + '#w225host .printonly{display:none;}@media print{body.w225print #w225host .rep .printonly{display:block !important;}}'
+    + '#w225host .rt th,#w225host .rt td{padding:6px 6px;border-bottom:1px solid rgba(16,63,57,.08);}#w225host .rt td:first-child{white-space:nowrap;}';
+
+  document.head.appendChild(css);
+
+  /* ---------- the page: one panel (#studio), sections by address ---------- */
+  function mast(title, blurb) {
+    var sec = document.getElementById('studio'); if (!sec) return;
+    var m = sec.querySelector(':scope > .w118mast');
+    if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w225', '1'); sec.insertBefore(m, sec.firstChild); }
+    var html = '<h1>' + E(title) + '</h1><p>' + E(blurb) + '</p>';
+    if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
+  }
+  function host() {
+    var sec = document.getElementById('studio'); if (!sec) return null;
+    var t = SECT[S.sec] || SECT.overview; mast(t[0], t[1]);
+    try { document.title = t[0] + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    var h = document.getElementById('w225host');
+    if (!h) { h = document.createElement('div'); h.id = 'w225host'; sec.appendChild(h); }
+    return h;
+  }
+  function go(h) { if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
+  function postRow(p, extra) {
+    var th = thumbOf(p), s = stateOf(p);
+    return '<div class="pl" data-w225open="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '<div class="ph">' + I('cal') + '</div>') +
+      '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><small>' + (p.platforms || []).map(function (k) { return mark(k, s.live && s.live[k]); }).join('') + ' ' + E(p.scheduled_at ? niceWhen(p.scheduled_at) : 'No date') + (p.owner ? ' \u00b7 ' + E(p.owner) : '') + '</small>' + (extra || '') + '</div>' +
+      '<span class="pill ' + (s.cls === 'live' ? 'ok' : s.cls === 'sched' ? 'warn' : s.cls === 'appr' ? 'appr' : s.cls === 'bad' || s.cls === 'due' ? 'bad' : '') + '">' + E(s.label) + '</span></div>';
+  }
+  function weekBounds(off) { var m = addDays(mondayOf(today()), 7 * (off || 0)); return [m, addDays(m, 6)]; }
+  function postsIn(a, b) { return posts().filter(function (p) { var d = dayOf(p.scheduled_at || p.published_at); return d && d >= a && d <= b && p.status !== 'cancelled'; }); }
+  /* goals: posts per platform per week (hub_settings content_studio.goals); a week counts for the streak when every goal with a target is met */
+  function goalStatus(off) {
+    var wb = weekBounds(off), g = goals(), list = postsIn(wb[0], wb[1]).filter(function (p) { return ['published', 'posted', 'scheduled', 'publishing'].indexOf(p.status) >= 0 || (off < 0 && p.status === 'failed' && Object.keys(p.results || {}).some(function (k) { return p.results[k] && p.results[k].id; })); });
+    var out = {}; PORDER.forEach(function (k) { out[k] = { goal: Number(g[k] || 0), n: list.filter(function (p) { return (p.platforms || []).indexOf(k) >= 0; }).length }; });
+    return out;
+  }
+  function streak() {
+    var n = 0; for (var w = -1; w > -53; w--) { var gs = goalStatus(w), any = false, met = true; PORDER.forEach(function (k) { if (gs[k].goal > 0) { any = true; if (gs[k].n < gs[k].goal) met = false; } }); if (!any || !met) break; n++; }
+    return n;
+  }
+  function overviewHtml() {
+    var now = Date.now(), t = today(), wb = weekBounds(0);
+    var all = posts();
+    var scheduled = all.filter(function (p) { return p.status === 'scheduled' && p.scheduled_at && new Date(p.scheduled_at).getTime() > now; });
+    var thisWeek = postsIn(wb[0], wb[1]);
+    var pend = all.filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; });
+    var mine = all.filter(function (p) { return p.approval_status === 'changes' && lower(p.submitted_by) === myEmail(); });
+    var attn = all.filter(function (p) { return p.status !== 'cancelled' && stateOf(p).attn; });
+    var open = S.comments.filter(function (c) { return c.status === 'open' && !c.from_us; });
+    var clicks30 = S.clicks.length;
+    var reach30 = 0; S.social.forEach(function (sp) { if (sp.published_at && now - new Date(sp.published_at).getTime() < 30 * 86400000) reach30 += Number(sp.reach || sp.views || 0); });
+    var gs = goalStatus(0), gT = 0, gN = 0; PORDER.forEach(function (k) { gT += gs[k].goal; gN += Math.min(gs[k].n, gs[k].goal); });
+    var st = streak();
+    var kpis = '<div class="kpis">' +
+      '<div class="kpi" data-w225go="#contentcal"><b>' + scheduled.length + '</b><span>scheduled ahead</span><em>' + thisWeek.length + ' this week</em></div>' +
+      '<div class="kpi" data-w225go="#studio/approvals"><b class="' + (pend.length ? 'warn' : '') + '">' + pend.length + '</b><span>waiting for approval</span>' + (mine.length ? '<em>' + mine.length + ' of yours sent back</em>' : '') + '</div>' +
+      '<div class="kpi" data-w225go="#studio/inbox"><b class="' + (open.length ? 'warn' : 'ok') + '">' + open.length + '</b><span>comments to answer</span></div>' +
+      '<div class="kpi" data-w225go="#studio/queue"><b class="' + (gT && gN >= gT ? 'ok' : '') + '">' + (gT ? gN + '/' + gT : '\u2013') + '</b><span>weekly goal</span><em>' + (st ? st + '-week streak' : 'Meet every goal to start a streak') + '</em></div>' +
+      '<div class="kpi" data-w225go="#studio/links"><b>' + num(clicks30) + '</b><span>link clicks, 30 days</span></div>' +
+      '<div class="kpi" data-w225go="#socialstats"><b>' + (reach30 ? num(reach30) : '\u2013') + '</b><span>reach and views, 30 days</span></div></div>';
+    /* the next seven days */
+    var days = ''; for (var i = 0; i < 7; i++) {
+      var d = addDays(t, i), list = all.filter(function (p) { return p.scheduled_at && dayOf(p.scheduled_at) === d && p.status !== 'cancelled'; }).sort(function (a, b) { return String(a.scheduled_at).localeCompare(String(b.scheduled_at)); });
+      if (!list.length) continue;
+      days += '<div class="day">' + E(i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : niceDate(d, { weekday: 'long', month: 'short', day: 'numeric' })) + '</div>' + list.map(function (p) { return postRow(p); }).join('');
+    }
+    var week = '<div class="card"><h3>' + I('cal') + ' The week ahead <span class="sp"></span><a class="btn225 sm" data-w225go="#contentcal">' + I('cal') + ' Calendar</a><a class="btn225 sm pri" data-w225new="1">' + I('plus') + ' New post</a></h3>' + (days || '<div class="empty">Nothing planned for the next seven days. <a data-w225go="#studio/queue" style="cursor:pointer;color:' + ROSE + ';font-weight:700">Fill the queue</a>.</div>') + '</div>';
+    var needs = attn.concat(mine.filter(function (p) { return attn.indexOf(p) < 0; }));
+    var attnCard = needs.length ? '<div class="card"><h3>' + I('warn') + ' Needs attention <small>' + needs.length + '</small></h3>' + needs.slice(0, 8).map(function (p) { return postRow(p, '<small style="color:' + FLAG + '">' + E(stateOf(p).note || '') + '</small>'); }).join('') + '</div>' : '';
+    var apprCard = pend.length ? '<div class="card"><h3>' + I('check') + ' Waiting for approval <small>' + pend.length + '</small><span class="sp"></span><a class="btn225 sm" data-w225go="#studio/approvals">Open</a></h3>' + pend.slice(0, 5).map(function (p) { return postRow(p, '<small>From ' + E(String(p.submitted_by || '').split('@')[0]) + '</small>'); }).join('') + '</div>' : '';
+    var goalsCard = '<div class="card"><h3>' + I('bolt') + ' This week\u2019s goals <span class="sp"></span><a class="btn225 sm" data-w225go="#studio/queue">Change</a></h3>' + PORDER.filter(function (k) { return gs[k].goal > 0 || gs[k].n > 0; }).map(function (k) { var g = gs[k], w = g.goal ? Math.min(100, Math.round(g.n / g.goal * 100)) : 100; return '<div class="goal"><span>' + mark(k) + ' ' + E(PLX[k][0]) + '</span><div class="bar"><i class="' + (g.goal && g.n > g.goal ? 'over' : '') + '" style="width:' + w + '%"></i></div><span>' + g.n + (g.goal ? ' / ' + g.goal : '') + '</span></div>'; }).join('') + '<p class="muted" style="margin:8px 0 0">' + (st ? 'A ' + st + '-week streak: every goal met ' + st + ' week' + (st === 1 ? '' : 's') + ' in a row.' : 'Counts what is scheduled or out this week (Monday to Sunday).') + '</p></div>';
+    var cx = cap(); var connCard = '<div class="card"><h3>' + I('plug') + ' How we post <span class="sp"></span><a class="btn225 sm" data-w225go="#studio/connections">Connections</a></h3>' + PORDER.map(function (k) { var m = modeOf(k), mm = MODE[m] || MODE.reminder; return '<div class="row" style="margin:5px 0;font-size:12.5px">' + mark(k) + '<b style="width:80px">' + E(PLX[k][0]) + '</b><span style="color:' + mm[1] + ';font-weight:700">' + E(mm[0]) + '</span></div>'; }).join('') + (cx && cx.missing && cx.missing.length ? '<p class="muted" style="margin:8px 0 0;color:' + FLAG + '">The Meta token is missing ' + cx.missing.length + ' permission' + (cx.missing.length === 1 ? '' : 's') + ': comments and some formats wait for the new token.</p>' : '') + '</div>';
+    var cmCard = '<div class="card"><h3>' + I('chat') + ' Latest comments <span class="sp"></span><a class="btn225 sm" data-w225go="#studio/inbox">Comments</a></h3>' + (open.length ? open.slice(0, 4).map(function (c) { return '<div style="font-size:12.5px;margin:6px 0">' + mark(c.platform) + '<b>' + E(c.author_handle || c.author_name || 'Someone') + '</b> <span class="muted">' + E(ago(c.commented_at)) + '</span><div>' + E(clip(c.text, 140)) + '</div></div>'; }).join('') : '<div class="empty">' + (S.inboxLast ? 'Every comment is answered.' : 'The inbox fills once the Meta token has the comment permissions (Connections).') + '</div>') + '</div>';
+    var top = S.social.filter(function (sp) { return sp.published_at && now - new Date(sp.published_at).getTime() < 30 * 86400000; }).sort(function (a, b) { return Number(b.engagement || (Number(b.likes || 0) + Number(b.comments || 0) + Number(b.shares || 0) + Number(b.saves || 0))) - Number(a.engagement || (Number(a.likes || 0) + Number(a.comments || 0) + Number(a.shares || 0) + Number(a.saves || 0))); })[0];
+    var topCard = top ? '<div class="card"><h3>' + I('star') + ' Best post, 30 days</h3><div class="pl" style="cursor:default">' + (top.thumb_cached || top.thumb_url ? '<img src="' + E(top.thumb_cached || top.thumb_url) + '" alt="" loading="lazy">' : '<div class="ph"></div>') + '<div style="min-width:0"><b>' + E(clip(top.caption || 'A post', 80)) + '</b><small>' + mark(top.platform) + ' ' + num(top.reach || top.views || 0) + ' reach \u00b7 ' + num(top.likes || 0) + ' likes \u00b7 ' + num(top.comments || 0) + ' comments</small></div>' + (top.url ? '<a class="btn225 sm" href="' + E(top.url) + '" target="_blank" rel="noopener">' + I('ext') + '</a>' : '') + '</div></div>' : '';
+    return kpis + '<div class="grid2"><div>' + week + attnCard + apprCard + '</div><div>' + goalsCard + connCard + cmCard + topCard + '</div></div>';
+  }
+
+  /* ---------- the queue and the posting schedule ---------- */
+  function slotGroups() {
+    /* one row per weekday and time, with the platforms that post then */
+    var m = {}; slots().forEach(function (s) { var k = s.weekday + '|' + String(s.at).slice(0, 5); (m[k] = m[k] || { wd: Number(s.weekday), at: String(s.at).slice(0, 5), pls: [], ids: [] }); m[k].pls.push(s.platform); m[k].ids.push(s.id); });
+    return Object.keys(m).map(function (k) { m[k].pls.sort(function (a, b) { return PORDER.indexOf(a) - PORDER.indexOf(b); }); return m[k]; });
+  }
+  function queueHtml14() {
+    var t = today(), nowHm = hm(new Date().toISOString()), groups = slotGroups(), all = posts();
+    var ideas = all.filter(function (p) { return !p.scheduled_at && p.status === 'draft'; });
+    var html = '';
+    for (var i = 0; i < 14; i++) {
+      var d = addDays(t, i), wd = dowOf(d);
+      var dayPosts = all.filter(function (p) { return p.scheduled_at && dayOf(p.scheduled_at) === d && p.status !== 'cancelled'; });
+      var taken = {}; dayPosts.forEach(function (p) { taken[hm(p.scheduled_at)] = 1; });
+      var free = groups.filter(function (g) { return g.wd === wd && !taken[g.at] && !(i === 0 && g.at <= nowHm); });
+      var rows = dayPosts.map(function (p) { return { at: hm(p.scheduled_at), html: postRow(p) }; }).concat(free.map(function (g) {
+        return { at: g.at, html: '<div class="slot"><div class="ph">' + E(g.at) + '</div><div>Free slot \u00b7 ' + g.pls.map(function (k) { return mark(k); }).join('') + ' ' + E(g.pls.map(function (k) { return PLX[k][0]; }).join(', ')) + '</div><div class="row">' +
+          (ideas.length ? '<select data-w225fill="' + d + '|' + g.at + '" aria-label="Fill with an idea"><option value="">Fill with an idea\u2026</option>' + ideas.slice(0, 40).map(function (p) { return '<option value="' + p.id + '">' + E(clip(titleOf(p), 50)) + '</option>'; }).join('') + '</select>' : '') +
+          '<a class="btn225 sm" data-w225slotnew="' + d + '|' + g.at + '|' + g.pls.join(',') + '">' + I('plus') + ' New post</a></div></div>' };
+      })).sort(function (a, b) { return a.at.localeCompare(b.at); });
+      if (!rows.length) continue;
+      html += '<div class="day">' + E(i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : niceDate(d, { weekday: 'long', month: 'short', day: 'numeric' })) + '</div>' + rows.map(function (r) { return r.html; }).join('');
+    }
+    return html || '<div class="empty">' + (groups.length ? 'Nothing in the next two weeks.' : 'Set the posting schedule below: the queue then shows the free slots to fill.') + '</div>';
+  }
+  /* suggested times: our own results, per platform, weekday and hour (engagement over reach), at least two posts a cell */
+  function suggestTimes() {
+    var out = {}; var by = {};
+    S.social.forEach(function (sp) {
+      if (!sp.published_at || PORDER.indexOf(sp.platform) < 0) return;
+      var d = new Date(sp.published_at), wd = (d.getDay() + 6) % 7, h = d.getHours();
+      var base = Number(sp.reach || sp.views || 0), eng = Number(sp.engagement || (Number(sp.likes || 0) + Number(sp.comments || 0) * 2 + Number(sp.shares || 0) * 3 + Number(sp.saves || 0) * 2));
+      if (!base) return;
+      var k = sp.platform + '|' + wd + '|' + h; (by[k] = by[k] || { pl: sp.platform, wd: wd, h: h, n: 0, rate: 0 }); by[k].n++; by[k].rate += eng / base;
+    });
+    Object.keys(by).forEach(function (k) { var c = by[k]; if (c.n < 2) return; c.rate = c.rate / c.n; (out[c.pl] = out[c.pl] || []).push(c); });
+    Object.keys(out).forEach(function (pl) { out[pl].sort(function (a, b) { return b.rate - a.rate; }); out[pl] = out[pl].slice(0, 3); });
+    return out;
+  }
+  function schedHtml() {
+    var mk = S.mk, sug = S.suggest;
+    var head = '<div class="sched"><div></div>' + WD.map(function (d) { return '<div class="h">' + d + '</div>'; }).join('');
+    var body = PORDER.map(function (k) {
+      return '<div class="pn">' + mark(k) + E(PLX[k][0]) + '</div>' + WD.map(function (d, wd) {
+        var list = slots().filter(function (s) { return s.platform === k && Number(s.weekday) === wd; }).sort(function (a, b) { return String(a.at).localeCompare(String(b.at)); });
+        var sl = (sug && sug[k] || []).filter(function (c) { return c.wd === wd && !list.some(function (s) { return Number(String(s.at).slice(0, 2)) === c.h; }); });
+        return '<div class="c">' + list.map(function (s) { return '<span class="t">' + E(String(s.at).slice(0, 5)) + (mk ? '<a data-w225slotx="' + s.id + '" title="Remove">\u2715</a>' : '') + '</span>'; }).join('') + sl.map(function (c) { return '<span class="t sug" title="Suggested from our results: ' + Math.round(c.rate * 1000) / 10 + '% engagement over ' + c.n + ' posts">' + pad(c.h) + ':00' + (mk ? '<a data-w225sugadd="' + k + '|' + c.wd + '|' + pad(c.h) + ':00" title="Add it">+</a>' : '') + '</span>'; }).join('') + '</div>';
+      }).join('');
+    }).join('');
+    var add = mk ? '<div class="row" style="margin-top:12px"><select id="w225spl"><option value="all">Every platform</option>' + PORDER.map(function (k) { return '<option value="' + k + '">' + E(PLX[k][0]) + '</option>'; }).join('') + '</select>' +
+      '<span class="seg" id="w225swd">' + WD.map(function (d, i) { return '<a data-w225swd="' + i + '" class="' + ((S.keys.swd || []).indexOf(i) >= 0 ? 'on' : '') + '">' + d + '</a>'; }).join('') + '</span><input type="time" id="w225sat" value="' + E(S.keys.sat || '18:00') + '"><a class="btn225 sm pri" data-w225slotadd="1">' + I('plus') + ' Add the time</a><span class="sp"></span><a class="btn225 sm" data-w225sug="1">' + I('bolt') + (sug ? ' Hide the suggestions' : ' Suggest times from our results') + '</a></div>' : '';
+    return head + body + '</div>' + add + (sug ? '<p class="muted" style="margin:8px 0 0">Dashed times are the hours our own posts did best (engagement over reach, the last year, at least two posts). ' + (Object.keys(sug).length ? '' : 'Not enough posts yet to suggest anything.') + '</p>' : '');
+  }
+  function goalsHtml() {
+    var g = goals(), mk = S.mk;
+    return '<div class="grid3" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">' + PORDER.map(function (k) { return '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px">' + mark(k) + '<span style="flex:1">' + E(PLX[k][0]) + '</span><input type="number" min="0" max="21" data-w225goal="' + k + '" value="' + E(g[k] != null ? g[k] : 0) + '" style="width:64px"' + (mk ? '' : ' disabled') + '> a week</label>'; }).join('') + '</div>' + (mk ? '<div class="row" style="margin-top:10px"><span class="sp"></span><a class="btn225 sm pri" data-w225goalsave="1">Save the goals</a></div>' : '');
+  }
+  function gridHtml() {
+    var ig = S.social.filter(function (sp) { return sp.platform === 'instagram' && (sp.kind || '').toLowerCase().indexOf('story') < 0; }).slice(0, 12);
+    var next = posts().filter(function (p) { return (p.platforms || []).indexOf('instagram') >= 0 && p.scheduled_at && new Date(p.scheduled_at).getTime() > Date.now() && ['draft', 'scheduled'].indexOf(p.status) >= 0 && (((p.variants || {}).instagram || {}).kind || 'feed') !== 'story'; }).sort(function (a, b) { return String(b.scheduled_at).localeCompare(String(a.scheduled_at)); }).slice(-6);
+    var cells = next.map(function (p) { var th = thumbOf(p); return '<div class="next" data-w225open="' + p.id + '" title="' + E(titleOf(p) + ' \u00b7 ' + niceWhen(p.scheduled_at)) + '">' + (th ? '<img src="' + E(th) + '" alt="">' : '') + '<span>' + E(niceDate(dayOf(p.scheduled_at), { month: 'short', day: 'numeric' })) + '</span></div>'; })
+      .concat(ig.map(function (sp) { var u = sp.thumb_cached || sp.thumb_url; return '<div>' + (u ? '<img src="' + E(u) + '" alt="" loading="lazy">' : '') + '</div>'; })).slice(0, 12);
+    return cells.length ? '<div class="igg">' + cells.join('') + '</div><p class="muted" style="margin:8px 0 0">Planned posts (outlined, newest first) in front of the last ones on @welfareavenue: how the profile will look.</p>' : '<div class="empty">No Instagram posts yet.</div>';
+  }
+  function queueHtml() {
+    return '<div class="grid2"><div><div class="card"><h3>' + I('cal') + ' The next two weeks <small>planned posts and free slots</small><span class="sp"></span><a class="btn225 sm pri" data-w225new="1">' + I('plus') + ' New post</a></h3>' + queueHtml14() + '</div></div><div>' +
+      '<div class="card"><h3>' + I('bolt') + ' Weekly goals</h3>' + goalsHtml() + '</div>' +
+      '<div class="card"><h3>' + I('eye') + ' Instagram grid</h3>' + gridHtml() + '</div></div></div>' +
+      '<div class="card"><h3>' + I('clock') + ' Posting schedule <small>times in Toronto; Next in the queue in the composer uses them</small></h3>' + schedHtml() + '</div>';
+  }
+  async function addSlots(pls, wds, at) {
+    var rows = []; pls.forEach(function (k) { wds.forEach(function (wd) { if (!slots().some(function (s) { return s.platform === k && Number(s.weekday) === wd && String(s.at).slice(0, 5) === at; })) rows.push({ platform: k, weekday: wd, at: at, created_by: myName() || 'staff' }); }); });
+    if (!rows.length) { toastS('Those times are already in the schedule'); return; }
+    var r = await db.from('content_slots').insert(rows); if (r.error) throw r.error;
+    var w = W(); if (w) await w.studio(); toastS(rows.length === 1 ? 'Added' : rows.length + ' times added');
+  }
+
+  /* ---------- approvals ---------- */
+  function apCard(p) {
+    var th = thumbOf(p), pub = S.pub, s = stateOf(p);
+    var who0 = memberByEmail(p.submitted_by); var whoN = who0 ? who0.name : String(p.submitted_by || '').split('@')[0];
+    var caps = (p.platforms || []).map(function (k) { var v = (p.variants || {})[k] || {}; var c = v.caption && String(v.caption).trim() ? v.caption : p.caption; return '<div style="margin:6px 0;font-size:12.5px">' + mark(k) + '<b>' + E(PLX[k] ? PLX[k][0] : k) + (v.kind && v.kind !== 'feed' ? ' ' + E(v.kind) : '') + '</b><div style="white-space:pre-wrap;margin-top:2px">' + E(clip(c || '', 400)) + '</div></div>'; }).join('');
+    return '<div class="card"><div class="pl" style="border:none;padding:0" data-w225open="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="">' : '<div class="ph">' + I('cal') + '</div>') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><small>' + E(p.scheduled_at ? niceWhen(p.scheduled_at) : 'No date yet') + ' \u00b7 sent by ' + E(whoN) + (p.submitted_at ? ' ' + E(ago(p.submitted_at)) : '') + '</small></div><span class="pill ' + (p.approval_status === 'pending' ? 'appr' : p.approval_status === 'changes' ? 'bad' : 'ok') + '">' + E(s.label) + '</span></div>' +
+      (p.approval_note ? '<div class="muted" style="margin:8px 0;padding:8px 10px;background:rgba(111,100,171,.08);border-radius:10px;color:var(--wa-text)">' + E(p.approval_note) + '</div>' : '') + caps +
+      ((p.media || []).length > 1 ? '<div class="row" style="gap:4px;margin:6px 0">' + p.media.slice(0, 8).map(function (m) { return String(m.kind || m.mime || '').indexOf('video') >= 0 ? '<span class="pill">video</span>' : '<img src="' + E(m.url) + '" alt="' + E(m.alt || '') + '" style="width:48px;height:48px;object-fit:cover;border-radius:8px">'; }).join('') + '</div>' : '') +
+      '<div class="row" style="margin-top:8px"><a class="btn225 sm" data-w225open="' + p.id + '">' + I('eye') + ' Open</a><span class="sp"></span>' +
+      (pub && p.approval_status === 'pending' ? '<input type="text" data-w225apnote="' + p.id + '" placeholder="Note (needed to send it back)" style="min-width:200px;flex:1"><a class="btn225 sm bad" data-w225dec="changes|' + p.id + '">Send it back</a><a class="btn225 sm pri" data-w225dec="approve|' + p.id + '">' + I('check') + ' Approve' + (p.scheduled_at ? ' and schedule' : '') + '</a>' : '') + '</div></div>';
+  }
+  function approvalsHtml() {
+    var all = posts().filter(function (p) { return ['draft', 'scheduled', 'failed', 'published', 'posted'].indexOf(p.status) >= 0; });
+    var pend = all.filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; });
+    var back = all.filter(function (p) { return p.approval_status === 'changes' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; });
+    var mine = all.filter(function (p) { return lower(p.submitted_by) === myEmail(); });
+    var done = all.filter(function (p) { return p.approval_status === 'approved' && p.approved_at && Date.now() - new Date(p.approved_at).getTime() < 30 * 86400000; }).sort(function (a, b) { return String(b.approved_at).localeCompare(String(a.approved_at)); });
+    var tabs = [['pending', 'Waiting', pend], ['changes', 'Sent back', back], ['mine', 'Mine', mine], ['approved', 'Approved, 30 days', done]];
+    var cur = tabs.filter(function (t) { return t[0] === S.f.apr; })[0] || tabs[0];
+    var intro = S.pub ? 'You approve posts: open one to check it, then Approve or Send it back with a note. The person who sent it hears about it in the Hub and on Slack.' : 'Marketing leads and admins approve posts before they go out. Send a post for approval from the composer; you hear back in the Hub and on Slack.';
+    return '<div class="row" style="margin:0 0 12px"><span class="seg">' + tabs.map(function (t) { return '<a data-w225apr="' + t[0] + '" class="' + (cur[0] === t[0] ? 'on' : '') + '">' + E(t[1]) + '<span class="n">' + t[2].length + '</span></a>'; }).join('') + '</span><span class="sp"></span><span class="muted">' + E(intro) + '</span></div>' +
+      (cur[2].length ? cur[2].map(apCard).join('') : '<div class="card"><div class="empty">' + (cur[0] === 'pending' ? 'Nothing waits for an approval.' : cur[0] === 'changes' ? 'Nothing was sent back.' : cur[0] === 'mine' ? 'You have not sent anything for approval.' : 'Nothing approved in the last 30 days.') + '</div></div>');
+  }
+  async function decideFrom(dec, id) {
+    var inp = document.querySelector('#w225host [data-w225apnote="' + id + '"]'); var note = inp ? inp.value.trim() : '';
+    if (dec === 'changes' && !note) { toastS('Write a note so they know what to change'); if (inp) inp.focus(); return; }
+    try { var r = await db.rpc('studio_decide', { p_id: Number(id), p_decision: dec, p_note: note || null }); if (r.error) throw r.error; toastS(dec === 'approve' ? 'Approved' : 'Sent back with your note'); await loadAll(true); paint(); }
+    catch (x) { toastS('Could not save the decision: ' + (x.message || x)); }
+  }
+
+  /* ---------- the comments inbox ---------- */
+  function scoreOf(list) {
+    var since = Date.now() - 30 * 86400000;
+    var theirs = list.filter(function (c) { return !c.from_us && c.commented_at && new Date(c.commented_at).getTime() > since && c.status !== 'deleted'; });
+    /* answered: the inbox marked a reply (replied_at), or one of our replies sits under it (its time counts) */
+    var repAt = function (c) { if (c.replied_at) return c.replied_at; var k = list.filter(function (x) { return x.from_us && x.platform === c.platform && x.parent_external_id === c.external_id && x.commented_at; }).sort(function (x, y) { return String(x.commented_at).localeCompare(String(y.commented_at)); })[0]; return k ? k.commented_at : null; };
+    theirs.forEach(function (c) { c.__rep = repAt(c); });
+    var answered = theirs.filter(function (c) { return c.__rep; });
+    var times = answered.map(function (c) { return (new Date(c.__rep).getTime() - new Date(c.commented_at).getTime()) / 3600000; }).filter(function (h) { return h >= 0; }).sort(function (a, b) { return a - b; });
+    var med = times.length ? times[Math.floor(times.length / 2)] : null;
+    var within = theirs.length ? answered.filter(function (c) { return (new Date(c.__rep).getTime() - new Date(c.commented_at).getTime()) < 24 * 3600000; }).length / theirs.length : null;
+    var score = theirs.length ? Math.round(((answered.length / theirs.length) * 0.6 + (within || 0) * 0.4) * 100) : null;
+    return { total: theirs.length, answered: answered.length, med: med, within: within, score: score };
+  }
+  function postFor(c) {
+    var sp = S.social.filter(function (x) { return (c.social_post_id && x.id === c.social_post_id) || (x.platform === c.platform && (x.external_id === c.media_external_id || String(x.external_id).split('_').pop() === String(c.media_external_id || '').split('_').pop())); })[0];
+    if (sp) return { thumb: sp.thumb_cached || sp.thumb_url, text: sp.caption, url: sp.url };
+    var cp = c.content_post_id ? posts().filter(function (p) { return p.id === c.content_post_id; })[0] : null;
+    if (cp) return { thumb: thumbOf(cp), text: titleOf(cp), url: c.permalink };
+    return { thumb: null, text: null, url: c.permalink };
+  }
+  function cmHtml(c, kids) {
+    var mk = S.mk, pub = S.pub, r = S.reply[c.id];
+    var nm = c.author_handle ? '@' + c.author_handle : (c.author_name || 'Someone');
+    var ours = kids.filter(function (k) { return k.from_us; }), theirs = kids.filter(function (k) { return !k.from_us; });
+    var replies = lib().filter(function (x) { return x.kind === 'reply'; });
+    var acts = mk ? '<div class="acts">' + (c.status !== 'deleted' ? '<a data-w225rp="' + c.id + '">' + I('chat') + ' Reply</a>' : '') +
+      (c.platform === 'facebook' && !c.liked_by_us ? '<a data-w225act="like|' + c.id + '">' + I('heart') + ' Like</a>' : '') +
+      (c.hidden ? '<a data-w225act="unhide|' + c.id + '">Show again</a>' : '<a data-w225act="hide|' + c.id + '">' + I('eye') + ' Hide</a>') +
+      (c.status === 'open' ? '<a data-w225act="resolve|' + c.id + '">' + I('check') + ' Resolve</a>' : c.status === 'resolved' ? '<a data-w225act="reopen|' + c.id + '">Reopen</a>' : '') +
+      '<select data-w225assign="' + c.id + '" aria-label="Assign" style="font-size:11.5px;padding:3px 8px;border-radius:999px"><option value="">' + (c.assigned_to ? 'Assigned: ' + E(c.assigned_to) : 'Assign\u2026') + '</option>' + members().filter(function (m) { return m.department === 'marketing' || m.department === 'exec'; }).map(function (m) { return '<option value="' + E(m.name) + '">' + E(m.name) + '</option>'; }).join('') + '</select>' +
+      (pub && c.status !== 'deleted' ? '<a class="bad" data-w225act="delete|' + c.id + '">' + I('trash') + ' Delete</a>' : '') +
+      (c.permalink ? '<a href="' + E(c.permalink) + '" target="_blank" rel="noopener">' + I('ext') + ' Open</a>' : '') + '</div>' : '';
+    var box = r ? '<div class="rbox"><textarea data-w225rtext="' + c.id + '" placeholder="Reply as Welfare Avenue">' + E(r.text || '') + '</textarea><div class="row" style="margin-top:6px">' +
+      (replies.length ? '<select data-w225saved="' + c.id + '"><option value="">Saved replies\u2026</option>' + replies.map(function (x) { return '<option value="' + x.id + '">' + E(x.name) + '</option>'; }).join('') + '</select>' : '') +
+      '<a class="btn225 sm" data-w225ai="' + c.id + '"' + (r.busy ? ' disabled' : '') + '>' + I('star') + (r.busy ? ' Writing\u2026' : ' Suggest a reply') + '</a><span class="sp"></span><a class="btn225 sm" data-w225rpx="' + c.id + '">Cancel</a><a class="btn225 sm pri" data-w225send="' + c.id + '"' + (r.sending ? ' disabled' : '') + '>' + I('send') + ' Send</a></div></div>' : '';
+    return '<div class="cm"><div class="av">' + E(String(nm).replace(/^@/, '').charAt(0).toUpperCase() || '?') + '</div><div style="min-width:0"><div class="who">' + mark(c.platform) + E(nm) + '<small>' + E(ago(c.commented_at)) + (c.like_count ? ' \u00b7 ' + c.like_count + ' likes' : '') + (c.status !== 'open' ? ' \u00b7 ' + E(c.status) : '') + (c.assigned_to ? ' \u00b7 for ' + E(c.assigned_to) : '') + '</small></div>' +
+      '<div class="tx' + (c.hidden ? ' hid' : '') + '">' + E(c.text || '') + '</div>' +
+      ours.map(function (o) { return '<div class="ours">' + I('chat') + ' ' + E(o.text || '') + (o.replied_by ? ' <span class="muted">(' + E(o.replied_by) + ')</span>' : '') + '</div>'; }).join('') +
+      theirs.map(function (o) { return '<div style="margin:4px 0 4px 10px;font-size:12.5px"><b>' + E(o.author_handle ? '@' + o.author_handle : o.author_name || '') + '</b> ' + E(o.text || '') + '</div>'; }).join('') +
+      acts + box + '</div></div>';
+  }
+  function inboxHtml() {
+    var f = S.f, all = S.comments.filter(function (c) { return c.status !== 'deleted' || f.inbox === 'all'; });
+    var tops = all.filter(function (c) { return !c.parent_external_id || !all.some(function (p) { return p.platform === c.platform && p.external_id === c.parent_external_id; }); }).filter(function (c) { return !c.from_us; });
+    var kidsOf = function (c) { return all.filter(function (k) { return k.platform === c.platform && k.parent_external_id === c.external_id; }); };
+    var counts = { open: tops.filter(function (c) { return c.status === 'open'; }).length, resolved: tops.filter(function (c) { return c.status === 'resolved'; }).length, hidden: tops.filter(function (c) { return c.status === 'hidden' || c.hidden; }).length, all: tops.length };
+    var list = tops.filter(function (c) {
+      if (f.inbox === 'open' && c.status !== 'open') return false;
+      if (f.inbox === 'resolved' && c.status !== 'resolved') return false;
+      if (f.inbox === 'hidden' && !(c.status === 'hidden' || c.hidden)) return false;
+      if (f.ipl && c.platform !== f.ipl) return false;
+      if (f.imine && lower(c.assigned_to) !== lower(myName())) return false;
+      if (f.iq && (lower(c.text) + ' ' + lower(c.author_handle) + ' ' + lower(c.author_name)).indexOf(lower(f.iq)) < 0) return false;
+      return true;
+    });
+    var sc = scoreOf(S.comments);
+    var last = S.inboxLast;
+    var errs = last && last.result ? Object.keys(last.result).filter(function (k) { return last.result[k] && last.result[k].error; }) : [];
+    var head = '<div class="kpis"><div class="kpi"><b class="' + (counts.open ? 'warn' : 'ok') + '">' + counts.open + '</b><span>open</span></div>' +
+      '<div class="kpi"><b>' + (sc.score == null ? '\u2013' : sc.score) + '</b><span>comment score</span><em>' + (sc.total ? sc.answered + ' of ' + sc.total + ' answered, 30 days' : 'No comments in 30 days') + '</em></div>' +
+      '<div class="kpi"><b>' + (sc.med == null ? '\u2013' : sc.med < 1 ? Math.round(sc.med * 60) + ' min' : Math.round(sc.med) + ' h') + '</b><span>typical reply time</span><em>' + (sc.within == null ? '' : pct(sc.within) + ' within a day') + '</em></div>' +
+      '<div class="kpi"><b style="font-size:18px">' + E(last && last.at ? ago(last.at) : 'never') + '</b><span>last check</span><em>' + (S.mk ? '<a data-w225sync="1" style="cursor:pointer;color:' + ROSE + ';font-weight:700">' + (S.busy.sync ? 'Checking\u2026' : 'Check now') + '</a>' : 'Every 10 minutes') + '</em></div></div>' +
+      (errs.length ? '<div class="card" style="background:rgba(220,165,39,.10)"><b>Some platforms could not be read:</b> ' + errs.map(function (k) { return E(PLX[k] ? PLX[k][0] : k) + ' (' + E(clip(last.result[k].error, 120)) + ')'; }).join('; ') + '. <a data-w225go="#studio/connections" style="cursor:pointer;font-weight:700">Connections</a></div>' : '');
+    var filters = '<div class="row" style="margin:0 0 12px"><span class="seg">' + [['open', 'Open'], ['resolved', 'Resolved'], ['hidden', 'Hidden'], ['all', 'Everything']].map(function (x) { return '<a data-w225ib="' + x[0] + '" class="' + (f.inbox === x[0] ? 'on' : '') + '">' + x[1] + '<span class="n">' + counts[x[0]] + '</span></a>'; }).join('') + '</span>' +
+      '<span class="seg"><a data-w225ipl="" class="' + (!f.ipl ? 'on' : '') + '">All</a>' + PORDER.filter(function (k) { return S.comments.some(function (c) { return c.platform === k; }); }).map(function (k) { return '<a data-w225ipl="' + k + '" class="' + (f.ipl === k ? 'on' : '') + '">' + E(PLX[k][0]) + '</a>'; }).join('') + '</span>' +
+      '<label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-w225imine' + (f.imine ? ' checked' : '') + '> Assigned to me</label><span class="sp"></span><input type="search" data-w225iq placeholder="Search comments" value="' + E(f.iq) + '"></div>';
+    /* grouped by post */
+    var groups = {}, order = [];
+    list.forEach(function (c) { var k = c.platform + '|' + (c.media_external_id || c.social_post_id || 'none'); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(c); });
+    var body = order.map(function (k) {
+      var g = groups[k], pp = postFor(g[0]);
+      return '<div class="card"><div class="post">' + (pp.thumb ? '<img src="' + E(pp.thumb) + '" alt="" loading="lazy">' : '<div class="ph"></div>') + '<div style="min-width:0"><b>' + mark(g[0].platform) + E(clip(pp.text || 'A post', 110)) + '</b>' + (pp.url ? '<a class="muted" href="' + E(pp.url) + '" target="_blank" rel="noopener">Open the post</a>' : '') + '</div></div>' +
+        g.map(function (c) { return cmHtml(c, kidsOf(c)); }).join('') + '</div>';
+    }).join('');
+    if (!S.mk && !S.pub) body = '<div class="card"><div class="empty">The comments are for the marketing team and admins.</div></div>';
+    else if (!list.length) body = '<div class="card"><div class="empty">' + (S.comments.length ? (f.inbox === 'open' ? 'Every comment is answered.' : 'Nothing matches.') : 'No comments yet. They arrive here within 10 minutes once the Meta token has the comment permissions (Connections), and from Threads and YouTube once they are connected.') + '</div></div>';
+    return head + filters + body;
+  }
+  var REPLY_SYSTEM = 'You reply to comments on Welfare Avenue\u2019s social media posts. Welfare Avenue is a youth-powered charity in Montreal and Toronto that serves meals and builds community. Write one reply as Welfare Avenue: warm, specific, short (one or two sentences), plain words. Thank people by name when there is a handle. Answer questions only with what the post or comment says; otherwise point to info@welfareavenue.com or the link in our bio. Never promise anything, never invent facts, dates or numbers. Reply in the language of the comment (Quebec French for French). No em dashes. At most one emoji, only when natural. Return only the reply text.';
+  async function suggestReply(id) {
+    var c = S.comments.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c) return;
+    var r = S.reply[id] = S.reply[id] || { text: '' }; r.busy = true; paint();
+    try {
+      var pp = postFor(c);
+      var res = await db.functions.invoke('llm', { body: { task: 'draft', caller: 'content-studio', max_tokens: 300, temperature: 0.5, system: REPLY_SYSTEM, messages: [{ role: 'user', content: 'PLATFORM: ' + c.platform + '\nPOST: ' + clip(pp.text || '', 600) + '\nCOMMENT by ' + (c.author_handle || c.author_name || 'someone') + ': ' + (c.text || '') } ] } });
+      if (res.error) throw res.error;
+      var txt = ((res.data && res.data.content) || []).filter(function (x) { return x.type === 'text'; }).map(function (x) { return x.text; }).join(' ').replace(/\u2014/g, ',').trim();
+      if (!txt) throw new Error('nothing came back');
+      r.text = txt;
+    } catch (x) { toastS('The Hub could not help this time: ' + (x.message || x)); }
+    r.busy = false; paint();
+  }
+  async function inboxAct(action, id, extra) {
+    if (action === 'delete' && !confirm('Delete this comment on the platform? It cannot be brought back.')) return;
+    try {
+      var body = Object.assign({ action: action, id: Number(id) }, extra || {});
+      await fn('social-inbox', body);
+      toastS({ reply: 'Reply sent', like: 'Liked', hide: 'Hidden', unhide: 'Shown again', resolve: 'Resolved', reopen: 'Reopened', delete: 'Deleted', assign: 'Assigned' }[action] || 'Done');
+      if (action === 'reply') delete S.reply[id];
+      var r = await q(db.from('social_comments').select('*').gte('commented_at', new Date(Date.now() - 90 * 86400000).toISOString()).order('commented_at', { ascending: false }).limit(1500));
+      if (r.data) S.comments = r.data;
+      paint(); try { if (window.w153) window.w153.paint(); } catch (e) { /* fine */ }
+    } catch (x) { toastS('Could not ' + action + ': ' + (x.message || x)); if (action === 'reply' && S.reply[id]) { S.reply[id].sending = false; paint(); } }
+  }
+
+  /* ---------- the library: templates, hashtag groups, saved replies, tags ---------- */
+  var LIBT = [['templates', 'Templates', 'template'], ['hashtags', 'Hashtag groups', 'hashtags'], ['replies', 'Saved replies', 'reply'], ['tags', 'Tags', null]];
+  var TAGCOLORS = ['#6F64AB', '#2A8C7A', '#B4467A', '#DCA527', '#1877F2', '#B3402F', '#103F39', '#C13584'];
+  function libTab() { var t = LIBT.filter(function (x) { return x[0] === S.sub; })[0]; return t || LIBT.filter(function (x) { return x[0] === S.f.lib; })[0] || LIBT[0]; }
+  function hashCount(s) { return (String(s || '').match(/#[\p{L}\p{N}_]+/gu) || []).length; }
+  function libEditor(t) {
+    var e = S.libEdit; if (!e || e.tab !== t[0]) return '';
+    var nm = '<label class="muted" style="display:block;margin:0 0 4px">Name</label><input type="text" data-w225lf="name" value="' + E(e.name || '') + '" style="width:100%" maxlength="80">';
+    var body = '';
+    if (t[0] === 'tags') {
+      body = '<label class="muted" style="display:block;margin:10px 0 4px">Colour</label><div class="row" style="gap:6px">' + TAGCOLORS.map(function (c) { return '<a data-w225lcol="' + c + '" title="' + c + '" style="width:26px;height:26px;border-radius:50%;background:' + c + ';cursor:pointer;outline:' + (e.color === c ? '3px solid ' + GOLD : 'none') + ';outline-offset:2px"></a>'; }).join('') + '</div>';
+    } else {
+      var lab = t[0] === 'hashtags' ? 'The hashtags (Instagram takes 5 at most)' : t[0] === 'replies' ? 'The reply' : 'The caption';
+      body = '<label class="muted" style="display:block;margin:10px 0 4px">' + lab + '</label><textarea data-w225lf="body" rows="' + (t[0] === 'hashtags' ? 3 : 6) + '" style="width:100%">' + E(e.body || '') + '</textarea>';
+      if (t[0] === 'hashtags') { var n = hashCount(e.body); body += '<p class="muted" style="margin:4px 0 0;' + (n > 5 ? 'color:' + FLAG : '') + '">' + n + ' hashtag' + (n === 1 ? '' : 's') + (n > 5 ? ': Instagram keeps the first 5' : '') + '</p>'; }
+      if (t[0] === 'templates') {
+        var pls = e.platforms || [];
+        body += '<label class="muted" style="display:block;margin:10px 0 4px">Platforms</label><div class="row" style="gap:6px">' + PORDER.map(function (k) { return '<label style="display:flex;gap:4px;align-items:center;font-size:12.5px"><input type="checkbox" data-w225lpl="' + k + '"' + (pls.indexOf(k) >= 0 ? ' checked' : '') + '>' + mark(k) + E(PLX[k][0]) + '</label>'; }).join('') + '</div>' +
+          '<label class="muted" style="display:block;margin:10px 0 4px">First comment (optional)</label><input type="text" data-w225lf="first_comment" value="' + E(e.first_comment || '') + '" style="width:100%">';
+      }
+      if (t[0] === 'replies') body += '<p class="muted" style="margin:4px 0 0">Use {name} for the person\u2019s name or handle.</p>';
+    }
+    return '<div class="card" style="border-color:' + ROSE + '"><h3>' + I(e.id ? 'star' : 'plus') + ' ' + (e.id ? 'Change' : 'New') + ' ' + E(t[1].replace(/s$/, '').toLowerCase()) + '</h3>' + nm + body +
+      '<div class="row" style="margin-top:12px"><span class="sp"></span><a class="btn225 sm" data-w225lcancel="1">Cancel</a><a class="btn225 sm pri" data-w225lsave="1"' + (S.busy.lib ? ' disabled' : '') + '>' + I('check') + ' Save</a></div></div>';
+  }
+  function libraryHtml() {
+    var t = libTab(), mk = S.mk, qq = lower(S.f.lq);
+    var tabs = '<div class="row" style="margin:0 0 12px"><span class="seg">' + LIBT.map(function (x) {
+      var n = x[2] ? lib().filter(function (s) { return s.kind === x[2]; }).length : tagsAll().length;
+      return '<a data-w225go="#studio/library/' + x[0] + '" class="' + (t[0] === x[0] ? 'on' : '') + '">' + E(x[1]) + '<span class="n">' + n + '</span></a>';
+    }).join('') + '</span><span class="sp"></span><input type="search" data-w225lq placeholder="Search the library" value="' + E(S.f.lq || '') + '">' + (mk ? '<a class="btn225 sm pri" data-w225lnew="' + t[0] + '">' + I('plus') + ' New</a>' : '') + '</div>';
+    var intro = { templates: 'Start a post from a template: the platforms, caption, first comment and tags come with it. Save one from the composer with Save as template, or make one here.', hashtags: 'Groups of hashtags to drop into a caption from the composer. Instagram counts 5 at most since December 2025, so keep the groups short.', replies: 'Answers the team sends often, ready in the Comments inbox.', tags: 'Tags sort posts by theme or campaign. Filter the calendar and the report by them.' }[t[0]];
+    var items;
+    if (t[0] === 'tags') {
+      var used = {}; posts().forEach(function (p) { (p.tags || []).forEach(function (g) { used[g] = (used[g] || 0) + 1; }); });
+      items = tagsAll().filter(function (g) { return !qq || lower(g.name).indexOf(qq) >= 0; }).map(function (g) {
+        return '<div class="it"><div class="row"><span class="tagdot" style="background:' + E(g.color || PURPLE) + '"></span><b>' + E(g.name) + '</b><span class="sp"></span><span class="muted">' + (used[g.name] || 0) + ' post' + (used[g.name] === 1 ? '' : 's') + '</span></div>' +
+          (mk ? '<div class="row"><a class="btn225 sm" data-w225lcal="' + E(g.name) + '">' + I('cal') + ' See the posts</a><span class="sp"></span><a class="btn225 sm" data-w225ledit="tag|' + g.id + '">Change</a><a class="btn225 sm bad" data-w225ldel="tag|' + g.id + '">' + I('trash') + '</a></div>' : '<div class="row"><a class="btn225 sm" data-w225lcal="' + E(g.name) + '">' + I('cal') + ' See the posts</a></div>') + '</div>';
+      });
+    } else {
+      items = lib().filter(function (s) { return s.kind === t[2] && (!qq || (lower(s.name) + ' ' + lower(s.body)).indexOf(qq) >= 0); }).sort(function (a, b) { return Number(b.uses || 0) - Number(a.uses || 0) || String(a.name).localeCompare(String(b.name)); }).map(function (s) {
+        var d = s.data || {}, txt = t[0] === 'templates' ? (d.caption || s.body || '') : s.body;
+        var meta = t[0] === 'templates' ? (d.platforms || []).map(function (k) { return mark(k); }).join('') + ((d.tags || []).length ? ' <span class="muted">' + E(d.tags.join(', ')) + '</span>' : '') : t[0] === 'hashtags' ? '<span class="muted">' + hashCount(s.body) + ' hashtags</span>' : '';
+        var use = t[0] === 'templates' ? '<a class="btn225 sm pri" data-w225luse="' + s.id + '">' + I('plus') + ' Use</a>' : '<a class="btn225 sm" data-w225lcopy="' + s.id + '">' + I('copy') + ' Copy</a>';
+        return '<div class="it"><div class="row"><b style="flex:1;min-width:0">' + E(s.name) + '</b>' + (s.uses ? '<span class="muted">used ' + s.uses + '\u00d7</span>' : '') + '</div>' + (meta ? '<div>' + meta + '</div>' : '') + '<p>' + E(txt) + '</p>' +
+          '<div class="row" style="margin-top:auto">' + use + '<span class="sp"></span>' + (mk ? '<a class="btn225 sm" data-w225ledit="' + t[2] + '|' + s.id + '">Change</a><a class="btn225 sm bad" data-w225ldel="' + t[2] + '|' + s.id + '" title="Remove">' + I('trash') + '</a>' : '') + '</div>' +
+          '<small class="muted">' + E(s.updated_by || s.created_by || '') + (s.updated_at ? ' \u00b7 ' + E(ago(s.updated_at)) : '') + '</small></div>';
+      });
+    }
+    return tabs + '<p class="muted" style="margin:-4px 0 12px">' + E(intro) + '</p>' + libEditor(t) +
+      (items.length ? '<div class="lib">' + items.join('') + '</div>' : '<div class="card"><div class="empty">' + (qq ? 'Nothing matches.' : 'Nothing here yet.' + (mk ? ' Press New to add the first one.' : '')) + '</div></div>');
+  }
+  function libNew(tab) {
+    var t = LIBT.filter(function (x) { return x[0] === tab; })[0] || LIBT[0];
+    S.libEdit = { tab: t[0], id: null, name: '', body: t[0] === 'hashtags' ? '#WelfareAvenue ' : '', color: TAGCOLORS[tagsAll().length % TAGCOLORS.length], platforms: t[0] === 'templates' ? ['instagram', 'facebook'] : [], first_comment: '' };
+  }
+  function libEdit(kind, id) {
+    if (kind === 'tag') { var g = tagsAll().filter(function (x) { return String(x.id) === String(id); })[0]; if (!g) return; S.libEdit = { tab: 'tags', id: g.id, name: g.name, color: g.color || PURPLE, oldName: g.name }; return; }
+    var s = lib().filter(function (x) { return String(x.id) === String(id); })[0]; if (!s) return;
+    var t = LIBT.filter(function (x) { return x[2] === s.kind; })[0] || LIBT[0], d = s.data || {};
+    S.libEdit = { tab: t[0], id: s.id, name: s.name, body: t[0] === 'templates' ? (d.caption || s.body || '') : s.body, platforms: (d.platforms || []).slice(), first_comment: d.first_comment || '', data: d };
+  }
+  async function libSave() {
+    var e = S.libEdit; if (!e) return;
+    var name = String(e.name || '').trim(); if (!name) { toastS('Give it a name'); return; }
+    S.busy.lib = true; paint();
+    try {
+      var r;
+      if (e.tab === 'tags') {
+        if (tagsAll().some(function (g) { return lower(g.name) === lower(name) && String(g.id) !== String(e.id); })) throw new Error('That tag already exists');
+        r = e.id ? await db.from('content_tags').update({ name: name, color: e.color }).eq('id', e.id) : await db.from('content_tags').insert({ name: name, color: e.color, created_by: myName() || myEmail() });
+        if (r.error) throw r.error;
+        /* a renamed tag follows onto the posts that carry it (the ones this person may change) */
+        if (e.id && e.oldName && e.oldName !== name) {
+          var hit = posts().filter(function (p) { return (p.tags || []).indexOf(e.oldName) >= 0; });
+          for (var i = 0; i < hit.length; i++) { await q(db.from('content_posts').update({ tags: hit[i].tags.map(function (x) { return x === e.oldName ? name : x; }) }).eq('id', hit[i].id)); }
+        }
+      } else {
+        var kind = { templates: 'template', hashtags: 'hashtags', replies: 'reply' }[e.tab];
+        var row = { name: name, body: String(e.body || ''), updated_by: myName() || myEmail(), updated_at: new Date().toISOString() };
+        if (kind === 'template') row.data = Object.assign({}, e.data || {}, { platforms: (e.platforms || []).slice(), caption: String(e.body || ''), first_comment: String(e.first_comment || '') });
+        r = e.id ? await db.from('content_snippets').update(row).eq('id', e.id) : await db.from('content_snippets').insert(Object.assign({ kind: kind, created_by: myName() || myEmail() }, row));
+        if (r.error) throw r.error;
+      }
+      S.libEdit = null; var w = W(); if (w) { await w.studio(); if (e.tab === 'tags') await w.load(true); }
+      toastS('Saved');
+    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
+    S.busy.lib = false; paint();
+  }
+  async function libRemove(kind, id) {
+    var isTag = kind === 'tag', item = isTag ? tagsAll().filter(function (x) { return String(x.id) === String(id); })[0] : lib().filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!item) return;
+    if (!confirm('Remove "' + item.name + '" from the library?' + (isTag ? ' Posts keep the tag name, without its colour.' : ''))) return;
+    try { var r = await db.from(isTag ? 'content_tags' : 'content_snippets').delete().eq('id', id); if (r.error) throw r.error; var w = W(); if (w) await w.studio(); toastS('Removed'); }
+    catch (x) { toastS('Could not remove it: ' + (x.message || x)); }
+    paint();
+  }
+  function libUse(id) {
+    var s = lib().filter(function (x) { return String(x.id) === String(id); })[0]; if (!s) return;
+    var d = s.data || {}, w = W();
+    var pre = { platforms: (d.platforms && d.platforms.length ? d.platforms : ['instagram', 'facebook']).slice(), caption: d.caption != null ? d.caption : s.body, first_comment: d.first_comment || '', tags: (d.tags || []).slice(), title: d.title || '' };
+    if (d.variants) pre.variants = d.variants;
+    if (d.campaign) pre.campaign = d.campaign;
+    q(db.from('content_snippets').update({ uses: Number(s.uses || 0) + 1 }).eq('id', s.id));
+    if (w && w.compose) w.compose(pre); else if (window.w121Compose) window.w121Compose(pre);
+  }
+  function libCopy(id) {
+    var s = lib().filter(function (x) { return String(x.id) === String(id); })[0]; if (!s) return;
+    copyText(s.body || ''); q(db.from('content_snippets').update({ uses: Number(s.uses || 0) + 1 }).eq('id', s.id));
+  }
+
+  /* ---------- links: short links that count clicks, and the link-in-bio page ---------- */
+  function shortUrl(code) { return HUB + '/l/' + code; }
+  function randCode(n) { var a = 'abcdefghjkmnpqrstuvwxyz23456789', s = ''; for (var i = 0; i < (n || 6); i++) s += a.charAt(Math.floor(Math.random() * a.length)); return s; }
+  function slug(s) { return lower(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30); }
+  function clicksBy(linkId) { return S.clicks.filter(function (c) { return String(c.link_id) === String(linkId); }); }
+  function sparkHtml(list, days) {
+    days = days || 30; var t = today(), b = [], mx = 1;
+    for (var i = days - 1; i >= 0; i--) { var d = addDays(t, -i), n = list.filter(function (c) { return dayOf(c.at) === d; }).length; b.push([d, n]); if (n > mx) mx = n; }
+    return '<div class="spark" role="img" aria-label="Clicks a day, last ' + days + ' days">' + b.map(function (x) { return '<i style="height:' + Math.max(2, Math.round(x[1] / mx * 100)) + '%" title="' + E(niceDate(x[0])) + ': ' + x[1] + '"></i>'; }).join('') + '</div>';
+  }
+  function topOf(list, key, n) { var m = {}; list.forEach(function (c) { var k = c[key] || 'unknown'; m[k] = (m[k] || 0) + 1; }); return Object.keys(m).map(function (k) { return [k, m[k]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, n || 5); }
+  function linksTabs(cur) { return '<div class="row" style="margin:0 0 12px"><span class="seg"><a data-w225go="#studio/links" class="' + (cur === 'links' ? 'on' : '') + '">' + I('link') + ' Short links<span class="n">' + S.links.filter(function (l) { return !/^bio-/.test(l.code); }).length + '</span></a><a data-w225go="#studio/links/bio" class="' + (cur === 'bio' ? 'on' : '') + '">' + I('heart') + ' Link in bio</a></span><span class="sp"></span><a class="btn225 sm" href="' + HUB + '/links" target="_blank" rel="noopener">' + I('ext') + ' Open the bio page</a></div>'; }
+  function linksHtml() {
+    if (S.sub === 'bio') return linksTabs('bio') + bioHtml();
+    var all = S.links.filter(function (l) { return !/^bio-/.test(l.code); }), qq = lower(S.f.kq);
+    var list = all.filter(function (l) { return (S.f.kall || l.active) && (!qq || (lower(l.code) + ' ' + lower(l.label) + ' ' + lower(l.url) + ' ' + lower(l.campaign)).indexOf(qq) >= 0); });
+    var c30 = S.clicks, c7 = c30.filter(function (c) { return Date.now() - new Date(c.at).getTime() < 7 * 86400000; });
+    var bio = S.links.filter(function (l) { return /^bio-/.test(l.code); }).map(function (l) { return String(l.id); });
+    var bioClicks = c30.filter(function (c) { return bio.indexOf(String(c.link_id)) >= 0; }).length;
+    var kpis = '<div class="kpis"><div class="kpi"><b>' + num(c30.length) + '</b><span>clicks, 30 days</span><em>' + num(c7.length) + ' in the last 7</em></div><div class="kpi"><b>' + all.filter(function (l) { return l.active; }).length + '</b><span>live short links</span></div><div class="kpi" data-w225go="#studio/links/bio"><b>' + num(bioClicks) + '</b><span>link-in-bio clicks, 30 days</span></div>' +
+      '<div class="kpi"><b style="font-size:17px">' + E((topOf(c30, 'device', 1)[0] || ['\u2013'])[0]) + '</b><span>most clicks from</span><em>' + E(topOf(c30, 'referrer_host', 2).map(function (x) { return x[0] + ' ' + x[1]; }).join(' \u00b7 ')) + '</em></div></div>';
+    var mk = S.mk;
+    var form = '<div class="card"><h3>' + I('plus') + ' Make a short link <small>anyone on staff</small></h3><div class="row" style="gap:8px"><input type="url" id="w225kurl" placeholder="https://welfareavenue.com/\u2026" style="flex:2;min-width:220px"><input type="text" id="w225klabel" placeholder="What it is (for us)" style="flex:1;min-width:150px"><input type="text" id="w225kcode" placeholder="Ending (optional)" style="width:150px" maxlength="40"><input type="text" id="w225kcamp" placeholder="Campaign (optional)" style="width:160px"><a class="btn225 sm pri" data-w225kmake="1"' + (S.busy.link ? ' disabled' : '') + '>' + I('link') + ' Make it</a></div><p class="muted" style="margin:8px 0 0">The short link is ' + E(HUB) + '/l/<i>ending</i>. Posts make their own when Tracked links is on in the composer, with the UTM tags added.</p></div>';
+    var rows = list.map(function (l) {
+      var cl = clicksBy(l.id), p = l.post_id ? posts().filter(function (x) { return String(x.id) === String(l.post_id); })[0] : null;
+      return '<div class="card" style="padding:12px 14px;' + (l.active ? '' : 'opacity:.6') + '"><div class="row" style="gap:10px;align-items:flex-start"><div style="flex:1;min-width:0"><b>' + E(l.label || l.code) + '</b>' + (l.platform ? ' ' + mark(l.platform) : '') + (l.campaign ? ' <span class="pill">' + E(l.campaign) + '</span>' : '') + (l.active ? '' : ' <span class="pill bad">off</span>') +
+        '<div style="font-size:12.5px;margin-top:3px"><a href="' + E(shortUrl(l.code)) + '" target="_blank" rel="noopener" style="color:' + ROSE + ';font-weight:700">' + E(shortUrl(l.code).replace(/^https:\/\//, '')) + '</a> <span class="muted">\u2192 ' + E(clip(l.url, 90)) + '</span></div>' +
+        (p ? '<div class="muted" style="font-size:12px;margin-top:2px;cursor:pointer" data-w225open="' + p.id + '">From the post: ' + E(clip(titleOf(p), 60)) + '</div>' : '') + '</div>' +
+        '<div style="width:150px">' + sparkHtml(cl, 30) + '<div class="muted" style="font-size:11.5px;text-align:right">' + num(l.clicks || 0) + ' in all \u00b7 ' + cl.length + ' in 30 days</div></div>' +
+        '<div class="row" style="gap:4px"><a class="btn225 sm" data-w225kcopy="' + E(l.code) + '" title="Copy">' + I('copy') + '</a>' + (mk ? '<a class="btn225 sm" data-w225kact="' + (l.active ? 'off' : 'on') + '|' + l.id + '">' + (l.active ? 'Switch off' : 'Switch on') + '</a>' : '') + '</div></div></div>';
+    }).join('');
+    return linksTabs('links') + kpis + '<div class="card"><h3>' + I('bolt') + ' Clicks a day <small>every short link, 30 days</small></h3>' + sparkHtml(c30, 30) + '</div>' + form +
+      '<div class="row" style="margin:0 0 10px"><input type="search" data-w225kq placeholder="Search the links" value="' + E(S.f.kq || '') + '"><label class="muted" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-w225kall' + (S.f.kall ? ' checked' : '') + '> Show the switched-off ones</label></div>' +
+      (rows || '<div class="card"><div class="empty">' + (all.length ? 'Nothing matches.' : 'No short links yet.') + '</div></div>');
+  }
+  async function makeLink(url, label, code, campaign, extra) {
+    url = String(url || '').trim(); if (!/^https?:\/\/\S+\.\S+/.test(url)) throw new Error('Paste a full address that starts with https://');
+    code = String(code || '').trim(); if (code && !/^[A-Za-z0-9_-]{3,40}$/.test(code)) throw new Error('The ending takes letters, numbers, - and _ (3 to 40)');
+    if (code && /^bio-/.test(code) && !(extra && extra.bio)) throw new Error('Endings that start with bio- are for the link in bio');
+    var tries = code ? 1 : 4;
+    for (var i = 0; i < tries; i++) {
+      var c = code || randCode(6);
+      var r = await db.from('short_links').insert(Object.assign({ code: c, url: url, label: label || null, campaign: campaign || null, created_by: myName() || myEmail() }, extra && extra.row || {})).select('*').maybeSingle();
+      if (!r.error) { S.links.unshift(r.data); return r.data; }
+      if (String(r.error.code) !== '23505') throw r.error;
+      if (code) throw new Error('That ending is taken: pick another');
+    }
+    throw new Error('Could not find a free ending, try again');
+  }
+  async function makeLinkFromForm() {
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    S.busy.link = true;
+    try { var l = await makeLink(g('w225kurl'), g('w225klabel').trim(), g('w225kcode'), g('w225kcamp').trim()); ['w225kurl', 'w225klabel', 'w225kcode', 'w225kcamp'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; }); copyText(shortUrl(l.code)); toastS('Made and copied: ' + shortUrl(l.code).replace(/^https:\/\//, '')); }
+    catch (x) { toastS(x.message || String(x)); }
+    S.busy.link = false; paint();
+  }
+  async function linkActive(id, on) {
+    try { var r = await db.from('short_links').update({ active: on }).eq('id', id); if (r.error) throw r.error; S.links.forEach(function (l) { if (String(l.id) === String(id)) l.active = on; }); toastS(on ? 'Switched on' : 'Switched off: the link now goes to the website'); }
+    catch (x) { toastS('Could not change it: ' + (x.message || x)); }
+    paint();
+  }
+
+  /* the link-in-bio page (hub.welfareavenue.com/links): hub_settings link_page + the active bio-* short links */
+  function bioDraft() {
+    if (!S.bioDraft) { var v = S.linkPage || {}; S.bioDraft = { title: v.title || 'Welfare Avenue', bio: v.bio || '', theme: v.theme || 'green', order: (v.order || []).slice(), socials: Object.assign({}, v.socials || {}), dirty: false }; }
+    return S.bioDraft;
+  }
+  function bioLinks(includeOff) {
+    var d = bioDraft(), list = S.links.filter(function (l) { return /^bio-/.test(l.code) && (includeOff || l.active); });
+    return list.sort(function (a, b) { var ia = d.order.indexOf(a.code), ib = d.order.indexOf(b.code); if (ia < 0) ia = 999 + Number(a.id); if (ib < 0) ib = 999 + Number(b.id); return ia - ib; });
+  }
+  var BIO_SOC = [['instagram', 'Instagram', 'https://instagram.com/welfareavenue'], ['facebook', 'Facebook', 'https://facebook.com/welfareavenue'], ['tiktok', 'TikTok', ''], ['linkedin', 'LinkedIn', ''], ['youtube', 'YouTube', '']];
+  function bioHtml() {
+    var d = bioDraft(), mk = S.mk, live = bioLinks(false), all = bioLinks(true);
+    var editor = '<div class="card"><h3>' + I('star') + ' The page</h3>' +
+      '<label class="muted" style="display:block;margin:0 0 4px">Name at the top</label><input type="text" data-w225bf="title" value="' + E(d.title) + '" style="width:100%" maxlength="60"' + (mk ? '' : ' disabled') + '>' +
+      '<label class="muted" style="display:block;margin:10px 0 4px">A line under it</label><textarea data-w225bf="bio" rows="2" style="width:100%" maxlength="200"' + (mk ? '' : ' disabled') + '>' + E(d.bio) + '</textarea>' +
+      '<label class="muted" style="display:block;margin:10px 0 4px">Colours</label><span class="seg"><a data-w225btheme="green" class="' + (d.theme === 'green' ? 'on' : '') + '">Green</a><a data-w225btheme="cream" class="' + (d.theme === 'cream' ? 'on' : '') + '">Cream</a></span>' +
+      '<h4>Social icons at the bottom</h4>' + BIO_SOC.map(function (s) { return '<div class="row" style="margin:4px 0">' + mark(s[0]) + '<input type="url" data-w225bsoc="' + s[0] + '" value="' + E(d.socials[s[0]] != null ? d.socials[s[0]] : '') + '" placeholder="' + E(s[2] || s[1] + ' address (optional)') + '" style="flex:1"' + (mk ? '' : ' disabled') + '></div>'; }).join('') + '</div>';
+    var links = '<div class="card"><h3>' + I('link') + ' The buttons <small>top to bottom</small></h3>' + (all.length ? all.map(function (l, i) {
+      var cl = clicksBy(l.id).length;
+      return '<div class="bl" style="' + (l.active ? '' : 'opacity:.55') + '"><span class="muted">' + (i + 1) + '</span><input type="text" data-w225blabel="' + l.id + '" value="' + E(l.label || '') + '"' + (mk ? '' : ' disabled') + '><input type="url" data-w225burl="' + l.id + '" value="' + E(l.url) + '"' + (mk ? '' : ' disabled') + '><span class="row" style="gap:3px;flex-wrap:nowrap">' +
+        (mk ? '<a class="btn225 sm" data-w225bmove="up|' + l.code + '" title="Up"' + (i ? '' : ' disabled') + '>' + I('up') + '</a><a class="btn225 sm" data-w225bmove="down|' + l.code + '" title="Down"' + (i < all.length - 1 ? '' : ' disabled') + '>' + I('down') + '</a><a class="btn225 sm" data-w225kact="' + (l.active ? 'off' : 'on') + '|' + l.id + '" title="' + (l.active ? 'Hide it' : 'Show it') + '">' + I(l.active ? 'eye' : 'plus') + '</a>' : '') + '<span class="muted" style="font-size:11.5px;min-width:52px;text-align:right">' + cl + ' clicks</span></span></div>';
+    }).join('') : '<div class="empty">No buttons yet.</div>') +
+      (mk ? '<div class="row" style="margin-top:10px;gap:8px"><input type="text" id="w225bnl" placeholder="Button text, e.g. Volunteer with us" style="flex:1;min-width:160px"><input type="url" id="w225bnu" placeholder="https://\u2026" style="flex:1.3;min-width:180px"><a class="btn225 sm" data-w225badd="1">' + I('plus') + ' Add a button</a></div>' : '') +
+      '<p class="muted" style="margin:8px 0 0">Each button is a short link (bio-\u2026), so its clicks count here. Changes to a button\u2019s text or address save when you press Save the page.</p></div>';
+    var phone = '<div class="phone ' + E(d.theme) + '"><div class="av">W</div><h5>' + E(d.title) + '</h5><p>' + E(d.bio) + '</p>' + live.map(function (l) { return '<a>' + E(l.label || l.code) + '</a>'; }).join('') +
+      '<div style="margin-top:14px;display:flex;gap:6px;justify-content:center">' + BIO_SOC.filter(function (s) { return d.socials[s[0]]; }).map(function (s) { return mark(s[0]); }).join('') + '</div></div>';
+    var save = mk ? '<div class="row" style="margin:0 0 12px"><span class="muted">' + (d.dirty ? 'Changes not saved yet.' : 'Everything is saved.') + '</span><span class="sp"></span><a class="btn225 sm" data-w225bcopy="1">' + I('copy') + ' Copy the address for the bio</a><a class="btn225 sm pri" data-w225bsave="1"' + (S.busy.bio ? ' disabled' : '') + '>' + I('check') + ' Save the page</a></div>' : '';
+    return save + '<div class="grid2"><div>' + editor + links + '</div><div><div class="card"><h3>' + I('eye') + ' How it looks</h3>' + phone + '<p class="muted" style="text-align:center;margin:10px 0 0">' + E(HUB.replace(/^https:\/\//, '')) + '/links</p></div></div></div>';
+  }
+  async function bioAdd() {
+    var lab = (document.getElementById('w225bnl') || {}).value || '', url = (document.getElementById('w225bnu') || {}).value || '';
+    if (!lab.trim()) { toastS('Write the button text'); return; }
+    try {
+      var base = 'bio-' + (slug(lab) || randCode(4)), code = base, n = 2;
+      while (S.links.some(function (l) { return l.code === code; })) code = base.slice(0, 36) + '-' + (n++);
+      var l = await makeLink(url, lab.trim(), code, 'link in bio', { bio: true, row: { platform: 'instagram' } });
+      ['w225bnl', 'w225bnu'].forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+      var d = bioDraft(); d.order = bioLinks(true).map(function (x) { return x.code; }).filter(function (c) { return c !== l.code; }).concat([l.code]); d.dirty = true;
+      toastS('Added: press Save the page to keep the order');
+    } catch (x) { toastS(x.message || String(x)); }
+    paint();
+  }
+  function bioMove(dir, code) {
+    var d = bioDraft(), codes = bioLinks(true).map(function (l) { return l.code; }), i = codes.indexOf(code), j = dir === 'up' ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= codes.length) return; var t = codes[i]; codes[i] = codes[j]; codes[j] = t; d.order = codes; d.dirty = true; paint();
+  }
+  async function bioSave() {
+    var d = bioDraft(); S.busy.bio = true; paint();
+    try {
+      /* the buttons' text and addresses */
+      var edits = [];
+      document.querySelectorAll('#w225host [data-w225blabel]').forEach(function (el) { var id = el.getAttribute('data-w225blabel'), l = S.links.filter(function (x) { return String(x.id) === id; })[0], u = document.querySelector('#w225host [data-w225burl="' + id + '"]'); if (!l) return; var nl = el.value.trim(), nu = u ? u.value.trim() : l.url; if (nl !== (l.label || '') || nu !== l.url) edits.push([l, nl, nu]); });
+      for (var i = 0; i < edits.length; i++) {
+        if (!/^https?:\/\/\S+\.\S+/.test(edits[i][2])) throw new Error('A button\u2019s address needs to start with https://');
+        var r = await db.from('short_links').update({ label: edits[i][1] || null, url: edits[i][2] }).eq('id', edits[i][0].id); if (r.error) throw r.error; edits[i][0].label = edits[i][1]; edits[i][0].url = edits[i][2];
+      }
+      var socials = {}; Object.keys(d.socials).forEach(function (k) { var v = String(d.socials[k] || '').trim(); if (v) { if (!/^https?:\/\//.test(v)) throw new Error('Social addresses start with https://'); socials[k] = v; } });
+      var value = Object.assign({}, S.linkPage || {}, { title: String(d.title || '').trim() || 'Welfare Avenue', bio: String(d.bio || '').trim(), theme: d.theme === 'cream' ? 'cream' : 'green', order: bioLinks(true).map(function (l) { return l.code; }), socials: socials });
+      var s = await db.rpc('studio_settings_save', { p_key: 'link_page', p_value: value }); if (s.error) throw s.error;
+      S.linkPage = value; d.dirty = false; toastS('Saved: the page is live');
+    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
+    S.busy.bio = false; paint();
+  }
+
+  /* ---------- connections: how the Hub reaches each platform ---------- */
+  var REDIRECT = 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/social-connect';
+  var CONSOLE = {
+    threads: ['https://developers.facebook.com/apps/', 'Meta for Developers: the Welfare Avenue Threads app, Use cases, Access the Threads API, Settings'],
+    youtube: ['https://console.cloud.google.com/apis/credentials', 'Google Cloud: APIs and services, Credentials, the Web client'],
+    tiktok: ['https://developers.tiktok.com/apps/', 'TikTok for Developers: Manage apps, the Welfare Avenue app, Basic information'],
+    linkedin: ['https://www.linkedin.com/developers/apps', 'LinkedIn Developers: My apps, the Welfare Avenue app, Auth']
+  };
+  var CX_STEPS = {
+    threads: ['Steel adds the Welfare Avenue Threads account as a Threads tester in the app and accepts the invite in Threads (Settings, Account, Website permissions).', 'Copy the Threads app ID and app secret below and save them.', 'Press Connect and sign in to Threads as @welfareavenue.'],
+    youtube: ['In Google Cloud, the OAuth client lists the redirect address below and the YouTube Data API v3 is on.', 'Copy the client ID and client secret below and save them.', 'Press Connect and pick the Welfare Avenue channel (the brand account).'],
+    tiktok: ['The TikTok app has Login Kit and Content Posting API with video.upload, and the redirect address below.', 'Copy the client key and client secret below and save them.', 'Press Connect and sign in to TikTok as Welfare Avenue. Videos then land in the TikTok drafts to finish in the app.'],
+    linkedin: ['Once LinkedIn approves the Community Management API, copy the client ID and secret below.', 'Press Connect and sign in as a Page admin. Until then, the Make route below posts to the Page.']
+  };
+  function connOf(k) { return (S.conn && S.conn.connections && S.conn.connections[k]) || {}; }
+  function chips(list, cls) { return (list || []).map(function (x) { return '<span class="' + (cls || '') + '">' + E(x) + '</span>'; }).join(''); }
+  function statusLine(k) {
+    var m = modeOf(k), mm = MODE[m] || MODE.reminder, c = connOf(k);
+    return '<small style="color:' + mm[1] + ';font-weight:700">' + E(mm[0]) + '</small>' + (c.name || c.handle ? ' <small>\u00b7 ' + E(c.handle ? '@' + c.handle : c.name) + '</small>' : '') + (c.connected_at ? ' <small>\u00b7 since ' + E(niceDate(dayOf(c.connected_at), { month: 'short', day: 'numeric', year: 'numeric' })) + '</small>' : '');
+  }
+  function hdr(k, sub, name) { var x = PLX[k] || ['Make.com', 'M', '#6D00CC']; return '<div class="hd"><div class="lg" style="background:' + x[2] + '">' + E(x[1]) + '</div><div><b>' + E(name || x[0]) + '</b>' + (sub || statusLine(k)) + '</div></div>'; }
+  function metaCard() {
+    var cx = cap() || {}, c = connOf('meta'), can = S.conn && S.conn.can_meta, granted = cx.granted || c.granted || [], missing = cx.missing || c.missing || [];
+    var html = '<div class="card">' + hdr('instagram', '<small>Instagram and Facebook, through the Meta system user token</small>', 'Meta') +
+      '<div class="row" style="gap:6px">' + ['instagram', 'facebook'].map(function (k) { var mm = MODE[modeOf(k)] || MODE.reminder; return mark(k) + '<small style="color:' + mm[1] + ';font-weight:700;margin-right:8px">' + E(mm[0]) + '</small>'; }).join('') + '</div>' +
+      (cx.token === false ? '<p style="color:' + FLAG + ';margin:0">No Meta token in the vault yet.</p>' : '') +
+      (granted.length ? '<div class="chips">' + chips(granted) + chips(missing, 'miss') + '</div>' : '') +
+      (missing.length ? '<p class="muted" style="margin:0;color:' + FLAG + '">Missing: ' + E(missing.join(', ')) + '. Comments' + (missing.some(function (x) { return /publish|manage_posts/.test(x); }) ? ', posting' : '') + ' and some formats wait for a token with these. Section 2 of the setup doc says how to make it.</p>' : granted.length ? '<p class="muted" style="margin:0">Every permission the Studio uses is there.</p>' : '') +
+      (c.replaced_at ? '<p class="muted" style="margin:0">Replaced ' + E(ago(c.replaced_at)) + ' by ' + E(String(c.replaced_by || '').split('@')[0]) + '.</p>' : '');
+    if (can) html += '<h4>Replace the token</h4><div class="row" style="gap:6px"><input type="password" id="w225metatok" autocomplete="off" spellcheck="false" placeholder="Paste the new system user token" style="flex:1;min-width:200px"><a class="btn225 sm" data-w225cx="meta_check">Check it</a><a class="btn225 sm pri" data-w225cx="meta_save"' + (S.busy.meta ? ' disabled' : '') + '>Replace</a></div><p class="muted" style="margin:0">It goes straight into the vault. The Hub never shows it again.</p>' + (S.keys.metaCheck ? '<div class="chips">' + chips(S.keys.metaCheck.granted) + chips(S.keys.metaCheck.missing, 'miss') + '</div>' : '');
+    else html += '<p class="muted" style="margin:0">An admin replaces the token.</p>';
+    return html + '</div>';
+  }
+  function appCard(k) {
+    var c = connOf(k), st = S.conn || {}, ch = st.can_change, con = CONSOLE[k];
+    var connected = c.status === 'connected';
+    var html = '<div class="card">' + hdr(k) +
+      (c.last_error ? '<p style="color:' + FLAG + ';margin:0;font-size:12.5px">' + E(c.last_error) + '</p>' : '') +
+      '<ol>' + CX_STEPS[k].map(function (s) { return '<li>' + E(s) + '</li>'; }).join('') + '</ol>' +
+      '<div style="font-size:12px">Redirect address <code>' + E(REDIRECT) + '</code> <a data-w225ccopy="' + E(REDIRECT) + '" style="cursor:pointer" title="Copy">' + I('copy') + '</a></div>' +
+      (k === 'threads' ? '<div style="font-size:12px">Uninstall callback <code>' + E(REDIRECT + '?event=uninstall') + '</code> <a data-w225ccopy="' + E(REDIRECT + '?event=uninstall') + '" style="cursor:pointer">' + I('copy') + '</a><br>Delete callback <code>' + E(REDIRECT + '?event=delete') + '</code> <a data-w225ccopy="' + E(REDIRECT + '?event=delete') + '" style="cursor:pointer">' + I('copy') + '</a></div>' : '') +
+      (con ? '<a class="muted" href="' + con[0] + '" target="_blank" rel="noopener" style="font-size:12px">' + I('ext') + ' ' + E(con[1]) + '</a>' : '');
+    if (ch) {
+      html += '<h4>App keys ' + (c.app_saved ? '<span class="pill ok" style="text-transform:none;letter-spacing:0">saved ' + E(c.app_id || '') + '</span>' : '') + '</h4>' +
+        '<div class="row" style="gap:6px"><input type="text" id="w225cid-' + k + '" autocomplete="off" spellcheck="false" placeholder="' + (k === 'tiktok' ? 'Client key' : k === 'threads' ? 'Threads app ID' : 'Client ID') + '" style="flex:1;min-width:140px"><input type="password" id="w225csec-' + k + '" autocomplete="off" placeholder="' + (k === 'threads' ? 'Threads app secret' : 'Client secret') + '" style="flex:1;min-width:140px"><a class="btn225 sm" data-w225cx="save_app|' + k + '">Save the keys</a></div>' +
+        '<div class="row" style="gap:6px;margin-top:4px">' + (connected ? '<span class="pill ok">' + I('check') + ' Connected</span><span class="sp"></span><a class="btn225 sm" data-w225cx="start|' + k + '">Connect again</a><a class="btn225 sm bad" data-w225cx="disconnect|' + k + '">Disconnect</a>' : '<span class="sp"></span><a class="btn225 sm pri" data-w225cx="start|' + k + '"' + (c.app_saved ? '' : ' disabled title="Save the app keys first"') + '>' + I('plug') + ' Connect</a>') + '</div>';
+      if (k === 'youtube' && connected) html += '<div class="row"><span class="muted" style="flex:1">Try it with an unlisted Short only you can see.</span><a class="btn225 sm" data-w225cx="test_short">' + I('send') + ' Send a test Short</a></div>';
+    } else html += '<p class="muted" style="margin:0">A marketing lead or an admin connects it.</p>';
+    return html + '</div>';
+  }
+  function makeCard() {
+    var c = connOf('make'), ch = S.conn && S.conn.can_change, li = modeOf('linkedin');
+    var html = '<div class="card">' + hdr('make', '<small>Posts to the LinkedIn Page until LinkedIn approves the direct connection' + (li === 'make' ? ' \u00b7 <b style="color:' + TEAL + '">in use</b>' : '') + '</small>') +
+      '<ol><li>In Make, a scenario starts with Webhooks, Custom webhook. Copy its address and save it below.</li><li>Press Send Make a sample, then in Make press Redetermine data structure (or run once) so it learns the fields.</li><li>Add a filter: secret equals the code below. Then LinkedIn, Create a company text post (or image post when image_url is filled), with text as the content.</li><li>Turn the scenario on. Send a test post if you want to see it on the Page.</li></ol>';
+    if (ch) {
+      html += '<div class="row" style="gap:6px"><input type="url" id="w225mkhook" autocomplete="off" placeholder="' + (c.saved ? 'Saved. Paste a new address to replace it' : 'https://hook.us2.make.com/\u2026') + '" style="flex:1;min-width:200px"><a class="btn225 sm" data-w225cx="make_hook">Save</a></div>' +
+        (c.secret ? '<div style="font-size:12px">The filter code <code>' + E(c.secret) + '</code> <a data-w225ccopy="' + E(c.secret) + '" style="cursor:pointer">' + I('copy') + '</a></div>' : '') +
+        '<div class="row" style="gap:6px">' + (c.saved ? '<a class="btn225 sm" data-w225cx="make_sample">Send Make a sample</a><a class="btn225 sm" data-w225cx="make_test">' + I('send') + ' Send a test post</a><span class="sp"></span><a class="btn225 sm bad" data-w225cx="disconnect|make">Forget it</a>' : '') + '</div>' +
+        (c.sampled_at || c.tested_at ? '<p class="muted" style="margin:0">' + (c.sampled_at ? 'Sample sent ' + E(ago(c.sampled_at)) + '. ' : '') + (c.tested_at ? 'Test post ' + E(ago(c.tested_at)) + (c.tested_ok ? ', Make took it.' : ', Make refused it.') : '') + '</p>' : '');
+    } else html += '<p class="muted" style="margin:0">' + (c.saved ? 'Set up.' : 'Not set up yet.') + ' A marketing lead or an admin changes it.</p>';
+    return html + '</div>';
+  }
+  function remindCard() {
+    var man = PORDER.filter(function (k) { return modeOf(k) === 'reminder'; });
+    return '<div class="card">' + '<div class="hd"><div class="lg" style="background:' + GOLD + ';color:' + GREEN + '">' + I('clock') + '</div><div><b>Reminders</b><small>For every platform the Hub cannot post to yet</small></div></div>' +
+      '<p style="margin:0;font-size:12.5px">At the post\u2019s time, its owner gets a Hub notification and a Slack message with the caption and the media. They post it in the app, then press Mark posted in the composer, so the calendar and the goals stay right.</p>' +
+      '<p class="muted" style="margin:0">' + (man.length ? 'By reminder now: ' + E(man.map(function (k) { return PLX[k][0]; }).join(', ')) + '.' : 'Every platform posts on its own.') + ' People turn these off in their notification settings (Content Studio).</p>' +
+      '<div class="row"><span class="sp"></span><a class="btn225 sm" data-w225cx="remind_preview">' + I('eye') + ' Preview a reminder</a></div>' +
+      (S.keys.remind ? '<div style="white-space:pre-wrap;font-size:12px;background:rgba(16,63,57,.05);border-radius:10px;padding:10px">' + E(S.keys.remind) + '</div>' : '') + '</div>';
+  }
+  function connectHtml() {
+    if (!S.conn) { loadConn().then(paint); return '<div class="card"><div class="empty">Checking the connections\u2026</div></div>'; }
+    if (S.conn.error) return '<div class="card"><div class="empty">Could not read the connections: ' + E(S.conn.error) + ' <a data-w225cx="reload" style="cursor:pointer;font-weight:700">Try again</a></div></div>';
+    var flash = S.keys.flash ? '<div class="card" style="background:' + (S.keys.flash.ok ? 'rgba(42,140,122,.10)' : 'rgba(179,64,47,.08)') + '">' + E(S.keys.flash.text) + '</div>' : '';
+    return flash + '<div class="row" style="margin:0 0 12px"><span class="muted">Every platform posts straight from the Hub once it is connected. Until then, the Hub reminds the post\u2019s owner to post it by hand. Keys and tokens go into the vault and are never shown again.</span><span class="sp"></span><a class="btn225 sm" data-w225cx="reload">' + I('refresh') + ' Check again</a></div>' +
+      '<div class="cx">' + metaCard() + appCard('threads') + appCard('youtube') + appCard('tiktok') + appCard('linkedin') + makeCard() + remindCard() + '</div>' +
+      '<p class="muted" style="margin:14px 0 0">The setup doc (09/10/26) has every form, answer and email for these steps.</p>';
+  }
+  /* the platforms send people back to #studio/connections?connected=x or ?error= */
+  function connFlash() {
+    var h = location.hash || '', i = h.indexOf('?'); if (i < 0) return;
+    var p = new URLSearchParams(h.slice(i + 1)), ok = p.get('connected'), er = p.get('error');
+    if (ok) S.keys.flash = { ok: true, text: (PLX[ok] ? PLX[ok][0] : ok) + ' is connected. New posts go there directly.' };
+    else if (er) S.keys.flash = { ok: false, text: er };
+    S.conn = null;
+    try { history.replaceState(null, '', location.pathname + location.search + h.slice(0, i)); } catch (e) { /* fine */ }
+  }
+  async function connAct(what) {
+    var parts = String(what).split('|'), a = parts[0], k = parts[1];
+    var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    var clear = function (id) { var el = document.getElementById(id); if (el) el.value = ''; };
+    try {
+      if (a === 'reload') { S.conn = null; S.keys.flash = null; var w = W(); if (w) await w.loadCap(); paint(); return; }
+      if (a === 'meta_check' || a === 'meta_save') {
+        var tok = val('w225metatok'); if (!tok) { toastS('Paste the token first'); return; }
+        S.busy.meta = true; paint();
+        var r = await fn('social-connect', { action: 'meta_token', token: tok, check_only: a === 'meta_check' });
+        S.keys.metaCheck = { granted: r.granted || [], missing: r.missing || [] };
+        if (a === 'meta_save') { clear('w225metatok'); toastS('Replaced. ' + (r.missing && r.missing.length ? r.missing.length + ' permissions still missing' : 'Every permission is there')); S.conn = null; var w2 = W(); if (w2) await w2.loadCap(); }
+        else toastS(r.missing && r.missing.length ? 'Missing ' + r.missing.length + ': ' + r.missing.join(', ') : 'Every permission is there');
+        S.busy.meta = false; paint(); return;
+      }
+      if (a === 'save_app') {
+        var id = val('w225cid-' + k), sec = val('w225csec-' + k); if (!id || !sec) { toastS('Paste both the ID and the secret'); return; }
+        await fn('social-connect', { action: 'save_app', platform: k, id: id, secret: sec }); clear('w225cid-' + k); clear('w225csec-' + k);
+        toastS('Saved in the vault'); await loadConn(); paint(); return;
+      }
+      if (a === 'start') { var s = await fn('social-connect', { action: 'start', platform: k }); if (s && s.url) location.href = s.url; return; }
+      if (a === 'disconnect') {
+        if (!confirm('Disconnect ' + (PLX[k] ? PLX[k][0] : 'Make') + '? Posts go back to reminders until it is connected again.')) return;
+        await fn('social-connect', { action: 'disconnect', platform: k }); toastS('Disconnected'); await loadConn(); var w3 = W(); if (w3) await w3.loadCap(); paint(); return;
+      }
+      if (a === 'make_hook') { var u = val('w225mkhook'); if (!u) { toastS('Paste the webhook address'); return; } await fn('social-connect', { action: 'make_hook', url: u }); clear('w225mkhook'); toastS('Saved. Now send Make a sample'); await loadConn(); var w4 = W(); if (w4) await w4.loadCap(); paint(); return; }
+      if (a === 'make_sample') { var m = await fn('social-connect', { action: 'make_sample' }); toastS(m.ok ? 'Make got the sample' : 'Make answered ' + m.status + ': is the scenario listening?'); await loadConn(); paint(); return; }
+      if (a === 'make_test') {
+        if (!confirm('This puts a real post on the Welfare Avenue LinkedIn Page: "Testing the connection between the Welfare Avenue Hub and our LinkedIn Page. Please ignore this post." Send it?')) return;
+        var t = await fn('social-connect', { action: 'make_test', confirm: true }); toastS(t.ok ? 'Sent: check the LinkedIn Page in a minute' : 'Make answered ' + t.status); await loadConn(); paint(); return;
+      }
+      if (a === 'test_short') {
+        var w5 = W(); var pre = { title: 'Test Short from the Hub', platforms: ['youtube'], caption: 'Testing the connection between the Welfare Avenue Hub and YouTube.', variants: { youtube: { title: 'Test from the Hub', privacy: 'unlisted', kids: false } } };
+        toastS('Add a short vertical video, then Publish now. It goes up unlisted.');
+        if (w5 && w5.compose) w5.compose(pre); return;
+      }
+      if (a === 'remind_preview') {
+        var cand = posts().filter(function (p) { return ['draft', 'scheduled'].indexOf(p.status) >= 0 && (p.platforms || []).some(function (x) { return modeOf(x) === 'reminder'; }); }).sort(function (x, y) { return String(x.scheduled_at || '9').localeCompare(String(y.scheduled_at || '9')); })[0];
+        if (!cand) { S.keys.remind = 'No planned post goes out by reminder. Make one for LinkedIn, TikTok or YouTube to see the message.'; paint(); return; }
+        var pl = (cand.platforms || []).filter(function (x) { return modeOf(x) === 'reminder'; })[0];
+        var rr = await fn('social-publish', { action: 'remind_test', post_id: cand.id, platform: pl });
+        var plan = rr.plan || {}; S.keys.remind = 'To: ' + (plan.to || 'nobody (the post has no owner)') + '\n\n' + String(plan.slack || '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/\*/g, ''); paint(); return;
+      }
+    } catch (x) { S.busy.meta = false; toastS((x.message || String(x))); paint(); }
+  }
+
+  /* ---------- the monthly report (printable) ---------- */
+  function repMonth() { var m = /^\d{4}-\d{2}$/.test(S.sub) ? S.sub : (S.reportMonth || today().slice(0, 7)); S.reportMonth = m; return m; }
+  function monthAdd(m, n) { var d = new Date(m + '-15T12:00:00'); d.setMonth(d.getMonth() + n); return ymd(d).slice(0, 7); }
+  function monthName(m) { try { return new Date(m + '-15T12:00:00').toLocaleDateString('en-CA', { month: 'long', year: 'numeric' }); } catch (e) { return m; } }
+  function engOf(sp) { return Number(sp.engagement || (Number(sp.likes || 0) + Number(sp.comments || 0) + Number(sp.shares || 0) + Number(sp.saves || 0))); }
+  function monthStats(m) {
+    var inM = function (iso) { return iso && dayOf(iso).slice(0, 7) === m; };
+    var out = posts().filter(function (p) { return inM(p.published_at || p.scheduled_at) && (['published', 'posted'].indexOf(p.status) >= 0 || Object.keys(p.results || {}).some(function (k) { return p.results[k] && (p.results[k].id || p.results[k].posted_at); })); });
+    var sp = S.social.filter(function (x) { return inM(x.published_at) && PORDER.indexOf(x.platform) >= 0; });
+    var per = {}; PORDER.forEach(function (k) { per[k] = { posts: 0, reach: 0, eng: 0, likes: 0, comments: 0, shares: 0, n: 0 }; });
+    sp.forEach(function (x) { var r = per[x.platform]; r.n++; r.reach += Number(x.reach || x.views || 0); r.eng += engOf(x); r.likes += Number(x.likes || 0); r.comments += Number(x.comments || 0); r.shares += Number(x.shares || 0); });
+    out.forEach(function (p) { (p.platforms || []).forEach(function (k) { if (per[k]) per[k].posts++; }); });
+    var reach = 0, eng = 0; PORDER.forEach(function (k) { reach += per[k].reach; eng += per[k].eng; });
+    var tags = {}; out.forEach(function (p) { (p.tags || []).forEach(function (t) { tags[t] = (tags[t] || 0) + 1; }); });
+    var cms = S.comments.filter(function (c) { return !c.from_us && inM(c.commented_at); });
+    var answered = cms.filter(function (c) { return c.status === 'resolved' || S.comments.some(function (k) { return k.from_us && k.platform === c.platform && k.parent_external_id === c.external_id; }); }).length;
+    return { posts: out, social: sp, per: per, reach: reach, eng: eng, rate: reach ? eng / reach : NaN, tags: tags, comments: cms.length, answered: answered, top: sp.slice().sort(function (a, b) { return engOf(b) - engOf(a); }).slice(0, 5) };
+  }
+  function delta(a, b) { if (!isFinite(a) || !isFinite(b) || !b) return ''; var d = (a - b) / b; return '<em class="' + (d >= 0 ? 'ok' : 'bad') + '" style="font-style:normal;font-size:11.5px;font-weight:700;color:' + (d >= 0 ? TEAL : FLAG) + '">' + (d >= 0 ? '\u25b2 ' : '\u25bc ') + Math.abs(Math.round(d * 100)) + '% on ' + E(monthName(monthAdd(S.reportMonth, -1)).split(' ')[0]) + '</em>'; }
+  function weeksIn(m) { var out = [], d = mondayOf(m + '-01'); while (d.slice(0, 7) <= m) { if (addDays(d, 6).slice(0, 7) >= m && addDays(d, 6) < today()) out.push(d); d = addDays(d, 7); } return out; }
+  function goalWeeks(m) {
+    var g = goals(), any = PORDER.some(function (k) { return Number(g[k] || 0) > 0; }); if (!any) return null;
+    var wk = weeksIn(m), met = 0;
+    wk.forEach(function (w) { var off = Math.round((new Date(w + 'T12:00:00') - new Date(mondayOf(today()) + 'T12:00:00')) / (7 * 86400000)); var gs = goalStatus(off), ok = true; PORDER.forEach(function (k) { if (gs[k].goal > 0 && gs[k].n < gs[k].goal) ok = false; }); if (ok) met++; });
+    return { met: met, of: wk.length };
+  }
+  function reportClicks(m) {
+    var key = 'clicks-' + m; if (S.keys[key]) return S.keys[key];
+    S.keys[key] = { loading: true, n: null };
+    var a = m + '-01T00:00:00', b = monthAdd(m, 1) + '-01T00:00:00';
+    q(db.from('short_link_clicks').select('id', { count: 'exact', head: true }).gte('at', new Date(a).toISOString()).lt('at', new Date(b).toISOString())).then(function (r) { S.keys[key] = { n: r.count == null ? null : r.count }; if (S.sec === 'report') paint(); });
+    return S.keys[key];
+  }
+  function reportHtml() {
+    var m = repMonth(), st = monthStats(m), prev = monthStats(monthAdd(m, -1)), gw = goalWeeks(m), cl = reportClicks(m), cur = today().slice(0, 7);
+    var note = S.keys['note-' + m] || '';
+    var bar = '<div class="row noprint" style="margin:0 0 12px"><a class="btn225 sm" data-w225go="#studio/report/' + monthAdd(m, -1) + '">\u2039 ' + E(monthName(monthAdd(m, -1))) + '</a>' + (m < cur ? '<a class="btn225 sm" data-w225go="#studio/report/' + monthAdd(m, 1) + '">' + E(monthName(monthAdd(m, 1))) + ' \u203a</a>' : '') + '<span class="sp"></span><a class="btn225 sm" data-w225rcopy="1">' + I('copy') + ' Copy a summary</a><a class="btn225 sm pri" data-w225print="1">' + I('print') + ' Print or save as PDF</a></div>';
+    var k = function (v, l, d) { return '<div class="kpi"><b>' + v + '</b><span>' + E(l) + '</span>' + (d || '') + '</div>'; };
+    var kpis = '<div class="kpis">' + k(st.posts.length, 'posts out', delta(st.posts.length, prev.posts.length)) + k(st.reach ? num(st.reach) : '\u2013', 'reach and views', delta(st.reach, prev.reach)) + k(st.eng ? num(st.eng) : '\u2013', 'likes, comments, shares, saves', delta(st.eng, prev.eng)) + k(pct(st.rate), 'engagement over reach') +
+      k(cl.n == null ? '\u2013' : num(cl.n), 'link clicks') + k(st.comments ? Math.round(st.answered / st.comments * 100) + '%' : '\u2013', 'comments answered', '<em>' + st.comments + ' comments</em>') + (gw ? k(gw.met + '/' + gw.of, 'weeks every goal met') : '') + '</div>';
+    var rows = PORDER.filter(function (x) { return st.per[x].posts || st.per[x].n; }).map(function (x) { var r = st.per[x]; return '<tr><td>' + mark(x) + E(PLX[x][0]) + '</td><td>' + r.posts + '</td><td>' + (r.reach ? num(r.reach) : '\u2013') + '</td><td>' + num(r.likes) + '</td><td>' + num(r.comments) + '</td><td>' + num(r.shares) + '</td><td>' + (r.reach ? pct(r.eng / r.reach) : '\u2013') + '</td></tr>'; }).join('');
+    var table = '<h4>By platform</h4>' + (rows ? '<table style="width:100%;border-collapse:collapse;font-size:12.5px" class="rt"><thead><tr style="text-align:left;color:' + MUTED + '"><th>Platform</th><th>Posts</th><th>Reach</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Rate</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="muted">Nothing went out this month.</p>');
+    var top = '<h4>The best posts</h4>' + (st.top.length ? st.top.map(function (x, i) { var u = x.thumb_cached || x.thumb_url; return '<div class="pl" style="cursor:default">' + (u ? '<img src="' + E(u) + '" alt="">' : '<div class="ph"></div>') + '<div style="min-width:0"><b><span style="font-family:' + HEAD + ';color:' + GOLD + ';margin-right:6px">' + (i + 1) + '</span>' + E(clip(x.caption || 'A post', 90)) + '</b><small>' + mark(x.platform) + ' ' + E(niceDate(dayOf(x.published_at), { month: 'short', day: 'numeric' })) + ' \u00b7 ' + num(x.reach || x.views || 0) + ' reach \u00b7 ' + num(engOf(x)) + ' engagements</small></div></div>'; }).join('') : '<p class="muted">No results yet for this month.</p>');
+    var tg = Object.keys(st.tags).sort(function (a, b) { return st.tags[b] - st.tags[a]; });
+    var tags = tg.length ? '<h4>Themes</h4><div class="row" style="gap:6px">' + tg.map(function (t) { var g = tagsAll().filter(function (x) { return x.name === t; })[0]; return '<span class="pill"><span class="tagdot" style="background:' + E(g && g.color || PURPLE) + '"></span> ' + E(t) + ' \u00b7 ' + st.tags[t] + '</span>'; }).join('') + '</div>' : '';
+    var notes = '<h4>What we learned</h4><textarea data-w225rnote="' + m + '" rows="3" class="noprint" style="width:100%" placeholder="A line or two for the board or the team (kept until you leave the page)">' + E(note) + '</textarea>' + (note ? '<p class="printonly" style="white-space:pre-wrap;font-size:13px">' + E(note) + '</p>' : '');
+    return bar + '<div class="rep"><div class="row"><div><h2>Content report, ' + E(monthName(m)) + '</h2><span class="muted">Welfare Avenue \u00b7 Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube \u00b7 made ' + E(niceDate(today(), { month: 'long', day: 'numeric', year: 'numeric' })) + '</span></div></div><div class="band"></div>' + kpis + '<div class="grid2"><div>' + top + '</div><div>' + table + tags + '</div></div>' + notes +
+      '<p class="muted" style="margin:14px 0 0;font-size:11px">Reach and engagement come from the platforms (Analytics); posts out come from the Content Studio. Link clicks count the hub.welfareavenue.com/l short links. Change against the month before where both have numbers.</p></div>';
+  }
+  function reportSummary() {
+    var m = repMonth(), st = monthStats(m), cl = reportClicks(m);
+    var by = PORDER.filter(function (k) { return st.per[k].posts; }).map(function (k) { return PLX[k][0] + ' ' + st.per[k].posts; }).join(', ');
+    return 'Content, ' + monthName(m) + ': ' + st.posts.length + ' posts out' + (by ? ' (' + by + ')' : '') + '; ' + num(st.reach) + ' reach and views; ' + num(st.eng) + ' engagements (' + pct(st.rate) + ' of reach)' + (cl.n != null ? '; ' + num(cl.n) + ' link clicks' : '') + (st.comments ? '; ' + st.answered + ' of ' + st.comments + ' comments answered' : '') + '.' + (st.top[0] ? ' Best post: ' + clip(st.top[0].caption || 'a post', 80) + ' on ' + PLX[st.top[0].platform][0] + ' (' + num(engOf(st.top[0])) + ' engagements).' : '') + (S.keys['note-' + m] ? '\n' + S.keys['note-' + m] : '');
+  }
+  function printReport() {
+    document.body.classList.add('w225print');
+    var done = function () { document.body.classList.remove('w225print'); window.removeEventListener('afterprint', done); };
+    window.addEventListener('afterprint', done);
+    setTimeout(function () { try { window.print(); } catch (e) { done(); } }, 60);
+  }
+
+  /* ---------- the academy's page tours (wave122's engine; trainings row tour:contentstudio; tour:studio is the Email studio (wave202)) ---------- */
+  function addTours() {
+    try {
+      var T = window.w122; if (!T || !T.tours) return false;
+      var OPT = { opt: 1 };
+      var St = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      var Ct = function (t, p) { return { c: 1, t: t, p: p }; };
+      if (!T.tours.contentstudio || !T.tours.contentstudio.__w225) T.tours.contentstudio = { __w225: true, tab: 'studio', icon: 'grid', hash: '#studio', steps: [
+        St('#studio > .w118mast', 'Content Studio', 'Everything for our social media in one app: plan, approve, post, answer comments and see what worked, on Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube.'),
+        St('#w225host .kpis', 'At a glance', 'What is scheduled, what waits for approval, comments to answer, the weekly goal and the clicks on our links. Each number opens its page.', OPT),
+        St('#w225host .grid2', 'The week ahead', 'The next seven days, anything that needs attention, the goals and how each platform posts.', OPT),
+        Ct('The app menu', 'Calendar to plan and write posts; Queue and schedule for the posting times and goals; Approvals; Comments; Library for templates, hashtags and saved replies; Links and link in bio; Analytics; Report; Connections.'),
+        Ct('Approvals', 'Marketing leads and admins publish. Everyone else presses Send for approval in the composer; a lead approves it or sends it back with a note, and you hear about it in the Hub and on Slack.'),
+        Ct('Reminders', 'Where the Hub cannot post yet (LinkedIn, TikTok or YouTube until they are connected), the post\u2019s owner gets a reminder at post time with the caption and the media. Post it in the app, then press Mark posted.')
+      ] };
+      var cc = T.tours.contentcal;
+      if (cc && !cc.__w225) {
+        cc.__w225 = true;
+        cc.steps = (cc.steps || []).map(function (s) {
+          if (s.s === '#contentcal .w116top') return St(s.s, 'Content calendar', 'Plan, approve and publish posts for Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube. It lives in the Content Studio app.');
+          if (s.s === '#contentcal .cap') return St(s.s, 'How we post', 'Which platforms the Hub posts to directly, and which ones send a reminder to post by hand. Connections in the Content Studio sets them up.', OPT);
+          if (s.c && s.t === 'The composer') return Ct('The composer', 'Pick the platforms, write the caption (the Hub drafts it and tailors it for each platform), add images or a video with alt text, a first comment and tags. Preview it on each platform, then plan it, schedule it in the next free slot, or send it for approval.');
+          if (s.s === '#contentcal .chips') return St(s.s, 'Filters', 'By platform, state, tag, and the posts waiting for approval.', OPT);
+          return s;
+        });
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* ---------- paint and route ---------- */
+  var KEEP = ['data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote'];
+  function paint() {
+    if (S.sec === 'calendar') return;
+    var h = host(); if (!h) return;
+    var a = document.activeElement, keep = null;
+    if (a && h.contains(a)) { for (var i = 0; i < KEEP.length; i++) { if (a.hasAttribute(KEEP[i])) { keep = { attr: KEEP[i], val: a.getAttribute(KEEP[i]), s: a.selectionStart, e: a.selectionEnd }; break; } } }
+    /* typed-but-unsent text survives a repaint */
+    var held = {}; h.querySelectorAll('[data-w225apnote],[data-w225blabel],[data-w225burl]').forEach(function (el) { var k = ['data-w225apnote', 'data-w225blabel', 'data-w225burl'].filter(function (x) { return el.hasAttribute(x); })[0]; held[k + '=' + el.getAttribute(k)] = el.value; });
+    h.querySelectorAll('input[id^="w225"],textarea[id^="w225"],select[id^="w225"]').forEach(function (el) { if (el.value) held['id=' + el.id] = el.value; });
+    var html;
+    if (!staffOk()) html = '<div class="card"><div class="empty">The Content Studio is for the staff.</div></div>';
+    else if (S.err && !S.loaded) html = '<div class="card"><div class="empty">The Content Studio could not load (' + E(clip(S.err, 140)) + '). <a data-w225reload="1" style="cursor:pointer;font-weight:700">Try again</a></div></div>';
+    else if (!S.loaded && !W()) html = '<div class="card"><div class="empty">Loading the Content Studio\u2026</div></div>';
+    else {
+      try {
+        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
+      } catch (e) { console.warn('wave225 paint', e); html = '<div class="card"><div class="empty">Something went wrong drawing this page: ' + E(e.message || e) + '</div></div>'; }
+    }
+    h.innerHTML = html;
+    Object.keys(held).forEach(function (k) { var p = k.split('='), el = h.querySelector('[' + p[0] + '="' + p.slice(1).join('=') + '"]'); if (el && held[k] !== el.value) el.value = held[k]; });
+    if (keep) { try { var el = h.querySelector('[' + keep.attr + (keep.val ? '="' + keep.val + '"' : '') + ']'); if (el) { el.focus(); if (keep.s != null && el.setSelectionRange) el.setSelectionRange(keep.s, keep.e); } } catch (e) { /* fine */ } }
+  }
+  function route(hh) {
+    var raw = String(hh || '').replace(/^#/, ''), qi = raw.indexOf('?'), path = qi >= 0 ? raw.slice(0, qi) : raw;
+    var p = path.split('/'), sec = p[1] || 'overview', sub = p[2] || '';
+    S.sec = SECTIONS.indexOf(sec) >= 0 ? sec : 'overview';
+    S.sub = sub;
+    if (S.sec === 'library') { if (LIBT.some(function (x) { return x[0] === sub; })) S.f.lib = sub; else S.sub = S.f.lib || 'templates'; if (S.libEdit && S.libEdit.tab !== S.sub) S.libEdit = null; }
+    if (S.sec === 'connections' && qi >= 0) connFlash();
+    if (S.sec !== 'links') S.bioDraft = S.bioDraft && S.bioDraft.dirty ? S.bioDraft : null;
+  }
+  async function show(hh) {
+    route(hh || location.hash);
+    var h = host(); if (!h) return;
+    if (!S.loaded) paint();
+    await loadAll();
+    if (S.sec === 'connections' && !S.conn) await loadConn();
+    paint();
+    try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* fine */ }
+  }
+  function reload() { S.loaded = 0; S.conn = null; return show(location.hash); }
+
+  /* ---------- small actions ---------- */
+  function compose(pre) { var w = W(); if (w && w.compose) { w.compose(pre || null); return; } if (window.w121Compose) window.w121Compose(pre || null); else go('#contentcal/new'); }
+  function openPost(id) { var w = W(); if (w && w.open && w.open(id)) return; go('#contentcal/' + id); }
+  function localIso(d, at) { return new Date(d + 'T' + (at || '18:00') + ':00').toISOString(); }
+  async function fillSlot(d, at, id) {
+    try {
+      var r = await db.from('content_posts').update({ scheduled_at: localIso(d, at), updated_by: myName() || myEmail(), updated_at: new Date().toISOString() }).eq('id', Number(id)); if (r.error) throw r.error;
+      var w = W(); if (w) await w.load(true); toastS('Planned for ' + niceDate(d) + ', ' + at + '. Open it to schedule it.');
+    } catch (x) { toastS('Could not plan it: ' + (x.message || x)); }
+    paint();
+  }
+  async function removeSlot(id) {
+    try { var r = await db.from('content_slots').delete().eq('id', Number(id)); if (r.error) throw r.error; var w = W(); if (w) await w.studio(); } catch (x) { toastS('Could not remove it: ' + (x.message || x)); }
+    paint();
+  }
+  async function saveGoals() {
+    var g = {}; document.querySelectorAll('#w225host [data-w225goal]').forEach(function (el) { var v = Math.max(0, Math.min(21, Math.round(Number(el.value) || 0))); g[el.getAttribute('data-w225goal')] = v; });
+    try { var value = Object.assign({}, S.settings || {}, { goals: g }); var r = await db.rpc('studio_settings_save', { p_key: 'content_studio', p_value: value }); if (r.error) throw r.error; S.settings = value; toastS('Goals saved'); }
+    catch (x) { toastS('Could not save the goals: ' + (x.message || x)); }
+    paint();
+  }
+  async function syncInbox() {
+    if (S.busy.sync) return; S.busy.sync = true; paint();
+    try {
+      var r = await fn('social-inbox', { action: 'sync', days: 45 });
+      var rs = await Promise.all([q(db.from('social_comments').select('*').gte('commented_at', new Date(Date.now() - 90 * 86400000).toISOString()).order('commented_at', { ascending: false }).limit(1500)), q(db.from('hub_settings').select('value').eq('key', 'studio_inbox_sync').maybeSingle())]);
+      if (rs[0].data) S.comments = rs[0].data; if (rs[1].data) S.inboxLast = rs[1].data.value;
+      var added = 0; Object.keys((r && r.platforms) || {}).forEach(function (k) { added += Number(r.platforms[k].added || 0); }); toastS(added ? added + ' new comment' + (added === 1 ? '' : 's') : 'Checked: nothing new');
+    } catch (x) { toastS('Could not check: ' + (x.message || x)); }
+    S.busy.sync = false; paint(); try { if (window.w153) window.w153.paint(); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- events ---------- */
+  function inApp(t) { return !!(t && t.closest && t.closest('#w225host')); }
+  var tT = null; function soon() { clearTimeout(tT); tT = setTimeout(paint, 200); }
+  function arg(el, a) { return el.getAttribute(a) || ''; }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!inApp(t)) return;
+    var el = t.closest('a,button,[data-w225open],[data-w225go],[data-w225lcol]'); if (!el) return;
+    if (el.hasAttribute('disabled')) { e.preventDefault(); return; }
+    var x;
+    if (el.hasAttribute('href') && /^https?:/.test(el.getAttribute('href'))) return;
+    if ((x = arg(el, 'data-w225open'))) { e.preventDefault(); openPost(x); return; }
+    if ((x = arg(el, 'data-w225go'))) { e.preventDefault(); go(x); return; }
+    if (el.hasAttribute('data-w225new')) { e.preventDefault(); compose(null); return; }
+    if (el.hasAttribute('data-w225reload')) { reload(); return; }
+    if ((x = arg(el, 'data-w225slotnew'))) { var sp = x.split('|'); compose({ date: sp[0], time: sp[1], platforms: (sp[2] || '').split(',').filter(Boolean) }); return; }
+    if ((x = arg(el, 'data-w225slotx'))) { removeSlot(x); return; }
+    if ((x = arg(el, 'data-w225sugadd'))) { var sa = x.split('|'); addSlots([sa[0]], [Number(sa[1])], sa[2]).then(paint, function (er) { toastS('Could not add it: ' + (er.message || er)); }); return; }
+    if (el.hasAttribute('data-w225swd')) { var wd = Number(arg(el, 'data-w225swd')), arr = S.keys.swd = S.keys.swd || []; var ix = arr.indexOf(wd); if (ix >= 0) arr.splice(ix, 1); else arr.push(wd); el.classList.toggle('on', ix < 0); return; }
+    if (el.hasAttribute('data-w225slotadd')) {
+      var pl = (document.getElementById('w225spl') || {}).value || 'all', at = (document.getElementById('w225sat') || {}).value || '';
+      if (!(S.keys.swd || []).length) { toastS('Pick the days first'); return; } if (!/^\d{2}:\d{2}$/.test(at)) { toastS('Pick a time'); return; }
+      S.keys.sat = at; addSlots(pl === 'all' ? PORDER.slice() : [pl], S.keys.swd.slice().sort(), at).then(paint, function (er) { toastS('Could not add it: ' + (er.message || er)); }); return;
+    }
+    if (el.hasAttribute('data-w225sug')) { S.suggest = S.suggest ? null : suggestTimes(); paint(); return; }
+    if (el.hasAttribute('data-w225goalsave')) { saveGoals(); return; }
+    if ((x = arg(el, 'data-w225apr'))) { S.f.apr = x; paint(); return; }
+    if ((x = arg(el, 'data-w225dec'))) { var dp = x.split('|'); el.setAttribute('disabled', '1'); decideFrom(dp[0], dp[1]); return; }
+    /* comments */
+    if ((x = arg(el, 'data-w225rp'))) { S.reply[x] = S.reply[x] || { text: '' }; paint(); var ta = document.querySelector('#w225host [data-w225rtext="' + x + '"]'); if (ta) ta.focus(); return; }
+    if ((x = arg(el, 'data-w225act'))) { var ap = x.split('|'); inboxAct(ap[0], ap[1]); return; }
+    if ((x = arg(el, 'data-w225ai'))) { suggestReply(x); return; }
+    if ((x = arg(el, 'data-w225rpx'))) { delete S.reply[x]; paint(); return; }
+    if ((x = arg(el, 'data-w225send'))) { var rr = S.reply[x]; if (!rr || !String(rr.text || '').trim()) { toastS('Write the reply first'); return; } rr.sending = true; paint(); inboxAct('reply', x, { text: String(rr.text).trim() }); return; }
+    if (el.hasAttribute('data-w225ib')) { S.f.inbox = arg(el, 'data-w225ib') || 'open'; lsSet('w225ib', S.f.inbox); paint(); return; }
+    if (el.hasAttribute('data-w225ipl')) { S.f.ipl = arg(el, 'data-w225ipl'); paint(); return; }
+    if (el.hasAttribute('data-w225sync')) { syncInbox(); return; }
+    /* library */
+    if ((x = arg(el, 'data-w225lnew'))) { libNew(x); paint(); var f0 = document.querySelector('#w225host [data-w225lf="name"]'); if (f0) f0.focus(); return; }
+    if ((x = arg(el, 'data-w225ledit'))) { var le = x.split('|'); libEdit(le[0], le[1]); paint(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    if ((x = arg(el, 'data-w225ldel'))) { var ld = x.split('|'); libRemove(ld[0], ld[1]); return; }
+    if ((x = arg(el, 'data-w225luse'))) { libUse(x); return; }
+    if ((x = arg(el, 'data-w225lcopy'))) { libCopy(x); return; }
+    if ((x = arg(el, 'data-w225lcal'))) { var w = W(); if (w && w.filter) w.filter('tag', x); go('#contentcal'); return; }
+    if ((x = arg(el, 'data-w225lcol'))) { if (S.libEdit) { S.libEdit.color = x; paint(); } return; }
+    if (el.hasAttribute('data-w225lsave')) { libSave(); return; }
+    if (el.hasAttribute('data-w225lcancel')) { S.libEdit = null; paint(); return; }
+    /* links */
+    if (el.hasAttribute('data-w225kmake')) { makeLinkFromForm(); return; }
+    if ((x = arg(el, 'data-w225kcopy'))) { copyText(shortUrl(x)); return; }
+    if ((x = arg(el, 'data-w225kact'))) { var ka = x.split('|'); linkActive(ka[1], ka[0] === 'on'); return; }
+    if ((x = arg(el, 'data-w225btheme'))) { var bd = bioDraft(); bd.theme = x; bd.dirty = true; paint(); return; }
+    if ((x = arg(el, 'data-w225bmove'))) { var bm = x.split('|'); bioMove(bm[0], bm.slice(1).join('|')); return; }
+    if (el.hasAttribute('data-w225badd')) { bioAdd(); return; }
+    if (el.hasAttribute('data-w225bsave')) { bioSave(); return; }
+    if (el.hasAttribute('data-w225bcopy')) { copyText(HUB + '/links'); return; }
+    /* connections */
+    if ((x = arg(el, 'data-w225cx'))) { e.preventDefault(); connAct(x); return; }
+    if ((x = arg(el, 'data-w225ccopy'))) { copyText(x); return; }
+    /* report */
+    if (el.hasAttribute('data-w225rcopy')) { copyText(reportSummary()); return; }
+    if (el.hasAttribute('data-w225print')) { printReport(); return; }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!inApp(t) || !t.matches) return;
+    if (t.matches('[data-w225iq]')) { S.f.iq = t.value; soon(); return; }
+    if (t.matches('[data-w225lq]')) { S.f.lq = t.value; soon(); return; }
+    if (t.matches('[data-w225kq]')) { S.f.kq = t.value; soon(); return; }
+    if (t.matches('[data-w225rtext]')) { var id = t.getAttribute('data-w225rtext'); (S.reply[id] = S.reply[id] || {}).text = t.value; return; }
+    if (t.matches('[data-w225rnote]')) { S.keys['note-' + t.getAttribute('data-w225rnote')] = t.value; return; }
+    if (t.matches('[data-w225lf]')) { if (S.libEdit) { S.libEdit[t.getAttribute('data-w225lf')] = t.value; if (S.libEdit.tab === 'hashtags' && t.getAttribute('data-w225lf') === 'body') soon(); } return; }
+    if (t.matches('[data-w225bf]')) { var d = bioDraft(); d[t.getAttribute('data-w225bf')] = t.value; d.dirty = true; soon(); return; }
+    if (t.matches('[data-w225bsoc]')) { var d2 = bioDraft(); d2.socials[t.getAttribute('data-w225bsoc')] = t.value; d2.dirty = true; return; }
+    if (t.matches('[data-w225blabel],[data-w225burl]')) { bioDraft().dirty = true; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!inApp(t) || !t.matches) return;
+    if (t.matches('[data-w225fill]')) { if (!t.value) return; var f = t.getAttribute('data-w225fill').split('|'); fillSlot(f[0], f[1], t.value); return; }
+    if (t.matches('[data-w225assign]')) { inboxAct('assign', t.getAttribute('data-w225assign'), { to: t.value }); return; }
+    if (t.matches('[data-w225saved]')) {
+      var cid = t.getAttribute('data-w225saved'), sn = lib().filter(function (x) { return String(x.id) === t.value; })[0]; if (!sn) return;
+      var c = S.comments.filter(function (x) { return String(x.id) === cid; })[0], nm = c ? (c.author_handle ? '@' + c.author_handle : (c.author_name || '').split(' ')[0]) : '';
+      var r = S.reply[cid] = S.reply[cid] || {}; r.text = String(sn.body || '').replace(/\{name\}/g, nm || 'there');
+      q(db.from('content_snippets').update({ uses: Number(sn.uses || 0) + 1 }).eq('id', sn.id)); paint(); return;
+    }
+    if (t.matches('[data-w225imine]')) { S.f.imine = !!t.checked; paint(); return; }
+    if (t.matches('[data-w225kall]')) { S.f.kall = !!t.checked; paint(); return; }
+    if (t.matches('[data-w225lpl]')) { if (!S.libEdit) return; var k = t.getAttribute('data-w225lpl'), pls = S.libEdit.platforms = S.libEdit.platforms || []; var i = pls.indexOf(k); if (t.checked && i < 0) pls.push(k); else if (!t.checked && i >= 0) pls.splice(i, 1); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!inApp(t) || e.key !== 'Enter') return;
+    if (t.matches && t.matches('#w225kurl,#w225klabel,#w225kcode,#w225kcamp')) { e.preventDefault(); makeLinkFromForm(); }
+    else if (t.matches && t.matches('#w225bnl,#w225bnu')) { e.preventDefault(); bioAdd(); }
+  });
+  window.addEventListener('beforeunload', function (e) { if (S.bioDraft && S.bioDraft.dirty && S.sec === 'links') { e.preventDefault(); e.returnValue = ''; } });
+
+  /* ---------- the page in the Hub ---------- */
+  function tabOk(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return false; } }
+  /* whoever opens the app reaches the calendar and the analytics through it: body.w225has takes those out of their Hub menu (wave153's rule) */
+  function markHas() { try { document.body.classList.toggle('w225has', staffOk() && tabOk('studio')); } catch (e) { /* fine */ } }
+  var hasT = null;
+  function watchHas() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.__w225obs) return;
+    bar.__w225obs = true;
+    try { new MutationObserver(function () { clearTimeout(hasT); hasT = setTimeout(markHas, 150); }).observe(bar, { attributes: true, subtree: true, attributeFilter: ['style'] }); } catch (e) { /* fine */ }
+  }
+  /* Steel's rule (09/10/26), also before every access profile lists the page (wa225b): the marketing, fundraising and executive
+     profiles, admins and team leads get the app; never the board */
+  function enrol() {
+    try {
+      if (typeof wa40Allowed === 'function' && !wa40Allowed.__w225) {
+        var __al = wa40Allowed;
+        wa40Allowed = function () { var a = __al.apply(this, arguments) || []; var bd = false; try { bd = (typeof MODE !== 'undefined' && MODE === 'board') || role() === 'board'; } catch (x) { /* fine */ } var pk = ''; try { pk = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile) || ''; } catch (x) { /* fine */ } if (!bd && a.indexOf('studio') < 0 && (['marketing', 'fundraising', 'executive', 'admin'].indexOf(pk) >= 0 || role() === 'admin' || role() === 'leader')) a = a.concat(['studio']); return a; };
+        Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (x) { /* fine */ } });
+        wa40Allowed.__w225 = true;
+      }
+    } catch (e) { /* fine */ }
+  }
+  function register() {
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    enrol();
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'studio'; })) WA_NAV.register({ id: 'studio', label: 'Content Studio', group: 'apps', dot: ROSE, gate: 'leader', onShow: function (h) { show(h); } });
+  }
+  var toursOk = false;
+  if (typeof startApp === 'function') {
+    var __sa225 = startApp;
+    startApp = async function () {
+      var out = await __sa225.apply(this, arguments);
+      try {
+        register(); toursOk = addTours(); markHas(); watchHas();
+        [400, 1500, 4000].forEach(function (ms) { setTimeout(function () { markHas(); if (!toursOk) toursOk = addTours(); }, ms); });
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+        if (h.split('/')[0] === 'studio') { try { showPanel('studio'); } catch (x) { /* fine */ } show(h); }
+        else setTimeout(function () { if (staffOk() && tabOk('studio') && !S.loaded) loadAll(); }, 6000);   /* the rail's counts */
+      } catch (e) { console.warn('wave225 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w225 = {
+    counts: counts, state: function () { return S; }, paint: paint, show: show, load: loadAll, route: route, reload: reload,
+    html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
+    monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl
+  };
+})();

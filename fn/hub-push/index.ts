@@ -1,4 +1,4 @@
-// Welfare Avenue: hub-push (v1, 07/10/26, wave219)
+// Welfare Avenue: hub-push (v2, 09/10/26: wave225 adds the studio event; v1 07/10/26, wave219)
 // Hub notifications on computers and phones (Web Push). Steel (07/10/26): "if it can send in-app notifications on updates,
 // I would like to do that if it's possible, especially browser use for those that are using the computer". His choices:
 // mentions and assigned work, and announcements; each person chooses Hub notifications, Slack or both (both by default,
@@ -12,7 +12,8 @@
 //
 // Calls:
 //   from the database (trigger secret, through wa219_push_call): the events the notify function already sends on Slack
-//     (comment_mention, mentioned, task_reassigned, request_filed, suggestion_accepted), plus task_assigned (a person makes
+//     (comment_mention, mentioned, task_reassigned, request_filed, suggestion_accepted), plus studio (wave225: the Content
+//     Studio names the people: approvals, posts due on a platform the Hub cannot post to, new comments), task_assigned (a person makes
 //     a task for someone else) and announcement (a new announcement, to the people it is for). The work runs in the
 //     background (EdgeRuntime.waitUntil) so the database's call returns at once. dry: true answers who would get what and
 //     sends nothing.
@@ -203,7 +204,7 @@ async function ownersOf(owner: string | null): Promise<Member[]> {
 }
 
 /* the person's choice: Slack only, or this kind switched off, means no Hub notification */
-const PREF_KEY: Record<string, string> = { task_assigned: 'task_reassigned' };
+const PREF_KEY: Record<string, string> = { task_assigned: 'task_reassigned', studio: 'content_studio' };
 async function wants(email: string, event: string): Promise<string | null> {
   const { data } = await svc.from('wa_notify_prefs').select('disabled, prefs').eq('email', email.toLowerCase()).maybeSingle();
   const channel = String((data?.prefs as Record<string, unknown> | null)?.channel || 'both');
@@ -358,6 +359,15 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
     if (!recipient) return { event, outcome: 'no recipient' };
     const msg: Msg = { title: 'A meeting suggestion is now a request', body: clip(String(s.title || rt?.label || s.type_key || 'A request'), 120), url: '/#requests', tag: 'suggestion-' + s.id };
     for (const p of await ownersOf(String(recipient))) outs.push(p.email + ': ' + await toPerson(event, p.email, msg, dry, plan));
+    return done();
+  }
+
+  /* wave225: the Content Studio (social-publish and social-inbox): approvals waiting or decided, a post due on a platform
+     the Hub cannot post to, new comments. The caller names the people; each person's choice is read as for every event. */
+  if (event === 'studio') {
+    const to = (Array.isArray(body.to) ? body.to : []).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 40);
+    const msg: Msg = { title: clip(String(body.title || 'Content Studio'), 80), body: clip(plain(String(body.body || '')), 180), url: String(body.url || '/#studio').startsWith('/') ? String(body.url || '/#studio') : '/#studio', tag: clip(String(body.tag || 'studio'), 60) };
+    for (const e of Array.from(new Set(to))) outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
     return done();
   }
 

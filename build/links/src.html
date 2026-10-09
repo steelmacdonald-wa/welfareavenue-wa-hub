@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Welfare Avenue: links</title>
+<meta name="description" content="Welfare Avenue: youth-powered meals and community in Montreal and Toronto. Volunteer, donate, and follow along.">
+<link rel="icon" href="/icons/hub-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the link-in-bio page (wave225, the Content Studio, 09/10/26). hub.welfareavenue.com/links, the address in our
+     social bios. Reads studio_link_page() (signed-out): the title, the line under it, the colours, the social icons and the
+     buttons. Each button is a short link (hub.welfareavenue.com/l/bio-...), so the go function counts its clicks.
+     The marketing team edits it in the Hub: Content Studio, Links and link in bio. Built by build/links/make.py. -->
+<style>
+:root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--fg);display:flex;justify-content:center;padding:44px 16px 32px;min-height:100vh;--bg:var(--green);--fg:var(--cream);--btn:var(--cream);--btnfg:var(--green)}
+body.cream{--bg:var(--cream);--fg:var(--green);--btn:var(--green);--btnfg:var(--cream)}
+main{width:100%;max-width:460px;text-align:center}
+.lockup{width:170px;height:auto;color:var(--fg);margin:0 auto 18px;display:block}
+h1{font-family:'Barlow Condensed','Arial Narrow',sans-serif;font-weight:700;font-size:34px;letter-spacing:.5px;margin:0 0 6px}
+p.bio{margin:0 0 26px;font-size:15px;line-height:1.45;opacity:.9}
+a.b{display:block;background:var(--btn);color:var(--btnfg);text-decoration:none;font-weight:700;font-size:15.5px;border-radius:999px;padding:15px 18px;margin:0 0 12px;transition:transform .12s ease}
+a.b:hover,a.b:focus-visible{transform:translateY(-2px);outline:3px solid var(--gold);outline-offset:2px}
+.soc{display:flex;gap:14px;justify-content:center;margin:24px 0 0}
+.soc a{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--fg);color:var(--fg);text-decoration:none;font-weight:700;font-size:13px}
+.soc a:hover,.soc a:focus-visible{background:var(--gold);border-color:var(--gold);color:var(--green)}
+footer{margin:30px 0 0;font-size:12px;opacity:.7}
+footer a{color:inherit}
+.load{opacity:.6;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  %%LOCKUP_SVG%%
+  <h1 id="t">Welfare Avenue</h1>
+  <p class="bio" id="bio">Youth-powered meals and community in Montreal and Toronto.</p>
+  <div id="links"><p class="load">Loading…</p></div>
+  <div class="soc" id="soc"></div>
+  <footer><a href="https://welfareavenue.com">welfareavenue.com</a></footer>
+</main>
+<script>
+(function () {
+  var API = '%%SUPABASE_URL%%/rest/v1/rpc/studio_link_page', KEY = '%%ANON_KEY%%';
+  var SOC = { instagram: 'IG', facebook: 'f', tiktok: 'Tk', linkedin: 'in', youtube: '▶' }, NAMES = { instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', linkedin: 'LinkedIn', youtube: 'YouTube' };
+  function el(tag, attrs, text) { var e = document.createElement(tag); Object.keys(attrs || {}).forEach(function (k) { e.setAttribute(k, attrs[k]); }); if (text != null) e.textContent = text; return e; }
+  function safe(u) { return /^https:\/\//.test(String(u || '')) ? String(u) : null; }
+  var FALLBACK = [{ code: null, label: 'Visit our website', url: 'https://welfareavenue.com' }];
+  fetch(API, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function (r) { return r.ok ? r.json() : null; }, function () { return null; })
+    .then(function (v) {
+      v = v || {};
+      if (v.theme === 'cream') document.body.className = 'cream';
+      if (v.title) { document.getElementById('t').textContent = v.title; document.title = v.title + ': links'; }
+      if (v.bio) document.getElementById('bio').textContent = v.bio;
+      var links = (v.links || []).slice(), order = v.order || [];
+      links.sort(function (a, b) { var i = order.indexOf(a.code), j = order.indexOf(b.code); return (i < 0 ? 999 : i) - (j < 0 ? 999 : j); });
+      var box = document.getElementById('links'); box.innerHTML = '';
+      (links.length ? links : FALLBACK).forEach(function (l) {
+        var href = l.code ? '/l/' + encodeURIComponent(l.code) : l.url;
+        box.appendChild(el('a', { class: 'b', href: href, rel: 'noopener' }, l.label || 'Open'));
+      });
+      var soc = document.getElementById('soc');
+      Object.keys(SOC).forEach(function (k) { var u = safe((v.socials || {})[k]); if (u) soc.appendChild(el('a', { href: u, rel: 'noopener', 'aria-label': 'Welfare Avenue on ' + NAMES[k], target: '_blank' }, SOC[k])); });
+    });
+})();
+</script>
+</body>
+</html>

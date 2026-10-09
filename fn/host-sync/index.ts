@@ -1,4 +1,6 @@
-// Welfare Avenue: host-sync (v12, 07/10/26)
+// Welfare Avenue: host-sync (v13, 09/10/26)
+// v13 (wave225): also deploys the link-in-bio page /links/index.html (served for /links by _redirects; /l/<code> is proxied to
+// the go function there too).
 // v12 (wave219): also deploys what makes the Hub an app with notifications: /manifest.webmanifest, the service worker /sw.js
 // (notifications only: no caching, no fetch handler) and the icons under /icons/ (PNG files kept in site_files as base64 text;
 // every path ending in .png is decoded before upload).
@@ -121,7 +123,7 @@ Deno.serve(async (req: Request) => {
   } catch (_) { /* headers optional */ }
   // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page; v11: the still-interested page;
   // v12: the app manifest, the service worker and the icons (the .png files are base64 in site_files)
-  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'i/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects',
+  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'i/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', 'links/index.html', '_redirects',
     'manifest.webmanifest', 'sw.js', 'icons/hub-192.png', 'icons/hub-512.png', 'icons/hub-maskable-512.png', 'icons/hub-badge-96.png', 'icons/apple-touch-180.png']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
@@ -138,7 +140,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v12'
+      changed_by: 'host-sync v13'
     });
   } catch (_) { /* audit only */ }
 

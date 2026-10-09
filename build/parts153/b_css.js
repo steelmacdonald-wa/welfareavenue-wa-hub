@@ -81,7 +81,10 @@
     /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
        menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
     + 'body.w153app main .panel > .w118mast .crumb{display:none;}'
-    + 'body.w153app.w153fund #fundevents > .w118mast .crumb{display:none;}'   /* wave193: wave124's masthead keeps its own crumb element */
+    + 'body.w153app.w153fund #fundevents > .w118mast .crumb{display:none;}'
+    /* wave225: the Content Studio's pages leave the Hub menu for whoever opens the app (body.w225has); directors keep the calendar and the analytics */
+    + 'nav.wa-nav #tabBar .tab[data-tab="studio"],body.w225has nav.wa-nav #tabBar .tab[data-tab="contentcal"],body.w225has nav.wa-nav #tabBar .tab[data-tab="socialstats"]{display:none !important;}'
+    + 'body.w153app.w153studio #contentcal .w116crumb,body.w153app.w153studio #socialstats .w116crumb{display:none;}'   /* wave193: wave124's masthead keeps its own crumb element */
     + '@media (min-width:901px){body.w153app.w153finance #finances #w94nav,body.w153app.w153hr #hrcentre .w47tabs{display:none !important;}}'
     /* search everything: contacts */
     + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'

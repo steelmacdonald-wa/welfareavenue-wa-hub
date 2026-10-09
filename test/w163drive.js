@@ -46,8 +46,8 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     ok('phone: the old bar is put away', old === 'none', old);
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(450);
     let s = await f.ev(SHEET);
-    ok('Menu opens the sheet: the apps (and the Website link, 01/10/26), then the top pages and Departments, Other Tools and Organization, the page you are on lit', s.on && s.title === 'Menu' && s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|Fundraising|HR centre|Finance|Admin centre|Website' && s.secs.join('|') === 'Apps|Departments|Other Tools|Organization' && s.rows.slice(0, 5).join('|') === 'Home*|Avenue Academy|Executive dashboard|Calendar|The Brain', s);
-    ok('the sheet: every team with its own pages as chips, yours marked; Other Tools and Organization in the menu\'s order', s.rows.indexOf('Board & Governance(mine)') >= 0 && s.chips.indexOf('MTL volunteering') < 0 /* wave176: an app now */ && s.chips.indexOf('Content calendar') >= 0 && s.rows.join('|').indexOf('Important info|The Task Bank|Agendas|Document finder|Transcript archive|Photo library|Requests|Org chart|Our story|Hub inbox') >= 0, s);
+    ok('Menu opens the sheet: the apps (and the Website link, 01/10/26), then the top pages and Departments, Other Tools and Organization, the page you are on lit', s.on && s.title === 'Menu' && s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|Fundraising|Content Studio|HR centre|Finance|Admin centre|Website' && s.secs.join('|') === 'Apps|Departments|Other Tools|Organization' && s.rows.slice(0, 5).join('|') === 'Home*|Avenue Academy|Executive dashboard|Calendar|The Brain', s);
+    ok('the sheet: every team with its own pages as chips, yours marked; Other Tools and Organization in the menu\'s order', s.rows.indexOf('Board & Governance(mine)') >= 0 && s.chips.indexOf('MTL volunteering') < 0 /* wave176: an app now */ && s.chips.indexOf('Content calendar') < 0 /* wave225: in the Content Studio now */ && s.rows.join('|').indexOf('Important info|The Task Bank|Agendas|Document finder|Transcript archive|Photo library|Requests|Org chart|Our story|Hub inbox') >= 0, s);
     /* 01/10/26: the Website tile after the apps: a real link in its own list item, opening a new tab and closing the sheet */
     const wt = await f.ev(() => { const a = document.querySelector('#w163sheet [data-w163ext="website"]'); if (!a) return null; const r = a.querySelector('.t').getBoundingClientRect();
       return { tag: a.tagName, href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel'), aria: a.getAttribute('aria-label'), li: a.parentElement.getAttribute('role'), size: [Math.round(r.width), Math.round(r.height)], icon: getComputedStyle(a.querySelector('.t')).color, deco: getComputedStyle(a).textDecorationLine }; });
@@ -84,9 +84,9 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     ok('Calendar opens the Calendar and lights up', (await f.ev(() => location.hash)) === '#calendar' && b.slots[1] === 'cal:Calendar*', b);
     /* a chip opens that team page's own page */
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(400);
-    await f.ev(() => { const c = [...document.querySelectorAll('#w163sheet .chip')].filter(x => x.textContent === 'Content calendar')[0]; if (c) c.click(); }); await p.waitForTimeout(1500);
+    await f.ev(() => { const c = [...document.querySelectorAll('#w163sheet .chip')].filter(x => x.textContent === 'Committees')[0]; if (c) c.click(); }); await p.waitForTimeout(1500);
     h = await f.ev(() => ({ hash: location.hash, active: (document.querySelector('.panel.active') || {}).id }));
-    ok('a chip opens the team\'s own page (Content calendar)', h.active === 'contentcal', h);
+    ok('a chip opens the team\'s own page (Committees; the calendar lives in the Content Studio since wave225)', h.active === 'committees', h);
     /* inside an app the sheet is the app's menu */
     await f.hash('#crm', 2500);
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(450);

@@ -39,7 +39,7 @@
       /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
          app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
          places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
-      { key: 'apps', label: 'Apps', items: ['orggoals', 'goals', 'projects', 'goalmap', 'crm', 'partners', 'fund'] },   /* wave193: the Fundraising app's page */
+      { key: 'apps', label: 'Apps', items: ['orggoals', 'goals', 'projects', 'goalmap', 'crm', 'partners', 'fund', 'studio'] },   /* wave193: the Fundraising app's page; wave225: the Content Studio's */
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
     ],

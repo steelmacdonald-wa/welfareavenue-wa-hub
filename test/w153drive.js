@@ -59,7 +59,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('it stays in view at the foot of the menu even though the menu is taller than the screen', Math.abs(dockPos.dockBottom - dockPos.navBottom) < 2 && dockPos.navScroll > 900, dockPos);
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(250);
   const pop = await f.ev(() => ({ open: document.getElementById('w153pop').classList.contains('open'), tiles: [...document.querySelectorAll('#w153pop .w153tile')].map(t => t.querySelector('b').textContent + (t.classList.contains('on') ? '*' : '')), expanded: document.querySelector('[data-w153grid]').getAttribute('aria-expanded') }));
-  ok('the 9 dots open the launcher: the Hub (current), Strategy (wave163), the Volunteer Manager, the CRM, Fundraising (wave193), the HR centre, Finance, the Admin centre, then the Website link (01/10/26)', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|Fundraising|HR centre|Finance|Admin centre|Website', pop);
+  ok('the 9 dots open the launcher: the Hub (current), Strategy (wave163), the Volunteer Manager, the CRM, Fundraising (wave193), the Content Studio (wave225), the HR centre, Finance, the Admin centre, then the Website link (01/10/26)', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|Fundraising|Content Studio|HR centre|Finance|Admin centre|Website', pop);
   await shot(f, 'apps_launcher');
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(150);
   ok('Escape closes it', await f.ev(() => !document.getElementById('w153pop').classList.contains('open')));

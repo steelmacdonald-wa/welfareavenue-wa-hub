@@ -32,13 +32,19 @@
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
-  var PL = { instagram: { label: 'Instagram', short: 'IG', color: '#C13584' }, facebook: { label: 'Facebook', short: 'f', color: '#1877F2' } };
+  var PL = { instagram: { label: 'Instagram', short: 'IG', color: '#C13584' }, facebook: { label: 'Facebook', short: 'f', color: '#1877F2' },
+    /* wave225: the Content Studio's other platforms (direct when connected, else the reminder flow) */
+    threads: { label: 'Threads', short: '@', color: '#1F201E' }, linkedin: { label: 'LinkedIn', short: 'in', color: '#0A66C2' },
+    tiktok: { label: 'TikTok', short: 'Tk', color: '#EE1D52' }, youtube: { label: 'YouTube', short: '\u25b6', color: '#FF0000' } };
+  var PORDER = ['instagram', 'facebook', 'threads', 'linkedin', 'tiktok', 'youtube'];
+  var KINDS = { instagram: [['feed', 'Post'], ['reel', 'Reel'], ['story', 'Story']], facebook: [['feed', 'Post'], ['reel', 'Reel'], ['story', 'Story']] };
+  var MODE_L = { direct: 'Posts directly', make: 'Posts through Make', drafts: 'Lands in TikTok drafts', reminder: 'Reminder to post by hand' };
   var ST = {
     draft: { label: 'Draft', cls: 'draft' }, scheduled: { label: 'Scheduled', cls: 'sched' }, publishing: { label: 'Publishing', cls: 'pub' },
     published: { label: 'Published', cls: 'live' }, posted: { label: 'Posted', cls: 'live' }, failed: { label: 'Failed', cls: 'bad' }, cancelled: { label: 'Cancelled', cls: 'draft' }
   };
   var WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  var C = { view: null, anchor: null, posts: [], loaded: false, loading: false, at: 0, cap: null, capBusy: false, filter: { pl: '', st: '', q: '' }, drag: null, edit: null, perf: null, perfBusy: false, undo: null, settingsOpen: false, channels: null, err: null };
+  var C = { view: null, anchor: null, posts: [], loaded: false, loading: false, at: 0, cap: null, capBusy: false, filter: { pl: '', st: '', q: '', tag: '' }, drag: null, edit: null, perf: null, perfBusy: false, undo: null, settingsOpen: false, channels: null, err: null, pub: null, tags: [], lib: [], slots: [] };
 
   var css = document.createElement('style'); css.id = 'wa121css';
   css.textContent = '' +
@@ -161,6 +167,42 @@
     '#contentcal .loading{font-size:13px;color:var(--wa-muted);padding:40px 0;text-align:center;}' +
     /* the composer */
     '#w121dr{position:fixed;inset:0;z-index:80;display:flex;justify-content:flex-end;font-family:' + BODY + ';}' +
+    /* wave225: the Content Studio's composer */
+    '#w121dr .tg .md{font-size:10px;font-weight:600;color:var(--wa-muted);letter-spacing:.2px;}' +
+    '#w121dr .tg.on .md{color:' + TEAL + ';}#w121dr .tg.on .md.rm{color:#8a5a00;}' +
+    '#w121dr .w225ap{border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.45;}' +
+    '#w121dr .w225ap.pending{background:rgba(111,100,171,.12);color:#3f3780;}#w121dr .w225ap.changes{background:rgba(179,64,47,.10);color:' + FLAG + ';}#w121dr .w225ap.approved{background:rgba(42,140,122,.12);color:#155a4d;}' +
+    '#w121dr .w225ap b{display:block;font-size:13px;margin-bottom:2px;}#w121dr .w225ap textarea{width:100%;margin-top:8px;min-height:54px;}' +
+    '#w121dr .w225ap .ac{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;}' +
+    '#w121dr .w225vt{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 8px;}' +
+    '#w121dr .w225vt a{font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;}' +
+    '#w121dr .w225vt a.on{background:' + GREEN + ';color:' + CREAM + ';}#w121dr .w225vt a i{font-style:normal;opacity:.6;margin-left:4px;}' +
+    '#w121dr .w225vb{border:1px solid rgba(16,63,57,.12);border-radius:12px;padding:10px 12px;background:#FFFAF2;}' +
+    '#w121dr .w225vb .row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px;}' +
+    '#w121dr .w225vb small,#w121dr .w225hint{display:block;font-size:11.5px;color:var(--wa-muted);line-height:1.4;margin-top:4px;}' +
+    '#w121dr .w225chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}' +
+    '#w121dr .w225chips span{font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:5px;}' +
+    '#w121dr .w225chips span i{width:8px;height:8px;border-radius:50%;display:inline-block;}' +
+    '#w121dr .w225chips span.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w121dr .w225lib{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 0;}' +
+    '#w121dr .w225lib select{font-size:12px;padding:5px 8px;border-radius:999px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;color:' + GREEN + ';max-width:220px;}' +
+    '#w121dr .w225alt{border:1px solid rgba(16,63,57,.12);border-radius:12px;padding:10px;margin-top:10px;background:#FFFAF2;display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;}' +
+    '#w121dr .w225alt .pic{position:relative;border-radius:10px;overflow:hidden;cursor:crosshair;align-self:start;}' +
+    '#w121dr .w225alt .pic img{width:100%;display:block;}' +
+    '#w121dr .w225alt .pic b{position:absolute;transform:translate(-50%,-50%);background:rgba(31,32,30,.82);color:#FFFAF2;font-size:10px;font-weight:700;border-radius:6px;padding:2px 6px;white-space:nowrap;pointer-events:none;}' +
+    '#w121dr .w225alt textarea{min-height:64px;}' +
+    '#w121dr .w225alt .tgs span{font-size:11.5px;background:rgba(16,63,57,.07);border-radius:999px;padding:3px 9px;margin:4px 4px 0 0;display:inline-block;cursor:pointer;}' +
+    '#w121dr .th .altb{position:absolute;left:4px;bottom:30px;font-size:10px;font-weight:800;border-radius:6px;padding:2px 6px;border:none;background:rgba(31,32,30,.72);color:#FFFAF2;cursor:pointer;}' +
+    '#w121dr .th .altb.ok{background:' + TEAL + ';}' +
+    '#w121dr .w225man{border:1px dashed rgba(220,165,39,.7);border-radius:12px;padding:10px 12px;margin:8px 0 0;background:rgba(220,165,39,.08);font-size:12.5px;}' +
+    '#w121dr .w225man .ac{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;}' +
+    '#w121dr .w225man input{flex:1;min-width:160px;}' +
+    '#w121dr .w225rep{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:8px;margin-top:8px;}' +
+    '#w121dr .mock.th3{font-size:13px;}#w121dr .mock .yt{background:#000;aspect-ratio:9/16;max-height:360px;display:flex;align-items:center;justify-content:center;color:#FFFAF2;}' +
+    '#contentcal .st-appr{border-left-color:' + PURPLE + ';background:rgba(111,100,171,.10);}' +
+    '#contentcal .pill.appr,#w121dr .pill.appr{background:rgba(111,100,171,.16);color:' + PURPLE + ';}' +
+    '#contentcal .chips select{font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;color:' + GREEN + ';}' +
+    '@media (max-width:560px){#w121dr .w225alt{grid-template-columns:minmax(0,1fr);}#w121dr .w225vb .row{grid-template-columns:minmax(0,1fr);}}' +
     '#w121dr .bk{position:absolute;inset:0;background:rgba(16,32,30,.38);}' +
     '#w121dr .pn{position:relative;width:min(620px,100vw);height:100%;background:' + CREAM + ';box-shadow:-20px 0 50px -20px rgba(0,0,0,.35);display:flex;flex-direction:column;animation:w121in .18s ease-out;}' +
     '@keyframes w121in{from{transform:translateX(24px);opacity:.6;}to{transform:none;opacity:1;}}' +
@@ -271,7 +313,16 @@
   function hasVideo(p) { return (p.media || []).some(function (x) { return x && String(x.kind || x.mime || '').indexOf('video') >= 0; }); }
   function titleOf(p) { var t = String(p.title || '').trim(); if (t) return t; var c = String(p.caption || '').replace(/\s+/g, ' ').trim(); return c ? (c.length > 60 ? c.slice(0, 57) + '\u2026' : c) : 'Untitled post'; }
   function fn(name, body) { return db.functions.invoke(name, { body: body }).then(function (r) { if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
-  function canPublish(pls) { var c = C.cap; if (!c || !c.token) return false; return (pls || []).length > 0 && (pls || []).every(function (p) { return c.can && c.can[p] === true; }); }
+  /* wave225b: a post can be scheduled to go out when Instagram and Facebook can publish (the Meta token); every other platform
+     goes out directly when connected, or by the reminder flow (social-publish tells the owner at the post's time) */
+  function canPublish(pls) { var c = C.cap; if (!c) return false; return (pls || []).length > 0 && (pls || []).every(function (p) { return (p === 'instagram' || p === 'facebook') ? !!(c.token && c.can && c.can[p] === true) : true; }); }
+  function modeOf(p) { var m = C.cap && C.cap.mode && C.cap.mode[p]; if (m) return m; if (p === 'instagram' || p === 'facebook') return C.cap && C.cap.can && C.cap.can[p] ? 'direct' : 'reminder'; return 'reminder'; }
+  function isPub() { return C.pub === true; }
+  function hashCap() { var s = C.cap && C.cap.studio; var n = s && Number(s.hashtag_cap); return n > 0 ? n : 5; }
+  function vOf(e, pl) { e.variants = e.variants || {}; return e.variants[pl] = e.variants[pl] || {}; }
+  function capOf(e, pl) { var v = (e.variants || {})[pl] || {}; return (v.caption != null && String(v.caption).trim() !== '') ? String(v.caption) : (e.caption || ''); }
+  function kindOf(e, pl) { var v = (e.variants || {})[pl] || {}; if (v.kind) return v.kind; if (pl === 'instagram' && vids(e).length) return 'reel'; return 'feed'; }
+  function tagColor(n) { var t = (C.tags || []).filter(function (x) { return x.name === n; })[0]; return t ? t.color : '#6F64AB'; }
   function anyPublish() { var c = C.cap; return !!(c && c.token && c.can && (c.can.instagram || c.can.facebook)); }
 
   /* the state a post is really in, including what the analytics confirmed */
@@ -281,6 +332,10 @@
     var results = p.results || {};
     var up = Object.keys(results).filter(function (k) { return results[k] && (results[k].id || results[k].url); });
     var s = p.status || 'draft'; var cls = (ST[s] || ST.draft).cls; var label = (ST[s] || ST.draft).label; var attn = false; var note = '';
+    /* wave225b: approvals come first while a post has not gone out */
+    var ap = p.approval_status || 'none', notOut = ['draft', 'scheduled', 'failed'].indexOf(s) >= 0;
+    if (notOut && ap === 'pending') return { cls: 'appr', label: 'Waiting for approval', attn: false, note: 'Sent for approval' + (p.submitted_by ? ' by ' + String(p.submitted_by).split('@')[0] : '') + '; a marketing lead or an admin approves it', live: liveMap, up: up };
+    if (notOut && ap === 'changes') return { cls: 'bad', label: 'Changes asked', attn: true, note: p.approval_note || 'Changes asked before it can go out', live: liveMap, up: up };
     if (s === 'scheduled' && due && due < now - 15 * 60000) { cls = 'due'; label = 'Due'; attn = true; note = canPublish(p.platforms) ? 'Was due at ' + hm(p.scheduled_at) + '; publishing did not run' : 'Due: post it in Meta Business Suite; the hub confirms it when it shows up'; }
     else if (s === 'scheduled') note = canPublish(p.platforms) ? 'Publishes automatically at ' + hm(p.scheduled_at) : 'Planned for ' + niceWhen(p.scheduled_at) + '; post it by hand (publishing is off)';
     else if (s === 'failed') { attn = true; if (up.length) { label = 'Partly published'; } note = p.error || 'Publishing failed'; }
@@ -289,8 +344,10 @@
       var missing = (p.platforms || []).filter(function (k) { return !liveMap[k]; });
       var ago = p.published_at ? (now - new Date(p.published_at).getTime()) / 3600000 : 0;
       var connected = function (k) { return ((C.cap && C.cap.accounts) || []).some(function (a) { return a.platform === k; }); };
-      if (!missing.length) note = 'Live on ' + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and ');
-      else if (ago > 36 && missing.some(connected)) { note = 'Not seen in the analytics yet on ' + missing.filter(connected).map(function (k) { return PL[k].label; }).join(' and '); attn = true; }
+      var byHand = (p.platforms || []).filter(function (k) { var r = (p.results || {})[k]; return r && r.manual && !r.manual_done && !liveMap[k]; });
+      if (byHand.length) { note = 'Waiting to be posted by hand on ' + byHand.map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and '); attn = (now - new Date(p.scheduled_at || p.published_at || now).getTime()) > 6 * 3600000; }
+      else if (!missing.length) note = 'Live on ' + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and ');
+      else if (ago > 36 && missing.some(connected)) { note = 'Not seen in the analytics yet on ' + missing.filter(connected).map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and '); attn = true; }
       else note = s === 'posted' ? 'Marked posted; the numbers arrive with the next morning pull' : 'Published; the numbers arrive with the next morning pull';
     }
     return { cls: cls, label: label, attn: attn, note: note, live: liveMap, up: up };
@@ -305,8 +362,10 @@
       if (f.st === 'live' && ['published', 'posted'].indexOf(p.status) < 0) return false;
       if (f.st === 'attn' && !s.attn) return false;
       if (f.st === 'drafts' && p.status !== 'draft') return false;
+      if (f.st === 'appr' && ['pending', 'changes'].indexOf(p.approval_status || 'none') < 0) return false;
     }
-    if (f.q) { var q = f.q.toLowerCase(); if ([p.title, p.caption, p.campaign, p.owner, p.notes].join(' ').toLowerCase().indexOf(q) < 0) return false; }
+    if (f.tag && (p.tags || []).indexOf(f.tag) < 0) return false;
+    if (f.q) { var q = f.q.toLowerCase(); if ([p.title, p.caption, p.campaign, p.owner, p.notes, (p.tags || []).join(' ')].join(' ').toLowerCase().indexOf(q) < 0) return false; }
     return true;
   }
   function dated() { return C.posts.filter(function (p) { return p.scheduled_at && p.status !== 'cancelled' && matches(p); }); }
@@ -321,7 +380,8 @@
     try {
       var r = await db.from('content_posts').select('*').order('scheduled_at', { ascending: true }).limit(1500);
       if (r.error) throw r.error;
-      var all121 = (r.data || []).map(function (p) { p.platforms = p.platforms || []; p.media = p.media || []; p.results = p.results || {}; p.live = p.live || {}; return p; });
+      var all121 = (r.data || []).map(function (p) { p.platforms = p.platforms || []; p.media = p.media || []; p.results = p.results || {}; p.live = p.live || {}; p.variants = p.variants || {}; p.tags = p.tags || []; p.manual = p.manual || {}; return p; });
+      loadStudio();
       /* wave136: an idea in the bank is out of the calendar until its date (the bank page lists it) */
       C.banked = all121.filter(function (p) { return !!p.banked_at; });
       C.posts = all121.filter(function (p) { return !p.banked_at; });
@@ -331,6 +391,33 @@
     C.loading = false; paint();
     if (!C.cap && staff() && !C.capBusy) loadCap();
     if (!C.perf && !C.perfBusy) loadPerf();
+  }
+  /* wave225b: the Content Studio's own data (who publishes, tags, the library, the posting slots) */
+  async function loadStudio() {
+    try {
+      var rs = await Promise.all([
+        C.pub === null ? db.rpc('wa225_publisher') : Promise.resolve({ data: C.pub }),
+        db.from('content_tags').select('*').order('name'),
+        db.from('content_snippets').select('*').order('name'),
+        db.from('content_slots').select('*').order('weekday').order('at')
+      ]);
+      C.pub = !!(rs[0] && rs[0].data === true);
+      C.tags = (rs[1] && rs[1].data) || []; C.lib = (rs[2] && rs[2].data) || []; C.slots = (rs[3] && rs[3].data) || [];
+      if (C.edit) paintDrawer(); else paint();
+    } catch (e) { /* the calendar works without them */ }
+  }
+  /* the next free posting slot for these platforms (content_slots), after now and not already taken by a post */
+  function nextQueueSlot(pls) {
+    var slots = (C.slots || []).filter(function (s) { return !pls || !pls.length || pls.indexOf(s.platform) >= 0; });
+    if (!slots.length) return null;
+    var taken = {}; C.posts.forEach(function (p) { if (p.scheduled_at && p.status !== 'cancelled') taken[dayOf(p.scheduled_at) + ' ' + hm(p.scheduled_at)] = 1; });
+    var t = today(), nowHm = hm(new Date().toISOString());
+    for (var i = 0; i < 60; i++) {
+      var d = addDays(t, i), wd = dowOf(d);
+      var opts = slots.filter(function (s) { return Number(s.weekday) === wd; }).map(function (s) { return String(s.at).slice(0, 5); }).sort();
+      for (var j = 0; j < opts.length; j++) { if (i === 0 && opts[j] <= nowHm) continue; if (!taken[d + ' ' + opts[j]]) return { date: d, time: opts[j] }; }
+    }
+    return null;
   }
   /* wave136: the meeting each idea came from */
   async function loadSources() {
@@ -403,21 +490,14 @@
     return sec;
   }
   function capBanner() {
+    /* wave225c: one line per way of posting, from social-publish capabilities */
     if (!staff()) return '';
     var c = C.cap;
-    if (!c) return '<div class="cap"><div><b>Checking the Meta connection\u2026</b></div></div>';
-    if (c.token && c.can && c.can.instagram && c.can.facebook) return '<div class="cap on"><div><b>Publishing is on for Instagram and Facebook.</b>Scheduled posts go out within five minutes of their time, and each one is confirmed live when it shows up in the analytics.</div></div>';
-    var parts = [];
-    if (!c.token) parts.push('The Meta token is not in the vault yet, so the calendar plans posts and confirms them when they show up in the analytics. To publish from here, generate the token with <b style="display:inline">pages_manage_posts</b> and <b style="display:inline">instagram_content_publish</b> ticked as well (<a data-w121go="#socialstats">Analytics &gt; Set up</a>).');
-    else {
-      var on = ['instagram', 'facebook'].filter(function (k) { return c.can && c.can[k]; }).map(function (k) { return PL[k].label; });
-      if (on.length) parts.push('Publishing is on for ' + on.join(' and ') + '.');
-      if ((c.missing || []).length) parts.push('The token is missing ' + c.missing.join(' and ') + '; generate it again with ' + (c.missing.length > 1 ? 'those' : 'that') + ' ticked to publish everywhere.');
-      if ((c.accounts_missing || []).length) parts.push('Connect ' + c.accounts_missing.map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and ') + ' in <a data-w121go="#socialstats">Analytics &gt; Set up</a>.');
-      if (!on.length && !(c.missing || []).length && !(c.accounts_missing || []).length) parts.push('Publishing is off.');
-      parts.push('Until then, posts are planned here and confirmed from the analytics.');
-    }
-    return '<div class="cap"><div><b>' + (c.token ? 'Publishing is partly on' : 'Plan and confirm mode') + '</b>' + parts.join(' ') + '</div></div>';
+    if (!c) return '<div class="cap"><div><b>Checking the connections\u2026</b></div></div>';
+    var by = {}; PORDER.forEach(function (k) { var m = modeOf(k); (by[m] = by[m] || []).push(PL[k].label); });
+    var bits = []; ['direct', 'make', 'drafts', 'reminder'].forEach(function (m) { if (by[m]) bits.push('<span style="display:block">' + E(MODE_L[m]) + ': <b style="display:inline">' + E(by[m].join(', ')) + '</b></span>'); });
+    var allOn = !by.reminder;
+    return '<div class="cap' + (allOn || (c.can && c.can.instagram && c.can.facebook) ? ' on' : '') + '"><div><b>' + (c.can && c.can.instagram && c.can.facebook ? 'Instagram and Facebook publish from here.' : 'Plan and confirm mode for Meta') + '</b>' + bits.join('') + '<span style="display:block;margin-top:4px">Reminders reach the post\u2019s owner at its time (a Hub notification and a Slack DM) with the caption and media to post by hand. <a data-w121go="#studio/connections">Connections</a></span></div></div>';
   }
   function glance() {
     var now = Date.now(); var t = today(); var mon = mondayOf(t), sun = addDays(mon, 6);
@@ -442,13 +522,14 @@
   function header() {
     var a = C.anchor, v = C.view; var label = v === 'month' ? niceDate(a, { month: 'long', year: 'numeric' }) : v === 'week' ? (function () { var m = mondayOf(a); return niceDate(m, { month: 'short', day: 'numeric' }) + ' to ' + niceDate(addDays(m, 6), { month: 'short', day: 'numeric' }); })() : 'All posts';
     return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Content calendar</div>' +
-      '<div class="w116top"><div><h2><span class="dot" style="background:#6F64AB"></span>Content calendar</h2><p class="sub">Plan, publish and confirm Instagram and Facebook posts. Drag a post to move it; drop an idea on a day to plan it.</p></div>' +
+      '<div class="w116top"><div><h2><span class="dot" style="background:#B4467A"></span>Content calendar</h2><p class="sub">Plan, approve, publish and confirm posts for Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube. Drag a post to move it; drop an idea on a day to plan it.</p></div>' +
       '<div class="w120ctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + (staff() ? '<button class="btn" data-w121new="1">New post</button><button class="btn mini ghost" data-w121set="1" title="Slack confirmations">Settings</button>' : '') + '<a class="btn mini ghost" data-w121go="#socialstats">Analytics</a></div></div>' +
       '<div class="ctl"><span class="w116seg">' + [['month', 'Month'], ['week', 'Week'], ['list', 'List']].map(function (x) { return '<a data-w121view="' + x[0] + '" class="' + (v === x[0] ? 'on' : '') + '">' + x[1] + '</a>'; }).join('') + '</span>' +
       (v !== 'list' ? '<span class="nav"><button data-w121nav="-1" title="Back">&lsaquo;</button><b>' + E(label) + '</b><button data-w121nav="1" title="Forward">&rsaquo;</button></span><button class="btn mini ghost" data-w121nav="0">Today</button>' : '') +
       '<span class="sp"></span><input type="search" id="w121q" placeholder="Search posts" value="' + E(C.filter.q) + '"></div>' +
-      '<div class="chips">' + [['', 'All platforms'], ['instagram', 'Instagram'], ['facebook', 'Facebook']].map(function (x) { return '<span data-w121fpl="' + x[0] + '" class="' + (C.filter.pl === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') + '<i></i>' +
-      [['', 'Everything'], ['planned', 'Planned'], ['live', 'Live'], ['attn', 'Needs attention'], ['drafts', 'Drafts']].map(function (x) { return '<span data-w121fst="' + x[0] + '" class="' + (C.filter.st === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') + '</div>';
+      '<div class="chips">' + [['', 'All platforms']].concat(PORDER.map(function (k) { return [k, PL[k].label]; })).map(function (x) { return '<span data-w121fpl="' + x[0] + '" class="' + (C.filter.pl === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') + '<i></i>' +
+      [['', 'Everything'], ['planned', 'Planned'], ['appr', 'Approvals'], ['live', 'Live'], ['attn', 'Needs attention'], ['drafts', 'Drafts']].map(function (x) { return '<span data-w121fst="' + x[0] + '" class="' + (C.filter.st === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') +
+      ((C.tags || []).length ? '<i></i><select data-w225ftag aria-label="Tag"><option value="">Every tag</option>' + C.tags.map(function (t) { return '<option' + (C.filter.tag === t.name ? ' selected' : '') + '>' + E(t.name) + '</option>'; }).join('') + '</select>' : '') + '</div>';
   }
   function settingsPanel() {
     if (!C.settingsOpen || !staff()) return '';
@@ -568,16 +649,23 @@
   /* ---------- the composer ---------- */
   function blank(day) {
     var slot = bestSlot(); var ns = day && day !== '1' && day !== 'idea' ? { date: day, time: slot && slot.h != null ? String(slot.h).padStart(2, '0') + ':00' : '18:00' } : (day === 'idea' ? { date: '', time: '' } : nextSlotDate(slot));
-    return { id: null, title: '', platforms: ['instagram', 'facebook'], caption: '', link_url: '', media: [], date: ns.date, time: ns.time, owner: me(), campaign: '', notes: '', status: 'draft', results: {}, live: {}, error: null, dirty: false, tab: 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false };
+    return { id: null, title: '', platforms: ['instagram', 'facebook'], caption: '', link_url: '', media: [], date: ns.date, time: ns.time, owner: me(), campaign: '', notes: '', status: 'draft', results: {}, live: {}, error: null, dirty: false, tab: 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false,
+      /* wave225d: the Content Studio */
+      variants: {}, first_comment: '', tags: [], repeat: '', repeat_times: 4, track_links: true, utm_campaign: '', approval_status: 'none', approval_note: '', submitted_by: null, manualMap: {}, vtab: 'instagram', altIdx: null, apNote: '' };
   }
   function fromPost(p) {
-    return { id: p.id, title: p.title || '', platforms: (p.platforms || []).slice(), caption: p.caption || '', link_url: p.link_url || '', media: (p.media || []).map(function (m) { return Object.assign({}, m); }), date: p.scheduled_at ? dayOf(p.scheduled_at) : '', time: p.scheduled_at ? hm(p.scheduled_at) : '', owner: p.owner || '', campaign: p.campaign || '', notes: p.notes || '', status: p.status || 'draft', results: p.results || {}, live: p.live || {}, error: p.error || null, published_at: p.published_at || null, dirty: false, tab: (p.platforms || [])[0] || 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false };
+    var rr = p.repeat_rule || {};
+    return { id: p.id, title: p.title || '', platforms: (p.platforms || []).slice(), caption: p.caption || '', link_url: p.link_url || '', media: (p.media || []).map(function (m) { var c = Object.assign({}, m); if (m.tags) c.tags = m.tags.map(function (t) { return Object.assign({}, t); }); return c; }), date: p.scheduled_at ? dayOf(p.scheduled_at) : '', time: p.scheduled_at ? hm(p.scheduled_at) : '', owner: p.owner || '', campaign: p.campaign || '', notes: p.notes || '', status: p.status || 'draft', results: p.results || {}, live: p.live || {}, error: p.error || null, published_at: p.published_at || null, dirty: false, tab: (p.platforms || [])[0] || 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false,
+      variants: JSON.parse(JSON.stringify(p.variants || {})), first_comment: p.first_comment || '', tags: (p.tags || []).slice(), repeat: rr.every || '', repeat_times: rr.times || 4, track_links: p.track_links !== false, utm_campaign: (p.utm && p.utm.campaign) || '', approval_status: p.approval_status || 'none', approval_note: p.approval_note || '', submitted_by: p.submitted_by || null, manualMap: p.manual || {}, vtab: (p.platforms || [])[0] || 'instagram', altIdx: null, apNote: '' };
   }
   function openComposer(pOrDay, prefill) {
     if (!allowed()) return;
     var p = pOrDay && typeof pOrDay === 'object' ? pOrDay : null;
     C.edit = p ? fromPost(p) : blank(pOrDay);
-    if (prefill) { if (prefill.title) C.edit.title = prefill.title; if (prefill.notes) C.edit.notes = prefill.notes; if (prefill.campaign) C.edit.campaign = prefill.campaign; if (prefill.slot) { var ns = nextSlotDate(prefill.slot); C.edit.date = ns.date; C.edit.time = ns.time; } C.edit.dirty = true; }
+    if (prefill) { if (prefill.title) C.edit.title = prefill.title; if (prefill.notes) C.edit.notes = prefill.notes; if (prefill.campaign) C.edit.campaign = prefill.campaign; if (prefill.slot) { var ns = nextSlotDate(prefill.slot); C.edit.date = ns.date; C.edit.time = ns.time; }
+      /* wave225d: the Content Studio's templates, queue and approvals open the composer with more */
+      if (prefill.platforms) C.edit.platforms = prefill.platforms.slice(); if (prefill.caption != null) C.edit.caption = prefill.caption; if (prefill.first_comment != null) C.edit.first_comment = prefill.first_comment; if (prefill.tags) C.edit.tags = prefill.tags.slice(); if (prefill.variants) C.edit.variants = JSON.parse(JSON.stringify(prefill.variants)); if (prefill.date) { C.edit.date = prefill.date; C.edit.time = prefill.time || C.edit.time || '18:00'; }
+      C.edit.dirty = true; }
     paintDrawer();
     if (!C.cap && staff() && !C.capBusy) loadCap();
     if (!C.perf && !C.perfBusy) loadPerf();
@@ -597,62 +685,130 @@
   function igRatioOk(r) { return r != null && r >= 0.795 && r <= 1.915; }
   function tagsOf(s) { return (String(s || '').match(/#[\w\u00c0-\u024f]+/g) || []); }
   function validate(e) {
-    var out = { ig: [], fb: [], all: [], errors: 0 };
+    /* wave225d: one list per platform, plus the shared one */
+    var out = { all: [], p: {}, errors: 0 };
+    function L(k) { return out.p[k] = out.p[k] || []; }
     function err(list, t) { list.push({ t: t, k: 'e' }); out.errors++; } function warn(list, t) { list.push({ t: t, k: 'w' }); } function ok(list, t) { list.push({ t: t, k: 'k' }); }
-    var im = imgs(e), vi = vids(e);
-    if (!e.platforms.length) err(out.all, 'Pick Instagram, Facebook or both.');
+    var im = imgs(e), vi = vids(e), cap = hashCap();
+    if (!e.platforms.length) err(out.all, 'Pick at least one platform.');
     if ((e.media || []).some(function (m) { return m.uploading; })) err(out.all, 'Wait for the uploads to finish.');
-    if (e.platforms.indexOf('instagram') >= 0) {
-      if (!im.length && !vi.length) err(out.ig, 'Instagram needs a photo or a video.');
-      if (vi.length) { if (im.length) warn(out.ig, 'A reel uses the video only; the photos stay off Instagram.'); var dur = vi[0].dur; if (dur != null && (dur < 3 || dur > 900)) err(out.ig, 'Reels run from 3 seconds to 15 minutes; this video is ' + Math.round(dur) + ' seconds.'); else ok(out.ig, 'Instagram: a reel' + (dur ? ' (' + Math.round(dur) + ' s)' : '') + '.'); }
-      else if (im.length) {
-        if (im.length > 10) err(out.ig, 'Instagram takes up to 10 photos in a carousel.');
-        var r0 = ratioOf(im[0]);
-        if (r0 != null && !igRatioOk(r0)) err(out.ig, 'The first photo is ' + ratioLabel(r0) + '; Instagram takes 4:5 to 1.91:1. Crop it below.');
-        else if (im.length > 1 && im.some(function (m) { var r = ratioOf(m); return r != null && Math.abs(r - r0) > 0.03; })) warn(out.ig, 'Instagram crops every photo in a carousel to the first one\u2019s shape (' + ratioLabel(r0) + ').');
-        if (!out.ig.filter(function (x) { return x.k === 'e'; }).length) ok(out.ig, 'Instagram: ' + (im.length > 1 ? 'a carousel of ' + im.length : 'one photo') + (r0 ? ', ' + ratioLabel(r0) : '') + '.');
+    e.platforms.forEach(function (k) {
+      var l = L(k), c = capOf(e, k), kind = kindOf(e, k), md = modeOf(k), nm = PL[k] ? PL[k].label : k, dur = vi[0] && vi[0].dur;
+      if (k === 'instagram') {
+        if (kind === 'story') { if (!im.length && !vi.length) err(l, 'An Instagram story needs a photo or a video.'); else ok(l, 'Instagram: a story (' + (vi.length ? 'the video' : 'the first photo') + ').'); if (vi.length && dur > 60) warn(l, 'Stories longer than 60 seconds are cut.'); }
+        else if (kind === 'reel' || (vi.length && !im.length)) { if (!vi.length) err(l, 'An Instagram reel needs a video.'); else if (dur != null && (dur < 3 || dur > 900)) err(l, 'Reels run from 3 seconds to 15 minutes; this video is ' + Math.round(dur) + ' seconds.'); else ok(l, 'Instagram: a reel' + (dur ? ' (' + Math.round(dur) + ' s)' : '') + '.'); if (im.length) warn(l, 'A reel uses the video only; the photos stay off Instagram.'); }
+        else if (!im.length && !vi.length) err(l, 'Instagram needs a photo or a video.');
+        else {
+          if (im.length > 10) err(l, 'Instagram takes up to 10 photos in a carousel.');
+          var r0 = ratioOf(im[0]);
+          if (r0 != null && !igRatioOk(r0)) err(l, 'The first photo is ' + ratioLabel(r0) + '; Instagram takes 4:5 to 1.91:1. Crop it below.');
+          else if (im.length > 1 && im.some(function (m) { var r = ratioOf(m); return r != null && Math.abs(r - r0) > 0.03; })) warn(l, 'Instagram crops every photo in a carousel to the first one\u2019s shape (' + ratioLabel(r0) + ').');
+          if (!l.filter(function (x) { return x.k === 'e'; }).length) ok(l, 'Instagram: ' + (im.length > 1 ? 'a carousel of ' + im.length : 'one photo') + (r0 ? ', ' + ratioLabel(r0) : '') + '.');
+          if (im.some(function (m) { return !m.alt; })) warn(l, 'Add alt text to each photo (Alt on the photo) so people using screen readers know what it shows.');
+        }
+        if (kind !== 'story') {
+          if (c.length > 2200) err(l, 'Instagram captions stop at 2,200 characters (' + c.length + ' now).');
+          if (tagsOf(c).length > cap) err(l, 'Instagram takes ' + cap + ' hashtags a post since December 2025 (' + tagsOf(c).length + ' now).');
+          if ((c.match(/(^|\s)@[\w.]+/g) || []).length > 20) err(l, 'Instagram allows 20 @mentions.');
+          if (e.link_url && c.indexOf('bio') < 0) warn(l, 'Links in Instagram captions are not clickable; say \u201clink in bio\u201d.');
+        }
+        var col = ((e.variants.instagram || {}).collaborators || []); if (col.length > 3) err(l, 'Instagram takes up to 3 collaborators.');
+      } else if (k === 'facebook') {
+        if (kind === 'reel') { if (!vi.length) err(l, 'A Facebook Reel needs a video.'); else if (dur != null && (dur < 3 || dur > 90)) err(l, 'Facebook Reels run from 3 to 90 seconds; this video is ' + Math.round(dur) + '.'); else ok(l, 'Facebook: a Reel.'); }
+        else if (kind === 'story') { if (!im.length && !vi.length) err(l, 'A Facebook story needs a photo or a video.'); else ok(l, 'Facebook: a story.'); }
+        else if (!c.trim() && !e.link_url && !im.length && !vi.length) err(l, 'Facebook needs words, a link or media.');
+        else ok(l, 'Facebook: ' + (vi.length ? 'a video' : im.length > 1 ? im.length + ' photos' : im.length ? 'a photo' : e.link_url ? 'a link post' : 'a text post') + (e.link_url && (im.length || vi.length) ? ' with the link in the text' : '') + '.');
+        if (kind === 'feed' && im.length > 10) warn(l, 'Facebook gets the first 10 photos.');
+      } else if (k === 'threads') {
+        if (c.length > 500) err(l, 'Threads posts stop at 500 characters (' + c.length + ' now). Write a shorter one under Customize.');
+        if (!c.trim() && !im.length && !vi.length) err(l, 'Threads needs words or media.');
+        if (im.length > 20) err(l, 'Threads takes up to 20 photos.');
+        if (!out.p[k].length) ok(l, 'Threads: ' + (vi.length ? 'a video' : im.length > 1 ? 'a carousel of ' + im.length : im.length ? 'a photo' : 'a text post') + '.');
+      } else if (k === 'linkedin') {
+        if (c.length > 3000) err(l, 'LinkedIn posts stop at 3,000 characters.');
+        if (!c.trim() && !im.length && !vi.length) err(l, 'LinkedIn needs words or media.');
+        if (md === 'make' && vi.length) warn(l, 'Make sends text and photos; a LinkedIn video comes to you as a reminder to post by hand.');
+        if (md === 'make' && im.length > 1) warn(l, 'Make sends the first photo only.');
+        if (!out.p[k].some(function (x) { return x.k !== 'k'; })) ok(l, 'LinkedIn: ' + (vi.length ? 'a video' : im.length ? 'a photo' : 'a text post') + '.');
+      } else if (k === 'tiktok') {
+        if (!vi.length) warn(l, im.length ? 'TikTok photo posts come to you as a reminder to post in the app.' : 'TikTok needs a video.');
+        if (vi.length && dur != null && dur > 600) err(l, 'TikTok videos run up to 10 minutes.');
+        if (vi.length) ok(l, md === 'drafts' ? 'TikTok: the video lands in WA\u2019s TikTok drafts; add sound and post it in the app.' : 'TikTok: a video.');
+        if (tagsOf(c).length > 5) warn(l, 'TikTok works best with 3 to 5 hashtags.');
+      } else if (k === 'youtube') {
+        if (!vi.length) err(l, 'A YouTube Short needs a video.');
+        else if (dur != null && dur > 180) err(l, 'Shorts run up to 3 minutes; this video is ' + Math.round(dur) + ' seconds.');
+        else { var r = ratioOf(vi[0]); if (r != null && r > 1.01) warn(l, 'Shorts are vertical or square; this video is wide.'); ok(l, 'YouTube: a Short.'); }
+        var yt = (e.variants.youtube || {}).title || e.title; if (!String(yt || '').trim()) warn(l, 'Give the Short a title (Customize, YouTube), or the post\u2019s name is used.');
       }
-      if (e.caption.length > 2200) err(out.ig, 'Instagram captions stop at 2,200 characters (' + e.caption.length + ' now).');
-      if (tagsOf(e.caption).length > 30) err(out.ig, 'Instagram allows 30 hashtags (' + tagsOf(e.caption).length + ' now).');
-      if (e.link_url && e.caption.indexOf('bio') < 0) warn(out.ig, 'Links in Instagram captions are not clickable; say \u201clink in bio\u201d.');
-    }
-    if (e.platforms.indexOf('facebook') >= 0) {
-      if (!e.caption.trim() && !e.link_url && !im.length && !vi.length) err(out.fb, 'Facebook needs words, a link or media.');
-      else ok(out.fb, 'Facebook: ' + (vi.length ? 'a video' : im.length > 1 ? im.length + ' photos' : im.length ? 'a photo' : e.link_url ? 'a link post' : 'a text post') + (e.link_url && (im.length || vi.length) ? ' with the link in the text' : '') + '.');
-      if (im.length > 10) warn(out.fb, 'Facebook gets the first 10 photos.');
-    }
+      if (md === 'reminder') warn(l, nm + ' is not connected: at the post\u2019s time the owner gets a reminder to post it by hand.');
+    });
+    /* the old names some waves read */
+    out.ig = out.p.instagram || []; out.fb = out.p.facebook || [];
     return out;
   }
   function valHtml(v) {
-    var rows = v.all.concat(v.ig).concat(v.fb);
+    var rows = v.all.slice(); PORDER.forEach(function (k) { (v.p[k] || []).forEach(function (x) { rows.push(x); }); });
     return rows.length ? '<div class="val">' + rows.map(function (x) { return '<div class="' + x.k + '">' + (x.k === 'e' ? '\u2715 ' : x.k === 'w' ? '! ' : '\u2713 ') + E(x.t) + '</div>'; }).join('') + '</div>' : '';
   }
   function thumbHtml(m, i) {
     var r = ratioOf(m); var isV = String(m.kind || m.mime || '').indexOf('video') >= 0; var bad = !isV && r != null && !igRatioOk(r) && C.edit && C.edit.platforms.indexOf('instagram') >= 0;
-    return '<div class="th" draggable="' + (readOnly() ? 'false' : 'true') + '" data-w121mi="' + i + '">' + (isV ? '<video src="' + E(m.local || m.url || '') + '" muted preload="metadata"></video>' : '<img src="' + E(m.local || m.url || '') + '" alt="">') +
+    return '<div class="th" draggable="' + (readOnly() ? 'false' : 'true') + '" data-w121mi="' + i + '">' + (isV ? '<video src="' + E(m.local || m.url || '') + '" muted preload="metadata"></video>' : '<img src="' + E(m.local || m.url || '') + '" alt="' + E(m.alt || '') + '">') +
       (r ? '<span class="rt' + (bad ? ' bad' : '') + '">' + E(isV ? (m.dur ? Math.round(m.dur) + ' s' : 'video') : ratioLabel(r)) + '</span>' : '') + (i === 0 && C.edit && C.edit.media.length > 1 ? '<span class="n1">cover</span>' : '') +
       (readOnly() ? '' : '<button class="rm" data-w121mrm="' + i + '" title="Remove">\u2715</button>') + (m.uploading ? '<div class="up">Uploading\u2026</div>' : '') +
-      (!isV && !readOnly() && !m.uploading ? '<div class="crop">' + [['0.8', '4:5'], ['1', '1:1'], ['1.91', '1.91']].map(function (c) { return '<button data-w121crop="' + i + '" data-r="' + c[0] + '" title="Crop to ' + c[1] + '">' + c[1] + '</button>'; }).join('') + '</div>' : '<div class="meta">' + (m.size ? num(m.size / 1024) + ' KB' : '') + '</div>') + '</div>';
+      (!isV && !m.uploading ? '<button class="altb' + (m.alt ? ' ok' : '') + '" data-w225alt="' + i + '" title="Alt text and people tags">' + (m.alt ? 'ALT \u2713' : 'ALT') + ((m.tags || []).length ? ' \u00b7 ' + m.tags.length + '@' : '') + '</button>' : '') +
+      (!isV && !readOnly() && !m.uploading ? '<div class="crop">' + [['0.8', '4:5'], ['1', '1:1'], ['1.91', '1.91'], ['0.5625', '9:16']].map(function (c) { return '<button data-w121crop="' + i + '" data-r="' + c[0] + '" title="Crop to ' + c[1] + '">' + c[1] + '</button>'; }).join('') + '</div>' : '<div class="meta">' + (m.size ? num(m.size / 1024) + ' KB' : '') + '</div>') + '</div>';
+  }
+  /* wave225d: alt text and people tags for one photo */
+  function altHtml(e) {
+    var i = e.altIdx; if (i == null) return ''; var m = e.media[i]; if (!m || String(m.kind || m.mime || '').indexOf('video') >= 0) return '';
+    var ro = readOnly();
+    return '<div class="w225alt"><div class="pic" data-w225pic="' + i + '"><img src="' + E(m.local || m.url || '') + '" alt="">' + (m.tags || []).map(function (t) { return '<b style="left:' + (t.x * 100).toFixed(1) + '%;top:' + (t.y * 100).toFixed(1) + '%">@' + E(t.username) + '</b>'; }).join('') + '</div>' +
+      '<div><span class="lbl">Alt text (photo ' + (i + 1) + ')</span><textarea id="w225alttext" maxlength="1000" placeholder="What the photo shows, for people using screen readers: who, what, where."' + (ro ? ' disabled' : '') + '>' + E(m.alt || '') + '</textarea>' +
+      (ro ? '' : '<div class="w225lib"><button class="btn mini ghost" data-w225altai="' + i + '"' + (e.altBusy ? ' disabled' : '') + '>' + (e.altBusy ? 'Writing\u2026' : 'Write it with the Hub') + '</button></div>') +
+      '<span class="lbl" style="margin-top:10px">Tag people on Instagram</span>' + (ro ? '' : '<input type="text" id="w225tagname" placeholder="@username, then click the photo where they are">') +
+      '<div class="tgs">' + (m.tags || []).map(function (t, j) { return '<span data-w225untag="' + j + '" title="Remove">@' + E(t.username) + ' \u2715</span>'; }).join('') + '</div>' +
+      '<small class="w225hint">Tags go to Instagram with the photo. Facebook and LinkedIn get the alt text too.</small>' +
+      '<div class="w225lib"><button class="btn mini ghost" data-w225altx="1">Done</button></div></div></div>';
   }
   function linkify(s) { return E(s).replace(/(#[\w\u00c0-\u024f]+)/g, '<span class="ht">$1</span>'); }
   function previewHtml(e) {
-    var im = imgs(e), vi = vids(e); var tab = e.tab === 'facebook' && e.platforms.indexOf('facebook') >= 0 ? 'facebook' : e.platforms.indexOf('instagram') >= 0 ? 'instagram' : 'facebook';
-    var tabs = '<div class="pvt">' + ['instagram', 'facebook'].filter(function (k) { return e.platforms.indexOf(k) >= 0; }).map(function (k) { return '<a data-w121tab="' + k + '" class="' + (tab === k ? 'on' : '') + '">' + PL[k].label + '</a>'; }).join('') + '</div>';
     if (!e.platforms.length) return '';
+    var im = imgs(e), vi = vids(e);
+    var tab = e.platforms.indexOf(e.tab) >= 0 ? e.tab : e.platforms[0];
+    var tabs = '<div class="pvt">' + PORDER.filter(function (k) { return e.platforms.indexOf(k) >= 0; }).map(function (k) { return '<a data-w121tab="' + k + '" class="' + (tab === k ? 'on' : '') + '">' + PL[k].label + '</a>'; }).join('') + '</div>';
+    var cap = capOf(e, tab), kind = kindOf(e, tab), fc = String(((e.variants[tab] || {}).first_comment) || e.first_comment || '').trim();
+    var src0 = vi.length ? (vi[0].local || vi[0].url || '') : im.length ? (im[0].local || im[0].url || '') : '';
+    var mediaBox = function (ratio, maxh) { return src0 ? '<div class="mm" style="aspect-ratio:' + ratio + ';' + (maxh ? 'max-height:' + maxh + 'px;' : '') + '">' + (vi.length ? '<video src="' + E(src0) + '" muted playsinline></video>' : '<img src="' + E(src0) + '" alt="">') + '</div>' : ''; };
     var html = '';
     if (tab === 'instagram') {
-      var r0 = vi.length ? 0.5625 : (ratioOf(im[0]) || 1); r0 = Math.max(0.8, Math.min(1.91, r0)); if (vi.length) r0 = 0.5625;
-      var cap = e.caption || ''; var short = cap.length > 125 ? cap.slice(0, 125) : cap;
-      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + '</b></div></div>' +
-        (vi.length || im.length ? '<div class="mm" style="aspect-ratio:' + r0.toFixed(3) + ';' + (vi.length ? 'max-height:420px;' : '') + '">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video>' : '<img src="' + E(im[0].local || im[0].url || '') + '" alt="">') + (!vi.length && im.length > 1 ? '<div class="dots">' + im.slice(0, 10).map(function () { return '<i></i>'; }).join('') + '</div>' : '') + '</div>' : '<div class="mm" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px">A photo or video goes here</div>') +
-        '<div class="mc"><b>' + E(igHandle()) + '</b> ' + linkify(short) + (cap.length > 125 ? '<span class="more">\u2026 more</span>' : '') + '</div></div>';
-    } else {
-      var txt = (e.caption || '') + (e.link_url && (im.length || vi.length) && (e.caption || '').indexOf(e.link_url) < 0 ? '\n\n' + e.link_url : '');
+      if (kind === 'story') html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + '</b><span>Story \u00b7 24 hours</span></div></div>' + (mediaBox('0.5625', 420) || '<div class="mm" style="aspect-ratio:.5625;max-height:420px;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px">A photo or video goes here</div>') + '</div>';
+      else {
+        var r0 = vi.length ? 0.5625 : (ratioOf(im[0]) || 1); r0 = Math.max(0.8, Math.min(1.91, r0)); if (vi.length) r0 = 0.5625;
+        var short = cap.length > 125 ? cap.slice(0, 125) : cap;
+        var col = ((e.variants.instagram || {}).collaborators || []);
+        html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + (col.length ? ' and ' + E(col.map(function (x) { return x.replace(/^@/, ''); }).join(', ')) : '') + '</b></div></div>' +
+          (vi.length || im.length ? '<div class="mm" style="aspect-ratio:' + r0.toFixed(3) + ';' + (vi.length ? 'max-height:420px;' : '') + '">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video>' : '<img src="' + E(im[0].local || im[0].url || '') + '" alt="">') + (!vi.length && im.length > 1 ? '<div class="dots">' + im.slice(0, 10).map(function () { return '<i></i>'; }).join('') + '</div>' : '') + '</div>' : '<div class="mm" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px">A photo or video goes here</div>') +
+          '<div class="mc"><b>' + E(igHandle()) + '</b> ' + linkify(short) + (cap.length > 125 ? '<span class="more">\u2026 more</span>' : '') + '</div>' + (fc ? '<div class="mc" style="color:var(--wa-muted)"><b>' + E(igHandle()) + '</b> ' + linkify(fc) + '</div>' : '') + '</div>';
+      }
+    } else if (tab === 'facebook') {
+      var txt = cap + (e.link_url && (im.length || vi.length) && cap.indexOf(e.link_url) < 0 ? '\n\n' + e.link_url : '');
       var grid = '';
-      if (vi.length) grid = '<div class="mm" style="aspect-ratio:1.7778"><video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video></div>';
+      if (kind === 'reel' || kind === 'story') grid = mediaBox('0.5625', 420);
+      else if (vi.length) grid = '<div class="mm" style="aspect-ratio:1.7778"><video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video></div>';
       else if (im.length === 1) grid = '<div class="mm" style="aspect-ratio:' + Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3) + '"><img src="' + E(im[0].local || im[0].url || '') + '" alt=""></div>';
       else if (im.length > 1) { var shown = im.slice(0, im.length >= 3 ? 3 : 2); grid = '<div class="fbg" style="grid-template-columns:' + (shown.length === 2 ? '1fr 1fr' : '2fr 1fr') + ';' + (shown.length === 3 ? 'grid-template-rows:1fr 1fr;' : '') + 'aspect-ratio:1.2">' + shown.map(function (m, i) { return '<div style="' + (shown.length === 3 && i === 0 ? 'grid-row:1 / 3;' : '') + 'overflow:hidden;position:relative"><img src="' + E(m.local || m.url || '') + '" alt="">' + (i === shown.length - 1 && im.length > shown.length ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);color:#FFFAF2;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">+' + (im.length - shown.length) + '</div>' : '') + '</div>'; }).join('') + '</div>'; }
-      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>' + E(e.date ? niceDate(e.date) + ' at ' + (e.time || '') : 'Just now') + ' \u00b7 Public</span></div></div><div class="mc">' + E(txt) + '</div>' + grid + (e.link_url && !im.length && !vi.length ? '<div class="lk">' + E((e.link_url.match(/^https?:\/\/([^\/]+)/) || [])[1] || '') + '<b>' + E(e.link_url) + '</b></div>' : '') + '</div>';
+      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>' + E(e.date ? niceDate(e.date) + ' at ' + (e.time || '') : 'Just now') + ' \u00b7 ' + (kind === 'story' ? 'Story' : kind === 'reel' ? 'Reel' : 'Public') + '</span></div></div>' + (kind === 'story' ? '' : '<div class="mc">' + E(txt) + '</div>') + grid + (kind === 'feed' && e.link_url && !im.length && !vi.length ? '<div class="lk">' + E((e.link_url.match(/^https?:\/\/([^\/]+)/) || [])[1] || '') + '<b>' + E(e.link_url) + '</b></div>' : '') + (fc && kind !== 'story' ? '<div class="mc" style="color:var(--wa-muted)"><b>Welfare Avenue</b> ' + E(fc) + '</div>' : '') + '</div>';
+    } else if (tab === 'threads') {
+      html = '<div class="mock th3"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + '</b><span>Threads</span></div></div><div class="mc">' + linkify(cap.length > 500 ? cap.slice(0, 500) + '\u2026' : cap) + '</div>' + mediaBox(vi.length ? '0.8' : (Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3))) + (fc ? '<div class="mc" style="color:var(--wa-muted)">\u21b3 ' + E(fc) + '</div>' : '') + '</div>';
+    } else if (tab === 'linkedin') {
+      var lt = cap + (e.link_url && cap.indexOf(e.link_url) < 0 ? '\n\n' + e.link_url : '');
+      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>Nonprofit Organization \u00b7 ' + E(e.date ? niceDate(e.date) : 'now') + '</span></div></div><div class="mc">' + E(lt.length > 210 ? lt.slice(0, 210) + '\u2026 see more' : lt) + '</div>' + mediaBox(vi.length ? '1.7778' : (Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3))) + '</div>';
+    } else if (tab === 'tiktok') {
+      html = '<div class="mock"><div class="yt">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>' : 'A video goes here') + '</div><div class="mc"><b>@' + E(igHandle()) + '</b> ' + linkify(cap.slice(0, 150)) + '</div></div>';
+    } else if (tab === 'youtube') {
+      var yt = (e.variants.youtube || {}).title || e.title || cap.split('\n')[0] || '';
+      html = '<div class="mock"><div class="yt">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>' : 'A vertical video goes here') + '</div><div class="mc"><b>' + E(String(yt).slice(0, 100)) + '</b><br><span style="color:var(--wa-muted)">Welfare Avenue \u00b7 ' + E(((e.variants.youtube || {}).privacy) || 'public') + '</span></div></div>';
     }
     return tabs + html;
   }
@@ -664,15 +820,71 @@
       var r = (e.results || {})[k], l = (e.live || {})[k]; var c = PL[k]; if (!c) return;
       var t;
       if (l && (l.external_id || l.url)) { var n = []; ['reach', 'views', 'likes', 'comments', 'shares', 'saves'].forEach(function (m) { if (l[m] != null) n.push(num(l[m]) + ' ' + m); }); t = '\u2713 Live' + (l.url ? ' (<a href="' + E(l.url) + '" target="_blank" rel="noopener">open</a>)' : '') + (n.length ? ': ' + E(n.join(', ')) : '') + '<br><span style="color:var(--wa-muted)">' + (l.matched === 'caption' ? 'Matched in the analytics by its caption' : 'Matched in the analytics') + ', ' + E(niceWhen(l.published_at)) + '</span>'; }
-      else if (r && r.pending) t = 'Instagram is processing the video; it goes up within a few minutes.';
-      else if (r && (r.id || r.url)) t = (r.manual ? 'Marked posted' : 'Published') + (r.url ? ' (<a href="' + E(r.url) + '" target="_blank" rel="noopener">open</a>)' : '') + '<br><span style="color:var(--wa-muted)">Waiting for the analytics to confirm it (the morning pull).</span>';
+      else if (r && r.pending) t = c.label + ' is processing the video; it goes up within a few minutes.';
+      else if (r && r.manual && !r.manual_done) {
+        /* wave225d: the reminder flow for a platform the Hub cannot post to */
+        var mm = (e.manualMap || {})[k] || {};
+        t = '<b>Post it by hand on ' + E(c.label) + '</b><br><span style="color:var(--wa-muted)">' + E(r.why || 'Not connected') + (mm.reminded_at ? '. Reminder sent ' + E(niceWhen(mm.reminded_at)) : '') + '.</span>' +
+          (staff() ? '<div class="w225man">1. <a data-w225copy="' + k + '">Copy the caption</a>' + (e.media.length ? ' and save the media (' + e.media.map(function (m, i) { return '<a href="' + E(m.url) + '" target="_blank" rel="noopener" download>' + (i + 1) + '</a>'; }).join(', ') + ')' : '') + '. 2. Post it in the ' + E(c.label) + ' app. 3. Paste the link (optional) and mark it posted.<div class="ac"><input type="url" data-w225murl="' + k + '" placeholder="' + E(c.label) + ' link (optional)"><button class="btn mini" data-w225mdone="' + k + '">Mark posted</button></div></div>' : '');
+      }
+      else if (r && (r.id || r.url)) t = (r.manual ? 'Posted by hand' + (((e.manualMap || {})[k] || {}).posted_by ? ' by ' + E(e.manualMap[k].posted_by) : '') : r.draft ? 'In the TikTok drafts: add sound and post it in the app' : 'Published' + (r.via === 'make' ? ' through Make' : '')) + (r.url ? ' (<a href="' + E(r.url) + '" target="_blank" rel="noopener">open</a>)' : '') + (r.first_comment ? ' \u00b7 first comment added' : r.first_comment_error ? ' \u00b7 <span style="color:' + FLAG + '">first comment failed: ' + E(r.first_comment_error) + '</span>' : '') + '<br><span style="color:var(--wa-muted)">Waiting for the analytics to confirm it (the morning pull).</span>';
       else if (e.status === 'published' || e.status === 'posted') t = '<span style="color:var(--wa-muted)">Not seen on ' + c.label + ' yet.</span>';
-      else t = '<span style="color:var(--wa-muted)">' + (e.status === 'failed' ? 'Not published.' : 'Not posted yet.') + '</span>';
+      else t = '<span style="color:var(--wa-muted)">' + (e.status === 'failed' ? 'Not published.' : 'Not posted yet.') + ' ' + E(MODE_L[modeOf(k)] || '') + '.</span>';
       rows.push('<div class="r"><i style="background:' + c.color + '">' + E(c.short) + '</i><div>' + t + '</div></div>');
     });
     var man = '';
-    if (staff() && e.manual) man = '<div class="man"><span class="lbl">Mark as posted</span><span class="ro">Posted it from Meta Business Suite or the app? Paste the links if you have them; the hub matches the post in the analytics either way.</span>' + (e.platforms || []).map(function (k) { return '<input type="url" data-w121manurl="' + k + '" placeholder="' + E(PL[k].label) + ' link (optional)">'; }).join('') + '<div style="display:flex;gap:8px"><button class="btn mini" data-w121mandone="1">Mark as posted</button><button class="btn mini ghost" data-w121man="0">Cancel</button></div></div>';
+    if (staff() && e.manual) man = '<div class="man"><span class="lbl">Mark as posted</span><span class="ro">Posted it from the platform\u2019s own app? Paste the links if you have them; the hub matches the post in the analytics either way.</span>' + (e.platforms || []).map(function (k) { return '<input type="url" data-w121manurl="' + k + '" placeholder="' + E(PL[k].label) + ' link (optional)">'; }).join('') + '<div style="display:flex;gap:8px"><button class="btn mini" data-w121mandone="1">Mark as posted</button><button class="btn mini ghost" data-w121man="0">Cancel</button></div></div>';
     return '<div class="sec"><span class="lbl">Where it stands</span><div class="res"><div style="margin:0 0 6px"><span class="pill ' + s.cls + '">' + E(s.label) + '</span> <span class="ro">' + E(s.note || '') + '</span></div>' + rows.join('') + (e.error && e.status === 'failed' ? '<div class="err">' + E(e.error) + '</div>' : '') + man + '</div></div>';
+  }
+  /* wave225d: the approval, at the top of the composer */
+  function apHtml(e) {
+    var ap = e.approval_status || 'none', out = ['published', 'posted', 'publishing'].indexOf(e.status) >= 0;
+    if (out || !staff()) return '';
+    if (ap === 'pending') {
+      var who0 = e.submitted_by ? String(e.submitted_by).split('@')[0] : 'Someone';
+      if (isPub()) return '<div class="w225ap pending"><b>' + E(who0) + ' sent this for approval.</b>' + (e.approval_note ? E(e.approval_note) : 'Check the caption, the media and the date, then approve it or send it back with a note.') + '<textarea id="w225apnote" placeholder="A note for ' + E(who0) + ' (needed to send it back)">' + E(e.apNote || '') + '</textarea><div class="ac"><button class="btn mini ghost" data-w225decide="changes">Send it back</button><button class="btn mini go" data-w225decide="approve">Approve' + (e.date ? ' and schedule' : '') + '</button></div></div>';
+      return '<div class="w225ap pending"><b>Waiting for approval.</b>A marketing lead or an admin approves it; you hear back in the Hub and on Slack. You can still edit it.</div>';
+    }
+    if (ap === 'changes') return '<div class="w225ap changes"><b>Changes asked.</b>' + E(e.approval_note || 'See the note from the approver.') + ' Make the changes, then send it for approval again.</div>';
+    if (ap === 'approved' && !isPub()) return '<div class="w225ap approved"><b>Approved.</b>You can schedule it. Changing the caption, the media or the platforms sends it back for approval.</div>';
+    if (!isPub()) return '<div class="w225ap pending" style="background:rgba(16,63,57,.05);color:var(--wa-text)"><b>Send it for approval when it is ready.</b>Marketing leads and admins approve posts before they go out.</div>';
+    return '';
+  }
+  /* wave225d: Customize per platform */
+  function variantsHtml(e, ro) {
+    var pls = PORDER.filter(function (k) { return e.platforms.indexOf(k) >= 0; }); if (!pls.length) return '';
+    var t = pls.indexOf(e.vtab) >= 0 ? e.vtab : pls[0]; e.vtab = t;
+    var v = (e.variants || {})[t] || {}; var dis = ro ? ' disabled' : '';
+    var lim = { instagram: 2200, facebook: 63206, threads: 500, linkedin: 3000, tiktok: 2200, youtube: 5000 }[t];
+    var own = v.caption != null && String(v.caption).trim() !== '';
+    var h = '<div class="w225vt">' + pls.map(function (k) { var vv = (e.variants || {})[k] || {}; var mark = vv.caption && String(vv.caption).trim() ? ' \u270e' : ''; return '<a data-w225vtab="' + k + '" class="' + (k === t ? 'on' : '') + '">' + PL[k].label + mark + '<i>' + E({ direct: 'direct', make: 'Make', drafts: 'drafts', reminder: 'reminder' }[modeOf(k)] || '') + '</i></a>'; }).join('') + '</div><div class="w225vb">';
+    h += '<span class="lbl">' + E(PL[t].label) + ' caption' + (own ? '' : ' (same as the main caption)') + '</span><textarea id="w225vcap" placeholder="Leave empty to use the main caption, or write one for ' + E(PL[t].label) + '"' + dis + ' style="min-height:80px">' + E(v.caption || '') + '</textarea><small>' + capOf(e, t).length + ' / ' + num(lim) + ' characters' + (t === 'instagram' || t === 'tiktok' ? ' \u00b7 ' + tagsOf(capOf(e, t)).length + ' / ' + (t === 'instagram' ? hashCap() : 5) + ' hashtags' : '') + '</small>';
+    var row = [];
+    if (KINDS[t]) row.push('<div><span class="lbl">Format</span><select id="w225vkind"' + dis + '>' + KINDS[t].map(function (x) { return '<option value="' + x[0] + '"' + (kindOf(e, t) === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div>');
+    if (t === 'instagram' || t === 'facebook' || t === 'threads') row.push('<div><span class="lbl">First comment here</span><input type="text" id="w225vfc" placeholder="' + E(e.first_comment ? 'Same as the shared first comment' : 'None') + '" value="' + E(v.first_comment || '') + '"' + dis + '></div>');
+    if (t === 'instagram') {
+      row.push('<div><span class="lbl">Collaborators (up to 3)</span><input type="text" id="w225vcol" placeholder="@partner, @volunteer" value="' + E((v.collaborators || []).map(function (x) { return '@' + String(x).replace(/^@/, ''); }).join(', ')) + '"' + dis + '></div>');
+      if (kindOf(e, t) === 'reel') { row.push('<div><span class="lbl">Cover frame (seconds in)</span><input type="number" min="0" step="0.5" id="w225vcov" value="' + E(v.cover_ms != null ? (Number(v.cover_ms) / 1000) : '') + '" placeholder="0"' + dis + '></div>'); row.push('<div><span class="lbl">Reel</span><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="w225vstf"' + (v.share_to_feed === false ? '' : ' checked') + dis + '> Also show it in the feed</label></div>'); }
+    }
+    if (t === 'youtube') {
+      row.push('<div><span class="lbl">Title (100 characters)</span><input type="text" id="w225vyt" maxlength="100" value="' + E(v.title || '') + '" placeholder="' + E(e.title || 'The Short\u2019s title') + '"' + dis + '></div>');
+      row.push('<div><span class="lbl">Who sees it</span><select id="w225vprv"' + dis + '>' + [['public', 'Public'], ['unlisted', 'Unlisted'], ['private', 'Private']].map(function (x) { return '<option value="' + x[0] + '"' + ((v.privacy || 'public') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></div>');
+      row.push('<div><span class="lbl">Audience</span><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="w225vmfk"' + (v.made_for_kids ? ' checked' : '') + dis + '> Made for kids</label></div>');
+    }
+    if (row.length) h += '<div class="row">' + row.join('') + '</div>';
+    var note = { tiktok: modeOf('tiktok') === 'drafts' ? 'The video lands in WA\u2019s TikTok inbox as a draft: add trending sound and post it from the app.' : 'TikTok is not connected: the owner gets a reminder with the video and caption.', linkedin: { make: 'Posts to the LinkedIn Page through Make (text and one photo; a video comes as a reminder).', direct: 'Posts to the LinkedIn Page directly.', reminder: 'LinkedIn is not connected: the owner gets a reminder with the caption and media.' }[modeOf('linkedin')], threads: modeOf('threads') === 'direct' ? 'Posts to Threads directly; a first comment becomes a reply.' : 'Threads is not connected: the owner gets a reminder.', youtube: modeOf('youtube') === 'direct' ? 'Uploads the video as a Short.' : 'YouTube is not connected: the owner gets a reminder with the video.' }[t];
+    if (note) h += '<small>' + E(note) + '</small>';
+    return h + '</div>';
+  }
+  function tagsHtml(e, ro) {
+    var all = (C.tags || []).map(function (t) { return t.name; }); (e.tags || []).forEach(function (n) { if (all.indexOf(n) < 0) all.push(n); });
+    return '<div class="w225chips">' + all.map(function (n) { return '<span data-w225tag="' + E(n) + '" class="' + ((e.tags || []).indexOf(n) >= 0 ? 'on' : '') + '"><i style="background:' + E(tagColor(n)) + '"></i>' + E(n) + '</span>'; }).join('') + (ro ? '' : '<input type="text" id="w225newtag" placeholder="New tag" style="width:120px;font-size:12px;padding:4px 10px;border-radius:999px"><button class="btn mini ghost" data-w225tagadd="1">Add</button>') + '</div>';
+  }
+  function libHtml(e) {
+    var hg = (C.lib || []).filter(function (x) { return x.kind === 'hashtags'; }), tp = (C.lib || []).filter(function (x) { return x.kind === 'template'; });
+    return '<div class="w225lib">' + (hg.length ? '<select data-w225hg aria-label="Hashtag group"><option value="">+ Hashtag group</option>' + hg.map(function (x) { return '<option value="' + x.id + '">' + E(x.name) + '</option>'; }).join('') + '</select>' : '') +
+      (tp.length ? '<select data-w225tpl aria-label="Template"><option value="">Start from a template</option>' + tp.map(function (x) { return '<option value="' + x.id + '">' + E(x.name) + '</option>'; }).join('') + '</select>' : '') +
+      '<button class="btn mini ghost" data-w225tplsave="1" title="Keep this post\u2019s platforms, caption, first comment and tags as a template">Save as template</button></div>';
   }
   function ownerOpts(cur) {
     var ms = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); });
@@ -736,17 +948,24 @@
     var aiHtml = '';
     if (e.aiBusy) aiHtml = '<div class="aio"><div style="cursor:default;color:var(--wa-muted)">Writing\u2026</div></div>';
     else if (e.ai && e.ai.options) aiHtml = '<div class="aio">' + e.ai.options.map(function (o, i) { return '<div data-w121aipick="' + i + '" title="Use this caption">' + E(o.caption) + (o.note ? '<small>' + E(o.note) + '</small>' : '') + '</div>'; }).join('') + (e.ai.hashtags && e.ai.hashtags.length ? '<div class="tags" style="cursor:default;border-style:dashed">Hashtags (click to add): ' + e.ai.hashtags.map(function (h) { return '<span data-w121tag="' + E(h) + '">' + E(h) + '</span>'; }).join('') + '</div>' : '') + '</div>';
-    var chars = e.caption.length, tags = tagsOf(e.caption).length;
+    else if (e.ai && e.ai.tailored) aiHtml = '<div class="aio"><div style="cursor:default">Captions written for ' + E(e.ai.tailored.join(', ')) + ': see Customize per platform below.</div></div>';
+    var chars = e.caption.length, tags = tagsOf(e.caption).length, hc = hashCap();
+    var qs = nextQueueSlot(e.platforms);
     var html = '<div class="bk" data-w121close="1"></div><aside class="pn" role="dialog" aria-label="Post">' +
-      '<header><input class="ttl" id="w121title" placeholder="Name this post (only the team sees it)" value="' + E(e.title) + '"' + (ro ? ' disabled' : '') + '>' + (function () { var hs = stateOf(Object.assign({}, C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] || {}, { status: e.status, results: e.results, live: e.live, platforms: e.platforms })); return '<span class="pill ' + hs.cls + '">' + E(e.id ? hs.label : 'New') + '</span>'; })() + '<button class="x" data-w121close="1" title="Close">\u2715</button></header>' +
-      '<div class="bd">' + resultHtml(e) + ideaBox(e) +
-      '<div class="sec"><label>Where</label><div class="pls">' + ['instagram', 'facebook'].map(function (k) { return '<span class="tg' + (e.platforms.indexOf(k) >= 0 ? ' on' : '') + '" data-w121pl="' + k + '"><i style="background:' + PL[k].color + '">' + PL[k].short + '</i>' + PL[k].label + '</span>'; }).join('') + '</div>' + valHtml(v) + '</div>' +
-      '<div class="sec"><label>Photos or a video</label>' + (ro ? '' : '<div class="drop" id="w121drop">Drop photos or a video here, <a data-w121pick="1">choose files</a>, or paste. Photos become JPEGs for Instagram.<input type="file" id="w121file" multiple accept="image/*,video/mp4,video/quicktime" style="display:none"></div>') + '<div class="thumbs" id="w121thumbs">' + e.media.map(thumbHtml).join('') + '</div></div>' +
-      '<div class="sec"><label>Caption</label><textarea id="w121cap" placeholder="What is this post about? Start with the line people see first."' + (ro ? ' disabled' : '') + '>' + E(e.caption) + '</textarea><div class="cc"><span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span></div>' +
-      (ro ? '' : '<div class="ai"><button data-w121ai="write">Write it with the Hub</button><button data-w121ai="shorten">Shorten</button><button data-w121ai="hashtags">Hashtags</button><select id="w121lang"><option value="en"' + (e.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (e.lang === 'fr' ? ' selected' : '') + '>Fran\u00e7ais</option><option value="both"' + (e.lang === 'both' ? ' selected' : '') + '>Both</option></select></div>' + aiHtml) + '</div>' +
-      '<div class="sec"><label>Link (optional)</label><input type="url" id="w121link" placeholder="https://" value="' + E(e.link_url) + '"' + (ro ? ' disabled' : '') + '></div>' +
-      '<div class="sec"><label>When</label><div class="row2"><input type="date" id="w121date" value="' + E(e.date) + '"' + (ro ? ' disabled' : '') + '><input type="time" id="w121time" value="' + E(e.time) + '"' + (ro ? ' disabled' : '') + '></div>' + (ro ? '' : '<div class="qk">' + (slot ? '<button class="best" data-w121best="1" title="From the analytics insights">Best: ' + E(slot.label) + '</button>' : '') + '<button data-w121quick="tomorrow">Tomorrow 12:00</button><button data-w121quick="nodate">No date yet</button></div>') + '<div class="tz">Times are in your time zone' + (tz() ? ' (' + E(tz()) + ')' : '') + '.' + (e.date ? ' ' + (pubOk ? 'Publishes automatically at this time once scheduled.' : 'Publishing is off: the hub reminds you when it is due and confirms it once it is up.') : '') + '</div></div>' +
+      '<header><input class="ttl" id="w121title" placeholder="Name this post (only the team sees it)" value="' + E(e.title) + '"' + (ro ? ' disabled' : '') + '>' + (function () { var hs = stateOf(Object.assign({}, C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] || {}, { status: e.status, results: e.results, live: e.live, platforms: e.platforms, approval_status: e.approval_status, approval_note: e.approval_note })); return '<span class="pill ' + hs.cls + '">' + E(e.id ? hs.label : 'New') + '</span>'; })() + '<button class="x" data-w121close="1" title="Close">\u2715</button></header>' +
+      '<div class="bd">' + apHtml(e) + resultHtml(e) + ideaBox(e) +
+      '<div class="sec"><label>Where</label><div class="pls">' + PORDER.map(function (k) { var md = modeOf(k); return '<span class="tg' + (e.platforms.indexOf(k) >= 0 ? ' on' : '') + '" data-w121pl="' + k + '" title="' + E(MODE_L[md] || '') + '"><i style="background:' + PL[k].color + '">' + PL[k].short + '</i><span>' + PL[k].label + '<br><span class="md' + (md === 'reminder' ? ' rm' : '') + '">' + E({ direct: 'Direct', make: 'Via Make', drafts: 'To drafts', reminder: 'Reminder' }[md] || '') + '</span></span></span>'; }).join('') + '</div>' + valHtml(v) + '</div>' +
+      '<div class="sec"><label>Photos or a video</label>' + (ro ? '' : '<div class="drop" id="w121drop">Drop photos or a video here, <a data-w121pick="1">choose files</a>, or paste. Photos become JPEGs for Instagram.<input type="file" id="w121file" multiple accept="image/*,video/mp4,video/quicktime" style="display:none"></div>') + '<div class="thumbs" id="w121thumbs">' + e.media.map(thumbHtml).join('') + '</div>' + altHtml(e) + '</div>' +
+      '<div class="sec"><label>Caption</label><textarea id="w121cap" placeholder="What is this post about? Start with the line people see first."' + (ro ? ' disabled' : '') + '>' + E(e.caption) + '</textarea><div class="cc"><span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > hc ? 'bad' : '') + '">' + tags + '</b> / ' + hc + ' hashtags on Instagram</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span></div>' +
+      (ro ? '' : '<div class="ai"><button data-w121ai="write">Write it with the Hub</button><button data-w121ai="shorten">Shorten</button><button data-w121ai="hashtags">Hashtags</button><button data-w121ai="tailor" title="A caption written for each platform you picked">Tailor for each platform</button><select id="w121lang"><option value="en"' + (e.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (e.lang === 'fr' ? ' selected' : '') + '>Fran\u00e7ais</option><option value="both"' + (e.lang === 'both' ? ' selected' : '') + '>Both</option></select></div>' + aiHtml + libHtml(e)) + '</div>' +
+      '<div class="sec"><label>Customize per platform</label>' + variantsHtml(e, ro) + '</div>' +
+      '<div class="sec"><label>First comment (optional)</label><textarea id="w225fc" style="min-height:52px" placeholder="Posted as the first comment right after the post (Instagram, Facebook; a reply on Threads): hashtags, a link, a thank-you"' + (ro ? ' disabled' : '') + '>' + E(e.first_comment || '') + '</textarea></div>' +
+      '<div class="sec"><label>Link (optional)</label><input type="url" id="w121link" placeholder="https://" value="' + E(e.link_url) + '"' + (ro ? ' disabled' : '') + '><div class="w225rep" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px;font-weight:600"><input type="checkbox" id="w225track"' + (e.track_links ? ' checked' : '') + (ro ? ' disabled' : '') + '> Count clicks (hub.welfareavenue.com/l/ links)</label><input type="text" id="w225utm" placeholder="Campaign tag for the website (optional)" value="' + E(e.utm_campaign || '') + '"' + (ro ? ' disabled' : '') + '></div><small class="w225hint">Links in the caption, the link and the first comment become short links that count clicks and tell the website where people came from. Instagram captions keep links as written (they are not clickable there).</small></div>' +
+      '<div class="sec"><label>When</label><div class="row2"><input type="date" id="w121date" value="' + E(e.date) + '"' + (ro ? ' disabled' : '') + '><input type="time" id="w121time" value="' + E(e.time) + '"' + (ro ? ' disabled' : '') + '></div>' + (ro ? '' : '<div class="qk">' + (qs ? '<button class="best" data-w225slot="1" title="The next free time in the posting schedule">Next in the queue: ' + E(niceDate(qs.date)) + ' ' + E(qs.time) + '</button>' : '') + (slot ? '<button class="best" data-w121best="1" title="From the analytics insights">Best: ' + E(slot.label) + '</button>' : '') + '<button data-w121quick="tomorrow">Tomorrow 12:00</button><button data-w121quick="nodate">No date yet</button></div>') +
+      '<div class="w225rep"><select id="w225rep"' + (ro ? ' disabled' : '') + '>' + [['', 'Does not repeat'], ['week', 'Repeats every week'], ['2weeks', 'Repeats every 2 weeks'], ['month', 'Repeats every month']].map(function (x) { return '<option value="' + x[0] + '"' + (e.repeat === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>' + (e.repeat ? '<input type="number" id="w225rept" min="2" max="52" value="' + E(e.repeat_times || 4) + '" title="How many times in all"' + (ro ? ' disabled' : '') + '>' : '') + '</div>' +
+      '<div class="tz">Times are in your time zone' + (tz() ? ' (' + E(tz()) + ')' : '') + '.' + (e.date ? ' ' + (pubOk ? 'Goes out at this time once scheduled (platforms that are not connected send the owner a reminder).' : 'Instagram and Facebook are in plan and confirm mode: the Hub reminds you and confirms the post once it is up.') : '') + '</div></div>' +
       '<div class="sec row2"><div><span class="lbl">Owner</span><select id="w121owner"' + (ro ? ' disabled' : '') + '>' + ownerOpts(e.owner) + '</select></div><div><span class="lbl">Campaign</span><input type="text" id="w121camp" list="w121camps" value="' + E(e.campaign) + '" placeholder="e.g. Rally Paper 2026"' + (ro ? ' disabled' : '') + '><datalist id="w121camps">' + campaigns().map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div class="sec"><label>Tags</label>' + tagsHtml(e, ro) + '</div>' +
       '<div class="sec"><label>Notes for the team</label><textarea id="w121notes" style="min-height:70px" placeholder="Brief, sources, who to tag, the photo credit"' + (ro ? ' disabled' : '') + '>' + E(e.notes) + '</textarea></div>' +
       '<div class="sec"><label>Preview</label>' + previewHtml(e) + '</div>' +
       '</div>' + footerHtml(e, v, pubOk, ro) + '</aside>';
@@ -759,11 +978,17 @@
   }
   function footerHtml(e, v, pubOk, ro) {
     if (!staff()) return '<footer><span class="ro">Read only.</span><span class="sp"></span><button class="btn mini ghost" data-w121close="1">Close</button></footer>';
-    if (ro) return '<footer>' + (e.id ? '<button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' + (e.status === 'posted' || e.status === 'published' ? '<button class="lnk" data-w121reopen="1" title="Back to a draft (does not remove the post from Instagram or Facebook)">Back to draft</button>' : '') + '<button class="btn mini ghost" data-w121close="1">Close</button></footer>';
+    if (ro) return '<footer>' + (e.id ? '<button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' + (e.status === 'posted' || e.status === 'published' ? '<button class="lnk" data-w121reopen="1" title="Back to a draft (does not remove the post from the platforms)">Back to draft</button>' : '') + '<button class="btn mini ghost" data-w121close="1">Close</button></footer>';
     var bad = v.errors > 0; var hasDate = !!(e.date && e.time);
     var parts = '<footer>' + (e.id ? '<button class="lnk del" data-w121del="1">Delete</button><button class="lnk" data-w121dup="1">Duplicate</button>' + (!e.date && e.status === 'draft' && !e.bank ? '<button class="lnk" data-w136bank="1" title="Out of the calendar until a day you pick">Put in the bank</button>' : '') : '') + '<span class="sp"></span>' +
       '<button class="btn mini ghost" data-w121save="draft">Save draft</button>';
-    if (hasDate) parts += '<button class="btn mini go" data-w121save="schedule"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (pubOk ? 'Schedule to publish' : 'Plan it') + '</button>';
+    /* wave225d: who publishes (marketing leads and admins) schedules and publishes; everyone else sends it for approval first */
+    var approved = e.approval_status === 'approved';
+    if (!isPub() && !approved) {
+      if (e.approval_status !== 'pending') parts += '<button class="btn mini go" data-w121save="submit"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>Send for approval</button>';
+      return parts + '<button class="lnk" data-w121man="1">Mark as posted</button></footer>';
+    }
+    if (hasDate) parts += '<button class="btn mini go" data-w121save="schedule"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (pubOk ? 'Schedule' : 'Plan it') + '</button>';
     if (pubOk) parts += '<button class="btn mini pub" data-w121save="publish"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (e.status === 'failed' ? 'Try again now' : 'Publish now') + '</button>';
     if (e.status !== 'draft' || hasDate || !pubOk) parts += '<button class="lnk" data-w121man="1">Mark as posted</button>';
     return parts + '</footer>';
@@ -771,6 +996,7 @@
   function readForm() {
     var e = C.edit; if (!e) return;
     var g = function (id) { var x = document.getElementById(id); return x ? x.value : null; };
+    var c = function (id) { var x = document.getElementById(id); return x ? !!x.checked : null; };
     var v;
     if ((v = g('w121title')) != null) e.title = v;
     if ((v = g('w121cap')) != null) e.caption = v;
@@ -780,19 +1006,44 @@
     if ((v = g('w121owner')) != null) e.owner = v;
     if ((v = g('w121camp')) != null) e.campaign = v.trim();
     if ((v = g('w121notes')) != null) e.notes = v;
+    /* wave225d */
+    if ((v = g('w225fc')) != null) e.first_comment = v;
+    if ((v = c('w225track')) != null) e.track_links = v;
+    if ((v = g('w225utm')) != null) e.utm_campaign = v.trim();
+    if ((v = g('w225rep')) != null) e.repeat = v;
+    if ((v = g('w225rept')) != null) e.repeat_times = Math.max(2, Math.min(52, Number(v) || 4));
+    if ((v = g('w225apnote')) != null) e.apNote = v;
+    if (e.vtab && e.platforms.indexOf(e.vtab) >= 0) {
+      var vv = vOf(e, e.vtab);
+      if ((v = g('w225vcap')) != null) { if (String(v).trim()) vv.caption = v; else delete vv.caption; }
+      if ((v = g('w225vkind')) != null) vv.kind = v;
+      if ((v = g('w225vfc')) != null) { if (String(v).trim()) vv.first_comment = v; else delete vv.first_comment; }
+      if ((v = g('w225vcol')) != null) vv.collaborators = String(v).split(/[\s,]+/).map(function (x) { return x.replace(/^@/, '').trim(); }).filter(Boolean).slice(0, 5);
+      if ((v = g('w225vcov')) != null) { if (String(v).trim() === '') delete vv.cover_ms; else vv.cover_ms = Math.round(Number(v) * 1000) || 0; }
+      if ((v = c('w225vstf')) != null) vv.share_to_feed = v;
+      if ((v = g('w225vyt')) != null) vv.title = v;
+      if ((v = g('w225vprv')) != null) vv.privacy = v;
+      if ((v = c('w225vmfk')) != null) vv.made_for_kids = v;
+    }
+    if (e.altIdx != null && e.media[e.altIdx] && (v = g('w225alttext')) != null) e.media[e.altIdx].alt = v;
   }
   function rowFromEdit(e) {
-    return { title: e.title.trim() || null, platforms: e.platforms.slice(), format: vids(e).length ? 'reel' : imgs(e).length > 1 ? 'carousel' : imgs(e).length ? 'post' : e.link_url ? 'link' : 'post', caption: e.caption || null, link_url: e.link_url || null, media: e.media.filter(function (m) { return m.url && !m.uploading; }).map(function (m) { return { path: m.path || null, url: m.url, mime: m.mime || null, kind: m.kind || (String(m.mime || '').indexOf('video') >= 0 ? 'video' : 'image'), w: m.w || null, h: m.h || null, size: m.size || null, dur: m.dur || null }; }), scheduled_at: e.date && e.time ? isoOf(e.date, e.time) : (e.date ? isoOf(e.date, '18:00') : null), owner: e.owner || null, campaign: e.campaign || null, notes: e.notes || null };
+    var variants = {}; Object.keys(e.variants || {}).forEach(function (k) { if (e.platforms.indexOf(k) >= 0) { var vv = Object.assign({}, e.variants[k]); Object.keys(vv).forEach(function (x) { if (vv[x] === '' || vv[x] == null) delete vv[x]; }); if (Object.keys(vv).length) variants[k] = vv; } });
+    return { title: e.title.trim() || null, platforms: e.platforms.slice(), format: vids(e).length ? 'reel' : imgs(e).length > 1 ? 'carousel' : imgs(e).length ? 'post' : e.link_url ? 'link' : 'post', caption: e.caption || null, link_url: e.link_url || null,
+      media: e.media.filter(function (m) { return m.url && !m.uploading; }).map(function (m) { var o = { path: m.path || null, url: m.url, mime: m.mime || null, kind: m.kind || (String(m.mime || '').indexOf('video') >= 0 ? 'video' : 'image'), w: m.w || null, h: m.h || null, size: m.size || null, dur: m.dur || null }; if (m.alt) o.alt = String(m.alt).slice(0, 1000); if (m.tags && m.tags.length) o.tags = m.tags; if (m.photo_id) o.photo_id = m.photo_id; return o; }),
+      scheduled_at: e.date && e.time ? isoOf(e.date, e.time) : (e.date ? isoOf(e.date, '18:00') : null), owner: e.owner || null, campaign: e.campaign || null, notes: e.notes || null,
+      variants: variants, first_comment: String(e.first_comment || '').trim() || null, tags: (e.tags || []).slice(), repeat_rule: e.repeat ? { every: e.repeat, times: e.repeat_times || 4 } : null, track_links: e.track_links !== false, utm: e.utm_campaign ? { campaign: e.utm_campaign } : null };
   }
+  function saveErr(x) { var m = String((x && (x.message || x.details)) || x || ''); return /needs approval/i.test(m) ? 'A marketing lead or an admin approves this post before it is scheduled. Send it for approval.' : 'Could not save: ' + m; }
   async function saveEdit(mode) {
     readForm(); var e = C.edit; if (!e) return;
     var v = validate(e);
     if (mode !== 'draft' && v.errors) { toastS('Fix the items marked \u2715 first'); paintDrawer(); return; }
     if (mode === 'schedule' && !(e.date && e.time)) { toastS('Pick a date and a time'); return; }
     if (mode === 'schedule' && isoOf(e.date, e.time) < new Date().toISOString()) { if (!confirm('That time has passed. Plan it anyway?')) return; }
-    if (mode === 'publish' && !confirm('Publish to ' + e.platforms.map(function (k) { return PL[k].label; }).join(' and ') + ' now?')) return;
+    if (mode === 'publish' && !confirm('Publish to ' + e.platforms.map(function (k) { return PL[k].label; }).join(', ') + ' now?')) return;
     var row = rowFromEdit(e);
-    if (mode === 'draft') row.status = e.status === 'scheduled' ? 'scheduled' : (e.status === 'failed' ? 'failed' : 'draft');
+    if (mode === 'draft' || mode === 'submit') row.status = e.status === 'scheduled' && mode === 'draft' ? 'scheduled' : (e.status === 'failed' ? 'failed' : 'draft');
     if (mode === 'schedule') row.status = 'scheduled';
     if (mode === 'publish') row.status = e.status === 'failed' ? 'failed' : 'draft';
     if (mode === 'schedule' || row.status !== 'failed') row.error = null;
@@ -802,19 +1053,46 @@
       if (e.id) { saved = await saveRow(e.id, row); logIt(e.id, 'status', e.status, row.status); }
       else { saved = await insertRow(row); e.id = saved.id; logIt(saved.id, 'created', null, (row.title || row.caption || '').slice(0, 80)); }
       e.status = row.status; e.dirty = false;
+      if (mode === 'submit') {
+        var sr = await db.rpc('studio_submit', { p_id: Number(e.id), p_note: String(e.apNote || '').trim() || null });
+        if (sr.error) throw sr.error;
+        toastS('Sent for approval: the marketing leads and admins are told');
+        await load(true); closeComposer(true); paint(); C.busy = false; return;
+      }
       if (mode === 'publish') {
         toastS('Publishing\u2026'); paintDrawer();
         var r = await fn('social-publish', { action: 'publish', post_id: e.id });
         var errs = (r.errors || []).length;
-        toastS(r.status === 'published' ? 'Published' : r.status === 'publishing' ? 'Instagram is processing the video; it goes up in a few minutes' : 'Publishing failed' + (errs ? ': ' + r.errors[0] : ''));
+        toastS(r.status === 'published' ? ((r.reminded || []).length ? 'Published; a reminder went out for ' + r.reminded.join(', ') : 'Published') : r.status === 'publishing' ? 'The video is processing; it goes up in a few minutes' : r.status === 'needs approval' ? 'This post needs an approval first' : 'Publishing failed' + (errs ? ': ' + r.errors[0] : ''));
         await load(true);
         var p2 = C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0]; if (p2) { C.edit = fromPost(p2); paintDrawer(); } else closeComposer(true);
-        return;
+        C.busy = false; return;
       }
-      toastS(mode === 'schedule' ? (canPublish(e.platforms) ? 'Scheduled: it publishes at ' + e.time : 'Planned for ' + niceDate(e.date) + ' at ' + e.time) : 'Saved');
+      toastS(mode === 'schedule' ? (canPublish(e.platforms) ? 'Scheduled: it goes out at ' + e.time : 'Planned for ' + niceDate(e.date) + ' at ' + e.time) : 'Saved');
       closeComposer(true); paint();
-    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
+    } catch (x) { toastS(saveErr(x)); }
     C.busy = false;
+  }
+  /* wave225d: approve or send back, by a publisher */
+  async function decide(dec) {
+    readForm(); var e = C.edit; if (!e || !e.id) return;
+    if (dec === 'changes' && !String(e.apNote || '').trim()) { toastS('Write a note so they know what to change'); var n0 = document.getElementById('w225apnote'); if (n0) n0.focus(); return; }
+    try {
+      if (e.dirty) { await saveRow(e.id, rowFromEdit(e)); e.dirty = false; }
+      var r = await db.rpc('studio_decide', { p_id: Number(e.id), p_decision: dec, p_note: String(e.apNote || '').trim() || null });
+      if (r.error) throw r.error;
+      toastS(dec === 'approve' ? (e.date ? 'Approved and scheduled' : 'Approved') : 'Sent back with your note');
+      await load(true); closeComposer(true); paint();
+    } catch (x) { toastS('Could not save the decision: ' + (x.message || x)); }
+  }
+  async function markOne(pl) {
+    var e = C.edit; if (!e || !e.id) return;
+    var inp = document.querySelector('#w121dr [data-w225murl="' + pl + '"]');
+    try {
+      await fn('social-publish', { action: 'mark_posted', post_id: e.id, platform: pl, url: inp && inp.value ? inp.value.trim() : null });
+      toastS('Marked posted on ' + (PL[pl] ? PL[pl].label : pl));
+      await load(true); var p2 = C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0]; if (p2) { C.edit = fromPost(p2); paintDrawer(); }
+    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
   }
   async function markPosted() {
     var e = C.edit; if (!e) return; readForm();
@@ -885,7 +1163,25 @@
     readForm(); var e = C.edit; if (!e) return;
     var lang = (document.getElementById('w121lang') || {}).value || e.lang || 'en'; e.lang = lang;
     var brief = { mode: mode, language: lang === 'fr' ? 'French' : lang === 'both' ? 'English then French' : 'English', title: e.title, notes: e.notes, current_caption: e.caption, platforms: e.platforms, campaign: e.campaign, link: e.link_url, when: e.date ? niceDate(e.date) + ' ' + e.time : null, media: imgs(e).length ? imgs(e).length + ' photo(s)' : vids(e).length ? 'a video (reel)' : 'none' };
-    var ask = mode === 'write' ? 'Write three different caption options from the brief (and the current caption if there is one). Vary the opening line.' : mode === 'shorten' ? 'Shorten the current caption into three tighter options (under 300 characters each), keeping the facts and the ask.' : 'Suggest 8 to 12 relevant hashtags for Montreal or Toronto community, food and volunteering, and one option of the current caption with the best 3 to 6 of them at the end.';
+    if (mode === 'tailor') {
+      /* wave225e: one caption per platform, in each platform's way */
+      if (!e.caption.trim() && !e.notes.trim() && !e.title.trim()) { toastS('Write a caption or a brief first'); return; }
+      var pls = e.platforms.slice(); if (!pls.length) { toastS('Pick the platforms first'); return; }
+      e.aiBusy = true; e.ai = null; paintDrawer();
+      try {
+        var props = {}; pls.forEach(function (k) { props[k] = { type: 'string' }; });
+        var ask2 = 'Rewrite the post for each platform listed, keeping every fact and the ask. Instagram: hook in the first 125 characters, at most ' + hashCap() + ' hashtags at the end, say link in bio. Facebook: conversational, the link can sit in the text. Threads: under 450 characters, one idea, no hashtags or one. LinkedIn: a short professional story about community impact, line breaks, 3 hashtags at most. TikTok: one or two punchy lines, 3 to 5 hashtags. YouTube: the Short\u2019s description, two sentences and the link. Return only the platforms asked for.';
+        var r0 = await db.functions.invoke('llm', { body: { task: 'draft', caller: 'content-calendar', max_tokens: 2200, temperature: 0.6, system: CAPTION_SYSTEM, messages: [{ role: 'user', content: ask2 + '\n\nPLATFORMS: ' + pls.join(', ') + '\n\nBRIEF:\n' + JSON.stringify(brief, null, 1) }], tools: [{ name: 'captions_by_platform', description: 'One caption per platform.', input_schema: { type: 'object', properties: props, required: pls } }], tool_choice: { type: 'tool', name: 'captions_by_platform' } } });
+        if (r0.error) throw r0.error;
+        var tu0 = ((r0.data && r0.data.content) || []).filter(function (c) { return c.type === 'tool_use'; })[0]; var got = (tu0 && tu0.input) || {};
+        var done = [];
+        pls.forEach(function (k) { var t2 = String(got[k] || '').replace(/\u2014/g, ',').trim(); if (t2) { vOf(e, k).caption = t2; done.push(PL[k].label); } });
+        if (!done.length) throw new Error('nothing came back');
+        e.dirty = true; e.ai = { tailored: done };
+      } catch (x) { toastS('The Hub could not help this time: ' + (x.message || x)); }
+      e.aiBusy = false; if (C.edit === e) paintDrawer(); return;
+    }
+    var ask = mode === 'write' ? 'Write three different caption options from the brief (and the current caption if there is one). Vary the opening line.' : mode === 'shorten' ? 'Shorten the current caption into three tighter options (under 300 characters each), keeping the facts and the ask.' : 'Suggest 8 to 12 relevant hashtags for Montreal or Toronto community, food and volunteering, and one option of the current caption with the best 3 to ' + hashCap() + ' of them at the end.';
     if (mode !== 'write' && !e.caption.trim()) { toastS('Write or generate a caption first'); return; }
     e.aiBusy = true; e.ai = null; paintDrawer();
     try {
@@ -900,7 +1196,19 @@
     } catch (x) { toastS('The Hub could not help this time: ' + (x.message || x)); }
     e.aiBusy = false; if (C.edit === e) paintDrawer();
   }
-
+  /* wave225e: alt text from the photo itself (the model sees the image through the router) */
+  async function aiAlt(i) {
+    readForm(); var e = C.edit; if (!e) return; var m = e.media[i]; if (!m || !m.url) { toastS('Wait for the upload to finish'); return; }
+    e.altBusy = true; paintDrawer();
+    try {
+      var r = await db.functions.invoke('llm', { body: { task: 'draft', caller: 'content-calendar', max_tokens: 300, temperature: 0.3, system: 'You write alt text for Welfare Avenue\u2019s social media photos: one or two plain sentences, under 250 characters, saying who and what is shown and where if obvious. Never guess names, ages, races or conditions. Do not start with "Image of" or "Photo of". No em dashes.', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url: m.url } }, { type: 'text', text: 'Write the alt text for this photo.' + (e.caption ? ' The post says: ' + e.caption.slice(0, 400) : '') }] }] } });
+      if (r.error) throw r.error;
+      var txt = ((r.data && r.data.content) || []).filter(function (c) { return c.type === 'text'; }).map(function (c) { return c.text; }).join(' ').replace(/\u2014/g, ',').trim();
+      if (!txt) throw new Error('nothing came back');
+      if (C.edit === e) { m.alt = txt.slice(0, 1000); e.dirty = true; }
+    } catch (x) { toastS('The Hub could not write the alt text: ' + (x.message || x)); }
+    e.altBusy = false; if (C.edit === e) paintDrawer();
+  }
   /* ---------- routing, nav ---------- */
   function openCal(sub) {
     if (!allowed()) return false;
@@ -962,6 +1270,16 @@
     };
   }
   window.w121Compose = function (prefill) { window.__w121prefill = prefill || null; location.hash = '#contentcal'; };
+  /* wave225d: the Content Studio app reads the calendar's state and opens its composer */
+  window.w121 = {
+    posts: function () { return C.posts; }, banked: function () { return C.banked || []; }, cap: function () { return C.cap; }, pub: function () { return C.pub; },
+    tags: function () { return C.tags; }, lib: function () { return C.lib; }, slots: function () { return C.slots; },
+    load: function (force) { return load(force); }, loadCap: function () { return loadCap(); }, studio: function () { return loadStudio(); },
+    stateOf: stateOf, modeOf: modeOf, nextSlot: nextQueueSlot, PL: PL, PORDER: PORDER, titleOf: titleOf, thumbOf: thumbOf,
+    open: function (id) { var p = C.posts.filter(function (x) { return String(x.id) === String(id); })[0]; if (p) { openComposer(p); return true; } return false; },
+    compose: function (prefill) { openComposer(null, prefill || null); },
+    filter: function (k, v) { if (k in C.filter) C.filter[k] = v || ''; return C.filter; }
+  };
 
   /* ---------- events ---------- */
   document.addEventListener('click', async function (e) {
@@ -991,9 +1309,23 @@
     if ((el = t.closest('[data-w136bank]'))) { e.preventDefault(); readForm(); var pb = C.posts.filter(function (x) { return String(x.id) === String(ed.id); })[0] || {}; var dflt = pb.idea_for ? addDays(pb.idea_for, -42) : addMonths(today(), 3); if (dflt <= today()) dflt = addMonths(today(), 3); ed.bank = { until: dflt, note: pb.idea_for ? 'For ' + shortDay(pb.idea_for) + (pb.campaign ? ': ' + pb.campaign : '') : '' }; paintDrawer(); var bd0 = document.querySelector('#w121dr .bd'); if (bd0) bd0.scrollTop = 0; return; }
     if ((el = t.closest('[data-w136bankx]'))) { e.preventDefault(); ed.bank = null; paintDrawer(); return; }
     if ((el = t.closest('[data-w136bankgo]'))) { e.preventDefault(); await bankIdea(); return; }
+    /* wave225d */
+    if ((el = t.closest('[data-w225vtab]'))) { readForm(); ed.vtab = el.getAttribute('data-w225vtab'); ed.tab = ed.vtab; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225alt]'))) { e.preventDefault(); readForm(); var ai0 = Number(el.getAttribute('data-w225alt')); ed.altIdx = ed.altIdx === ai0 ? null : ai0; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225altx]'))) { readForm(); ed.altIdx = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225copy]'))) { var cpl = el.getAttribute('data-w225copy'); var ctext = capOf(ed, cpl); try { navigator.clipboard.writeText(ctext); toastS('Caption copied'); } catch (x) { window.prompt('Copy the caption', ctext); } return; }
+    if ((el = t.closest('[data-w225mdone]'))) { e.preventDefault(); await markOne(el.getAttribute('data-w225mdone')); return; }
+    if ((el = t.closest('[data-w225decide]'))) { e.preventDefault(); await decide(el.getAttribute('data-w225decide')); return; }
     if (readOnly() && !t.closest('[data-w121dup]') && !t.closest('[data-w121reopen]') && !t.closest('[data-w121tab]')) return;
+    if ((el = t.closest('[data-w225tag]'))) { readForm(); var tn = el.getAttribute('data-w225tag'); var ti = (ed.tags || []).indexOf(tn); ed.tags = ed.tags || []; if (ti >= 0) ed.tags.splice(ti, 1); else ed.tags.push(tn); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225tagadd]'))) { e.preventDefault(); readForm(); var nt = String((document.getElementById('w225newtag') || {}).value || '').trim().slice(0, 40); if (!nt) return; if ((C.tags || []).every(function (x) { return x.name.toLowerCase() !== nt.toLowerCase(); })) { try { var pal = ['#6F64AB', '#2A8C7A', '#DCA527', '#B3402F', '#B4467A', '#0A66C2', '#103F39']; var tr = await db.from('content_tags').insert({ name: nt, color: pal[(C.tags || []).length % pal.length], created_by: me() || 'staff' }).select('*').single(); if (tr.error) throw tr.error; C.tags.push(tr.data); } catch (x) { toastS('Could not add the tag: ' + (x.message || x)); return; } } else nt = C.tags.filter(function (x) { return x.name.toLowerCase() === nt.toLowerCase(); })[0].name; if ((ed.tags || []).indexOf(nt) < 0) (ed.tags = ed.tags || []).push(nt); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225untag]'))) { readForm(); var mi = ed.media[ed.altIdx]; if (mi && mi.tags) { mi.tags.splice(Number(el.getAttribute('data-w225untag')), 1); ed.dirty = true; paintDrawer(); } return; }
+    if ((el = t.closest('[data-w225pic]'))) { readForm(); var nm = String((document.getElementById('w225tagname') || {}).value || '').replace(/^@/, '').trim(); if (!nm) { toastS('Type the @username first, then click where they are'); var tnm = document.getElementById('w225tagname'); if (tnm) tnm.focus(); return; } var rc = el.getBoundingClientRect(); var mm = ed.media[Number(el.getAttribute('data-w225pic'))]; if (!mm) return; mm.tags = mm.tags || []; if (mm.tags.length >= 20) { toastS('Instagram takes 20 tags a photo'); return; } mm.tags.push({ username: nm, x: Math.max(0, Math.min(1, (e.clientX - rc.left) / rc.width)), y: Math.max(0, Math.min(1, (e.clientY - rc.top) / rc.height)) }); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w225altai]'))) { e.preventDefault(); await aiAlt(Number(el.getAttribute('data-w225altai'))); return; }
+    if ((el = t.closest('[data-w225slot]'))) { readForm(); var qs0 = nextQueueSlot(ed.platforms); if (qs0) { ed.date = qs0.date; ed.time = qs0.time; ed.dirty = true; paintDrawer(); } return; }
+    if ((el = t.closest('[data-w225tplsave]'))) { e.preventDefault(); readForm(); var tname = window.prompt('Name the template', ed.title || 'New template'); if (!tname) return; try { var row0 = rowFromEdit(ed); var ins = await db.from('content_snippets').insert({ kind: 'template', name: tname.slice(0, 80), body: row0.caption || '', data: { platforms: row0.platforms, first_comment: row0.first_comment, tags: row0.tags, variants: row0.variants, campaign: row0.campaign }, created_by: me() || 'staff' }).select('*').single(); if (ins.error) throw ins.error; C.lib.push(ins.data); toastS('Saved as a template'); paintDrawer(); } catch (x) { toastS('Could not save the template: ' + (x.message || x)); } return; }
     if ((el = t.closest('[data-w121tab]'))) { ed.tab = el.getAttribute('data-w121tab'); readForm(); paintDrawer(); return; }
-    if ((el = t.closest('[data-w121pl]'))) { readForm(); var k = el.getAttribute('data-w121pl'); var i = ed.platforms.indexOf(k); if (i >= 0) ed.platforms.splice(i, 1); else ed.platforms.push(k); ed.platforms.sort(); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w121pl]'))) { readForm(); var k = el.getAttribute('data-w121pl'); var i = ed.platforms.indexOf(k); if (i >= 0) ed.platforms.splice(i, 1); else ed.platforms.push(k); ed.platforms.sort(function (a, b) { return PORDER.indexOf(a) - PORDER.indexOf(b); }); if (ed.platforms.indexOf(ed.vtab) < 0) ed.vtab = ed.platforms[0] || 'instagram'; ed.dirty = true; paintDrawer(); return; }
     if ((el = t.closest('[data-w121pick]'))) { e.preventDefault(); var fi = document.getElementById('w121file'); if (fi) fi.click(); return; }
     if ((el = t.closest('[data-w121mrm]'))) { e.preventDefault(); readForm(); ed.media.splice(Number(el.getAttribute('data-w121mrm')), 1); ed.dirty = true; paintDrawer(); return; }
     if ((el = t.closest('[data-w121crop]'))) { e.preventDefault(); readForm(); await cropAt(Number(el.getAttribute('data-w121crop')), Number(el.getAttribute('data-r'))); return; }
@@ -1015,13 +1347,18 @@
     if (!C.edit || !t.closest || !t.closest('#w121dr')) return;
     if (C.edit.bank && (t.id === 'w136until' || t.id === 'w136note')) { C.edit.bank[t.id === 'w136until' ? 'until' : 'note'] = t.value; return; } /* wave136 */
     C.edit.dirty = true;
-    if (t.id === 'w121cap') { readForm(); var cc = document.querySelector('#w121dr .cc'); if (cc) { var chars = C.edit.caption.length, tags = tagsOf(C.edit.caption).length; cc.innerHTML = '<span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span>'; } clearTimeout(C.pvT); C.pvT = setTimeout(function () { if (!C.edit) return; readForm(); var pv = document.querySelector('#w121dr .sec:last-child'); var box = pv ? pv : null; if (box) box.innerHTML = '<label>Preview</label>' + previewHtml(C.edit); var val = document.querySelector('#w121dr .pls + .val, #w121dr .pls'); var sec = document.querySelector('#w121dr [data-w121pl]'); if (sec) { var host = sec.closest('.sec'); var v = validate(C.edit); var old = host.querySelector('.val'); var nv = valHtml(v); if (old) old.outerHTML = nv || '<div class="val"></div>'; else host.insertAdjacentHTML('beforeend', nv); } var f = document.querySelector('#w121dr footer'); if (f) f.outerHTML = footerHtml(C.edit, validate(C.edit), canPublish(C.edit.platforms), readOnly()); }, 350); }
+    if (t.id === 'w121cap') { readForm(); var cc = document.querySelector('#w121dr .cc'); if (cc) { var chars = C.edit.caption.length, tags = tagsOf(C.edit.caption).length; cc.innerHTML = '<span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > hashCap() ? 'bad' : '') + '">' + tags + '</b> / ' + hashCap() + ' hashtags on Instagram</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span>'; } clearTimeout(C.pvT); C.pvT = setTimeout(function () { if (!C.edit) return; readForm(); var pv = document.querySelector('#w121dr .sec:last-child'); var box = pv ? pv : null; if (box) box.innerHTML = '<label>Preview</label>' + previewHtml(C.edit); var val = document.querySelector('#w121dr .pls + .val, #w121dr .pls'); var sec = document.querySelector('#w121dr [data-w121pl]'); if (sec) { var host = sec.closest('.sec'); var v = validate(C.edit); var old = host.querySelector('.val'); var nv = valHtml(v); if (old) old.outerHTML = nv || '<div class="val"></div>'; else host.insertAdjacentHTML('beforeend', nv); } var f = document.querySelector('#w121dr footer'); if (f) f.outerHTML = footerHtml(C.edit, validate(C.edit), canPublish(C.edit.platforms), readOnly()); }, 350); }
   });
   document.addEventListener('change', function (e) {
+    var t0 = e.target; if (t0 && t0.matches && t0.matches('#contentcal [data-w225ftag]')) { C.filter.tag = t0.value; paint(); return; }   /* wave225c */
     var t = e.target; if (!t || !C.edit || !t.closest || !t.closest('#w121dr')) return;
     if (t.id === 'w121file') { addFiles(t.files); t.value = ''; return; }
     if (t.id === 'w121lang') { C.edit.lang = t.value; return; }
     if (t.id === 'w121date' || t.id === 'w121time' || t.id === 'w121link') { readForm(); C.edit.dirty = true; paintDrawer(); }
+    /* wave225d */
+    if (t.id === 'w225rep' || t.id === 'w225vkind' || t.id === 'w225vstf' || t.id === 'w225vprv') { readForm(); C.edit.dirty = true; paintDrawer(); return; }
+    if (t.matches && t.matches('[data-w225hg]')) { readForm(); var g0 = (C.lib || []).filter(function (x) { return String(x.id) === String(t.value); })[0]; if (g0) { var tagsNew = (String(g0.body || '').match(/#[\w\u00c0-\u024f]+/g) || []).filter(function (h) { return C.edit.caption.indexOf(h) < 0; }); if (tagsNew.length) { C.edit.caption = C.edit.caption.replace(/\s+$/, '') + '\n\n' + tagsNew.join(' '); C.edit.dirty = true; } try { db.from('content_snippets').update({ uses: (g0.uses || 0) + 1 }).eq('id', g0.id); } catch (x) { /* fine */ } } paintDrawer(); return; }
+    if (t.matches && t.matches('[data-w225tpl]')) { readForm(); var tp0 = (C.lib || []).filter(function (x) { return String(x.id) === String(t.value); })[0]; if (tp0) { if (C.edit.caption.trim() && !confirm('Replace the caption, platforms and tags with the template \u201c' + tp0.name + '\u201d?')) { paintDrawer(); return; } var dd = tp0.data || {}; C.edit.caption = tp0.body || ''; if (dd.platforms && dd.platforms.length) C.edit.platforms = dd.platforms.slice(); if (dd.first_comment != null) C.edit.first_comment = dd.first_comment || ''; if (dd.tags) C.edit.tags = dd.tags.slice(); if (dd.variants) C.edit.variants = JSON.parse(JSON.stringify(dd.variants)); if (dd.campaign && !C.edit.campaign) C.edit.campaign = dd.campaign; C.edit.dirty = true; try { db.from('content_snippets').update({ uses: (tp0.uses || 0) + 1 }).eq('id', tp0.id); } catch (x) { /* fine */ } } paintDrawer(); return; }
   });
   document.addEventListener('keydown', function (e) {
     if (!C.edit) return;

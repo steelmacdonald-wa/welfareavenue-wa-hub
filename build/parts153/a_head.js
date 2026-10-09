@@ -83,6 +83,12 @@
     /* wave193: the Fundraising app's rail */
     pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
     book: '<path d="M5 4.5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H5z"/><path d="M19 4.5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z"/>',
+    /* wave225: the Content Studio */
+    spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="m6.3 6.3 2.4 2.4M15.3 15.3l2.4 2.4M6.3 17.7l2.4-2.4M15.3 8.7l2.4-2.4"/>',
+    chat: '<path d="M4.5 5.5h15v10h-9l-4 3.5v-3.5h-2z"/>',
+    queue: '<path d="M5 6h14M5 12h14M5 18h9"/><circle cx="18.5" cy="18" r="2"/>',
+    print: '<path d="M7 9V4.5h10V9"/><rect x="4" y="9" width="16" height="7.5" rx="2"/><path d="M7 14h10v5.5H7z"/>',
+    plug: '<path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 17v3.5"/>',
     globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>',
     ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>'
   };
@@ -203,13 +209,38 @@
         ] }];
       }
     },
+    /* wave225: Steel (09/10/26): "build it entirely on the content calendar. Make it the most sophisticated content calendar possible.
+       Consider making it an app in the hub." The Content Studio: the calendar and the analytics move in, with the queue, approvals,
+       the comments inbox, the library, tracked links and the link-in-bio page, a report, and the platform connections. One page
+       (#studio and its sections by address), plus wave121's #contentcal and wave120's #socialstats, framed by the app. */
+    studio: { id: 'studio', label: 'Content Studio', color: '#B4467A', ic: 'spark', blurb: 'Plan, approve, publish, answer and measure', pages: ['studio', 'contentcal', 'socialstats'], need: 'studio', home: '#studio',
+      groups: function () {
+        var n = { appr: null, inbox: null }; try { var W = window.w225 && window.w225.counts ? window.w225.counts() : null; if (W) { n.appr = W.approvals || null; n.inbox = W.inbox || null; } } catch (e) { /* fine */ }
+        return [{ label: 'Content', items: [
+          { h: '#studio', l: 'Overview', ic: 'home', page: 'studio' },
+          { h: '#contentcal', l: 'Calendar', ic: 'cal', page: 'contentcal' },
+          { h: '#studio/queue', l: 'Queue and schedule', ic: 'queue', page: 'studio' },
+          { h: '#studio/approvals', l: 'Approvals', ic: 'check', page: 'studio', n: n.appr },
+          { h: '#studio/inbox', l: 'Comments', ic: 'chat', page: 'studio', n: n.inbox }
+        ] }, { label: 'Toolkit', items: [
+          { h: '#studio/library', l: 'Library', ic: 'book', page: 'studio' },
+          { h: '#studio/links', l: 'Links and link in bio', ic: 'link', page: 'studio' }
+        ] }, { label: 'Results', items: [
+          { h: '#socialstats', l: 'Analytics', ic: 'chart', page: 'socialstats' },
+          { h: '#studio/report', l: 'Report', ic: 'print', page: 'studio' }
+        ] }, { label: 'Setup', items: [
+          { h: '#studio/connections', l: 'Connections', ic: 'plug', page: 'studio' }
+        ] }];
+      },
+      actions: [{ k: 'newpost', l: 'New post', ic: 'plus' }]
+    },
     admin: { id: 'admin', label: 'Admin centre', color: SLATE, ic: 'shield', blurb: 'Access, security, the AI models, the Hub itself', pages: ['adminpanel', 'activity'], home: '#adminpanel/people',
       groups: function () {
         return [{ label: 'Admin', items: adminSections() }, { label: 'Audit', items: [{ h: '#activity', l: 'Activity', ic: 'list', page: 'activity' }] }];
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'hr', 'finance', 'admin'];   /* wave193: the Fundraising app, before HR and Finance */
+  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
