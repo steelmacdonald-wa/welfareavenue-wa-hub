@@ -61,6 +61,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **The Hub, not "AI" (wave221).** Outside the Admin centre, the interface never says "AI": the Hub speaks as "the Hub" ("The Hub suggests", "Edit with the Hub", "the Hub's recommendation"). Who-did-it markers stay in the data ("AI: <meeting>" is matched by triggers) and are shown through `waWho()`; a new place that shows updated_by, added_by, raised_by, changed_by or a comment author wraps it the same way. `test/w221drive.js` walks the pages.
 
+- **The loading screen (wave222).** The veil lifts when `startApp` has resolved through every wrapper, the menu has settled and the page is still; never on a clock (the old 9 s cut-off showed half-built pages that rebuilt in front of the reader). Work a page needs at start goes inside the `startApp` chain; a wave that draws after its own fetch outside the chain fills its card in place and must not move or replace what is already drawn. Anything that shows or hides a menu entry reads `wa40Allowed()` (the same list `wa40Enforce` applies): never a looser rule on a watcher, or the two take turns. `test/w222drive.js` checks a slow load; `test/w222probe.js` measures one.
+
 ## Hub training
 - Every new page has a page tour (`w122.tours.<key>`) that walks through each section, and a `trainings` row `tour:<key>` in "Hub page tours".
 - Changed pages: the existing tour still highlights every step (`node test/tour1.js all`).

@@ -30,7 +30,7 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     const init = `window.__WA_LAT = 500; window.__menuMoves = 0; window.__menuShown = null;
       (function(){ var last = ''; function sig(){ var b = document.getElementById('tabBar'); if (!b) return ''; return [].map.call(b.querySelectorAll('.tab, .tab-group'), function (el) { return (el.getAttribute('data-tab') || el.getAttribute('data-w42g')) + (el.style.display === 'none' ? '-' : '+'); }).join(','); }
         var iv = setInterval(function(){ var s = sig(); var shown = document.documentElement.classList.contains('w163nav'); if (shown && window.__menuShown === null) window.__menuShown = s; if (shown && s !== last && last) window.__menuMoves++; last = s; }, 30); setTimeout(function(){ clearInterval(iv); }, 30000); })();`;
-    const f = await fresh(browser, { who: 'admin', wait: 16000, init });
+    const f = await fresh(browser, { who: 'admin', wait: 20000, init });   /* wave222: the veil waits for the start, so the slow load needs longer */
     const s = await f.ev(() => ({ moves: window.__menuMoves, shown: !!window.__menuShown, st: window.w163.state(), ready: document.documentElement.classList.contains('wa-ready') }));
     ok('a slow load: the menu shows once and does not change after (' + (s.st && s.st.at) + ' ms)', s.shown && s.moves === 0 && s.st.after === 0 && s.ready, s);
     await f.close();

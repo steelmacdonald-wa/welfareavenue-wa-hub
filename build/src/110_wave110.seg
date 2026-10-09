@@ -4,8 +4,16 @@
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
       set once startApp has fully resolved through every wave wrapper
       (this wave loads last, so its startApp wrap finishes last) plus a
-      short settle; a 9s failsafe always reveals the page. Ends the
-      "last five versions flash by" on load.
+      short settle. Ends the "last five versions flash by" on load.
+      wave222 (09/10/26): the veil no longer gives up after 9 seconds.
+      On a slow connection the start chain takes longer than that, so
+      the page used to appear half-built and then rebuild itself in
+      front of the reader for several seconds (every page, computer and
+      phone). Now the veil waits for the start to finish, then for the
+      menu (wave163) and for the page to be still for a moment, and
+      lifts once. Only a start that never finishes (a request that
+      hangs) is cut short, at 25 seconds, as the menu's own failsafe
+      is at 20. The sign-in screen still shows at once (wave175b).
    2. Self-provisioning: any @welfareavenue.com sign-in with no
       hub_roles row writes its own row as 'member' (RLS allows exactly
       that and nothing else), so admins see every real user in the
@@ -50,11 +58,39 @@
   }
 
   /* ---------- 1. boot veil ---------- */
-  function w110Reveal() {
+  var w222now = function () { try { return performance.now(); } catch (e) { return Date.now(); } };
+  var W222 = { t0: w222now(), started: null, lifted: null, why: null };
+  function w110Reveal(why) {
+    if (W222.lifted !== null) return;
+    W222.lifted = Math.round(w222now() - W222.t0); W222.why = why || 'reveal';
     try { document.documentElement.classList.add('wa-ready'); } catch (e) { /* no */ }
     try { setTimeout(function () { var v = document.getElementById('wa110veil'); if (v) v.remove(); }, 450); } catch (e) { /* no */ }
   }
-  setTimeout(w110Reveal, 9000);
+  /* wave222: the page lifts the veil when the Hub has started (below); this only catches a start that never finishes */
+  setTimeout(function () { w110Reveal('failsafe'); }, 25000);
+  /* wave222: after the start chain, let the page be still for a moment (no visible change for 180 ms, at most 1.2 s) before it shows */
+  function w110Settle(done) {
+    var main = document.body;
+    if (!main || typeof MutationObserver !== 'function') { done(); return; }
+    var now = w222now;
+    var start = now(), last = now(), mo = null;
+    try {
+      mo = new MutationObserver(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var t = list[i].target, e = t && t.nodeType === 1 ? t : (t && t.parentElement);
+          if (!e || (e.closest && e.closest('#wa110veil, head, script, style'))) continue;
+          last = now(); return;
+        }
+      });
+      mo.observe(main, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+    } catch (e) { done(); return; }
+    (function check() {
+      if (W222.lifted !== null) { try { mo.disconnect(); } catch (e) { /* no */ } return; }
+      if (now() - last >= 180 || now() - start > 1200) { try { mo.disconnect(); } catch (e) { /* no */ } done(); return; }
+      setTimeout(check, 40);
+    })();
+  }
+  try { window.w222 = { state: function () { return { started: W222.started, lifted: W222.lifted, why: W222.why }; } }; } catch (e) { /* no */ }
 
   /* ---------- 2. self-provisioning ---------- */
   async function w110Provision() {
@@ -249,10 +285,12 @@
       startApp = async function () {
         try { await __sa110.apply(this, arguments); }
         finally {
-          /* every earlier wave's wrapper has resolved by now; wave163: the menu settles first (at most 1.5 s), so the page appears whole */
+          /* every earlier wave's wrapper has resolved by now; wave163: the menu settles first (at most 1.5 s), then wave222:
+             the page is still for a moment, so it appears whole, once */
+          W222.started = Math.round(w222now() - W222.t0);
           var w163wait = 0;
           (function w163when() {
-            if (document.documentElement.classList.contains('w163nav') || w163wait >= 1500) { setTimeout(w110Reveal, 60); return; }
+            if (document.documentElement.classList.contains('w163nav') || w163wait >= 1500) { w110Settle(function () { w110Reveal('started'); }); return; }
             w163wait += 50; setTimeout(w163when, 50);
           })();
         }
@@ -260,7 +298,7 @@
         try { await w110Provision(); } catch (e) { /* non-fatal */ }
       };
     } else {
-      setTimeout(w110Reveal, 1500);
+      setTimeout(function () { w110Reveal('no startApp'); }, 1500);
     }
   })();
 })();

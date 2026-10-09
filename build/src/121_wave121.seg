@@ -250,6 +250,8 @@
   function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function allowed() { return staff() || board(); }
+  /* wave222: the menu entry shows only when the person's access list carries the page (wa40Enforce hides it otherwise; before, placeTab showed it again on every change of the menu and the two took turns) */
+  function tabOk222() { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf('contentcal') >= 0; } catch (e) { return true; } }
   function me() { try { return (typeof USER !== 'undefined' && USER && USER.name) || ''; } catch (e) { return ''; } }
   function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function today() { return ymd(new Date()); }
@@ -930,7 +932,7 @@
       var b = bar.querySelector('.tab[data-tab="contentcal"]');
       if (!b) { b = document.createElement('button'); b.className = 'tab w116tool'; b.dataset.tab = 'contentcal'; b.innerHTML = '<span class="tabdot" style="background:' + PURPLE + '"></span>Content calendar'; b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); location.hash = '#contentcal'; }, true); }
       var mk = bar.querySelector('.tab[data-tab="marketing"]'); var row = mk && mk.closest ? mk.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
-      if (sub) { var an = sub.querySelector('.tab[data-tab="socialstats"]'); if (b.parentNode !== sub || (an && b.nextSibling !== an && an.previousSibling !== b)) { if (an) sub.insertBefore(b, an); else sub.appendChild(b); } b.classList.add('w116tool'); b.style.display = ''; }
+      if (sub) { var an = sub.querySelector('.tab[data-tab="socialstats"]'); if (b.parentNode !== sub || (an && b.nextSibling !== an && an.previousSibling !== b)) { if (an) sub.insertBefore(b, an); else sub.appendChild(b); } b.classList.add('w116tool'); b.style.display = tabOk222() ? '' : 'none'; }   /* wave222: the access list decides, as wa40Enforce does, so the two no longer take turns */
       else if (!b.parentNode) { b.style.display = 'none'; bar.appendChild(b); }
     } catch (e) { /* fine */ }
   }

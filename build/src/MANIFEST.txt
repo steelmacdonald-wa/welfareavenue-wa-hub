@@ -256,6 +256,6 @@
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.
 163_wave163
-# 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
+# 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page. wave222 (09/10/26): it waits for the start chain, the menu and a still page, never a clock (the 9 s cut-off made pages rebuild in front of the reader); 120 and 121's menu entries follow the access list.
 110_wave110
 999_tail
