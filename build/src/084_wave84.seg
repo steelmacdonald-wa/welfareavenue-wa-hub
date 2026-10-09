@@ -43,7 +43,7 @@
     s.push({ t: 'Welcome to the Hub', p: 'This is where Welfare Avenue actually runs: meetings turn into tasks, goals and decisions automatically, and everyone can see how the work moves. This tour takes about a minute.', hash: null });
     s.push({ t: 'Home is your queue', p: 'Home shows what needs you: overdue tasks, mentions from meetings, your team and your requests. If you only check one page, check this one.', hash: '#mypage' });
     if (role !== 'board') {
-      s.push({ t: 'Your department page', p: 'Open Departments in the menu and pick your team. The tabs in the middle are your workstreams; everything else folds away until you need it.', hash: null });
+      s.push({ t: 'Your team page', p: 'Open Teams in the menu and pick your team. The tabs in the middle are your workstreams; everything else folds away until you need it.', hash: null });
       s.push({ t: 'Ask the Hub', p: 'The green pill in the corner answers questions from everything in here: meetings, tasks, goals, decisions. Try one of the suggested prompts.', hash: null });
     }
     if (role === 'leader' || role === 'admin') {

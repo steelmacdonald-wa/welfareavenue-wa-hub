@@ -7,7 +7,7 @@
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       var jump = function (h) { return function () { if (location.hash !== h) location.hash = h; }; };
       W.tours.orggoals = { __w205: true, tab: 'orggoals', icon: 'target', hash: '#orggoals', steps: [
-        T('#w205 .w205mast', 'Goals', 'Welfare Avenue’s five organizational goals for FY27 to FY29, with a gated view to FY31. Departments own projects, and every project serves one of these goals.'),
+        T('#w205 .w205mast', 'Goals', 'Welfare Avenue’s five organizational goals for FY27 to FY29, with a gated view to FY31. Teams own projects, and every project serves one of these goals.'),
         T('#w205 .w205hero', 'The mission first', 'Every goal serves the mission the board adopted in July 2026.', OPT),
         T('#w205 .w205status', 'Draft or approved', 'Until the board votes (Oct 19, 2026) the goals say Draft for board approval. An admin marks them approved after the vote.', OPT),
         T('#w205 [data-w207year]', 'This year', 'This year’s goals: each goal’s target for the fiscal year and its four quarterly checkpoints. The current quarter is highlighted, Due next lists what comes due first, and anything past its date and not done is flagged Overdue. Click a row to open the goal.', OPT),
@@ -22,7 +22,7 @@
         T('#w205 .w205goal .w205paths', 'Paths', 'How we get there. Owners add, change and remove paths.', OPT),
         T('#w205 .w205goal .w207yb', 'This year’s target', 'The goal’s target for this fiscal year, who reports on it, and its Q1 to Q4 checkpoints. Owners set each checkpoint’s status (not started, on track, at risk, done) and its due date; the speech bubble holds its comments and the link icon ties a project to it.', OPT),
         T('#w205 .w205goal .w205years', 'Milestones by year', 'Each fiscal year’s milestones with their status (tap the circle). The projects serving a milestone sit under it; the speech bubble is its own comments.', OPT),
-        T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Departments link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
+        T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Teams link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
         T('#w205 .w205goal .w205gft', 'Comments and history', 'Comments are threaded; type @ to bring someone in. History lists every change, who made it and when; Restore puts an old version back.', OPT),
         T('#w205 .w205road', 'The roadmap', 'Three years to prove it: stabilize, strengthen, scale. The checkpoint in Oct 2027 and the FY29 gate in Oct 2029 decide whether FY30 and FY31 go ahead.', OPT),
         T('#w205 .w205lib', 'The Strategy Library', 'The pinned documents that set our direction. The full library is in the menu.', OPT),

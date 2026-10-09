@@ -206,7 +206,7 @@
   }
   function unlinkedHtml() {
     var list = unlinkedList();
-    return '<div class="w205sec"><h2>Projects not linked to a goal yet</h2><span class="hint">Departments own projects; each one serves a goal.</span></div>' +
+    return '<div class="w205sec"><h2>Projects not linked to a goal yet</h2><span class="hint">Teams own projects; each one serves a goal.</span></div>' +
       (list.length ? '<div class="w205list" data-w205unlinked>' + list.map(function (p) {
         var was = p.goal_id ? byId(S.allGoals || [], p.goal_id) : null;
         return '<div class="it"><i style="width:9px;height:9px;border-radius:50%;background:' + E(deptColor(p.department)) + ';flex:none"></i><div class="t"><b data-w198skip>' + E(p.name) + '</b><small>' + E(deptLabel(p.department)) + (was ? ' · was linked to a retired goal: <span data-w198skip>' + E(clip(was.title, 70)) + '</span>' : '') + '</small></div>' +
@@ -224,7 +224,7 @@
     if (!S.goals.length) {
       return mastHtml('Goals', p.window || '') + heroHtml() + '<div class="w205empty"><b>No organizational goals yet</b>' + (S.err ? 'The goals could not be read (' + E(clip(S.err, 120)) + ').' : 'When the goals are written, they show here.') + '</div>';
     }
-    return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Departments own projects; each one serves a goal.') +
+    return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Teams own projects; each one serves a goal.') +
       heroHtml() + statusHtml() + yearViewHtml() + whyHtml() + glanceHtml() + coverageHtml() +
       '<div class="w205sec"><h2>Goal by goal</h2><span class="hint">' + (S.goals.some(canEdit) ? 'Click any text to change it; it saves as you type.' : 'Owners keep these up to date.') + '</span></div>' +
       S.goals.map(goalHtml).join('') + roadHtml() + libPreviewHtml() + unlinkedHtml() +

@@ -1713,7 +1713,7 @@
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Departments, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
+      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Teams, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A team folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),

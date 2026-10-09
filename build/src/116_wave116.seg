@@ -477,7 +477,7 @@
     var pages = pagesOf(d);
     var ms = members(d);
     var next = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(); })[0];
-    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/' + E(d) + '">' + E(label(d)) + '</a>' + (title ? ' &middot; ' + E(title) : '') + '</div>' +
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/' + E(d) + '">' + E(label(d)) + '</a>' + (title ? ' &middot; ' + E(title) : '') + '</div>' +
       '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + '</div>' +
       '<div class="w116right">' + (ms.length ? '<span title="' + E(ms.map(function (m) { return m.name; }).join(', ')) + '" data-w116go="#orgchart" style="cursor:pointer">' + stack(ms, 28, 6) + '</span>' : '') +
       (next ? '<span class="w116next"><span class="ic">&#9200;</span><span><b>' + E(relDay(next.start_at)) + '</b> ' + E(next.all_day ? '' : fmtTime(next.start_at)) + ' &middot; ' + E(next.summary) + (next.meet_link ? ' &middot; <a href="' + E(next.meet_link) + '" target="_blank" rel="noopener">Join</a>' : '') + '</span></span>' : '') +

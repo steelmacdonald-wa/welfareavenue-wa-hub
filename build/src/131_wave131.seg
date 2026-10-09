@@ -46,7 +46,7 @@
   var GROUPS = [ /* wave134: the same groups as the menu */
     /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
     ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
-    ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app */
+    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app */
     ['Board', ['board', 'governance', 'committees']],
     ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
     ['Organization', ['orgchart', 'ourstory', 'hubmail']],

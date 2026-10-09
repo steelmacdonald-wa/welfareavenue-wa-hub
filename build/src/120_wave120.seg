@@ -225,7 +225,7 @@
   function header() {
     var d = S.data; var last = null;
     ((d && d.accounts) || []).forEach(function (a) { if (a.last_sync_at && (!last || a.last_sync_at > last)) last = a.last_sync_at; });
-    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Analytics</div>' +
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Analytics</div>' +
       '<div class="w116top"><div><h2><span class="dot" style="background:' + PURPLE + '"></span>Marketing analytics</h2><p class="sub">Followers, reach and what worked across Instagram, Facebook, TikTok, LinkedIn and the website. Numbers refresh every morning.</p></div>' +
       '<div class="w120ctl"><span class="w116seg w120rng">' + RANGES.map(function (r) { return '<a data-w120range="' + r[0] + '" class="' + (S.range === r[0] ? 'on' : '') + '">' + r[1] + '</a>'; }).join('') + '</span>' +
       (S.range === 'custom' ? '<span class="w120cust"><input type="date" id="w120cf" value="' + E(S.cfrom || '') + '"><span>to</span><input type="date" id="w120ct" value="' + E(S.cto || '') + '"><button class="btn mini" data-w120apply="1">Show</button></span>' : '') +

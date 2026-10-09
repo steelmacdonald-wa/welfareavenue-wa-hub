@@ -88,7 +88,7 @@
 
       var order = [];
       ['mypage', 'overview'].forEach(function (id) { var b = grab(id); if (b) order.push(b); });
-      order.push(w73Group('departments', 'Departments', deptRows));
+      order.push(w73Group('departments', 'Teams', deptRows));
       order.push(w73Group('meetings', 'Meetings', [grab('transcripts'), grab('agendas')]));
       var strat = grab('goals');
       if (strat) order.push(strat);

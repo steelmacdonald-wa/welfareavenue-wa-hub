@@ -521,7 +521,7 @@
   }
   function header() {
     var a = C.anchor, v = C.view; var label = v === 'month' ? niceDate(a, { month: 'long', year: 'numeric' }) : v === 'week' ? (function () { var m = mondayOf(a); return niceDate(m, { month: 'short', day: 'numeric' }) + ' to ' + niceDate(addDays(m, 6), { month: 'short', day: 'numeric' }); })() : 'All posts';
-    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Content calendar</div>' +
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Content calendar</div>' +
       '<div class="w116top"><div><h2><span class="dot" style="background:#B4467A"></span>Content calendar</h2><p class="sub">Plan, approve, publish and confirm posts for Instagram, Facebook, Threads, LinkedIn, TikTok and YouTube. Drag a post to move it; drop an idea on a day to plan it.</p></div>' +
       '<div class="w120ctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + (staff() ? '<button class="btn" data-w121new="1">New post</button><button class="btn mini ghost" data-w121set="1" title="Slack confirmations">Settings</button>' : '') + '<a class="btn mini ghost" data-w121go="#socialstats">Analytics</a></div></div>' +
       '<div class="ctl"><span class="w116seg">' + [['month', 'Month'], ['week', 'Week'], ['list', 'List']].map(function (x) { return '<a data-w121view="' + x[0] + '" class="' + (v === x[0] ? 'on' : '') + '">' + x[1] + '</a>'; }).join('') + '</span>' +

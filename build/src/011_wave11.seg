@@ -64,7 +64,7 @@ async function renderOrgChart() {
     + '<div class="oc-row">' + boardOthers.map(ocPerson).join('') + '</div></div></div>';
   html += '<div class="oc-level">Co executive directors</div><div class="oc-row"><div class="oc-card" style="border-top-color:#6F64AB;max-width:none;"><div class="oc-row">'
     + execs.map(ocPerson).join('') + '</div></div></div>';
-  html += '<div class="oc-level">Departments</div><div class="oc-row">';
+  html += '<div class="oc-level">Teams</div><div class="oc-row">';
   DEPT_ORDER.filter(function (d) { return d !== 'board'; }).forEach(function (d) {
     var members = WA_ROSTER.filter(function (m) { return m.department === d; });
     var groups = [];

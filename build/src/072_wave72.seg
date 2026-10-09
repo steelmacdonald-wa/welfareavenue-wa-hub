@@ -65,7 +65,7 @@
   };
   var W72_GROUPS = [
     ['Home and work', ['mypage', 'overview', 'dashboard', 'goals', 'agendas', 'requests', 'importantinfo', 'create', 'finances']],
-    ['Departments', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']],
+    ['Teams', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']],
     ['People and programs', ['volunteering', 'training', 'hrcentre', 'orgchart']],
     ['Archive and admin', ['transcripts', 'activity', 'adminpanel']]
   ];

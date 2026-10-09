@@ -191,7 +191,7 @@
             return '<label><input type="radio" name="w205lp" data-w205pickp="' + x.id + '" /><span class="t"><span data-w198skip>' + E(x.name) + '</span><small>' + (cur ? 'Serves goal ' + E(cur.number) + (g && cur.id === g.id ? ' (this goal)' : '') : 'Not linked to a goal yet') + '</small></span></label>';
           }).join('') + '</div>';
         }).join('') : '<div class="w205empty"><b>No project matches</b>Projects are added on a team’s page or on Projects.</div>');
-      return drawerShell('Link a project', g ? '<span data-w198skip>To goal ' + E(g.number) + ': ' + E(g.title) + '</span>' : 'Pick the project first', body, '<small style="color:' + MUTED + '">Departments own their projects; linking one says which goal (and milestone) it serves.</small>');
+      return drawerShell('Link a project', g ? '<span data-w198skip>To goal ' + E(g.number) + ': ' + E(g.title) + '</span>' : 'Pick the project first', body, '<small style="color:' + MUTED + '">Teams own their projects; linking one says which goal (and milestone) it serves.</small>');
     }
     var goalSel = st.goalPick != null ? st.goalPick : (g ? g.id : p.goal_id);
     var gg = byId(S.goals, goalSel);

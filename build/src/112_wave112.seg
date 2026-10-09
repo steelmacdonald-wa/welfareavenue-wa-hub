@@ -84,7 +84,7 @@
     var s = [];
     s.push({ id: 'profile', t: 'Check your profile', d: 'Open your page and make sure your name, role and team look right. If something is off, tell an admin.', go: 'Open my profile' });
     var deptOk = dept ? w112Allowed(dept) : DEPTS112.some(w112Allowed);
-    if (deptOk) s.push({ id: 'dept', t: 'Visit your department', d: 'Open the ' + deptLabel + ' page: tasks, workstreams and meeting notes live there.', go: dept ? 'Go to ' + deptLabel : 'Open Departments' });
+    if (deptOk) s.push({ id: 'dept', t: 'Visit your team', d: 'Open the ' + deptLabel + ' page: tasks, workstreams and meeting notes live there.', go: dept ? 'Go to ' + deptLabel : 'Open Teams' });
     s.push({ id: 'task', t: 'Tick off a task', d: 'Finish something with your name on it and tick it, here on My page or on your team page. Nothing assigned yet? Tick this one yourself.', go: 'See my tasks' });
     if (document.getElementById('waChatBtn')) s.push({ id: 'brain', t: 'Ask the Hub a question', d: 'The assistant answers from everything in the Hub. Try: what is my team working on this week?', go: 'Ask now' });
     if (w112Allowed('importantinfo')) s.push({ id: 'info', t: 'Read Important info', d: 'Policies, key contacts and what everyone at Welfare Avenue should know.', go: 'Open Important info' });

@@ -925,7 +925,7 @@
   }
   function unlinkedHtml() {
     var list = unlinkedList();
-    return '<div class="w205sec"><h2>Projects not linked to a goal yet</h2><span class="hint">Departments own projects; each one serves a goal.</span></div>' +
+    return '<div class="w205sec"><h2>Projects not linked to a goal yet</h2><span class="hint">Teams own projects; each one serves a goal.</span></div>' +
       (list.length ? '<div class="w205list" data-w205unlinked>' + list.map(function (p) {
         var was = p.goal_id ? byId(S.allGoals || [], p.goal_id) : null;
         return '<div class="it"><i style="width:9px;height:9px;border-radius:50%;background:' + E(deptColor(p.department)) + ';flex:none"></i><div class="t"><b data-w198skip>' + E(p.name) + '</b><small>' + E(deptLabel(p.department)) + (was ? ' \u00b7 was linked to a retired goal: <span data-w198skip>' + E(clip(was.title, 70)) + '</span>' : '') + '</small></div>' +
@@ -943,7 +943,7 @@
     if (!S.goals.length) {
       return mastHtml('Goals', p.window || '') + heroHtml() + '<div class="w205empty"><b>No organizational goals yet</b>' + (S.err ? 'The goals could not be read (' + E(clip(S.err, 120)) + ').' : 'When the goals are written, they show here.') + '</div>';
     }
-    return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Departments own projects; each one serves a goal.') +
+    return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Teams own projects; each one serves a goal.') +
       heroHtml() + statusHtml() + yearViewHtml() + whyHtml() + glanceHtml() + coverageHtml() +
       '<div class="w205sec"><h2>Goal by goal</h2><span class="hint">' + (S.goals.some(canEdit) ? 'Click any text to change it; it saves as you type.' : 'Owners keep these up to date.') + '</span></div>' +
       S.goals.map(goalHtml).join('') + roadHtml() + libPreviewHtml() + unlinkedHtml() +
@@ -1145,7 +1145,7 @@
             return '<label><input type="radio" name="w205lp" data-w205pickp="' + x.id + '" /><span class="t"><span data-w198skip>' + E(x.name) + '</span><small>' + (cur ? 'Serves goal ' + E(cur.number) + (g && cur.id === g.id ? ' (this goal)' : '') : 'Not linked to a goal yet') + '</small></span></label>';
           }).join('') + '</div>';
         }).join('') : '<div class="w205empty"><b>No project matches</b>Projects are added on a team\u2019s page or on Projects.</div>');
-      return drawerShell('Link a project', g ? '<span data-w198skip>To goal ' + E(g.number) + ': ' + E(g.title) + '</span>' : 'Pick the project first', body, '<small style="color:' + MUTED + '">Departments own their projects; linking one says which goal (and milestone) it serves.</small>');
+      return drawerShell('Link a project', g ? '<span data-w198skip>To goal ' + E(g.number) + ': ' + E(g.title) + '</span>' : 'Pick the project first', body, '<small style="color:' + MUTED + '">Teams own their projects; linking one says which goal (and milestone) it serves.</small>');
     }
     var goalSel = st.goalPick != null ? st.goalPick : (g ? g.id : p.goal_id);
     var gg = byId(S.goals, goalSel);
@@ -1655,7 +1655,7 @@
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       var jump = function (h) { return function () { if (location.hash !== h) location.hash = h; }; };
       W.tours.orggoals = { __w205: true, tab: 'orggoals', icon: 'target', hash: '#orggoals', steps: [
-        T('#w205 .w205mast', 'Goals', 'Welfare Avenue\u2019s five organizational goals for FY27 to FY29, with a gated view to FY31. Departments own projects, and every project serves one of these goals.'),
+        T('#w205 .w205mast', 'Goals', 'Welfare Avenue\u2019s five organizational goals for FY27 to FY29, with a gated view to FY31. Teams own projects, and every project serves one of these goals.'),
         T('#w205 .w205hero', 'The mission first', 'Every goal serves the mission the board adopted in July 2026.', OPT),
         T('#w205 .w205status', 'Draft or approved', 'Until the board votes (Oct 19, 2026) the goals say Draft for board approval. An admin marks them approved after the vote.', OPT),
         T('#w205 [data-w207year]', 'This year', 'This year\u2019s goals: each goal\u2019s target for the fiscal year and its four quarterly checkpoints. The current quarter is highlighted, Due next lists what comes due first, and anything past its date and not done is flagged Overdue. Click a row to open the goal.', OPT),
@@ -1670,7 +1670,7 @@
         T('#w205 .w205goal .w205paths', 'Paths', 'How we get there. Owners add, change and remove paths.', OPT),
         T('#w205 .w205goal .w207yb', 'This year\u2019s target', 'The goal\u2019s target for this fiscal year, who reports on it, and its Q1 to Q4 checkpoints. Owners set each checkpoint\u2019s status (not started, on track, at risk, done) and its due date; the speech bubble holds its comments and the link icon ties a project to it.', OPT),
         T('#w205 .w205goal .w205years', 'Milestones by year', 'Each fiscal year\u2019s milestones with their status (tap the circle). The projects serving a milestone sit under it; the speech bubble is its own comments.', OPT),
-        T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Departments link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
+        T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Teams link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
         T('#w205 .w205goal .w205gft', 'Comments and history', 'Comments are threaded; type @ to bring someone in. History lists every change, who made it and when; Restore puts an old version back.', OPT),
         T('#w205 .w205road', 'The roadmap', 'Three years to prove it: stabilize, strengthen, scale. The checkpoint in Oct 2027 and the FY29 gate in Oct 2029 decide whether FY30 and FY31 go ahead.', OPT),
         T('#w205 .w205lib', 'The Strategy Library', 'The pinned documents that set our direction. The full library is in the menu.', OPT),

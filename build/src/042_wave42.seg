@@ -208,7 +208,7 @@
       var b = grab(d);
       return b ? wa42DeptRow(b, d) : null;
     });
-    order.push(wa42Group('departments', 'Departments', depts));
+    order.push(wa42Group('departments', 'Teams', depts));
     order.push(wa42Group('work', 'Work', [grab('dashboard'), grab('goals'),
       need('create', 'Create studio', '#6F64AB'), need('finances', 'Finance', '#B9851B')]));
     order.push(wa42Group('people', 'People', [grab('orgchart'), grab('training')]));

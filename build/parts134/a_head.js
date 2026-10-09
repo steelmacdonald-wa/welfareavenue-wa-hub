@@ -32,7 +32,7 @@
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
-      { key: 'departments', label: 'Departments' },
+      { key: 'departments', label: 'Teams' },
       /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
       { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'] },
       { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },

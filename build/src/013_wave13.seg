@@ -65,7 +65,7 @@ function waOrganizeNav() {
   }
   var order = [];
   ['mypage', 'overview', 'dashboard'].forEach(function (id) { var b = grab(id); if (b) order.push(b); });
-  var gD = mkGroup('Departments', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']);
+  var gD = mkGroup('Teams', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']);
   var gW = mkGroup('Workspace', ['agendas', 'requests', 'importantinfo', 'orgchart']);
   var gR = mkGroup('Records', ['transcripts', 'activity']);
   [gD, gW, gR].forEach(function (g) { if (g) order.push(g); });
