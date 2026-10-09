@@ -34,7 +34,7 @@
       progdev: ['overview', 'agenda', 'tasks'],
       opsto: ['overview', 'agenda', 'tasks'],
       marketing: ['overview', 'agenda', 'tasks'],
-      fundraising: ['overview', 'agenda', 'boards'],
+      fundraising: ['overview', 'agenda', 'tasks'],   /* 09/10/26 Steel: Grants, Event fundraising and Donor relations live in the Fundraising app, so the team menu no longer lists them (the boards stay for grouping, projects and the overview cards) */
       hr: ['overview', 'agenda', 'tasks'],
       board: ['overview', 'agenda', 'tasks']
     },
