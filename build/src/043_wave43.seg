@@ -119,7 +119,7 @@
   /* ---- 3. page help ---- */
   var WA43_TITLE = {
     mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
-    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
+    requests: 'Team Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
     create: 'Create studio', finances: 'Finance', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages'

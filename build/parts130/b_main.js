@@ -21,7 +21,7 @@
   var TEAM_LABEL = (window.WA_TEAMS && window.WA_TEAMS.labels) || {};
   var LABEL = {
     dashboard: ['Delivery numbers', 1], needsme: ['Needs me', 1], 'needs-me': ['Needs me', 1], activity: ['Activity', 1],
-    transcripts: ['The transcript archive', 1], tx: ['Transcripts', 0], requests: ['Requests', 0], agendas: ['Agendas', 0],
+    transcripts: ['The transcript archive', 1], tx: ['Transcripts', 0], requests: ['Team Requests', 0], agendas: ['Agendas', 0],
     mypage: ['My page', 1], orgchart: ['The org chart', 1], goals: ['Department goals', 0], projects: ['Projects', 0],
     project: ['Project pages', 0], goalmap: ['Goal alignment', 1], orggoals: ['Organizational goals', 0], create: ['The Create studio', 1],
     volunteering: ['Volunteering', 1], finances: ['Finance', 0], training: ['The Avenue Academy', 1], adminpanel: ['Admin', 1],

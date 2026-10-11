@@ -204,7 +204,7 @@ function renderDeptRequestCards() {
           var b = document.createElement('button');
           b.className = 'tab';
           b.dataset.tab = 'requests';
-          b.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Requests';
+          b.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Team Requests';
           var info = bar.querySelector('[data-tab="importantinfo"]');
           var act = document.getElementById('actTabBtn');
           bar.insertBefore(b, info || act || null);

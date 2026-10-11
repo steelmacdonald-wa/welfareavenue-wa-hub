@@ -45,17 +45,17 @@
   var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
   var GROUPS = [ /* wave134: the same groups as the menu */
     /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
-    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
+    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'requests', 'calendar', 'brain']],
     ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app */
     ['Board', ['board', 'governance', 'committees']],
-    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
+    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'create']],
     ['Organization', ['orgchart', 'ourstory', 'hubmail']],
     ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
     ['CRM', ['crm', 'partners']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
-    mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
+    mypage: 'Home', calendar: 'Calendar', requests: 'Team Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Goals and the Strategy Library', goals: 'Department goals (retired)', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',

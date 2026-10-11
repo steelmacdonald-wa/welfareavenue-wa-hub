@@ -66,7 +66,7 @@
 
   var T = {
     mypage: 'Home', overview: 'Executive dashboard', dashboard: 'Delivery numbers', dept: 'Department pages',
-    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Department goals',
+    requests: 'Team Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Department goals',
     create: 'Create studio', finances: 'Finance', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'

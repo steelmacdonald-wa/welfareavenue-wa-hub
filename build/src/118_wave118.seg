@@ -81,7 +81,7 @@
     "overview": ["Home", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
     "dashboard": ["Executive dashboard", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
     "goals": ["Strategy", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
-    "requests": ["Other Tools", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
+    "requests": ["Home", "Team Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
     "transcripts": ["Other Tools", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
     "agendas": ["Other Tools", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],

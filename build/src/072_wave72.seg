@@ -56,7 +56,7 @@
   /* ---- friendly page names for the access modal ---- */
   var W72_LABELS = {
     mypage: 'My page', overview: 'Decisions', dashboard: 'Dashboard', goals: 'Department goals',
-    agendas: 'Agendas', requests: 'Requests', importantinfo: 'Important info',
+    agendas: 'Agendas', requests: 'Team Requests', importantinfo: 'Important info',
     opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing',
     fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
     volunteering: 'Volunteering', training: 'Avenue Academy', hrcentre: 'HR centre',

@@ -27,14 +27,14 @@
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
     /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
-    top: ['mypage', 'training', 'overview', 'calendar'],
+    top: ['mypage', 'training', 'overview', 'requests', 'calendar'],   /* 09/10/26 Steel: Team Requests sits above the Calendar */
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
       { key: 'departments', label: 'Teams' },
       /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
-      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'] },
+      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
       /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
          app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
