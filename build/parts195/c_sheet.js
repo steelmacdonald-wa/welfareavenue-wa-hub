@@ -32,6 +32,8 @@
     var r = await rpc('signoff_detail', { p_id: id });
     if (r.error || !r.data) { sheet('<div class="w195warn">' + E(r.error ? msgOf(r.error) : 'That request is gone.') + '</div>'); return; }
     S.det = r.data;
+    /* 11/10/26: words prepared for the signer ahead of time (signer_note on a waiting request) fill the box */
+    if (!S.note && r.data.request && r.data.request.status === 'requested' && r.data.request.signer_note) S.note = r.data.request.signer_note;
     if (!S.me) { var m = await rpc('signoff_signer_me'); if (!m.error && m.data) S.me = m.data; }
     S.items = (r.data.servings || []).map(function (x) { return { roster_id: x.roster_id, date: x.date, role: x.role_en || x.role, location: x.location, hours: Number(x.hours || 0), on: true }; });
     paintSheet();
@@ -68,7 +70,7 @@
   function bodyFor(action) {
     var q = S.det.request, b = { action: action, id: q.id };
     if (q.kind !== 'recognition') b.items = (S.items || []).filter(function (x) { return x.on; }).map(function (x) { return { roster_id: x.roster_id, hours: Number(x.hours) }; });
-    else b.note = S.note || '';
+    if (q.kind !== 'form') b.note = S.note || '';   /* 11/10/26: the signer's comment also goes on an hours letter */
     if (q.kind === 'form') { b.placement = placement(); b.add_page = !!S.addPage; }
     if (action === 'sign') b.notify = !!S.notify;
     return b;
@@ -123,8 +125,8 @@
     } else if (waiting) {
       if (!ready()) h += '<div class="w195warn">Add your signature, name and title before you sign. <button type="button" class="w195link" data-w195mine="1">Open My signature</button></div>';
       if (q.kind !== 'recognition') h += servingsHtml();
-      if (q.kind === 'recognition') {
-        h += '<h3>Your words</h3><p class="w195muted">The letter already says when ' + E(fn || 'they') + ' started, their servings, hours and roles. Add a few lines of your own if you like: what they bring, a moment that stood out. A blank line starts a new paragraph.</p>' +
+      if (q.kind !== 'form') {   /* 11/10/26: recognition letters and hours letters both take the signer's own words */
+        h += '<h3>' + (q.kind === 'hours' ? 'Your comment' : 'Your words') + '</h3><p class="w195muted">' + (q.kind === 'hours' ? 'Optional. The letter already lists their servings, hours and roles; your comment prints under the table.' : 'The letter already says when ' + E(fn || 'they') + ' started, their servings, hours and roles.') + ' Add a few lines of your own if you like: what they bring, a moment that stood out. A blank line starts a new paragraph.</p>' +
           '<label class="sr" for="w195note">Your words</label><textarea id="w195note" maxlength="1500">' + E(S.note) + '</textarea>';
       }
       if (q.kind === 'form') h += placementHtml();

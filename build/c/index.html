@@ -24,7 +24,7 @@
      wave174 (30/09/26): the role's own times (from the serving's start time; in the calendar entries too); the survey, tailored
      to the role, on this page an hour after the serving starts (volunteer_survey_submit); the itinerary by role from the day
      before (team leaders and drivers, servers and photographers, the Community lead; none for cooks). ?test=1 previews both.
-     wave175 (30/09/26): "Save to my account" goes to hub.welfareavenue.com/me?link=<token> (the volunteer account page). -->
+     wave175 (30/09/26): "Save to my account"; since 11/10/26 (website accounts on) it goes to welfareavenue.com/account/?link=<token> (or /fr/compte/). -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -371,7 +371,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       pjSend: 'Sign me up', pjOk: 'You are on the team!', pjOkP: 'Thank you for joining us. Your page has everything for the day.', pjOpen: 'Open my page', pjAlready: 'You were already on the team for this serving.',
       pjClosed: 'Sign-ups for this serving are closed. Thank you for your interest!', pjErrName: 'Please enter your first name.', pjErrContact: 'Please enter an email or a mobile phone.', pjErrEmail: 'Please check the email.', pjErrPhone: 'Please check the phone number (10 digits).',
       pjPriv: 'Welfare Avenue keeps your name and contact details to organize this serving and to invite you to future ones. Reply STOP to any text to stop texts.', pjJoined: '{n} from your group already signed up',
-      acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots, with your Google account.' },
+      acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots on welfareavenue.com. Sign in with Google or a code we email you.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
@@ -445,7 +445,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       pjSend: 'Je m’inscris', pjOk: 'Vous faites partie de l’équipe!', pjOkP: 'Merci de vous joindre à nous. Votre page a tout ce qu’il faut pour le jour J.', pjOpen: 'Ouvrir ma page', pjAlready: 'Vous faisiez déjà partie de l’équipe pour ce service.',
       pjClosed: 'Les inscriptions pour ce service sont fermées. Merci de votre intérêt!', pjErrName: 'Veuillez entrer votre prénom.', pjErrContact: 'Veuillez entrer un courriel ou un cellulaire.', pjErrEmail: 'Veuillez vérifier le courriel.', pjErrPhone: 'Veuillez vérifier le numéro (10 chiffres).',
       pjPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ce service et vous inviter aux prochains. Répondez STOP à un texto pour ne plus en recevoir.', pjJoined: '{n} de votre groupe déjà inscrits',
-      acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres, avec votre compte Google.' }
+      acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres sur welfareavenue.com. Connectez-vous avec Google ou un code reçu par courriel.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
@@ -667,8 +667,8 @@ a.rbig svg{width:20px;height:20px;flex:none}
   }
   function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   /* wave175: keep it in their Google account (hub.welfareavenue.com/me) */
-  var ACCT_ON = false;   /* wave175b: off until volunteer sign-in moves to welfareavenue.com (Steel, 30/09/26: the Hub is staff-only) */
-  function acctHtml() { return S.test || !ACCT_ON ? '' : '<div class="soon" style="margin:18px 0 0"><img src="' + ST + 'brand/doodle-heart-purple.png" alt="" style="width:28px;height:auto;flex:none"><div><a href="/me/?link=' + encodeURIComponent(token()) + '" style="font-weight:700">' + E(t('acct')) + '</a><br><span style="font-size:14px">' + E(t('acctP')) + '</span></div></div>'; }
+  var ACCT_ON = true;   /* wave175b: off until volunteer sign-in moves to welfareavenue.com (Steel, 30/09/26: the Hub is staff-only) */
+  function acctHtml() { return S.test || !ACCT_ON ? '' : '<div class="soon" style="margin:18px 0 0"><img src="' + ST + 'brand/doodle-heart-purple.png" alt="" style="width:28px;height:auto;flex:none"><div><a href="https://welfareavenue.com' + (S.lang === 'fr' ? '/fr/compte/' : '/account/') + '?link=' + encodeURIComponent(token()) + '" style="font-weight:700">' + E(t('acct')) + '</a><br><span style="font-size:14px">' + E(t('acctP')) + '</span></div></div>'; }
   function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
   /* ---------- wave174: the survey, tailored to the role ---------- */
   function svLabel(o) { return (S.lang === 'fr' ? o.fr : o.en) || o.en || ''; }

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Welfare Avenue: still interested?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the "I'm still interested" page (02/10/26). Served for every /i/<token> by a Netlify rewrite
+     (_redirects), deployed by host-sync from site_files path i/index.html. People who applied for a team role through
+     CABM get their personal link by text; the page asks the candidate-confirm function who the token is for (first
+     name and role only), shows one button, and the answer moves them in HR centre > Recruitment (Reviewing = still
+     interested, Withdrawn = no longer available). English and French (?l=fr). Nothing is saved until the button. -->
+<style>
+  :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font-family: 'Space Grotesk', system-ui, sans-serif; line-height: 1.5; }
+  .top { background: var(--green); color: var(--cream); padding: 22px 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: .02em; }
+  .card { max-width: 560px; margin: 28px auto; padding: 0 20px 48px; }
+  h1 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 36px; line-height: 1.08; margin: 0 0 14px; color: var(--green); }
+  p { margin: 0 0 14px; font-size: 17px; }
+  .btn { display: block; width: 100%; text-align: center; background: var(--green); color: var(--cream); border: 0; border-radius: 999px; padding: 17px 20px; font: 600 18px 'Space Grotesk', sans-serif; cursor: pointer; margin: 24px 0 14px; }
+  .btn:hover, .btn:focus { background: #0b2f2b; }
+  .btn[disabled] { opacity: .6; cursor: default; }
+  .quiet { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--muted); font: 15px 'Space Grotesk', sans-serif; text-decoration: underline; cursor: pointer; padding: 8px; }
+  .ok { background: var(--soft); border-radius: 16px; padding: 18px 20px; margin-top: 10px; }
+  .lang { float: right; font-size: 14px; font-family: 'Space Grotesk', sans-serif; font-weight: 500; }
+  .lang a { color: var(--cream); text-decoration: none; opacity: .85; }
+  small { color: var(--muted); }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<div class="top">Welfare Avenue <span class="lang" id="lang"></span></div>
+<div class="card" id="card"><p id="loading">…</p></div>
+<script>
+(function () {
+  var FN = 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/candidate-confirm';
+  var token = decodeURIComponent((location.pathname.split('/i/')[1] || '').split('/')[0] || '');
+  var q = new URLSearchParams(location.search);
+  var lang = (q.get('l') || (navigator.language || 'en')).toLowerCase().indexOf('fr') === 0 ? 'fr' : 'en';
+  var ROLE_FR = { 'Operations Manager': 'Gestionnaire des opérations', 'HR Technician': 'Technicien·ne RH', 'Event Coordinator': "Coordonnateur·rice d'événements" };
+  var T = {
+    en: { title: 'Welfare Avenue: still interested?', hi: 'Hi {first},', applied: 'You applied for the volunteer <strong>{role}</strong> role at Welfare Avenue through CABM. Thank you again.',
+          ask: 'We are lining up calls. Are you still interested?', yes: "Yes, I'm still interested", no: "No, I'm no longer available",
+          thanksYes: 'Thank you, {first}!', okYes: 'Noted: you are still interested in the <strong>{role}</strong> role. Someone from the team will call you in the next few days.',
+          thanksNo: 'Thank you, {first}.', okNo: 'Noted: we will not call you about the <strong>{role}</strong> role. Thank you for thinking of Welfare Avenue, and maybe another time.',
+          again: 'Your answer was already on file.', close: 'You can close this page.',
+          bad: 'This link does not work', badText: 'It may be incomplete. Write to volunteer@welfareavenue.com and we will sort it out.',
+          oops: 'A hiccup on our side. Try again in a minute.', other: 'Français' },
+    fr: { title: 'Welfare Avenue: toujours intéressé·e?', hi: 'Bonjour {first},', applied: 'Vous avez postulé pour le poste bénévole de <strong>{role}</strong> chez Welfare Avenue, par le CABM. Merci encore.',
+          ask: 'On prépare les appels. Êtes-vous toujours intéressé·e?', yes: 'Oui, je suis toujours intéressé·e', no: 'Non, je ne suis plus disponible',
+          thanksYes: 'Merci, {first}!', okYes: "C'est noté: vous êtes toujours intéressé·e par le poste de <strong>{role}</strong>. Quelqu'un de l'équipe vous appelle dans les prochains jours.",
+          thanksNo: 'Merci, {first}.', okNo: "C'est noté: on ne vous appellera pas pour le poste de <strong>{role}</strong>. Merci d'avoir pensé à Welfare Avenue, et à une prochaine fois peut-être.",
+          again: 'Votre réponse était déjà enregistrée.', close: 'Vous pouvez fermer cette page.',
+          bad: 'Ce lien ne fonctionne pas', badText: 'Il est peut-être incomplet. Écrivez-nous à volunteer@welfareavenue.com et on règle ça.',
+          oops: 'Un pépin de notre côté. Réessayez dans une minute.', other: 'English' }
+  };
+  var t = T[lang];
+  document.title = t.title;
+  document.documentElement.lang = lang;
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fill(s, c) { return s.replace('{first}', esc(c.first || '')).replace('{role}', esc(lang === 'fr' ? (ROLE_FR[c.role] || c.role) : c.role)); }
+  var card = document.getElementById('card');
+  var other = document.getElementById('lang');
+  other.innerHTML = '<a href="' + esc(location.pathname + '?l=' + (lang === 'fr' ? 'en' : 'fr')) + '">' + t.other + '</a>';
+  function bad() { card.innerHTML = '<h1>' + t.bad + '</h1><p>' + t.badText + '</p>'; }
+  function done(c, answer, repeated) {
+    card.innerHTML = answer === 'yes'
+      ? '<h1>' + fill(t.thanksYes, c) + '</h1><div class="ok"><p>' + fill(t.okYes, c) + '</p></div><p><small>' + (repeated ? t.again : t.close) + '</small></p>'
+      : '<h1>' + fill(t.thanksNo, c) + '</h1><div class="ok"><p>' + fill(t.okNo, c) + '</p></div>';
+  }
+  function ask(c) {
+    card.innerHTML = '<h1>' + fill(t.hi, c) + '</h1><p>' + fill(t.applied, c) + '</p><p>' + t.ask + '</p>' +
+      '<button class="btn" id="yes" type="button">' + t.yes + '</button>' +
+      '<button class="quiet" id="no" type="button">' + t.no + '</button><p id="err" class="hide"><small></small></p>';
+    function send(a) {
+      var b1 = document.getElementById('yes'), b2 = document.getElementById('no');
+      b1.disabled = true; b2.disabled = true;
+      fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, a: a }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok) done(c, j.answer, !!j.repeated); else throw new Error('save'); })
+        .catch(function () { b1.disabled = false; b2.disabled = false; var e = document.getElementById('err'); e.className = ''; e.firstChild.textContent = t.oops; });
+    }
+    document.getElementById('yes').addEventListener('click', function () { send('yes'); });
+    document.getElementById('no').addEventListener('click', function () { send('no'); });
+  }
+  if (!token) { bad(); return; }
+  fetch(FN + '?t=' + encodeURIComponent(token))
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j || !j.ok) { bad(); return; }
+      if (j.answered) done(j, j.answered, true); else ask(j);
+    })
+    .catch(bad);
+})();
+</script>
+</body>
+</html>

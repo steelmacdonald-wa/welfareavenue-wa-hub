@@ -1,4 +1,7 @@
-// Welfare Avenue: host-sync (v13, 09/10/26)
+// Welfare Avenue: host-sync (v14, 12/10/26)
+// v14 (wave231): also deploys platform verification files at the site root: every site_files path that looks like
+// tiktok<letters and digits>.txt (TikTok for Developers' "Verify URL prefix" file for https://hub.welfareavenue.com/).
+// They are plain text, one row each; add or remove the row and run host-sync.
 // v13 (wave225): also deploys the link-in-bio page /links/index.html (served for /links by _redirects; /l/<code> is proxied to
 // the go function there too).
 // v12 (wave219): also deploys what makes the Hub an app with notifications: /manifest.webmanifest, the service worker /sw.js
@@ -134,13 +137,23 @@ Deno.serve(async (req: Request) => {
     } catch (_) { /* optional */ }
   }
 
+  // v14: platform verification files at the root (tiktok<id>.txt), one plain-text row each
+  try {
+    const { data: vf } = await svc.from('site_files').select('path, part, content').like('path', 'tiktok%').order('part', { ascending: true });
+    for (const r of (vf || []) as Array<{ path: string; content: string }>) {
+      if (!/^tiktok[A-Za-z0-9]{8,80}\.txt$/.test(r.path)) continue;
+      const prev = deployFiles['/' + r.path] ? new TextDecoder().decode(deployFiles['/' + r.path]) : '';
+      deployFiles['/' + r.path] = new TextEncoder().encode(prev + r.content);
+    }
+  } catch (_) { /* optional */ }
+
   const netlify = await netlifyDeploy(deployFiles);
 
   try {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v13'
+      changed_by: 'host-sync v14'
     });
   } catch (_) { /* audit only */ }
 

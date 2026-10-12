@@ -1,7 +1,7 @@
 /f/*  /f/index.html  200
 /c/*  /c/index.html  200
-/me  /me/index.html  200
-/me/*  /me/index.html  200
+/me  https://welfareavenue.com/account/  301!
+/me/*  https://welfareavenue.com/account/  301!
 /give  /give/index.html  200
 /give/*  /give/index.html  200
 /i/*  /i/index.html  200

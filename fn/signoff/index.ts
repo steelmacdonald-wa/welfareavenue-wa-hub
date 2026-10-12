@@ -1,4 +1,11 @@
-// Welfare Avenue: signoff (v1, 02/10/26, wave195)
+// Welfare Avenue: signoff (v3, 11/10/26; v1 02/10/26, wave195)
+// v3 (11/10/26): letters follow the WA brand guide v1 in full (Steel: "can we make it like this on the web?", after the
+// wa-brand letter for James Morand): cream page, green header with the cream lockup and the purple spray in the corner, a purple
+// overline (their roles), the title in Barlow Condensed Medium with a gold rule and one gold star, a green strip with the
+// services, hours and period, "Chaleureusement," / "Warmly," on recognition letters, and a green footer band.
+// v2 (11/10/26): the signer's own words also print on an hours sign-off letter (under the servings table, before the close).
+// Steel, 11/10/26: "add in the functionality to add comments to future volunteers that want to add their hours".
+// The volunteer's own form still takes no words (only the signature and our hours page).
 // The Volunteer Manager's Sign-offs page. Steel, 02/10/26: "I'd also like to add my signature to volunteer recognition and
 // volunteer hours sign off requests that volunteers can ask for on their profile in the website. This would appear on our
 // volunteer manager as it's own page to sign off on hours completed with us." Signers (admins, Operations leads and people an
@@ -19,11 +26,14 @@
 //   check (x-wa-secret)        -> the build's check: made-up letters drawn and kept as previews/check-*.pdf (10-minute links)
 // sign also takes notify: false (the signer chose not to email the volunteer).
 // items: [{roster_id, hours}] the servings to list and their hours (default: every confirmed serving in the request's period);
-// note: the signer's own words on a recognition letter; placement (their own form): {page (0-based, default the last), x, y
-// (the signature's top left, 0 to 1 of the page from the top left), w (its width, 0 to 1 of the page), caption (true)};
+// note: the signer's own words on a recognition letter or an hours letter (v2); placement (their own form): {page (0-based,
+// default the last), x, y (the signature's top left, 0 to 1 of the page from the top left), w (its width, 0 to 1 of the page),
+// caption (true)};
 // add_page: add our hours confirmation page after their form (default true).
 // Fonts: Barlow Condensed and Space Grotesk fetched as TrueType from Google Fonts (OFL) when the function starts, Helvetica if
 // that fails. Secrets: WA_TRIGGER_SECRET (vault) to call mail-send.
+// Repo copy made 12/10/26 from the deployed function (platform version 4); the combining-mark range in letterFileName is
+// written as \u escapes here.
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import * as PDFLib from 'npm:pdf-lib@1.17.1';
@@ -35,10 +45,16 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app'];
-const LOCKUP = SUPABASE_URL + '/storage/v1/object/public/content-images/brand/logo-lockup-cream-600.png';
+const BRAND = SUPABASE_URL + '/storage/v1/object/public/content-images/brand/';
+const LOCKUP = BRAND + 'logo-lockup-cream-1200.png';
+// v3: French letters carry the French logo, Avenue du Bien-Être (Steel, 12/10/26: "here's the french logo to use on french
+// website and french forms etc"); the English lockup stands in if it is missing
+const LOCKUP_FR = BRAND + 'logo-fr-lockup-cream-1200.png';
+const STAR = BRAND + 'doodle-star-gold.png', BLOB = BRAND + 'doodle-blob-purple.png';
 const BUCKET = 'signoffs';
 
 const GREEN = rgb(16 / 255, 63 / 255, 57 / 255), CREAM = rgb(1, 250 / 255, 242 / 255), GOLD = rgb(220 / 255, 165 / 255, 39 / 255);
+const PURPLE = rgb(111 / 255, 100 / 255, 171 / 255);
 const INK = rgb(31 / 255, 32 / 255, 30 / 255), MUTED = rgb(121 / 255, 119 / 255, 115 / 255), LINE = rgb(0.9, 0.88, 0.84), RED = rgb(0.70, 0.25, 0.18);
 const PW = 612, PH = 792, L = 54, R = 558;
 
@@ -76,6 +92,15 @@ function dateText(iso, lang) {
   return p[2] + ' ' + MON[lang][p[1] - 1] + ' ' + p[0];
 }
 function monthYear(iso, lang) { const p = String(iso || '').slice(0, 10).split('-').map(Number); return p[0] ? MON[lang][p[1] - 1] + ' ' + p[0] : ''; }
+// v3: "April to October 2026" / "Avril à octobre 2026" (years shown on both ends when they differ)
+function periodText(a, b, lang) {
+  const pa = String(a || '').slice(0, 10).split('-').map(Number), pb = String(b || a || '').slice(0, 10).split('-').map(Number);
+  if (!pa[0]) return ''; const m = MON[lang];
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1), to = lang === 'fr' ? ' à ' : ' to ';
+  if (pa[0] === pb[0] && pa[1] === pb[1]) return cap(m[pa[1] - 1]) + ' ' + pa[0];
+  if (pa[0] === pb[0]) return cap(m[pa[1] - 1]) + to + m[pb[1] - 1] + ' ' + pb[0];
+  return cap(m[pa[1] - 1]) + ' ' + pa[0] + to + m[pb[1] - 1] + ' ' + pb[0];
+}
 function hoursText(n, lang) { const v = Math.round(Number(n || 0) * 10) / 10; const s = v % 1 === 0 ? String(v) : v.toFixed(1); return lang === 'fr' ? s.replace('.', ',') : s; }
 function placeText(loc, lang) { return lang === 'fr' && /^montreal$/i.test(loc || '') ? 'Montréal' : (loc || ''); }
 function listText(items, lang) {
@@ -88,7 +113,7 @@ function rolesOf(items, lang) {
 }
 const W = {
   en: { hours_title: 'Volunteer hours confirmation', rec_title: 'Letter of recognition', place: 'Montreal', ref: 'Reference', to: 'To: ', whom: 'To whom it may concern',
-        sincerely: 'Sincerely,', date: 'Date', role: 'Role', where: 'Location', hours: 'Hours', total: 'Total', servings1: 'serving', servingsN: 'servings', hoursN: 'hours',
+        sincerely: 'Sincerely,', warmly: 'Warmly,', attn: 'For the attention of ', st_serv: 'With Welfare Avenue', st_hours: 'Of volunteer service', st_when: 'Period', date: 'Date', role: 'Role', where: 'Location', hours: 'Hours', total: 'Total', servings1: 'serving', servingsN: 'servings', hoursN: 'hours',
         roles: 'Roles: ', cont: '(continued)', preview: 'PREVIEW', charity: 'Registered charity', check: 'To confirm this letter, write to info@welfareavenue.com and give its reference, ',
         p1: (n) => 'This letter confirms that ' + n + ' volunteered with Welfare Avenue, a youth-powered registered charity that serves home-cooked meals and connects people experiencing homelessness with support in Montreal and Toronto.',
         p2: (f, a, b, h, s) => (a === b ? 'On ' + a : 'Between ' + a + ' and ' + b) + ', ' + f + ' gave ' + h + ' hours of volunteer service over ' + s + '.',
@@ -99,7 +124,7 @@ const W = {
         rasked: (p) => 'This letter was requested for: ' + p + '.',
         rclose: (f) => 'Thank you, ' + f + ', for the care you bring every time you show up.' },
   fr: { hours_title: 'Confirmation des heures de bénévolat', rec_title: 'Lettre de reconnaissance', place: 'Montréal, le', ref: 'Référence', to: 'Destinataire : ', whom: 'À qui de droit',
-        sincerely: 'Cordialement,', date: 'Date', role: 'Rôle', where: 'Lieu', hours: 'Heures', total: 'Total', servings1: 'service', servingsN: 'services', hoursN: 'heures',
+        sincerely: 'Cordialement,', warmly: 'Chaleureusement,', attn: 'À l’attention de ', st_serv: 'Avec Welfare Avenue', st_hours: 'De bénévolat', st_when: 'Période', date: 'Date', role: 'Rôle', where: 'Lieu', hours: 'Heures', total: 'Total', servings1: 'service', servingsN: 'services', hoursN: 'heures',
         roles: 'Rôles : ', cont: '(suite)', preview: 'APERÇU', charity: 'Organisme de bienfaisance enregistré', check: 'Pour vérifier cette lettre, écrivez à info@welfareavenue.com en indiquant sa référence, ',
         p1: (n) => 'La présente confirme que ' + n + ' a fait du bénévolat avec Welfare Avenue, un organisme de bienfaisance enregistré porté par les jeunes qui sert des repas maison et met les personnes en situation d’itinérance en lien avec du soutien, à Montréal et à Toronto.',
         p2: (f, a, b, h, s) => (a === b ? 'Le ' + a : 'Du ' + a + ' au ' + b) + ', ' + f + ' a donné ' + h + ' heures de bénévolat lors de ' + s + '.',
@@ -116,27 +141,30 @@ function servingsText(n, w) { return n + ' ' + (n === 1 ? w.servings1 : w.servin
 let ASSETS = null;
 async function assets() {
   if (ASSETS) return ASSETS;
-  const a = { fonts: null, lockup: null };
+  const a = { fonts: null, lockup: null, lockup_fr: null, star: null, blob: null };
   try {
-    const css = await (await fetch('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600&family=Space+Grotesk:wght@400;700&display=swap', { headers: { 'User-Agent': 'curl/7.0' } })).text();
+    const css = await (await fetch('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Space+Grotesk:wght@400;700&display=swap', { headers: { 'User-Agent': 'curl/7.0' } })).text();
     const blocks = css.split('@font-face').slice(1);
     const pick = (fam, w) => { const b = blocks.find(x => x.indexOf("'" + fam + "'") >= 0 && x.indexOf('font-weight: ' + w) >= 0); const m = b && b.match(/url\((https:[^)]+\.ttf)\)/); return m ? m[1] : null; };
-    const urls = { head: pick('Barlow Condensed', 600), body: pick('Space Grotesk', 400), bold: pick('Space Grotesk', 700) };
+    const urls = { head: pick('Barlow Condensed', 500), head6: pick('Barlow Condensed', 600), body: pick('Space Grotesk', 400), bold: pick('Space Grotesk', 700) };
     const f = {};
     for (const k of Object.keys(urls)) { if (!urls[k]) throw new Error('font ' + k); const r = await fetch(urls[k]); if (!r.ok) throw new Error('font ' + k + ' ' + r.status); f[k] = new Uint8Array(await r.arrayBuffer()); }
     a.fonts = f;
   } catch (e) { console.warn('signoff fonts', String(e)); }
-  try { const r = await fetch(LOCKUP); if (r.ok) a.lockup = new Uint8Array(await r.arrayBuffer()); } catch (_) { /* the band stands without it */ }
+  for (const [k, u] of [['lockup', LOCKUP], ['lockup_fr', LOCKUP_FR], ['star', STAR], ['blob', BLOB]]) {
+    try { const r = await fetch(u); if (r.ok) a[k] = new Uint8Array(await r.arrayBuffer()); } catch (_) { /* the letter stands without it */ }
+  }
   ASSETS = a; return a;
 }
 async function fontsFor(pdf) {
   const a = await assets();
   pdf.registerFontkit(fontkit);
   if (a.fonts) {
-    try { return { head: await pdf.embedFont(a.fonts.head, { subset: true }), body: await pdf.embedFont(a.fonts.body, { subset: true }), bold: await pdf.embedFont(a.fonts.bold, { subset: true }), std: false }; }
+    try { return { head: await pdf.embedFont(a.fonts.head, { subset: true }), head6: await pdf.embedFont(a.fonts.head6, { subset: true }), body: await pdf.embedFont(a.fonts.body, { subset: true }), bold: await pdf.embedFont(a.fonts.bold, { subset: true }), std: false }; }
     catch (e) { console.warn('signoff embed', String(e)); }
   }
-  return { head: await pdf.embedFont(StandardFonts.HelveticaBold), body: await pdf.embedFont(StandardFonts.Helvetica), bold: await pdf.embedFont(StandardFonts.HelveticaBold), std: true };
+  const hb = await pdf.embedFont(StandardFonts.HelveticaBold);
+  return { head: hb, head6: hb, body: await pdf.embedFont(StandardFonts.Helvetica), bold: hb, std: true };
 }
 const WINANSI = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ'.split(''));
 function safeText(F, s) {
@@ -161,30 +189,35 @@ function wrap(F, font, text, size, width) {
 function letterLayout(pdf, F, d) {
   const w = W[d.lang];
   const ctx = { pdf, page: null, y: 0, n: 0 };
-  const lockup = d._lockup;
+  const lockup = d._lockup, blob = d._blob;
   function band(first) {
     const page = pdf.addPage([PW, PH]); ctx.page = page; ctx.n++;
-    const bh = first ? 92 : 46;
+    // v3: the cream page, the green header with the purple spray in its corner, the green footer band
+    page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: CREAM });
+    const bh = first ? 97 : 46;
     page.drawRectangle({ x: 0, y: PH - bh, width: PW, height: bh, color: GREEN });
-    if (lockup) { const lh = first ? 40 : 22, lw = lh * lockup.width / lockup.height; page.drawImage(lockup, { x: L, y: PH - bh / 2 - lh / 2, width: lw, height: lh }); }
+    if (first && blob) { const bw = 187, bhh = bw * blob.height / blob.width; page.drawImage(blob, { x: PW - bw + 25, y: PH - bhh + 4, width: bw, height: bhh, opacity: 0.9 }); }
+    if (lockup) { const lh = first ? 60 : 24, lw = lh * lockup.width / lockup.height; page.drawImage(lockup, { x: L, y: PH - bh / 2 - lh / 2, width: lw, height: lh }); }
     if (first) {
-      const lines = [['Welfare Avenue', F.bold, 10], [d.org_address, F.body, 8], [w.charity + ' ' + d.org_charity, F.body, 8], ['welfareavenue.com  ·  info@welfareavenue.com', F.body, 8]].filter(x => x[0] && String(x[0]).trim());
-      let y = PH - 26;
-      lines.forEach(([t, f, s]) => { const tt = safeText(F, t); page.drawText(tt, { x: R - f.widthOfTextAtSize(tt, s), y, size: s, font: f, color: CREAM }); y -= s + 4; });
+      const lines = [['Welfare Avenue', F.bold, 9], [d.org_address, F.body, 8], [w.charity + ' ' + d.org_charity, F.body, 8], ['welfareavenue.com  ·  info@welfareavenue.com', F.body, 8]].filter(x => x[0] && String(x[0]).trim());
+      let y = PH - 30; const xr = R - 62;
+      lines.forEach(([t, f, s]) => { const tt = safeText(F, t); page.drawText(tt, { x: xr - f.widthOfTextAtSize(tt, s), y, size: s, font: f, color: CREAM }); y -= s + 4.5; });
     } else {
       const t = safeText(F, (d.kind === 'recognition' ? w.rec_title : w.hours_title) + ' ' + w.cont);
       page.drawText(t, { x: R - F.body.widthOfTextAtSize(t, 8.5), y: PH - 28, size: 8.5, font: F.body, color: CREAM });
     }
-    // the foot: how to check the letter, the charity
-    page.drawLine({ start: { x: L, y: 62 }, end: { x: R, y: 62 }, thickness: 0.6, color: LINE });
-    const f1 = safeText(F, w.check + d.reference + '.'), f2 = safeText(F, 'Welfare Avenue  ·  ' + d.org_address + '  ·  ' + w.charity + ' ' + d.org_charity);
-    page.drawText(f1, { x: L, y: 48, size: 7.5, font: F.body, color: MUTED });
-    page.drawText(f2, { x: L, y: 37, size: 7.5, font: F.body, color: MUTED });
+    // the foot: how to check the letter, then the green band with the charity
+    const f1 = safeText(F, w.check + d.reference + '.');
+    page.drawText(f1, { x: L, y: 56, size: 7.5, font: F.body, color: MUTED });
+    page.drawRectangle({ x: 0, y: 0, width: PW, height: 44, color: GREEN });
+    page.drawText(safeText(F, d.lang === 'fr' ? 'AVENUE DU BIEN-ÊTRE' : 'WELFARE AVENUE'), { x: L, y: 18, size: 10.5, font: F.head6, color: CREAM });
+    const f2 = safeText(F, w.charity + ' ' + d.org_charity + '  ·  welfareavenue.com');
+    page.drawText(f2, { x: R - F.body.widthOfTextAtSize(f2, 7.5), y: 19, size: 7.5, font: F.body, color: CREAM });
     if (d.preview) {
       const t = w.preview, s = 96, tw = F.head.widthOfTextAtSize(t, s);
       page.drawText(t, { x: PW / 2 - (tw * Math.cos(Math.PI / 5)) / 2, y: PH / 2 - (tw * Math.sin(Math.PI / 5)) / 2, size: s, font: F.head, color: RED, opacity: 0.13, rotate: degrees(36) });
     }
-    ctx.y = PH - bh - (first ? 46 : 34);
+    ctx.y = PH - bh - (first ? 34 : 34);
   }
   function ensure(h) { if (ctx.y - h < 84) band(false); }
   function para(text, size = 10.5, font = F.body, color = INK, gap = 9) {
@@ -200,24 +233,45 @@ async function letterPdf(d) {
   pdf.setTitle(d.kind === 'recognition' ? W[d.lang].rec_title : W[d.lang].hours_title); pdf.setAuthor('Welfare Avenue'); pdf.setCreator('Welfare Avenue Hub (signoff)');
   const F = await fontsFor(pdf);
   const a = await assets();
-  d._lockup = null; if (a.lockup) { try { d._lockup = await pdf.embedPng(a.lockup); } catch (_) { d._lockup = null; } }
+  const emb = async (b) => { if (!b) return null; try { return await pdf.embedPng(b); } catch (_) { return null; } };
+  d._lockup = (d.lang === 'fr' ? await emb(a.lockup_fr) : null) || await emb(a.lockup); d._blob = await emb(a.blob); const star = await emb(a.star);
   const { ctx, band, ensure, para, w } = letterLayout(pdf, F, d);
   const lang = d.lang;
   band(true);
-  // the title, the date and reference, the addressee
-  const title = safeText(F, (d.kind === 'recognition' ? w.rec_title : w.hours_title).toUpperCase());
-  let ts = 25; while (F.head.widthOfTextAtSize(title, ts) > R - L && ts > 14) ts -= 1;
-  ctx.page.drawText(title, { x: L, y: ctx.y, size: ts, font: F.head, color: GREEN }); ctx.y -= 12;
-  ctx.page.drawRectangle({ x: L, y: ctx.y, width: 46, height: 3, color: GOLD }); ctx.y -= 20;
-  const meta = (lang === 'fr' ? w.place + ' ' : w.place + ', ') + dateText(d.date, lang) + '   ·   ' + w.ref + ' ' + d.reference;
-  ctx.page.drawText(safeText(F, meta), { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED }); ctx.y -= 26;
-  para(d.for_org ? w.to + d.for_org : w.whom, 10.5, F.bold, INK, 10);
-
   const items = d.items || [], n = items.length, h = items.reduce((s, x) => s + Number(x.hours || 0), 0);
   const roles = rolesOf(items.length ? items : (d.all_items || []), lang);
+  // v3: the purple overline (their roles), the title in Barlow Condensed Medium with one gold star, the gold rule
+  const over = safeText(F, (roles.length ? listText(roles, lang) : 'Welfare Avenue').toUpperCase());
+  let os = 8.5; while (F.bold.widthOfTextAtSize(over, os) > R - L && os > 6) os -= 0.5;
+  ctx.page.drawText(over, { x: L, y: ctx.y, size: os, font: F.bold, color: PURPLE }); ctx.y -= 36;
+  const title = safeText(F, (d.kind === 'recognition' ? w.rec_title : w.hours_title).toUpperCase());
+  let ts = 38; while (F.head.widthOfTextAtSize(title, ts) > R - L - 44 && ts > 16) ts -= 1;
+  ctx.page.drawText(title, { x: L, y: ctx.y, size: ts, font: F.head, color: GREEN });
+  if (star) { const sw = 28, sh = sw * star.height / star.width; ctx.page.drawImage(star, { x: L + F.head.widthOfTextAtSize(title, ts) + 8, y: ctx.y + ts * 0.45, width: sw, height: sh, rotate: degrees(-8) }); }
+  ctx.y -= 13;
+  ctx.page.drawRectangle({ x: L, y: ctx.y, width: 30, height: 3, color: GOLD }); ctx.y -= 19;
+  const meta = (lang === 'fr' ? w.place + ' ' : w.place + ', ') + dateText(d.date, lang) + '   ·   ' + w.ref + ' ' + d.reference;
+  ctx.page.drawText(safeText(F, meta), { x: L, y: ctx.y, size: 9, font: F.body, color: MUTED }); ctx.y -= 24;
+  para(d.for_org ? w.to + d.for_org : (d.kind === 'recognition' ? w.attn + d.name : w.whom), 10.5, F.bold, GREEN, 10);
+
+  // v3: the green strip: services, hours (what the record counts, 2 h a service by default), the period
+  const tot = d.kind === 'recognition' ? (d.all || { count: n, hours: h, first: items[0] && items[0].date, last: items[n - 1] && items[n - 1].date })
+    : { count: n, hours: h, first: items[0] && items[0].date, last: items[n - 1] && items[n - 1].date };
+  if (tot.count) {
+    const sh = 46, sy = ctx.y - sh + 8, cw = (R - L) / 3;
+    const rr = 6, x0 = L, y0 = PH - (sy + sh), wdt = R - L;
+    ctx.page.drawSvgPath('M' + (x0 + rr) + ' ' + y0 + ' H' + (x0 + wdt - rr) + ' Q' + (x0 + wdt) + ' ' + y0 + ' ' + (x0 + wdt) + ' ' + (y0 + rr) + ' V' + (y0 + sh - rr) + ' Q' + (x0 + wdt) + ' ' + (y0 + sh) + ' ' + (x0 + wdt - rr) + ' ' + (y0 + sh) + ' H' + (x0 + rr) + ' Q' + x0 + ' ' + (y0 + sh) + ' ' + x0 + ' ' + (y0 + sh - rr) + ' V' + (y0 + rr) + ' Q' + x0 + ' ' + y0 + ' ' + (x0 + rr) + ' ' + y0 + ' Z', { x: 0, y: PH, color: GREEN });
+    const cells = [[servingsText(tot.count, w), w.st_serv], [hoursText(tot.hours, lang) + ' ' + w.hoursN, w.st_hours], [periodText(tot.first, tot.last, lang), w.st_when]];
+    cells.forEach(([big, small], i) => {
+      const cx = L + i * cw + 12, bt = safeText(F, String(big).toUpperCase()); let bs = 16; while (F.head6.widthOfTextAtSize(bt, bs) > cw - 22 && bs > 9) bs -= 0.5;
+      ctx.page.drawText(bt, { x: cx, y: sy + 22, size: bs, font: F.head6, color: GOLD });
+      ctx.page.drawText(safeText(F, String(small).toUpperCase()), { x: cx, y: sy + 10, size: 6.5, font: F.bold, color: CREAM });
+      if (i) ctx.page.drawLine({ start: { x: L + i * cw, y: sy + 6 }, end: { x: L + i * cw, y: sy + sh - 6 }, thickness: 0.6, color: CREAM, opacity: 0.25 });
+    });
+    ctx.y = sy - 22;
+  }
   if (d.kind === 'recognition') {
     para(w.r1(d.name));
-    const tot = d.all || { count: n, hours: h, first: items[0] && items[0].date };
     para(w.r2(d.first, monthYear(tot.first, lang), hoursText(tot.hours, lang), servingsText(tot.count, w)) + (roles.length ? ' ' + w.roles + listText(roles, lang) + '.' : ''));
     if (d.note) String(d.note).split(/\n{2,}/).forEach(p => para(p.trim()));
     if (d.purpose) para(w.rasked(d.purpose));
@@ -245,11 +299,13 @@ async function letterPdf(d) {
     ensure(24);
     const tt = safeText(F, w.total + ' : '.slice(lang === 'fr' ? 0 : 1) + servingsText(n, w) + ', ' + hoursText(h, lang) + ' ' + w.hoursN);
     ctx.page.drawText(tt, { x: R - F.bold.widthOfTextAtSize(tt, 10), y: ctx.y, size: 10, font: F.bold, color: GREEN }); ctx.y -= 28;
+    // v2: the signer's own words, under the servings
+    if (d.note) String(d.note).split(/\n{2,}/).forEach(p => para(p.trim()));
     para(w.close(d.first));
   }
-  // the signature
-  if (ctx.y - 120 < 84) band(false);
-  ctx.page.drawText(safeText(F, w.sincerely), { x: L, y: ctx.y, size: 10.5, font: F.body, color: INK }); ctx.y -= 12;
+  // the signature (v3: about 112 pt tall; it may come down to just above the check line and the footer band)
+  if (ctx.y - 112 < 68) band(false);
+  ctx.page.drawText(safeText(F, d.kind === 'recognition' ? w.warmly : w.sincerely), { x: L, y: ctx.y, size: 10.5, font: F.body, color: INK }); ctx.y -= 12;
   if (d.signature) {
     try {
       const img = await pdf.embedPng(d.signature); const s = Math.min(190 / img.width, 54 / img.height);
@@ -259,12 +315,12 @@ async function letterPdf(d) {
     ctx.page.drawRectangle({ x: L, y: ctx.y - 46, width: 190, height: 44, borderColor: LINE, borderWidth: 1, borderDashArray: [3, 3] });
     ctx.page.drawText(lang === 'fr' ? 'Votre signature' : 'Your signature', { x: L + 10, y: ctx.y - 28, size: 9, font: F.body, color: MUTED }); ctx.y -= 52;
   }
-  ctx.page.drawText(safeText(F, d.signer_name || ''), { x: L, y: ctx.y, size: 11, font: F.bold, color: INK }); ctx.y -= 14;
+  ctx.page.drawText(safeText(F, d.signer_name || ''), { x: L, y: ctx.y, size: 11, font: F.bold, color: GREEN }); ctx.y -= 14;
   if (d.signer_title) { ctx.page.drawText(safeText(F, d.signer_title), { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED }); ctx.y -= 13; }
   ctx.page.drawText('Welfare Avenue', { x: L, y: ctx.y, size: 9.5, font: F.body, color: MUTED });
   // page numbers when there is more than one
   const pages = pdf.getPages();
-  if (pages.length > 1) pages.forEach((p, i) => { const t = (i + 1) + ' / ' + pages.length; p.drawText(t, { x: R - F.body.widthOfTextAtSize(t, 7.5), y: 48, size: 7.5, font: F.body, color: MUTED }); });
+  if (pages.length > 1) pages.forEach((p, i) => { const t = (i + 1) + ' / ' + pages.length; p.drawText(t, { x: L + F.head6.widthOfTextAtSize(safeText(F, d.lang === 'fr' ? 'AVENUE DU BIEN-ÊTRE' : 'WELFARE AVENUE'), 10.5) + 14, y: 19, size: 7.5, font: F.body, color: CREAM }); });
   return pdf;
 }
 
@@ -304,7 +360,7 @@ async function formPdf(d, bytes, type, placement, addPage) {
     pages.forEach(p => { const z = p.getSize(); p.drawText(t, { x: z.width / 2 - (tw * Math.cos(Math.PI / 5)) / 2, y: z.height / 2 - (tw * Math.sin(Math.PI / 5)) / 2, size: s, font: F.head, color: RED, opacity: 0.13, rotate: degrees(36) }); });
   }
   if (addPage !== false && (d.items || []).length) {
-    const letter = await letterPdf({ ...d, kind: 'hours' });
+    const letter = await letterPdf({ ...d, kind: 'hours', note: '' });
     const copied = await pdf.copyPages(letter, letter.getPageIndices());
     copied.forEach(p => pdf.addPage(p));
   }
@@ -315,10 +371,21 @@ async function formPdf(d, bytes, type, placement, addPage) {
 function sampleData(kind, lang, signer, signature) {
   const items = [['2026-06-07', 'server', 'Serveur·se', 'Server'], ['2026-06-21', 'cook', 'Cuisine', 'Cook'], ['2026-07-05', 'server', 'Serveur·se', 'Server']]
     .map((r, i) => ({ roster_id: i + 1, date: r[0], role: r[1], role_fr: r[2], role_en: r[3], location: 'Montreal', hours: i === 1 ? 3 : 2 }));
+  const notes = {
+    recognition: { fr: 'Alex arrive toujours en avance et met tout le monde à l’aise.', en: 'Alex always arrives early and puts everyone at ease.' },
+    hours: { fr: 'Alex a aussi aidé à former deux nouveaux bénévoles en cuisine.', en: 'Alex also helped train two new volunteers in the kitchen.' }
+  };
   return { kind, lang, date: today(), reference: 'WA-VS-SAMPLE', preview: true, name: 'Alex Sample', first: 'Alex', for_org: lang === 'fr' ? 'Cégep du Vieux Montréal' : 'Dawson College',
     purpose: lang === 'fr' ? 'Heures de bénévolat requises' : 'Community service hours', items, all: { count: 3, hours: 7, first: '2026-06-07', last: '2026-07-05' },
-    note: kind === 'recognition' ? (lang === 'fr' ? 'Alex arrive toujours en avance et met tout le monde à l’aise.' : 'Alex always arrives early and puts everyone at ease.') : '',
+    note: notes[kind] ? notes[kind][lang] : '',
     signer_name: signer.name || 'Signer', signer_title: signer.title || '', signature, org_address: '8200 av Bloomfield, Montreal QC H3N 2H9', org_charity: '713048502RR0001' };
+}
+// v3: the file name a signed letter downloads under, with the volunteer's name (accents kept out for every system)
+function letterFileName(kind, lang, name, ref) {
+  const fr = lang === 'fr';
+  const what = kind === 'recognition' ? (fr ? 'Lettre de reconnaissance' : 'Letter of recognition') : kind === 'hours' ? (fr ? 'Confirmation des heures' : 'Volunteer hours') : (fr ? 'Formulaire signe' : 'Signed form');
+  const slug = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return ['Welfare-Avenue', slug(what), slug(name), slug(ref)].filter(Boolean).join('-') + '.pdf';
 }
 function same(a, b) { if (a.length !== b.length) return false; let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i); return d === 0; }
 
@@ -358,7 +425,8 @@ async function build(who, me, id, body, preview) {
     });
   }
   if (req0.kind !== 'recognition' && !items.length) return { status: 400, error: 'Choose at least one serving to list.' };
-  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1500) : '';
+  // v2: the signer's words go on recognition and hours letters; never on the volunteer's own form
+  const note = req0.kind === 'form' ? '' : (typeof body.note === 'string' ? body.note.trim().slice(0, 1500) : '');
   const signerName = String(me.name || S.signer.name || '').trim(), signerTitle = String((lang === 'fr' ? (me.title_fr || me.title) : me.title) || '').trim();
   if (!preview && !signerName) return { status: 400, error: 'Add your name in My signature first.' };
   if (!preview && !signerTitle) return { status: 400, error: 'Add your title in My signature first.' };
@@ -373,7 +441,7 @@ async function build(who, me, id, body, preview) {
   const d = {
     kind: req0.kind, lang, date: today(), reference: preview ? 'WA-VS-······' : S.reference, preview,
     name: S.volunteer.name || '', first: S.volunteer.first_name || S.volunteer.name || '', for_org: req0.for_org || '', purpose: req0.purpose || '',
-    items, all: S.all, note: req0.kind === 'recognition' ? note : '', signer_name: signerName || (lang === 'fr' ? 'Votre nom' : 'Your name'), signer_title: signerTitle,
+    items, all: S.all, note, signer_name: signerName || (lang === 'fr' ? 'Votre nom' : 'Your name'), signer_title: signerTitle,
     signature, org_address: address, org_charity: String(org.mail_charity_number || '')
   };
   if (req0.kind === 'form') {
@@ -419,7 +487,7 @@ Deno.serve(async (req) => {
       const given = req.headers.get('x-wa-secret') || '';
       if (!given || !same(given, await secret('WA_TRIGGER_SECRET'))) return reply(req, { error: 'not_allowed' }, 403);
       const a = await assets(); const out = [];
-      for (const [kind, lang] of [['hours', 'en'], ['recognition', 'fr'], ['form', 'en']]) {
+      for (const [kind, lang] of [['hours', 'en'], ['recognition', 'fr'], ['form', 'en'], ['hours', 'fr']]) {
         const d = sampleData(kind, lang, { name: 'Steel MacDonald', title: lang === 'fr' ? 'Fondateur' : 'Founder' }, null);
         let pdf;
         if (kind === 'form') {
@@ -432,7 +500,23 @@ Deno.serve(async (req) => {
         const s = await svc.storage.from(BUCKET).createSignedUrl(path, 600);
         out.push({ kind, lang, pages: pdf.getPageCount(), bytes: bytes.length, url: s.data ? s.data.signedUrl : null });
       }
-      return reply(req, { ok: true, brand_fonts: !!a.fonts, lockup: !!a.lockup, files: out });
+      return reply(req, { ok: true, version: 3, brand_fonts: !!a.fonts, lockup: !!a.lockup, lockup_fr: !!a.lockup_fr, star: !!a.star, blob: !!a.blob, files: out });
+    }
+    if (body.action === 'brand_put') {
+      // v3 (x-wa-secret only): put the French logo files into the public brand library (content-images/brand/logo-fr-*.png);
+      // nothing else can be written here, and PNG only
+      const given = req.headers.get('x-wa-secret') || '';
+      if (!given || !same(given, await secret('WA_TRIGGER_SECRET'))) return reply(req, { error: 'not_allowed' }, 403);
+      const done = [];
+      for (const f of (Array.isArray(body.files) ? body.files : []).slice(0, 12)) {
+        const name = String(f && f.name || '');
+        if (!/^logo-fr-[a-z0-9-]+\.png$/.test(name)) { done.push({ name, error: 'name' }); continue; }
+        let bytes; try { bytes = unb64(String(f.b64 || '')); } catch (_) { done.push({ name, error: 'b64' }); continue; }
+        if (!(bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) || bytes.length > 2 * 1024 * 1024) { done.push({ name, error: 'png' }); continue; }
+        const up = await svc.storage.from('content-images').upload('brand/' + name, bytes, { contentType: 'image/png', upsert: true });
+        done.push({ name, bytes: bytes.length, ok: !up.error, error: up.error ? String(up.error.message || up.error) : undefined });
+      }
+      return reply(req, { ok: true, files: done });
     }
     const who = await caller(req);
     if (!who) return reply(req, { error: 'signin' }, 401);
@@ -482,8 +566,10 @@ Deno.serve(async (req) => {
       if (!det.data) return reply(req, { error: 'not_found' }, 404);
       const r0 = det.data.request; const path = body.action === 'form_url' ? r0.form_path : r0.letter_path;
       if (!path) return reply(req, { error: 'not_found' }, 404);
-      const s = await svc.storage.from(BUCKET).createSignedUrl(path, 300);
-      return reply(req, { url: s.data ? s.data.signedUrl : null, type: body.action === 'form_url' ? r0.form_type : 'application/pdf' });
+      // v3: a signed letter downloads under the volunteer's name (Welfare-Avenue-Lettre-de-reconnaissance-James-Morand-WA-VS-xxxxxx.pdf)
+      const fname = body.action === 'letter_url' ? letterFileName(r0.kind, r0.lang, det.data.name, r0.reference) : null;
+      const s = await svc.storage.from(BUCKET).createSignedUrl(path, 300, fname ? { download: fname } : undefined);
+      return reply(req, { url: s.data ? s.data.signedUrl : null, type: body.action === 'form_url' ? r0.form_type : 'application/pdf', file_name: fname });
     }
     if (body.action === 'preview' || body.action === 'sign') {
       if (!Number.isFinite(id)) return reply(req, { error: 'bad' }, 400);

@@ -1,0 +1,14 @@
+# Welfare Avenue website (wave162): security headers for every page. One CSP for the whole site.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://hub.welfareavenue.com https://accounts.google.com/gsi/client; style-src 'self' https://fonts.googleapis.com https://hub.welfareavenue.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://accounts.google.com/gsi/; frame-src https://form-can.keela.co https://www.youtube-nocookie.com https://hub.welfareavenue.com https://www.linkedin.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self "https://hub.welfareavenue.com")
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+/img/*
+  Cache-Control: public, max-age=604800
+/static/react/*
+  Cache-Control: no-cache

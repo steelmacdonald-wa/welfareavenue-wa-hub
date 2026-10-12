@@ -1,4 +1,7 @@
-// Welfare Avenue: social-connect (v1, 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-connect (v2, 12/10/26, wave231 TikTok analytics; v1 09/10/26, wave225 the Content Studio)
+// v2: TikTok asks for user.info.profile, user.info.stats and video.list beside user.info.basic and video.upload (the Hub's
+// TikTok analytics, tiktok-pull), keeps the scopes TikTok granted in the vault login, shows @username on the card, and runs
+// the first tiktok-pull right after connecting so Analytics has the account, its followers and its videos at once.
 // The Content Studio's Connections page: it keeps every platform login in the vault and never shows a secret back.
 // Purpose: connect Threads, YouTube, TikTok and LinkedIn by their own sign-in pages (OAuth), replace the Meta system user token,
 // and keep the Make.com webhook that posts to the LinkedIn Page until LinkedIn approves the direct connection.
@@ -38,6 +41,8 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 type Any = any;
 const PLATFORMS = ['threads', 'youtube', 'tiktok', 'linkedin'];
 const NAME: Record<string, string> = { threads: 'Threads', youtube: 'YouTube', tiktok: 'TikTok', linkedin: 'LinkedIn', make: 'Make.com', meta: 'Meta' };
+// v2: what the Hub asks TikTok for (drafts plus the analytics); every one is shown in the app review's demo
+const TIKTOK_SCOPES = 'user.info.basic,user.info.profile,user.info.stats,video.list,video.upload';
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -88,7 +93,7 @@ function authorizeUrl(platform: string, id: string, state: string): string {
   const r = encodeURIComponent(REDIRECT), s = encodeURIComponent(state);
   if (platform === 'threads') return 'https://threads.net/oauth/authorize?client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&scope=threads_basic,threads_content_publish,threads_manage_replies,threads_read_replies,threads_manage_insights,threads_manage_mentions,threads_delete&response_type=code&state=' + s;
   if (platform === 'youtube') return 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&scope=' + encodeURIComponent('https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl') + '&state=' + s;
-  if (platform === 'tiktok') return 'https://www.tiktok.com/v2/auth/authorize/?client_key=' + encodeURIComponent(id) + '&scope=user.info.basic,video.upload&response_type=code&redirect_uri=' + r + '&state=' + s;
+  if (platform === 'tiktok') return 'https://www.tiktok.com/v2/auth/authorize/?client_key=' + encodeURIComponent(id) + '&scope=' + TIKTOK_SCOPES + '&response_type=code&redirect_uri=' + r + '&state=' + s;
   if (platform === 'linkedin') return 'https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&state=' + s + '&scope=' + encodeURIComponent('w_organization_social r_organization_social rw_organization_admin r_organization_admin');
   throw new Error('unknown platform');
 }
@@ -97,6 +102,14 @@ async function form(url: string, params: Record<string, string>): Promise<Any> {
   const b = await r.json().catch(() => ({}));
   if (!r.ok || b.error) throw new Error(String(b.error_description || (b.error && (b.error.message || b.error)) || ('HTTP ' + r.status)).slice(0, 200));
   return b;
+}
+/* v2: the first TikTok pull, so Analytics shows the account at once (a failure there never fails the connection) */
+async function firstTikTokPull(): Promise<void> {
+  try {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 30000);
+    await fetch(SUPABASE_URL + '/functions/v1/tiktok-pull', { method: 'POST', signal: ctl.signal, headers: { 'x-wa-secret': await getSecret('WA_TRIGGER_SECRET'), 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'sync' }) });
+    clearTimeout(tm);
+  } catch (_) { /* the morning pull catches up */ }
 }
 async function finish(platform: string, code: string, by: string): Promise<string> {
   const c = await client(platform); if (!c) throw new Error('save the app keys first');
@@ -120,11 +133,15 @@ async function finish(platform: string, code: string, by: string): Promise<strin
   }
   if (platform === 'tiktok') {
     const t = await form('https://open.tiktokapis.com/v2/oauth/token/', { client_key: c.id, client_secret: c.secret, code, grant_type: 'authorization_code', redirect_uri: REDIRECT });
-    const u = await (await fetch('https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url', { headers: { Authorization: 'Bearer ' + t.access_token } })).json();
+    const scope = String(t.scope || 'user.info.basic,video.upload');
+    const fields = 'open_id,display_name,avatar_url' + (scope.indexOf('user.info.profile') >= 0 ? ',username' : '');
+    const u = await (await fetch('https://open.tiktokapis.com/v2/user/info/?fields=' + fields, { headers: { Authorization: 'Bearer ' + t.access_token } })).json();
     const user = (u.data && u.data.user) || {};
-    await vaultSet('SOCIAL_TIKTOK_TOKEN', JSON.stringify({ access_token: t.access_token, refresh_token: t.refresh_token, open_id: t.open_id, expires_at: Date.now() + Number(t.expires_in || 86400) * 1000 }), 'wave225: the TikTok login for the Content Studio (drafts to the inbox)');
-    await setConn('tiktok', { status: 'connected', open_id: t.open_id || '', name: user.display_name || 'TikTok', connected_by: by, connected_at: new Date().toISOString(), state: null }, by);
-    return user.display_name || 'the account';
+    await vaultSet('SOCIAL_TIKTOK_TOKEN', JSON.stringify({ access_token: t.access_token, refresh_token: t.refresh_token, open_id: t.open_id, scope, expires_at: Date.now() + Number(t.expires_in || 86400) * 1000 }), 'wave225/231: the TikTok login for the Content Studio (drafts to the inbox, and the analytics)');
+    const label = (user.display_name || 'TikTok') + (user.username ? ' (@' + user.username + ')' : '');
+    await setConn('tiktok', { status: 'connected', open_id: t.open_id || '', name: label, username: user.username || null, scopes: scope, connected_by: by, connected_at: new Date().toISOString(), state: null }, by);
+    await firstTikTokPull();
+    return label;
   }
   if (platform === 'linkedin') {
     const t = await form('https://www.linkedin.com/oauth/v2/accessToken', { grant_type: 'authorization_code', code, redirect_uri: REDIRECT, client_id: c.id, client_secret: c.secret });
@@ -225,6 +242,8 @@ Deno.serve(async (req: Request) => {
       if (!names[p]) return json({ error: 'which platform?' }, 400);
       for (const n of names[p]) { if (await secretOrNull(n)) await vaultSet(n, '', 'wave225: disconnected ' + new Date().toISOString().slice(0, 10)); }
       await setConn(p, { status: 'disconnected', disconnected_by: me.email, disconnected_at: new Date().toISOString(), state: null }, me.email);
+      // v2: the TikTok analytics account stops syncing (its history stays)
+      if (p === 'tiktok') { try { await svc.from('social_accounts').update({ status: 'disconnected' }).eq('platform', 'tiktok').neq('external_id', 'csv'); } catch (_) { /* none */ } }
       await log(p, NAME[p] + ' disconnected', me.email);
       return json({ ok: true });
     }
