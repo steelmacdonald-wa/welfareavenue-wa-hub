@@ -119,6 +119,7 @@ a{color:var(--green)}
   var q = new URLSearchParams(location.search);
   /* v4 (wave162b, 29/09/26): French with ?lang=fr (the French website's buttons and its popup ask for it), English otherwise */
   var L = q.get('lang') === 'fr' ? 'fr' : 'en', FR = L === 'fr';
+  waLogoLang(FR);
   var W = {
     en: { cancelled: 'No payment was made. You can change anything below and try again.', charity: ' · Registered charity ',
       privacy: 'We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them.', stripe_note: ' Payments are handled by Stripe.',
@@ -443,6 +444,14 @@ a{color:var(--green)}
   var sid = q.get('session_id');
   if (/\/give\/thanks\/?$/.test(location.pathname) && sid) thanks(sid); else load();
 })();
+  /* wave232 (Steel, 12/10/26): the French logo, Avenue du Bien-Etre, on French pages; the English lockup otherwise */
+  function waLogoLang(fr) {
+    var svg = document.querySelector('svg.lockup'); if (!svg) return;
+    var img = svg.parentNode.querySelector('img.lockup');
+    if (fr && !img) { img = document.createElement('img'); img.className = 'lockup'; img.alt = 'Avenue du Bien-Être'; img.src = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/logo-fr-lockup-cream-1200.png'; svg.parentNode.insertBefore(img, svg); }
+    if (img) img.style.display = fr ? '' : 'none';
+    svg.style.display = fr ? 'none' : '';
+  }
 </script>
 </body>
 </html>

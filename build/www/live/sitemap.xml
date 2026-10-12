@@ -20,4 +20,8 @@
   <url><loc>https://welfareavenue.com/fr/confidentialite/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/privacy/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/confidentialite/"/></url>
   <url><loc>https://welfareavenue.com/join/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/join/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/rejoindre/"/></url>
   <url><loc>https://welfareavenue.com/fr/rejoindre/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/join/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/rejoindre/"/></url>
+  <url><loc>https://welfareavenue.com/terms/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/terms/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/conditions/"/></url>
+  <url><loc>https://welfareavenue.com/fr/conditions/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/terms/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/conditions/"/></url>
+  <url><loc>https://welfareavenue.com/data-deletion/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/data-deletion/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/suppression-des-donnees/"/></url>
+  <url><loc>https://welfareavenue.com/fr/suppression-des-donnees/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/data-deletion/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/suppression-des-donnees/"/></url>
 </urlset>

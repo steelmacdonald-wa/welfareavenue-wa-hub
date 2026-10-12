@@ -230,4 +230,23 @@
     f.setAttribute('allowfullscreen', '');
     b.parentNode.replaceChild(f, b);
   });
+  /* wave232 (Steel, 12/10/26): the team's photos. A team or board member's professional website photo, set in the Hub, always
+     shows; their Hub photo only fills a face that still shows our logo. First name and photo addresses only (www_team_photos). */
+  (function () {
+    var lis = document.querySelectorAll('ul.team li'); if (!lis.length || !SUPA || !KEY) return;
+    fetch(SUPA + '/rest/v1/rpc/www_team_photos', { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json', Accept: 'application/json' }, body: '{}' })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var ok = /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\/storage\/v1\/object\/public\/avatars\//, map = {};
+        (rows || []).forEach(function (x) { if (x && x.first_name) map[x.first_name] = { w: ok.test(x.website_photo || '') ? x.website_photo : '', h: ok.test(x.hub_photo || '') ? x.hub_photo : '' }; });
+        Array.prototype.forEach.call(lis, function (li) {
+          var nm = li.querySelector('.nm'), face = li.querySelector('.face'); if (!nm || !face) return;
+          var p = map[(nm.textContent || '').trim().split(/\s+/)[0].toLowerCase()]; if (!p) return;
+          var url = p.w || (face.hasAttribute('data-face-logo') ? p.h : ''); if (!url) return;
+          var img = new Image(); img.className = 'face'; img.alt = ''; img.width = 96; img.height = 96; img.decoding = 'async';
+          img.onload = function () { if (face.parentNode) face.parentNode.replaceChild(img, face); };
+          img.src = url;
+        });
+      }).catch(function () { /* the logo stays */ });
+  })();
 })();

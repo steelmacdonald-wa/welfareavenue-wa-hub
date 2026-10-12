@@ -8,3 +8,4 @@ build/live.html
 build/w1*.html
 build/rebase_check.html
 node_modules/
+test/shots_w*.png

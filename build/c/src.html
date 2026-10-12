@@ -479,6 +479,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     img.src = photoUrl(p);
   }
   function langButtons() {
+    waLogoLang(S.lang === 'fr');
     Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-l') === S.lang); b.setAttribute('aria-pressed', b.getAttribute('data-l') === S.lang ? 'true' : 'false'); });
     document.documentElement.lang = S.lang;
   }
@@ -1311,6 +1312,14 @@ a.rbig svg{width:20px;height:20px;flex:none}
     invLoad();
   }).catch(function () { notFound(t('offline')); });
 })();
+  /* wave232 (Steel, 12/10/26): the French logo, Avenue du Bien-Etre, on French pages; the English lockup otherwise */
+  function waLogoLang(fr) {
+    var svg = document.querySelector('svg.lockup'); if (!svg) return;
+    var img = svg.parentNode.querySelector('img.lockup');
+    if (fr && !img) { img = document.createElement('img'); img.className = 'lockup'; img.alt = 'Avenue du Bien-Être'; img.src = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/logo-fr-lockup-cream-1200.png'; svg.parentNode.insertBefore(img, svg); }
+    if (img) img.style.display = fr ? '' : 'none';
+    svg.style.display = fr ? 'none' : '';
+  }
 </script>
 
 </body>

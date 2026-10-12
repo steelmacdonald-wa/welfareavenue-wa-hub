@@ -157,10 +157,10 @@ a{color:var(--green)}
   function load(keep) {
     return call('GET').then(function (r) {
       if (r.status === 404) { message(t('nf'), t('nfh')); return; }
-      if (r.body && r.body.closed) { S.org = r.body.org; S.lang = r.body.lang || 'en'; document.documentElement.lang = S.lang; message(t('closed'), t('closedh'), r.body.cover, r.body.title); return; }
+      if (r.body && r.body.closed) { S.org = r.body.org; S.lang = r.body.lang || 'en'; document.documentElement.lang = S.lang; waLogoLang(S.lang === 'fr'); message(t('closed'), t('closedh'), r.body.cover, r.body.title); return; }
       if (r.status !== 200 || !r.body.form) { app.innerHTML = '<div class="banner warn">' + E(t('server')) + '</div>'; return; }
       S.form = r.body.form; S.org = r.body.org; S.token = r.body.token; S.lang = S.form.lang || 'en';
-      document.documentElement.lang = S.lang; document.title = S.form.title + ' · Welfare Avenue';
+      document.documentElement.lang = S.lang; waLogoLang(S.lang === 'fr'); document.title = S.form.title + ' · Welfare Avenue';
       hero(S.form.title, S.form.cover, S.form.kind);
       if (!keep) render(); else { S.banner = t('expired'); render(keep); }
     }).catch(function () { app.innerHTML = '<div class="banner warn">' + E(t('offline')) + '</div>'; });
@@ -314,6 +314,14 @@ a{color:var(--green)}
   if (!slug()) { message(t('nf'), t('nfh')); return; }
   load();
 })();
+  /* wave232 (Steel, 12/10/26): the French logo, Avenue du Bien-Etre, on French pages; the English lockup otherwise */
+  function waLogoLang(fr) {
+    var svg = document.querySelector('svg.lockup'); if (!svg) return;
+    var img = svg.parentNode.querySelector('img.lockup');
+    if (fr && !img) { img = document.createElement('img'); img.className = 'lockup'; img.alt = 'Avenue du Bien-Être'; img.src = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/logo-fr-lockup-cream-1200.png'; svg.parentNode.insertBefore(img, svg); }
+    if (img) img.style.display = fr ? '' : 'none';
+    svg.style.display = fr ? 'none' : '';
+  }
 </script>
 </body>
 </html>
