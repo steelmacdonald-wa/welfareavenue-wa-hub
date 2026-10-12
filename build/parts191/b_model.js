@@ -3,21 +3,37 @@
     if (!ev) return null;
     if (!force && S.ev && S.ev.id === ev.id && Date.now() - S.evAt < 20000) return S.ev;
     try {
-      var r = await db.from('volunteer_events').select('id,format,planned_meals,plan_note,start_time,whatsapp_url,location,status,itinerary_auto,itinerary_channels,kitchen_place,kitchen_contact').eq('id', ev.id).maybeSingle();
-      if (r && r.data) { S.ev = r.data; S.evAt = Date.now(); if (r.data.format && !ev.format) ev.format = r.data.format; if (r.data.start_time && !ev.start_time) ev.start_time = r.data.start_time; }
+      var r = await db.from('volunteer_events').select('id,format,planned_meals,plan_note,start_time,whatsapp_url,location,status,itinerary_auto,itinerary_channels,kitchen_place,kitchen_contact,spot_counts').eq('id', ev.id).maybeSingle();
+      if (r && r.data) { S.ev = r.data; S.evAt = Date.now(); S.spots = S.spots || {}; S.spots[ev.id] = r.data.spot_counts || null; if (r.data.format && !ev.format) ev.format = r.data.format; if (r.data.start_time && !ev.start_time) ev.start_time = r.data.start_time; }
     } catch (e) { /* fine */ }
     return S.ev && S.ev.id === ev.id ? S.ev : null;
   }
   async function loadGuides() {
     if (S.guides) return S.guides;
     try { var r = await db.from('volunteer_role_guides').select('role,target,label_en'); S.guides = (r && r.data) || []; } catch (e) { S.guides = []; }
+    /* wave232: every serving that has its own spot counts (volunteer_events.spot_counts), once per load */
+    try { var sp = await db.from('volunteer_events').select('id,spot_counts').not('spot_counts', 'is', null); S.spots = S.spots || {}; ((sp && sp.data) || []).forEach(function (x) { S.spots[x.id] = x.spot_counts; }); } catch (e) { /* the usual counts */ }
     return S.guides;
   }
-  function targets() {
+  /* wave232 (Steel, 12/10/26, from the 08/10 ops meeting: "per-event editable spot counts"): a serving may set its own number
+     of spots per role (volunteer_events.spot_counts, e.g. {"cook":2,"server":5}); a role it leaves out keeps the usual count,
+     and 0 means the serving does not need that role. */
+  function usualTargets() {
     /* the database's targets (volunteer_role_guides.target, from the medians of past servings); these defaults only until they load */
     var t = { team_leader: 1, cook: 4, driver: 2, server: 8, dishwasher: 1, photographer: 1, community_debrief: 1 };
     if (S.guides && S.guides.length) { t = {}; S.guides.forEach(function (g) { if (g.target != null && Number(g.target) > 0) t[g.role] = Number(g.target); }); }
     return t;
+  }
+  function withSpots(evId, base) {
+    var sc = evId != null && S.spots ? S.spots[evId] : null;
+    if (!sc || typeof sc !== 'object') return base;
+    var t = Object.assign({}, base);
+    Object.keys(sc).forEach(function (k) { var n = Number(sc[k]); if (isFinite(n) && n >= 0) t[k] = Math.round(n); });
+    return t;
+  }
+  function targets(evId) {
+    var id = evId != null ? evId : (S.ev && S.ev.id);
+    return withSpots(id, usualTargets());
   }
   /* the Hub ticks what it can when the page opens (once per serving per five minutes), then the steps reload */
   async function autotick(ev) {
@@ -73,7 +89,7 @@
     return bits.join(' · ');
   }
   function rosterCounts(D) {
-    var T = targets(); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
+    var T = targets(D && D.id); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var by = {}; list.forEach(function (r) { by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; });
     /* wave191o: a partner's people count toward the roles they cover (promised until they sign up by name); our team leader and
        community lead are always ours; when they make the food the cooks are covered, and when they bring it ready, one driver */

@@ -40,14 +40,14 @@
     Object.keys(out).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; out[r] += Math.min(signed[r] || 0, cov[r] || 0); });
     return out;
   }
-  window.WA191TARGETS = function (evId, base) { var D = curD(); return partnerTargets(evId, base, D && D.id === evId ? D.roster : []); };
+  window.WA191TARGETS = function (evId, base) { var D = curD(); var b2 = withSpots(evId, base); return partnerTargets(evId, b2, D && D.id === evId ? D.roster : []) || (b2 !== base ? b2 : null); };   /* wave232: the serving's own spot counts first */
   function coversText(P) {
     var c = P.covers || {}; var bits = PROLES.filter(function (x) { return c[x[0]]; }).map(function (x) { return c[x[0]] + ' ' + (c[x[0]] === 1 ? x[1].replace(/s$/, '').replace(/^Dishwashing$/, 'dishwasher').toLowerCase() : x[1].toLowerCase()); });
     return bits.join(', ');
   }
   function partnerCardHtml(ev, D, P) {
     var signed = (D.roster || []).filter(function (r) { return (r.detail || {}).source === 'partner form' && !isOff(r) && !isDecl(r); });
-    var base = targets(); var T = partnerOurs(ev.id, base) || base;
+    var base = targets(ev.id); var T = partnerOurs(ev.id, base) || base;
     var ours = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > 0; }).map(function (r) { return (T[r] > 1 ? T[r] + ' ' : '') + one(r).toLowerCase() + (T[r] > 1 ? 's' : ''); });
     var link = P.route === 'everyone' && P.signup_token ? 'https://hub.welfareavenue.com/c/' + P.signup_token : '';
     var h = '<h4>Collaboration</h4><div class="w191pt"><div class="nm"><b>' + E(P.partner_name) + '</b>' + (P.headcount ? '<span>' + E(P.headcount + ' people') + '</span>' : '') + '</div>'

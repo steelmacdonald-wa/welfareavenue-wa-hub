@@ -29385,7 +29385,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     await Promise.all([loadEvents(), loadMentions(), loadProjects(), loadMetrics()]);
     if (!W116.cur || W116.cur.d !== d || W116.cur.page !== 'overview') return;
     var html = header(d, 'overview', null, meta.read ? E(meta.read) : '') +
-      boardsHtml(d) +
+      (d === 'fundraising' ? '' : boardsHtml(d)) +   /* wave232 (Steel, 12/10/26): Fundraising's sub-team cards repeated the Fundraising app; gone */
       kpiTiles(d, null) +
       '<div class="w116grid"><div class="w116col">' +
       '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
@@ -68869,21 +68869,37 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!ev) return null;
     if (!force && S.ev && S.ev.id === ev.id && Date.now() - S.evAt < 20000) return S.ev;
     try {
-      var r = await db.from('volunteer_events').select('id,format,planned_meals,plan_note,start_time,whatsapp_url,location,status,itinerary_auto,itinerary_channels,kitchen_place,kitchen_contact').eq('id', ev.id).maybeSingle();
-      if (r && r.data) { S.ev = r.data; S.evAt = Date.now(); if (r.data.format && !ev.format) ev.format = r.data.format; if (r.data.start_time && !ev.start_time) ev.start_time = r.data.start_time; }
+      var r = await db.from('volunteer_events').select('id,format,planned_meals,plan_note,start_time,whatsapp_url,location,status,itinerary_auto,itinerary_channels,kitchen_place,kitchen_contact,spot_counts').eq('id', ev.id).maybeSingle();
+      if (r && r.data) { S.ev = r.data; S.evAt = Date.now(); S.spots = S.spots || {}; S.spots[ev.id] = r.data.spot_counts || null; if (r.data.format && !ev.format) ev.format = r.data.format; if (r.data.start_time && !ev.start_time) ev.start_time = r.data.start_time; }
     } catch (e) { /* fine */ }
     return S.ev && S.ev.id === ev.id ? S.ev : null;
   }
   async function loadGuides() {
     if (S.guides) return S.guides;
     try { var r = await db.from('volunteer_role_guides').select('role,target,label_en'); S.guides = (r && r.data) || []; } catch (e) { S.guides = []; }
+    /* wave232: every serving that has its own spot counts (volunteer_events.spot_counts), once per load */
+    try { var sp = await db.from('volunteer_events').select('id,spot_counts').not('spot_counts', 'is', null); S.spots = S.spots || {}; ((sp && sp.data) || []).forEach(function (x) { S.spots[x.id] = x.spot_counts; }); } catch (e) { /* the usual counts */ }
     return S.guides;
   }
-  function targets() {
+  /* wave232 (Steel, 12/10/26, from the 08/10 ops meeting: "per-event editable spot counts"): a serving may set its own number
+     of spots per role (volunteer_events.spot_counts, e.g. {"cook":2,"server":5}); a role it leaves out keeps the usual count,
+     and 0 means the serving does not need that role. */
+  function usualTargets() {
     /* the database's targets (volunteer_role_guides.target, from the medians of past servings); these defaults only until they load */
     var t = { team_leader: 1, cook: 4, driver: 2, server: 8, dishwasher: 1, photographer: 1, community_debrief: 1 };
     if (S.guides && S.guides.length) { t = {}; S.guides.forEach(function (g) { if (g.target != null && Number(g.target) > 0) t[g.role] = Number(g.target); }); }
     return t;
+  }
+  function withSpots(evId, base) {
+    var sc = evId != null && S.spots ? S.spots[evId] : null;
+    if (!sc || typeof sc !== 'object') return base;
+    var t = Object.assign({}, base);
+    Object.keys(sc).forEach(function (k) { var n = Number(sc[k]); if (isFinite(n) && n >= 0) t[k] = Math.round(n); });
+    return t;
+  }
+  function targets(evId) {
+    var id = evId != null ? evId : (S.ev && S.ev.id);
+    return withSpots(id, usualTargets());
   }
   /* the Hub ticks what it can when the page opens (once per serving per five minutes), then the steps reload */
   async function autotick(ev) {
@@ -68939,7 +68955,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return bits.join(' \u00b7 ');
   }
   function rosterCounts(D) {
-    var T = targets(); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
+    var T = targets(D && D.id); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var by = {}; list.forEach(function (r) { by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; });
     /* wave191o: a partner's people count toward the roles they cover (promised until they sign up by name); our team leader and
        community lead are always ours; when they make the food the cooks are covered, and when they bring it ready, one driver */
@@ -68973,7 +68989,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '') + (partnerOf(ev.id) ? '<span class="w191with">With ' + E(partnerOf(ev.id).partner_name) + '</span>' : '');
     var prim = primaryAction(ev, D, M, row);
     var menu = ''
-      + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button>' : '')
+      + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button><button data-w191go="spots">Spot counts</button>' : '')
       + (staff() ? '<button data-w191go="text171">Text to confirm</button>' : '')
       + (staff() ? '<button data-w191go="send182">Send itineraries</button><button data-w191go="hist182">Sent and scheduled</button><button data-w191go="ev182">This serving\u2019s itinerary</button>' : '')
       + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button><button data-w191go="partner">' + (partnerOf(ev.id) ? 'Edit the collaboration' : 'A partner organization serves with us') + '</button>' : '')
@@ -69274,9 +69290,48 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (what === 'start') { openStage('prepare', true); setTimeout(function () { var st = document.getElementById('w174st'); if (st) { try { st.focus(); } catch (e) { /* fine */ } } }, 350); return; }
     if (what === 'inventory') { location.hash = '#volunteering/inventory'; return; }
     if (what === 'partner') { partnerEditor(); return; }
+    if (what === 'spots') { spotsEditor(ev); return; }
     if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; setTimeout(scrollHints, 60); try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
     if (what === 'close') { if (confirm('Close this serving? It moves to Done; you can reopen it.')) setStatus(ev, 'completed'); return; }
     if (what === 'reopen') { setStatus(ev, 'planned'); return; }
+  }
+
+  /* wave232: this serving's spot counts, role by role (staff); Reset puts the usual counts back */
+  function spotsEditor(ev) {
+    if (!staff() || !ev) return;
+    var usual = usualTargets(), mine = (S.spots && S.spots[ev.id]) || {}, cur = targets(ev.id);
+    var rows = ROLE_ORDER.map(function (r) {
+      return '<label class="w232sp"><span>' + E(one(r)) + '<i>usual ' + (usual[r] || 0) + '</i></span><input type="number" min="0" max="60" step="1" data-w232sp="' + r + '" value="' + (cur[r] || 0) + '"' + (r in mine ? ' class="own"' : '') + '></label>';
+    }).join('');
+    openModal('<div class="w232spots"><h3>Spot counts for ' + E(ev.code || 'this serving') + '</h3>'
+      + '<p class="m-sub">How many people this serving needs in each role. The roster, the open spots, Find volunteers and Home all count against these. 0 means this serving does not need the role.</p>'
+      + '<div class="w232grid">' + rows + '</div>'
+      + '<div class="w232row"><button class="w191btn gold" id="w232spsave">Save</button><button class="w191btn ghost" id="w232spreset">Use the usual counts</button><button class="w191btn quiet" id="w232spx">Cancel</button></div>'
+      + '<p class="w191rsub" id="w232spmsg"></p></div>');
+    var css = document.getElementById('w232spcss');
+    if (!css) { css = document.createElement('style'); css.id = 'w232spcss'; css.textContent = '.w232grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:14px 0}.w232sp{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(16,63,57,.14);border-radius:10px;background:#FFFAF2}.w232sp span{font-weight:600;font-size:14px;color:#103F39}.w232sp i{display:block;font-style:normal;font-weight:400;font-size:11.5px;color:#797773}.w232sp input{width:64px;padding:6px 8px;border:1px solid rgba(16,63,57,.22);border-radius:8px;font:inherit;text-align:center}.w232sp input.own{border-color:#DCA527;background:#FFF7E3}.w232row{display:flex;gap:8px;flex-wrap:wrap}'; document.head.appendChild(css); }
+    function msg(t) { var m = document.getElementById('w232spmsg'); if (m) m.textContent = t || ''; }
+    async function put(val) {
+      msg('Saving...');
+      var r = await db.from('volunteer_events').update({ spot_counts: val }).eq('id', ev.id);
+      if (r && r.error) { msg('Could not save: ' + r.error.message); return; }
+      S.spots = S.spots || {}; S.spots[ev.id] = val; if (S.ev && S.ev.id === ev.id) S.ev.spot_counts = val;
+      try { await db.from('change_log').insert({ entity_type: 'volunteer_event', entity_id: String(ev.id), field: 'spot_counts', old_value: JSON.stringify(mine || null), new_value: JSON.stringify(val), changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'hub' }); } catch (e) { /* audit only */ }
+      try { closeModal(); } catch (e) { /* fine */ }
+      T(val ? 'Spot counts saved for this serving' : 'This serving uses the usual counts again');
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+      refresh();
+    }
+    document.getElementById('w232spx').addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
+    document.getElementById('w232spreset').addEventListener('click', function () { put(null); });
+    document.getElementById('w232spsave').addEventListener('click', function () {
+      var val = {};
+      document.querySelectorAll('[data-w232sp]').forEach(function (inp) {
+        var k = inp.getAttribute('data-w232sp'), n = Math.max(0, Math.min(60, Math.round(Number(inp.value))));
+        if (isFinite(n) && n !== (usual[k] || 0)) val[k] = n;
+      });
+      put(Object.keys(val).length ? val : null);
+    });
   }
 
   /* ---------- wiring ---------- */
@@ -70267,14 +70322,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     Object.keys(out).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; out[r] += Math.min(signed[r] || 0, cov[r] || 0); });
     return out;
   }
-  window.WA191TARGETS = function (evId, base) { var D = curD(); return partnerTargets(evId, base, D && D.id === evId ? D.roster : []); };
+  window.WA191TARGETS = function (evId, base) { var D = curD(); var b2 = withSpots(evId, base); return partnerTargets(evId, b2, D && D.id === evId ? D.roster : []) || (b2 !== base ? b2 : null); };   /* wave232: the serving's own spot counts first */
   function coversText(P) {
     var c = P.covers || {}; var bits = PROLES.filter(function (x) { return c[x[0]]; }).map(function (x) { return c[x[0]] + ' ' + (c[x[0]] === 1 ? x[1].replace(/s$/, '').replace(/^Dishwashing$/, 'dishwasher').toLowerCase() : x[1].toLowerCase()); });
     return bits.join(', ');
   }
   function partnerCardHtml(ev, D, P) {
     var signed = (D.roster || []).filter(function (r) { return (r.detail || {}).source === 'partner form' && !isOff(r) && !isDecl(r); });
-    var base = targets(); var T = partnerOurs(ev.id, base) || base;
+    var base = targets(ev.id); var T = partnerOurs(ev.id, base) || base;
     var ours = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > 0; }).map(function (r) { return (T[r] > 1 ? T[r] + ' ' : '') + one(r).toLowerCase() + (T[r] > 1 ? 's' : ''); });
     var link = P.route === 'everyone' && P.signup_token ? 'https://hub.welfareavenue.com/c/' + P.signup_token : '';
     var h = '<h4>Collaboration</h4><div class="w191pt"><div class="nm"><b>' + E(P.partner_name) + '</b>' + (P.headcount ? '<span>' + E(P.headcount + ' people') + '</span>' : '') + '</div>'
@@ -85579,7 +85634,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label class="w230f"><span>Button shape</span><select data-w230t2="shape">' + [['pill', 'Pill'], ['rounded', 'Rounded'], ['square', 'Square']].map(function (x) { return '<option value="' + x[0] + '"' + ((th.shape || 'pill') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
       '<label class="w230f"><span>Language</span><select data-w230s="lang">' + [['auto', 'English or French, from the phone\u2019s language'], ['en', 'English only'], ['fr-only', 'French only']].map(function (x) { return '<option value="' + x[0] + '"' + ((st.lang || 'auto') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select></label>' +
       '<label class="w230f"><span>Switched-off links go to</span><input type="url" data-w230s="fallback_url" value="' + E(st.fallback_url || 'https://welfareavenue.com/') + '"></label></div>' +
-      '<h4>Social profiles</h4><div class="w230grid">' + ['instagram', 'facebook', 'tiktok', 'linkedin', 'threads', 'youtube'].map(function (k) { return '<label class="w230f"><span>' + E(PLX[k] ? PLX[k][0] : k) + '</span><input type="url" data-w230so="' + k + '" value="' + E(d.socials[k] || '') + '" placeholder="https://"></label>'; }).join('') + '</div></div>';
+      '<h4>Social profiles</h4><div class="w230grid">' + ['instagram', 'facebook', 'tiktok', 'linkedin', 'threads', 'youtube', 'x', 'email'].map(function (k) {
+        /* wave232 (Steel, 12/10/26): X and Email are edited here too; Email is typed as an address and kept as mailto: */
+        var lab = k === 'x' ? 'X' : k === 'email' ? 'Email' : (PLX[k] ? PLX[k][0] : k);
+        var val = d.socials[k] || ''; if (k === 'email') val = val.replace(/^mailto:/i, '');
+        return '<label class="w230f"><span>' + E(lab) + '</span><input type="' + (k === 'email' ? 'email' : 'url') + '" data-w230so="' + k + '" value="' + E(val) + '" placeholder="' + (k === 'email' ? 'info@welfareavenue.com' : 'https://') + '"></label>'; }).join('') + '</div></div>';
     var prev = '<div class="card w230prevcard"><h3>' + I('eye') + ' How it looks <span class="sp"></span><span class="seg"><a data-w230pl="en" class="' + (S.lp.prevLang === 'en' ? 'on' : '') + '">EN</a><a data-w230pl="fr" class="' + (S.lp.prevLang === 'fr' ? 'on' : '') + '">FR</a></span>' + (d.blocks.some(function (b) { return b.ab && b.ab.on && !b.ab.winner; }) ? '<span class="seg"><a data-w230pb="0" class="' + (!S.lp.prevB ? 'on' : '') + '">A</a><a data-w230pb="1" class="' + (S.lp.prevB ? 'on' : '') + '">B</a></span>' : '') + '</h3>' +
       '<div class="w230phone"><iframe id="w230prev" title="Preview" src="/links/' + E(d.slug) + '?preview=1&from=' + E(lpPage(d.id) ? lpPage(d.id).slug : 'main') + '"></iframe></div><p class="muted" style="text-align:center;margin:8px 0 0">Faded buttons are off or scheduled; the live page leaves them out.</p></div>';
     return top + '<div class="grid2 w230ed"><div>' + page + blocks + look + '</div><div>' + prev + '</div></div>';
@@ -85829,7 +85888,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.matches('[data-w230b]')) { lpSet(t.getAttribute('data-w230b'), t.value); mark0(); return; }
     if (t.matches('[data-w230p]')) { var k = t.getAttribute('data-w230p'); d[k] = k === 'slug' ? t.value.toLowerCase().replace(/[^a-z0-9-]/g, '') : t.value; mark0(); return; }
     if (t.matches('[data-w230s]')) { d.settings[t.getAttribute('data-w230s')] = t.value; mark0(); return; }
-    if (t.matches('[data-w230so]')) { var v = t.value.trim(); if (v) d.socials[t.getAttribute('data-w230so')] = v; else delete d.socials[t.getAttribute('data-w230so')]; mark0(); return; }
+    if (t.matches('[data-w230so]')) { var v = t.value.trim(); if (v && t.getAttribute('data-w230so') === 'email' && !/^mailto:/i.test(v)) v = 'mailto:' + v; if (v) d.socials[t.getAttribute('data-w230so')] = v; else delete d.socials[t.getAttribute('data-w230so')]; mark0(); return; }
     if (t.matches('[data-w230tc]')) { d.theme[t.getAttribute('data-w230tc')] = t.value; mark0(); return; }
     if (t.matches('[data-w230ab]')) { var ap = t.getAttribute('data-w230ab').split('|'), ab = d.blocks[Number(ap[0])]; if (!ab) return; ab.ab = ab.ab || {}; if (ap[1] !== 'on') { ab.ab[ap[1]] = t.value; mark0(); } return; }
     if (t.matches('[data-w230st]')) { var sp = t.getAttribute('data-w230st').split('|'), sb = d.blocks[Number(sp[0])]; if (!sb) return; sb.stats = (sb.stats || []).concat([{}, {}, {}, {}]).slice(0, 4); sb.stats[Number(sp[1])][sp[2]] = t.value; sb.stats = sb.stats.filter(function (s, k) { return s.n || s.label || k < 1; }); mark0(); return; }
@@ -86085,6 +86144,224 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
     monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl
   };
+})();
+/* =====================================================================
+   WA v232 Your photos, and the mileage on a reimbursement (Steel, 12/10/26)
+   =====================================================================
+   Steel, 12/10/26: "If anything, just put our logo if they don't have a profile picture set up yet. And if the profile
+   picture is just kind of not really professional, then allow them to add a professional photo and an internal photo going
+   forward. For just my team though, and board members." And from the 08/10 ops meeting: "a mileage calculator for driver
+   reimbursement".
+   - Your photos (the profile menu, for anyone with a team or board roster row, board members included): two photos side by
+     side. The Hub photo (team_members.avatar_url, avatars u/<email>.jpg) shows next to your name in the Hub; the website photo
+     (team_members.public_photo_url, avatars w/<email>.jpg) is the professional one for welfareavenue.com's team section. The
+     website shows the website photo, else the Hub photo, else the Welfare Avenue logo (www_team_faces). Saved through
+     wa232_my_photo_set (your own row only). The Edit profile window of wave115 keeps working as before.
+   - The mileage on a reimbursement (Team Requests > Finance > Reimbursement): "Driving? Work out the mileage" takes the
+     kilometres (one way, with a round-trip box), from and to, and fills Total amount with km x the rate (app_config
+     mileage_rate_cad, the CRA 2026 rate of $0.73 a km by default) and adds the line to Items and prices. It only fills the form;
+     the person still sends it.
+   Wrapped: nothing (it watches the profile menu and the request form). ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa232) return; window.__wa232 = true;
+  var BUCKET = 'avatars';
+  var STO = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/avatars/';
+  var S = { me: null, pend: { hub: null, website: null }, rm: { hub: false, website: false }, rate: null };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function toastIt(t) { try { toast(t); } catch (e) { /* fine */ } }
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w232ph{font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif}' +
+    '.w232ph .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 6px}' +
+    '@media (max-width:560px){.w232ph .two{grid-template-columns:1fr}}' +
+    '.w232ph .slot{border:1px solid rgba(16,63,57,.14);border-radius:14px;padding:14px;background:#FFFAF2;display:flex;flex-direction:column;gap:8px;align-items:flex-start}' +
+    '.w232ph .slot h4{margin:0;font-size:14px;color:#103F39}' +
+    '.w232ph .slot p{margin:0;font-size:12px;color:#797773;line-height:1.4}' +
+    '.w232ph .pic{width:96px;height:96px;border-radius:50%;overflow:hidden;background:#103F39;display:flex;align-items:center;justify-content:center}' +
+    '.w232ph .pic img{width:100%;height:100%;object-fit:cover;display:block}' +
+    '.w232ph .pic.logo img{width:62%;height:auto;object-fit:contain}' +
+    '.w232ph .choose{display:inline-flex;align-items:center;background:rgba(16,63,57,.08);color:#103F39;border-radius:10px;padding:7px 12px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:14.5px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .choose input{display:none}' +
+    '.w232ph .rm{font-size:12px;color:#797773;cursor:pointer;text-decoration:underline;background:none;border:none;padding:0}' +
+    '.w232ph .acts{display:flex;gap:8px;margin-top:14px}' +
+    '.w232ph .go{background:#DCA527;color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .cx{background:rgba(16,63,57,.08);color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .msg{font-size:12.5px;color:#797773;margin-top:8px;min-height:1em}' +
+    '.w232mile{margin:4px 0 14px;border:1px solid rgba(16,63,57,.14);border-radius:12px;background:#FFFAF2}' +
+    '.w232mile summary{cursor:pointer;padding:10px 14px;font-weight:600;color:#103F39;list-style:none}' +
+    '.w232mile summary::-webkit-details-marker{display:none}' +
+    '.w232mile .in{padding:0 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}' +
+    '@media (max-width:560px){.w232mile .in{grid-template-columns:1fr}}' +
+    '.w232mile label{font-size:12px;color:#797773;display:block;margin:0 0 3px}' +
+    '.w232mile input[type=text],.w232mile input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid rgba(16,63,57,.2);border-radius:9px;font:inherit}' +
+    '.w232mile .tog{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#1F201E}' +
+    '.w232mile .sum{grid-column:1/-1;font-size:14px;color:#103F39}' +
+    '.w232mile .sum b{font-size:16px}' +
+    '.w232mile .fine{grid-column:1/-1;font-size:11.5px;color:#797773;margin:0}';
+  document.head.appendChild(css);
+
+  /* ---------- your photos ---------- */
+  async function loadMe() {
+    var em = myEmail(); if (!em) return null;
+    try {
+      var r = await db.from('team_members').select('id,name,email,avatar_url,public_photo_url').ilike('email', em).eq('active', true).limit(1);
+      S.me = (r && r.data && r.data[0]) || null;
+    } catch (e) { S.me = null; }
+    return S.me;
+  }
+  function square(file, size) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image(); var u = URL.createObjectURL(file);
+      img.onload = function () {
+        try {
+          var s = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - s) / 2, sy = (img.naturalHeight - s) / 2;
+          var c = document.createElement('canvas'); c.width = size; c.height = size;
+          var x = c.getContext('2d'); x.fillStyle = '#FFFAF2'; x.fillRect(0, 0, size, size); x.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+          URL.revokeObjectURL(u);
+          c.toBlob(function (b) { if (b) resolve(b); else reject(new Error('Could not encode the photo')); }, 'image/jpeg', 0.88);
+        } catch (e) { reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(u); reject(new Error('That file is not an image the browser can read')); };
+      img.src = u;
+    });
+  }
+  function picHtml(url) {
+    if (url) return '<div class="pic"><img src="' + E(url) + '" alt=""></div>';
+    return '<div class="pic logo"><img src="' + STO.replace('/avatars/', '/content-images/') + 'brand/logo-primary-cream-600.png" alt="Welfare Avenue" onerror="this.style.display=\'none\'"></div>';
+  }
+  function slotHtml(kind) {
+    var me = S.me || {};
+    var cur = kind === 'hub' ? me.avatar_url : me.public_photo_url;
+    var title = kind === 'hub' ? 'Hub photo' : 'Website photo';
+    var note = kind === 'hub' ? 'Shows next to your name inside the Hub, for the team. A casual photo is fine.'
+      : 'Shows with your name in the team section of welfareavenue.com. Pick a clear, professional photo. Without one, the website uses your Hub photo, then our logo.';
+    return '<div class="slot" data-w232slot="' + kind + '"><h4>' + title + '</h4><div data-w232prev="' + kind + '">' + picHtml(cur) + '</div>'
+      + '<label class="choose">Choose a photo<input type="file" accept="image/jpeg,image/png,image/webp" data-w232file="' + kind + '"></label>'
+      + (cur ? '<button type="button" class="rm" data-w232rm="' + kind + '">Remove it</button>' : '') + '<p>' + note + '</p></div>';
+  }
+  async function openPhotos() {
+    await loadMe();
+    if (!S.me) { toastIt('Your account is not linked to a team or board profile yet; ask an admin.'); return; }
+    S.pend = { hub: null, website: null }; S.rm = { hub: false, website: false };
+    openModal('<div class="w232ph"><h3>Your photos</h3><p class="m-sub">Two photos, for two places. JPG, PNG or WebP; each is cropped to a centred square.</p>'
+      + '<div class="two">' + slotHtml('hub') + slotHtml('website') + '</div>'
+      + '<div class="acts"><button type="button" class="go" data-w232save>Save</button><button type="button" class="cx" data-w232cx>Cancel</button></div><div class="msg" data-w232msg></div></div>');
+  }
+  function msg(t) { var m = document.querySelector('[data-w232msg]'); if (m) m.textContent = t || ''; }
+  async function savePhotos(btn) {
+    var me = S.me; if (!me) return;
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      var em = lower(me.email);
+      for (var i = 0; i < 2; i++) {
+        var kind = ['hub', 'website'][i], path = (kind === 'hub' ? 'u/' : 'w/') + em + '.jpg';
+        if (S.pend[kind]) {
+          var up = await db.storage.from(BUCKET).upload(path, S.pend[kind], { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+          if (up && up.error) throw new Error('Upload failed: ' + (up.error.message || 'storage error'));
+          var url = STO + path + '?v=' + Date.now();
+          var r = await db.rpc('wa232_my_photo_set', { p_kind: kind, p_url: url });
+          if (r && r.error) throw new Error(r.error.message || 'Could not save');
+          if (kind === 'hub') me.avatar_url = url; else me.public_photo_url = url;
+        } else if (S.rm[kind]) {
+          var r2 = await db.rpc('wa232_my_photo_set', { p_kind: kind, p_url: '' });
+          if (r2 && r2.error) throw new Error(r2.error.message || 'Could not save');
+          try { await db.storage.from(BUCKET).remove([path]); } catch (e) { /* the row is what matters */ }
+          if (kind === 'hub') me.avatar_url = ''; else me.public_photo_url = null;
+        }
+      }
+      try { closeModal(); } catch (e) { /* fine */ }
+      toastIt('Photos saved');
+      try { if (typeof window.w115 === 'object' && window.w115 && typeof window.w115.reload === 'function') window.w115.reload(); } catch (e) { /* fine */ }
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Save'; msg(String(e.message || e));
+    }
+  }
+  document.addEventListener('change', async function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    var kind = t.getAttribute('data-w232file'); if (!kind) return;
+    var f = t.files && t.files[0]; if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { msg('That photo is very large; pick one under 12 MB.'); return; }
+    msg('Preparing the photo...');
+    try {
+      var blob = await square(f, kind === 'website' ? 800 : 512);
+      S.pend[kind] = blob; S.rm[kind] = false;
+      var p = document.querySelector('[data-w232prev="' + kind + '"]'); if (p) p.innerHTML = picHtml(URL.createObjectURL(blob));
+      msg('Looks good. Save to keep it.');
+    } catch (err) { msg(String(err.message || err)); }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w232photos],[data-w232rm],[data-w232save],[data-w232cx]') : null;
+    if (!t) return;
+    if (t.hasAttribute('data-w232photos')) { e.preventDefault(); try { var m = document.getElementById('w115menu'); if (m) m.style.display = 'none'; } catch (x) { /* fine */ } openPhotos(); return; }
+    if (t.hasAttribute('data-w232rm')) { var k = t.getAttribute('data-w232rm'); S.rm[k] = true; S.pend[k] = null; var p = document.querySelector('[data-w232prev="' + k + '"]'); if (p) p.innerHTML = picHtml(null); msg(k === 'hub' ? 'The Hub photo will be removed when you save.' : 'The website photo will be removed when you save; the website then uses your Hub photo, or our logo.'); return; }
+    if (t.hasAttribute('data-w232save')) { savePhotos(t); return; }
+    if (t.hasAttribute('data-w232cx')) { try { closeModal(); } catch (x) { /* fine */ } }
+  });
+  /* the item in the profile menu (wave115 rebuilds the menu each time it opens) */
+  function addMenuItem() {
+    var m = document.getElementById('w115menu'); if (!m || m.querySelector('[data-w232photos]')) return;
+    var b = document.createElement('button'); b.className = 'w115item'; b.setAttribute('data-w232photos', '1'); b.type = 'button'; b.textContent = 'Your photos (Hub and website)';
+    /* the menu stops clicks from reaching the page, so the button listens itself */
+    b.addEventListener('click', function (e) { e.preventDefault(); m.style.display = 'none'; openPhotos(); });
+    var so = m.querySelector('#signOutBtn');
+    var items = m.querySelectorAll('.w115item');
+    if (items.length) items[0].parentNode.insertBefore(b, items[0].nextSibling); else if (so) m.insertBefore(b, so); else m.appendChild(b);
+  }
+  var mo = new MutationObserver(function () { addMenuItem(); mileHook(); });
+  function startObs() { try { mo.observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ } }
+  if (document.body) startObs(); else document.addEventListener('DOMContentLoaded', startObs);
+
+  /* ---------- the mileage on a reimbursement ---------- */
+  async function rate() {
+    if (S.rate != null) return S.rate;
+    S.rate = 0.73;
+    try { var r = await db.from('app_config').select('value').eq('key', 'mileage_rate_cad').maybeSingle(); var v = Number(r && r.data && r.data.value); if (isFinite(v) && v > 0 && v < 5) S.rate = v; } catch (e) { /* the default */ }
+    return S.rate;
+  }
+  function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+  function mileHook() {
+    var f = document.querySelector('form.w123form[data-w123form="reimbursement"]');
+    if (!f || f.querySelector('.w232mile')) return;
+    var amt = f.querySelector('input[type=number]:not([data-w232m])'); if (!amt) return;
+    var lab = f.querySelector('label[for="' + amt.id + '"]') || amt;
+    var box = document.createElement('details'); box.className = 'w232mile';
+    box.innerHTML = '<summary>Driving? Work out the mileage</summary><div class="in">'
+      + '<div><label>From</label><input type="text" data-w232m="from" placeholder="e.g. the storage unit"></div>'
+      + '<div><label>To</label><input type="text" data-w232m="to" placeholder="e.g. Place Emilie-Gamelin"></div>'
+      + '<div><label>Kilometres, one way</label><input type="number" min="0" step="0.1" inputmode="decimal" data-w232m="km"></div>'
+      + '<div><label>&nbsp;</label><span class="tog"><input type="checkbox" data-w232m="round" checked> Round trip (there and back)</span></div>'
+      + '<div class="sum" data-w232m="sum">Enter the kilometres.</div>'
+      + '<p class="fine" data-w232m="rate">Rate: the CRA automobile allowance rate.</p></div>';
+    lab.parentNode.insertBefore(box, lab);
+    rate().then(function (r) { var el = box.querySelector('[data-w232m="rate"]'); if (el) el.textContent = 'Rate: ' + money(r) + ' a km (the CRA automobile allowance rate for 2026, first 5,000 km). It fills Total amount and adds a line to Items and prices; check both before you send.'; });
+    box.addEventListener('input', function () { calc(f, box); });
+    box.addEventListener('change', function () { calc(f, box); });
+  }
+  async function calc(f, box) {
+    var r = await rate();
+    var km = Number((box.querySelector('[data-w232m="km"]') || {}).value);
+    var round = !!(box.querySelector('[data-w232m="round"]') || {}).checked;
+    var from = ((box.querySelector('[data-w232m="from"]') || {}).value || '').trim(), to = ((box.querySelector('[data-w232m="to"]') || {}).value || '').trim();
+    var sum = box.querySelector('[data-w232m="sum"]');
+    if (!isFinite(km) || km <= 0) { if (sum) sum.textContent = 'Enter the kilometres.'; return; }
+    var dist = Math.round(km * (round ? 2 : 1) * 10) / 10, total = Math.round(dist * r * 100) / 100;
+    if (sum) sum.innerHTML = E(dist + ' km x ' + money(r)) + ' = <b>' + E(money(total)) + '</b>';
+    var amt = f.querySelector('input[type=number]:not([data-w232m])');
+    if (amt) { amt.value = total.toFixed(2); amt.dispatchEvent(new Event('input', { bubbles: true })); amt.dispatchEvent(new Event('change', { bubbles: true })); }
+    var items = f.querySelector('textarea:not([name="__more"])');
+    if (items) {
+      var line = 'Mileage: ' + (from || to ? (from || '?') + ' to ' + (to || '?') + ', ' : '') + dist + ' km' + (round ? ' (round trip)' : '') + ' x ' + money(r) + ' = ' + money(total);
+      var lines = String(items.value || '').split('\n').filter(function (l) { return !/^Mileage: /.test(l); });
+      items.value = [line].concat(lines.filter(function (l) { return l.trim() !== ''; })).join('\n');
+      items.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  window.w232 = { openPhotos: openPhotos, rate: rate, state: function () { return { me: S.me, rate: S.rate }; } };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

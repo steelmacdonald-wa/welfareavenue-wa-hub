@@ -1,0 +1,6 @@
+-- wave232 (12/10/26), applied as migration wa232_spots_photos_mileage (and wa232_followups_quick_fixes, wa232_md5_helper):
+-- volunteer_events.spot_counts; wa191_this_week's target per serving; team_members.public_photo_url with avatars w/<email>.jpg
+-- policies (staff and board viewers, their own files); wa232_my_photo_set(kind, url); www_team_faces() for the website;
+-- app_config mileage_rate_cad = 0.73 (CRA 2026, first 5,000 km); request type website-message and trigger
+-- trg_wa232_website_message (contact form messages become Team Requests by topic); cron wa-tiktok-pull 06:35 UTC.
+-- See supabase migrations for the exact statements.

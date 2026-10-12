@@ -15,7 +15,7 @@
       + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '') + (partnerOf(ev.id) ? '<span class="w191with">With ' + E(partnerOf(ev.id).partner_name) + '</span>' : '');
     var prim = primaryAction(ev, D, M, row);
     var menu = ''
-      + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button>' : '')
+      + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button><button data-w191go="spots">Spot counts</button>' : '')
       + (staff() ? '<button data-w191go="text171">Text to confirm</button>' : '')
       + (staff() ? '<button data-w191go="send182">Send itineraries</button><button data-w191go="hist182">Sent and scheduled</button><button data-w191go="ev182">This serving’s itinerary</button>' : '')
       + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button><button data-w191go="partner">' + (partnerOf(ev.id) ? 'Edit the collaboration' : 'A partner organization serves with us') + '</button>' : '')
@@ -316,9 +316,48 @@
     if (what === 'start') { openStage('prepare', true); setTimeout(function () { var st = document.getElementById('w174st'); if (st) { try { st.focus(); } catch (e) { /* fine */ } } }, 350); return; }
     if (what === 'inventory') { location.hash = '#volunteering/inventory'; return; }
     if (what === 'partner') { partnerEditor(); return; }
+    if (what === 'spots') { spotsEditor(ev); return; }
     if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; setTimeout(scrollHints, 60); try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
     if (what === 'close') { if (confirm('Close this serving? It moves to Done; you can reopen it.')) setStatus(ev, 'completed'); return; }
     if (what === 'reopen') { setStatus(ev, 'planned'); return; }
+  }
+
+  /* wave232: this serving's spot counts, role by role (staff); Reset puts the usual counts back */
+  function spotsEditor(ev) {
+    if (!staff() || !ev) return;
+    var usual = usualTargets(), mine = (S.spots && S.spots[ev.id]) || {}, cur = targets(ev.id);
+    var rows = ROLE_ORDER.map(function (r) {
+      return '<label class="w232sp"><span>' + E(one(r)) + '<i>usual ' + (usual[r] || 0) + '</i></span><input type="number" min="0" max="60" step="1" data-w232sp="' + r + '" value="' + (cur[r] || 0) + '"' + (r in mine ? ' class="own"' : '') + '></label>';
+    }).join('');
+    openModal('<div class="w232spots"><h3>Spot counts for ' + E(ev.code || 'this serving') + '</h3>'
+      + '<p class="m-sub">How many people this serving needs in each role. The roster, the open spots, Find volunteers and Home all count against these. 0 means this serving does not need the role.</p>'
+      + '<div class="w232grid">' + rows + '</div>'
+      + '<div class="w232row"><button class="w191btn gold" id="w232spsave">Save</button><button class="w191btn ghost" id="w232spreset">Use the usual counts</button><button class="w191btn quiet" id="w232spx">Cancel</button></div>'
+      + '<p class="w191rsub" id="w232spmsg"></p></div>');
+    var css = document.getElementById('w232spcss');
+    if (!css) { css = document.createElement('style'); css.id = 'w232spcss'; css.textContent = '.w232grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:14px 0}.w232sp{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(16,63,57,.14);border-radius:10px;background:#FFFAF2}.w232sp span{font-weight:600;font-size:14px;color:#103F39}.w232sp i{display:block;font-style:normal;font-weight:400;font-size:11.5px;color:#797773}.w232sp input{width:64px;padding:6px 8px;border:1px solid rgba(16,63,57,.22);border-radius:8px;font:inherit;text-align:center}.w232sp input.own{border-color:#DCA527;background:#FFF7E3}.w232row{display:flex;gap:8px;flex-wrap:wrap}'; document.head.appendChild(css); }
+    function msg(t) { var m = document.getElementById('w232spmsg'); if (m) m.textContent = t || ''; }
+    async function put(val) {
+      msg('Saving...');
+      var r = await db.from('volunteer_events').update({ spot_counts: val }).eq('id', ev.id);
+      if (r && r.error) { msg('Could not save: ' + r.error.message); return; }
+      S.spots = S.spots || {}; S.spots[ev.id] = val; if (S.ev && S.ev.id === ev.id) S.ev.spot_counts = val;
+      try { await db.from('change_log').insert({ entity_type: 'volunteer_event', entity_id: String(ev.id), field: 'spot_counts', old_value: JSON.stringify(mine || null), new_value: JSON.stringify(val), changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'hub' }); } catch (e) { /* audit only */ }
+      try { closeModal(); } catch (e) { /* fine */ }
+      T(val ? 'Spot counts saved for this serving' : 'This serving uses the usual counts again');
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+      refresh();
+    }
+    document.getElementById('w232spx').addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
+    document.getElementById('w232spreset').addEventListener('click', function () { put(null); });
+    document.getElementById('w232spsave').addEventListener('click', function () {
+      var val = {};
+      document.querySelectorAll('[data-w232sp]').forEach(function (inp) {
+        var k = inp.getAttribute('data-w232sp'), n = Math.max(0, Math.min(60, Math.round(Number(inp.value))));
+        if (isFinite(n) && n !== (usual[k] || 0)) val[k] = n;
+      });
+      put(Object.keys(val).length ? val : null);
+    });
   }
 
   /* ---------- wiring ---------- */

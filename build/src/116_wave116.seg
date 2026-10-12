@@ -733,7 +733,7 @@
     await Promise.all([loadEvents(), loadMentions(), loadProjects(), loadMetrics()]);
     if (!W116.cur || W116.cur.d !== d || W116.cur.page !== 'overview') return;
     var html = header(d, 'overview', null, meta.read ? E(meta.read) : '') +
-      boardsHtml(d) +
+      (d === 'fundraising' ? '' : boardsHtml(d)) +   /* wave232 (Steel, 12/10/26): Fundraising's sub-team cards repeated the Fundraising app; gone */
       kpiTiles(d, null) +
       '<div class="w116grid"><div class="w116col">' +
       '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +

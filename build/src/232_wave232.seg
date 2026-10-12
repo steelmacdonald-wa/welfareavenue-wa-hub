@@ -1,0 +1,218 @@
+/* =====================================================================
+   WA v232 Your photos, and the mileage on a reimbursement (Steel, 12/10/26)
+   =====================================================================
+   Steel, 12/10/26: "If anything, just put our logo if they don't have a profile picture set up yet. And if the profile
+   picture is just kind of not really professional, then allow them to add a professional photo and an internal photo going
+   forward. For just my team though, and board members." And from the 08/10 ops meeting: "a mileage calculator for driver
+   reimbursement".
+   - Your photos (the profile menu, for anyone with a team or board roster row, board members included): two photos side by
+     side. The Hub photo (team_members.avatar_url, avatars u/<email>.jpg) shows next to your name in the Hub; the website photo
+     (team_members.public_photo_url, avatars w/<email>.jpg) is the professional one for welfareavenue.com's team section. The
+     website shows the website photo, else the Hub photo, else the Welfare Avenue logo (www_team_faces). Saved through
+     wa232_my_photo_set (your own row only). The Edit profile window of wave115 keeps working as before.
+   - The mileage on a reimbursement (Team Requests > Finance > Reimbursement): "Driving? Work out the mileage" takes the
+     kilometres (one way, with a round-trip box), from and to, and fills Total amount with km x the rate (app_config
+     mileage_rate_cad, the CRA 2026 rate of $0.73 a km by default) and adds the line to Items and prices. It only fills the form;
+     the person still sends it.
+   Wrapped: nothing (it watches the profile menu and the request form). ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa232) return; window.__wa232 = true;
+  var BUCKET = 'avatars';
+  var STO = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/avatars/';
+  var S = { me: null, pend: { hub: null, website: null }, rm: { hub: false, website: false }, rate: null };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function toastIt(t) { try { toast(t); } catch (e) { /* fine */ } }
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w232ph{font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif}' +
+    '.w232ph .two{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 6px}' +
+    '@media (max-width:560px){.w232ph .two{grid-template-columns:1fr}}' +
+    '.w232ph .slot{border:1px solid rgba(16,63,57,.14);border-radius:14px;padding:14px;background:#FFFAF2;display:flex;flex-direction:column;gap:8px;align-items:flex-start}' +
+    '.w232ph .slot h4{margin:0;font-size:14px;color:#103F39}' +
+    '.w232ph .slot p{margin:0;font-size:12px;color:#797773;line-height:1.4}' +
+    '.w232ph .pic{width:96px;height:96px;border-radius:50%;overflow:hidden;background:#103F39;display:flex;align-items:center;justify-content:center}' +
+    '.w232ph .pic img{width:100%;height:100%;object-fit:cover;display:block}' +
+    '.w232ph .pic.logo img{width:62%;height:auto;object-fit:contain}' +
+    '.w232ph .choose{display:inline-flex;align-items:center;background:rgba(16,63,57,.08);color:#103F39;border-radius:10px;padding:7px 12px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:14.5px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .choose input{display:none}' +
+    '.w232ph .rm{font-size:12px;color:#797773;cursor:pointer;text-decoration:underline;background:none;border:none;padding:0}' +
+    '.w232ph .acts{display:flex;gap:8px;margin-top:14px}' +
+    '.w232ph .go{background:#DCA527;color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .cx{background:rgba(16,63,57,.08);color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer}' +
+    '.w232ph .msg{font-size:12.5px;color:#797773;margin-top:8px;min-height:1em}' +
+    '.w232mile{margin:4px 0 14px;border:1px solid rgba(16,63,57,.14);border-radius:12px;background:#FFFAF2}' +
+    '.w232mile summary{cursor:pointer;padding:10px 14px;font-weight:600;color:#103F39;list-style:none}' +
+    '.w232mile summary::-webkit-details-marker{display:none}' +
+    '.w232mile .in{padding:0 14px 14px;display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}' +
+    '@media (max-width:560px){.w232mile .in{grid-template-columns:1fr}}' +
+    '.w232mile label{font-size:12px;color:#797773;display:block;margin:0 0 3px}' +
+    '.w232mile input[type=text],.w232mile input[type=number]{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid rgba(16,63,57,.2);border-radius:9px;font:inherit}' +
+    '.w232mile .tog{display:flex;align-items:center;gap:8px;font-size:13.5px;color:#1F201E}' +
+    '.w232mile .sum{grid-column:1/-1;font-size:14px;color:#103F39}' +
+    '.w232mile .sum b{font-size:16px}' +
+    '.w232mile .fine{grid-column:1/-1;font-size:11.5px;color:#797773;margin:0}';
+  document.head.appendChild(css);
+
+  /* ---------- your photos ---------- */
+  async function loadMe() {
+    var em = myEmail(); if (!em) return null;
+    try {
+      var r = await db.from('team_members').select('id,name,email,avatar_url,public_photo_url').ilike('email', em).eq('active', true).limit(1);
+      S.me = (r && r.data && r.data[0]) || null;
+    } catch (e) { S.me = null; }
+    return S.me;
+  }
+  function square(file, size) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image(); var u = URL.createObjectURL(file);
+      img.onload = function () {
+        try {
+          var s = Math.min(img.naturalWidth, img.naturalHeight), sx = (img.naturalWidth - s) / 2, sy = (img.naturalHeight - s) / 2;
+          var c = document.createElement('canvas'); c.width = size; c.height = size;
+          var x = c.getContext('2d'); x.fillStyle = '#FFFAF2'; x.fillRect(0, 0, size, size); x.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+          URL.revokeObjectURL(u);
+          c.toBlob(function (b) { if (b) resolve(b); else reject(new Error('Could not encode the photo')); }, 'image/jpeg', 0.88);
+        } catch (e) { reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(u); reject(new Error('That file is not an image the browser can read')); };
+      img.src = u;
+    });
+  }
+  function picHtml(url) {
+    if (url) return '<div class="pic"><img src="' + E(url) + '" alt=""></div>';
+    return '<div class="pic logo"><img src="' + STO.replace('/avatars/', '/content-images/') + 'brand/logo-primary-cream-600.png" alt="Welfare Avenue" onerror="this.style.display=\'none\'"></div>';
+  }
+  function slotHtml(kind) {
+    var me = S.me || {};
+    var cur = kind === 'hub' ? me.avatar_url : me.public_photo_url;
+    var title = kind === 'hub' ? 'Hub photo' : 'Website photo';
+    var note = kind === 'hub' ? 'Shows next to your name inside the Hub, for the team. A casual photo is fine.'
+      : 'Shows with your name in the team section of welfareavenue.com. Pick a clear, professional photo. Without one, the website uses your Hub photo, then our logo.';
+    return '<div class="slot" data-w232slot="' + kind + '"><h4>' + title + '</h4><div data-w232prev="' + kind + '">' + picHtml(cur) + '</div>'
+      + '<label class="choose">Choose a photo<input type="file" accept="image/jpeg,image/png,image/webp" data-w232file="' + kind + '"></label>'
+      + (cur ? '<button type="button" class="rm" data-w232rm="' + kind + '">Remove it</button>' : '') + '<p>' + note + '</p></div>';
+  }
+  async function openPhotos() {
+    await loadMe();
+    if (!S.me) { toastIt('Your account is not linked to a team or board profile yet; ask an admin.'); return; }
+    S.pend = { hub: null, website: null }; S.rm = { hub: false, website: false };
+    openModal('<div class="w232ph"><h3>Your photos</h3><p class="m-sub">Two photos, for two places. JPG, PNG or WebP; each is cropped to a centred square.</p>'
+      + '<div class="two">' + slotHtml('hub') + slotHtml('website') + '</div>'
+      + '<div class="acts"><button type="button" class="go" data-w232save>Save</button><button type="button" class="cx" data-w232cx>Cancel</button></div><div class="msg" data-w232msg></div></div>');
+  }
+  function msg(t) { var m = document.querySelector('[data-w232msg]'); if (m) m.textContent = t || ''; }
+  async function savePhotos(btn) {
+    var me = S.me; if (!me) return;
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      var em = lower(me.email);
+      for (var i = 0; i < 2; i++) {
+        var kind = ['hub', 'website'][i], path = (kind === 'hub' ? 'u/' : 'w/') + em + '.jpg';
+        if (S.pend[kind]) {
+          var up = await db.storage.from(BUCKET).upload(path, S.pend[kind], { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+          if (up && up.error) throw new Error('Upload failed: ' + (up.error.message || 'storage error'));
+          var url = STO + path + '?v=' + Date.now();
+          var r = await db.rpc('wa232_my_photo_set', { p_kind: kind, p_url: url });
+          if (r && r.error) throw new Error(r.error.message || 'Could not save');
+          if (kind === 'hub') me.avatar_url = url; else me.public_photo_url = url;
+        } else if (S.rm[kind]) {
+          var r2 = await db.rpc('wa232_my_photo_set', { p_kind: kind, p_url: '' });
+          if (r2 && r2.error) throw new Error(r2.error.message || 'Could not save');
+          try { await db.storage.from(BUCKET).remove([path]); } catch (e) { /* the row is what matters */ }
+          if (kind === 'hub') me.avatar_url = ''; else me.public_photo_url = null;
+        }
+      }
+      try { closeModal(); } catch (e) { /* fine */ }
+      toastIt('Photos saved');
+      try { if (typeof window.w115 === 'object' && window.w115 && typeof window.w115.reload === 'function') window.w115.reload(); } catch (e) { /* fine */ }
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Save'; msg(String(e.message || e));
+    }
+  }
+  document.addEventListener('change', async function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    var kind = t.getAttribute('data-w232file'); if (!kind) return;
+    var f = t.files && t.files[0]; if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { msg('That photo is very large; pick one under 12 MB.'); return; }
+    msg('Preparing the photo...');
+    try {
+      var blob = await square(f, kind === 'website' ? 800 : 512);
+      S.pend[kind] = blob; S.rm[kind] = false;
+      var p = document.querySelector('[data-w232prev="' + kind + '"]'); if (p) p.innerHTML = picHtml(URL.createObjectURL(blob));
+      msg('Looks good. Save to keep it.');
+    } catch (err) { msg(String(err.message || err)); }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w232photos],[data-w232rm],[data-w232save],[data-w232cx]') : null;
+    if (!t) return;
+    if (t.hasAttribute('data-w232photos')) { e.preventDefault(); try { var m = document.getElementById('w115menu'); if (m) m.style.display = 'none'; } catch (x) { /* fine */ } openPhotos(); return; }
+    if (t.hasAttribute('data-w232rm')) { var k = t.getAttribute('data-w232rm'); S.rm[k] = true; S.pend[k] = null; var p = document.querySelector('[data-w232prev="' + k + '"]'); if (p) p.innerHTML = picHtml(null); msg(k === 'hub' ? 'The Hub photo will be removed when you save.' : 'The website photo will be removed when you save; the website then uses your Hub photo, or our logo.'); return; }
+    if (t.hasAttribute('data-w232save')) { savePhotos(t); return; }
+    if (t.hasAttribute('data-w232cx')) { try { closeModal(); } catch (x) { /* fine */ } }
+  });
+  /* the item in the profile menu (wave115 rebuilds the menu each time it opens) */
+  function addMenuItem() {
+    var m = document.getElementById('w115menu'); if (!m || m.querySelector('[data-w232photos]')) return;
+    var b = document.createElement('button'); b.className = 'w115item'; b.setAttribute('data-w232photos', '1'); b.type = 'button'; b.textContent = 'Your photos (Hub and website)';
+    /* the menu stops clicks from reaching the page, so the button listens itself */
+    b.addEventListener('click', function (e) { e.preventDefault(); m.style.display = 'none'; openPhotos(); });
+    var so = m.querySelector('#signOutBtn');
+    var items = m.querySelectorAll('.w115item');
+    if (items.length) items[0].parentNode.insertBefore(b, items[0].nextSibling); else if (so) m.insertBefore(b, so); else m.appendChild(b);
+  }
+  var mo = new MutationObserver(function () { addMenuItem(); mileHook(); });
+  function startObs() { try { mo.observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ } }
+  if (document.body) startObs(); else document.addEventListener('DOMContentLoaded', startObs);
+
+  /* ---------- the mileage on a reimbursement ---------- */
+  async function rate() {
+    if (S.rate != null) return S.rate;
+    S.rate = 0.73;
+    try { var r = await db.from('app_config').select('value').eq('key', 'mileage_rate_cad').maybeSingle(); var v = Number(r && r.data && r.data.value); if (isFinite(v) && v > 0 && v < 5) S.rate = v; } catch (e) { /* the default */ }
+    return S.rate;
+  }
+  function money(n) { return '$' + (Math.round(n * 100) / 100).toFixed(2); }
+  function mileHook() {
+    var f = document.querySelector('form.w123form[data-w123form="reimbursement"]');
+    if (!f || f.querySelector('.w232mile')) return;
+    var amt = f.querySelector('input[type=number]:not([data-w232m])'); if (!amt) return;
+    var lab = f.querySelector('label[for="' + amt.id + '"]') || amt;
+    var box = document.createElement('details'); box.className = 'w232mile';
+    box.innerHTML = '<summary>Driving? Work out the mileage</summary><div class="in">'
+      + '<div><label>From</label><input type="text" data-w232m="from" placeholder="e.g. the storage unit"></div>'
+      + '<div><label>To</label><input type="text" data-w232m="to" placeholder="e.g. Place Emilie-Gamelin"></div>'
+      + '<div><label>Kilometres, one way</label><input type="number" min="0" step="0.1" inputmode="decimal" data-w232m="km"></div>'
+      + '<div><label>&nbsp;</label><span class="tog"><input type="checkbox" data-w232m="round" checked> Round trip (there and back)</span></div>'
+      + '<div class="sum" data-w232m="sum">Enter the kilometres.</div>'
+      + '<p class="fine" data-w232m="rate">Rate: the CRA automobile allowance rate.</p></div>';
+    lab.parentNode.insertBefore(box, lab);
+    rate().then(function (r) { var el = box.querySelector('[data-w232m="rate"]'); if (el) el.textContent = 'Rate: ' + money(r) + ' a km (the CRA automobile allowance rate for 2026, first 5,000 km). It fills Total amount and adds a line to Items and prices; check both before you send.'; });
+    box.addEventListener('input', function () { calc(f, box); });
+    box.addEventListener('change', function () { calc(f, box); });
+  }
+  async function calc(f, box) {
+    var r = await rate();
+    var km = Number((box.querySelector('[data-w232m="km"]') || {}).value);
+    var round = !!(box.querySelector('[data-w232m="round"]') || {}).checked;
+    var from = ((box.querySelector('[data-w232m="from"]') || {}).value || '').trim(), to = ((box.querySelector('[data-w232m="to"]') || {}).value || '').trim();
+    var sum = box.querySelector('[data-w232m="sum"]');
+    if (!isFinite(km) || km <= 0) { if (sum) sum.textContent = 'Enter the kilometres.'; return; }
+    var dist = Math.round(km * (round ? 2 : 1) * 10) / 10, total = Math.round(dist * r * 100) / 100;
+    if (sum) sum.innerHTML = E(dist + ' km x ' + money(r)) + ' = <b>' + E(money(total)) + '</b>';
+    var amt = f.querySelector('input[type=number]:not([data-w232m])');
+    if (amt) { amt.value = total.toFixed(2); amt.dispatchEvent(new Event('input', { bubbles: true })); amt.dispatchEvent(new Event('change', { bubbles: true })); }
+    var items = f.querySelector('textarea:not([name="__more"])');
+    if (items) {
+      var line = 'Mileage: ' + (from || to ? (from || '?') + ' to ' + (to || '?') + ', ' : '') + dist + ' km' + (round ? ' (round trip)' : '') + ' x ' + money(r) + ' = ' + money(total);
+      var lines = String(items.value || '').split('\n').filter(function (l) { return !/^Mileage: /.test(l); });
+      items.value = [line].concat(lines.filter(function (l) { return l.trim() !== ''; })).join('\n');
+      items.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+
+  window.w232 = { openPhotos: openPhotos, rate: rate, state: function () { return { me: S.me, rate: S.rate }; } };
+})();
