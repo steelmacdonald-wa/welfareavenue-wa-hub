@@ -31,6 +31,7 @@
     if (c.donations) out.push('Bringing to donate: ' + c.donations);
     if (c.vehicle || c.model) out.push('Car: ' + [c.vehicle, c.model].filter(Boolean).join(' '));
     if (c.photos_share) out.push('Photos by ' + (SHARE[c.photos_share] || c.photos_share));
+    if (lower(r.role) === 'community_debrief') out.push(c.briefed_at ? 'Briefing read ' + fmtWhen(c.briefed_at) : 'Briefing not read yet');   /* wave235 */
     var sv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'survey' && x.direction === 'out' && x.status === 'sent'; })[0];
     if (sv) out.push('Survey texted ' + fmtWhen(sv.sent_at || sv.created_at));
     var iv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'itinerary' && x.direction === 'out' && x.status === 'sent'; })[0];

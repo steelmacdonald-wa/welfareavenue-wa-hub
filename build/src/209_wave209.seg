@@ -18,7 +18,7 @@
 (function () {
   'use strict';
   var GREEN = '#103F39', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
-  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishes'], ['photographer', 'Photographer'], ['community_debrief', 'Community lead'], ['community_talker', 'Community welcome'], ['team_leader', 'Team leader']];
+  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishes'], ['photographer', 'Photographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];
   var SOURCES = [['linkedin', 'LinkedIn'], ['cabm', 'CABM'], ['fcabq', 'Je B\u00e9n\u00e9vole'], ['email', 'Email'], ['referral', 'Referral'], ['website', 'Website'], ['event', 'An event'], ['manual', 'Other']];
   var STATUS = [['received', 'To handle'], ['contacted', 'Contacted'], ['welcomed', 'Welcomed'], ['not_fit', 'Not a fit'], ['withdrawn', 'Withdrawn']];
   var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, busy: false, n: null };
@@ -48,7 +48,7 @@
     if (/(dish|vaisselle|plonge)/.test(t)) r.push('dishwasher');
     if (/photo/.test(t)) r.push('photographer');
     if (/(community lead|community leader|responsable communaut|leader communaut)/.test(t)) r.push('community_debrief');
-    if (/(community welcome|community talk|accueil)/.test(t)) r.push('community_talker');
+    if (/(community welcome|community talk|accueil)/.test(t)) { if (r.indexOf('community_debrief') < 0) r.push('community_debrief'); }   /* wave234: one role, Community lead */
     if (!r.length && /(benevol|volunteer)/.test(t)) r.push('volunteer');
     return r;
   }

@@ -1,4 +1,6 @@
-// Welfare Avenue: www-sync (v2, 01/10/26, www3; v1 28/09/26, wave162)
+// Welfare Avenue: www-sync (v3, 14/10/26, wave234; v2 01/10/26, www3; v1 28/09/26, wave162)
+// v3 (wave234): the website's files are read from www_files eight rows at a time; one select of every row (about 25 MB
+// since wave233's video) hit the database's statement timeout and the deploy answered "website files missing".
 // Deploys the public website (the new welfareavenue.com, built by build/www/make.py) from the www_files table to its
 // own Netlify site, separate from the Hub's (host-sync). Text files are stored as they are, images as base64
 // (encoding 'base64'); files with several parts are joined in part order. Netlify's digest deploy uploads only what
@@ -13,6 +15,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const API = 'https://api.netlify.com/api/v1';
 const DOMAINS = ['welfareavenue.com', 'www.welfareavenue.com'];
+const PAGE = 8;
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -27,7 +30,7 @@ async function setCfg(key: string, value: string) {
   await svc.from('app_config').upsert({ key, value, updated_at: new Date().toISOString() });
 }
 async function audit(entity: string, field: string, value: string) {
-  try { await svc.from('change_log').insert({ entity_type: 'www_domain', entity_id: entity, field, old_value: null, new_value: value.slice(0, 500), changed_by: 'www-sync v2' }); } catch (_) { /* audit only */ }
+  try { await svc.from('change_log').insert({ entity_type: 'www_domain', entity_id: entity, field, old_value: null, new_value: value.slice(0, 500), changed_by: 'www-sync v3' }); } catch (_) { /* audit only */ }
 }
 function json(o: unknown, status = 200) { return new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json' } }); }
 function b64(s: string): Uint8Array { const bin = atob(s); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
@@ -96,10 +99,18 @@ Deno.serve(async (req: Request) => {
     if (!siteId) return json({ error: 'every name was taken', names }, 409);
   }
 
-  const { data, error } = await svc.from('www_files').select('path, part, content, encoding').order('path', { ascending: true }).order('part', { ascending: true });
-  if (error || !data || !data.length) return json({ error: 'website files missing' }, 500);
+  /* v3: a page of rows at a time (the whole table in one select timed out) */
+  const data: Array<{ path: string; part: number; content: string; encoding: string }> = [];
+  for (let from = 0; ; from += PAGE) {
+    const pg = await svc.from('www_files').select('path, part, content, encoding').order('path', { ascending: true }).order('part', { ascending: true }).range(from, from + PAGE - 1);
+    if (pg.error) return json({ error: 'website files unreadable: ' + String(pg.error.message || pg.error).slice(0, 200), at: from }, 500);
+    const rows = (pg.data || []) as Array<{ path: string; part: number; content: string; encoding: string }>;
+    data.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  if (!data.length) return json({ error: 'website files missing' }, 500);
   const parts: Record<string, { enc: string; chunks: string[] }> = {};
-  for (const r of data as Array<{ path: string; part: number; content: string; encoding: string }>) {
+  for (const r of data) {
     (parts[r.path] = parts[r.path] || { enc: r.encoding || 'utf8', chunks: [] }).chunks.push(r.content);
   }
   const files: Record<string, { sha: string; bytes: Uint8Array }> = {};
@@ -137,7 +148,7 @@ Deno.serve(async (req: Request) => {
   const site = await cfg('www_preview_url');
   try {
     await svc.from('change_log').insert({ entity_type: 'www_deploy', entity_id: String(deployId), field: 'published', old_value: null,
-      new_value: 'files=' + Object.keys(files).length + ' uploaded=' + uploaded + ' state=' + state + (created ? ' site created' : ''), changed_by: 'www-sync v2' });
+      new_value: 'files=' + Object.keys(files).length + ' uploaded=' + uploaded + ' state=' + state + (created ? ' site created' : ''), changed_by: 'www-sync v3' });
   } catch (_) { /* audit only */ }
   return json({ ok: state === 'ready', site_id: siteId, site, created, deploy_id: deployId, state, files: Object.keys(files).length, uploaded, deploy_url: url });
 });

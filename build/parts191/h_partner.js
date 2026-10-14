@@ -13,7 +13,7 @@
     desta_kitchen: ['They cook with us in DESTA’s kitchen', 'Community kitchen at DESTA: their people cook, our driver picks the food up there.'],
     their_kitchen: ['They cook in their own space', 'Their people cook at their place: our driver picks the food up there.']
   };
-  var PROLES = [['server', 'Servers'], ['cook', 'Cooks'], ['driver', 'Drivers'], ['photographer', 'Photographers'], ['dishwasher', 'Dishwashing'], ['community_talker', 'Community welcome']];
+  var PROLES = [['server', 'Servers'], ['cook', 'Cooks'], ['driver', 'Drivers'], ['photographer', 'Photographers'], ['dishwasher', 'Dishwashing']];
   function partnerOf(evId) { var x = PART.by[evId]; return x && x.active ? x : null; }
   async function loadPartner(ev, force) {
     if (!ev || !staff()) return null;

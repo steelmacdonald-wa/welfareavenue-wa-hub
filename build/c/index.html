@@ -304,7 +304,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       okT: 'You’re confirmed!', okP: 'Thank you. The team can see it now.', okWhen: 'Confirmed',
       earlyT: 'You’re signed up!', earlyP: 'Thank you for volunteering with us. There is nothing to confirm yet:',
       earlyWhen: 'We will text you on {d} to confirm your spot.', earlyCal: 'Add it to your calendar so you don’t miss it.',
-      expect: 'What to expect as', bring: 'What to bring', arrive: 'When to arrive', photo: 'The team in action',
+      expect: 'What to expect as', brief: 'Your Community lead briefing', briefRead: 'I have read my briefing and I am ready to lead with the community', briefDone: 'Briefing read', bring: 'What to bring', arrive: 'When to arrive', photo: 'The team in action',
       noT: 'Thanks for letting us know', noP: 'We have taken you off this serving. We hope to see you at another one soon.', changed: 'Changed your mind?', again: 'I can come after all',
       call: 'Questions? Text or call Welfare Avenue at ', past: 'This serving has already happened. Thank you for being part of it.', cancelled: 'This serving was cancelled. We will be in touch about the next one.',
       survey: 'How did it go? Take the two-minute survey', surveyP: 'Your answers help us make every serving better.',
@@ -378,7 +378,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       okT: 'C’est confirmé!', okP: 'Merci. L’équipe le voit dès maintenant.', okWhen: 'Confirmé',
       earlyT: 'Vous êtes inscrit!', earlyP: 'Merci de faire du bénévolat avec nous. Rien à confirmer pour l’instant :',
       earlyWhen: 'Nous vous texterons le {d} pour confirmer votre place.', earlyCal: 'Ajoutez-le à votre agenda pour ne pas l’oublier.',
-      expect: 'À quoi vous attendre :', bring: 'Quoi apporter', arrive: 'Quand arriver', photo: 'L’équipe en action',
+      expect: 'À quoi vous attendre :', brief: 'Vos consignes de responsable communautaire', briefRead: 'J’ai lu mes consignes et je suis prêt·e à jouer ce rôle', briefDone: 'Consignes lues', bring: 'Quoi apporter', arrive: 'Quand arriver', photo: 'L’équipe en action',
       noT: 'Merci de nous avoir prévenus', noP: 'Nous vous avons retiré de ce service. Au plaisir de vous voir à un prochain.', changed: 'Vous avez changé d’idée?', again: 'Finalement, je peux venir',
       call: 'Des questions? Textez ou appelez Welfare Avenue au ', past: 'Ce service a déjà eu lieu. Merci d’en avoir fait partie.', cancelled: 'Ce service a été annulé. Nous vous écrirons pour le prochain.',
       survey: 'Comment ça s’est passé? Répondez au sondage de deux minutes', surveyP: 'Vos réponses nous aident à améliorer chaque service.',
@@ -510,13 +510,15 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (tm.serve && tm.serve !== tm.start) s += ' (' + t('serveAt').replace('{t}', hm(tm.serve)) + ')';
     return s;
   }
+  /* wave235: the Community lead's page is a briefing they tick as read */
+  function isLead() { return String(((S.d || {}).role) || '').toLowerCase() === 'community_debrief'; }
   function guideHtml() {
     var d = S.d, g = d.guide || {}, fr = S.lang === 'fr';
     var steps = (fr ? g.expect_fr : g.expect_en) || [];
     var bring = fr ? g.bring_fr : g.bring_en, arrive = fr ? g.arrive_fr : g.arrive_en;
     var ph = d.photo || DEF_PHOTO;
     var h = '<div class="photo" role="img" aria-label="' + E(ph.alt || t('photo')) + '" style="background-image:url(&quot;' + E(photoUrl(ph)) + '&quot;);background-position:' + Math.round((ph.fx == null ? 0.5 : ph.fx) * 100) + '% ' + Math.round((ph.fy == null ? 0.5 : ph.fy) * 100) + '%"><span class="cap">' + E(roleName()) + '</span></div>';
-    h += '<h3>' + E(t('expect')) + ' ' + E(roleName().toLowerCase()) + '</h3>';
+    h += '<h3>' + (isLead() ? E(t('brief')) : E(t('expect')) + ' ' + E(roleName().toLowerCase())) + '</h3>';
     if (steps.length) h += '<ul class="steps">' + steps.map(function (s, i) { return '<li data-n="' + (i + 1) + '">' + E(s) + '</li>'; }).join('') + '</ul>';
     if (bring) h += '<div class="kv"><b>' + E(t('bring')) + '</b>' + E(bring) + '</div>';
     if (arrive) h += '<div class="kv"><b>' + E(t('arrive')) + '</b>' + E(arrive) + '</div>';
@@ -560,6 +562,9 @@ a.rbig svg{width:20px;height:20px;flex:none}
       h += '<div class="q"><label class="l">' + E(t('car')) + '</label>' + (onFile ? '<p style="margin:0 0 8px;font-size:14px">' + E(t('carOnFile')) + ' <b>' + E(onFile) + '</b>. ' + E(t('carChange')) + '</p>' : '')
         + '<select id="vehicle" aria-label="' + E(t('carType')) + '"><option value="">' + E(t('carType')) + '</option>' + t('carTypes').map(function (c) { return '<option' + (val('vehicle') === c ? ' selected' : '') + '>' + E(c) + '</option>'; }).join('') + '</select>'
         + '<input type="text" id="model" maxlength="60" style="margin-top:8px" aria-label="' + E(t('carModel')) + '" placeholder="' + E(t('carModel') + ' · ' + t('carPh')) + '" value="' + E(val('model')) + '"></div>';
+    } else if (role === 'community_debrief') {
+      var bOn = f.briefed !== undefined ? !!f.briefed : !!x.briefed_at;
+      h += '<div class="q"><label class="opt"><input type="checkbox" id="briefed"' + (bOn ? ' checked' : '') + '><span>' + E(t('briefRead')) + '</span></label>' + (x.briefed_at && f.briefed === undefined ? '<p class="saved" style="margin:6px 0 0">' + E(t('briefDone')) + ' ' + E(when(x.briefed_at).replace(/\.$/, '')) + '.</p>' : '') + '</div>';
     } else if (role === 'photographer') {
       var sh = val('photos_share');
       h += '<div class="q"><label class="l">' + E(t('share')) + '</label>' + t('shareOpts').map(function (o) { return '<label class="opt"><input type="radio" name="share" value="' + o[0] + '"' + (sh === o[0] ? ' checked' : '') + '><span>' + E(o[1]) + '</span></label>'; }).join('') + '</div>';
@@ -611,6 +616,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (role === 'server') p.donations = v('don') || '';
     if (role === 'driver') { p.vehicle = v('vehicle') || ''; p.model = v('model') || ''; }
     if (role === 'photographer') { var s = r('share'); if (s) p.photos_share = s; }
+    if (role === 'community_debrief') { var cb = document.getElementById('briefed'); if (cb) p.briefed = cb.checked; }
     return p;
   }
   /* Add to calendar (wave172): all-day, the date, the place and the link */
@@ -1144,7 +1150,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     } else {
       app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t(d.invited ? 'introInv' : 'intro')) + '</p>' + spotHtml()
         + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t(d.invited ? 'confirmInv' : 'confirm')) + '</button>'
-        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + detailsHtml() + calHtml() + eventsHtml() + callHtml();
+        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + (isLead() ? guideHtml() + linksHtml() : '') + detailsHtml() + calHtml() + eventsHtml() + callHtml();
     }
   }
   function answer(att) {
@@ -1179,6 +1185,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       if ('donations' in p) x.donations = p.donations;
       if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
       if ('photos_share' in p) x.photos_share = p.photos_share;
+      if ('briefed' in p) x.briefed_at = p.briefed ? new Date().toISOString() : null;
       if ('pickup' in p) { x.pickup = p.pickup; if (p.pickup === 'pickup') { x.neighbourhood = p.neighbourhood; x.address = p.address; x.postal_code = p.postal_code; } if ('stay_to_serve' in p) x.stay_to_serve = p.stay_to_serve; }
       S.form = {}; S.saved = true;
     };

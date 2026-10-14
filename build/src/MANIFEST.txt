@@ -260,6 +260,8 @@
 225_wave225
 # 232_wave232: Your photos (a Hub photo and a professional website photo for the team and the board; wa232_my_photo_set; the website shows the website photo, else the Hub photo, else the logo) and the mileage on a reimbursement (km x app_config mileage_rate_cad fills Total amount) (Steel, 12/10/26). The same wave changed 116 (Fundraising overview cards), 191 parts (a serving's own spot counts, volunteer_events.spot_counts) and 225 parts (X and Email in Social profiles).
 232_wave232
+# 234_wave234: volunteer spots on each serving card (a bar of confirmed and waiting over the serving's spots: role targets, its own spot counts, a partner's share) and one Community lead (Steel, 14/10/26: Community welcome folded into Community lead in 020, 119, 119b, 152, 171, 191, 209, 218; data wa234_community_lead). wave235 in the same release: Plan the roster suggests past community leads first, then servers with 2 or more servings (119b), the roster card says whether the lead read the briefing (parts171); data wa235_community_lead_briefing; the confirm page build/c.
+234_wave234
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

@@ -44,7 +44,7 @@
   ];
   var STAGE_IX = {}; STAGES.forEach(function (s, i) { STAGE_IX[s.k] = i; });
   var FORMATS = { home_cooked: 'Home-cooked', community_kitchen: 'Community kitchen' };
-  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
   var S = { ev: null, evAt: 0, guides: null, week: null, weekAt: 0, weekFor: null, open: {}, showAll: false, pend: null, laid: null, ticking: false, ticked: {}, sopPend: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -57,7 +57,7 @@
   function fmtDue(iso) { if (!iso) return ''; var d = daysTo(iso); if (d === 0) return 'today'; if (d === 1) return 'tomorrow'; if (d === -1) return 'yesterday'; if (d < 0) return fmtDay(iso); if (d < 7) return fmtDay(iso).split(',')[0]; return fmtDay(iso); }
   function hm12(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var h = Number(m[1]); return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
   function roleLabel(r) { try { return typeof waVolRoleLabel === 'function' ? waVolRoleLabel(r) : r; } catch (e) { return r; } }
-  function one(r) { var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community welcome', community_debrief: 'Community lead' }; return ONE[r] || String(r || 'volunteer').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); }); }
+  function one(r) { var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community lead', community_debrief: 'Community lead' }; return ONE[r] || String(r || 'volunteer').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); }); }
   function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }
   function isDecl(r) { return lower(r.status) === 'unavailable' || r.confirm_status === 'declined'; }
   function isOff(r) { return lower(r.status) === 'cancelled'; }

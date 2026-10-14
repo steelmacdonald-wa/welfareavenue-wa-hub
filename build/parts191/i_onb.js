@@ -7,7 +7,7 @@
      (wa191_onb_signup: Confirmed on each, a Request to Operations Montreal with the dates and the message, their onboarding
      step ticked). Team members only. */
   var ONB = { data: null, at: 0, busy: false, err: '', done: null, pick: {}, role: 'server', msg: '' };
-  var ONB_ROLES = [['server', 'Serve', 'Set up, serve the meal, pack up'], ['photographer', 'Take photos', 'Capture the day for our stories'], ['community_talker', 'Welcome people', 'Greet and talk with the people we serve']];
+  var ONB_ROLES = [['server', 'Serve', 'Set up, serve the meal, pack up'], ['photographer', 'Take photos', 'Capture the day for our stories']];
   function onbFmt(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); } }
   function onbMonth(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { timeZone: 'UTC', month: 'long', year: 'numeric' }); } catch (e) { return String(iso); } }
   async function onbLoad(force) {

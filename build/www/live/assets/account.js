@@ -68,7 +68,7 @@
       servings: 'servings', serving1: 'serving', hours: 'hours', since: 'since {d}', milestoneNext: '{n} more to your {m} serving', milestoneHit: 'You reached {m} servings. Thank you!', rolesT: 'Your roles',
       upT: 'Coming up', upNone: 'Nothing coming up yet. Take an open spot below.', open: 'Open', stOk: 'Confirmed', stNo: 'Can’t make it', stWait: 'To confirm',
       openT: 'Open spots', openP: 'Pick a serving and a role. We text you to confirm 7 days before.', openNone: 'No open spots right now. We will text you when new servings are posted.',
-      spots1: '1 spot', spotsN: '{n} spots', askT: 'Sign up as {r} on {d}?', askYes: 'Yes, sign me up', askNo: 'Not now',
+      spots1: '1 spot', spotsN: '{n} spots', askT: 'Sign up as {r} on {d}?', leadNote: 'Community lead is a role with more responsibility: you welcome and talk with the people we serve, then run the short debrief with the team leader. It suits volunteers who have served with us at least twice. Your briefing will be on your serving page, and we confirm with you before the day.', askYes: 'Yes, sign me up', askNo: 'Not now',
       joined: 'You’re signed up as {r} on {d}! We will text you to confirm 7 days before.', full: 'That spot was just taken. Please pick another.', already: 'You’re already on that serving.',
       histT: 'Where you’ve been', histNone: 'Your servings show here after you volunteer with us.', survey: 'Take the survey', surveyDone: 'Survey answered', showAll: 'Show all ({n})',
       lettersT: 'Letters and sign-offs', lettersP: 'For school, a job or a scholarship: ask for a letter signed by our team. We email you when it is ready, and it stays here to download.',
@@ -142,7 +142,7 @@
       servings: 'services', serving1: 'service', hours: 'heures', since: 'depuis {d}', milestoneNext: 'Encore {n} avant votre {m}e service', milestoneHit: 'Vous avez atteint {m} services. Merci!', rolesT: 'Vos rôles',
       upT: 'À venir', upNone: 'Rien à venir pour l’instant. Prenez une place libre ci-dessous.', open: 'Ouvrir', stOk: 'Confirmé', stNo: 'Absent', stWait: 'À confirmer',
       openT: 'Places libres', openP: 'Choisissez un service et un rôle. Nous vous texterons pour confirmer 7 jours avant.', openNone: 'Aucune place libre pour l’instant. Nous vous texterons quand de nouveaux services seront affichés.',
-      spots1: '1 place', spotsN: '{n} places', askT: 'Vous inscrire comme {r} le {d}?', askYes: 'Oui, inscrivez-moi', askNo: 'Pas maintenant',
+      spots1: '1 place', spotsN: '{n} places', askT: 'Vous inscrire comme {r} le {d}?', leadNote: 'Responsable communautaire est un rôle avec plus de responsabilités : vous accueillez les gens que nous servons, vous parlez avec eux, puis vous animez le court bilan avec la ou le responsable d’équipe. Il convient aux bénévoles qui ont déjà servi avec nous au moins deux fois. Vos consignes seront sur la page de votre service, et nous confirmons avec vous avant le jour même.', askYes: 'Oui, inscrivez-moi', askNo: 'Pas maintenant',
       joined: 'Vous êtes inscrit comme {r} le {d}! Nous vous texterons pour confirmer 7 jours avant.', full: 'Cette place vient d’être prise. Choisissez-en une autre.', already: 'Vous êtes déjà inscrit à ce service.',
       histT: 'Vos services', histNone: 'Vos services apparaîtront ici après votre premier bénévolat.', survey: 'Répondre au sondage', surveyDone: 'Sondage rempli', showAll: 'Tout afficher ({n})',
       lettersT: 'Lettres et attestations', lettersP: 'Pour l’école, un emploi ou une bourse : demandez une lettre signée par notre équipe. Nous vous écrivons quand elle est prête, et elle reste ici à télécharger.',
@@ -562,7 +562,7 @@
         (e.roles || []).map(function (r) {
           return '<button type="button" data-act="join" data-ev="' + e.event_id + '" data-role="' + E(r.role) + '">' + E(rn(r)) + '<small>' + E(Number(r.left) === 1 ? t('spots1') : f('spotsN', { n: r.left })) + '</small></button>';
         }).join('') + '</div>' +
-        (ask ? '<div class="ask" role="alertdialog" aria-label="' + E(f('askT', { r: rn(ask).toLowerCase(), d: dDay(e.date) })) + '"><b>' + E(f('askT', { r: rn(ask).toLowerCase(), d: dDay(e.date) })) + '</b>' +
+        (ask ? '<div class="ask" role="alertdialog" aria-label="' + E(f('askT', { r: rn(ask).toLowerCase(), d: dDay(e.date) })) + '"><b>' + E(f('askT', { r: rn(ask).toLowerCase(), d: dDay(e.date) })) + '</b>' + (ask.role === 'community_debrief' ? '<p class="fine">' + E(t('leadNote')) + '</p>' : '') +   /* wave235: what a Community lead does, before they say yes */
           '<div class="btns"><button type="button" class="btn small" data-act="join-yes"' + (S.busyJoin ? ' disabled' : '') + '>' + E(t('askYes')) + '</button><button type="button" class="btn ghost small" data-act="join-no">' + E(t('askNo')) + '</button></div></div>' : '') + '</li>';
     }).join('') + '</ul>';
   }

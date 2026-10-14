@@ -451,6 +451,7 @@ FUNDRAISERS_NEXT = [
 # Who we need at each serving (www2, 01/10/26, Edison's "Who do we need?"): the roster board's target for each role, from the
 # Hub's app_config vol_role_targets (30/09/26: server 8, cook 4, driver 2, dishwasher 2, photographer 1, community welcome 2;
 # team leaders and the community debrief are staff roles and left off). A rebuild picks up a change of targets.
+# wave234 (14/10/26): Community welcome is Community lead now (one a serving); its card left the list (the live pages too).
 SERVING_TEAM = [  # (role key in the Hub, target, title, what they do)
     ('server', 8, {'en': 'Servers', 'fr': 'Service'},
      {'en': 'Set up the tent and serve meals with care.', 'fr': 'Monter la tente et servir les repas avec soin.'}),
@@ -460,8 +461,6 @@ SERVING_TEAM = [  # (role key in the Hub, target, title, what they do)
      {'en': 'Bring the food and supplies there and back.', 'fr': 'Apporter la nourriture et le matériel, aller-retour.'}),
     ('dishwasher', 2, {'en': 'Dishwashers', 'fr': 'Vaisselle'},
      {'en': 'Keep the kitchen moving so every meal is ready on time.', 'fr': 'Assurer le roulement en cuisine pour que chaque repas soit prêt à temps.'}),
-    ('community_talker', 2, {'en': 'Community welcome', 'fr': 'Accueil'},
-     {'en': 'Welcome people as they arrive: a meal is also a conversation.', 'fr': 'Accueillir les gens à leur arrivée : un repas, c’est aussi une conversation.'}),
     ('photographer', 1, {'en': 'Photographer', 'fr': 'Photographie'},
      {'en': 'Capture the day, with care for everyone’s privacy.', 'fr': 'Raconter la journée en images, dans le respect de la vie privée de chacun.'}),
 ]

@@ -1,0 +1,175 @@
+/* =====================================================================
+   WA v234 Volunteer spots on each serving card, and one Community lead (Steel, 14/10/26)
+   =====================================================================
+   Steel, 14/10/26: "I'd like to have a bar that shows how we are filling up the total amount of roles for volunteers for
+   the event", and "Community Lead position and Community Talker is the same position - please combine the 2 and keep the
+   name Community Lead" (one spot a serving, assigned by staff, not picked on the website).
+   - Each upcoming serving on the Volunteer Manager's calendar shows its volunteer spots: a bar in two parts (confirmed in
+     teal, signed up but not confirmed yet in gold) over every spot the serving needs, with "N of M volunteer spots filled"
+     and how many wait to confirm. The spots are the serving page's: volunteer_role_guides.target per role, the serving's
+     own spot counts (volunteer_events.spot_counts, wave232) first, and a partner's share as wave191o counts it (what they
+     cover is filled by them; when they make the food no cooks are needed, when they bring it ready one driver). A role
+     counts at most its spots, so ten servers never fill the drivers' spots. The bar's tooltip lists what is still open.
+   - Community welcome (community_talker) is Community lead (community_debrief) everywhere: the pickers and labels in waves
+     020, 119, 119b, 152, 171, 191, 209 and 218 changed in their sources; the database folds the old key into the new one
+     (migration wa234_community_lead). Here a stray old key still counts as Community lead.
+   Wrapped: waVolRenderCalendar (paints after the calendar, like 119 and 171). Reads event_roster, volunteer_role_guides,
+   volunteer_events (spot_counts) and volunteer_event_partners for the upcoming servings only (staff RLS). ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa234) return; window.__wa234 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', TEAL = '#2A8C7A', MUTED = '#797773';
+  var S = { key: '', at: 0, data: null, busy: null, labels: {} };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function today() { try { if (typeof waVolToday === 'function') return waVolToday(); } catch (e) { /* fine */ } return new Date().toISOString().slice(0, 10); }
+  function roleOf(r) { var k = lower(r) || 'volunteer'; return k === 'community_talker' ? 'community_debrief' : k; }
+  function isOut(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
+  function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }
+  var NAMES = { team_leader: ['team leader', 'team leaders'], cook: ['cook', 'cooks'], driver: ['driver', 'drivers'], server: ['server', 'servers'],
+    dishwasher: ['dishwasher', 'dishwashers'], photographer: ['photographer', 'photographers'], community_debrief: ['community lead', 'community leads'] };
+  function nameOf(k, n) { var x = NAMES[k]; if (x) return n === 1 ? x[0] : x[1]; var l = lower(S.labels[k] || k.replace(/_/g, ' ')); return n === 1 ? l : l + 's'; }
+  var ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
+
+  var css = document.createElement('style'); css.id = 'wa234css';
+  css.textContent =
+    '#volunteering .vl-ev .w234{margin:8px 0 6px}' +
+    '#volunteering .vl-ev .w234 .tr{height:8px;border-radius:999px;background:rgba(16,63,57,.10);display:flex;overflow:hidden}' +
+    '#volunteering .vl-ev .w234 .tr i{display:block;height:100%}' +
+    '#volunteering .vl-ev .w234 .tr i.c{background:' + TEAL + '}' +
+    '#volunteering .vl-ev .w234 .tr i.w{background:' + GOLD + '}' +
+    '#volunteering .vl-ev .w234 .t{font-size:12.5px;color:' + GREEN + ';margin-top:5px;font-weight:600;line-height:1.35}' +
+    '#volunteering .vl-ev .w234 .t span{color:' + MUTED + ';font-weight:500}' +
+    '#volunteering .vl-ev .w234.full .t{color:#1c6b5d}';
+  document.head.appendChild(css);
+
+  /* ---------- the spots of one serving ---------- */
+  function spotsOf(evId, D) {
+    var t = {};
+    (D.guides || []).forEach(function (g) { var k = roleOf(g.role); if (g.target != null && Number(g.target) > 0 && k !== 'volunteer') t[k] = Math.max(t[k] || 0, Number(g.target)); });
+    if (!Object.keys(t).length) t = { team_leader: 1, cook: 4, driver: 2, server: 8, dishwasher: 1, photographer: 1, community_debrief: 1 };
+    var sc = D.spots[evId];
+    if (sc && typeof sc === 'object') Object.keys(sc).forEach(function (k) { var n = Number(sc[k]); if (isFinite(n) && n >= 0) t[roleOf(k)] = Math.round(n); });
+    var P = D.partners[evId];
+    if (P) {
+      if (P.food && P.food !== 'ours') t.cook = 0;
+      if (P.food === 'they_bring' && (t.driver || 0) > 1) t.driver = 1;
+    }
+    return t;
+  }
+  function fillOf(evId, D) {
+    var T = spotsOf(evId, D), P = D.partners[evId], cov = (P && P.covers) || {};
+    var conf = {}, wait = {}, pform = {};
+    (D.roster[evId] || []).forEach(function (r) {
+      if (isOut(r)) return;
+      var k = roleOf(r.role); if (!(k in T)) return;
+      if ((r.detail || {}).source === 'partner form') { pform[k] = (pform[k] || 0) + 1; return; }
+      if (isConf(r)) conf[k] = (conf[k] || 0) + 1; else wait[k] = (wait[k] || 0) + 1;
+    });
+    var total = 0, filled = 0, waiting = 0, open = [];
+    Object.keys(T).forEach(function (k) {
+      var need = T[k] || 0; if (!need) return;
+      var theirs = (k === 'team_leader' || k === 'community_debrief') ? 0 : Math.max(Number(cov[roleOf(k)] || cov[k] || 0) || 0, pform[k] || 0);
+      var f = Math.min(need, (conf[k] || 0) + theirs);
+      var w = Math.min(need - f, wait[k] || 0);
+      total += need; filled += f; waiting += w;
+      if (need - f - w > 0) open.push([k, need - f - w]);
+    });
+    open.sort(function (a, b) { return ORDER.indexOf(a[0]) - ORDER.indexOf(b[0]); });
+    return { total: total, filled: filled, waiting: waiting, open: open };
+  }
+  function barHtml(f) {
+    if (!f || !f.total) return '';
+    var pc = Math.round(f.filled / f.total * 100), pw = Math.round(f.waiting / f.total * 100);
+    if (pc + pw > 100) pw = 100 - pc;
+    var full = f.filled >= f.total;
+    var tip = full ? 'Every spot is filled' : f.open.length ? 'Still open: ' + f.open.map(function (x) { return x[1] + ' ' + nameOf(x[0], x[1]); }).join(', ') : 'Every spot has someone signed up';
+    var line = full ? 'All ' + f.total + ' volunteer spots filled'
+      : f.filled + ' of ' + f.total + ' volunteer spots filled' + (f.waiting ? ' <span>&middot; ' + f.waiting + ' to confirm</span>' : '');
+    return '<div class="w234' + (full ? ' full' : '') + '" title="' + E(tip) + '" data-k="' + f.total + ':' + f.filled + ':' + f.waiting + ':' + E(tip) + '">'
+      + '<div class="tr" role="img" aria-label="' + E(f.filled + ' of ' + f.total + ' volunteer spots filled, ' + f.waiting + ' waiting to confirm') + '">'
+      + (pc ? '<i class="c" style="width:' + pc + '%"></i>' : '') + (pw ? '<i class="w" style="width:' + pw + '%"></i>' : '') + '</div>'
+      + '<div class="t">' + line + '</div></div>';
+  }
+
+  /* ---------- data, once for the upcoming servings on the page ---------- */
+  function upcoming() {
+    var t = today();
+    return ((typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []).filter(function (e) {
+      return e && (e.kind || 'service') === 'service' && e.event_date >= t && e.status !== 'cancelled';
+    });
+  }
+  async function load(force) {
+    var evs = upcoming(); if (!evs.length) return null;
+    var ids = evs.map(function (e) { return e.id; }).sort(function (a, b) { return a - b; });
+    var key = ids.join(',');
+    if (!force && S.data && S.key === key && Date.now() - S.at < 20000) return S.data;
+    if (S.busy) return S.busy;
+    S.busy = (async function () {
+      try {
+        var res = await Promise.all([
+          db.from('event_roster').select('event_id,role,status,confirm_status,detail').in('event_id', ids),
+          db.from('volunteer_role_guides').select('role,target,label_en'),
+          db.from('volunteer_events').select('id,spot_counts').in('id', ids),
+          db.from('volunteer_event_partners').select('event_id,covers,food').in('event_id', ids)
+        ]);
+        if (res[0].error || res[1].error) return null;
+        var D = { roster: {}, guides: res[1].data || [], spots: {}, partners: {} };
+        (res[0].data || []).forEach(function (r) { (D.roster[r.event_id] = D.roster[r.event_id] || []).push(r); });
+        D.guides.forEach(function (g) { if (g.label_en) S.labels[g.role] = g.label_en; });
+        ((res[2] && res[2].data) || []).forEach(function (x) { if (x.spot_counts) D.spots[x.id] = x.spot_counts; });
+        ((res[3] && !res[3].error && res[3].data) || []).forEach(function (x) { D.partners[x.event_id] = x; });
+        S.data = D; S.key = key; S.at = Date.now();
+        return D;
+      } catch (e) { return null; } finally { S.busy = null; }
+    })();
+    return S.busy;
+  }
+
+  /* ---------- paint: in place, only where it changed ---------- */
+  function decorate(D) {
+    var sec = document.getElementById('volunteering'); if (!sec || !D) return;
+    var t = today();
+    sec.querySelectorAll('.vl-ev[data-vlev]').forEach(function (el) {
+      var id = Number(el.getAttribute('data-vlev'));
+      var e = upcoming().filter(function (x) { return x.id === id; })[0];
+      var old = el.querySelector('.w234');
+      if (!e || e.event_date < t) { if (old) old.remove(); return; }
+      var html = barHtml(fillOf(id, D));
+      var box = document.createElement('div'); box.innerHTML = html; var nu = box.firstChild;
+      if (old && nu && old.getAttribute('data-k') === nu.getAttribute('data-k')) return;
+      if (old) old.remove();
+      if (!nu) return;
+      var at = el.querySelector('.vl-bar') || el.querySelector('.vl-nums');
+      if (at) el.insertBefore(nu, at);
+      else { var code = el.querySelector('.vl-code'); if (code) code.insertAdjacentElement('afterend', nu); else el.appendChild(nu); }
+    });
+  }
+  async function paint(force) {
+    var sec = document.getElementById('volunteering'); if (!sec || !sec.querySelector('.vl-ev[data-vlev]')) return;
+    var D = await load(force); decorate(D);
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof waVolRenderCalendar === 'function') {
+    var __cal234 = waVolRenderCalendar;
+    waVolRenderCalendar = function () { var out = __cal234.apply(this, arguments); setTimeout(function () { paint(true); }, 160); return out; };
+  }
+  var pend = null;
+  try {
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes;
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j]; if (!n || n.nodeType !== 1 || (n.classList && n.classList.contains('w234'))) continue;
+          if ((n.matches && n.matches('.vl-ev[data-vlev]')) || (n.querySelector && n.querySelector('.vl-ev[data-vlev]'))) {
+            if (!pend) pend = setTimeout(function () { pend = null; paint(false); }, 200);
+            return;
+          }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* the calendar wrapper still paints */ }
+
+  window.w234 = { state: function () { return S; }, fillOf: function (id) { return S.data ? fillOf(id, S.data) : null; }, paint: paint };
+})();

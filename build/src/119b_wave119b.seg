@@ -21,8 +21,8 @@
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
-  var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_talker: 2, community_debrief: 1 };
-  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_debrief: 1 };
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
   var S = { hist: null, histAt: 0, sort: 'reliable', dupOnly: false, q: '', plan: null, recap: null, channels: null };
 
   var css = document.createElement('style'); css.id = 'wa119bcss';
@@ -217,6 +217,15 @@
     if (p.needs_review) why.push('record needs a review');
     return { s: Math.max(0, Math.min(1, s)), why: why.join(' \u00b7 ') };
   }
+  /* wave235 (Steel, 14/10/26): a Community lead comes from our pool of past community leads first, then from servers who
+     have been to 2 or more servings (or people with the role on file and 2 or more servings); nobody else is suggested */
+  function leadTier(p) {
+    var h = hist(p), served = h.roles || [], onFile = p.roles || [];
+    if (served.indexOf('community_debrief') >= 0 && h.confirmed >= 1) return 0;
+    if (h.confirmed >= 2 && (served.indexOf('server') >= 0 || onFile.indexOf('server') >= 0 || onFile.indexOf('community_debrief') >= 0)) return 1;
+    return -1;
+  }
+  var LEAD_NOTE = 'Past community leads first, then servers with 2 or more servings. They get the Community lead briefing on their page and in their text.';
   function planRows() {
     var D = det(); if (!D) return [];
     var on = {}; (D.roster || []).forEach(function (r) { if (r.person_id) on[r.person_id] = 1; });
@@ -226,6 +235,12 @@
       var TT = (typeof window.WA191TARGETS === 'function' && window.WA191TARGETS(D.id, TARGET)) || TARGET;   /* wave191o: a partner's people count toward the roles they cover */
       var need = (TT[role] || 0) - have; if (need <= 0) return;
       var cands = people().filter(function (p) { return !on[p.id]; }).map(function (p) { var sc = score(p, role); return { p: p, s: sc.s, why: sc.why, jev: null, pick: false }; });
+      if (role === 'community_debrief') {
+        cands = cands.map(function (c) { c.tier = leadTier(c.p); c.why = (c.tier === 0 ? 'led the community before' : c.tier === 1 ? hist(c.p).confirmed + ' servings' : '') + (c.why ? ' \u00b7 ' + c.why : ''); return c; }).filter(function (c) { return c.tier >= 0; });
+        cands.sort(function (a, b) { return a.tier - b.tier || b.s - a.s; });
+        out.push({ role: role, need: need, have: have, cands: cands.slice(0, 8), note: LEAD_NOTE });
+        return;
+      }
       cands.sort(function (a, b) { return b.s - a.s; });
       var fit = cands.filter(function (c) { return c.s >= 0.35; }).slice(0, 8);
       out.push({ role: role, need: need, have: have, cands: fit });
@@ -237,13 +252,14 @@
   function assignPicks(rows) {
     var taken = {};
     rows.forEach(function (r) { r.cands.forEach(function (c) { c.pick = false; }); });
-    rows.forEach(function (r) { var n = 0; r.cands.forEach(function (c) { if (n < r.need && !taken[c.p.id]) { c.pick = true; taken[c.p.id] = r.role; n++; } }); });
+    /* wave235: the Community lead is picked first, so a past lead is not used up as a server */
+    rows.slice().sort(function (a, b) { return (b.role === 'community_debrief') - (a.role === 'community_debrief'); }).forEach(function (r) { var n = 0; r.cands.forEach(function (c) { if (n < r.need && !taken[c.p.id]) { c.pick = true; taken[c.p.id] = r.role; n++; } }); });
   }
   function planHtml() {
     var rows = S.plan || [];
     if (!rows.length) return '<p class="read">Every role has enough people (counting those still to confirm). Nothing to plan.</p>';
     return '<div class="w119bplan">' + rows.map(function (r) {
-      return '<h4>' + E(roleLabel(r.role)) + ' <small>' + r.have + ' on the list, need ' + r.need + ' more</small></h4>' + (r.cands.length ? r.cands.map(function (c, i) {
+      return '<h4>' + E(roleLabel(r.role)) + ' <small>' + r.have + ' on the list, need ' + r.need + ' more</small></h4>' + (r.note ? '<p class="read" style="font-size:12.5px;margin:0 0 6px">' + E(r.note) + '</p>' : '') + (r.cands.length ? r.cands.map(function (c, i) {
         var final = c.jev != null ? 0.5 * c.s + 0.5 * c.jev : c.s;
         return '<label class="cand"><input type="checkbox" data-w119bpick="' + c.p.id + '" data-role="' + E(r.role) + '"' + (c.pick ? ' checked' : '') + '><div><b>' + E(c.p.full_name) + '</b><span>' + E(c.why) + '</span></div><div class="sc">' + Math.round(final * 100) + '<small>' + (c.jev != null ? '<span class="jev">Jev ' + Math.round(c.jev * 100) + '%</span>' : (S.jevBusy ? 'asking Jev\u2026' : 'history')) + '</small></div></label>';
       }).join('') : '<p class="read" style="font-size:12.5px">Nobody on file fits; add people on the Volunteers page or drop someone from another role.</p>');
@@ -269,7 +285,7 @@
     }
     await Promise.all([worker(), worker(), worker(), worker()]);
     S.jevBusy = false;
-    rows.forEach(function (r) { r.cands.sort(function (a, b) { var fa = a.jev != null ? 0.5 * a.s + 0.5 * a.jev : a.s, fb = b.jev != null ? 0.5 * b.s + 0.5 * b.jev : b.s; return fb - fa; }); });
+    rows.forEach(function (r) { r.cands.sort(function (a, b) { if ((a.tier || 0) !== (b.tier || 0)) return (a.tier || 0) - (b.tier || 0); var fa = a.jev != null ? 0.5 * a.s + 0.5 * a.jev : a.s, fb = b.jev != null ? 0.5 * b.s + 0.5 * b.jev : b.s; return fb - fa; }); });
     if (!S.planTouched) assignPicks(rows);
     repaintPlan(!S.planTouched);
   }
