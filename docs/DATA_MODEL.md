@@ -2049,6 +2049,10 @@ wave250: each change Meta sent to the meta-events webhook (object page, instagra
 - `signed`: wave250: true when the X-Hub-Signature-256 matched META_APP_SECRET; null when the vault has no app secret (the event is still only a hint); false when it did not match (stored as skipped, never acted on).
 - `status`: wave250: new (received), done (acted on after a re-read), skipped (nothing to do, a duplicate, or a bad signature), error (the re-read or the action failed; result says why).
 - `result`: wave250: what meta-events did with the change, in a few words (never message text).
+- `id`: Row id.
+- `received_at`: When the webhook call arrived.
+- `value`: The event's value from Meta with message text stripped (a hint; the Hub reads the real thing back from Meta).
+- `processed_at`: When meta-events finished handling the event.
 
 ### `social_threads`
 
@@ -2063,6 +2067,18 @@ wave251: a Messenger or Instagram conversation between Welfare Avenue's Page or 
 - `unread`: wave251: messages from the person since our last reply (Messenger's own unread count when Meta gives it).
 - `status`: wave251: open (waiting for us), resolved (answered or closed by hand), archived (a lead or admin took it out of the inbox; Meta cannot remove a conversation). A new message from the person reopens it.
 - `assigned_to`: wave251: the team member's name the conversation is given to, as for comments.
+- `id`: Row id.
+- `participant_name`: The other person's name.
+- `participant_handle`: Their Instagram username, when there is one.
+- `last_message_at`: The latest message in the conversation.
+- `message_count`: Messages Meta reports in the conversation.
+- `archived_at`: When a lead archived it (hidden from Open).
+- `archived_by`: Who archived it.
+- `replied_at`: The last reply sent from the Hub.
+- `replied_by`: Who sent that reply.
+- `fetched_at`: When social-dms last read the conversation.
+- `created_at`: When the Hub first stored it.
+- `updated_at`: Last change in the Hub.
 
 ### `social_messages`
 
@@ -2071,6 +2087,14 @@ wave251: the messages of a social_threads conversation, the person's and ours (f
 - `external_id`: wave251: Meta's message id (mid).
 - `attachments`: wave251: what came with the message: [{type, name, url}] (image, video, file, sticker, story mention, share). Meta's links expire; the Hub opens them, it does not copy them.
 - `sent_by`: wave251: the Hub person who sent our reply from the Hub; null for messages from the person or sent from Meta's own inbox.
+- `id`: Row id.
+- `thread_id`: The conversation (social_threads.id).
+- `platform`: facebook (Messenger) or instagram.
+- `from_us`: True when the Page sent it (from the Hub or from Meta Business Suite).
+- `author_name`: Who wrote it, as Meta names them.
+- `text`: The message text.
+- `sent_at`: When it was sent, from Meta.
+- `created_at`: When the Hub stored it.
 
 ### `social_ad_daily`
 
@@ -2081,6 +2105,15 @@ wave253: Meta ads, one row per ad account, campaign and day, from the Marketing 
 - `reach`: wave253: people reached that day. Reach is not additive across days: a period's reach comes from studio_ads_summary, not a sum of rows.
 - `results`: wave253: the campaign's results that day, counted from the action that matches its objective (leads for lead ads, link clicks for traffic, messaging conversations for messages, post engagement for engagement, and so on); result_type names it.
 - `actions`: wave253: every action Meta counted that day ({action_type: count}), for the detail view.
+- `campaign_id`: Meta campaign id.
+- `day`: The day the results are for (the ad account's time zone).
+- `campaign_name`: Campaign name as in Ads Manager.
+- `objective`: The campaign objective (decides which action counts as a result).
+- `currency`: The ad account's currency (CAD).
+- `impressions`: Impressions that day.
+- `clicks`: Clicks that day.
+- `result_type`: The action counted as a result for this objective (for example link_click).
+- `fetched_at`: When social-ads last read this row from the Marketing API.
 
 ### `whatsapp_messages`
 
@@ -2095,6 +2128,20 @@ wave254: every WhatsApp message the Hub queued, sent or received through the Wha
 - `quo_message_id`: wave254: the quo_messages row this template mirrors (trg_wa254_mirror), so a text is mirrored once.
 - `pool_check_id`: wave254: the volunteer_pool_checks row a reconfirm belongs to (wave239's "still in?").
 - `handled`: wave254: what the Hub did with an inbound message: confirmed, declined, pool_yes, pool_no, opted_out, stored, question, unmatched.
+- `id`: Row id.
+- `batch_id`: The batch of the text it copies (quo_messages.batch_id).
+- `person_id`: The volunteer (volunteer_people) when known.
+- `direction`: out (from us) or in (a reply or button press).
+- `kind`: confirm, reconfirm (the template copies of those texts), ack (our thank-you after a reply), manual, test, inbound.
+- `lang`: en or fr: the template language.
+- `error`: Meta's error, when sending failed.
+- `event_id`: The serving (event) it is about.
+- `roster_id`: The roster row it is about.
+- `sent_by`: Who sent a test or manual message; null for the drain.
+- `created_at`: When it was queued or received.
+- `sent_at`: When Meta accepted it.
+- `delivered_at`: When Meta reported it delivered.
+- `read_at`: When Meta reported it read.
 
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
