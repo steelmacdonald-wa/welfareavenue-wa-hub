@@ -1,0 +1,546 @@
+/* =====================================================================
+   WA v256 the Volunteer Manager's Phone page (15/10/26)
+   =====================================================================
+   Steel (15/10/26): "The volunteer manager needs to have a page where the phone and messages can be used. Similar to the
+   text volunteers pop up. That should also be a page in itself. I'm also curious if phone calls itself can be done there."
+
+   #volunteering/phone (the Volunteer Manager's rail, People > Phone; the classic page's Phone chip): every number that
+   texted the ops line (438) 808-7754, was texted from it, called it or was called from it, in one list with what waits
+   for a person (texts nobody answered, missed calls nobody returned), and the conversation with texts and calls in one
+   timeline.
+   - Texts: the same conversations as Find volunteers > Conversations (wave191e/h/i/j: wa191_recruit_inbox,
+     wa191_recruit_thread, quo-send thread for what was typed in the Quo app, wa191_text_reply, wa191_text_done,
+     wa191_text_roster for their place on the next servings), over 60 days instead of 21. New text (wa256_phone_lookup: a
+     volunteer or CRM contact by name or number, or any number typed in) and Text a group (wave23's Text volunteers window).
+     Texts go only between 9 am and 7 pm Montreal (the queue waits otherwise) and never to a number that texted STOP.
+   - Calls: Quo's API reads calls but cannot place one. Call opens the Quo app with the number filled in (a tel: link: the
+     Quo desktop app on a computer where Quo is the calling app, the Quo or phone app on a phone), and the call goes out
+     from the ops line when the Quo app has it selected. quo-calls (cron wa-quo-calls, every 10 minutes, and Check now)
+     copies the ops line's calls into quo_calls: missed calls, answered calls and their length, voicemails and Quo's call
+     summaries (summaries and voicemail transcripts for leaders, HR and admins only: wa256_phone_calls). A missed call
+     waits until someone calls or texts back, or presses No call back needed (wa256_call_done).
+   - Who: every staff member who opens the Volunteer Manager reads; leaders, HR and admins text, reply and mark (as
+     everywhere texts go out; the database checks again).
+   The page re-reads the list every 30 seconds while it is open (and the open conversation with it). */
+(function () {
+  'use strict';
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E', MUTED = '#797773';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif", HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var OPS = '(438) 808-7754', OPS_TEL = '+14388087754';
+  var DAYS = 60;
+  var KIND = { recruit: 'Invitation', confirm: 'Confirmation text', signup: 'Sign-up text', itinerary: 'Itinerary', survey: 'Survey', ack: 'Thank-you', reply: 'Reply', manual: 'Text volunteers', reconfirm: 'Still in?', inbound: '' };
+  var P = { inbox: null, at: 0, ph: null, thread: null, quo: null, calls: null, filter: 'all', q: '', drafts: {}, names: {}, can: false, win: true, synced: null,
+    newOpen: false, look: null, lookQ: '', lookT: null, timer: null, loading: false, setting: null, checking: false, lastN: null };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function digits(s) { var d = String(s || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; }
+  function phf(d) { d = digits(d); return d ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : ''; }
+  function initials(n) { var p = String(n || '?').trim().split(/\s+/); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
+  function hue(n) { var h = 0; n = String(n || ''); for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360; return h; }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function here() { try { return typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'phone' && /^#volunteering\/phone/.test(location.hash || ''); } catch (e) { return false; } }
+  function ms(x) { var t = new Date(x).getTime(); return isFinite(t) ? t : 0; }
+  function when(ts) {
+    if (!ts) return '';
+    try {
+      var d = new Date(ts), now = new Date(), day = 86400000;
+      var tz = { timeZone: 'America/Toronto' };
+      var ds = d.toLocaleDateString('en-CA', tz), ns = now.toLocaleDateString('en-CA', tz);
+      if (ds === ns) return d.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' });
+      var y = new Date(now.getTime() - day).toLocaleDateString('en-CA', tz);
+      if (ds === y) return 'Yesterday';
+      if (now.getTime() - d.getTime() < 6 * day) return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto', weekday: 'short' });
+      return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric' });
+    } catch (e) { return ''; }
+  }
+  function whenLong(ts) { try { return new Date(ts).toLocaleString('en-CA', { timeZone: 'America/Toronto', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+  function dur(s) { s = Number(s) || 0; if (s < 60) return s + ' s'; var m = Math.floor(s / 60), r = s % 60; return m + ' min' + (r ? ' ' + r + ' s' : ''); }
+  function ago(ts) { var m = Math.round((Date.now() - ms(ts)) / 60000); if (!ts || !isFinite(m)) return 'not yet'; if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); return h < 24 ? h + ' h ago' : Math.round(h / 24) + ' days ago'; }
+  function fmtDay(d) { try { return new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(d || ''); } }
+  function roleName(r) { var m = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', videographer: 'Videographer', community_debrief: 'Community lead' }; return m[r] || (r ? String(r).replace(/_/g, ' ') : ''); }
+  function lower(s) { return String(s || '').toLowerCase(); }
+  var ICO = {
+    phone: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.2 3.8 9.6 4.4l1.2 3.9-1.9 1.4a11 11 0 0 0 5.4 5.4l1.4-1.9 3.9 1.2.6 2.4c.2.8-.3 1.6-1.1 1.8C11 20.2 3.8 13 5.4 4.9c.2-.8 1-1.3 1.8-1.1z"/></svg>',
+    missed: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.2 3.8 9.6 4.4l1.2 3.9-1.9 1.4a11 11 0 0 0 5.4 5.4l1.4-1.9 3.9 1.2.6 2.4c.2.8-.3 1.6-1.1 1.8C11 20.2 3.8 13 5.4 4.9c.2-.8 1-1.3 1.8-1.1z"/><path d="m15 3.5 5 5M20 3.5l-5 5"/></svg>',
+    text: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 5.5h15v10h-9l-4 3.5v-3.5h-2z"/></svg>',
+    vm: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="13" r="3.5"/><circle cx="17" cy="13" r="3.5"/><path d="M7 16.5h10"/></svg>'
+  };
+
+  /* ---------- data ---------- */
+  async function loadInbox(force) {
+    if (!force && P.inbox && Date.now() - P.at < 25000) return P.inbox;
+    if (P.loading) return P.inbox; P.loading = true;
+    try {
+      var r = await db.rpc('wa256_phone_inbox', { p_days: DAYS });
+      if (r && r.error) throw r.error;
+      var d = (r && r.data) || {};
+      P.can = d.can === true; P.win = d.window !== false; P.synced = d.synced_at || null;
+      P.inbox = merge(d.texts || [], d.calls || []); P.at = Date.now();
+    } catch (e) { if (!P.inbox) P.inbox = []; P.err = String((e && e.message) || e).slice(0, 120); }
+    P.loading = false;
+    bumpRail();
+    return P.inbox;
+  }
+  /* one row a number: the texts' row (wa191_recruit_inbox) and the calls' row side by side; the latest of the two leads */
+  function merge(texts, calls) {
+    var by = {};
+    (texts || []).forEach(function (t) { if (!t || !t.ph) return; by[t.ph] = { ph: t.ph, n: t.n || null, p: t.p || null, t: t }; });
+    (calls || []).forEach(function (c) { if (!c || !c.ph) return; var x = by[c.ph] || (by[c.ph] = { ph: c.ph, n: c.n || null, p: c.p || null }); x.c = c; if (!x.n && c.n) x.n = c.n; if (!x.p && c.p) x.p = c.p; });
+    var out = Object.keys(by).map(function (k) {
+      var x = by[k], ta = x.t ? ms(x.t.at) : 0, ca = x.c ? ms(x.c.at) : 0;
+      x.at = Math.max(ta, ca); x.lastIs = ca > ta ? 'call' : 'text';
+      x.waitT = !!(x.t && x.t.wait); x.openT = (x.t && x.t.open) || (x.waitT ? 1 : 0);
+      x.missed = (x.c && x.c.open) || 0;
+      x.wait = x.waitT || x.missed > 0;
+      return x;
+    });
+    out.sort(function (a, b) { return (b.wait - a.wait) || (b.at - a.at); });
+    return out;
+  }
+  function waitingCount() { var n = 0; (P.inbox || []).forEach(function (x) { if (x.wait) n++; }); return n; }
+  function bumpRail() {
+    var n = waitingCount();
+    if (n === P.lastN) return; P.lastN = n;
+    try { if (window.w153 && window.w153.state && window.w153.state().app === 'volunteer' && typeof window.w153.paint === 'function') window.w153.paint(); } catch (e) { /* the count shows on the next paint */ }
+  }
+  function toConv() {
+    /* on a phone the conversation takes the screen: bring its box to the top */
+    try { if (window.innerWidth < 760) { var c = root() && root().querySelector('.conv'); if (c) c.scrollIntoView({ block: 'start' }); } } catch (e) { /* fine */ }
+  }
+  async function openThread(ph) {
+    P.ph = digits(ph); P.thread = null; P.quo = null; P.calls = null; P.newOpen = false;
+    paint(); toConv();
+    await loadThread(true);
+  }
+  async function loadThread(withQuo) {
+    var ph = P.ph; if (!ph) return;
+    var a = db.rpc('wa191_recruit_thread', { p_phone: ph }), b = db.rpc('wa256_phone_calls', { p_phone: ph });
+    try { var r = await a; if (r && r.error) throw r.error; if (P.ph === ph) P.thread = r.data || { ph: ph, messages: [] }; }
+    catch (e) { if (P.ph === ph && !P.thread) P.thread = { ph: ph, messages: [] }; }
+    try { var c = await b; if (P.ph === ph) P.calls = (c && !c.error && c.data) || []; } catch (e) { if (P.ph === ph) P.calls = []; }
+    if (P.ph !== ph) return; paintThread();
+    if (!withQuo || !P.can) return;
+    try {
+      var q = await db.functions.invoke('quo-send', { body: { action: 'thread', phone: ph } });
+      if (q && !q.error && q.data && q.data.messages && P.ph === ph && ph === (q.data.phone || ph)) { P.quo = q.data; paintThread(); }
+    } catch (e) { /* the Hub's copy is enough */ }
+  }
+  /* the Hub's copy of the texts, then what was typed in the Quo app since the last copy, then the calls: one timeline */
+  function timeline() {
+    var t = (P.thread && P.thread.messages) || [], seen = {};
+    t.forEach(function (m) { if (m.qid) seen[m.qid] = 1; });
+    var out = t.map(function (m) { return { k: 'text', dir: m.dir, body: m.body, at: m.at, kind: m.kind, st: m.st, by: m.by, err: m.err, ev: m.ev }; });
+    ((P.quo && P.quo.messages) || []).forEach(function (q) {
+      if (seen[q.id]) return;
+      if (q.dir === 'in' && t.some(function (m) { return m.dir === 'in' && String(m.body || '').trim() === String(q.text || '').trim(); })) return;
+      if (q.dir === 'out' && t.some(function (m) { return m.dir === 'out' && String(m.body || '').trim() === String(q.text || '').trim() && Math.abs(ms(m.at) - ms(q.at)) < 180000; })) return;
+      out.push({ k: 'text', dir: q.dir, body: q.text, at: q.at, kind: q.dir === 'out' ? 'quo' : 'inbound', st: q.status, quo: true });
+    });
+    (P.calls || []).forEach(function (c) { out.push({ k: 'call', dir: c.dir, at: c.at, c: c }); });
+    out.sort(function (a, b) { return ms(a.at) - ms(b.at); });
+    return out;
+  }
+
+  /* ---------- the page ---------- */
+  function shown() {
+    var q = lower(P.q).trim(), qd = String(P.q || '').replace(/\D/g, '');
+    return (P.inbox || []).filter(function (x) {
+      if (P.filter === 'wait' && !x.wait) return false;
+      if (P.filter === 'missed' && !(x.c && x.c.missed)) return false;
+      if (P.filter === 'texts' && !x.t) return false;
+      if (P.filter === 'calls' && !x.c) return false;
+      if (q && !(lower(x.n).indexOf(q) >= 0 || (qd.length >= 3 && x.ph.indexOf(qd) >= 0))) return false;
+      return true;
+    });
+  }
+  function lastLine(x) {
+    if (x.lastIs === 'call' && x.c) {
+      var c = x.c;
+      if (c.dir === 'in' && !c.ans) return '<span class="ic miss">' + ICO.missed + '</span>' + (c.vm ? 'Missed call \u00b7 voicemail' : 'Missed call');
+      return '<span class="ic">' + ICO.phone + '</span>' + (c.dir === 'in' ? 'Incoming call' : c.ans ? 'Outgoing call' : 'Outgoing call \u00b7 no answer') + (c.ans && c.dur ? ' \u00b7 ' + E(dur(c.dur)) : '');
+    }
+    var t = x.t || {};
+    return (t.dir === 'out' ? 'You: ' : '') + E(t.last || '');
+  }
+  function rowHtml(x) {
+    var nm = x.n || phf(x.ph);
+    var badges = '';
+    if (x.missed) badges += '<i class="b miss" title="' + x.missed + ' missed call' + (x.missed === 1 ? '' : 's') + ' to return">' + ICO.missed + (x.missed > 1 ? x.missed : '') + '</i>';
+    if (x.waitT) badges += '<i class="dot" title="Their text waits for an answer"></i>';
+    return '<button class="cv' + (P.ph === x.ph ? ' on' : '') + (x.wait ? ' wt' : '') + '" data-w256conv="' + E(x.ph) + '">'
+      + '<span class="av" style="background:hsl(' + hue(x.n || x.ph) + ',36%,40%)">' + E(x.n ? initials(x.n) : '#') + '</span>'
+      + '<span class="who"><b>' + E(nm) + '</b><span>' + lastLine(x) + '</span></span>'
+      + '<span class="tm">' + E(when(new Date(x.at).toISOString())) + '<span class="bs">' + badges + '</span></span></button>';
+  }
+  function counts() {
+    var c = { wait: 0, missed: 0, texts: 0 };
+    (P.inbox || []).forEach(function (x) { if (x.waitT) c.texts++; if (x.missed) c.missed++; if (x.wait) c.wait++; });
+    return c;
+  }
+  function headHtml() {
+    var c = counts();
+    var stat = '<div class="st">'
+      + '<button class="sc' + (c.texts ? ' hot' : '') + '" data-w256f="wait"><b>' + c.texts + '</b><span>text' + (c.texts === 1 ? '' : 's') + ' waiting</span></button>'
+      + '<button class="sc' + (c.missed ? ' hot' : '') + '" data-w256f="missed"><b>' + c.missed + '</b><span>missed call' + (c.missed === 1 ? '' : 's') + ' to return</span></button>'
+      + '<span class="sc q"><span>Calls checked ' + E(ago(P.synced)) + '</span>' + (P.can ? '<button class="lnk" data-w256go="check"' + (P.checking ? ' disabled' : '') + '>' + (P.checking ? 'Checking\u2026' : 'Check now') + '</button>' : '') + '</span>'
+      + '</div>';
+    var acts = '<div class="acts">'
+      + (P.can ? '<button class="w191btn gold" data-w256go="new">New text</button><button class="w191btn ghost" data-w256go="group">Text a group</button>' : '')
+      + '<button class="w191btn quiet" data-w256go="how">How calls work</button></div>';
+    return '<div class="hd"><div class="tt"><h2>Phone</h2><p>Texts and calls on the ops line <b>' + OPS + '</b>, in one place. ' + (P.win ? 'Texts send now.' : 'It is outside 9 am to 7 pm in Montreal: texts wait and go at 9 am.') + '</p></div>' + acts + '</div>' + stat;
+  }
+  function listHtml() {
+    var segs = [['all', 'All'], ['wait', 'Waiting'], ['missed', 'Missed calls'], ['texts', 'Texts'], ['calls', 'Calls']];
+    var top = '<div class="lt"><div class="seg" role="tablist">' + segs.map(function (s) { return '<button role="tab" data-w256f="' + s[0] + '" class="' + (P.filter === s[0] ? 'on' : '') + '" aria-selected="' + (P.filter === s[0]) + '">' + s[1] + '</button>'; }).join('') + '</div>'
+      + '<input type="search" data-w256q placeholder="Search a name or number" value="' + E(P.q) + '" aria-label="Search a name or number"></div>';
+    var list = P.inbox == null ? '<div class="empty">Loading the phone\u2026</div>' : (function () {
+      var s = shown();
+      if (!s.length) return '<div class="empty">' + (P.filter === 'wait' ? 'Nothing waits for a person. ' : P.filter === 'missed' ? 'No missed calls to return. ' : 'Nothing here in the last ' + DAYS + ' days. ') + '</div>';
+      return s.map(rowHtml).join('');
+    })();
+    return '<div class="cl">' + top + '<div class="ls">' + list + '</div></div>';
+  }
+  function newHtml() {
+    var ph = digits(P.lookQ);
+    var res = P.look == null ? '' : !P.look.length ? '<div class="empty sm">No one with a phone by that name or number.' + (ph ? '' : '') + '</div>'
+      : P.look.map(function (x) { return '<button class="lk" data-w256pick="' + E(x.ph) + '"><span class="av" style="background:hsl(' + hue(x.n || x.ph) + ',36%,40%)">' + E(initials(x.n)) + '</span><span class="who"><b>' + E(x.n || x.phf) + '</b><span>' + E(x.phf) + (x.k === 'p' ? ' \u00b7 volunteer' : ' \u00b7 in the CRM') + (x.r && x.r.length ? ' \u00b7 ' + E(x.r.map(roleName).join(', ')) : '') + '</span></span></button>'; }).join('');
+    return '<div class="nw"><div class="th"><button class="bk" data-w256go="back" aria-label="Back">\u2039</button><span><b>New text</b><span>From the ops line ' + OPS + '</span></span></div>'
+      + '<div class="nb"><label for="w256look">To</label><input id="w256look" type="search" data-w256look autocomplete="off" placeholder="A volunteer\u2019s name, or a phone number" value="' + E(P.lookQ) + '">'
+      + (ph ? '<button class="w191btn" data-w256pick="' + ph + '">Text ' + E(phf(ph)) + '</button>' : '')
+      + '<div class="lks">' + res + '</div>'
+      + '<p class="gn">To text many people at once (a serving\u2019s roster, a role, everyone), use <button class="lnk" data-w256go="group">Text a group</button>. To invite people to a serving, use Find volunteers on the serving.</p></div></div>';
+  }
+  function callCard(m) {
+    var c = m.c, inn = c.dir === 'in', missed = inn && !c.ans;
+    var t = missed ? (c.ai ? 'Answered by Quo\u2019s assistant' : 'Missed call') : inn ? 'Incoming call' : c.ans ? 'Outgoing call' : 'Outgoing call, no answer';
+    var meta = [whenLong(c.at), c.ans && c.dur ? dur(c.dur) : '', missed && c.done ? 'marked: no call back needed' : ''].filter(Boolean).join(' \u00b7 ');
+    var extra = '';
+    if (c.vm) extra += '<div class="cx"><span class="ic">' + ICO.vm + '</span><span><b>Voicemail' + (c.vms ? ' \u00b7 ' + E(dur(c.vms)) : '') + '</b>' + (c.vmt ? '<span>' + E(c.vmt) + '</span>' : P.can ? '<span>Listen to it in the Quo app.</span>' : '') + '</span></div>';
+    if (c.summary) extra += '<div class="cx"><span class="ic">' + ICO.text + '</span><span><b>Quo\u2019s summary</b><span>' + E(c.summary).replace(/\n/g, '<br>') + '</span>' + (c.next ? '<span class="nx"><b>Next steps:</b> ' + E(c.next).replace(/\n/g, '<br>') + '</span>' : '') + '</span></div>';
+    return '<div class="m call ' + (inn ? 'in' : 'out') + '"><div class="cc' + (missed && !c.ai ? ' miss' : '') + '"><span class="ic">' + (missed ? ICO.missed : ICO.phone) + '</span><span class="ct"><b>' + E(t) + '</b><span>' + E(meta) + '</span></span></div>' + extra + '</div>';
+  }
+  function placeOf(r) { var s = lower(r.st), c = lower(r.cs); if (s === 'confirmed' || c === 'confirmed') return 'yes'; if (s === 'unavailable' || s === 'declined' || c === 'declined' || s === 'cancelled') return 'no'; return ''; }
+  function placesHtml(th) {
+    var sv = th.servings || []; if (!sv.length || !staff()) return '';
+    var who = th.p ? '' : th.cn ? '<p class="srn">The CRM knows this number as <b>' + E(th.cn) + '</b>. Adding them to a serving gives them a volunteer record.</p>'
+      : '<p class="srn"><label for="w256rname">Not in the volunteer directory yet.</label><input id="w256rname" type="text" data-w256name maxlength="80" autocomplete="off" placeholder="Their name, to add them" value="' + E(P.names[th.ph] || '') + '"></p>';
+    var busy = P.setting != null;
+    var rows = sv.map(function (s) {
+      var r = s.row, pl = r ? placeOf(r) : '';
+      var what = r ? [roleName(r.role), pl === 'yes' ? 'coming' : pl === 'no' ? 'can\u2019t make it' : 'waiting'] : ['not on the roster'];
+      var day = '<span class="d"><b>' + E(fmtDay(s.d)) + '</b><span>' + E(what.filter(Boolean).join(' \u00b7 ')) + '</span></span>';
+      if (!r) return '<div class="sr">' + day + '<button class="w191btn ghost sm" data-w256set="' + s.e + '|Confirmed"' + (busy ? ' disabled' : '') + '>Add as coming</button></div>';
+      return '<div class="sr">' + day + '<span class="seg sm">'
+        + '<button data-w256set="' + s.e + '|' + (pl === 'yes' ? 'Waiting For Response' : 'Confirmed') + '"' + (pl === 'yes' ? ' class="on"' : '') + (busy ? ' disabled' : '') + '>Coming</button>'
+        + '<button data-w256set="' + s.e + '|' + (pl === 'no' ? 'Waiting For Response' : 'Unavailable') + '"' + (pl === 'no' ? ' class="on"' : '') + (busy ? ' disabled' : '') + '>Can\u2019t make it</button></span></div>';
+    }).join('');
+    return '<details class="srv"' + (P.srvOpen ? ' open' : '') + '><summary>Their next servings</summary>' + who + rows + '</details>';
+  }
+  function threadHtml() {
+    if (P.newOpen) return newHtml();
+    if (!P.ph) return '<div class="empty big"><span class="ic">' + ICO.phone + '</span><b>Pick a conversation</b><span>Texts and calls with each number show together. ' + (P.can ? 'Or start a New text.' : '') + '</span></div>';
+    var th = P.thread || { ph: P.ph, messages: [] };
+    var row = (P.inbox || []).filter(function (x) { return x.ph === P.ph; })[0] || {};
+    var nm = th.n || th.cn || row.n; var name = nm || phf(P.ph);
+    var head = '<div class="th"><button class="bk" data-w256go="back" aria-label="Back">\u2039</button><span class="av" style="background:hsl(' + hue(nm || P.ph) + ',36%,40%)">' + E(nm ? initials(nm) : '#') + '</span>'
+      + '<span class="nm"><b>' + E(name) + '</b><span>' + (nm ? E(phf(P.ph)) : 'Unknown number') + (th.p || row.p ? ' \u00b7 <a href="#volunteering/people" data-w256person="' + (th.p || row.p) + '">volunteer record</a>' : th.cn ? ' \u00b7 in the CRM' : '') + '</span></span>'
+      + '<a class="w191btn call" href="tel:+1' + E(P.ph) + '" data-w256call="' + E(P.ph) + '" title="Opens the Quo app with this number">' + ICO.phone + '<span>Call</span></a></div>';
+    var items = P.thread ? timeline() : null;
+    var body = items == null ? '<div class="empty">Loading\u2026</div>' : !items.length ? '<div class="empty">No texts or calls yet. ' + (P.can && !th.out ? 'Write the first text below.' : '') + '</div>'
+      : items.map(function (m) {
+        if (m.k === 'call') return callCard(m);
+        var lab = m.dir === 'out' ? (m.quo || m.by === 'Quo app' ? 'Typed in Quo' : (KIND[m.kind] || '') + (m.kind === 'reply' && m.by ? ' \u00b7 ' + String(m.by).split('@')[0] : '')) : '';
+        var st = m.dir === 'out' && m.st === 'queued' ? (P.win ? 'Sending\u2026' : 'Waits for 9 am') : m.st === 'failed' ? 'Not delivered' + (m.err ? ': ' + m.err : '') : m.st === 'skipped' ? 'Not sent' + (m.err ? ': ' + m.err : '') : '';
+        return '<div class="m ' + (m.dir === 'in' ? 'in' : 'out') + '"><div class="bub ' + (m.dir === 'in' ? 'in' : 'out') + (m.st === 'failed' || m.st === 'skipped' ? ' bad' : '') + '">' + E(m.body || '').replace(/\n/g, '<br>') + '</div><div class="mt">' + E([lab, m.ev, when(m.at), st].filter(Boolean).join(' \u00b7 ')) + '</div></div>';
+      }).join('');
+    /* what waits: their text, a missed call; a reply typed in Quo in the last minutes already answers */
+    var lines = '';
+    if (P.can && items) {
+      var tIn = 0, tMe = 0; items.forEach(function (m) { if (m.k !== 'text') return; var t = ms(m.at); if (m.dir === 'in') tIn = Math.max(tIn, t); else if (m.quo || m.kind === 'reply' || m.kind === 'manual') tMe = Math.max(tMe, t); });
+      if (row.waitT && !(tMe && tMe > tIn)) lines += '<div class="wl"><span><i class="dot"></i>' + (row.openT > 1 ? row.openT + ' texts wait' : 'Their text waits') + ' for an answer</span><button class="lnk" data-w256go="textdone">No reply needed</button></div>';
+      if (row.missed) lines += '<div class="wl miss"><span>' + ICO.missed + (row.missed > 1 ? row.missed + ' missed calls' : 'A missed call') + ' to return</span><span><a class="lnk" href="tel:+1' + E(P.ph) + '" data-w256call="' + E(P.ph) + '">Call back</a><button class="lnk" data-w256go="calldone">No call back needed</button></span></div>';
+    }
+    var foot = th.out ? '<div class="note warn">They texted STOP, so the Hub cannot text them. If they text START to the ops line, texts work again. You can still call.</div>'
+      : !P.can ? '<div class="note">Only leaders, HR and admins can text from the Hub. Quo has the same conversation on the ops line.</div>'
+      : lines + '<div class="rp"><textarea rows="2" placeholder="Text from the ops line" data-w256ta>' + E(P.drafts[P.ph] || '') + '</textarea><button class="w191btn" data-w256go="send">' + (P.win ? 'Send' : 'Send at 9 am') + '</button></div>';
+    return head + placesHtml(th) + '<div class="msgs" id="w256msgs">' + body + '</div>' + foot;
+  }
+  function root() { return document.getElementById('w256'); }
+  function paint() {
+    var host = document.getElementById('volunteering'); if (!host || !here()) return;
+    var el = root();
+    if (!el) {
+      if (typeof waVolPaint === 'function') waVolPaint('<div id="w256" class="w256"></div>'); else host.innerHTML = '<div id="w256" class="w256"></div>';
+      el = root(); if (!el) return;
+    }
+    keepFocus(function () {
+      el.innerHTML = headHtml() + '<div class="conv' + (P.ph || P.newOpen ? ' has' : '') + '">' + listHtml() + '<div class="thr" id="w256thr">' + threadHtml() + '</div></div>';
+    });
+    scrollEnd();
+  }
+  function paintThread() {
+    var t = document.getElementById('w256thr'); if (!t) { paint(); return; }
+    keepFocus(function () { t.innerHTML = threadHtml(); var c = root() && root().querySelector('.conv'); if (c) c.classList.toggle('has', !!(P.ph || P.newOpen)); });
+    scrollEnd();
+  }
+  function paintList() {
+    var r = root(); if (!r) { paint(); return; }
+    var ls = r.querySelector('.ls'); var hd = r.querySelector('.st');
+    keepFocus(function () {
+      var tmp = document.createElement('div'); tmp.innerHTML = headHtml();
+      var oldHd = r.querySelector('.hd'); if (oldHd && tmp.querySelector('.hd')) oldHd.replaceWith(tmp.querySelector('.hd'));
+      if (hd && tmp.querySelector('.st')) hd.replaceWith(tmp.querySelector('.st'));
+      if (ls) { var t2 = document.createElement('div'); t2.innerHTML = listHtml(); var nl = t2.querySelector('.ls'); if (nl) ls.replaceWith(nl); }
+      r.querySelectorAll('[data-w256f]').forEach(function (b) { if (b.closest('.seg')) { b.classList.toggle('on', b.getAttribute('data-w256f') === P.filter); } });
+    });
+  }
+  /* a redraw keeps the box being typed in, and where the cursor was */
+  function keepFocus(fn) {
+    var ae = document.activeElement, key = null, s = 0, e = 0;
+    if (ae && ae.getAttribute) ['data-w256ta', 'data-w256q', 'data-w256look', 'data-w256name'].forEach(function (k) { if (ae.getAttribute(k) !== null) key = k; });
+    if (key) { try { s = ae.selectionStart; e = ae.selectionEnd; } catch (x) { /* fine */ } }
+    fn();
+    if (key) { var n = root() && root().querySelector('[' + key + ']'); if (n) { try { n.focus(); n.setSelectionRange(s, e); } catch (x) { /* fine */ } } }
+  }
+  function scrollEnd() { var m = document.getElementById('w256msgs'); if (m && !m.__w256) { m.__w256 = 1; m.scrollTop = m.scrollHeight; } }
+
+  async function render() {
+    if (!staff()) return;
+    paint();
+    await loadInbox(true);
+    if (!here()) return;
+    paint();
+    if (P.ph && !P.thread) loadThread(true);
+    tick();
+  }
+  function tick() {
+    clearInterval(P.timer);
+    P.timer = setInterval(async function () {
+      if (!here() || document.hidden) return;
+      await loadInbox(true); if (!here()) return; paintList();
+      if (P.ph && !P.newOpen) { var before = JSON.stringify([P.thread, P.calls]); await loadThread(false); if (JSON.stringify([P.thread, P.calls]) === before) { /* nothing new */ } }
+    }, 30000);
+  }
+
+  /* ---------- actions ---------- */
+  async function send(btn) {
+    var ta = root() && root().querySelector('[data-w256ta]'); if (!ta) return; var v = ta.value.trim(); if (!v) { ta.focus(); return; }
+    btn.disabled = true;
+    try {
+      var r = await db.rpc('wa191_text_reply', { p_phone: P.ph, p_body: v }); if (r && r.error) throw r.error;
+      ta.value = ''; delete P.drafts[P.ph]; T(r.data && r.data.sends_now ? 'Sent from the ops line' : 'Queued: it goes at 9 am');
+      setTimeout(function () { loadThread(true); }, r.data && r.data.sends_now ? 2500 : 300);
+      loadInbox(true).then(paintList);
+    } catch (e) { T('Could not send: ' + String((e && e.message) || e).slice(0, 140)); }
+    btn.disabled = false;
+  }
+  async function textDone(btn) {
+    btn.disabled = true;
+    try { var r = await db.rpc('wa191_text_done', { p_phone: P.ph }); if (r && r.error) throw r.error; T('Marked as needing no reply'); await loadInbox(true); paintList(); paintThread(); }
+    catch (e) { btn.disabled = false; T('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  async function callDone(btn) {
+    btn.disabled = true;
+    try { var r = await db.rpc('wa256_call_done', { p_phone: P.ph }); if (r && r.error) throw r.error; T('Marked: no call back needed'); await loadInbox(true); await loadThread(false); paintList(); }
+    catch (e) { btn.disabled = false; T('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  async function check(btn) {
+    if (P.checking) return; P.checking = true; paintList();
+    try {
+      var r = await db.functions.invoke('quo-calls', { body: { action: 'sync' } });
+      var d = (r && r.data) || {};
+      if (r && r.error) throw r.error; if (d.error) throw new Error(d.error);
+      T(d.seen ? 'Calls checked: ' + d.seen + ' from Quo' : 'Calls checked: nothing new');
+    } catch (e) { T('Could not check the calls: ' + String((e && e.message) || e).slice(0, 120)); }
+    P.checking = false; await loadInbox(true); paintList(); if (P.ph) loadThread(false);
+  }
+  async function setPlace(evId, status) {
+    var th = P.thread; if (!th || P.setting != null) return;
+    var name = String(P.names[th.ph] || '').trim();
+    if (!th.p && !th.cn && name.length < 2) { T('Type their name first: this number is not in the volunteer directory yet.'); var ni = root() && root().querySelector('[data-w256name]'); if (ni) ni.focus(); return; }
+    P.setting = evId; P.srvOpen = true; paintThread();
+    try {
+      var r = await db.rpc('wa191_text_roster', { p_phone: th.ph, p_event: evId, p_status: status, p_name: name || null, p_role: null });
+      if (r && r.error) throw r.error; var d = r.data || {};
+      var who = String(d.name || 'They').split(' ')[0];
+      T(status === 'Confirmed' ? who + ' is coming on ' + fmtDay(d.date) + (d.added ? ' (added to the roster)' : '') : status === 'Unavailable' ? who + ' can\u2019t make it on ' + fmtDay(d.date) : who + ' is back to waiting for ' + fmtDay(d.date));
+      if (d.new_person) delete P.names[th.ph];
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    P.setting = null; await loadThread(false); loadInbox(true).then(paintList);
+  }
+  function how() {
+    var tel = 'https://support.quo.com/core-concepts/calling/click-to-call';
+    try {
+      openModal('<div class="w256how"><h3>Calls from the Hub</h3>'
+        + '<p class="m-sub">Quo can tell the Hub about calls, but it cannot start one from a web page. So <b>Call</b> hands the number to the Quo app, and the call goes out from the ops line ' + OPS + '.</p>'
+        + '<ol><li><b>On a computer:</b> install the Quo desktop app and make it the computer\u2019s calling app (Windows: Default apps, TEL; Mac: FaceTime settings, Default for calls). Then Call opens Quo with the number filled in: press Call there. <a href="' + tel + '" target="_blank" rel="noopener">Quo\u2019s steps</a></li>'
+        + '<li><b>On a phone:</b> Call opens the phone\u2019s dialer or Quo. To call from the ops line, choose Quo (on Android it can be the default dialer).</li>'
+        + '<li><b>In Quo, pick the Welfare Phone line</b> (' + OPS + ') before calling, so volunteers see the number they know.</li></ol>'
+        + '<p class="m-sub">Every call on the ops line shows here within 10 minutes (or press Check now): missed calls, answered calls and how long, voicemails, and Quo\u2019s summary when Quo makes one. A missed call waits on this page until someone calls or texts back.</p>'
+        + '<div class="m-foot"><button class="btn" data-w256x>Got it</button></div></div>');
+    } catch (e) { T('Call opens the Quo app with the number. Every call shows here within 10 minutes.'); }
+  }
+  var lookSeq = 0;
+  function lookup(q) {
+    P.lookQ = q; clearTimeout(P.lookT);
+    if (String(q || '').trim().length < 2) { P.look = null; paintThread(); return; }
+    P.lookT = setTimeout(async function () {
+      var my = ++lookSeq;
+      try { var r = await db.rpc('wa256_phone_lookup', { p_q: q }); if (my !== lookSeq) return; P.look = (r && !r.error && r.data) || []; }
+      catch (e) { P.look = []; }
+      paintThread();
+    }, 280);
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (t.closest('[data-w256x]')) { try { closeModal(); } catch (x) { /* fine */ } return; }
+    var r = root(); if (!r || !r.contains(t)) return;
+    var b;
+    if ((b = t.closest('[data-w256conv]'))) { openThread(b.getAttribute('data-w256conv')); return; }
+    if ((b = t.closest('[data-w256f]'))) { P.filter = P.filter === b.getAttribute('data-w256f') && !b.closest('.seg') ? 'all' : b.getAttribute('data-w256f'); paint(); return; }
+    if ((b = t.closest('[data-w256pick]'))) { var ph = digits(b.getAttribute('data-w256pick')); if (!ph) { T('That is not a full phone number.'); return; } P.lookQ = ''; P.look = null; openThread(ph); return; }
+    if ((b = t.closest('[data-w256set]'))) { var a = b.getAttribute('data-w256set').split('|'); setPlace(Number(a[0]), a[1]); return; }
+    if ((b = t.closest('[data-w256call]'))) { T('Opening the Quo app for ' + phf(b.getAttribute('data-w256call')) + '\u2026'); return; }
+    if ((b = t.closest('[data-w256go]'))) {
+      var g = b.getAttribute('data-w256go');
+      if (g === 'new') { P.newOpen = true; P.ph = null; P.look = null; paint(); toConv(); var i = document.getElementById('w256look'); if (i) i.focus(); return; }
+      if (g === 'back') { P.newOpen = false; P.ph = null; paint(); return; }
+      if (g === 'group') { try { if (typeof waTxtModal === 'function') waTxtModal(); } catch (x) { T('Text volunteers is loading'); } return; }
+      if (g === 'how') { how(); return; }
+      if (g === 'check') { check(b); return; }
+      if (g === 'send') { send(b); return; }
+      if (g === 'textdone') { textDone(b); return; }
+      if (g === 'calldone') { callDone(b); return; }
+    }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    if (t.hasAttribute('data-w256ta')) { if (P.ph) P.drafts[P.ph] = t.value; t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; return; }
+    if (t.hasAttribute('data-w256q')) { P.q = t.value; paintList(); return; }
+    if (t.hasAttribute('data-w256look')) { lookup(t.value); return; }
+    if (t.hasAttribute('data-w256name')) { if (P.thread) P.names[P.thread.ph] = t.value; return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    if (t.hasAttribute('data-w256ta') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); var b = root() && root().querySelector('[data-w256go="send"]'); if (b && !b.disabled) send(b); return; }
+    if (t.hasAttribute('data-w256look') && e.key === 'Enter') { e.preventDefault(); var f = root() && root().querySelector('[data-w256pick]'); if (f) f.click(); return; }
+    if (e.key === 'Escape' && root() && root().contains(t) && (P.ph || P.newOpen) && window.innerWidth < 760) { P.ph = null; P.newOpen = false; paint(); }
+  });
+  document.addEventListener('toggle', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('srv') && root() && root().contains(t)) P.srvOpen = t.open; }, true);
+
+  /* ---------- the view: #volunteering/phone, its chip on the classic page ---------- */
+  if (typeof waVolShell === 'function') {
+    var __sh256 = waVolShell;
+    waVolShell = function (inner) {
+      var html = __sh256(inner);
+      try {
+        var on = typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'phone';
+        if (html.indexOf('data-vl="phone"') < 0) html = html.replace(/(<div class="vl-sub">[\s\S]*?)(<\/div>)/, '$1<span class="fchip' + (on ? ' on' : '') + '" data-vl="phone">Phone</span>$2');
+      } catch (e) { /* fine */ }
+      return html;
+    };
+  }
+  if (typeof waVolRender === 'function') {
+    var __vr256 = waVolRender;
+    waVolRender = async function () {
+      if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'phone') {
+        try { if (typeof waVolLoad === 'function') await waVolLoad(false); } catch (e) { /* the page does not need the events */ }
+        if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'phone') { await render(); return; }
+      }
+      clearInterval(P.timer);
+      return __vr256.apply(this, arguments);
+    };
+  }
+  window.addEventListener('hashchange', function () { if (!/^#volunteering\/phone/.test(location.hash || '')) clearInterval(P.timer); });
+
+  /* the count on the rail, read once after the start (staff with the Volunteer Manager) and with each refresh */
+  if (typeof startApp === 'function') {
+    var __sa256 = startApp;
+    startApp = async function () {
+      var out = await __sa256.apply(this, arguments);
+      try { if (staff()) setTimeout(function () { loadInbox(false); }, 2500); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+
+  /* ---------- the look (the Volunteer Manager's conversation, as a page) ---------- */
+  var css = document.createElement('style'); css.id = 'w256css';
+  css.textContent =
+    '.w256{font-family:' + BODY + ';color:' + INK + ';}' +
+    '.w256 .hd{display:flex;justify-content:space-between;gap:14px;align-items:flex-end;flex-wrap:wrap;margin:0 0 10px;}' +
+    '.w256 .hd h2{font-family:' + HEAD + ';font-size:30px;line-height:1;color:' + GREEN + ';margin:0 0 4px;letter-spacing:.2px;}.w256 .hd p{margin:0;font-size:13px;color:' + MUTED + ';}.w256 .hd p b{color:' + INK + ';}' +
+    '.w256 .acts{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w256 .st{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '.w256 .sc{display:inline-flex;align-items:baseline;gap:6px;border:1px solid rgba(16,63,57,.14);background:' + CREAM + ';border-radius:12px;padding:8px 12px;font:inherit;font-size:12.5px;color:' + MUTED + ';cursor:pointer;}' +
+    '.w256 .sc b{font-family:' + HEAD + ';font-size:22px;line-height:1;color:' + GREEN + ';}.w256 .sc.hot{border-color:rgba(179,64,47,.4);background:rgba(179,64,47,.05);}.w256 .sc.hot b{color:' + FLAG + ';}' +
+    '.w256 .sc.q{cursor:default;align-items:center;}' +
+    '.w256 .lnk{border:0;background:none;color:' + TEAL + ';font:inherit;cursor:pointer;text-decoration:underline;padding:0 4px;}.w256 .lnk[disabled]{opacity:.5;cursor:default;}' +
+    '.w256 .conv{display:grid;grid-template-columns:330px minmax(0,1fr);height:max(460px,calc(100vh - 330px));border:1px solid rgba(16,63,57,.12);border-radius:16px;overflow:hidden;background:#FFFAF2;}' +
+    '.w256 .cl{display:flex;flex-direction:column;min-height:0;border-right:1px solid rgba(16,63,57,.1);background:rgba(16,63,57,.035);}' +
+    '.w256 .lt{padding:10px;border-bottom:1px solid rgba(16,63,57,.1);display:flex;flex-direction:column;gap:8px;}' +
+    '.w256 .seg{display:flex;gap:2px;padding:3px;background:rgba(16,63,57,.07);border-radius:10px;flex-wrap:wrap;}.w256 .seg button{flex:1;border:0;background:transparent;font:inherit;font-size:12px;font-weight:600;padding:6px 8px;border-radius:8px;color:' + GREEN + ';cursor:pointer;white-space:nowrap;}' +
+    '.w256 .seg button.on{background:#FFFAF2;box-shadow:0 1px 3px rgba(16,63,57,.15);}' +
+    '.w256 .lt input{font:inherit;font-size:13px;padding:8px 11px;border-radius:10px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;}' +
+    '.w256 .ls{overflow:auto;flex:1;min-height:0;}' +
+    '.w256 .cv{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:11px 12px;border-bottom:1px solid rgba(16,63,57,.07);cursor:pointer;font-family:' + BODY + ';color:' + INK + ';}' +
+    '.w256 .cv:hover{background:rgba(16,63,57,.04);}.w256 .cv.on{background:rgba(16,63,57,.09);}.w256 .cv.wt .who b{color:' + GREEN + ';}' +
+    '.w256 .av{width:36px;height:36px;border-radius:50%;color:' + CREAM + ';font-weight:700;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:none;}' +
+    '.w256 .who{min-width:0;display:flex;flex-direction:column;gap:2px;}.w256 .who b{font-size:14px;}.w256 .who > span{font-size:12px;color:' + MUTED + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;}' +
+    '.w256 .ic{display:inline-flex;align-items:center;flex:none;}.w256 .ic.miss{color:' + FLAG + ';}' +
+    '.w256 .tm{font-size:11px;color:' + MUTED + ';display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap;}.w256 .bs{display:flex;gap:5px;align-items:center;}' +
+    '.w256 .b.miss{font-style:normal;color:' + FLAG + ';display:inline-flex;align-items:center;gap:1px;font-size:11px;font-weight:700;}.w256 .dot{width:9px;height:9px;border-radius:50%;background:' + FLAG + ';display:inline-block;}' +
+    '.w256 .thr{display:flex;flex-direction:column;min-width:0;min-height:0;}' +
+    '.w256 .th{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(16,63,57,.1);}.w256 .th .nm{flex:1;min-width:0;}.w256 .th b{display:block;font-size:15px;}.w256 .th span span{font-size:12px;color:' + MUTED + ';}.w256 .th a{color:' + TEAL + ';}' +
+    '.w256 .th .bk{display:none;border:0;background:none;font-size:28px;color:' + GREEN + ';cursor:pointer;padding:0 4px;line-height:1;}' +
+    '.w256 a.w191btn.call{color:' + CREAM + ';text-decoration:none;}' +
+    '.w256 .msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:9px;background:' + CREAM + ';}' +
+    '.w256 .m{display:flex;flex-direction:column;}.w256 .m.out{align-items:flex-end;}.w256 .m .mt{font-size:10.5px;color:' + MUTED + ';margin:3px 6px 0;}' +
+    '.w256 .bub{max-width:min(480px,86%);padding:9px 13px;border-radius:18px;font-size:13.5px;line-height:1.42;overflow-wrap:anywhere;}' +
+    '.w256 .bub.out{background:' + GREEN + ';color:' + CREAM + ';border-bottom-right-radius:6px;}.w256 .bub.in{background:#ECEBE6;color:' + INK + ';border-bottom-left-radius:6px;}.w256 .bub.bad{opacity:.55;}' +
+    '.w256 .m.call{align-items:center;gap:6px;}.w256 .cc{display:inline-flex;gap:9px;align-items:center;padding:7px 14px;border-radius:999px;border:1px solid rgba(16,63,57,.16);background:#FFFAF2;font-size:12.5px;color:' + GREEN + ';}' +
+    '.w256 .cc .ct{display:flex;flex-direction:column;}.w256 .cc .ct span{font-size:11px;color:' + MUTED + ';}.w256 .cc.miss{color:' + FLAG + ';border-color:rgba(179,64,47,.35);background:rgba(179,64,47,.04);}' +
+    '.w256 .cx{display:flex;gap:8px;max-width:min(520px,92%);padding:9px 12px;border-radius:12px;background:#FFFAF2;border:1px solid rgba(16,63,57,.12);font-size:12.5px;line-height:1.45;color:' + INK + ';}.w256 .cx > span:last-child{display:flex;flex-direction:column;gap:3px;}.w256 .cx b{color:' + GREEN + ';}.w256 .cx .nx{color:' + MUTED + ';}' +
+    '.w256 .rp{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid rgba(16,63,57,.1);background:#FFFAF2;}.w256 .rp textarea{flex:1;font:inherit;font-size:13.5px;line-height:1.4;padding:10px 14px;border-radius:20px;border:1px solid rgba(16,63,57,.2);resize:none;min-height:42px;height:42px;max-height:140px;box-sizing:border-box;background:#FFFAF2;}' +
+    '.w256 .wl{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 14px;border-top:1px solid rgba(16,63,57,.1);background:rgba(179,64,47,.05);font-size:12px;color:' + FLAG + ';}.w256 .wl span{display:inline-flex;align-items:center;gap:7px;}.w256 .wl .lnk{font-size:12px;}.w256 .wl + .wl{border-top:0;}.w256 .wl + .rp{border-top:0;}' +
+    '.w256 .note{font-size:12.5px;line-height:1.45;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.06);margin:8px 12px;}.w256 .note.warn{background:#FFF4DC;border:1px solid rgba(220,165,39,.45);}' +
+    '.w256 .empty{padding:30px 14px;text-align:center;color:' + MUTED + ';font-size:13px;}.w256 .empty.sm{padding:12px 4px;text-align:left;}' +
+    '.w256 .empty.big{margin:auto;display:flex;flex-direction:column;gap:6px;align-items:center;max-width:320px;}.w256 .empty.big .ic{width:46px;height:46px;border-radius:50%;background:rgba(16,63,57,.07);color:' + GREEN + ';justify-content:center;}.w256 .empty.big .ic svg{width:22px;height:22px;}.w256 .empty.big b{color:' + GREEN + ';font-size:15px;}' +
+    '.w256 .srv{padding:6px 14px 8px;border-bottom:1px solid rgba(16,63,57,.1);background:' + CREAM + ';}.w256 .srv summary{font-size:12px;font-weight:600;color:' + GREEN + ';cursor:pointer;padding:3px 0;}' +
+    '.w256 .sr{display:flex;align-items:center;gap:10px;min-height:32px;}.w256 .sr .d{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}.w256 .sr .d b{font-size:13px;color:' + GREEN + ';white-space:nowrap;}.w256 .sr .d span{font-size:12px;color:' + MUTED + ';}' +
+    '.w256 .seg.sm{flex-wrap:nowrap;}.w256 .seg.sm button{padding:5px 10px;font-size:12px;flex:none;}.w256 .seg.sm button.on{background:' + GREEN + ';color:' + CREAM + ';}.w256 .seg.sm button[disabled]{opacity:.5;}.w256 .w191btn.sm{padding:6px 11px;font-size:12px;}' +
+    '.w256 .srn{margin:4px 0;font-size:12px;color:' + MUTED + ';display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w256 .srn b{color:' + INK + ';}.w256 .srn input{flex:1;min-width:150px;font:inherit;font-size:13px;padding:6px 10px;border-radius:9px;border:1px solid rgba(16,63,57,.25);}' +
+    '.w256 .nw{display:flex;flex-direction:column;min-height:0;flex:1;}.w256 .nb{padding:14px;display:flex;flex-direction:column;gap:8px;overflow:auto;}.w256 .nb label{font-size:12px;font-weight:700;color:' + MUTED + ';letter-spacing:.5px;text-transform:uppercase;}' +
+    '.w256 .nb input{font:inherit;font-size:14px;padding:10px 12px;border-radius:12px;border:1px solid rgba(16,63,57,.25);}.w256 .nb > .w191btn{align-self:flex-start;}' +
+    '.w256 .lks{display:flex;flex-direction:column;}.w256 .lk{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;align-items:center;border:0;border-bottom:1px solid rgba(16,63,57,.07);background:transparent;text-align:left;padding:9px 4px;cursor:pointer;font-family:' + BODY + ';color:' + INK + ';border-radius:8px;}.w256 .lk:hover{background:rgba(16,63,57,.05);}' +
+    '.w256 .gn{font-size:12px;color:' + MUTED + ';margin:6px 0 0;}' +
+    '.w232row + .w256usual{margin-top:6px;}.w256usual{font-size:12px;color:' + MUTED + ';}.w256usual .lnk{border:0;background:none;color:' + TEAL + ';font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;padding:0 2px;}' +
+    '.w256how ol{padding-left:20px;font-size:13.5px;line-height:1.5;}.w256how li{margin:0 0 8px;}.w256how a{color:' + TEAL + ';}' +
+    '@media (max-width:760px){.w256 .conv{grid-template-columns:1fr;height:calc(100vh - 170px);height:calc(100dvh - 170px);min-height:400px;scroll-margin-top:8px;}.w256 .wl{flex-wrap:wrap;gap:4px 10px;}.w256 .conv .thr{display:none;}.w256 .conv.has .cl{display:none;}.w256 .conv.has .thr{display:flex;}' +
+      '.w256 .th .bk{display:inline-block;}.w256 .hd h2{font-size:26px;}.w256 .acts{width:100%;}.w256 .acts .w191btn{flex:1;justify-content:center;}.w256 .sc{flex:1 1 40%;}.w256 .sc.q{flex-basis:100%;}' +
+      '.w256 a.w191btn.call span{display:none;}.w256 .sr .d span{flex-basis:100%;}}';
+  document.head.appendChild(css);
+
+  /* ---------- the page tour (wave122's engine; trainings row tour:phone) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return false; if (W.tours.phone) return true;
+      var OPT = { opt: 1 };
+      var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.phone = { tab: 'volunteering', icon: 'chat', hash: '#volunteering/phone', steps: [
+        Tt('#w153rail [data-w153go="#volunteering/phone"] || #volunteering [data-vl="phone"] || #w256 .hd', 'The Phone page', 'Texts and calls on the ops line (438) 808-7754, in one place. The number beside Phone is how many people wait for us.'),
+        Tt('#w256 .st', 'What waits', 'Texts nobody answered yet and missed calls nobody returned. Click one to see only those. Calls come in from Quo every 10 minutes; Check now gets them at once.', OPT),
+        Tt('#w256 .cl', 'Every number', 'Everyone who texted or called the ops line, or was texted or called from it, in the last 60 days. Filter by Waiting, Missed calls, Texts or Calls, or search a name or number.', OPT),
+        Tt('#w256thr', 'One conversation', 'Texts and calls together, in time order: invitations, confirmations, replies, what was typed in the Quo app, missed calls, voicemails and Quo\u2019s call summary. Reply from the ops line, set their place on the next servings, or mark No reply needed and No call back needed.', OPT),
+        Tt('#w256 [data-w256go="new"]', 'New text and Text a group', 'Text one person by name or number, or open Text volunteers for a roster, a role or everyone. Texts go between 9 am and 7 pm; later ones wait for 9 am.', OPT),
+        Tt('#w256 [data-w256go="how"]', 'Calls', 'Call opens the Quo app with the number filled in, and the call goes out from the ops line. A web page cannot ring a phone itself; this explains the one-time set-up on a computer.', OPT)
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  if (!addTour()) { var tries = 0, iv = setInterval(function () { if (addTour() || ++tries > 40) clearInterval(iv); }, 500); }
+
+  window.w256 = { state: function () { return P; }, waiting: waitingCount, load: loadInbox, open: openThread, merge: merge, render: render };
+})();

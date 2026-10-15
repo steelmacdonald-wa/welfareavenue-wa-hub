@@ -273,6 +273,8 @@
 242_wave242
 # 244_wave244: two roles at most on the forms and the coordinator places people who picked two (Steel, 15/10/26; another session's wave, taken from the live build on 15/10/26: the roster board's "Picked X or Y" buttons, the spots bar's "N to place"; data wa244_two_roles, form-submit v8).
 244_wave244
+# 256_wave256: the Volunteer Manager's Phone page (Steel, 15/10/26: "a page where the phone and messages can be used. Similar to the text volunteers pop up ... I'm also curious if phone calls itself can be done there"): #volunteering/phone (rail People > Phone with the waiting count; the classic page's Phone chip) lists every number texted or called on the ops line in 60 days, what waits (texts nobody answered, missed calls nobody returned), and one timeline of texts and calls; New text, Text a group (wave23's window), Call (tel: to the Quo app; Quo's API cannot place calls), Check now (quo-calls), No reply needed, No call back needed, their next servings. Also: the spot counts window's Make these the usual counts (parts191 c_event). Data: build/data/wa256_phone.sql; edge function quo-calls v1; cron wa-quo-calls.
+256_wave256
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

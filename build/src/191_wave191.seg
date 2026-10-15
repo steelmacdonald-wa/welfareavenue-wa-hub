@@ -661,6 +661,7 @@
       + '<p class="m-sub">How many people this serving needs in each role. The roster, the open spots, Find volunteers and Home all count against these. 0 means this serving does not need the role.</p>'
       + '<div class="w232grid">' + rows + '</div>'
       + '<div class="w232row"><button class="w191btn gold" id="w232spsave">Save</button><button class="w191btn ghost" id="w232spreset">Use the usual counts</button><button class="w191btn quiet" id="w232spx">Cancel</button></div>'
+      + '<p class="w191rsub w256usual">The usual counts apply to every serving that has not set its own. <button class="lnk" id="w256spusual" type="button">Make these the usual counts</button></p>'
       + '<p class="w191rsub" id="w232spmsg"></p></div>');
     var css = document.getElementById('w232spcss');
     if (!css) { css = document.createElement('style'); css.id = 'w232spcss'; css.textContent = '.w232grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin:14px 0}.w232sp{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(16,63,57,.14);border-radius:10px;background:#FFFAF2}.w232sp span{font-weight:600;font-size:14px;color:#103F39}.w232sp i{display:block;font-style:normal;font-weight:400;font-size:11.5px;color:#797773}.w232sp input{width:64px;padding:6px 8px;border:1px solid rgba(16,63,57,.22);border-radius:8px;font:inherit;text-align:center}.w232sp input.own{border-color:#DCA527;background:#FFF7E3}.w232row{display:flex;gap:8px;flex-wrap:wrap}'; document.head.appendChild(css); }
@@ -677,6 +678,31 @@
       refresh();
     }
     document.getElementById('w232spx').addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
+    /* wave256 (Steel, 15/10/26: "where do I edit the number of positions per event"): the usual counts had no screen; leaders,
+       HR and admins make the numbers in this window the usual counts (volunteer_role_guides.target) for every serving that has
+       not set its own. This serving then uses the usual counts. */
+    document.getElementById('w256spusual').addEventListener('click', async function () {
+      var btn = this; var ok = false;
+      try { var c = await db.rpc('wa256_can_text'); ok = !!(c && c.data === true); } catch (e) { ok = false; }
+      if (!ok) { msg('Only leaders, HR and admins can change the usual counts.'); return; }
+      var val = {}, changed = [];
+      document.querySelectorAll('[data-w232sp]').forEach(function (inp) {
+        var k = inp.getAttribute('data-w232sp'), n = Math.max(0, Math.min(60, Math.round(Number(inp.value))));
+        if (isFinite(n)) { val[k] = n; if (n !== (usual[k] || 0)) changed.push(k); }
+      });
+      if (!changed.length) { msg('These are already the usual counts.'); return; }
+      if (!confirm('Make these the usual counts for every serving that has not set its own? (' + changed.map(function (k) { return one(k) + ' ' + (usual[k] || 0) + ' to ' + val[k]; }).join(', ') + ')')) return;
+      btn.disabled = true; msg('Saving the usual counts...');
+      for (var i = 0; i < changed.length; i++) {
+        var k = changed[i];
+        var r = await db.from('volunteer_role_guides').update({ target: val[k] }).eq('role', k);
+        if (r && r.error) { btn.disabled = false; msg('Could not save ' + one(k) + ': ' + r.error.message); return; }
+        (S.guides || []).forEach(function (g) { if (g.role === k) g.target = val[k]; });
+      }
+      try { await db.from('change_log').insert({ entity_type: 'volunteer_role_guides', entity_id: 'target', field: 'usual_spot_counts', old_value: JSON.stringify(usual), new_value: JSON.stringify(val), changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'hub' }); } catch (e) { /* audit only */ }
+      try { var st234 = window.w234 && window.w234.state ? window.w234.state() : null; if (st234) st234.at = 0; } catch (e) { /* the spots bar re-reads within 20 s */ }
+      put(null);
+    });
     document.getElementById('w232spreset').addEventListener('click', function () { put(null); });
     document.getElementById('w232spsave').addEventListener('click', function () {
       var val = {};

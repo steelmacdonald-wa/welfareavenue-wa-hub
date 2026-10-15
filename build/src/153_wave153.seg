@@ -90,6 +90,8 @@
     print: '<path d="M7 9V4.5h10V9"/><rect x="4" y="9" width="16" height="7.5" rx="2"/><path d="M7 14h10v5.5H7z"/>',
     plug: '<path d="M9 3.5v5M15 3.5v5"/><path d="M6.5 8.5h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 17v3.5"/>',
     globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>',
+    /* wave256: the Volunteer Manager's Phone page */
+    phone: '<path d="M7.2 3.8 9.6 4.4l1.2 3.9-1.9 1.4a11 11 0 0 0 5.4 5.4l1.4-1.9 3.9 1.2.6 2.4c.2.8-.3 1.6-1.1 1.8C11 20.2 3.8 13 5.4 4.9c.2-.8 1-1.3 1.8-1.1z"/>',
     ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
@@ -183,7 +185,9 @@
           { h: '#volunteering/recipes', l: 'Recipes', ic: 'pot', page: 'volunteering' },
           { h: '#volunteering/inventory', l: 'Inventory', ic: 'box', page: 'volunteering' }
         ] }, { label: 'People', items: [
-          { h: '#volunteering/people', l: 'Volunteers', ic: 'people', page: 'volunteering' }
+          { h: '#volunteering/people', l: 'Volunteers', ic: 'people', page: 'volunteering' },
+          /* wave256: texts and calls on the ops line, one page; the count is what waits for a person (texts and missed calls) */
+          { h: '#volunteering/phone', l: 'Phone', ic: 'phone', page: 'volunteering', n: (function () { try { return (window.w256 && window.w256.waiting && window.w256.waiting()) || null; } catch (e) { return null; } })() }
         ] }];
       },
       actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]

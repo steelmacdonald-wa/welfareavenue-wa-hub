@@ -1430,6 +1430,7 @@ The CRM (wave150/152): one row per person Welfare Avenue knows (volunteers, dono
 - `last_activity_at`: The last outward or inward touch logged on their timeline (not internal notes).
 - `organization`: wave176: the organization the person gave (free text, for example a school or employer), shared with the Volunteer Manager. Partners with a record are in crm_contact_orgs.
 - `pronouns`: wave194: the pronouns the person gave on their welfareavenue.com profile (optional, up to 40 characters). Written by account_update(); read with the contact.
+- `whatsapp_opt_out`: wave254: the person replied STOP on WhatsApp; whatsapp-send never messages them (sms_opt_out stops WhatsApp too).
 
 ### `crm_contact_orgs`
 
@@ -2050,6 +2051,135 @@ wave245: one row per message the Hub tried to send a person (a Slack DM, a Hub n
 
 - `outcome`: wave245: sent | sent (Hub instead: no Slack account) | skipped: switched off | skipped: Hub only | skipped: no device | failed: <why>
 
+### `meta_events`
+
+wave250: each change Meta sent to the meta-events webhook (object page, instagram or whatsapp_business_account; field feed, messages, mention, leadgen, comments, mentions, statuses). A hint only: meta-events re-reads the object through the Graph API before the Hub changes. value is the change without its text fields (no message or comment text kept here), cleared after 60 days (meta-events prune). Written by meta-events with the service key; admins read it (Studio > Connections).
+
+- `object`: wave250: Meta's object: page, instagram or whatsapp_business_account.
+- `field`: wave250: the subscribed field the change came under (feed, messages, mention, leadgen, comments, mentions; for WhatsApp messages carries both inbound messages and statuses).
+- `account_id`: wave250: the entry id: the Facebook Page id, the Instagram account id or the WhatsApp Business Account id.
+- `ref_id`: wave250: the object the change is about: a comment or post id, a lead id, the sender's id for a message, a WhatsApp message id.
+- `signed`: wave250: true when the X-Hub-Signature-256 matched META_APP_SECRET; null when the vault has no app secret (the event is still only a hint); false when it did not match (stored as skipped, never acted on).
+- `status`: wave250: new (received), done (acted on after a re-read), skipped (nothing to do, a duplicate, or a bad signature), error (the re-read or the action failed; result says why).
+- `result`: wave250: what meta-events did with the change, in a few words (never message text).
+- `id`: Row id.
+- `received_at`: When the webhook call arrived.
+- `value`: The event's value from Meta with message text stripped (a hint; the Hub reads the real thing back from Meta).
+- `processed_at`: When meta-events finished handling the event.
+
+### `social_threads`
+
+wave251: a Messenger or Instagram conversation between Welfare Avenue's Page or Instagram account and one person (the Content Studio's Messages). Written by social-dms (dm_sync, dm_reply and the dm_* actions) with the service key; read by the marketing team and admins (wa225_marketing, wa225_publisher).
+
+- `platform`: wave251: facebook (Messenger) or instagram (Instagram Direct).
+- `external_id`: wave251: Meta's conversation id (t_... for Messenger, an Instagram conversation id).
+- `participant_id`: wave251: the person's page-scoped id (PSID on Messenger, IGSID on Instagram); the reply goes to it.
+- `last_inbound_at`: wave251: when the person last wrote. Meta lets a Page answer for 24 hours after that (standard messaging); the Hub says so and refuses after it.
+- `last_from_us`: wave251: true when the last message in the conversation is ours (answered).
+- `last_snippet`: wave251: the first 140 characters of the last message, for the list.
+- `unread`: wave251: messages from the person since our last reply (Messenger's own unread count when Meta gives it).
+- `status`: wave251: open (waiting for us), resolved (answered or closed by hand), archived (a lead or admin took it out of the inbox; Meta cannot remove a conversation). A new message from the person reopens it.
+- `assigned_to`: wave251: the team member's name the conversation is given to, as for comments.
+- `id`: Row id.
+- `participant_name`: The other person's name.
+- `participant_handle`: Their Instagram username, when there is one.
+- `last_message_at`: The latest message in the conversation.
+- `message_count`: Messages Meta reports in the conversation.
+- `archived_at`: When a lead archived it (hidden from Open).
+- `archived_by`: Who archived it.
+- `replied_at`: The last reply sent from the Hub.
+- `replied_by`: Who sent that reply.
+- `fetched_at`: When social-dms last read the conversation.
+- `created_at`: When the Hub first stored it.
+- `updated_at`: Last change in the Hub.
+
+### `social_messages`
+
+wave251: the messages of a social_threads conversation, the person's and ours (from_us), read through Meta's Graph API (conversations, messages). Written by social-dms with the service key; read by the marketing team and admins.
+
+- `external_id`: wave251: Meta's message id (mid).
+- `attachments`: wave251: what came with the message: [{type, name, url}] (image, video, file, sticker, story mention, share). Meta's links expire; the Hub opens them, it does not copy them.
+- `sent_by`: wave251: the Hub person who sent our reply from the Hub; null for messages from the person or sent from Meta's own inbox.
+- `id`: Row id.
+- `thread_id`: The conversation (social_threads.id).
+- `platform`: facebook (Messenger) or instagram.
+- `from_us`: True when the Page sent it (from the Hub or from Meta Business Suite).
+- `author_name`: Who wrote it, as Meta names them.
+- `text`: The message text.
+- `sent_at`: When it was sent, from Meta.
+- `created_at`: When the Hub stored it.
+
+### `social_ad_daily`
+
+wave253: Meta ads, one row per ad account, campaign and day, from the Marketing API (insights, level campaign, time_increment 1), read-only. Written by social-ads with the service key (cron wa-social-ads daily, and Refresh in the Studio's analytics); read by staff and board viewers like social_posts.
+
+- `account_id`: wave253: the ad account (act_<id>) under the business 686100608981552.
+- `spend`: wave253: the amount spent that day, in the account's currency (CAD).
+- `reach`: wave253: people reached that day. Reach is not additive across days: a period's reach comes from studio_ads_summary, not a sum of rows.
+- `results`: wave253: the campaign's results that day, counted from the action that matches its objective (leads for lead ads, link clicks for traffic, messaging conversations for messages, post engagement for engagement, and so on); result_type names it.
+- `actions`: wave253: every action Meta counted that day ({action_type: count}), for the detail view.
+- `campaign_id`: Meta campaign id.
+- `day`: The day the results are for (the ad account's time zone).
+- `campaign_name`: Campaign name as in Ads Manager.
+- `objective`: The campaign objective (decides which action counts as a result).
+- `currency`: The ad account's currency (CAD).
+- `impressions`: Impressions that day.
+- `clicks`: Clicks that day.
+- `result_type`: The action counted as a result for this objective (for example link_click).
+- `fetched_at`: When social-ads last read this row from the Marketing API.
+
+### `whatsapp_messages`
+
+wave254: every WhatsApp message the Hub queued, sent or received through the WhatsApp Cloud API (the second channel beside quo_messages): templates out (kind confirm, reconfirm, test), the person's replies and button taps in (kind inbound), our thank-you after a reply (kind ack). Written by whatsapp-send and wa254_inbound with the service key, and by trg_wa254_mirror; read by staff. No foreign keys, as quo_messages (ids only).
+
+- `phone`: wave254: the number in E.164 (+1...).
+- `template`: wave254: the approved template's name for an outbound template (wa_serving_reminder, wa_still_in, hello_world); null for free text (ack, manual) and inbound.
+- `params`: wave254: the template's body parameters in order ({{1}}, {{2}}, ...).
+- `body`: wave254: the message as the person sees it (the template filled in, the free text, or the reply / button text received).
+- `status`: wave254: queued, sent, delivered, read, failed (error says why), skipped (mode off, not a test phone, opted out, no number) or received (inbound).
+- `wamid`: wave254: Meta's message id (wamid...), how statuses find the row.
+- `quo_message_id`: wave254: the quo_messages row this template mirrors (trg_wa254_mirror), so a text is mirrored once.
+- `pool_check_id`: wave254: the volunteer_pool_checks row a reconfirm belongs to (wave239's "still in?").
+- `handled`: wave254: what the Hub did with an inbound message: confirmed, declined, pool_yes, pool_no, opted_out, stored, question, unmatched.
+- `id`: Row id.
+- `batch_id`: The batch of the text it copies (quo_messages.batch_id).
+- `person_id`: The volunteer (volunteer_people) when known.
+- `direction`: out (from us) or in (a reply or button press).
+- `kind`: confirm, reconfirm (the template copies of those texts), ack (our thank-you after a reply), manual, test, inbound.
+- `lang`: en or fr: the template language.
+- `error`: Meta's error, when sending failed.
+- `event_id`: The serving (event) it is about.
+- `roster_id`: The roster row it is about.
+- `sent_by`: Who sent a test or manual message; null for the drain.
+- `created_at`: When it was queued or received.
+- `sent_at`: When Meta accepted it.
+- `delivered_at`: When Meta reported it delivered.
+- `read_at`: When Meta reported it read.
+
+### `quo_calls`
+
+wave256: the ops line's calls (438) 808-7754, copied from Quo by the quo-calls edge function (cron wa-quo-calls, every 10 minutes, and Check now on the Phone page). One row per Quo call (quo_id). No direct grants: read through wa256_phone_inbox and wa256_phone_calls.
+
+- `quo_id`: Quo's call id (AC...).
+- `phone`: The other party's number as Quo gives it (E.164).
+- `ph`: The other party's last 10 digits, the key the Hub's conversations use (as wa171_digits).
+- `direction`: in (they called the ops line) or out (the team called them from the Quo app).
+- `status`: Quo's status: completed, missed, answered, no-answer, in-progress, voicemail...
+- `duration`: Seconds, as Quo reports.
+- `answered_at`: When someone picked up (null for a missed call).
+- `completed_at`: When the call ended.
+- `created_at`: When the call started (Quo's createdAt).
+- `quo_user`: The Quo user who answered or placed it (Quo's US... id), when Quo says.
+- `ai_handled`: Quo's own AI agent answered it.
+- `summary`: Quo's call summary, when the plan makes one. Shown to leaders, HR and admins only.
+- `next_steps`: Quo's next steps from the summary, when given. Leaders, HR and admins only.
+- `voicemail_text`: The voicemail's transcript, when Quo has one. Leaders, HR and admins only.
+- `voicemail_seconds`: The voicemail's length in seconds.
+- `has_voicemail`: They left a voicemail.
+- `handled_at`: A missed call someone dealt with (No call back needed on the Phone page); a later call or text to the number also clears it.
+- `handled_by`: Who marked the missed call dealt with.
+- `synced_at`: When quo-calls last wrote the row.
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
 
@@ -2393,4 +2523,14 @@ Functions:
 - `wa242_remind_me()`: wave242: the caller asks for the day's reminder now (at most three a day)
 - `wa242_prefs_set(jsonb)`: wave242: the notification centre saves each kind's Hub and Slack switch (wa_notify_prefs.prefs.kinds), the disabled list kept in step
 - `wa245_notify_allowed(text, text, text)`: wave245: does this kind of notification reach this person on this channel (hub or slack): the saved switch (wa_notify_prefs.prefs.kinds), else the disabled list, else the channel choice with a device on. Every sender asks it.
+- `meta_verify_token()`: wave250: the Meta webhook verify token, for an admin to paste into the HUB-Analytics app (Webhooks, Verify token). Admins only; each read lands in change_log (vault, META_VERIFY_TOKEN, read). Not a credential: it only lets Meta confirm the callback URL is ours.
+- `wa254_role_words(text, text)`: wave254: a roster role key in words for the WhatsApp templates (a server, a cook, team leader...; French: serveur·se, cuisinier·ère...).
+- `wa254_mirror()`: wave254: trigger on quo_messages: a queued confirmation (confirm) or "still in?" (reconfirm) text is copied into whatsapp_messages as the matching template (wa_serving_reminder or wa_still_in, in the person's language), only while sms_whatsapp_mode is test or live and sms_whatsapp_channel is also. Errors never block the SMS.
+- `wa254_inbound(jsonb)`: wave254: files a WhatsApp reply ({phone, text, button, wamid, at}) from whatsapp-send: stored in whatsapp_messages, STOP always honoured (crm_contacts.whatsapp_opt_out); YES / NO (or the template's buttons) act on the last template sent to that number in 14 days (a serving confirmation through volunteer_confirm_submit, a "still in?" through wa239_pool_answer) only when sms_whatsapp_mode is live, or test and the number is a test phone; a thank-you is queued on WhatsApp. Service role only.
+- `wa256_missed_open(text)`: wave256: how many missed calls from one number still wait for a call back (internal; used by wa256_phone_inbox).
+- `wa256_can_text()`: wave256: leaders, HR and admins (who text volunteers, read call summaries and voicemails).
+- `wa256_phone_inbox(int)`: wave256: the Phone page's list (staff): {texts: wa191_recruit_inbox over p_days, calls: one row a number (last call, counts, missed calls still open), can (may text), synced_at, window (texts send now)}.
+- `wa256_phone_calls(text)`: wave256: one number's last 50 calls for the Phone page's conversation (staff; summary, next steps and voicemail transcript only for leaders, HR and admins).
+- `wa256_call_done(text)`: wave256: marks a number's missed calls as needing no call back (leaders, HR and admins; change_log volunteer_call).
+- `wa256_phone_lookup(text)`: wave256: New text on the Phone page: volunteers and CRM contacts with a phone whose name or number matches (staff; at most 12, one row a number).
 
