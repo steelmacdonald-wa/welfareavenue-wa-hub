@@ -1,9 +1,11 @@
-// Welfare Avenue: social-inbox (v1, 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-inbox (v2, 15/10/26, wave251; v1 09/10/26, wave225 the Content Studio)
 // The Content Studio's comments inbox: comments on Welfare Avenue's own posts on Instagram, Facebook, Threads and YouTube,
 // read every 10 minutes (cron wa-social-inbox) and answered from the Hub. Steel (09/10/26): the marketing team and admins
 // reply, like, hide and resolve; deleting is marketing leads and admins.
 // Why polling: Meta only sends live comment alerts to apps that are Live, and Instagram's need an App Review; reading every
-// 10 minutes needs neither (the comments arrive within 10 minutes).
+// 10 minutes needs neither (the comments arrive within 10 minutes). Since wave250 meta-events also asks for a sync (7 days)
+// when Meta reports a comment, at most once a minute.
+// v2 (wave251): each sync also asks social-dms for the direct messages (dm_sync, 14 days), so the one 10-minute cron reads both.
 // Auth: verify_jwt off; automation with x-wa-secret (sync), or a signed-in staff member: wa225_marketing() for reply, like,
 // hide, unhide, resolve, reopen, assign and sync; wa225_publisher() for delete. Everything is written with the service key
 // into social_comments (the page reads it through row security) and one change_log line per action (never the comment text).
@@ -195,6 +197,14 @@ async function sync(days: number): Promise<Any> {
     catch (e) { out.platforms[pl] = { error: String((e as Error).message || e).slice(0, 200) }; }
   }
   try { await svc.from('hub_settings').upsert({ key: 'studio_inbox_sync', value: { at: new Date().toISOString(), result: out.platforms }, updated_at: new Date().toISOString(), updated_by: 'social-inbox' }); } catch (_) { /* fine */ }
+  /* wave251: the direct messages, read by social-dms */
+  if (days >= 14) {
+    try {
+      const sec = await getSecret('WA_TRIGGER_SECRET');
+      const r = await fetch(SUPABASE_URL + '/functions/v1/social-dms', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': sec, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ action: 'dm_sync', days: 14 }) });
+      const b = await r.json().catch(() => ({})); out.messages = r.ok ? b.messages : { error: String(b.error || r.status) };
+    } catch (e) { out.messages = { error: String((e as Error).message || e).slice(0, 200) }; }
+  }
   return out;
 }
 

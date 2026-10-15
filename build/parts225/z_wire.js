@@ -1,6 +1,6 @@
 
   /* ---------- paint and route ---------- */
-  var KEEP = ['data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote', 'data-w230b', 'data-w230p', 'data-w230s', 'data-w230so', 'data-w230tc', 'data-w230ab', 'data-w230st'];
+  var KEEP = ['data-w250q', 'data-w250rtext', 'data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote', 'data-w230b', 'data-w230p', 'data-w230s', 'data-w230so', 'data-w230tc', 'data-w230ab', 'data-w230st'];
   function paint() {
     if (S.sec === 'calendar') return;
     var h = host(); if (!h) return;
@@ -15,7 +15,7 @@
     else if (!S.loaded && !W()) html = '<div class="card"><div class="empty">Loading the Content Studio…</div></div>';
     else {
       try {
-        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
+        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'messages' ? messagesHtml() : S.sec === 'ads' ? adsHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
       } catch (e) { console.warn('wave225 paint', e); html = '<div class="card"><div class="empty">Something went wrong drawing this page: ' + E(e.message || e) + '</div></div>'; }
     }
     if (!(S.sec === 'pages' && S.sub === 'edit' && lpPatch(h, html))) h.innerHTML = html;
@@ -39,12 +39,14 @@
     await loadAll();
     if (S.sec === 'connections' && !S.conn) await loadConn();
     if (S.sec === 'pages') { try { await lpLoad(); } catch (e) { /* drawn below */ } }
+    if (S.sec === 'messages') { try { await load250(); } catch (e) { /* drawn below */ } }   /* wave251 */
+    if (S.sec === 'ads') { try { await loadAds250(); } catch (e) { /* drawn below */ } }   /* wave253 */
     paint();
     try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* fine */ }
     if (S.sec === 'approvals' && S.apDo) { try { await applyApDo(); } catch (e) { /* fine */ } }   /* wave241 */
     if (S.sec === 'library' && S.sub === 'partners') { try { var hadP = !!S.partners; await loadPartnerPosts(); if (!hadP) paint(); } catch (e) { /* fine */ } }
   }
-  function reload() { S.loaded = 0; S.conn = null; return show(location.hash); }
+  function reload() { S.loaded = 0; S.conn = null; M250.loaded = 0; M250.ads = null; M250.meta = null; M250.wa = null; return show(location.hash); }
 
   /* ---------- small actions ---------- */
   function compose(pre) { var w = W(); if (w && w.compose) { w.compose(pre || null); return; } if (window.w121Compose) window.w121Compose(pre || null); else go('#contentcal/new'); }
@@ -206,7 +208,7 @@
         [400, 1500, 4000].forEach(function (ms) { setTimeout(function () { markHas(); if (!toursOk) toursOk = addTours(); }, ms); });
         var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
         if (h.split('/')[0] === 'studio') { try { showPanel('studio'); } catch (x) { /* fine */ } show(h); }
-        else setTimeout(function () { if (staffOk() && tabOk('studio') && !S.loaded) loadAll(); }, 6000);   /* the rail's counts */
+        else setTimeout(function () { if (staffOk() && tabOk('studio') && !S.loaded) loadAll(); if (staffOk() && tabOk('studio') && !M250.loaded) load250().then(function () { try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (x) { /* fine */ } }, function () { /* fine */ }); }, 6000);   /* the rail's counts (wave251: messages too) */
       } catch (e) { console.warn('wave225 boot', e); }
       return out;
     };
@@ -215,7 +217,8 @@
   /* ---------- test hook ---------- */
   window.w225 = {
     counts: counts, state: function () { return S; }, paint: paint, show: show, load: loadAll, route: route, reload: reload,
-    html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
+    html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
+    m250: function () { return M250; }, load250: load250, loadAds250: loadAds250,   /* waves 250 to 254 */
     monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl
   };
 })();

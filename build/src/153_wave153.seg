@@ -215,19 +215,21 @@
        (#studio and its sections by address), plus wave121's #contentcal and wave120's #socialstats, framed by the app. */
     studio: { id: 'studio', label: 'Content Studio', color: '#B4467A', ic: 'spark', blurb: 'Plan, approve, publish, answer and measure', pages: ['studio', 'contentcal', 'socialstats'], need: 'studio', home: '#studio',
       groups: function () {
-        var n = { appr: null, inbox: null }; try { var W = window.w225 && window.w225.counts ? window.w225.counts() : null; if (W) { n.appr = W.approvals || null; n.inbox = W.inbox || null; } } catch (e) { /* fine */ }
+        var n = { appr: null, inbox: null, msg: null }; try { var W = window.w225 && window.w225.counts ? window.w225.counts() : null; if (W) { n.appr = W.approvals || null; n.inbox = W.inbox || null; n.msg = W.messages || null; } } catch (e) { /* fine */ }
         return [{ label: 'Content', items: [
           { h: '#studio', l: 'Overview', ic: 'home', page: 'studio' },
           { h: '#contentcal', l: 'Calendar', ic: 'cal', page: 'contentcal' },
           { h: '#studio/queue', l: 'Queue and schedule', ic: 'queue', page: 'studio' },
           { h: '#studio/approvals', l: 'Approvals', ic: 'check', page: 'studio', n: n.appr },
-          { h: '#studio/inbox', l: 'Comments', ic: 'chat', page: 'studio', n: n.inbox }
+          { h: '#studio/inbox', l: 'Comments', ic: 'chat', page: 'studio', n: n.inbox },
+          { h: '#studio/messages', l: 'Messages', ic: 'chat', page: 'studio', n: n.msg }   /* wave251 */
         ] }, { label: 'Toolkit', items: [
           { h: '#studio/library', l: 'Library', ic: 'book', page: 'studio' },
           { h: '#studio/pages', l: 'Link pages', ic: 'link', page: 'studio' },
           { h: '#studio/links', l: 'Short links', ic: 'link', page: 'studio' }
         ] }, { label: 'Results', items: [
           { h: '#socialstats', l: 'Analytics', ic: 'chart', page: 'socialstats' },
+          { h: '#studio/ads', l: 'Paid and organic', ic: 'chart', page: 'studio' },   /* wave253 */
           { h: '#studio/report', l: 'Report', ic: 'print', page: 'studio' }
         ] }, { label: 'Setup', items: [
           { h: '#studio/connections', l: 'Connections', ic: 'plug', page: 'studio' }

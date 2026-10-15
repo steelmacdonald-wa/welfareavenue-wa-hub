@@ -74,7 +74,7 @@
     if (S.conn.error) return '<div class="card"><div class="empty">Could not read the connections: ' + E(S.conn.error) + ' <a data-w225cx="reload" style="cursor:pointer;font-weight:700">Try again</a></div></div>';
     var flash = S.keys.flash ? '<div class="card" style="background:' + (S.keys.flash.ok ? 'rgba(42,140,122,.10)' : 'rgba(179,64,47,.08)') + '">' + E(S.keys.flash.text) + '</div>' : '';
     return flash + '<div class="row" style="margin:0 0 12px"><span class="muted">Every platform posts straight from the Hub once it is connected. Until then, the Hub reminds the post’s owner to post it by hand. Keys and tokens go into the vault and are never shown again.</span><span class="sp"></span><a class="btn225 sm" data-w225cx="reload">' + I('refresh') + ' Check again</a></div>' +
-      '<div class="cx">' + metaCard() + appCard('threads') + appCard('youtube') + appCard('tiktok') + appCard('linkedin') + makeCard() + remindCard() + '</div>' +
+      '<div class="cx">' + metaCard() + connectExtra250() + appCard('threads') + appCard('youtube') + appCard('tiktok') + appCard('linkedin') + makeCard() + remindCard() + '</div>' +
       '<p class="muted" style="margin:14px 0 0">The setup doc (09/10/26) has every form, answer and email for these steps.</p>';
   }
   /* the platforms send people back to #studio/connections?connected=x or ?error= */

@@ -197,7 +197,7 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
     await f.hash('#studio/connections?connected=threads', 1500);
     t = await f.ev(HOST);
     const cards = await f.ev(() => document.querySelectorAll('#w225host .cx > .card').length);
-    ok('Connections: the Threads flash, seven cards, the redirect address, the Make filter code', /Threads is connected/.test(t) && cards === 7 && /functions\/v1\/social-connect/.test(t) && /abc123def0/.test(t), [cards, t.slice(0, 600)]);
+    ok('Connections: the Threads flash, nine cards (wave250: Meta live and WhatsApp), the redirect address, the Make filter code', /Threads is connected/.test(t) && cards === 9 && /functions\/v1\/social-connect/.test(t) && /abc123def0/.test(t), [cards, t.slice(0, 600)]);
     const hashNow = await f.ev(() => location.hash);
     ok('the flash clears the address', hashNow === '#studio/connections', hashNow);
     await p.fill('#w225cid-youtube', 'yt-client-1234.apps.googleusercontent.com'); await p.fill('#w225csec-youtube', 'GOCSPX-secret-value'); await click(p, '#w225host [data-w225cx="save_app|youtube"]'); await p.waitForTimeout(500);
