@@ -1,4 +1,10 @@
-// Welfare Avenue: hub-push (v3, 15/10/26: waves 239 and 242; v2 09/10/26: wave225 adds the studio event; v1 07/10/26, wave219)
+// Welfare Avenue: hub-push (v4, 15/10/26: wave245; v3 15/10/26: waves 239 and 242; v2 09/10/26: wave225 adds the studio event; v1 07/10/26, wave219)
+// v4 (wave245, Steel: "The notifications need to be even more robust and descriptive"): every notification tried is logged in
+// hub_notifications_sent (the kind, the words, the outcome: sent to N devices, skipped and why, failed), so the notification
+// centre shows each person their Recent. relay {kind, to[], title, body, url, tag, sync?}: a kind another function composes
+// (notify's timeoff_request, applicant, loop_still, and the centre's sample), through the person's switch for that kind.
+// sync: true answers with the outcome instead of queueing. The task and request notifications say more (the team, the
+// project, the due date in words, the details).
 // v3: volunteer_applied (a photographer or videographer applied; the database names the SOP's photographer owner, to_email or
 // to_name) and task_due (wa242_due_reminders: a person's tasks due today, tomorrow or overdue, once a day). The notification
 // centre (wave242) keeps each kind's Hub and Slack switch in wa_notify_prefs.prefs.kinds[kind] = {hub, slack}: hub false
@@ -173,6 +179,12 @@ async function log(event: string, target: string, outcome: string) {
     await svc.from('change_log').insert({ entity_type: 'push', entity_id: event, field: 'delivery', old_value: null, new_value: target + ': ' + outcome, changed_by: 'hub-push' });
   } catch (_) { /* audit only */ }
 }
+/* v4: the log the notification centre shows each person (Recent) */
+async function logSent(email: string, kind: string, msg: Msg, outcome: string) {
+  try {
+    await svc.from('hub_notifications_sent').insert({ email: String(email || '').toLowerCase(), kind, channel: 'hub', title: String(msg.title || '').slice(0, 200), body: String(msg.body || '').slice(0, 600), url: String(msg.url || '').slice(0, 300), outcome: String(outcome || '').slice(0, 300), ref: String(msg.tag || '').slice(0, 120) || null, sent_by: 'hub-push' });
+  } catch (_) { /* the log never blocks a notification */ }
+}
 
 /* ---------- people ---------- */
 type Member = { name: string; email: string; department: string | null };
@@ -233,18 +245,20 @@ async function toPerson(event: string, email: string, msg: Msg, dry: boolean, pl
   const no = await wants(e, event);
   const subs = no ? [] : await devicesOf(e);
   if (dry) { plan.push({ email: e, skip: no, devices: subs.length, title: msg.title, body: msg.body, url: msg.url }); return 'dry'; }
-  if (no) return no;
-  if (!subs.length) return 'no device';
+  const kind = PREF_KEY[event] || event;
+  if (no) { await logSent(e, kind, msg, 'skipped: ' + (no === 'Slack only' ? 'Slack only (your choice)' : 'switched off here')); return no; }
+  if (!subs.length) { await logSent(e, kind, msg, 'skipped: no device with Hub notifications on'); return 'no device'; }
   const r = await sendDevices(subs, msg);
   const outcome = 'sent to ' + r.sent + ' device' + (r.sent === 1 ? '' : 's') + (r.failed ? ', ' + r.failed + ' failed (' + r.errors[0] + ')' : '') + (r.gone ? ', ' + r.gone + ' gone (removed)' : '');
   await log(event, e, outcome);
+  await logSent(e, kind, msg, r.sent ? outcome : 'failed: ' + (r.errors[0] || 'no device reached'));
   return outcome;
 }
 
 /* ---------- words ---------- */
 function clip(s: string, n: number): string {
   const t = String(s || '').replace(/\s+/g, ' ').trim();
-  return t.length <= n ? t : t.slice(0, n - 1).replace(/\s+\S*$/, '') + '…';
+  return t.length <= n ? t : t.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026';
 }
 /* the Hub's editor writes markdown; a notification is plain text */
 function plain(s: string): string {
@@ -253,13 +267,14 @@ function plain(s: string): string {
     .replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').replace(/~~(.+?)~~/g, '$1')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1')).join(' ');
 }
-const Q = (s: string) => '“' + s + '”';
+const Q = (s: string) => '\u201c' + s + '\u201d';
 function dueText(d: string | null): string {
   if (!d) return '';
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
   if (!m) return '';
   return 'due ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(m[2]) - 1] + ' ' + Number(m[3]);
 }
+const DEPT_WORDS: Record<string, string> = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board' };
 const KIND: Record<string, string> = {
   task: 'the task', goal: 'the goal', request: 'the request', update: 'a team update', decision: 'the decision',
   committee: 'a committee note', project: 'the project', content: 'the post', crm: 'the CRM automation'
@@ -273,7 +288,7 @@ function stillMentions(text: string, name: string): boolean {
   let i = t.indexOf(n);
   while (i >= 0) {
     const before = i > 0 ? t.charAt(i - 1) : '', after = t.charAt(i + n.length), after2 = t.charAt(i + n.length + 1);
-    const word = (c: string) => /[0-9a-z_À-ɏ]/.test(c);
+    const word = (c: string) => /[0-9a-z_\u00c0-\u024f]/.test(c);
     if (!(before && (word(before) || before === '.')) && !(after && word(after)) && !(after === '.' && after2 && word(after2))) return true;
     i = t.indexOf(n, i + 1);
   }
@@ -320,19 +335,23 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
   }
 
   if (event === 'task_reassigned' || event === 'task_assigned') {
-    const { data: t } = await svc.from('dept_tasks').select('id, title, owner, due_date, done, updated_by, confidential, board_only, visibility').eq('id', Number(body.task_id)).maybeSingle();
+    const { data: t } = await svc.from('dept_tasks').select('id, title, owner, due_date, done, updated_by, confidential, board_only, visibility, department, project_id, priority').eq('id', Number(body.task_id)).maybeSingle();
     if (!t) return { error: 'task not found' };
     if (t.done) return { event, outcome: 'already done' };
+    /* v4: the team and the project */
+    let project = '';
+    if (t.project_id) { const { data: pr } = await svc.from('projects').select('name').eq('id', t.project_id).maybeSingle(); project = String(pr?.name || ''); }
+    const team = DEPT_WORDS[String(t.department || '')] || '';
     const now = await ownersOf(String(body.new_owner ?? t.owner ?? ''));
     const before = event === 'task_reassigned' ? await ownersOf(String(body.old_owner || '')) : [];
     const by = event === 'task_assigned' ? await byEmail(String(body.by || '')) : await byName(String(t.updated_by || ''));
     const byLabel = by ? by.name : (event === 'task_assigned' ? '' : String(t.updated_by || '').replace(/^AI:.*$/, 'a meeting'));
-    const parts = [hidden(t) ? 'A confidential task' : clip(String(t.title || 'A task'), 90), dueText(t.due_date), byLabel ? 'from ' + byLabel : ''].filter(Boolean);
+    const parts = [hidden(t) ? 'A confidential task' : clip(String(t.title || 'A task'), 90), team, project ? 'project ' + clip(project, 40) : '', dueText(t.due_date), t.priority ? 'priority' : '', byLabel ? 'from ' + byLabel : ''].filter(Boolean);
     for (const p of now) {
       if (before.some(b => b.email === p.email)) continue;   /* they had it already */
       if (by && by.email === p.email) continue;               /* they gave it to themselves */
       if (event === 'task_assigned' && String(body.by || '').toLowerCase() === p.email) continue;
-      const msg: Msg = { title: event === 'task_assigned' ? 'New task for you' : 'A task is now yours', body: parts.join(' · '), url: '/#task/' + t.id, tag: 'task-' + t.id };
+      const msg: Msg = { title: event === 'task_assigned' ? 'New task for you' : 'A task is now yours', body: parts.join(' \u00b7 '), url: '/#task/' + t.id, tag: 'task-' + t.id };
       outs.push(p.email + ': ' + await toPerson(event, p.email, msg, dry, plan));
     }
     return done();
@@ -355,7 +374,7 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
       people = (await roster()).filter(m => m.department === r.department && le.indexOf(m.email) >= 0).slice(0, 2);
     }
     const from = String(r.requested_by || '');
-    const msg: Msg = { title: 'New request for your team', body: [clip(String(r.title || rt?.label || r.type_key || 'A request'), 100), from ? 'from ' + clip(from, 40) : ''].filter(Boolean).join(' · '), url: '/#requests', tag: 'request-' + id };
+    const msg: Msg = { title: 'New request for your team', body: [clip(String(r.title || rt?.label || r.type_key || 'A request'), 100), DEPT_WORDS[String(r.department || '')] || '', from ? 'from ' + clip(from, 40) : '', r.needed_by ? 'needed by ' + String(r.needed_by) : '', r.details ? clip(plain(String(r.details)), 120) : ''].filter(Boolean).join(' \u00b7 '), url: '/#requests', tag: 'request-' + id };
     for (const p of people) {
       if (r.requested_email && String(r.requested_email).toLowerCase() === p.email) continue;   /* their own request */
       outs.push(p.email + ': ' + await toPerson(event, p.email, msg, dry, plan));
@@ -383,6 +402,16 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
     return done();
   }
 
+  /* v4 (wave245): a kind another function composes, through the person's switch for that kind */
+  if (event === 'relay') {
+    const kind = String(body.kind || '').replace(/[^a-z_]/g, '');
+    if (!kind) return { error: 'kind required' };
+    const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 40);
+    const msg: Msg = { title: clip(String(body.title || 'The Hub'), 80), body: clip(plain(String(body.body || '')), 180), url: String(body.url || '/#mypage').startsWith('/') ? String(body.url || '/#mypage') : '/' + String(body.url || '#mypage'), tag: clip(String(body.tag || kind), 60) };
+    for (const e of Array.from(new Set(to))) outs.push(e + ': ' + await toPerson(kind, e, msg, dry, plan));
+    return done();
+  }
+
   if (event === 'volunteer_applied') {
     /* v3 (wave239): a photographer or videographer applied; the owner of the SOP's Volunteer Photographers step */
     const { data: a } = await svc.from('volunteer_applications').select('id, name, roles, source').eq('id', Number(body.application_id)).maybeSingle();
@@ -391,7 +420,7 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
     if (!e) { const m = await byName(String(body.to_name || '')); e = m ? m.email : ''; }
     if (!e) { outs.push('no owner'); return done(); }
     const roles = ((a.roles || []) as string[]).filter(r => r === 'photographer' || r === 'videographer').map(r => ROLE_WORDS[r] || r);
-    const msg: Msg = { title: 'A ' + (roles.join(' and ') || 'photographer') + ' applied', body: clip(String(a.name || 'A volunteer') + (a.source === 'website' ? ' · on the website' : a.source ? ' · ' + String(a.source) : '') + ' · yours to welcome (the SOP\u2019s photographer step)', 160), url: '/#volunteering/applicants', tag: 'vol-app-' + a.id };
+    const msg: Msg = { title: 'A ' + (roles.join(' and ') || 'photographer') + ' applied', body: clip(String(a.name || 'A volunteer') + (a.source === 'website' ? ' \u00b7 on the website' : a.source ? ' \u00b7 ' + String(a.source) : '') + ' \u00b7 yours to welcome (the SOP\u2019s photographer step)', 160), url: '/#volunteering/applicants', tag: 'vol-app-' + a.id };
     outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
     return done();
   }
@@ -408,7 +437,7 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
     if (today) bits.push(today + ' due today');
     if (over) bits.push(over + ' overdue');
     if (tomorrow) bits.push(tomorrow + ' due tomorrow');
-    const msg: Msg = { title: 'Your tasks ' + String(body.day || 'today'), body: clip(bits.join(', ') + (first && first.title ? ' · ' + String(first.title) : ''), 160), url: '/#mypage', tag: 'task-due-' + String(body.day || '') };
+    const msg: Msg = { title: 'Your tasks ' + String(body.day || 'today'), body: clip(bits.join(', ') + (first && first.title ? ' \u00b7 ' + String(first.title) : ''), 160), url: '/#mypage', tag: 'task-due-' + String(body.day || '') };
     outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
     return done();
   }
@@ -489,6 +518,7 @@ Deno.serve(async (req: Request) => {
     const dry = body.dry === true;
     if (dry) return json(await handleEvent(action, body, true));
     const job = handleEvent(action, body, false).catch(e => ({ error: String(e).slice(0, 200) }));
+    if (body.sync === true) return json(await job);   /* v4: the caller waits for the outcome (notify's relay, the sample) */
     const rt = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
     if (rt && typeof rt.waitUntil === 'function') { rt.waitUntil(job); return json({ event: action, outcome: 'queued' }); }
     return json(await job);

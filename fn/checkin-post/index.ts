@@ -1,4 +1,8 @@
-// Welfare Avenue: checkin-post (v7 wave217, 07/10/26: one Still in? Slack DM to the person at 3 hours;
+// Welfare Avenue: checkin-post (v8 wave245, 15/10/26: the Still in? DM goes through notify (event loop_still): the person's own
+// switch for that kind in the notification centre, the Hub notification on their devices, and the log the centre shows them;
+// the direct DM from here is the fallback when notify cannot be reached. Steel: "The notifications need to be even more
+// robust and descriptive";
+// v7 wave217, 07/10/26: one Still in? Slack DM to the person at 3 hours;
 // v6 wave214, 06/10/26: every closed loop posts once, in the check-in-out channel only;
 // v5 wave212, 06/10/26: I'm in and Close the loop also post to the check-in-out channel;
 // v4 wave192b, 01/10/26: no stored trail, real channel names, private titles never posted;
@@ -303,6 +307,19 @@ function stillText(name: string, startedAt: string): string {
     + '<' + HUB + '?loop=still|Still in>   \u00b7   <' + HUB + '?loop=close|Close the loop>\n'
     + '_Only you get this message. Nothing changes if you leave it._';
 }
+/* v8 (wave245): the DM through notify: the person's switch for the kind, the Hub notification, the centre's log. null when
+   notify cannot be reached (the caller then DMs directly). */
+const WORDS: Record<string, string> = { sent: 'sent', sent_channel: 'sent (channel ping)', opted_out: 'not sent: switched off in the notification centre', hub_only: 'not sent: Hub notifications only (their choice)', no_slack: 'not sent: no Slack account linked', no_email: 'not sent: not on the roster', failed: 'not sent: Slack refused' };
+async function viaNotify(secret: string, event: string, to: string[], text: string, title: string, body: string, url: string, tag: string): Promise<{ slack: string; hub: string } | null> {
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ event, to, text, title, body, url, tag }) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => ({}));
+    if (!j || !j.outcome || typeof j.outcome !== 'object') return null;
+    const code = String((j.outcome as Record<string, string>)[to[0]] || 'failed');
+    return { slack: WORDS[code] || code, hub: String(j.hub || 'off') };
+  } catch (_) { return null; }
+}
 type Due = { id: number; email: string; name: string | null; started_at: string };
 async function stillDm(dry: boolean, onlyId: number): Promise<Record<string, unknown>> {
   let due: Due[] = [];
@@ -327,7 +344,13 @@ async function stillDm(dry: boolean, onlyId: number): Promise<Record<string, unk
     const claim = await svc.from('hub_checkins').update({ loop_dm_at: new Date().toISOString() }).eq('id', d.id).is('loop_dm_at', null).is('ended_at', null).select('id');
     if (claim.error || !claim.data || !claim.data.length) continue;
     let result = 'sent';
-    if (!sid) result = 'not sent: no Slack account linked';
+    let hub = 'off';
+    /* v8: through notify (the switch, the Hub notification, the centre's log); directly only when notify cannot be reached */
+    let secret = '';
+    try { secret = await getSecret('WA_TRIGGER_SECRET'); } catch (_) { secret = ''; }
+    const via = secret ? await viaNotify(secret, 'loop_still', [email], text, 'Still in the Loop?', 'You have been in the loop for ' + inFor((Date.now() - new Date(d.started_at).getTime()) / 60000) + '. Still going, or all done? Open the Hub for Still in or Close the loop.', '#mypage', 'loop-still-' + d.id) : null;
+    if (via) { result = via.slack; hub = via.hub; }
+    else if (!sid) result = 'not sent: no Slack account linked';
     else {
       try {
         if (!tok) tok = await getSecret('SLACK_BOT_TOKEN');
@@ -340,10 +363,11 @@ async function stillDm(dry: boolean, onlyId: number): Promise<Record<string, unk
           if (!r.ok) result = 'not sent: ' + String(r.error || 'slack refused');
         }
       } catch (e) { result = 'not sent: ' + String((e as Error).message || e).slice(0, 160); }
+      result += ' (directly: notify unreachable)';
     }
     /* the audit line names the check, never the hours */
-    try { await svc.from('change_log').insert({ entity_type: 'checkin', entity_id: email, field: 'still_dm', old_value: null, new_value: 'Still in? Slack DM ' + result, changed_by: 'The Loop' }); } catch (_) { /* audit */ }
-    out.push({ id: d.id, email, result });
+    try { await svc.from('change_log').insert({ entity_type: 'checkin', entity_id: email, field: 'still_dm', old_value: null, new_value: 'Still in? Slack DM ' + result + (via ? '; Hub: ' + hub : ''), changed_by: 'The Loop' }); } catch (_) { /* audit */ }
+    out.push({ id: d.id, email, result, hub });
   }
   return { ok: true, dry, due: due.length, done: out };
 }

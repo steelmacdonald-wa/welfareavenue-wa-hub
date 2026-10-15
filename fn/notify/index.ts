@@ -1,3 +1,11 @@
+// v15 (wave245, 15/10/26, Steel: "The notifications need to be even more robust and descriptive"): every message tried is
+// logged in hub_notifications_sent (the kind, the words, the outcome: sent, skipped and why, failed and why), so the
+// notification centre shows each person their Recent. The task, request, suggestion, mention and reminder messages say
+// more (the team, the project, the due date in words, the details, the first line of the description). Three kinds that
+// had no switch reach the Hub through notify now: timeoff_request (hr-notify), applicant (recruit-actions), loop_still
+// (checkin-post), each a relay event {event, to_email|to[], text, title, body, url, tag}: the Slack DM through the person's
+// switch, and the Hub notification through hub-push (event relay). sample {kind} (a signed-in person, for themselves):
+// the registry's example for that kind, sent for real through the switches, so the centre's Send me a sample works.
 // v14 (waves 239 and 242, 15/10/26): two events and a per-kind choice. volunteer_applied (a photographer or videographer applied:
 // the database names the SOP's photographer owner, to_name/to_email) and task_due (wa242_due_reminders: a person's tasks due
 // today, tomorrow or overdue, once a day). The notification centre (wave242) keeps each kind's Hub and Slack switch in
@@ -70,7 +78,48 @@ async function log(event: string, target: string, outcome: string) {
 function siteLink(hash: string): string {
   return 'https://wa-exec-dashboard.netlify.app/' + hash;
 }
+/* v15: the words of the message, for the log and the Hub notification: Slack's links become their words, bold marks go */
+function plainOf(text: string): string {
+  return String(text || '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/<(https?:[^>]+)>/g, '$1').replace(/[*_~`]/g, '').replace(/^:[a-z_]+:\s*/i, '').replace(/\s+/g, ' ').trim();
+}
+async function logSent(email: string, kind: string, channel: string, title: string | null, body: string | null, url: string | null, outcome: string, ref: string | null = null) {
+  try {
+    await svc.from('hub_notifications_sent').insert({ email: String(email || '').toLowerCase(), kind, channel, title: title ? String(title).slice(0, 200) : null, body: body ? String(body).slice(0, 600) : null, url: url ? String(url).slice(0, 300) : null, outcome: String(outcome || '').slice(0, 300), ref: ref ? String(ref).slice(0, 120) : null, sent_by: 'notify' });
+  } catch (_) { /* the log never blocks a message */ }
+}
+/* v15: the Hub side of a relayed kind (hub-push reads the person's switch for it) */
+async function hubRelay(kind: string, to: string[], title: string, body: string, url: string, tag: string): Promise<string> {
+  try {
+    const sec = await getSecret('WA_TRIGGER_SECRET');
+    const r = await fetch(SUPABASE_URL + '/functions/v1/hub-push', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': sec, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ event: 'relay', kind, to, title, body, url, tag, sync: true }) });
+    const b = await r.json().catch(() => ({}));
+    return String((b && (b.outcome || b.error)) || ('HTTP ' + r.status));
+  } catch (e) { return 'failed: ' + String(e).slice(0, 80); }
+}
+const DEPT_WORDS: Record<string, string> = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board' };
+function teamWords(d: string | null): string { return DEPT_WORDS[String(d || '')] || String(d || ''); }
+/* a due date in words: "due Fri 17 Oct (in 2 days)", "due today", "was due 3 Oct (12 days ago)" */
+function dueWords(d: string | null): string {
+  if (!d || !/^\d{4}-\d{2}-\d{2}/.test(String(d))) return '';
+  const iso = String(d).slice(0, 10);
+  const today = new Date(new Date().toLocaleString('en-CA', { timeZone: 'America/Toronto' }).slice(0, 10) + 'T12:00:00Z');
+  const day = new Date(iso + 'T12:00:00Z');
+  const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
+  const words = day.toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  if (diff === 0) return 'due today';
+  if (diff === 1) return 'due tomorrow';
+  if (diff > 1) return 'due ' + words + ' (in ' + diff + ' days)';
+  return 'was due ' + words + ' (' + (-diff) + (diff === -1 ? ' day' : ' days') + ' ago)';
+}
+function firstLines(text: string | null, n = 220): string {
+  const t = String(text || '').replace(/[#*_>`]+/g, '').replace(/\s+/g, ' ').trim();
+  return t.length <= n ? t : t.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026';
+}
 
+async function appConfig(key: string): Promise<string> {
+  try { const { data } = await svc.from('app_config').select('value').eq('key', key).maybeSingle(); return String(data?.value ?? ''); } catch (_) { return ''; }
+}
+const coalesceOn = (v: string) => String(v || 'on').trim().toLowerCase() !== 'off';
 async function memberByName(name: string): Promise<{ email: string | null; name: string } | null> {
   if (!name) return null;
   const { data } = await svc.from('team_members').select('name, email, active').eq('active', true);
@@ -108,7 +157,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due'];
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still'];   /* v15: the relayed kinds reach the Hub too */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -274,6 +323,7 @@ async function commentMention(id: number): Promise<Record<string, unknown>> {
   const done = async (status: string, via: string | null, err: string | null) => {
     await svc.from('hub_mentions').update({ dm_status: status, dm_via: via, dm_error: err, dm_at: new Date().toISOString() }).eq('id', id);
     await log('comment_mention', String(m.to_email || m.to_name || '?'), status + (via ? ' as ' + via : '') + (err ? ': ' + err : ''));
+    if (m.to_email) await logSent(String(m.to_email), 'comment_mention', 'slack', String(m.from_name || m.from_email || 'Someone') + ' mentioned you', m.private ? 'On a confidential item in the Hub.' : firstLines(String(m.snippet || ''), 300), String(m.url || ''), status === 'sent' ? 'sent' + (via === 'user' ? ' (as the writer)' : '') : (status === 'skipped' ? 'skipped: ' + (err === 'opted out' ? 'switched off' : err === 'Hub notifications only' ? 'Hub only (your choice)' : String(err || '')) : 'failed: ' + String(err || '')), 'mention-' + id);
     return { event: 'comment_mention', outcome: status, via, error: err };
   };
   /* v10: a task description saves while the person is still typing: wait, then quote what it says now */
@@ -304,7 +354,8 @@ async function commentMention(id: number): Promise<Record<string, unknown>> {
   return done('failed', null, (r2.err || 'unknown') + (r1.err && r1.err !== 'not_connected' ? '; as the writer: ' + r1.err : ''));
 }
 
-async function deliver(event: string, personName: string | null, email: string | null, text: string): Promise<string> {
+type Meta = { title?: string; url?: string; ref?: string };
+async function deliver(event: string, personName: string | null, email: string | null, text: string, meta: Meta = {}): Promise<string> {
   const target = email || personName || 'unknown';
   let rosterName = personName;
   if (!email && personName) {
@@ -317,18 +368,21 @@ async function deliver(event: string, personName: string | null, email: string |
     const { data } = await svc.from('team_members').select('name').eq('email', email).maybeSingle();
     rosterName = data?.name || null;
   }
-  if (await optedOut(email, event)) { await log(event, email, 'skipped: opted out'); return 'opted_out'; }
-  if (await hubOnly(email, event)) { await log(event, email, 'skipped: Hub notifications only'); return 'hub_only'; }
+  /* v15: the log the centre shows (Recent): the words, where, and what happened */
+  const words = plainOf(text);
+  const note = async (outcome: string) => { await log(event, email as string, outcome); await logSent(email as string, event, 'slack', meta.title || null, words, meta.url || null, outcome, meta.ref || null); };
+  if (await optedOut(email, event)) { await note('skipped: switched off'); return 'opted_out'; }
+  if (await hubOnly(email, event)) { await note('skipped: Hub only (your choice)'); return 'hub_only'; }
   const sid = await slackIdFor(email, rosterName);
-  if (!sid) { await log(event, email, 'skipped: no Slack id (not resolvable yet)'); return 'no_slack'; }
+  if (!sid) { await note('skipped: no Slack account found (the Hub notification still goes to your devices)'); return 'no_slack'; }
   const r = await dm(sid, text);
-  if (r.ok) { await log(event, email, 'sent (DM)'); return 'sent'; }
+  if (r.ok) { await note('sent'); return 'sent'; }
   if (r.err === 'missing_scope' || r.err === 'not_allowed_token_type') {
     const ok = await postSlack('<@' + sid + '> ' + text);
-    await log(event, email, ok ? 'sent via channel ping (DM scopes not granted yet)' : 'failed: webhook fallback also failed');
+    await note(ok ? 'sent via channel ping (DM scopes not granted yet)' : 'failed: webhook fallback also failed');
     return ok ? 'sent_channel' : 'failed';
   }
-  await log(event, email, 'failed: ' + (r.err || 'unknown'));
+  await note('failed: ' + (r.err || 'unknown'));
   return 'failed';
 }
 
@@ -392,11 +446,18 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     if (!r) return { error: 'request not found' };
     const { data: rt } = await svc.from('request_types').select('label, default_assignee').eq('key', r.type_key).maybeSingle();
     const recipient = r.assignee || rt?.default_assignee || null;
-    const text = ':inbox_tray: New request for your team: *' + (r.title || rt?.label || r.type_key) + '*'
-      + (r.requested_by ? '\nFiled by ' + r.requested_by : '')
-      + '\n' + siteLink('#requests');
+    /* v15: the type, who asked, when it is needed, the details */
+    const text = ':inbox_tray: New request for your team: *' + slackEsc(String(r.title || rt?.label || r.type_key)) + '*'
+      + (rt?.label && r.title && rt.label !== r.title ? ' (' + slackEsc(String(rt.label)) + ')' : '')
+      + (r.department ? ' \u00b7 ' + teamWords(r.department) : '')
+      + (r.requested_by ? '\nFrom ' + slackEsc(String(r.requested_by)) : '')
+      + (r.needed_by ? (r.requested_by ? ', ' : '\n') + 'needed by ' + dueWords(String(r.needed_by)).replace(/^due /, '').replace(/^was due /, '') : '')
+      + (r.priority && String(r.priority).toLowerCase() !== 'normal' ? ' \u00b7 ' + slackEsc(String(r.priority)) : '')
+      + (r.details ? '\n> ' + slackEsc(firstLines(String(r.details), 300)) : '')
+      + '\n<' + siteLink('#requests') + '|Open the Requests page>';
+    const meta: Meta = { title: 'New request for your team', url: '#requests', ref: 'request-' + id };
     if (recipient) {
-      const out = await deliver(event, String(recipient), null, text);
+      const out = await deliver(event, String(recipient), null, text, meta);
       return { event, outcome: out };
     }
     const { data: leads } = await svc.from('hub_roles').select('email, role').eq('role', 'leader');
@@ -405,19 +466,27 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
       .filter((e: string) => (leads || []).some((l: { email: string }) => l.email === e)).slice(0, 2);
     if (!deptLeadEmails.length) { await log(event, r.department, 'skipped: no leader found'); return { event, outcome: 'no_leader' }; }
     const outs = [];
-    for (const e of deptLeadEmails) outs.push(await deliver(event, null, e, text));
+    for (const e of deptLeadEmails) outs.push(await deliver(event, null, e, text, meta));
     return { event, outcome: outs.join(',') };
   }
 
   if (event === 'task_reassigned') {
     const id = Number(body.task_id);
-    const { data: t } = await svc.from('dept_tasks').select('id, title, department, owner, due_date, updated_by').eq('id', id).maybeSingle();
+    const { data: t } = await svc.from('dept_tasks').select('id, title, department, owner, due_date, updated_by, description, project_id, priority, confidential, board_only, visibility').eq('id', id).maybeSingle();
     if (!t) return { error: 'task not found' };
-    const text = ':card_index_dividers: A task is now yours: *' + t.title + '*'
-      + (t.due_date ? ' (due ' + t.due_date + ')' : '')
-      + (t.updated_by ? '\nReassigned by ' + t.updated_by : '')
-      + '\n' + siteLink('#task/' + t.id);
-    const out = await deliver(event, String(t.owner || ''), null, text);
+    /* v15: the team, the project, the due date in words, who gave it, the first lines of the description */
+    const hiddenTask = !!(t.confidential || t.board_only || ['private', 'speakers', 'leadership'].indexOf(String(t.visibility || '')) >= 0);
+    let project = '';
+    if (t.project_id) { const { data: pr } = await svc.from('projects').select('name').eq('id', t.project_id).maybeSingle(); project = String(pr?.name || ''); }
+    const by = String(t.updated_by || '').replace(/^AI: ?/, 'the meeting ').replace(/^the Hub.*$/, 'the Hub');
+    const oldOwner = String(body.old_owner || '').trim();
+    const line1 = [teamWords(t.department), project ? 'project ' + project : '', dueWords(t.due_date), t.priority ? 'priority' : ''].filter(Boolean).join(' \u00b7 ');
+    const text = ':card_index_dividers: A task is now yours: *' + slackEsc(String(t.title || 'A task')) + '*'
+      + (line1 ? '\n' + slackEsc(line1) : '')
+      + (by ? '\nFrom ' + slackEsc(by) + (oldOwner && oldOwner.toLowerCase() !== String(t.owner || '').toLowerCase() ? ' (it was ' + slackEsc(oldOwner) + '\u2019s)' : '') : '')
+      + (!hiddenTask && t.description ? '\n> ' + slackEsc(firstLines(String(t.description), 300)) : '')
+      + '\n<' + siteLink('#task/' + t.id) + '|Open the task>';
+    const out = await deliver(event, String(t.owner || ''), null, text, { title: 'A task is now yours', url: '#task/' + t.id, ref: 'task-' + t.id });
     return { event, outcome: out };
   }
 
@@ -427,11 +496,17 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     if (!s) return { error: 'suggestion not found' };
     const { data: rt } = await svc.from('request_types').select('label, default_assignee').eq('key', s.type_key).maybeSingle();
     const recipient = s.assignee || rt?.default_assignee || null;
-    const text = ':white_check_mark: A meeting suggestion was accepted into a real request for your team: *' + (s.title || rt?.label || s.type_key) + '*'
-      + (s.quote ? '\n> ' + String(s.quote).slice(0, 180) : '')
-      + '\n' + siteLink('#requests');
+    /* v15: the meeting it came from, the details */
+    let meeting = '';
+    if (s.transcript_id) { const { data: tx } = await svc.from('transcripts').select('title, meeting_date').eq('id', s.transcript_id).maybeSingle(); if (tx) meeting = String(tx.title || 'a meeting') + (tx.meeting_date ? ' (' + String(tx.meeting_date) + ')' : ''); }
+    const text = ':white_check_mark: A meeting suggestion is now a request for your team: *' + slackEsc(String(s.title || rt?.label || s.type_key)) + '*'
+      + (s.department ? ' \u00b7 ' + teamWords(s.department) : '')
+      + (meeting ? '\nFrom ' + slackEsc(meeting) : '')
+      + (s.quote ? '\n> ' + slackEsc(String(s.quote).slice(0, 220)) : '')
+      + (s.details ? '\n' + slackEsc(firstLines(String(s.details), 240)) : '')
+      + '\n<' + siteLink('#requests') + '|Open the Requests page>';
     if (!recipient) { await log(event, s.department || 'unknown', 'skipped: no recipient'); return { event, outcome: 'no_recipient' }; }
-    const out = await deliver(event, String(recipient), null, text);
+    const out = await deliver(event, String(recipient), null, text, { title: 'A meeting suggestion is now a request', url: '#requests', ref: 'suggestion-' + id });
     return { event, outcome: out };
   }
 
@@ -449,10 +524,11 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     if (!m) return { error: 'mention not found' };
     if (m.visibility === 'private' || m.visibility === 'speakers') { await log(event, m.person, 'skipped: private meeting'); return { event, outcome: 'private' }; }
     const restricted = m.visibility === 'leadership';
-    const text = ':speech_balloon: You were mentioned in *' + (m.meeting_title || 'a meeting') + '*'
-      + (!restricted && m.quote ? '\n> ' + String(m.quote).slice(0, 200) : '')
-      + '\n' + siteLink('#mypage');
-    const out = await deliver(event, String(m.person || ''), null, text);
+    const text = ':speech_balloon: You were mentioned in *' + slackEsc(String(m.meeting_title || 'a meeting')) + '*'
+      + (m.meeting_date ? ' (' + String(m.meeting_date) + ')' : '') + (m.department ? ' \u00b7 ' + teamWords(m.department) : '')
+      + (!restricted && m.quote ? '\n> ' + slackEsc(String(m.quote).slice(0, 260)) : (restricted ? '\nA leadership meeting: the sentence stays in the Hub.' : ''))
+      + '\n<' + siteLink('#mypage') + '|Open My page>';
+    const out = await deliver(event, String(m.person || ''), null, text, { title: 'You were mentioned in a meeting', url: '#mypage', ref: 'meeting-mention-' + id });
     return { event, outcome: out };
   }
 
@@ -471,7 +547,7 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
       + '\nYou own the Volunteer Photographers step in the serving SOP, so this one is yours to welcome.'
       + '\n' + siteLink('#volunteering/applicants');
     const toEmail = String(body.to_email || '').toLowerCase() || null;
-    const out = await deliver(event, toEmail ? null : String(body.to_name || ''), toEmail, text);
+    const out = await deliver(event, toEmail ? null : String(body.to_name || ''), toEmail, text, { title: 'A ' + (listWords(roles) || 'photographer') + ' applied', url: '#volunteering/applicants', ref: 'vol-app-' + id });
     return { event, outcome: out };
   }
 
@@ -479,18 +555,54 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     /* v14 (wave242): the day's reminder, composed by wa242_due_reminders */
     const email = String(body.email || '').toLowerCase();
     if (!email) return { error: 'email required' };
+    /* v15: each task with its team, its due date and the first line of its description */
+    type Due = { id: number; title: string; due: string; team?: string; project?: string | null; line?: string | null; priority?: boolean };
     const lines: string[] = [];
-    const one = (t: { id: number; title: string; due: string }) => '\u2022 <' + siteLink('#task/' + t.id) + '|' + slackEsc(String(t.title || 'a task').replace(/\|/g, '/').slice(0, 90)) + '>';
-    const over = (Array.isArray(body.overdue) ? body.overdue : []) as Array<{ id: number; title: string; due: string }>;
-    const today = (Array.isArray(body.due_today) ? body.due_today : []) as Array<{ id: number; title: string; due: string }>;
-    const tomorrow = (Array.isArray(body.due_tomorrow) ? body.due_tomorrow : []) as Array<{ id: number; title: string; due: string }>;
+    const one = (t: Due, when: string) => '\u2022 <' + siteLink('#task/' + t.id) + '|' + slackEsc(String(t.title || 'a task').replace(/\|/g, '/').slice(0, 90)) + '>'
+      + ' _(' + slackEsc([t.team || '', t.project ? 'project ' + t.project : '', when, t.priority ? 'priority' : ''].filter(Boolean).join(', ')) + ')_'
+      + (t.line ? '\n    ' + slackEsc(firstLines(String(t.line), 110)) : '');
+    const over = (Array.isArray(body.overdue) ? body.overdue : []) as Due[];
+    const today = (Array.isArray(body.due_today) ? body.due_today : []) as Due[];
+    const tomorrow = (Array.isArray(body.due_tomorrow) ? body.due_tomorrow : []) as Due[];
     if (!over.length && !today.length && !tomorrow.length) return { event, outcome: 'nothing due' };
-    if (today.length) lines.push('*Due today* (' + today.length + ')\n' + today.slice(0, 8).map(one).join('\n') + (today.length > 8 ? '\n\u2026 and ' + (today.length - 8) + ' more' : ''));
-    if (over.length) lines.push('*Overdue* (' + over.length + ')\n' + over.slice(0, 8).map(t => one(t) + ' (' + t.due + ')').join('\n') + (over.length > 8 ? '\n\u2026 and ' + (over.length - 8) + ' more' : ''));
-    if (tomorrow.length) lines.push('*Due tomorrow* (' + tomorrow.length + ')\n' + tomorrow.slice(0, 8).map(one).join('\n') + (tomorrow.length > 8 ? '\n\u2026 and ' + (tomorrow.length - 8) + ' more' : ''));
-    const text = ':alarm_clock: Your tasks, ' + String(body.day || 'today') + ':\n' + lines.join('\n') + '\nClose them or move the dates in the Hub: ' + siteLink('#mypage');
-    const out = await deliver(event, null, email, text);
+    if (today.length) lines.push('*Due today* (' + today.length + ')\n' + today.slice(0, 8).map(t => one(t, 'due today')).join('\n') + (today.length > 8 ? '\n\u2026 and ' + (today.length - 8) + ' more' : ''));
+    if (over.length) lines.push('*Overdue* (' + over.length + ')\n' + over.slice(0, 8).map(t => one(t, 'was due ' + t.due)).join('\n') + (over.length > 8 ? '\n\u2026 and ' + (over.length - 8) + ' more' : ''));
+    if (tomorrow.length) lines.push('*Due tomorrow* (' + tomorrow.length + ')\n' + tomorrow.slice(0, 8).map(t => one(t, 'due tomorrow')).join('\n') + (tomorrow.length > 8 ? '\n\u2026 and ' + (tomorrow.length - 8) + ' more' : ''));
+    const text = ':alarm_clock: *Your tasks, ' + slackEsc(String(body.day || 'today')) + '*\n' + lines.join('\n') + '\n<' + siteLink('#mypage') + '|Close them or move the dates on My page>';
+    const out = await deliver(event, null, email, text, { title: 'Your tasks, ' + String(body.day || 'today'), url: '#mypage', ref: 'task-due-' + String(body.day || '') });
     return { event, outcome: out };
+  }
+
+  /* v15: a kind another function composes (hr-notify, recruit-actions, checkin-post): the Slack DM through the switch and
+     the log here, the Hub notification through hub-push's relay (its own switch) */
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still') {
+    const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 12);
+    const text = String(body.text || '').slice(0, 3000);
+    if (!to.length || !text) return { error: 'to and text required' };
+    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?' })[event]);
+    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage' })[event]);
+    const plainBody = String(body.body || plainOf(text)).slice(0, 400);
+    const outs: Record<string, string> = {};
+    for (const e of Array.from(new Set(to))) outs[e] = await deliver(event, null, e, text, { title, url, ref: body.tag ? String(body.tag) : undefined });
+    let hub = 'off';
+    if (coalesceOn(await appConfig('push_on'))) hub = await hubRelay(event, Array.from(new Set(to)), title, plainBody, '/' + url, String(body.tag || (event + '-' + Date.now())));
+    return { event, outcome: outs, hub };
+  }
+
+  /* v15: the centre's Send me a sample: the registry's example for the kind, for real, through the switches */
+  if (event === 'sample') {
+    const email = String(callerEmail || body.email || '').toLowerCase();
+    const kind = String(body.kind || '').replace(/[^a-z_]/g, '');
+    if (!email || !kind) return { error: 'kind required' };
+    const { data: k } = await svc.from('hub_notification_kinds').select('*').eq('key', kind).maybeSingle();
+    if (!k || k.channel_only) return { error: 'no such kind' };
+    const title = '[Sample] ' + String(k.example_title || k.title);
+    const url = String(k.example_url || '#mypage');
+    const text = ':bell: *' + slackEsc(title) + '*\n' + slackEsc(String(k.example_body || k.says || '')) + '\n_A sample from the notification centre: this is what "' + slackEsc(String(k.title)) + '" looks like._\n<' + siteLink(url) + '|Open it in the Hub>';
+    const slack = k.slack ? await deliver(kind, null, email, text, { title, url, ref: 'sample-' + kind }) : 'no Slack path for this kind';
+    const hub = k.hub ? (coalesceOn(await appConfig('push_on')) ? await hubRelay(kind, [email], title, String(k.example_body || k.says || '').slice(0, 400), '/' + url, 'sample-' + kind + '-' + Date.now()) : 'Hub notifications are off') : 'no Hub path for this kind';
+    const slackWords = ({ sent: 'sent', sent_channel: 'sent', opted_out: 'skipped: switched off here', hub_only: 'skipped: Hub only (your choice)', no_slack: 'skipped: no Slack account found', no_email: 'skipped: no email on the roster', failed: 'failed' } as Record<string, string>)[slack] || slack;
+    return { ok: true, event, kind, slack: slackWords, hub };
   }
 
   if (event === 'invited') {
@@ -519,7 +631,7 @@ Deno.serve(async (req: Request) => {
   } catch (_) { /* fall through */ }
   if (!authed) {
     callerEmail = await staffEmail(req);
-    if (callerEmail && (event === 'welcome_kit' || event === 'test' || event === 'decision_raised' || event === 'change_request' || event === 'change_request_text')) authed = true;
+    if (callerEmail && (event === 'welcome_kit' || event === 'test' || event === 'decision_raised' || event === 'change_request' || event === 'change_request_text' || event === 'sample')) authed = true;
   }
   if (!authed) return json({ error: 'unauthorized' }, 401);
   const result = await handle(event, body, callerEmail);

@@ -1,4 +1,9 @@
-// Welfare Avenue: hr-notify (v2, 07/10/26, wave215; v1 06/10/26, wave212)
+// Welfare Avenue: hr-notify (v3, 15/10/26, wave245; v2, 07/10/26, wave215; v1 06/10/26, wave212)
+// v3, Steel (15/10/26): "The notifications need to be even more robust and descriptive". The time-off DM goes through the
+// notify function (event timeoff_request): each HR person's own switch for that kind (the notification centre), the Hub
+// notification on their devices (hub-push), and the log the centre shows them (hub_notifications_sent). The direct DM from
+// here is the fallback when notify cannot be reached, so HR always hears. The message says the type, the dates, the days
+// and the note, with the link to the HR centre's Time off.
 // v1, Valex (06/10/26): "notify Valex and Samson when someone asks for time off". A new time-off request (wa_timeoff, status
 // requested; trigger trg_wa212_timeoff) is sent by Slack DM, from the Hub bot, to the people in app_config
 // hr_notify_emails (default Valex and Samson), with the dates, the type, the note and a link to the HR centre's Time off.
@@ -14,7 +19,9 @@
 // Auth: the trigger secret only.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const svc = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const svc = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 const HUB = 'https://hub.welfareavenue.com';
 const CAL = 'hub@welfareavenue.com';
 const GCAL = 'https://www.googleapis.com/calendar/v3';
@@ -36,6 +43,22 @@ async function dm(tok: string, email: string, text: string): Promise<string> {
   if (!uid) return 'no slack account';
   const o = await slack(tok, 'conversations.open', { users: uid }); const ch = (o.channel as { id?: string } | undefined)?.id; if (!ch) return String(o.error || 'no dm');
   const p = await slack(tok, 'chat.postMessage', { channel: ch, text, unfurl_links: false }); return p.ok ? 'sent' : String(p.error || 'refused');
+}
+/* v3 (wave245): the DM through notify: the person's switch for the kind, the Hub notification, the centre's log. null when
+   notify cannot be reached (the caller then DMs directly). The answer maps each address to sent, opted_out, hub_only,
+   no_slack, no_email or failed. */
+const WORDS: Record<string, string> = { sent: 'sent', sent_channel: 'sent (channel ping)', opted_out: 'skipped: switched off', hub_only: 'skipped: Hub only (their choice)', no_slack: 'skipped: no Slack account', no_email: 'skipped: not on the roster', failed: 'failed' };
+async function viaNotify(secret: string, event: string, to: string[], text: string, title: string, body: string, url: string, tag: string): Promise<Record<string, string> | null> {
+  try {
+    const r = await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ event, to, text, title, body, url, tag }) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => ({}));
+    if (!j || !j.outcome || typeof j.outcome !== 'object') return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(j.outcome as Record<string, string>)) out[k] = WORDS[String(v)] || String(v);
+    if (j.hub) out['hub'] = String(j.hub);
+    return out;
+  } catch (_) { return null; }
 }
 function d(s: string): string { try { return new Date(s + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); } catch (_) { return s; } }
 function nextDay(s: string): string { const t = new Date(s + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); }
@@ -129,12 +152,19 @@ Deno.serve(async (req) => {
     if (t.practice) return json({ ok: true, skipped: 'practice' });
     const { data: cfg } = await svc.from('app_config').select('value').eq('key', 'hr_notify_emails').maybeSingle();
     const to = String((cfg as { value?: string } | null)?.value || 'valex.sanon@welfareavenue.com,samson.jules@welfareavenue.com').split(/[,\s]+/).map(x => x.trim().toLowerCase()).filter(Boolean).filter(x => x !== String(t.email || '').toLowerCase());
+    const plainLine = t.name + ' asked for time off: ' + (CATS[t.category] || t.category) + ', ' + d(t.start_date) + (t.end_date !== t.start_date ? ' to ' + d(t.end_date) : '') + ' (' + t.days + (Number(t.days) === 1 ? ' day' : ' days') + ').';
     const text = ':palm_tree: *' + t.name + '* asked for time off: ' + (CATS[t.category] || t.category) + ', ' + d(t.start_date) + (t.end_date !== t.start_date ? ' to ' + d(t.end_date) : '') + ' (' + t.days + (Number(t.days) === 1 ? ' day' : ' days') + ').' + (t.note ? '\n_' + String(t.note).slice(0, 300) + '_' : '') + '\n<' + HUB + '/#hrcentre/timeoff|Approve or decline in the HR centre>';
-    const tok = await getSecret('SLACK_BOT_TOKEN');
-    const out: Record<string, string> = {};
-    for (const e of to.slice(0, 6)) out[e] = await dm(tok, e, text);
-    try { await svc.from('change_log').insert({ entity_type: 'timeoff', entity_id: String(t.id), field: 'notified', old_value: null, new_value: Object.entries(out).map(([k, v]) => k + ': ' + v).join('; '), changed_by: 'hr-notify' }); } catch (_) { /* audit */ }
-    return json({ ok: true, sent: out });
+    /* v3: through notify (switches, Hub notification, the centre's log); the direct DM when notify cannot be reached */
+    let out = await viaNotify(secret, 'timeoff_request', to.slice(0, 6), text, 'Time off requested', plainLine + (t.note ? ' ' + String(t.note).slice(0, 160) : '') + ' Approve or decline in the HR centre.', '#hrcentre/timeoff', 'timeoff-' + t.id);
+    let via = 'notify';
+    if (!out) {
+      via = 'hr-notify directly (notify unreachable)';
+      const tok = await getSecret('SLACK_BOT_TOKEN');
+      out = {};
+      for (const e of to.slice(0, 6)) out[e] = await dm(tok, e, text);
+    }
+    try { await svc.from('change_log').insert({ entity_type: 'timeoff', entity_id: String(t.id), field: 'notified', old_value: null, new_value: Object.entries(out).map(([k, v]) => k + ': ' + v).join('; ') + ' (' + via + ')', changed_by: 'hr-notify' }); } catch (_) { /* audit */ }
+    return json({ ok: true, sent: out, via });
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);
   }

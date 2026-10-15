@@ -1,4 +1,8 @@
-// Welfare Avenue: recruit-actions (v5, 07/10/26, wave216c: jd_publish: the job description of each open position (Posted or
+// Welfare Avenue: recruit-actions (v7, 15/10/26, wave245: the stage_moved DM to the person handling an applicant goes through
+// notify (event applicant): their own switch for that kind in the notification centre, the Hub notification on their devices,
+// and the log the centre shows them; the direct DM from here is the fallback when notify cannot be reached. Steel: "The
+// notifications need to be even more robust and descriptive". v6, 07/10/26, wave216d: jd_public_hold.
+// v5, 07/10/26, wave216c: jd_publish: the job description of each open position (Posted or
 // Interviewing, wa216_open_positions) as a PDF in public storage (content-images/jobs/), so welfareavenue.com/join/ and the
 // Join our team form can link it while the Drive folders stay private; redone when the JD changes in Drive (hub_positions
 // jd_public_url, jd_public_src); also run by cv_scan's schedule; a held one (jd_public_hold, set by HR) is taken down. v4, 07/10/26, wave215b: the offer letter is a PDF in the Welfare Avenue brand, signed with the
@@ -248,6 +252,20 @@ async function dm(tok: string, email: string, text: string): Promise<boolean> {
   const p = await slack(tok, 'chat.postMessage', { channel: ch, text, unfurl_links: false }); return !!p.ok;
 }
 const STAGE: Record<string, string> = { new: 'New', reviewing: 'Reviewing', interview: 'Interview', offer: 'Offer', hired: 'Hired', declined: 'Declined', withdrawn: 'Withdrawn' };
+/* v7 (wave245): the DM through notify: the person's switch for the kind, the Hub notification, the centre's log. null when
+   notify cannot be reached (the caller then DMs directly). */
+const DM_WORDS: Record<string, string> = { sent: 'sent', sent_channel: 'sent (channel ping)', opted_out: 'skipped: switched off', hub_only: 'skipped: Hub only (their choice)', no_slack: 'skipped: no Slack account', no_email: 'skipped: not on the roster', failed: 'failed' };
+async function viaNotify(event: string, to: string[], text: string, title: string, body: string, url: string, tag: string): Promise<{ slack: string; hub: string } | null> {
+  try {
+    const secret = await getSecret('WA_TRIGGER_SECRET');
+    const r = await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ event, to, text, title, body, url, tag }) });
+    if (!r.ok) return null;
+    const j = await r.json().catch(() => ({}));
+    if (!j || !j.outcome || typeof j.outcome !== 'object') return null;
+    const code = String((j.outcome as Record<string, string>)[to[0]] || 'failed');
+    return { slack: DM_WORDS[code] || code, hub: String(j.hub || 'off') };
+  } catch (_) { return null; }
+}
 // deno-lint-ignore no-explicit-any
 async function stageMoved(b: any) {
   const { data: c } = await svc.from('hub_candidates').select('id,name,role,position_id,owner,interview_at,status').eq('id', b.id).maybeSingle();
@@ -260,13 +278,19 @@ async function stageMoved(b: any) {
   const text = '*' + c.name + '*' + (role ? ' (' + role + ')' : '') + ' moved to *' + (STAGE[b.new] || b.new) + '*' + when + ' by ' + by + (c.owner ? '. Handled by ' + c.owner : '. Nobody handles it yet') + '. <' + link + '|Open Applications>';
   const tok = await getSecret('SLACK_BOT_TOKEN');
   const ch = await hrChannel(tok);
-  let posted = false, dmed = false;
+  let posted = false, dmed: string | boolean = false, hub = 'off';
   if (ch) { const p = await slack(tok, 'chat.postMessage', { channel: ch.id, text, unfurl_links: false }); posted = !!p.ok; }
   if (c.owner && c.owner !== by) {
     const { data: m } = await svc.from('team_members').select('email').eq('name', c.owner).maybeSingle();
-    if (m?.email) dmed = await dm(tok, String(m.email), text.replace('. Handled by ' + c.owner, '. You handle this applicant'));
+    if (m?.email) {
+      const dmText = text.replace('. Handled by ' + c.owner, '. You handle this applicant');
+      /* v7: through notify (the switch, the Hub notification, the centre's log); directly only when notify cannot be reached */
+      const via = await viaNotify('applicant', [String(m.email).toLowerCase()], dmText, c.name + ' moved to ' + (STAGE[b.new] || b.new), (role ? role + ': ' : '') + 'moved to ' + (STAGE[b.new] || b.new) + when + ' by ' + by + '. You handle this applicant.', '#hrcentre/applications', 'applicant-' + c.id + '-' + String(b.new));
+      if (via) { dmed = via.slack; hub = via.hub; }
+      else dmed = (await dm(tok, String(m.email), dmText)) ? 'sent (directly: notify unreachable)' : 'failed (directly: notify unreachable)';
+    }
   }
-  return { ok: true, posted, channel: ch?.name || null, dm: dmed };
+  return { ok: true, posted, channel: ch?.name || null, dm: dmed, hub };
 }
 
 /* ---------- Google Drive (the wa-hub-drive service account) ---------- */

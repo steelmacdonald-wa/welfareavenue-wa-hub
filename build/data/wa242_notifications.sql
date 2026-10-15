@@ -196,12 +196,13 @@ begin
   return jsonb_build_object('ok', true, 'disabled', v_row.disabled, 'kinds', coalesce(v_row.prefs -> 'kinds', '{}'::jsonb), 'channel', coalesce(v_row.prefs ->> 'channel', 'both'));
 end $$;
 
-revoke execute on function public.wa242_name_is(text, text, text, jsonb) from anon, authenticated;
-revoke execute on function public.wa242_due_lists(bigint) from anon, authenticated;
-revoke execute on function public.wa242_due_reminders(boolean) from anon, authenticated;
-revoke execute on function public.wa242_due_mine() from anon;
-revoke execute on function public.wa242_remind_me() from anon;
-revoke execute on function public.wa242_prefs_set(jsonb) from anon;
+-- a new function is executable by PUBLIC: revoke from public too (wa243b_grants.sql set the week's functions right)
+revoke execute on function public.wa242_name_is(text, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.wa242_due_lists(bigint) from public, anon, authenticated;
+revoke execute on function public.wa242_due_reminders(boolean) from public, anon, authenticated;
+revoke execute on function public.wa242_due_mine() from public, anon; grant execute on function public.wa242_due_mine() to authenticated;
+revoke execute on function public.wa242_remind_me() from public, anon; grant execute on function public.wa242_remind_me() to authenticated;
+revoke execute on function public.wa242_prefs_set(jsonb) from public, anon; grant execute on function public.wa242_prefs_set(jsonb) to authenticated;
 
 comment on function public.wa242_name_is(text, text, text, jsonb) is 'wave242: is this owner or allowed person this team member (the email, the full name, a unique first name as a whole word, a nickname)';
 comment on function public.wa242_due_lists(bigint) is 'wave242: a team member''s open tasks with a date: due today, overdue (60 days), due tomorrow; theirs as an assignee or the named owner, and only what they could open';
