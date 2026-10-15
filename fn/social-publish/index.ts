@@ -1,4 +1,7 @@
-// Welfare Avenue: social-publish (v4, 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-publish (v5, 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// v5 (wave242): the notification centre's switches for the Content Studio kind (wa_notify_prefs.prefs.kinds.content_studio =
+//   {hub, slack}) decide: Slack off means no DM whatever the devices; Hub off means no Hub notification; no entry means the
+//   old rules (the channel, the disabled list).
 // v4 (wave241, Steel 14/10/26: scheduling goes to approval, "sent a message to you and KK, and it's like a button, you can
 //   literally just click a button to approve in Slack"): the pending notice goes to the approvers (hub_settings
 //   content_studio.approvers, else the marketing leads and admins) with Approve and Send it back links into the Hub
@@ -110,7 +113,7 @@ async function slackChannel(tok: string, name: string): Promise<string | null> {
   }
   return null;
 }
-function label(p: Post): string { const t = String(p.title || '').trim() || String(p.caption || '').replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 67) + '…' : (t || 'Post #' + p.id); }
+function label(p: Post): string { const t = String(p.title || '').trim() || String(p.caption || '').replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 67) + '\u2026' : (t || 'Post #' + p.id); }
 async function announce(p: Post, lines: string[]): Promise<void> {
   try {
     if (!lines.length) return;
@@ -143,7 +146,15 @@ async function slackDm(email: string, text: string): Promise<string> {
 }
 /* the person's own choice of Hub and Slack (wa_notify_prefs, wave219): Hub only means no Slack DM when a device is on */
 async function channelOf(email: string): Promise<string> {
-  try { const { data } = await svc.from('wa_notify_prefs').select('prefs, disabled').eq('email', email.toLowerCase()).maybeSingle(); const off = (Array.isArray(data?.disabled) ? data?.disabled : []) as string[]; if (off.indexOf('content_studio') >= 0) return 'off'; return String((data?.prefs as Any)?.channel || 'both'); } catch (_) { return 'both'; }
+  try {
+    const { data } = await svc.from('wa_notify_prefs').select('prefs, disabled').eq('email', email.toLowerCase()).maybeSingle();
+    const off = (Array.isArray(data?.disabled) ? data?.disabled : []) as string[];
+    /* v5 (wave242): the notification centre's switches for this kind win; 'hub-only' means no Slack DM whatever the devices */
+    const k = ((((data?.prefs as Any) || {}).kinds || {}) as Any).content_studio;
+    if (k && (typeof k.slack === 'boolean' || typeof k.hub === 'boolean')) { const sl = k.slack !== false, hb = k.hub !== false; return !sl && !hb ? 'off' : sl && hb ? 'both' : hb ? 'hub-only' : 'slack'; }
+    if (off.indexOf('content_studio') >= 0) return 'off';
+    return String((data?.prefs as Any)?.channel || 'both');
+  } catch (_) { return 'both'; }
 }
 async function hasDevice(email: string): Promise<boolean> { try { const { count } = await svc.from('hub_push_subs').select('id', { count: 'exact', head: true }).eq('email', email.toLowerCase()); return (count || 0) > 0; } catch (_) { return false; } }
 async function hubPush(emails: string[], title: string, body: string, url: string, tag: string): Promise<void> {
@@ -160,7 +171,7 @@ async function tell(emails: string[], title: string, body: string, url: string, 
     const ch = await channelOf(e);
     if (ch === 'off') { out.push(e + ': switched off'); continue; }
     if (ch !== 'slack') hubTo.push(e);
-    const hubOnly = ch === 'hub' && await hasDevice(e);
+    const hubOnly = ch === 'hub-only' || (ch === 'hub' && await hasDevice(e));
     out.push(e + ': ' + (hubOnly ? 'Hub only' : await slackDm(e, slackText)));
   }
   if (hubTo.length) await hubPush(hubTo, title, body, url, tag);
@@ -239,7 +250,7 @@ function capHashtags(s: string, max: number): string {
   return s.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, (m) => { n++; return n > max ? '' : m; }).replace(/[ \t]+\n/g, '\n').trim();
 }
 function rid(n = 6): string { const a = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; const b = crypto.getRandomValues(new Uint8Array(n)); for (let i = 0; i < n; i++) s += a[b[i] % a.length]; return s; }
-function slug(s: string): string { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+function slug(s: string): string { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
 function withUtm(url: string, p: Post, platform: string): string {
   try {
     const u = new URL(url);
@@ -282,7 +293,7 @@ async function capFor(p: Post, platform: string): Promise<string> {
   if (platform === 'facebook' && p.link_url && images(p).length && c.indexOf(p.link_url) < 0) c += (c ? '\n\n' : '') + p.link_url;
   if ((platform === 'linkedin' || platform === 'threads') && p.link_url && c.indexOf(p.link_url) < 0) c += (c ? '\n\n' : '') + p.link_url;
   if (platform === 'instagram') { const cap = Number((await studio()).hashtag_cap || 5); c = capHashtags(c, cap); }
-  if (platform === 'threads' && c.length > 500) c = c.slice(0, 497) + '…';
+  if (platform === 'threads' && c.length > 500) c = c.slice(0, 497) + '\u2026';
   return await trackLinks(c, p, platform);
 }
 
@@ -578,7 +589,7 @@ async function remindManual(p: Post, platform: string, why: string, dry = false)
   const when = p.scheduled_at ? new Date(p.scheduled_at).toLocaleString('en-CA', { timeZone: 'America/Toronto', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'now';
   const link = SITE + '/#contentcal/' + p.id;
   const slack = ':calendar: *Time to post on ' + (PNAME[platform] || platform) + ':* ' + label(p) + ' (' + when + ')\n' + why + '. Copy the caption and the media from the Hub, post it in the ' + (PNAME[platform] || platform) + ' app, then press Mark posted.\n' +
-    (cap ? '>' + cap.slice(0, 600).replace(/\n/g, '\n>') + (cap.length > 600 ? '…' : '') + '\n' : '') + (media.length ? media.slice(0, 4).map((u, i) => '<' + u + '|Media ' + (i + 1) + '>').join('  ') + '\n' : '') + '<' + link + '|Open it in the Content Studio>';
+    (cap ? '>' + cap.slice(0, 600).replace(/\n/g, '\n>') + (cap.length > 600 ? '\u2026' : '') + '\n' : '') + (media.length ? media.slice(0, 4).map((u, i) => '<' + u + '|Media ' + (i + 1) + '>').join('  ') + '\n' : '') + '<' + link + '|Open it in the Content Studio>';
   if (dry) return { to, slack };
   if (!to) return { to: null, outcome: 'nobody to remind (no owner)' };
   const out = await tell([to], 'Time to post on ' + (PNAME[platform] || platform), label(p) + ': copy the caption and media, post it, then Mark posted.', '/#contentcal/' + p.id, 'studio-due-' + p.id + '-' + platform, slack);
@@ -612,7 +623,7 @@ async function publishPost(id: number, by: string, caller: Me | null): Promise<A
       if ((platform === 'facebook' || platform === 'instagram') && !t) throw new Error(metaErr.indexOf('META_SYSTEM_TOKEN') >= 0 ? 'Publishing to Meta is off: the Meta token is not in the vault' : (metaErr || 'Meta is not connected'));
       const r = await fn(p, t);
       results[platform] = { ...r, at: new Date().toISOString() };
-      lines.push('• ' + (r.draft ? 'Sent to the ' + PNAME[platform] + ' drafts (post it in the app)' : 'Published to ' + (PNAME[platform] || platform)) + ': <' + r.url + '|open>');
+      lines.push('\u2022 ' + (r.draft ? 'Sent to the ' + PNAME[platform] + ' drafts (post it in the app)' : 'Published to ' + (PNAME[platform] || platform)) + ': <' + r.url + '|open>');
     } catch (e) {
       if (e instanceof Pending) { results[platform] = { pending: true, container: e.container, since: new Date().toISOString() }; }
       else if (e instanceof Manual) {
@@ -676,11 +687,11 @@ async function finishPending(): Promise<Any[]> {
         if (pl === 'instagram' && t && t.ig) {
           const tok = t.page ? t.page.token : t.token;
           const s = await containerStatus(String(r.container), tok);
-          if (s === 'FINISHED') { const fin = await igFinish(t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('• Published to Instagram: <' + fin.url + '|open>'); }
+          if (s === 'FINISHED') { const fin = await igFinish(t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Instagram: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Instagram: the video was still processing after 30 minutes'); }
         } else if (pl === 'threads' && th) {
           const s = await containerStatus(String(r.container), th.token, THREADS);
-          if (s === 'FINISHED') { const fin = await threadsFinish(th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('• Published to Threads: <' + fin.url + '|open>'); }
+          if (s === 'FINISHED') { const fin = await threadsFinish(th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Threads: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Threads: the video was still processing after 30 minutes'); }
         } else { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': cannot finish without its connection'); }
       } catch (e) { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': ' + String((e as Error).message || e).slice(0, 300)); }
@@ -698,7 +709,7 @@ async function finishPending(): Promise<Any[]> {
 }
 
 /* ---------- confirmations (unchanged from v2, all platforms the analytics hold) ---------- */
-function norm(s: string): string { return String(s || '').toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/[#@]/g, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function norm(s: string): string { return String(s || '').toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/[#@]/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function words(s: string): Set<string> { return new Set(norm(s).split(' ').filter(w => w.length > 3)); }
 function similar(a: string, b: string): number {
   const A = words(a), B = words(b); if (A.size < 3 || !B.size) return 0;
@@ -729,7 +740,7 @@ async function confirm(days: number): Promise<Any> {
         const row = liveRow(hit, hit._by || 'id');
         const old = live[platform];
         if (!old || old.external_id !== row.external_id || JSON.stringify([old.reach, old.views, old.likes, old.comments, old.shares, old.saves]) !== JSON.stringify([row.reach, row.views, row.likes, row.comments, row.shares, row.saves])) { live[platform] = { ...row, announced: old ? old.announced : false }; changed = true; }
-        if (!old && !(p.results && p.results[platform] && p.results[platform].id)) { lines.push('• Live on ' + (PNAME[platform] || platform) + (row.url ? ': <' + row.url + '|open>' : '') + ' (seen in the analytics)'); live[platform].announced = true; }
+        if (!old && !(p.results && p.results[platform] && p.results[platform].id)) { lines.push('\u2022 Live on ' + (PNAME[platform] || platform) + (row.url ? ': <' + row.url + '|open>' : '') + ' (seen in the analytics)'); live[platform].announced = true; }
       }
     }
     if (changed) { await save(p.id, { live }); updated++; out.push({ id: p.id, live: Object.keys(live) }); }
@@ -742,7 +753,7 @@ async function confirm(days: number): Promise<Any> {
     const live: Record<string, Any> = { ...(p.live || {}) }; let first: string | null = null; const lines: string[] = [];
     for (const platform of (p.platforms || [])) {
       const b = byCaption(S, platform, rawCaption(p, platform), new Date(String(p.scheduled_at)).getTime());
-      if (b) { live[platform] = { ...liveRow(b, 'caption'), announced: true }; if (!first || String(b.published_at) < first) first = String(b.published_at); lines.push('• Live on ' + (PNAME[platform] || platform) + (b.url ? ': <' + b.url + '|open>' : '') + ' (posted by hand, seen in the analytics)'); }
+      if (b) { live[platform] = { ...liveRow(b, 'caption'), announced: true }; if (!first || String(b.published_at) < first) first = String(b.published_at); lines.push('\u2022 Live on ' + (PNAME[platform] || platform) + (b.url ? ': <' + b.url + '|open>' : '') + ' (posted by hand, seen in the analytics)'); }
     }
     if (first) {
       await save(p.id, { status: 'posted', live, published_at: first, error: null, updated_by: 'confirmed from the analytics' });

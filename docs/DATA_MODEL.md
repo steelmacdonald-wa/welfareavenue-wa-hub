@@ -2373,4 +2373,10 @@ Functions:
 - `wa234_fold_role()`: wave234: Community welcome (community_talker) is Community lead (community_debrief). Before insert or update on event_roster (role), volunteer_profiles and volunteer_applications (roles): the old key is written as the new one. Trigger only.
 - `wa237_upcoming_dates(text, date)`: wave237: the named dates in the 45 days after a meeting (serving events, fundraisers, the team's own meetings), one line each, for process-transcript (the service role) to resolve "before Sunday's event". Security invoker: anyone else gets only what row security lets them read.
 - `wa237_due_check()`: wave237: the due-date check's list for the signed-in person: their open tasks that are overdue, undated, dated by a meeting and unconfirmed, or whose owner a meeting left unsure (owner_unsure: "Is this yours?"), plus, for a team's lead, the team's tasks nobody on the roster owns (for_lead: "Who owns this?"). Replaces my_due_date_check() for the pop-up; that one stays for pages on the old build.
+- `wa242_name_is(text, text, text, jsonb)`: wave242: is this owner or allowed person this team member (the email, the full name, a unique first name as a whole word, a nickname)
+- `wa242_due_lists(bigint)`: wave242: a team member's open tasks with a date: due today, overdue (60 days), due tomorrow; theirs as an assignee or the named owner, and only what they could open
+- `wa242_due_mine()`: wave242: the caller's due lists (the notification centre shows them)
+- `wa242_due_reminders(boolean)`: wave242: the day's task reminders, weekdays 8:30 Toronto (cron wa-task-due): one message a person through notify (task_due) and hub-push; p_dry shows the plan; app_config task_due = off pauses it
+- `wa242_remind_me()`: wave242: the caller asks for the day's reminder now (at most three a day)
+- `wa242_prefs_set(jsonb)`: wave242: the notification centre saves each kind's Hub and Slack switch (wa_notify_prefs.prefs.kinds), the disabled list kept in step
 

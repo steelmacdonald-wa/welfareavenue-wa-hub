@@ -1,0 +1,232 @@
+/* =====================================================================
+   WA v242 The notification centre (Steel, 14/10/26 marketing meeting; built 15/10/26)
+   =====================================================================
+   Settings > Notifications lists every kind of notification the Hub sends a person, each with a Hub switch and a Slack
+   switch (wa_notify_prefs.prefs.kinds[kind] = {hub, slack}, saved through wa242_prefs_set). It takes the place of
+   wave116j's checkbox list and wave219's "where they arrive" radios and announcement checkbox (those stay in the code;
+   this segment hides them once the centre is mounted). The task reminders (wa242_due_reminders, weekday mornings) show
+   what is due for the person today and "Send me today's reminder" (wa242_remind_me).
+   Reads wa_notify_prefs (own row), wa242_due_mine; writes through wa242_prefs_set and wa242_remind_me only. Staff only.
+   ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa242) return; window.__wa242 = true;
+  var GREEN = '#103F39', TEAL = '#2A8C7A', MUTED = '#797773', FLAG = '#B3402F', CREAM = '#FFFAF2';
+  /* the kinds, in the order shown: which channels each one can use (announcements have no Slack DM: their Slack post and
+     email stay as they are; a request update and the welcome have no Hub notification) */
+  var KINDS = [
+    { key: 'mentioned', label: 'A meeting mentions me', hub: true, slack: true },
+    { key: 'comment_mention', label: 'Someone @mentions me in the Hub', hub: true, slack: true },
+    { key: 'task_reassigned', label: 'A task is given or handed to me', hub: true, slack: true },
+    { key: 'task_due', label: 'My tasks due today, tomorrow or overdue (weekday mornings, 8:30)', hub: true, slack: true },
+    { key: 'request_filed', label: 'A request is filed for my team', hub: true, slack: true },
+    { key: 'suggestion_accepted', label: 'A meeting suggestion becomes a request for my team', hub: true, slack: true },
+    { key: 'request_update', label: 'A request I asked for is done, or someone adds a note to it', hub: false, slack: true },
+    { key: 'content_studio', label: 'Content Studio: a post waits for my approval, is decided, or is mine to post by hand', hub: true, slack: true },
+    { key: 'volunteer_applied', label: 'A photographer or videographer applies (the owner of the photographer step)', hub: true, slack: true },
+    { key: 'announcement', label: 'A new announcement for me (its Slack post and email stay as they are)', hub: true, slack: false }
+  ];
+  var W = { loaded: false, loading: null, channel: 'both', disabled: [], kinds: {}, devices: null, due: null, dueAt: 0, busy: false, sending: false, at: 0 };
+  window.__wa242state = W;
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function deviceCount() {
+    if (W.devices != null) return W.devices;
+    try { var s = window.__wa219 && window.__wa219.state(); if (s && typeof s.devices === 'number') return s.devices; } catch (e) { /* fine */ }
+    return 0;
+  }
+
+  /* ---------- the person's choices ---------- */
+  async function load(force) {
+    if (W.loading) return W.loading;
+    if (W.loaded && !force && Date.now() - W.at < 15000) return Promise.resolve();
+    W.loading = (async function () {
+      try {
+        var r = await db.from('wa_notify_prefs').select('disabled, prefs').eq('email', myEmail()).maybeSingle();
+        var d = r && r.data;
+        W.disabled = (d && Array.isArray(d.disabled)) ? d.disabled.slice() : [];
+        var p = (d && d.prefs && typeof d.prefs === 'object') ? d.prefs : {};
+        W.channel = (p.channel === 'hub' || p.channel === 'slack') ? p.channel : 'both';
+        W.kinds = (p.kinds && typeof p.kinds === 'object') ? JSON.parse(JSON.stringify(p.kinds)) : {};
+      } catch (e) { /* keep what we have */ }
+      try { var dv = await db.from('hub_push_subs').select('id').eq('email', myEmail()); W.devices = (dv && Array.isArray(dv.data)) ? dv.data.length : 0; } catch (e) { /* fine */ }
+      W.loaded = true; W.at = Date.now();
+    })();
+    try { await W.loading; } finally { W.loading = null; }
+  }
+  /* each kind's state: the saved switch, else the old rules (the channel, the disabled list, a device on) */
+  function stateOf(k) {
+    var ex = W.kinds[k.key];
+    var off = W.disabled.indexOf(k.key) >= 0;
+    var hub = k.hub && (ex && typeof ex.hub === 'boolean' ? ex.hub : (W.channel !== 'slack' && !off));
+    var slack = k.slack && (ex && typeof ex.slack === 'boolean' ? ex.slack : (!off && !(W.channel === 'hub' && deviceCount() > 0 && k.key !== 'request_update')));
+    return { hub: !!hub, slack: !!slack };
+  }
+  function allKinds() {
+    var out = {};
+    KINDS.forEach(function (k) { var s = stateOf(k); out[k.key] = { hub: k.hub ? s.hub : true, slack: k.slack ? s.slack : true }; });
+    return out;
+  }
+  async function flip(key, ch) {
+    var k = null; KINDS.forEach(function (x) { if (x.key === key) k = x; });
+    if (!k || W.busy) return;
+    var cur = stateOf(k); var next = { hub: cur.hub, slack: cur.slack };
+    next[ch] = !cur[ch];
+    var kinds = allKinds(); kinds[key] = { hub: k.hub ? next.hub : true, slack: k.slack ? next.slack : true };
+    W.kinds = kinds; W.busy = true; paint();
+    try {
+      var r = await db.rpc('wa242_prefs_set', { p_kinds: kinds });
+      if (r && r.error) throw r.error;
+      var d = r && r.data;
+      if (d && d.kinds) W.kinds = d.kinds;
+      if (d && Array.isArray(d.disabled)) W.disabled = d.disabled;
+      toastS(k.label.split(' (')[0] + ': ' + (ch === 'hub' ? 'Hub' : 'Slack') + (next[ch] ? ' on' : ' off'));
+    } catch (e) {
+      toastS('Could not save that: ' + (e && e.message ? e.message : 'try again'));
+      await load(true);
+    }
+    W.busy = false; paint();
+  }
+
+  /* ---------- the day's tasks ---------- */
+  async function loadDue(force) {
+    if (W.due && !force && Date.now() - W.dueAt < 60000) return;
+    try { var r = await db.rpc('wa242_due_mine'); if (r && !r.error) { W.due = r.data || null; W.dueAt = Date.now(); } } catch (e) { /* fine */ }
+    paint();
+  }
+  async function remindMe() {
+    if (W.sending) return;
+    W.sending = true; paint();
+    try {
+      var r = await db.rpc('wa242_remind_me');
+      if (r && r.error) throw r.error;
+      var d = (r && r.data) || {};
+      toastS(d.sent ? 'Sent: look in the Hub and on Slack as you chose above' : (d.why || 'Nothing sent'));
+    } catch (e) { toastS('Could not send it: ' + (e && e.message ? e.message : 'try again')); }
+    W.sending = false; paint();
+  }
+  function dueWords() {
+    var d = W.due; if (!d) return '';
+    if (d.member === false) return 'You are not on the team list yet, so there are no tasks of yours to remind you of.';
+    var n = function (k) { return Array.isArray(d[k]) ? d[k].length : 0; };
+    var t = n('due_today'), o = n('overdue'), m = n('due_tomorrow');
+    if (!t && !o && !m) return 'Nothing of yours is due today or tomorrow, and nothing is overdue.';
+    var bits = [];
+    if (t) bits.push('<b>' + t + '</b> due today');
+    if (m) bits.push('<b>' + m + '</b> due tomorrow');
+    if (o) bits.push('<b>' + o + '</b> overdue');
+    return 'Right now: ' + bits.join(', ') + '. <a data-w242go="mypage">Open My page</a>';
+  }
+
+  /* ---------- paint ---------- */
+  function rowHtml(k) {
+    var s = stateOf(k);
+    var sw = function (ch, on, can) {
+      if (!can) return '<span class="w242na" title="Not on ' + (ch === 'hub' ? 'the Hub' : 'Slack') + ' for this kind">\u2014</span>';
+      return '<span class="sw' + (on ? ' on' : '') + (W.busy ? ' busy' : '') + '" data-w242sw="' + k.key + '|' + ch + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" aria-label="' + E(k.label) + ': ' + (ch === 'hub' ? 'Hub' : 'Slack') + '"><i></i></span>';
+    };
+    var extra = '';
+    if (k.key === 'task_due') {
+      extra = '<div class="w242due">' + (W.due ? dueWords() : 'Looking at your tasks\u2026') + (W.due && W.due.member !== false ? ' <button type="button" class="w242btn" data-w242="remind"' + (W.sending ? ' disabled' : '') + '>' + (W.sending ? 'Sending\u2026' : 'Send me today\u2019s reminder') + '</button>' : '') + '</div>';
+    }
+    return '<div class="w242row" data-w242row="' + k.key + '"><div class="w242lab">' + E(k.label) + extra + '</div><div class="w242c">' + sw('hub', s.hub, k.hub) + '</div><div class="w242c">' + sw('slack', s.slack, k.slack) + '</div></div>';
+  }
+  function html() {
+    var dev = deviceCount();
+    var head = '<div class="w242head"><div class="w242lab"><b>What reaches you, and where</b><span>Hub notifications pop up on the devices you turned on above' + (dev ? '' : ' (none yet)') + '; Slack ones come to your DMs.</span></div><div class="w242c">Hub</div><div class="w242c">Slack</div></div>';
+    return head + KINDS.map(rowHtml).join('') +
+      '<div class="note w242note">Each switch saves by itself. Off on both means that kind stays quiet; the weekly digest, the serving texts and the announcements\u2019 Slack posts are not notifications and are not touched here.</div>';
+  }
+  function host() {
+    var box = document.getElementById('modalBox'); if (!box) return null;
+    var root = box.querySelector('.w116js'); if (!root) return null;
+    var tab = root.querySelector('.tabs a.on'); if (!tab || tab.getAttribute('data-jtab') !== 'notifications') return null;
+    return root;
+  }
+  function paint() {
+    try {
+      var root = host(); if (!root) return;
+      var el = document.getElementById('w242set');
+      if (!el) {
+        el = document.createElement('div'); el.id = 'w242set';
+        /* after wave219's block and the line that introduces the list; wave116j's checkboxes and wave219's radios step aside */
+        var after = document.getElementById('w219set');
+        if (after && after.nextElementSibling && after.nextElementSibling.classList.contains('note') && after.nextElementSibling.classList.contains('w219what')) after = after.nextElementSibling;
+        if (!after) { var tabs = root.querySelector('.tabs'); after = tabs; }
+        if (after && after.nextSibling) root.insertBefore(el, after.nextSibling); else root.appendChild(el);
+      }
+      var h = html();
+      if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+      tidy(root);
+    } catch (e) { /* fine */ }
+  }
+  /* the older controls for the same choices, out of the way */
+  function tidy(root) {
+    try {
+      var labels = root.querySelectorAll(':scope > label.chk');
+      for (var i = 0; i < labels.length; i++) { var inp = labels[i].querySelector('input[data-jev]'); if (inp) labels[i].style.display = 'none'; }
+      var w = root.querySelector('#w219set .w219where'); if (w) w.style.display = 'none';
+      var a = root.querySelector('#w219set .w219ann'); if (a) a.style.display = 'none';
+      var n = root.querySelector('.note.w219what'); if (n && !n.__w242) { n.__w242 = true; n.innerHTML = n.innerHTML.replace('Which of these reach you. On Slack they come to your DMs', 'Slack messages go to your DMs'); }
+    } catch (e) { /* fine */ }
+  }
+  function mount() {
+    if (!staff() || !host()) return;
+    paint();
+    load().then(function () { paint(); });
+    loadDue();
+  }
+  /* wave138's hook runs after wave116j paints Settings; wave219 wrapped it, this wraps once more */
+  var prevAfter = window.w138AfterPaint;
+  window.w138AfterPaint = function (tab) {
+    var r;
+    try { if (typeof prevAfter === 'function') r = prevAfter.apply(this, arguments); } catch (e) { /* fine */ }
+    if (tab === 'notifications') { setTimeout(mount, 0); setTimeout(paint, 400); setTimeout(paint, 1500); }
+    return r;
+  };
+  /* wave219 repaints its block after its own checks; keep ours in place and in step with the device count */
+  try {
+    if (window.__wa219 && typeof window.__wa219.paintSettings === 'function' && !window.__wa219.paintSettings.__w242) {
+      var ps = window.__wa219.paintSettings;
+      var wrapped = function () { var r = ps.apply(this, arguments); try { if (host()) { W.devices = null; paint(); } } catch (e) { /* fine */ } return r; };
+      wrapped.__w242 = true; window.__wa219.paintSettings = wrapped;
+    }
+  } catch (e) { /* fine */ }
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var s = t.closest('#w242set [data-w242sw]');
+    if (s) { e.preventDefault(); e.stopPropagation(); var p = s.getAttribute('data-w242sw').split('|'); flip(p[0], p[1]); return; }
+    var b = t.closest('#w242set [data-w242]');
+    if (b) { e.preventDefault(); e.stopPropagation(); if (b.getAttribute('data-w242') === 'remind') remindMe(); return; }
+    var g = t.closest('#w242set [data-w242go]');
+    if (g) { e.preventDefault(); e.stopPropagation(); try { if (typeof closeModal === 'function') closeModal(); } catch (x) { /* fine */ } location.hash = '#mypage'; }
+  }, true);
+
+  var css = document.createElement('style'); css.id = 'wa242css';
+  css.textContent =
+    '#w242set{margin:6px 0 14px}' +
+    '#w242set .w242head,#w242set .w242row{display:grid;grid-template-columns:1fr 64px 64px;gap:8px;align-items:center}' +
+    '#w242set .w242head{padding:0 0 6px;border-bottom:1px solid rgba(16,63,57,.14)}' +
+    '#w242set .w242head .w242c{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:13px;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';text-align:center}' +
+    '#w242set .w242head b{display:block;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:18px;color:' + GREEN + ';line-height:1.15}' +
+    '#w242set .w242head span{display:block;font-size:12px;color:' + MUTED + ';margin-top:2px;line-height:1.4}' +
+    '#w242set .w242row{padding:8px 0;border-bottom:1px solid rgba(16,63,57,.08)}' +
+    '#w242set .w242lab{font-size:13px;color:var(--wa-text);line-height:1.4;min-width:0}' +
+    '#w242set .w242c{display:flex;justify-content:center}' +
+    '#w242set .w242na{color:rgba(31,32,30,.35);font-size:14px}' +
+    '#w242set .w242due{margin:5px 0 0;font-size:12.5px;color:' + MUTED + ';line-height:1.45}' +
+    '#w242set .w242due b{color:' + GREEN + '}' +
+    '#w242set .w242due a{color:' + GREEN + ';text-decoration:underline;cursor:pointer}' +
+    '#w242set .w242btn{margin:4px 0 0;font:600 12px/1 Barlow,sans-serif;padding:6px 10px;border-radius:999px;border:1px solid rgba(16,63,57,.3);background:' + CREAM + ';color:' + GREEN + ';cursor:pointer}' +
+    '#w242set .w242btn[disabled]{opacity:.6;cursor:default}' +
+    '#w242set .w242note{margin-top:8px}' +
+    '@media (max-width:520px){#w242set .w242head,#w242set .w242row{grid-template-columns:1fr 52px 52px}}';
+  (document.head || document.documentElement).appendChild(css);
+
+  window.__wa242 = { paint: paint, load: load, stateOf: stateOf, allKinds: allKinds, KINDS: KINDS, flip: flip, remindMe: remindMe, state: function () { return { loaded: W.loaded, channel: W.channel, disabled: W.disabled.slice(), kinds: JSON.parse(JSON.stringify(W.kinds)), devices: W.devices, due: W.due, busy: W.busy }; } };
+})();

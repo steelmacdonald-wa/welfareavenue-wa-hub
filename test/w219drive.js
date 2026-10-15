@@ -169,7 +169,7 @@ async function openNotif(f) {
       const ann = await f.ev(() => { const a = document.querySelector('#w219set [data-jev="announcement"]'); return a ? a.checked : null; });
       ok('new announcements are on by default', ann === true, ann);
       const what = await f.ev(() => { const n = document.querySelector('.w116js .w219what'); return n ? n.textContent : null; });
-      ok('wave116j\'s list now says it covers both', !!what && /^Which of these reach you\. On Slack they come to your DMs/.test(what), what);
+      ok('wave116j\'s list now says it covers both (wave242: the centre\'s line)', !!what && /^(Which of these reach you\. On Slack they come to your DMs|Slack messages go to your DMs)/.test(what), what);
       const order = await f.ev(() => { const t = document.querySelector('.w116js .tabs'); return t && t.nextElementSibling && t.nextElementSibling.id; });
       ok('the device block comes first under the tabs', order === 'w219set', order);
       await f.ev(() => document.querySelector('#w219set [data-w219="test"]').click());

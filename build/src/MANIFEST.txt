@@ -269,6 +269,8 @@
 239_wave239
 # 240_wave240: content for each serving (Steel, 14/10/26 marketing meeting): a Content card on the serving page (the photographers on the roster or "No photographer yet", the serving's Google Photos album link, the content brief with the LinkedIn questions apart from the Instagram and TikTok ones, the throwback and recap ideas for a partner serving); the photographers' page and text carry the album and the brief; the daily photographer check gives the SOP's photographer owner a task within 5 days. Data: build/data/wa240_event_content.sql.
 240_wave240
+# 242_wave242: the notification centre (Steel, 14/10/26 marketing meeting): Settings > Notifications lists every kind of notification with a Hub switch and a Slack switch each (wa_notify_prefs.prefs.kinds, wa242_prefs_set; wave116j's checkboxes and wave219's radios step aside), what is due for the person today and Send me today's reminder (wa242_remind_me). Data: build/data/wa242_notifications.sql (wa242_due_reminders, cron wa-task-due weekdays 8:30); notify v14, hub-push v3, social-publish v5 read the switches.
+242_wave242
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.
