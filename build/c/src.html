@@ -75,6 +75,7 @@ ul.steps li:first-child{border-top:0}
 ul.steps li:before{content:attr(data-n);position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:50%;background:rgba(220,165,39,.28);color:var(--green);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
 .kv{margin:10px 0 0;padding:12px 14px;background:rgba(16,63,57,.05);border-radius:12px}
 .kv b{display:block;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.brief{margin:18px 0 0;padding:14px 16px;border:1.5px solid rgba(220,165,39,.5);border-radius:14px;background:#FFF8E8}.brief h3{margin:0 0 4px}.brief .kv{background:rgba(255,250,242,.7)}
 .call{margin:18px 0 0;font-size:15px}
 .call a,.nw{white-space:nowrap}
 .done-e{display:block;width:92px;height:auto;margin:0 0 6px}
@@ -375,7 +376,9 @@ a.rbig svg{width:20px;height:20px;flex:none}
       /* wave239: Still in? (a text to past volunteers) */
       plEy: 'Still volunteering with us?', plT: 'Hi {f}!', plP: 'A while back you signed up to volunteer with Welfare Avenue as {r}. Are you still up for it? One tap tells us.',
       plYes: 'Yes, count me in', plNo: 'Not any more', plNoteL: 'Anything to tell us? (optional)', plOkYes: 'Wonderful, {f}! We’ll be in touch about the next servings.',
-      plOkNo: 'Thank you for letting us know, {f}. You’re welcome back any time.', plAgain: 'Changed your mind?', plSaved: 'Your answer is saved.', plPriv: 'Welfare Avenue keeps your name and contact details to organise its servings. Reply STOP to any text to stop them.' },
+      plOkNo: 'Thank you for letting us know, {f}. You’re welcome back any time.', plAgain: 'Changed your mind?', plSaved: 'Your answer is saved.', plPriv: 'Welfare Avenue keeps your name and contact details to organise its servings. Reply STOP to any text to stop them.',
+      /* wave240: the content brief for photographers and videographers */
+      cbT: 'Your content brief for this serving', cbLi: 'Questions for LinkedIn (longer answers, for the article)', cbSo: 'Questions for Instagram and TikTok (one question, short answers on video)', cbNo: 'Shots to get and notes', cbAlbum: 'This serving has its own album: add everything you capture there within 24 hours.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
@@ -452,7 +455,8 @@ a.rbig svg{width:20px;height:20px;flex:none}
       acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres sur welfareavenue.com. Connectez-vous avec Google ou un code reçu par courriel.',
       plEy: 'Toujours bénévole avec nous?', plT: 'Bonjour {f}!', plP: 'Il y a quelque temps, vous vous êtes inscrit(e) comme bénévole chez Welfare Avenue ({r}). Êtes-vous toujours partant(e)? Un seul clic nous le dit.',
       plYes: 'Oui, je suis partant(e)', plNo: 'Plus maintenant', plNoteL: 'Quelque chose à nous dire? (facultatif)', plOkYes: 'Formidable, {f}! Nous vous écrirons pour les prochains services.',
-      plOkNo: 'Merci de nous l’avoir dit, {f}. La porte reste ouverte, à tout moment.', plAgain: 'Vous avez changé d’avis?', plSaved: 'Votre réponse est enregistrée.', plPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ses services. Répondez STOP à un texto pour ne plus en recevoir.' }
+      plOkNo: 'Merci de nous l’avoir dit, {f}. La porte reste ouverte, à tout moment.', plAgain: 'Vous avez changé d’avis?', plSaved: 'Votre réponse est enregistrée.', plPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ses services. Répondez STOP à un texto pour ne plus en recevoir.',
+      cbT: 'Votre brief de contenu pour ce service', cbLi: 'Questions pour LinkedIn (réponses plus longues, pour l’article)', cbSo: 'Questions pour Instagram et TikTok (une question, réponses courtes en vidéo)', cbNo: 'Plans à capter et notes', cbAlbum: 'Ce service a son propre album : ajoutez-y tout ce que vous captez dans les 24 heures.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
@@ -530,6 +534,12 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (bring) h += '<div class="kv"><b>' + E(t('bring')) + '</b>' + E(bring) + '</div>';
     if (arrive) h += '<div class="kv"><b>' + E(t('arrive')) + '</b>' + E(arrive) + '</div>';
     return h;
+  }
+  /* wave240: the serving's content brief (photographers and videographers), written on the serving page in the Hub */
+  function briefHtml() {
+    var d = S.d || {}, b = d.brief; if (!b || !(b.linkedin || b.social || b.notes)) return '';
+    var block = function (label, text) { return text ? '<div class="kv cb"><b>' + E(label) + '</b>' + E(String(text)).replace(/\n/g, '<br>') + '</div>' : ''; };
+    return '<div class="brief" id="cbrief"><h3>' + E(t('cbT')) + '</h3>' + block(t('cbLi'), b.linkedin) + block(t('cbSo'), b.social) + block(t('cbNo'), b.notes) + (d.album_url ? '<p class="m" style="margin:8px 0 0">' + E(t('cbAlbum')) + '</p>' : '') + '</div>';
   }
   function safeUrl(u) { u = String(u || ''); return /^(https:\/\/|mailto:)/i.test(u) ? u : ''; }
   function linksHtml() {
@@ -1145,7 +1155,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + teaserHtml() + (S.inv && S.inv.open ? invHtml() : '') + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+        + teaserHtml() + (S.inv && S.inv.open ? invHtml() : '') + spotHtml() + guideHtml() + briefHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
         + (S.test && d.survey ? surveyHtml() : '') + (S.test && !(S.inv && S.inv.open) ? invHtml() : '');
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
@@ -1153,7 +1163,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     } else if (d.state === 'early') {
       app.innerHTML = test + err + '<h2>' + E(t('earlyT')) + '</h2><div class="rule"></div><p style="margin:0 0 12px">' + E(t('hi')) + ' ' + E(d.first || '') + '. ' + E(t('earlyP')) + '</p>'
         + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + '</div></div>'
-        + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + linksHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
+        + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + briefHtml() + linksHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else {
       app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t(d.invited ? 'introInv' : 'intro')) + '</p>' + spotHtml()
         + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t(d.invited ? 'confirmInv' : 'confirm')) + '</button>'

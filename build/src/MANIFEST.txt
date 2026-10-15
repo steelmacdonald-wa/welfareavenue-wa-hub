@@ -267,6 +267,8 @@
 234_wave234
 # 239_wave239: the volunteer roles set right (Steel, 14/10/26 marketing meeting): the Volunteers list's chips are the roles in a fixed order (plus a videographer role everywhere: 020, 023, 119, 119b, 152, 171, 191, 209, 218, 234), the other tags behind a select; "Text: still in?" sends one text a person by role (wa239_pool_send, kind reconfirm, the /c/ page's Still in? screen, YES/NO replies) and the answers show and filter; Applicants received's role filter lists every role with counts and takes the website's volunteer forms (crm_form_apply step 7c). Data: build/data/wa239_roles_pool.sql.
 239_wave239
+# 240_wave240: content for each serving (Steel, 14/10/26 marketing meeting): a Content card on the serving page (the photographers on the roster or "No photographer yet", the serving's Google Photos album link, the content brief with the LinkedIn questions apart from the Instagram and TikTok ones, the throwback and recap ideas for a partner serving); the photographers' page and text carry the album and the brief; the daily photographer check gives the SOP's photographer owner a task within 5 days. Data: build/data/wa240_event_content.sql.
+240_wave240
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

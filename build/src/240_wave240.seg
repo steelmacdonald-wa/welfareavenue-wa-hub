@@ -1,0 +1,167 @@
+/* =====================================================================
+   WA v240 Content for each serving (Steel, 14/10/26 marketing meeting; built 15/10/26)
+   =====================================================================
+   Ian: "we don't have someone to take pictures"; Roberto's LinkedIn questions kept apart from the Instagram and TikTok
+   ones; a throwback to the last time with Oberoi; the photos go to the Google Photos album.
+   - The serving page (Plan stage, after the collaboration card) gets a Content card: the photographers and videographers on
+     the roster (confirmed or waiting), or "No photographer yet" with a link to Volunteers > Photographers; the serving's
+     Google Photos album link (made by hand in Google Photos, pasted here; the photographer's page links it instead of the
+     shared album and the confirmation text names it); the content brief (LinkedIn questions, Instagram and TikTok
+     questions, shot notes: shown to photographers and videographers on their page); and the throwback and recap ideas
+     for a partner serving (wa240_event_ideas: Content Studio drafts suggested by the Hub).
+   - The database side (wa240_event_content): wa240_event_content_set, the daily photographer check (within 5 days with
+     nobody confirmed, a task "Book a photographer..." for the SOP's photographer owner that closes itself).
+   Reads volunteer_events (photos_album_url, content_brief) for the open serving; writes through wa240_event_content_set and
+   wa240_event_ideas only. Staff only. ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa240) return; window.__wa240 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', TEAL = '#2A8C7A', MUTED = '#797773', FLAG = '#B3402F', CREAM = '#FFFAF2';
+  var W = { ev: null, row: null, at: 0, busy: false, open: false, loading: null };
+  window.__wa240state = W;
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function curEv() { var ev = null; try { (WA_VOL_EVENTS || []).forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; }); } catch (e) { /* fine */ } return ev; }
+  function curD() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+  function root() { var r = document.getElementById('w119'); return r && r.classList.contains('w191') ? r : null; }
+  function planBody() { var r = root(); return r ? r.querySelector('.w191stage[data-stage="plan"] > .b') : null; }
+  function dayWords(iso) { if (!iso) return ''; var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); if (isNaN(d)) return String(iso); try { return d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function isOff(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
+  function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }
+
+  var css = document.createElement('style'); css.id = 'wa240css';
+  css.textContent =
+    '#w240content .w240ph{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}' +
+    '#w240content .w240ph .p{border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:600;background:rgba(42,140,122,.12);color:' + TEAL + '}' +
+    '#w240content .w240ph .p.wait{background:rgba(220,165,39,.18);color:#8a6410}' +
+    '#w240content .w240ph .none{color:' + FLAG + ';font-weight:700;font-size:13px}' +
+    '#w240content .w240ph a{color:' + GREEN + ';font-size:12.5px;text-decoration:underline;cursor:pointer}' +
+    '#w240content dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0 0 8px;font-size:13.5px}' +
+    '#w240content dt{color:' + MUTED + ';font-weight:600}#w240content dd{margin:0;min-width:0;overflow-wrap:anywhere}' +
+    '#w240content dd i{color:' + MUTED + ';font-style:normal}' +
+    '#w240content .w240f{margin:8px 0 0}#w240content .w240f label{display:block;font-size:12px;font-weight:700;color:' + MUTED + ';margin:8px 0 4px;letter-spacing:.3px}' +
+    '#w240content .w240f input,#w240content .w240f textarea{width:100%;box-sizing:border-box;font:13.5px inherit;font-family:inherit;border:1.5px solid rgba(16,63,57,.18);border-radius:12px;padding:8px 10px;background:#FFFDF8;color:#1F201E}' +
+    '#w240content .w240f textarea{min-height:64px;resize:vertical}' +
+    '#w240content .w240ac{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}' +
+    '#w240content .w240ac span{font-size:12px;color:' + MUTED + ';flex:1;min-width:160px}' +
+    '#w240content .w240ideas{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(16,63,57,.15);font-size:13px}';
+  document.head.appendChild(css);
+
+  /* ---------- data: the serving's album and brief ---------- */
+  function load(ev, force) {
+    if (!ev) return Promise.resolve(null);
+    if (!force && W.row && W.ev === ev.id && Date.now() - W.at < 30000) return Promise.resolve(W.row);
+    if (W.loading && W.ev === ev.id) return W.loading;
+    W.ev = ev.id;
+    W.loading = db.from('volunteer_events').select('id, photos_album_url, content_brief').eq('id', ev.id).maybeSingle().then(function (r) {
+      W.row = (r && r.data) || { id: ev.id, photos_album_url: null, content_brief: {} }; W.at = Date.now(); W.loading = null; return W.row;
+    }).catch(function () { W.row = W.row || { id: ev.id, photos_album_url: null, content_brief: {} }; W.at = Date.now(); W.loading = null; return W.row; });
+    return W.loading;
+  }
+  function partnerName(ev) {
+    try { var P = window.w191 && window.w191.partnerOf ? window.w191.partnerOf(ev.id) : null; if (P && P.partner_name) return P.partner_name; } catch (e) { /* fine */ }
+    var b = document.querySelector('#w191partner .w191pt .nm b'); return b ? b.textContent.trim() : '';
+  }
+
+  /* ---------- the card ---------- */
+  function html(ev, D, row) {
+    var ph = (D.roster || []).filter(function (r) { return ['photographer', 'videographer'].indexOf(lower(r.role)) >= 0 && !isOff(r); });
+    var conf = ph.filter(isConf), wait = ph.filter(function (r) { return !isConf(r); });
+    var b = (row && row.content_brief) || {};
+    var h = '<h4>Content</h4>';
+    h += '<div class="w240ph">' + (ph.length
+      ? conf.map(function (r) { return '<span class="p">' + E(r.person_name || 'Someone') + ' \u00b7 ' + E(lower(r.role) === 'videographer' ? 'videographer' : 'photographer') + ', confirmed</span>'; }).join('')
+        + wait.map(function (r) { return '<span class="p wait">' + E(r.person_name || 'Someone') + ' \u00b7 ' + E(lower(r.role) === 'videographer' ? 'videographer' : 'photographer') + ', not confirmed yet</span>'; }).join('')
+      : '<span class="none">No photographer yet.</span>')
+      + (conf.length ? '' : ' <a data-w240go="photographers">Find one: Volunteers &gt; Photographers</a>')
+      + (conf.length ? '' : '<span style="font-size:12px;color:' + MUTED + '">Within 5 days of the serving the Hub gives the SOP\u2019s photographer owner a task to book one.</span>') + '</div>';
+    h += '<dl><dt>Album</dt><dd>' + (row && row.photos_album_url ? '<a href="' + E(row.photos_album_url) + '" target="_blank" rel="noopener">' + E(row.photos_album_url.replace(/^https?:\/\//, '')) + '</a> <i>\u00b7 the photographer\u2019s page and text point here</i>' : '<i>the shared Google Photos album, until this serving has its own</i>') + '</dd>'
+      + '<dt>Brief</dt><dd>' + (b.linkedin || b.social || b.notes ? '<i>saved ' + (b.updated_at ? E(dayWords(b.updated_at)) : '') + (b.updated_by ? ' by ' + E(String(b.updated_by).split('@')[0]) : '') + ' \u00b7 shown to the photographers on their page</i>' : '<i>none yet: the questions for LinkedIn, the ones for Instagram and TikTok, the shots to get</i>') + '</dd></dl>';
+    if (W.open) {
+      h += '<div class="w240f">'
+        + '<label for="w240album">Google Photos album link (make the album in Google Photos, share it, paste the link)</label><input type="url" id="w240album" placeholder="https://photos.app.goo.gl/..." value="' + E((row && row.photos_album_url) || '') + '">'
+        + '<label for="w240li">LinkedIn questions (for the article: ask the partner\u2019s people, longer answers)</label><textarea id="w240li">' + E(b.linkedin || '') + '</textarea>'
+        + '<label for="w240so">Instagram and TikTok questions (one question, short answers on video)</label><textarea id="w240so">' + E(b.social || '') + '</textarea>'
+        + '<label for="w240no">Shots to get and notes for the photographer</label><textarea id="w240no">' + E(b.notes || '') + '</textarea>'
+        + '<div class="w240ac"><button type="button" class="w191btn" data-w240="save"' + (W.busy ? ' disabled' : '') + '>' + (W.busy ? 'Saving\u2026' : 'Save') + '</button><button type="button" class="w191btn ghost" data-w240="close">Cancel</button><span>The brief and the album show on the photographers\u2019 and videographers\u2019 pages (hub.welfareavenue.com/c/...).</span></div></div>';
+    } else {
+      h += '<div class="w240ac"><button type="button" class="w191btn ghost" data-w240="edit">' + (row && (row.photos_album_url || b.linkedin || b.social || b.notes) ? 'Edit the album and the brief' : 'Set the album and the brief') + '</button></div>';
+    }
+    var pn = partnerName(ev);
+    if (pn) h += '<div class="w240ideas"><b>Throwback and recap ideas</b> \u00b7 for ' + E(pn) + ': a throwback to the last time they served with us (two days before) and a recap the day after, as drafts in the Content Studio. <a data-w240go="ideas" style="cursor:pointer;text-decoration:underline;color:' + GREEN + '">Add them now</a></div>';
+    return h;
+  }
+  function mount(force) {
+    var ev = curEv(), D = curD(); if (!ev || !D || !staff()) return;
+    if (ev.kind && ev.kind !== 'service') return;
+    var b = planBody(); if (!b) return;
+    var box = document.getElementById('w240content');
+    if (!box) { box = document.createElement('div'); box.id = 'w240content'; box.className = 'cardy w191run w240'; }
+    var partner = document.getElementById('w191partner'), own = b.querySelector(':scope > .w191own');
+    var after = partner && partner.parentNode === b ? partner : own;
+    if (after) { if (after.nextElementSibling !== box) after.insertAdjacentElement('afterend', box); }
+    else if (box.parentNode !== b) b.insertBefore(box, b.firstChild);
+    if (W.ev !== ev.id) { W.open = false; }
+    load(ev, !!force).then(function (row) {
+      if (curEv() !== ev || !root()) return;
+      var h = html(ev, D, row);
+      if (box.__h !== h) { box.innerHTML = h; box.__h = h; }
+    });
+  }
+  /* the serving page is laid out and refreshed by wave191 in its own time: watch it */
+  var pending = null;
+  function schedule() { if (pending) return; pending = setTimeout(function () { pending = null; mount(false); }, 250); }
+  var sec = document.getElementById('volunteering');
+  function watch() {
+    sec = sec || document.getElementById('volunteering'); if (!sec || sec.__w240mo) return;
+    var mo = new MutationObserver(function (list) {
+      for (var i = 0; i < list.length; i++) { var t = list[i].target; if (t && t.id === 'w240content') continue; if (t && t.closest && t.closest('#w240content')) continue; schedule(); return; }
+    });
+    mo.observe(sec, { childList: true, subtree: true }); sec.__w240mo = mo;
+  }
+  watch(); setTimeout(watch, 1500); setTimeout(watch, 5000);
+  if (typeof waVolRenderEvent === 'function') {
+    var __ev240 = waVolRenderEvent;
+    waVolRenderEvent = function () { var out = __ev240.apply(this, arguments); [400, 1200, 2600].forEach(function (ms) { setTimeout(function () { mount(false); }, ms); }); return out; };
+  }
+
+  /* ---------- actions ---------- */
+  function save() {
+    var ev = curEv(); if (!ev || W.busy) return;
+    var v = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    var album = v('w240album').trim();
+    if (album && !/^https:\/\/\S+$/.test(album)) { toastS('The album link must start with https://'); return; }
+    W.busy = true; mount(false);
+    db.rpc('wa240_event_content_set', { p_event: ev.id, p: { album_url: album, brief: { linkedin: v('w240li'), social: v('w240so'), notes: v('w240no') } } }).then(function (r) {
+      W.busy = false;
+      if (r && r.error) { toastS(r.error.message || 'That did not save.'); mount(false); return; }
+      W.open = false; toastS('Saved. The photographers see it on their page.');
+      mount(true);
+    }).catch(function (e) { W.busy = false; toastS('That did not save: ' + ((e && e.message) || 'offline')); mount(false); });
+  }
+  function ideas() {
+    var ev = curEv(); if (!ev || W.busy) return;
+    W.busy = true;
+    db.rpc('wa240_event_ideas', { p_event: ev.id }).then(function (r) {
+      W.busy = false;
+      if (r && r.error) { toastS(r.error.message || 'That did not go through.'); return; }
+      var n = (r && r.data && r.data.added) || 0;
+      toastS(n ? n + ' idea' + (n === 1 ? '' : 's') + ' added to the Content Studio.' : 'Nothing new: the ideas are already in the Studio (the recap comes the day before the serving).');
+    }).catch(function () { W.busy = false; toastS('That did not go through.'); });
+  }
+  function toPhotographers() {
+    try {
+      var chip = document.querySelector('#volunteering [data-vl="people"]'); if (chip) chip.click();
+      setTimeout(function () { WA_VOL_ROLEFILTER = 'photographer'; if (typeof waVolRenderPeople === 'function') waVolRenderPeople(); }, 150);
+    } catch (e) { /* fine */ }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var a = t.closest('#w240content [data-w240]');
+    if (a) { e.preventDefault(); var k = a.getAttribute('data-w240'); if (k === 'edit') { W.open = true; mount(false); } else if (k === 'close') { W.open = false; mount(false); } else if (k === 'save') save(); return; }
+    var g = t.closest('#w240content [data-w240go]');
+    if (g) { e.preventDefault(); var w = g.getAttribute('data-w240go'); if (w === 'ideas') ideas(); else if (w === 'photographers') toPhotographers(); }
+  }, true);
+})();

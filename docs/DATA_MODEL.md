@@ -795,6 +795,8 @@ Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind serv
 - `itinerary_photo_id`: wave182: the photo at the top of this serving's itineraries (a ready photo from the Photo library). Empty: the season's photo (volunteer_itinerary_settings photo_<season>).
 - `itinerary_auto`: wave182: true: the itinerary goes by itself the day before (sms_itinerary_hour, Toronto) to everyone confirmed who has not had it yet.
 - `itinerary_channels`: wave182: how the automatic itinerary goes: text, email or both (each person by what we have for them).
+- `photos_album_url`: wave240: the serving's Google Photos album (made by hand); the photographer's page and text use it
+- `content_brief`: wave240: {linkedin, social, notes, updated_by, updated_at}: the questions and shot notes for the photographer and videographer
 
 ### `event_roster`
 
