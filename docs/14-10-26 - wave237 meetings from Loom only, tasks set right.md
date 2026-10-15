@@ -62,9 +62,15 @@ can avoid that without it prompting people to clarify tasks as much. I'd rather 
 
 ## Deploy
 - Database: build/data/wa237_tasks_set_right.sql, applied 14/10/26 22:30 to 22:45 in two parts through execute_sql.
-- Edge functions: process-transcript v25 (file v18), loom-pull v13 (v3), mail-pull v22 (v11); each answers.
-- Tonight's two recap transcripts (277, 278) and their 12 tasks (785 to 796): see the project doc of the night for what
-  Steel decided; the cron was paused during the clean-up and re-enabled after.
+- Edge functions: process-transcript v26 (file v18.1: Jev's due-date check sees upcoming_dates, so the day-before-the-event
+  dates hold; v25 had cleared them), loom-pull v13 (v3), mail-pull v22 (v11); each answers.
+- Tonight's meeting, re-filed through the new pipeline (loom-pull `pull`, transcript 279, 56,600 characters): 7 tasks with
+  dates from upcoming_dates (Oberoi 18/10: the day before; the next marketing meeting: 21/10), 1 owner to confirm (the
+  photographer role, asked of Ian), 2 doubles left out against the open board, 3 content ideas (one on LinkedIn), 3 updates.
+  The 12 recap-born tasks (785 to 796) stayed open at Steel's choice (the supersede write was declined three times); two of
+  them that the Loom run restated were closed as Superseded (788 by 797, 789 by 802). The recap transcripts 277 and 278 are
+  still ordinary meetings in the archive: `update transcripts set archive_only = true where id in (277, 278);` hides them
+  from processing (that write was declined too).
 - Tests: test/w213drive.js 21 of 21 (the owner questions). Regression on the candidate: w177 36, w217 36, w192 75 of 80
   (the same five fail on the shipped wave235 build: the chrome tour step and the reading's headings, steps and callouts,
   wave225 drift, not this wave).

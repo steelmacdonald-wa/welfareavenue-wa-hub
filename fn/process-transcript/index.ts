@@ -1,3 +1,5 @@
+// v18.1 (14/10/26, wave237): Jev's due-date check sees upcoming_dates too, so a date that comes from a named event or meeting
+// (the day before the Oberoi event, the next marketing meeting) holds instead of being cleared as unsupported.
 // v18 (14/10/26, wave237): tasks set right. Steel, after the 14/10 marketing meeting came out with missing, doubled and wrongly
 // owned tasks: "definitely make sure the tasks are set correctly", and the Hub asks a person to confirm a task only when the
 // owner is unsure ("I'd rather it just be where the AI takes care of that"). What changed: the model reads the WHOLE transcript
@@ -276,7 +278,7 @@ function calendarStrip(meetingDate: string | null): string[] {
   for (let i = 0; i <= 21; i++) { const d = new Date(meetingDate + 'T12:00:00'); d.setDate(d.getDate() + i); out.push(d.toISOString().slice(0, 10) + ' ' + d.toLocaleDateString('en-CA', { weekday: 'long' }) + (i === 0 ? ' (the meeting)' : '')); }
   return out;
 }
-async function jevCheck(result: Record<string, unknown>, transcript: string, roster: string[], meetingLabel: string, projs: ProjRow[], dept: string, meetingDateIso: string | null): Promise<JevReport> {
+async function jevCheck(result: Record<string, unknown>, transcript: string, roster: string[], meetingLabel: string, projs: ProjRow[], dept: string, meetingDateIso: string | null, upcoming: string[] = []): Promise<JevReport> {
   const rep: JevReport = { checked: 0, dropped: [], owners: [], due_cleared: 0, decisions_dropped: [], closes_dropped: 0, skipped: false, projects: [] };
   const tasks = Array.isArray(result.new_tasks) ? (result.new_tasks as Array<Record<string, unknown>>) : [];
   const keep: Array<Record<string, unknown>> = [];
@@ -293,14 +295,15 @@ async function jevCheck(result: Record<string, unknown>, transcript: string, ros
       owner_ok: { type: 'noul', instructions: 'According to the excerpt, is "' + owner + '" the person who took this on?' },
     };
     if (cands.length > 1) questions.owner = { type: 'choice', instructions: 'Who took this on, according to the excerpt?', criteria };
-    if (due) questions.due_ok = { type: 'noul', instructions: 'Does the excerpt state or strongly imply the due date ' + due + ' for this item (a named day, "by Friday", "before the event on the 12th"), checked against the calendar given? Vague timing, or a different day than the calendar gives, does not count.' };
+    /* v18.1: a date that comes from a named event or meeting in upcoming_dates (the day before an event, the meeting's own date) holds */
+    if (due) questions.due_ok = { type: 'noul', instructions: 'Does the excerpt state or strongly imply the due date ' + due + ' for this item: a named day ("by Friday", "before the event on the 12th") checked against the calendar given, or a named event, serving or meeting listed in upcoming_dates (a task for an event is due the day before it; a task for the next meeting is due on that meeting\'s date)? Vague timing ("soon", "at some point"), or a different day than the calendar gives, does not count.' };
     /* the project it landed in: the model's pick against the department's other projects */
     const pickedP = t.project_id ? projs.find(p => Number(p.id) === Number(t.project_id)) : null;
     const pool = projs.filter(p => p.department === dept || (pickedP && p.id === pickedP.id)).slice(0, 10);
     const pcrit: Record<string, string> = { none: 'No project: the department\u2019s general list' };
     pool.forEach(p => { pcrit['pr' + p.id] = p.name + (p.description ? ': ' + String(p.description).slice(0, 120) : ''); });
     if (pool.length) questions.project = { type: 'choice', instructions: 'Which project does this task belong to? Pick "none" unless the task is clearly part of one.', criteria: pcrit };
-    const ans = await jev({ meeting: meetingLabel, item: { title, owner, assignees: t.assignees || [], due_date: due, workstream: t.subsection || null }, transcript_excerpt: ex, calendar_after_meeting: due ? calendarStrip(meetingDateIso).slice(0, 15) : undefined, note: 'Names in the roster are the only valid owners.' }, questions);
+    const ans = await jev({ meeting: meetingLabel, item: { title, owner, assignees: t.assignees || [], due_date: due, workstream: t.subsection || null }, transcript_excerpt: ex, calendar_after_meeting: due ? calendarStrip(meetingDateIso).slice(0, 15) : undefined, upcoming_dates: due && upcoming.length ? upcoming.slice(0, 15) : undefined, note: 'Names in the roster are the only valid owners.' }, questions);
     if (!ans) { failures += 1; keep.push(t); if (failures >= 3) { rep.skipped = true; keep.push(...tasks.slice(keep.length)); break; } continue; }
     rep.checked += 1;
     const real = noul(ans.real);
@@ -681,7 +684,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     if (typeof t.owner === 'string') t.owner = canon(t.owner);
     if (Array.isArray(t.assignees)) t.assignees = (t.assignees as unknown[]).map(a => canon(String(a)));
   });
-  const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''), projRows.map(p => ({ id: p.id, name: (p.parent_id && projName.get(p.parent_id) ? projName.get(p.parent_id) + ' > ' : '') + p.name, description: p.description, department: p.department, parent_id: p.parent_id })), dept, tx.meeting_date || null);
+  const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''), projRows.map(p => ({ id: p.id, name: (p.parent_id && projName.get(p.parent_id) ? projName.get(p.parent_id) + ' > ' : '') + p.name, description: p.description, department: p.department, parent_id: p.parent_id })), dept, tx.meeting_date || null, context.upcoming_dates);
 
   /* v18: no doubles. Two tasks for the same work in one meeting are merged (the first kept, assignees joined), and a task
      already open on the board (the same meeting filed twice, or last week's task said again) is not added again; the
