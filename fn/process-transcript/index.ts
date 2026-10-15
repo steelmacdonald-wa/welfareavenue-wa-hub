@@ -1,3 +1,15 @@
+// v18 (14/10/26, wave237): tasks set right. Steel, after the 14/10 marketing meeting came out with missing, doubled and wrongly
+// owned tasks: "definitely make sure the tasks are set correctly", and the Hub asks a person to confirm a task only when the
+// owner is unsure ("I'd rather it just be where the AI takes care of that"). What changed: the model reads the WHOLE transcript
+// (it used to see the first 30,000 characters, about half of an hour-long meeting, so the last half's commitments were lost);
+// the roster carries each person's nicknames (team_members.nicknames: Robert and Rob for Roberto Toto, Trish for Patricia, KK for
+// Kahkashan) so a spoken name lands on the right person; the context lists the named dates ahead (serving events, fundraisers,
+// team meetings in the next 45 days) so "before Sunday's Oberoi event" resolves to a date; each new task says whether its owner
+// is sure (owner_sure); a task whose owner is unsure, or that is for the whole team, is marked dept_tasks.owner_unsure and the
+// due-date check asks "Is this yours?" (mine / not mine) or, for the team's lead, who owns it; near-duplicates are merged
+// (within the meeting, and against the tasks already open on the board: a meeting filed twice never doubles a task); content
+// ideas keep the platform the meeting named (all six of the Studio's, not only Instagram and Facebook) and emails or newsletters
+// are not content ideas. Meeting recaps from Read AI, Otter and the like are no longer filed (mail-pull v11): Loom only.
 // v17 (29/09/26, wave165): one-on-ones only for the people speaking in them, and archive-only meetings. Steel: "1on1s should be
 // confidential and not searchable by anyone except for those that are speaking in the meeting", and for the older Loom meetings
 // "don't create any tasks from them just enhance the "Ask the Hub"". An archive-only meeting (transcripts.archive_only) is never
@@ -118,12 +130,12 @@ const SYSTEM = `You maintain the Welfare Avenue executive status board, used by 
 Rules:
 1. Never use em dashes in any text you produce. Use commas, colons, parentheses, or the word "to" for ranges.
 2. Executive tone: concise, specific, energetic where it counts.
-3. Never invent people. Assignees must be names from the roster provided. Otter transcripts garble names (for example Suhaib can appear as Suheb). Map a spoken name to a roster name only when confident; otherwise keep the transcript spelling and it will be flagged as verify name.
+3. Never invent people. Assignees must be names from the roster provided, written exactly as the roster writes them. Transcripts garble names (Suhaib can appear as Suheb, Steel as Sue or Steele) and people use nicknames: each roster entry lists what else the person is called (also_called), so "Robert" is the roster's "Roberto Toto" and "Trish" is "Patricia". Map a spoken name to a roster name when the nickname list, the role or the context makes it clear; otherwise keep the transcript spelling and it will be flagged as verify name.
 4. Review the numbered open task list against the transcript, item by item, and be CONSERVATIVE about closing. Include a task in close_tasks only when the transcript clearly states the work is done, shipped, delivered, resolved, signed, hired, or explicitly no longer needed (cancelled or dropped). When in doubt, do not close: a task that is merely discussed, in progress, partially done, or planned stays open. For each closure provide evidence: a short quote or close paraphrase from the transcript that proves the task is complete, plus the exact task_id from the numbered list. Never close a task on inference alone, and never remove or rewrite existing tasks; only add or close.
 5. Raise a new executive decision only when a call needs Steel or Suhaib personally. Every new decision needs reason_category and a one line reason_note. Categories: Budget or purchase; Hiring or people; Legal, risk, or governance; Strategy or direction; Partnership or external; Ethics or policy. Use a better fitting short category only if none apply. Flagged tasks (flag true) need the same two fields.
 6. progress: an updated 2 to 4 sentence paragraph for the department, keeping prior content that is still true. read: only update if team mood or energy clearly shifted; otherwise null. priorities: 2 to 4 short items, or null to keep current.
 7. new_updates: 1 to 3 new update entries summarizing what the meeting moved, label like "Jul 2 (Otter)".
-8. due_date only when the transcript states or strongly implies a date, resolved to ISO with calendar_after_meeting (one line per day after the meeting, with its weekday): "by Friday" is the first Friday after the meeting, "next week" is the Friday of the following week, "end of the month" is the last day of that month, "before the event on the 12th" is the day before, "in two weeks" is meeting date plus 14 days. No date when timing is vague ("soon", "at some point").
+8. due_date only when the transcript states or strongly implies a date, resolved to ISO with calendar_after_meeting (one line per day after the meeting, with its weekday): "by Friday" is the first Friday after the meeting, "next week" is the Friday of the following week, "end of the month" is the last day of that month, "before the event on the 12th" is the day before, "in two weeks" is meeting date plus 14 days. upcoming_dates lists the named things ahead (serving events, partner events, fundraisers, the team's meetings) with their dates: a task for one of them ("find a photographer for the Oberoi event", "the post before Sunday's collab") is due the day before that event unless the meeting says otherwise, and a task to be done "for next meeting" or "by the next marketing meeting" is due that meeting's date. "Tonight" or "today" is the meeting date; "tomorrow" is the day after. No date when timing is vague ("soon", "at some point").
 8b. description: every new task gets 2 to 4 plain sentences a colleague could act on without having been in the meeting: what exactly needs doing, why (the context from the discussion), what done looks like, and any names, numbers, places or links mentioned. Use "- " bullets for lists of items. Never pad; never invent.
 8c. priority true only when the meeting clearly treats the task as urgent or the top priority ("this has to happen this week", "top priority", "blocking"), else false.
 9. subsection must be exactly one of the provided workstream names, or null.
@@ -133,7 +145,9 @@ Rules:
 13. board_sensitive: set true when the transcript contains board only content: leadership departures or succession (for example a founder or co executive director stepping back or leaving), personnel performance or discipline, individual compensation, legal disputes, or anything explicitly marked board only or for the board only. When unsure, err toward true.
 14. Event routing (Ops Montreal and Ops Toronto only): give every new task an event_routing value. Use "event" when the task is preparation or follow up for one of the regular biweekly Sunday serving events: volunteer confirmations and recruitment for that Sunday, cooking, groceries and supplies, packing, distribution day logistics, standard operating procedure steps. Use "adhoc" for everything else, including special one off or corporate volunteering events, partnerships, admin, marketing, and anything not tied to a regular serving Sunday. When the transcript states which serving date a task is for, set event_date to that ISO date, preferring a date listed in upcoming_serving_events; otherwise leave event_date null and the task attaches to the next serving event. For all other departments use "adhoc".
 15. Project routing: the context lists the organization's projects with descriptions. Give every new task a project_id when the task clearly belongs to that project based on the project's name and description. Prefer projects from this department, but use another department's project when the task is clearly part of that named initiative (for example a marketing task promoting the flag football tournament belongs to the Flag Football 2026 project). When no project fits, use null: the task lands in the department's general list. Never invent a project_id that is not in the list. Event routed tasks (rule 14) do not need a project_id.
-16. The bank: when the meeting clearly puts a piece of work off by three months or more ("in the spring", "next year", "after the gala in March", "park it until the new fiscal year", "not before January"), still add it as a new task, but set bank_until to the ISO date it should come back (the first day of the month or season named; three to six months after the meeting when the timing is vague) and bank_reason to one short line saying why it waits. It goes to the bank instead of the board and comes back on that date. Work for the next three months is never banked, and a date alone is not a reason to bank. Tasks marked "(in the bank until ...)" in the numbered open task list are already banked: never add them again; close one only with the same evidence rule; list its task_id in unbank_task_ids only when the meeting says to start it now.`;
+16. The bank: when the meeting clearly puts a piece of work off by three months or more ("in the spring", "next year", "after the gala in March", "park it until the new fiscal year", "not before January"), still add it as a new task, but set bank_until to the ISO date it should come back (the first day of the month or season named; three to six months after the meeting when the timing is vague) and bank_reason to one short line saying why it waits. It goes to the bank instead of the board and comes back on that date. Work for the next three months is never banked, and a date alone is not a reason to bank. Tasks marked "(in the bank until ...)" in the numbered open task list are already banked: never add them again; close one only with the same evidence rule; list its task_id in unbank_task_ids only when the meeting says to start it now.
+17. Read the whole transcript to the end: the commitments made in the last ten minutes of a meeting (who finds the photographer, who sends the link, who reviews what on Friday) are tasks too. Every "I'll do X", "can you do X" that is accepted, and every "X will do Y" is a task; a question nobody answered, an idea nobody took on, or a step already done is not. One task per commitment: never two tasks for the same work, even when it was mentioned twice.
+18. owner_sure: true when the transcript makes it clear who took the task on (they said they would, or were asked and agreed). false when it is a guess, when two people could own it, or when the work is for the whole team with nobody named: then give the team's director or lead as owner (the roster says who leads) and owner_sure false, and the Hub asks them who owns it. Never leave a task without an owner.`;
 
 const TOOL = {
   name: 'apply_department_update',
@@ -151,6 +165,7 @@ const TOOL = {
         flag: { type: 'boolean' }, reason_category: { type: ['string', 'null'] }, reason_note: { type: ['string', 'null'] },
         description: { type: 'string', description: '2 to 4 plain sentences: what needs doing, why, what done looks like, names, numbers, places, links from the meeting. Use "- " bullets for lists. No em dashes.' },
         priority: { type: 'boolean', description: 'True only when the meeting treats it as urgent or the top priority.' },
+        owner_sure: { type: 'boolean', description: 'Rule 18: true when the transcript makes it clear who took this on; false for a guess, a toss-up between two people, or work for the whole team (then the owner is the team lead and the Hub asks).' },
         status: { type: 'string' }, confidential: { type: 'boolean' },
         event_routing: { type: 'string', enum: ['event', 'adhoc'], description: 'For operations departments: "event" when the task belongs to a regular biweekly Sunday serving event, "adhoc" otherwise (including special or corporate volunteering events). Other departments: "adhoc".' },
         event_date: { type: ['string', 'null'], description: 'ISO date of the specific serving event this task is for, only when the transcript states it. Prefer a date from upcoming_serving_events. Null when unstated.' },
@@ -177,10 +192,15 @@ const TOOL = {
 
 const MODELS = ['claude-sonnet-5', 'claude-sonnet-4-5', 'claude-sonnet-4-20250514'];
 
+/* v18: the whole transcript (an hour's meeting is 50,000 to 75,000 characters; the old 30,000 cut lost the second half) */
+const TRANSCRIPT_MAX = 180000;
 async function callAnthropic(context: unknown, transcriptText: string): Promise<Record<string, unknown>> {
   const key = 'hub-router';
+  const text = transcriptText.length > TRANSCRIPT_MAX
+    ? transcriptText.slice(0, TRANSCRIPT_MAX) + '\n[... the transcript continues; ' + (transcriptText.length - TRANSCRIPT_MAX) + ' more characters not shown ...]'
+    : transcriptText;
   const userContent = 'CONTEXT (current board state, JSON):\n' + JSON.stringify(context) +
-    '\n\nTRANSCRIPT:\n' + transcriptText.slice(0, 30000);
+    '\n\nTRANSCRIPT (read it all, to the end):\n' + text;
   let lastErr = '';
   for (const model of MODELS) {
     const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
@@ -192,7 +212,7 @@ async function callAnthropic(context: unknown, transcriptText: string): Promise<
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model, max_tokens: 3500, temperature: 0.2, system: SYSTEM,
+        model, max_tokens: 6000, temperature: 0.2, system: SYSTEM,
         messages: [{ role: 'user', content: userContent }],
         tools: [TOOL], tool_choice: { type: 'tool', name: 'apply_department_update' }
       })
@@ -415,11 +435,11 @@ const IDEAS_SYSTEM = `You read one Welfare Avenue marketing meeting and pull out
 Rules:
 1. Never use em dashes. Plain, specific language.
 2. Only ideas actually raised in this meeting (or this part of it). Every idea needs evidence: an exact quote of 6 to 25 words copied word for word from the transcript where the idea came up. No quote, no idea.
-3. Content ideas only. Skip operational to-dos (fix the website, send the schedule, order supplies), meeting logistics, anything about a person's performance, pay or health, and ideas the meeting turned down.
+3. Content ideas only. Skip operational to-dos (fix the website, send the schedule, order supplies), meeting logistics, anything about a person's performance, pay or health, and ideas the meeting turned down. Emails and newsletters are not content ideas (the Email studio holds those): skip them.
 4. Skip anything already listed in existing_ideas, even when worded differently. Merge near duplicates into one idea.
 5. title: a short working title a teammate would recognise, 3 to 8 words (for example "Volunteer spotlight: Sunday cooks").
 6. idea: 1 to 3 sentences: what the post or series is, the angle or hook, and what it needs (photos, an interview, a partner, a date).
-7. format: post, reel, carousel, story, series or other. platforms: only the ones named in the meeting, else an empty list.
+7. format: post, reel, carousel, story, series or other. platforms: only the ones named in the meeting (a LinkedIn article is linkedin; a TikTok is tiktok; a short is youtube), else an empty list.
 8. suggested_by: the roster name of the person who raised it when it is clear, else null. Otter garbles names; map a spoken name to a roster name only when confident.
 9. campaign: the named campaign, event or fundraiser it belongs to, else null.
 10. for_date: when the meeting ties the idea to a date, an event or a season, the ISO date it is for (resolve relative dates from the meeting date; a month or a season means its first day), else null.
@@ -435,7 +455,7 @@ const IDEAS_TOOL = {
         title: { type: 'string' },
         idea: { type: 'string', description: '1 to 3 sentences: what it is, the angle, what it needs. No em dashes.' },
         format: { type: 'string', enum: ['post', 'reel', 'carousel', 'story', 'series', 'other'] },
-        platforms: { type: 'array', items: { type: 'string', enum: ['instagram', 'facebook', 'linkedin', 'tiktok'] } },
+        platforms: { type: 'array', items: { type: 'string', enum: ['instagram', 'facebook', 'linkedin', 'tiktok', 'youtube', 'threads'] } },
         suggested_by: { type: ['string', 'null'] },
         campaign: { type: ['string', 'null'] },
         for_date: { type: ['string', 'null'], description: 'ISO date the idea is for, or null.' },
@@ -447,6 +467,23 @@ const IDEAS_TOOL = {
 };
 
 function normText(x: string): string { return String(x || '').toLowerCase().replace(/[^a-z0-9À-ɏ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+/* v18: do two task titles describe the same work? The words that carry meaning (no stop words, no plurals), then the overlap:
+   three fifths of the smaller set shared, or one title inside the other. "Check assigned hub tasks for the upcoming week" and
+   "Check the Hub tasks for next week" match; "Find a photographer for Sunday" and "Send Roberto last year's post" do not. */
+const DUP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'at', 'by', 'with', 'from', 'into', 'our', 'their', 'his', 'her', 'its', 'this', 'that', 'these', 'those', 'is', 'are', 'be', 'as', 'it', 'up', 'out', 'all', 'any', 'some', 'new', 'next', 'upcoming', 'week', 'weeks', 'day', 'days', 'hub', 'team', 'meeting', 'will', 'should', 'need', 'needs', 'make', 'sure', 'get', 'do', 'via', 'about', 'after', 'before', 'over']);
+function workWords(t: string): string[] {
+  return [...new Set(normText(t).split(' ').filter(w => w.length > 2 && !DUP_STOP.has(w)).map(w => w.replace(/(ies)$/, 'y').replace(/(s|es|ed|ing)$/, '')))].filter(Boolean);
+}
+export function sameWork(a: string, b: string): boolean {
+  const wa = workWords(a), wb = workWords(b);
+  if (!wa.length || !wb.length) return false;
+  const na = normText(a), nb = normText(b);
+  if (na === nb) return true;
+  if (Math.min(wa.length, wb.length) >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+  const sa = new Set(wa); let shared = 0; for (const w of wb) if (sa.has(w)) shared++;
+  const small = Math.min(wa.length, wb.length);
+  return small >= 3 ? shared / small >= 0.6 : (small === 2 ? shared === 2 : false);
+}
 /* an idea stands only when four consecutive words of its quote are in the transcript */
 function quoted(evidence: string, transcriptNorm: string): boolean {
   const w = normText(evidence).split(' ').filter(Boolean);
@@ -561,13 +598,22 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   const vis = restrictedVis(tx);
   const sees = seesRow(tx); const own = ownKind(tx);
 
-  const [metaQ, tasksAll, decAll, rosterQ, projQ] = await Promise.all([
+  const [metaQ, tasksAll, decAll, rosterQ, projQ, datesQ] = await Promise.all([
     svc.from('dept_meta').select('read, progress, priorities').eq('department', dept).maybeSingle(),
     svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag, banked_at, bank_until, visibility, allowed_people').eq('department', dept).eq('done', false),
     svc.from('decisions').select('id, title, area, owner, visibility, allowed_people').eq('done', false),
-    svc.from('team_members').select('name, role').eq('department', dept).eq('active', true),
+    /* v18: the whole active roster with each person's nicknames; this team first, then the people in other teams (a marketing
+       meeting hands work to the operations lead too), so a spoken name lands on the right person */
+    svc.from('team_members').select('name, role, department, nicknames').eq('active', true).order('name'),
     svc.from('projects').select('id, name, description, department, parent_id, goal_id').is('banked_at', null).eq('status', 'active').order('department').order('sort'),
+    svc.rpc('wa237_upcoming_dates', { p_dept: dept, p_from: tx.meeting_date || new Date().toISOString().slice(0, 10) }),
   ]);
+  type RosterRow = { name: string; role: string | null; department: string | null; nicknames: string[] | null };
+  const rosterAll = ((rosterQ.data || []) as RosterRow[]).filter(m => m.name && !/^(exec|board)$/i.test(String(m.department || '')) || /^(steel|suhaib)/i.test(String(m.name || '')));
+  const rosterTeam = rosterAll.filter(m => m.department === dept);
+  const rosterOthers = rosterAll.filter(m => m.department !== dept);
+  const rosterEntry = (m: RosterRow) => ({ name: m.name, role: m.role || '', team: DEPT_LABEL[String(m.department || '')] || m.department || '', also_called: (m.nicknames || []).filter(Boolean) });
+  const teamLead = rosterTeam.find(m => /director|co-director|lead\b|manager/i.test(String(m.role || '')) && !/co-director/i.test(String(m.role || ''))) || rosterTeam.find(m => /director|lead|manager/i.test(String(m.role || ''))) || null;
   /* v17: only the work this meeting may share (see seesRow) */
   const seenTasks = ((tasksAll.data || []) as Array<Record<string, unknown>>).filter(sees);
   const seenDecs = ((decAll.data || []) as Array<Record<string, unknown>>).filter(sees);
@@ -606,21 +652,65 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     open_tasks: tasksQ.data || [],
     open_tasks_numbered_list: openTasksNumbered,
     open_executive_decisions: decQ.data || [],
-    roster: rosterQ.data || [],
+    roster: rosterTeam.map(rosterEntry),
+    other_people: rosterOthers.map(rosterEntry),
     upcoming_serving_events: upcomingEvents.map(e => e.event_date + (e.code ? ' (' + e.code + ')' : '')),
+    /* v18: the named dates ahead, so a task tied to an event or a meeting gets its date (rule 8) */
+    upcoming_dates: Array.isArray(datesQ.data) ? (datesQ.data as string[]).slice(0, 40) : [],
+    team_lead: teamLead ? teamLead.name : null,
     projects,
-    note: 'Steel MacDonald and Suhaib are the co executive directors and are always valid owners.'
+    note: 'Steel MacDonald and Suhaib are the co executive directors and are always valid owners. roster lists this team (with what each person is also called); other_people are the rest of the organisation, valid owners when the meeting hands them work.'
   };
 
   const result = await callAnthropic(context, tx.body);
   const changedBy = 'AI: ' + (tx.title || 'transcript ' + transcriptId);
   // Jev second opinion on every item (see jevCheck); the roster is whatever the context lists as valid owners
-  const rosterNames: string[] = [...new Set([...(Array.isArray((context as { roster?: unknown }).roster) ? ((context as { roster: Array<Record<string, unknown>> }).roster).map(m => String(m.name || '')).filter(Boolean) : []), 'Steel MacDonald', 'Steel', 'Suhaib', 'Both'])];
+  const rosterNames: string[] = [...new Set([...rosterAll.map(m => String(m.name || '')).filter(Boolean), 'Steel MacDonald', 'Steel', 'Suhaib', 'Both'])];
+  /* v18: a nickname the model kept becomes the roster name (Robert > Roberto Toto); a name nobody has stays for the verify-name flag */
+  const nickMap = new Map<string, string>();
+  rosterAll.forEach(m => { (m.nicknames || []).forEach(n => { if (n) nickMap.set(String(n).toLowerCase(), m.name); }); nickMap.set(String(m.name).toLowerCase(), m.name); });
+  const firstMap = new Map<string, string[]>();
+  rosterAll.forEach(m => { const f = String(m.name).split(/\s+/)[0].toLowerCase(); firstMap.set(f, [...(firstMap.get(f) || []), m.name]); });
+  const canon = (n: string): string => {
+    const k = String(n || '').trim().toLowerCase(); if (!k) return n;
+    if (nickMap.has(k)) return nickMap.get(k) as string;
+    const f = firstMap.get(k.split(/\s+/)[0]); if (f && f.length === 1 && k.split(/\s+/).length === 1) return f[0];
+    return n;
+  };
+  (Array.isArray(result.new_tasks) ? result.new_tasks as Array<Record<string, unknown>> : []).forEach(t => {
+    if (typeof t.owner === 'string') t.owner = canon(t.owner);
+    if (Array.isArray(t.assignees)) t.assignees = (t.assignees as unknown[]).map(a => canon(String(a)));
+  });
   const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''), projRows.map(p => ({ id: p.id, name: (p.parent_id && projName.get(p.parent_id) ? projName.get(p.parent_id) + ' > ' : '') + p.name, description: p.description, department: p.department, parent_id: p.parent_id })), dept, tx.meeting_date || null);
+
+  /* v18: no doubles. Two tasks for the same work in one meeting are merged (the first kept, assignees joined), and a task
+     already open on the board (the same meeting filed twice, or last week's task said again) is not added again; the
+     existing task gets a comment-free change_log line instead so the archive shows the meeting touched it. */
+  const dupes: Array<{ title: string; same: string; existing?: number }> = [];
+  {
+    const seenNew: Array<Record<string, unknown>> = [];
+    const open = (tasksQ.data || []).map(t => ({ id: Number(t.id), title: String(t.title || '') }));
+    for (const t of (Array.isArray(result.new_tasks) ? result.new_tasks as Array<Record<string, unknown>> : [])) {
+      const title = String(t.title || '');
+      const twin = seenNew.find(x => sameWork(String(x.title || ''), title));
+      if (twin) {
+        dupes.push({ title, same: String(twin.title || '') });
+        const a = new Set([...(Array.isArray(twin.assignees) ? twin.assignees.map(String) : []), ...(Array.isArray(t.assignees) ? t.assignees.map(String) : [])]);
+        if (a.size) twin.assignees = [...a];
+        if (!twin.due_date && t.due_date) twin.due_date = t.due_date;
+        if (t.owner_sure === true && twin.owner_sure === false && String(t.owner || '') === String(twin.owner || '')) twin.owner_sure = true;
+        continue;
+      }
+      const old = open.find(o => sameWork(o.title, title));
+      if (old) { dupes.push({ title, same: old.title, existing: old.id }); continue; }
+      seenNew.push(t);
+    }
+    result.new_tasks = seenNew;
+  }
 
   if (dryRun) {
     /* preview: what the model and Jev would put on the board, nothing written */
-    return { dry_run: true, department: dept, model_result: result, jev: jevRep };
+    return { dry_run: true, department: dept, model_result: result, jev: jevRep, doubles_left_out: dupes };
   }
   /* v17: a one-on-one is only for its speakers already; board-only would lock out the ones not on the board */
   const boardSensitive = result.board_sensitive === true && vis !== 'speakers';
@@ -631,6 +721,11 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   }
 
   const runStartIso = new Date(Date.now() - 60000).toISOString();
+
+  /* v18: the tasks the meeting raised again get a line in the archive (nothing added) */
+  for (const d of dupes.filter(x => x.existing)) {
+    await svc.from('change_log').insert({ entity_type: 'dept_task', entity_id: String(d.existing), field: 'mentioned again', old_value: null, new_value: 'The meeting raised it again ("' + d.title.slice(0, 120) + '"); the task was already open, so nothing was added', changed_by: changedBy, board_only: effectiveBoardOnly }).then(() => null, () => null);
+  }
 
   const allNew = Array.isArray(result.new_tasks) ? (result.new_tasks as Array<Record<string, unknown>>) : [];
   const routed: Array<{ event: EventRow; title: string }> = [];
@@ -671,6 +766,15 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     p_transcript_id: transcriptId, p: rpcPayload, p_changed_by: changedBy,
   });
   if (applyErr) throw new Error('apply failed: ' + applyErr.message);
+
+  /* v18: a task whose owner the meeting left unsure (rule 18) is marked, so the due-date check asks "Is this yours?" (or asks the
+     team's lead who owns it). Matched by title: apply_transcript_result inserts the title as given. */
+  const unsure = remainingNew.filter(t => t.owner_sure === false && typeof t.title === 'string' && t.title.trim()).map(t => String(t.title).trim());
+  let unsureCount = 0;
+  if (unsure.length) {
+    const { data: marked, error: markErr } = await svc.from('dept_tasks').update({ owner_unsure: true }).eq('updated_by', changedBy).gte('opened_at', runStartIso).in('title', unsure).select('id');
+    if (markErr) console.error('owner_unsure mark failed', markErr); else unsureCount = (marked || []).length;
+  }
 
   if (effectiveBoardOnly) {
     const stamps = await Promise.all([
@@ -732,6 +836,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   if (r.decisions_decided) parts.push(r.decisions_decided + ' decided');
   if (ideasRes && ideasRes.added) parts.push(ideasRes.added + (ideasRes.added === 1 ? ' content idea' : ' content ideas') + ' for the calendar' + (ideasRes.banked ? ' (' + ideasRes.banked + ' in the bank)' : ''));
   if (r.updates) parts.push(r.updates + (r.updates === 1 ? ' update' : ' updates'));
+  if (dupes.length) parts.push(dupes.length + (dupes.length === 1 ? ' double left out' : ' doubles left out'));
+  if (unsureCount) parts.push(unsureCount + (unsureCount === 1 ? ' owner to confirm' : ' owners to confirm'));
   let jevLine = '';
   if (jevRep.checked) {
     const bits: string[] = [];
@@ -763,7 +869,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   if (!isTest && !loomQuiet && vis !== 'speakers') {
     await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + jevLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
   }
-  return { ...(applied as Record<string, unknown>), tasks_unbanked: unbanked.length, tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, content_ideas: ideasRes, jev: jevRep };
+  return { ...(applied as Record<string, unknown>), tasks_unbanked: unbanked.length, tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, content_ideas: ideasRes, jev: jevRep, doubles_left_out: dupes, owners_to_confirm: unsureCount };
 }
 
 Deno.serve(async (req: Request) => {

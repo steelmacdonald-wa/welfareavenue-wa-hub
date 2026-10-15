@@ -41,6 +41,9 @@ Source of truth for tasks of every team. Written by the Hub pages (team boards, 
 - `bank_due`: The due_date the task had when it was banked; restored when it comes back if still in the future.
 - `bank_project_id`: Set when the task was banked together with a whole project (projects.id). Foreign key (on delete set null).
 - `resurfaced_at`: When the task last came back from the bank.
+- `due_confirmed_at`: wave213: when the owner set or confirmed the due date in the due-date check
+- `due_confirmed_by`: wave213: who set or confirmed it (email)
+- `owner_unsure`: wave237: the meeting left the owner unsure (a guess, a toss-up between two people, or work for the whole team given to its lead). The due-date check asks the owner "Is this yours?" and asks the team's lead who owns it; cleared when someone confirms or assigns.
 
 ### `task_assignees`
 
@@ -299,6 +302,7 @@ Job applicants filed from email by mail-pull, with CV and hiring stage; managed 
 - `request_id`: dept_requests.id of the hiring request (position). Foreign key (on delete set null).
 - `mail_id`: hub_mail.id of the application email. Foreign key (on delete set null).
 - `cv_path`: Object path of the CV in the hub-mail bucket.
+- `volunteer_id`: wave218: the volunteer record this applicant became when the card was closed as volunteering.
 - `member_id`: wave220: the roster row (team_members) this applicant became once hired. Set by wa220_member_contact (wa220_cand_for: the name or WA email matching a hired applicant) or by hand; the hire's phone and personal email then reach the team member's CRM contact through wa220_member_contact.
 
 ## Meetings, agendas, transcripts, calendar
@@ -460,6 +464,7 @@ Staff and board roster; id is the key other tables should use for a person (task
 - `start_source`: Where start_date came from: google (Workspace account creation), slack (the day they joined Slack, from the Member Analytics export, wave181) or manual (set by HR).
 - `avatar_url`: Profile photo URL in the public avatars bucket: u/<email> is a photo the person uploaded on the Hub (always kept); slack/<member_id> is their Slack photo and google/<member_id> their Google Workspace photo, both filled in and refreshed by directory-sync (Slack wins over Google). Empty text means the person removed their photo on the Hub, so nothing fills it in again; null means no photo yet.
 - `start_date`: When the person started with Welfare Avenue: the earliest of the Workspace account's creation (google) and the day they joined Slack (slack, wave181), unless HR sets it by hand (manual). Workspace dates of 17/01/2024 are the day the Workspace was set up, not a start.
+- `nicknames`: wave237: what else the person is called in meetings (Robert and Rob for Roberto Toto, Trish for Patricia, KK for Kahkashan); process-transcript maps a spoken nickname to the roster name. Edited on the person page by the person, HR, leaders and admins.
 
 ### `hub_directory`
 
@@ -626,6 +631,8 @@ The Loop (wave192; check in and out before): a session starts with I'm in and en
 - `closed_task_ids`: dept_tasks ids closed during the session.
 - `share_to`: wave192: where the wrap-up note was shared: team (the department's Slack channel), everyone (the Loop channel) or hub (no Slack post; Home only). Null before wave192 or for a session closed without a note.
 - `share_channel`: wave192: the Slack channel name the wrap-up was posted to, when it was.
+- `still_in_at`: wave217: the last time the person answered Still in (the Hub's check under the button, Still working in Welcome back, or the 3-hour DM's link). Written by the person's own page (hub_checkins_own_update). The 3-hour DM skips a session answered in the last 40 minutes; other devices treat that half-hour mark as answered. Never shared: read like the rest of the row (the person, admins, HR).
+- `loop_dm_at`: wave217: when checkin-post still_dm claimed this session for the one Still in? Slack DM at 3 hours (set before sending, so a session gets at most one, sent or not). Written by the service role only.
 
 ### `hub_shoutouts`
 
@@ -949,7 +956,7 @@ Branded content created with AI on the Create page (draft-content edge function)
 
 Content calendar posts: planned, scheduled and published to the Facebook Page and Instagram by social-publish (cron every 5 minutes). A draft without a date is an idea (the Ideas tray); ideas raised in marketing meetings are added by process-transcript (source_transcript_id), and an idea in the bank (banked_at) is out of the calendar until bank_until. Outgoing posts; social_posts holds published posts and their metrics. Staff write; staff and board viewers read.
 
-- `platforms`: Target platforms, such as instagram and facebook.
+- `platforms`: Target platforms: instagram, facebook, threads, linkedin, tiktok, youtube (wave225 adds the last four).
 - `media`: JSON array of media [{url, path, kind, mime, size, w, h, dur}] in the content-images bucket.
 - `status`: Workflow state; social-publish uses scheduled, publishing, posted and failed. No CHECK.
 - `results`: JSON of per-platform publish results written by social-publish.
@@ -963,6 +970,14 @@ Content calendar posts: planned, scheduled and published to the Facebook Page an
 - `bank_note`: Why the idea waits, such as "For December 2, 2026: Giving Tuesday".
 - `banked_by`: Display name of who banked it, or "the meeting" when process-transcript did.
 - `resurfaced_at`: When the idea came back from the bank (shown as back from the bank for two weeks).
+- `variants`: wave225: per-platform settings and overrides, {platform: {caption, kind (feed|reel|story), first_comment, collaborators[], user_tags[{username,x,y,media}], location {id,name}, alt [per photo], cover_ms, share_to_feed, title, privacy, made_for_kids}}. Empty keys fall back to the shared caption and first comment.
+- `first_comment`: wave225: the first comment posted right after the post (Instagram, Facebook, Threads reply), unless a platform variant has its own.
+- `tags`: wave225: the post's tags (content_tags names), for filters in the calendar, the queue and the analytics.
+- `approval_status`: wave225: none (a publisher's post), pending (sent for approval), approved, changes (sent back with approval_note). Only wa225_publisher() can schedule or publish a post that is not approved (trigger wa225_post_guard).
+- `repeat_rule`: wave225: {every: week|2weeks|month, times: n, until: date}; after a repeating post goes out, social-publish makes the next one (repeat_of points at the first).
+- `track_links`: wave225: links in the caption become hub.welfareavenue.com/l/<code> short links with UTM tags when the post goes out (short_links counts the clicks).
+- `utm`: wave225: UTM overrides {source, medium, campaign}; the default is the platform, social, and the post's campaign.
+- `manual`: wave225: the reminder flow for platforms the Hub cannot post to directly: {platform: {reminded_at, posted_at, posted_by, url}}.
 
 ### `social_accounts`
 
@@ -1043,6 +1058,7 @@ Model router configuration: one row per AI job (task), with the chain of OpenRou
 - `chain`: OpenRouter model ids in order: the first is primary, the rest are fallbacks.
 - `jev`: True when the job also runs Jev checks.
 - `max_tokens`: Unused (NULL in every row).
+- `system_add`: Text the llm router (v1.6) adds to the end of the system prompt of every call on this route. wave226: the confidentiality rule on the routes whose words the team reads. Admins change it in SQL (logged in change_log, entity ai_route).
 
 ### `ai_calls`
 
@@ -1658,7 +1674,7 @@ wave170: what the inbox assistant did with each message in its owner's inbox: th
 
 ### `volunteer_role_guides`
 
-wave171: what a volunteer sees after confirming on hub.welfareavenue.com/c/<token>: per roster role, the label (English and French), a Photo library photo (only a ready one is ever shown), what to expect, what to bring and when to arrive. Staff edit (Texts settings on an event); the public page reads it only through volunteer_confirm_get.
+Each volunteer role's guide (what to expect, bring, arrive; links; itinerary kind; target spots a serving). wave234: community_talker (Community welcome) is retired and folded into community_debrief (Community lead); its row is kept only for history.
 
 - `photo_id`: The role's photo (wa_photos.id); shown only while that photo is ready.
 - `links`: wave172: the forms and documents the role needs, [{label_en, label_fr, url, when: before | during | after}], shown on the confirm page after confirming (from the master SOP).
@@ -1953,6 +1969,69 @@ wave210: the tasks a transcript added, banked or closed when it was processed (a
 - `owner`: the owner as the meeting named it
 - `due_date`: the due date the meeting set (the bank date for a banked task)
 
+### `crm_form_uploads`
+
+wave216: CV upload links handed out by form-submit for application forms (bucket hub-mail, applications/web/). Service role only.
+
+### `hub_push_subs`
+
+wave219: one row per browser or installed Hub app where a person turned Hub notifications on (the Web Push subscription: endpoint, p256dh, auth). Saved by the person's own page through wa219_push_save and removed through hub-push (drop); read by hub-push (service role) to send. The person reads their own rows; nobody else does. A device the push service no longer knows is deleted by hub-push.
+
+### `content_tags`
+
+wave225: the Content Studio's tags (name and colour). Posts carry the names in content_posts.tags. Staff read; the marketing team and admins write.
+
+### `content_snippets`
+
+wave225: the library: hashtag groups (body = the hashtags), post templates (data = platforms, caption, first comment, tags, variants), saved replies for the comments inbox, and caption snippets. Staff read; the marketing team and admins write.
+
+### `content_slots`
+
+wave225: the posting schedule per platform (weekday 0 = Monday, the time in Toronto). Add to queue fills the next free slot. Staff read; the marketing team and admins write.
+
+### `short_links`
+
+wave225: hub.welfareavenue.com/l/<code> links (made for a post's links when track_links is on, by hand in Links, and for the link-in-bio page). The go function redirects and counts. Staff read; the marketing team and admins write.
+
+- `fallback_url`: wave230: where a switched-off link goes (else the page's fallback, else welfareavenue.com)
+
+### `short_link_clicks`
+
+wave225: one row per click on a short link: when, the referring site's host, phone or computer, the country when the host says it. No address, no cookie, nothing that names a person. Written only by the go function.
+
+### `social_comments`
+
+wave225: comments on Welfare Avenue's own posts (Instagram, Facebook, Threads, YouTube; LinkedIn and TikTok when connected), filled every 10 minutes by social-inbox. Public comments, kept 24 months (the privacy notice). Read by the marketing team and admins; written only by social-inbox (reply, like, hide, delete, resolve go through it).
+
+### `hub_intros`
+
+wave227: the weekly introduction. One row per person a week (source weekly: the Hub picked other_id, someone they have not worked with, and wrote note and hello for them; note_back and hello_back are the same introduction seen from the other side), plus source shared when someone pressed Tell <name> too (from_intro). Written by the intros edge function and wa227_intro_act; read by the person through wa227_my_intro, admins read all.
+
+- `week`: The Monday (Toronto) of the week the introduction belongs to.
+- `member_id`: team_members.id of the person who sees the introduction.
+- `other_id`: team_members.id of the person they are introduced to.
+- `note`: Why they might connect, written by the Hub for member_id (their language), from open profile facts only.
+- `hello`: A friendly first line member_id can paste into Slack.
+- `note_back`: The same introduction written for other_id; becomes the note of the shared row when member_id presses Tell <name> too.
+- `signals`: What the match used: shared goals, projects, words, teams, the score. Never confidential meetings.
+- `status`: new (not shown yet), seen (shown), later (Maybe later: not again this week), acted (they said hi, booked a chat or told the other person).
+- `actions`: What they did: slack, coffee, shared, profile.
+
+### `link_pages`
+
+wave230: the Content Studio's link pages. slug main is hub.welfareavenue.com/links (the bio link); any other slug is /links/<slug>. blocks is the ordered list the public page draws (link, featured, header, text, form, donate, youtube, instagram, events, impact, socials); link blocks carry a short_links code so the go function redirects and counts. Staff read; the marketing team and admins write.
+
+### `link_page_sources`
+
+wave230: where a link page visit comes from: /links/<slug>?s=<code> (each platform's bio, each printed QR code, an email, a partner). A visit with no ?s is credited from the app it opened in or the referring site.
+
+### `link_page_events`
+
+wave230: one row per link page view or click. No cookie and no address: visitor is a keyed hash of the network and the browser that changes every month (unique and returning visitors within the month); ipm is the same keyed network hash the CRM forms and the donation page keep, so a sign-up or a gift soon after a click is credited to the page, the link and the source. Written by the linkpage and go functions only.
+
+- `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
+- `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1960,7 +2039,7 @@ Functions:
 - `info_decide(bigint, text)`: Admins grant, decline or revoke a request to see a password (info_link_access). Logged. Access: authenticated (admins only, checked inside).
 - `info_grant(bigint, text)`: Admins give a person access to a password without a request. Logged. Access: authenticated (admins only, checked inside).
 - `info_links_grant_adder()`: Trigger on info_links insert: whoever adds a password can see it (a granted info_link_access row).
-- `content_ideas_from_meeting(bigint, jsonb, text)`: Adds the content ideas process-transcript found in a marketing meeting to the Content calendar as undated drafts (title, idea in notes with the meeting, suggested_by, idea_for, source_transcript_id); skips a title already in the calendar and an idea whose date has passed; banks an idea for three months or more away until six weeks before its date. Refuses board-only, leadership and private meetings. Logged. Access: service role only.
+- `content_ideas_from_meeting(bigint, jsonb, text)`: wave136, wave237: files the content ideas a marketing meeting raised into the Content calendar's Ideas (draft posts with the meeting as their source), keeping the platforms the meeting named (any of the Studio's six; Instagram and Facebook when none), banking an idea three months or more away until six weeks before.
 - `bank_idea(bigint, date, text)`: Puts a Content calendar idea (an undated draft) in the bank until a date, with an optional reason; it leaves the calendar and comes back to the Ideas tray on that day. Checks wa_can_bank(). Logged. Called by the Content calendar. Access: authenticated.
 - `bank_unbank_do(text, bigint, text, text)`: Internal: brings a banked task, project or content idea (p_kind task, project or idea) back; tasks get their future due dates back. Used by bank_unbank(), bank_undo(), bank_resurface() and the process-transcript edge function. Access: service role only.
 - `bank_unbank(text, bigint, text)`: Brings a banked task, project or content idea back now, with a reason. Checks wa_can_bank(), visibility, and project lead rights. Called by the page. Access: authenticated.
@@ -2245,6 +2324,19 @@ Functions:
 - `wa209_vol_app_status(bigint, text, text)`: wave209: sets a volunteer application received, contacted, welcomed, not_fit or withdrawn; welcomed, not a fit and withdrawn clear the person's Review flag once none of their applications is open (welcomed adds the tag welcomed). Staff only.
 - `transcript_outcomes(bigint[])`: wave210: the tasks each transcript added, banked or closed, with the live owner, due date and state when the reader may see the task
 - `wa209_task_link()`: wave210: links a task the AI inserted or closed (updated_by AI: <title>) to its transcript in transcript_tasks
+- `wa213_team_meetings(text, date)`: wave213: the next two dates the team meets (Hub calendar, Toronto), from a day on; dates only, nothing else about the events
+- `my_due_date_check()`: wave213: the signed-in person's open tasks that are overdue or have no due date, and the ones a meeting dated that nobody confirmed (from 1 Sep 2026), each with the team's next and following meetings and a suggestion
+- `confirm_due_dates(jsonb)`: wave213: saves the dates a person set or confirmed, and the tasks they marked done, in the due-date check (their own listed tasks only), with a change_log line each
+- `confirm_due_check(jsonb)`: wave213c, wave237: saves what a person chose in the due-date check: a date, done, to the bank, discard (closes the task with the status Discarded), mine (clears owner_unsure), not mine (the task goes to the team's lead, still unsure) and, for a lead, assign (names the owner). Their own listed tasks only; a change_log line each.
+- `wa216_open_positions()`: wave216: positions open to applicants on the website (Posted or Interviewing, serving roles excepted); wave216c: the public PDF of the job description; wave216d: null while held, and whether it is a leadership role (by title).
+- `wa217_loop_dm_due()`: wave217: open sessions due the one Still in? Slack DM (3 to 4 hours in, none sent yet, no Still in in the last 40 minutes, so someone answering in the Hub gets no DM). Read by checkin-post still_dm with the service key and by wa217_loop_dm_tick. Closed to the API.
+- `wa217_loop_dm_tick()`: wave217: run every 5 minutes by cron wa-loop-still-dm; calls checkin-post {action: still_dm} (trigger secret) only when wa217_loop_dm_due() has a session and app_config loop_still_dm is on. Closed to the API.
+- `wa218_to_volunteer(bigint, text[], bigint[], text)`: wave218: an applicant who would rather volunteer: into Volunteers and Applicants received (wa209_volunteer_apply), optionally on upcoming servings as Waiting For Response (no text), and the card closed as volunteering. Staff only; practice cards only close.
+- `wa219_push_save(text, text, text, text)`: wave219: the page saves this device's Web Push subscription for the signed-in staff member (upsert by endpoint). Known push services only.
+- `wa219_channel_set(text)`: wave219: the person's choice of where mentions and work for them arrive (wa_notify_prefs.prefs.channel): both, hub or slack. notify skips the Slack DM for hub when the person has a device on; hub-push skips slack.
+- `wa219_push_call(jsonb)`: wave219: hands an event to hub-push (trigger secret), only from a trigger, only when app_config push_on is on and some device has Hub notifications on. Never raises.
+- `wa219_task_assigned()`: wave219: a new open task with an owner, made by a signed-in person, goes to hub-push (task_assigned); hub-push skips the person who made it.
+- `wa219_announce_push()`: wave219: a new announcement goes to hub-push, which sends it to wa180_audience (not the poster).
 - `wa220_digits(text)`: wave220: the last 10 digits of a phone number (null when none), to compare numbers typed in any format.
 - `wa220_cand_for(bigint)`: wave220: the hired applicant (hub_candidates) behind a team member: the one linked by member_id, else the only hired, unlinked applicant whose name matches the roster name or the WA email (first.last). Null when none or ambiguous.
 - `wa220_member_contact(bigint, boolean)`: wave220: makes sure a team member has one CRM contact (crm_contacts.member_id): links or creates it, merges the same person's other records (the roster email, the hired applicant's email, or the applicant's phone with the same first name; never another team member's), carries the hire's phone and personal email, restores the full name and, with p_volunteer, gives an active non-board member a volunteer record. Called by the team_members and hub_candidates triggers and by wa220_set_member_phone; not callable from the API.
@@ -2253,21 +2345,15 @@ Functions:
 - `wa220_member_phone(bigint)`: wave220: the phone numbers on a team member's CRM contact for their Hub profile (#person/<id>), and can_edit (the person themselves, HR, leaders and admins). Staff only; board viewers and blocked accounts get no row.
 - `wa220_set_member_phone(bigint, text)`: wave220: sets a team member's main phone (the first in crm_contacts.phones) from their Hub profile; the person, HR, leaders and admins only. The CRM and the Volunteer Manager show the same number (one record). change_log records that it changed, not the number.
 - `wa221_comment_author()`: wave221: signs the meeting and Slack passes' task comments as the Hub ("The Hub, from the meeting", "The Hub, from Slack") whatever the edge function sends (it still writes Meeting AI or Slack AI).
-
-### `hub_intros`
-
-wave227: the weekly introduction. One row per person a week (source weekly: the Hub picked other_id, someone they have not worked with, and wrote note and hello for them; note_back and hello_back are the same introduction seen from the other side), plus source shared when someone pressed Tell <name> too (from_intro). Written by the intros edge function and wa227_intro_act; read by the person through wa227_my_intro, admins read all.
-
-- `week`: The Monday (Toronto) of the week the introduction belongs to.
-- `member_id`: team_members.id of the person who sees the introduction.
-- `other_id`: team_members.id of the person they are introduced to.
-- `note`: Why they might connect, written by the Hub for member_id (their language), from open profile facts only.
-- `hello`: A friendly first line member_id can paste into Slack.
-- `note_back`: The same introduction written for other_id; becomes the note of the shared row when member_id presses Tell <name> too.
-- `signals`: What the match used: shared goals, projects, words, teams, the score. Never confidential meetings.
-- `status`: new (not shown yet), seen (shown), later (Maybe later: not again this week), acted (they said hi, booked a chat or told the other person).
-- `actions`: What they did: slack, coffee, shared, profile.
-
+- `wa225_marketing()`: wave225: the marketing team and admins (the Content Studio's people who reply to comments and edit the library). Staff with the marketing profile or in the marketing department, or an admin.
+- `wa225_publisher()`: wave225: who publishes without an approval (Steel, 09/10/26: marketing leads and admins). Admins, and leaders on the marketing team. Everyone else sends a post for approval.
+- `wa225_post_guard()`: wave225: refuses a schedule or publish of a post that is not approved unless the person is a publisher (wa225_publisher); an approved post edited by a non-publisher goes back to pending.
+- `studio_submit(bigint, text)`: wave225: send a post for approval (anyone on staff). Notifies the publishers through the trigger trg_wa225_approval_notify.
+- `studio_decide(bigint, text, text)`: wave225: a publisher approves a pending post (it becomes scheduled when it has a date) or sends it back with a note.
+- `wa225_approval_notify()`: wave225: tells social-publish (approval_notify) when a post is sent for approval, approved or sent back; off with app_config studio_notify = off.
+- `studio_link_page()`: wave225: what hub.welfareavenue.com/links shows: the settings in hub_settings link_page (title, bio, blocks, theme) and the active bio-* short links. Executable signed-out.
+- `wa225_click(bigint, text, text, text)`: wave225: one click on a short link (the go function, with the service key): the row in short_link_clicks and the count on short_links.
+- `studio_settings_save(text, jsonb)`: wave225: save the Content Studio settings (content_studio: goals, the hashtag cap, link tracking) or the link-in-bio page (link_page); the marketing team and admins only.
 - `wa227_my_member()`: wave227: the roster id (team_members) of the signed-in person: their team email, or for a director the board_members address they sign in with.
 - `wa227_people()`: wave227: who the weekly introduction runs for: active team members with an address, directors included (their board address when the roster has none).
 - `wa227_together(bigint, bigint)`: wave227: how much two roster members already work together: same team (5), the executive team and the board (5, they meet at board meetings), shared tasks, meetings both spoke in (last 180 days), a reporting line (5), an introduction in the last 12 weeks (10). Read by wa227_intro_plan only.
@@ -2275,27 +2361,8 @@ wave227: the weekly introduction. One row per person a week (source weekly: the 
 - `wa227_intro_plan(date)`: wave227: the week's introductions: for each person (random order) the one they have not worked with (wa227_together) whose goals, projects and role words overlap most, someone already picked this week a little less likely, never their own team. Returns both profiles and the signals for the intros function to write the notes. Service role only.
 - `wa227_my_intro()`: wave227: the introduction the signed-in person should see (a shared one first, else this week's), with the other person's card (role, team, avatar, Slack id) and whether they can still tell them. It pops up once: only a new one is returned (the page marks it seen). Null when there is none or when app_config intros_on is false.
 - `wa227_intro_act(bigint, text)`: wave227: records what the person did with their introduction (seen, later, slack, coffee, profile) and, for share, gives the other person the same introduction from their side (a shared row with note_back) in their next pop-up. Only the person it is for.
-
-### `link_pages`
-
-wave230: the link pages (the link in bio is slug main at /links; others at /links/<slug>). Staff read; marketing (wa225_marketing) and admins write.
-
-- `slug`: ^[a-z0-9][a-z0-9-]{0,39}$; main is the bio page.
-- `title`, `title_fr`, `bio`, `bio_fr`, `avatar_url`: the top of the page.
-- `theme`: {preset green|cream|gold|purple|night, bg, btn, accent, shape pill|rounded|square}.
-- `socials`: profile addresses by platform.
-- `blocks`: ordered array of {id, type link|form|donate|header|text|youtube|instagram|events|impact|socials, label, label_fr, sub, icon, thumb, featured, on, start_at, end_at, url and code (link: its short_links row), fallback, form, form_fr, campaign, video, count, stats, ab {on, label, label_fr, winner, started_at}}.
-- `settings`: {lang auto|en|fr-only, fallback_url, seo}.
-- `status`: live, draft or archived.
-
-### `link_page_sources`
-
-wave230: tracked addresses (?s=<code>) per platform bio, QR code, email, print or partner; page_id null means every page. Staff read; marketing writes.
-
-### `link_page_events`
-
-wave230: one row per view or click on a link page, written by the linkpage and go functions only; marketing and publishers read. Columns: page_id, at, kind (view|click), block_id, link_id, variant (a view: the A/B map as JSON; a click: a or b), src, src_detail, visitor (monthly hash), repeat_visit, lang, device, os, browser, country, region, city, tz, ipm (keyed network hash), is_test. No cookie, no address.
-
-- `wa230_conversions(p_days)`: wave230: form submissions and donation attempts matched to the last link page click from the same ipm in the 2 hours before, with the CRM contact when there is one. Service role, marketing or publishers.
-- `short_links.fallback_url` (wave230): where a switched-off link goes.
+- `wa230_conversions(int)`: wave230: the sign-ups (CRM forms) and gifts (the donation page) that followed a link page click on the same network within 2 hours, last click wins; the person is named only because they signed up or gave. The marketing team and admins.
+- `wa234_fold_role()`: wave234: Community welcome (community_talker) is Community lead (community_debrief). Before insert or update on event_roster (role), volunteer_profiles and volunteer_applications (roles): the old key is written as the new one. Trigger only.
+- `wa237_upcoming_dates(text, date)`: wave237: the named dates in the 45 days after a meeting (serving events, fundraisers, the team's own meetings), one line each, for process-transcript (the service role) to resolve "before Sunday's event". Security invoker: anyone else gets only what row security lets them read.
+- `wa237_due_check()`: wave237: the due-date check's list for the signed-in person: their open tasks that are overdue, undated, dated by a meeting and unconfirmed, or whose owner a meeting left unsure (owner_unsure: "Is this yours?"), plus, for a team's lead, the team's tasks nobody on the roster owns (for_lead: "Who owns this?"). Replaces my_due_date_check() for the pop-up; that one stays for pages on the old build.
 

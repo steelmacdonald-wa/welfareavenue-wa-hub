@@ -149,6 +149,7 @@
 126_wave126
 117_wave117
 118_wave118
+# wave238 (14/10/26): Welcome back is a gate over the whole Hub (#w238loop: Close as of, Set the time, Still working only when away under three hours the same day; no x, no Escape; kept across a reload until answered); Still in? has no x.
 118b_wave118b
 118c_wave118c
 127_wave127
@@ -197,6 +198,7 @@
 # 180_wave180: announcements that lead to a poll or a short form the team answers (Steel, 29/09/26): the card at the top of Home (#w180card) with the announcements for this person, a poll answered with a tap, a short form in a window, the totals once answered when the poster allows; See the answers for the poster, leaders, HR and admins (who chose what unless anonymous, who has not answered, a CSV); Post an announcement (leaders to their team, the leaders or everyone; HR and admins to anyone) with the one Slack post (team-inbox). #announce/<id> opens one. Numbered 180: another session ships 171 onwards tonight. The What's new link lives in 116g.
 180_wave180
 # 177_wave177: confirm your next team meeting from Home (Steel, 30/09/26): a pop-up (#w177pop) over Home asks about the next team meeting (hub_events.department) in 7 days the person has not answered, Accept or I can't make it, the reply goes to Google Calendar through hub-connect rsvp (switching Google Calendar on when it is off), with the note to tell the leader (the organizer) 24 hours before.
+# wave238 (14/10/26): the gate. The pop-up shows on any page once the Hub has started, after the Loop's Welcome back gate (#w238loop, in 118b), with no x, Ask me later or Escape; every unanswered team meeting is asked in turn; only a failed reply offers Try again later. The due-date check (213) waits for it.
 177_wave177
 # 181_wave181: the HR centre's Analytics (HR and admins): who has been part of Welfare Avenue and for how long, from the roster and Slack's member export (hr_people_tenure_v, hr_slack_accounts): the team over time, each fiscal year, how long people stay, by team, Worth a look, everyone with a sheet per person, a CSV, and Import a new Slack export. The rail icon lives in 153.
 181_wave181
@@ -241,6 +243,7 @@
 # 212_wave212: the HR centre (Valex and Steel, 06/10/26): brighter colours in the HR centre only (stage colours on Applications, coloured Overview tiles, stronger chips), the bell (what needs you), and time off that works (wave105 edited: wa_is_hr decides access, Log time off form, decline reason, totals and sick days left; the Overview counts 'requested'). Built from build/parts212; hook in parts197 mastHr.
 212_wave212
 # 213_wave213: the due-date check: on opening the Hub, a pop-up (that stays until saved) for the person's overdue, undated and meeting-dated open tasks, suggested from their team's next meeting (my_due_date_check, confirm_due_dates). Built from build/parts213.
+# wave237 (14/10/26): the owner questions (Is this yours? Mine / Not mine; a lead names the owner of a team task nobody owns) from wa237_due_check. wave238: waits for the Loop's gate (#w238loop); no way out but Save.
 213_wave213
 # 215_wave215: the HR centre walkthroughs (Steel, 07/10/26): a hands-on coach (w215: a card and a gold ring on the real page; the card moves on when the Hub shows the step is done) and seven walkthroughs in the Avenue Academy Learning Avenue The HR centre (getting around, recruitment with yourself as the applicant and the offer letter in your inbox, onboarding yourself, time off both sides, team/hours/recognition, training and the onboarding plan, policies and discipline). Practice records (hub_candidates.practice, wa_timeoff.practice) never reach Slack, texts or the calendar; Clear practice. Built from build/parts215; hooks in parts122 startTour, 105, 209, 211, 212.
 215_wave215

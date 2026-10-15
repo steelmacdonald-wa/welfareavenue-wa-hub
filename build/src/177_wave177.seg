@@ -12,6 +12,13 @@
    window. "Ask me later" (or Escape, or the x) closes it until they next come back to Home. The reply goes to Google
    Calendar as them (hub-connect rsvp, the domain-wide delegation of wave116j), so the organizer sees it like any reply;
    the pop-up then says so and closes. Their leader is the meeting's organizer. Nothing else is sent on their behalf.
+   wave238 (14/10/26), the gate. Steel: "I don't want people to exit out of closing their tasks or change due dates on
+   the pop up - they must do it to use the hub. Also answering if they are joining meetings too." So the pop-up is now
+   part of the gate on opening the Hub: it shows on whatever page the person lands on (not only Home), a moment after
+   the Loop's Welcome back (#w238loop) is answered, and it cannot be put off: no x, no Ask me later, no Escape, no click
+   outside; every unanswered team meeting of the next seven days is asked in turn. Only a failed reply (Google Calendar
+   could not be reached) offers Try again later, so a fault never locks anyone out. The due-date check (#w213pop) waits
+   for it.
    ===================================================================== */
 (function () {
   if (window.__wa177) return; window.__wa177 = true;
@@ -109,8 +116,8 @@
   function cardHtml(e) {
     var lead = nameOf(organizer(e)); var calOn = !!(window.w116Conn && window.w116Conn.calendar);
     var soon = new Date(e.start_at).getTime() - Date.now() < 864e5;
-    return '<button type="button" class="x" data-w177later aria-label="Ask me later">\u00d7</button>'
-      + '<p class="k" id="w177k">Your next team meeting \u00b7 ' + E(teamLabel(e.department)) + '</p>'
+    /* wave238: no x and no Ask me later: the gate stays until answered */
+    return '<p class="k" id="w177k">Your next team meeting \u00b7 ' + E(teamLabel(e.department)) + '</p>'
       + '<h3>' + E(e.summary || 'Team meeting') + '</h3>'
       + '<p class="w">' + E(when(e.start_at)) + (e.meet_link ? '<a href="' + E(e.meet_link) + '" target="_blank" rel="noopener">Meet link</a>' : '') + '</p>'
       + '<p class="q">Will you be there?</p>'
@@ -118,12 +125,12 @@
       + '<button type="button" class="no" data-w177="declined"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'declined' ? 'Sending\u2026' : 'I can\u2019t make it') + '</button></div>'
       + '<p class="note">Your answer goes to Google Calendar' + (lead ? ', so ' + E(lead) + ' sees it' : '') + '. If you can\u2019t make it, <b>let ' + E(lead || 'your team leader') + ' know at least 24 hours before</b>' + (soon ? ' (this one is less than 24 hours away, so message them now)' : '') + '.'
       + (calOn ? '' : ' Answering here switches on Google Calendar for the Hub, which you can turn off in Settings.') + '</p>'
-      + (S.err ? '<p class="err">' + E(S.err) + (e.html_link ? ' <a href="' + E(e.html_link) + '" target="_blank" rel="noopener">Answer in Google Calendar</a>' : '') + '</p>' : '')
-      + '<button type="button" class="later" data-w177later' + (S.busy ? ' disabled' : '') + '>Ask me later</button>';
+      + (S.err ? '<p class="err">' + E(S.err) + (e.html_link ? ' <a href="' + E(e.html_link) + '" target="_blank" rel="noopener">Answer in Google Calendar</a>' : '') + '</p>'
+          + '<button type="button" class="later" data-w177later' + (S.busy ? ' disabled' : '') + '>Try again later</button>' : '');
   }
   function doneHtml(d) {
     var lead = d.lead;
-    var x = '<button type="button" class="x" data-w177close aria-label="Close">\u00d7</button>';
+    var x = '';   /* wave238: no x; Close (below) moves on to the next meeting, or closes */
     if (d.response === 'accepted') return x + '<p class="k" id="w177k">Thank you</p><h3>See you there</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Accepted on your Google Calendar.</p>'
       + '<div class="row"><button type="button" class="yes" data-w177close>Close</button></div>';
     return x + '<p class="k" id="w177k">Answer sent</p><h3>Thanks for letting us know</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Declined on your Google Calendar.</p>'
@@ -134,6 +141,13 @@
     var body = document.getElementById('mpBody'), home = document.getElementById('mypage');
     return !!body && (!home || home.classList.contains('active'));
   }
+  /* wave238: the gate shows on any page once the Hub has started for a signed-in staff member (the sign-in screen down) */
+  function inHub() {
+    try { var g = document.getElementById('gate'); if (g && g.style.display !== 'none') return false; } catch (x) { /* fine */ }
+    return staff() && !!document.getElementById('tabBar');
+  }
+  /* wave238: the Loop's Welcome back gate comes first */
+  function loopGateUp() { var l = document.getElementById('w238loop'); return !!l && l.getBoundingClientRect().width > 0; }
   /* another window is open (the Hub's modal, the Academy's sheet, a tour, any dialog): wait for it to close */
   function busyElsewhere() {
     try {
@@ -149,7 +163,8 @@
     document.removeEventListener('keydown', onKey, true);
   }
   function onKey(ev) {
-    if (ev.key === 'Escape' && document.getElementById('w177pop')) { ev.preventDefault(); later(); }
+    /* wave238: Escape does nothing (the gate stays until answered) */
+    if (ev.key === 'Escape' && document.getElementById('w177pop')) { ev.preventDefault(); ev.stopPropagation(); }
   }
   function later() {
     var e = pick(); if (e) S.later[e.id] = 1;
@@ -158,10 +173,10 @@
   function paint() {
     var pop = document.getElementById('w177pop');
     var e = S.done ? null : pick();
-    if (!onHome() || !staff()) { if (pop) close(); return; }
+    if (!inHub()) { if (pop) close(); return; }
     var html = S.done ? doneHtml(S.done) : (e && !S.later[e.id] && !S.quiet) ? cardHtml(e) : '';
     if (!html) { if (pop) close(); return; }
-    if (!pop && busyElsewhere()) return;
+    if (!pop && (busyElsewhere() || loopGateUp())) return;
     css();
     var first = !pop;
     if (!pop) {
@@ -177,7 +192,7 @@
     if (first) { var b = el.querySelector('button.yes'); if (b) try { b.focus(); } catch (x) { /* fine */ } }
   }
   /* a moment after Home opens, so the page is drawn behind it */
-  function soon(ms) { clearTimeout(S.timer); S.timer = setTimeout(function () { refresh(false); }, ms == null ? 1200 : ms); }
+  function soon(ms) { clearTimeout(S.timer); S.timer = setTimeout(function () { refresh(false); }, ms == null ? 4200 : ms); }   /* wave238: after the Loop's gate has had its moment */
   async function refresh(force) { await load(force); paint(); }
 
   async function answer(resp) {
@@ -204,12 +219,12 @@
       S.busy = false; S.err = String((err && err.message) || err).slice(0, 160); paint();
     }
   }
-  /* after an answer: close, and stay quiet until they next come back to Home (then the next unanswered one, if any) */
-  function finish() { S.done = null; S.err = ''; S.quiet = true; close(); }
+  /* after an answer: close, then the next unanswered meeting, if any (wave238: the gate asks them all) */
+  function finish() { S.done = null; S.err = ''; S.quiet = false; close(); setTimeout(function () { paint(); }, 250); }
   document.addEventListener('click', function (ev) {
     var t = ev.target; if (!t || !t.closest) return;
     var b = t.closest('#w177card [data-w177]'); if (b) { ev.preventDefault(); answer(b.getAttribute('data-w177')); return; }
-    if (t.closest('#w177card [data-w177later]')) { ev.preventDefault(); if (!S.busy) later(); return; }
+    if (t.closest('#w177card [data-w177later]')) { ev.preventDefault(); if (!S.busy && S.err) later(); return; }   /* wave238: only after a failed reply */
     if (t.closest('#w177card [data-w177close]')) { ev.preventDefault(); finish(); }
   });
 
@@ -218,7 +233,7 @@
   function watch() {
     var h = onHome();
     if (h && !wasHome) { S.quiet = false; S.later = {}; soon(); }
-    if (!h && wasHome) { clearTimeout(S.timer); close(); S.done = null; }
+    /* wave238: leaving Home no longer closes it; the gate stays until answered */
     wasHome = h;
   }
   if (typeof renderMyPage === 'function') {
@@ -231,8 +246,13 @@
   }
   window.addEventListener('hashchange', function () { setTimeout(watch, 300); });
   /* another window was open: try again once it closes; look again every ten minutes */
-  setInterval(function () { try { watch(); if (!document.hidden && document.getElementById('mpBody') && !S.quiet && !S.list && !S.p && myEmail() && staff()) { refresh(false); return; } if (!document.hidden && onHome() && !document.getElementById('w177pop') && !S.quiet && pick() && !busyElsewhere()) paint(); } catch (e) { /* fine */ } }, 2000);
-  setInterval(function () { try { if (!document.hidden && onHome() && !S.quiet) refresh(true); } catch (e) { /* fine */ } }, 10 * 60000);
+  setInterval(function () { try { watch(); if (!document.hidden && inHub() && !S.quiet && !S.list && !S.p && myEmail()) { refresh(false); return; } if (!document.hidden && inHub() && !document.getElementById('w177pop') && !S.quiet && pick() && !busyElsewhere() && !loopGateUp()) paint(); } catch (e) { /* fine */ } }, 2000);
+  setInterval(function () { try { if (!document.hidden && inHub() && !S.quiet) refresh(true); } catch (e) { /* fine */ } }, 10 * 60000);
+  /* wave238: the gate shows on whatever page the Hub opens on, a moment after the start (the Loop's gate first, see paint) */
+  if (typeof startApp === 'function') {
+    var __sa177 = startApp;
+    startApp = async function () { var r = await __sa177.apply(this, arguments); setTimeout(function () { try { refresh(false); } catch (e) { /* fine */ } }, 4000); return r; };
+  }
   try {
     if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { S.list = null; S.done = null; S.later = {}; close(); } });
   } catch (e) { /* fine */ }

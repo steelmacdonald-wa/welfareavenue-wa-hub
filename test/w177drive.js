@@ -1,7 +1,9 @@
 /* w177drive.js: wave177, confirm your next team meeting from Home (#w177card): the next team meeting in 7 days that the
    person has not answered, Accept and I can't make it through hub-connect (switching Google Calendar on first when it is
    off), the note to tell the leader 24 hours before, the error path, and who sees nothing. Since 30/09/26 it is a pop-up
-   (#w177pop): Ask me later, Escape, not over another window, back on the next visit to Home. The clock is 25/09/26 16:00. */
+   (#w177pop): Ask me later, Escape, not over another window, back on the next visit to Home. The clock is 25/09/26 16:00.
+   wave238 (14/10/26), the gate: no x, no Ask me later, no Escape; it shows on any page; every unanswered meeting is asked in
+   turn; leaving Home does not close it; only a failed reply offers Try again later; it waits for the Loop's gate (#w238loop). */
 const { launch, fresh, loadFixture } = require('./boot');
 let pass = 0, fail = 0;
 function ok(name, cond, extra) { if (cond) { pass++; console.log('PASS ' + name); } else { fail++; console.log('FAIL ' + name + (extra ? ' :: ' + JSON.stringify(extra).slice(0, 600) : '')); } }
@@ -59,12 +61,9 @@ const away = async f => { await f.hash('#calendar', 1200); await f.hash('#mypage
     c = await card(f);
     ok('then: See you there, accepted on Google Calendar', c && /See you there/i.test(c.t) && /Accepted on your Google Calendar/.test(c.t), c && c.t);
     await f.page.waitForTimeout(6500);
-    ok('then it closes by itself, and does not ask again during this visit', !(await card(f)) && await f.ev(() => !document.getElementById('w177pop')));
-    await f.page.waitForTimeout(2500);
-    ok('still closed a moment later', !(await card(f)));
-    await away(f);
     c = await card(f);
-    ok('back on Home: the next unanswered team meeting', c && c.ev === 'hr2', c);
+    ok('then it closes by itself and asks the next unanswered team meeting right away (wave238)', c && c.ev === 'hr2' && !/See you there/.test(c.t), c);
+    ok('no x and no Ask me later on the card (wave238)', c && !/Ask me later/.test(c.t) && await f.ev(() => !document.querySelector('#w177card .x, #w177card button.later')), c && c.t);
     await f.page.click('#w177card [data-w177="declined"]'); await f.page.waitForTimeout(500);
     calls = await f.ev(() => window.__w177);
     ok('I can\'t make it declines on Google Calendar (no second switch-on)', calls.filter(x => x.b.action === 'toggle').length === 1 && calls[calls.length - 1].b.action === 'rsvp' && calls[calls.length - 1].b.event_id === 'hr2' && calls[calls.length - 1].b.response === 'declined', calls);
@@ -79,22 +78,34 @@ const away = async f => { await f.hash('#calendar', 1200); await f.hash('#mypage
     ok('no page errors', f.errs.length === 0, f.errs);
     await f.close();
 
-    /* 1b. Ask me later, Escape, and never on top of another window */
+    /* 1b. wave238: no way out (Escape, a click outside, leaving Home), never on top of another window, and it shows on any page */
     f = await fresh(browser, { who: 'member', hash: '#mypage', fixture: fixture(EVENTS()), wait: 4500 });
     await f.ev(MOCK, 'ok'); await f.ev(() => window.w177.refresh(true)); await f.page.waitForTimeout(400);
-    await f.page.click('#w177card button.later'); await f.page.waitForTimeout(2600);
-    ok('Ask me later closes it for this visit', !(await card(f)) && (await f.ev(() => window.__w177)).length === 0);
-    await away(f);
-    ok('it asks again on the next visit to Home', (await card(f) || {}).ev === 'hr1');
+    ok('it is up', (await card(f) || {}).ev === 'hr1');
     await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(300);
-    ok('Escape is Ask me later', !(await card(f)));
-    await f.ev(() => { openModal('<p>another window</p>'); }); await f.hash('#calendar', 1000); await f.hash('#mypage', 2600);
+    ok('Escape does nothing', (await card(f) || {}).ev === 'hr1');
+    await f.page.mouse.click(5, 5); await f.page.waitForTimeout(300);
+    ok('a click outside does nothing', (await card(f) || {}).ev === 'hr1');
+    await f.hash('#calendar', 1500);
+    ok('leaving Home does not close it', (await card(f) || {}).ev === 'hr1');
+    await f.ev(() => window.w177.close());
+    await f.ev(() => { openModal('<p>another window</p>'); }); await f.hash('#mypage', 2600); await f.page.waitForTimeout(4500);
     ok('not on top of another window', !(await card(f)));
     await f.ev(() => closeModal()); await f.page.waitForTimeout(2600);
     ok('once that window closes, it shows', (await card(f) || {}).ev === 'hr1');
-    await f.hash('#calendar', 1200);
-    ok('leaving Home closes it', !(await card(f)));
-    ok('no page errors (later)', f.errs.length === 0, f.errs);
+    ok('no page errors (gate)', f.errs.length === 0, f.errs);
+    await f.close();
+    /* 1c. wave238: on a page that is not Home, a moment after the start */
+    f = await fresh(browser, { who: 'member', hash: '#calendar', fixture: fixture(EVENTS()), wait: 4500 });
+    await f.ev(MOCK, 'ok'); await f.page.waitForTimeout(5500);
+    ok('it shows on the Calendar page too (any page, after the start)', (await card(f) || {}).ev === 'hr1', await card(f));
+    /* the Loop's gate first */
+    await f.ev(() => window.w177.close());
+    await f.ev(() => { var g = document.createElement('div'); g.id = 'w238loop'; g.innerHTML = '<div class="box" role="dialog" aria-modal="true" style="width:300px;height:100px"></div>'; g.style.cssText = 'position:fixed;inset:0;z-index:2147483100'; document.body.appendChild(g); });
+    await f.ev(() => window.w177.refresh(true)); await f.page.waitForTimeout(2600);
+    ok('it waits while the Loop\'s Welcome back gate is up', !(await card(f)));
+    await f.ev(() => document.getElementById('w238loop').remove()); await f.page.waitForTimeout(2600);
+    ok('and shows once that gate is answered', (await card(f) || {}).ev === 'hr1');
     await f.close();
 
     /* 2. switching Calendar on fails: the reason and a link to answer in Google Calendar */
@@ -104,6 +115,9 @@ const away = async f => { await f.hash('#calendar', 1200); await f.hash('#mypage
     c = await card(f);
     calls = await f.ev(() => window.__w177);
     ok('if Calendar cannot be switched on: no reply sent, the card says so and links to Google Calendar', c && c.ev === 'hr1' && /could not be switched on/.test(c.t) && /Answer in Google Calendar/.test(c.t) && !calls.some(x => x.b.action === 'rsvp'), { c, calls });
+    ok('only then: Try again later (wave238)', c && /Try again later/.test(c.t), c && c.t);
+    await f.page.click('#w177card button.later'); await f.page.waitForTimeout(600);
+    ok('Try again later closes it for this visit', !(await card(f)));
     await f.close();
 
     /* 3. less than 24 hours away: message them now; Calendar already on: no switch-on line and no toggle */

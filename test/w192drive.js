@@ -263,11 +263,12 @@ const toastText = f => f.ev(() => { const t = document.getElementById('toast') |
     await stubFn(g);
     await g.ev(() => { localStorage.setItem('w118bHid', String(Date.now() - 30 * 60000)); window.__wa118b.decide('back'); });
     await g.page.waitForTimeout(300);
-    const back = await g.ev(() => (document.getElementById('w118ck') || {}).textContent || '');
-    ok('back after a while: "Close as of" a time, never "check out"', /Welcome back/.test(back) && /Close as of/.test(back) && !/[Cc]heck(ed)? ?out|checked in/.test(back), back);
+    /* wave238: Welcome back is a gate over the Hub (#w238loop) */
+    const back = await g.ev(() => (document.getElementById('w238loop') || {}).textContent || '');
+    ok('back after a while: the Welcome back gate, "Close as of" a time, never "check out"', /Welcome back/.test(back) && /Close as of/.test(back) && !/[Cc]heck(ed)? ?out|checked in/.test(back), back);
     /* the stub acknowledges writes without applying them: end the row as the database would, so wave116j's reload finds it closed */
     await g.ev(() => { (window.__WAFIX.hub_checkins || []).forEach(r => { if (r.id === 901) r.ended_at = new Date(Date.now() - 30 * 60000).toISOString(); }); });
-    await g.page.click('#w118ck [data-w118b="asof"]'); await g.page.waitForTimeout(1200);
+    await g.page.click('#w238loop [data-w118b="asof"]'); await g.page.waitForTimeout(1200);
     const as = await g.ev(() => ({ sheet: !!document.getElementById('w192sheet'), row: w192.state().row, open: !!w116jCk.open() }));
     ok('closing as of that time opens the wrap-up sheet for that session (nothing posted)', as.sheet && as.row && as.row.id === 901 && !!as.row.ended_at && !as.open && !(await calls(g)).some(c => c.action === 'out'), as);
     ok('the draft is asked for that session', (await calls(g)).some(c => c.action === 'draft' && c.body.checkin_id === 901));

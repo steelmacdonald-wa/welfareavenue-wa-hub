@@ -17,11 +17,17 @@
      change_log line; the pop-up comes back next visit only for what is still overdue or undated.
    wave213c (07/10/26): each task can also be Done, sent To the bank (until a day; bank_task) or Discarded (deleted, the
    row kept in change_log); saved through confirm_due_check (confirm_due_dates stays for pages still open).
-   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close. */
+   Never on top of another window: it waits for the meeting pop-up (#w177pop) or a modal to close.
+   wave237 (14/10/26): the owner questions. Steel: "if confirmations are needed, put it in the pop-up that people get when they
+   open the hub [...] have them just confirm, okay, this is my task. No, this is someone else's task [...] hopefully we can avoid
+   that without it prompting people to clarify tasks as much." A task whose owner a meeting left unsure (dept_tasks.owner_unsure)
+   opens with "Is this yours?": Mine (then the usual date choices) or Not mine (it goes to the team's lead to re-home). A team's
+   lead also sees the team's tasks nobody on the roster owns and names the owner. The list comes from wa237_due_check().
+   wave238 (14/10/26): it also waits for the Loop's Welcome back gate (#w238loop). */
 (function () {
   'use strict';
   if (window.__wa213) return; window.__wa213 = true;
-  var S = { rows: null, pick: {}, act: {}, bank: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
+  var S = { rows: null, pick: {}, act: {}, bank: {}, mine: {}, who: {}, busy: false, err: '', failed: 0, shown: false, gone: false };
   var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F';
 
   var css = ''
@@ -53,6 +59,9 @@
     + '#w213pop .later{background:none;border:0;color:#555;text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;}'
     + '#w213pop .err{color:' + FLAG + ';font-size:12.5px;flex-basis:100%;}'
     + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
+    + '#w213pop .ask{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:8px;font-size:12.5px;color:#444;}'
+    + '#w213pop .ask .q{font-weight:700;color:' + GREEN + ';}'
+    + '#w213pop select{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;max-width:100%;}'
     + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
 
@@ -65,17 +74,28 @@
   function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
   function busyElsewhere() {
     var p = document.getElementById('w177pop'); if (p && p.offsetParent !== null && getComputedStyle(p).display !== 'none') return true;
+    var l = document.getElementById('w238loop'); if (l && l.getBoundingClientRect().width > 0) return true;   /* wave238: the Loop's gate first */
     var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
     return false;
   }
 
   async function load() {
     try {
-      var r = await db.rpc('my_due_date_check');
-      if (r && r.error) return null;
-      return (r && r.data) || [];
+      var r = await db.rpc('wa237_due_check');
+      if (!r || r.error || !Array.isArray(r.data)) { r = await db.rpc('my_due_date_check'); if (r && r.error) return null; }   /* the old list, for a database still on wave213 */
+      return (r && Array.isArray(r.data)) ? r.data : [];
     } catch (e) { return null; }
   }
+  /* wave237: the people a lead can give a task to (the task's team first, active members only) */
+  function teamPeople(dept) {
+    var all = (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || [];
+    var act = all.filter(function (m) { return m && m.name && m.active !== false; });
+    var own = act.filter(function (m) { return m.department === dept; }), rest = act.filter(function (m) { return m.department !== dept; });
+    return own.concat(rest);
+  }
+  function isUnsure(r) { return r.owner_unsure === true && !r.for_lead; }
+  function isLead(r) { return r.for_lead === true; }
+  function mineOf(id) { return S.mine[id] === undefined ? null : S.mine[id]; }
 
   /* wave213c (Steel, 07/10/26): "members should have the ability to discard a task, complete a task (it's done), or
      move the task to the task bank". Each task: Keep (with its date), Done, To the bank (until a day), Discard. */
@@ -86,11 +106,37 @@
   function rowHtml(r) {
     var id = r.task_id, isOver = r.why === 'overdue', v = S.pick[id], a = actOf(id);
     var meta = [team(r.department)];
+    if (isLead(r)) meta.push('owner: ' + (r.owner || 'nobody yet'));
     if (isOver) meta.push('was due ' + day(r.due_date));
     else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
+    else if (r.why === 'owner_check' && r.due_date) meta.push('due ' + day(r.due_date));
     if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
-    var h = '<div class="row a-' + a + (a === 'done' || a === 'discard' ? ' isdone' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
-      + '<div class="m">' + E(meta.filter(Boolean).join(' · ')) + '</div><div class="ctl">'
+    var h = '<div class="row a-' + a + (a === 'done' || a === 'discard' ? ' isdone' : '') + (isUnsure(r) ? ' unsure' : '') + '" data-w213row="' + id + '"><div class="t">' + E(r.title || 'Untitled') + '</div>'
+      + '<div class="m">' + E(meta.filter(Boolean).join(' · ')) + '</div>';
+    /* wave237: a lead names the owner of a task nobody owns */
+    if (isLead(r)) {
+      var who = S.who[id] || '';
+      h += '<div class="ask"><span class="q">Who owns this?</span>'
+        + '<span class="seg" role="group" aria-label="What to do with it"><button type="button" data-w213act="' + id + '" data-a="assign" class="' + (a === 'assign' ? 'on' : '') + '" aria-pressed="' + (a === 'assign') + '">Give it to</button>'
+        + '<button type="button" data-w213act="' + id + '" data-a="done" class="' + (a === 'done' ? 'on' : '') + '" aria-pressed="' + (a === 'done') + '">Done</button>'
+        + '<button type="button" data-w213act="' + id + '" data-a="discard" class="' + (a === 'discard' ? 'on' : '') + '" aria-pressed="' + (a === 'discard') + '">Discard</button></span>';
+      if (a === 'assign') {
+        h += '<select data-w213who="' + id + '" aria-label="Who owns ' + E(r.title || 'this task') + '"><option value="">Pick someone\u2026</option>' + teamPeople(r.department).map(function (m) { return '<option value="' + E(m.name) + '"' + (who === m.name ? ' selected' : '') + '>' + E(m.name) + (m.department && m.department !== r.department ? ' (' + E(team(m.department)) + ')' : '') + '</option>'; }).join('') + '</select>'
+          + '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">';
+      } else if (a === 'discard') h += '<span class="hint warn">It will be deleted, like Delete on the task.</span>';
+      else h += '<span class="hint">Marked done.</span>';
+      return h + '</div></div>';
+    }
+    /* wave237: "Is this yours?" comes first; the date choices follow a Mine */
+    if (isUnsure(r)) {
+      var mine = mineOf(id);
+      h += '<div class="ask"><span class="q">Is this yours?</span><span class="seg" role="group" aria-label="Is this your task">'
+        + '<button type="button" data-w213mine="' + id + '" data-v="1" class="' + (mine === true ? 'on' : '') + '" aria-pressed="' + (mine === true) + '">Mine</button>'
+        + '<button type="button" data-w213mine="' + id + '" data-v="0" class="' + (mine === false ? 'on' : '') + '" aria-pressed="' + (mine === false) + '">Not mine</button></span>'
+        + (mine === false ? '<span class="hint">It goes to your team\u2019s lead to give to the right person.</span>' : '') + '</div>';
+      if (mine !== true) return h + '</div>';
+    }
+    h += '<div class="ctl">'
       + '<span class="seg" role="group" aria-label="What to do with it">' + ACTS.map(function (x) {
           return '<button type="button" data-w213act="' + id + '" data-a="' + x[0] + '" class="' + (a === x[0] ? 'on' : '') + '" aria-pressed="' + (a === x[0]) + '">' + (x[0] === 'keep' && isOver ? 'Keep, push to' : x[1]) + '</button>';
         }).join('') + '</span>';
@@ -109,8 +155,13 @@
   }
 
   function counts() {
-    var c = { keep: 0, done: 0, bank: 0, discard: 0 };
-    (S.rows || []).forEach(function (r) { c[actOf(r.task_id)]++; });
+    var c = { keep: 0, done: 0, bank: 0, discard: 0, assign: 0, notmine: 0, open: 0 };
+    (S.rows || []).forEach(function (r) {
+      var id = r.task_id;
+      if (isLead(r)) { c[actOf(id) === 'keep' ? 'assign' : actOf(id)]++; return; }
+      if (isUnsure(r)) { var m = mineOf(id); if (m === null) { c.open++; return; } if (m === false) { c.notmine++; return; } }
+      c[actOf(id)]++;
+    });
     return c;
   }
   function saveLabel() {
@@ -119,23 +170,35 @@
     if (c.done) bits.push(c.done + ' done');
     if (c.bank) bits.push(c.bank + ' to the bank');
     if (c.discard) bits.push(c.discard + ' discarded');
-    return 'Save: ' + bits.join(', ');
+    if (c.assign) bits.push(c.assign + ' given an owner');
+    if (c.notmine) bits.push(c.notmine + ' not yours');
+    return 'Save: ' + (bits.join(', ') || 'your answers');
   }
 
   function html() {
     var rows = S.rows || [];
-    var over = rows.filter(function (r) { return r.why === 'overdue'; });
-    var none = rows.filter(function (r) { return r.why === 'no_date'; });
-    var set = rows.filter(function (r) { return r.why === 'meeting_set'; });
+    var unsure = rows.filter(isUnsure);
+    var lead = rows.filter(isLead);
+    var plain = rows.filter(function (r) { return !isUnsure(r) && !isLead(r); });
+    var over = plain.filter(function (r) { return r.why === 'overdue'; });
+    var none = plain.filter(function (r) { return r.why === 'no_date'; });
+    var set = plain.filter(function (r) { return r.why === 'meeting_set'; });
     var bits = [];
+    if (unsure.length) bits.push(unsure.length + (unsure.length === 1 ? ' task to confirm as yours' : ' tasks to confirm as yours'));
     if (over.length) bits.push(over.length + (over.length === 1 ? ' overdue task' : ' overdue tasks'));
     if (none.length) bits.push(none.length + (none.length === 1 ? ' task' : ' tasks') + ' with no due date');
     if (set.length) bits.push(set.length + (set.length === 1 ? ' task' : ' tasks') + ' with a date a meeting set');
+    if (lead.length) bits.push(lead.length + (lead.length === 1 ? ' task of your team' : ' tasks of your team') + ' with no owner yet');
     var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">' + E(hello()) + 'let’s get your tasks on track</h2>'
-      + '<p class="lead">You have ' + E(bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits.join('')) + '. We’ve suggested a due date for each one, usually your team’s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it. Then save, and you’re all set.</p></div><div class="bd">';
+      + '<p class="lead">You have ' + E(bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits.join('')) + '. '
+      + (unsure.length ? 'A meeting gave you a task without being sure it was yours: say if it is. ' : '')
+      + 'We’ve suggested a due date for each one, usually your team’s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it.'
+      + (lead.length ? ' For your team’s tasks nobody owns yet, name who takes them.' : '') + ' Then save, and you’re all set.</p></div><div class="bd">';
+    if (unsure.length) h += '<h3>Is this yours? A meeting was not sure</h3>' + unsure.map(rowHtml).join('');
     if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + over.map(rowHtml).join('');
     if (none.length) h += '<h3>No due date yet: here’s our suggestion</h3>' + none.map(rowHtml).join('');
     if (set.length) h += '<h3>Dates a meeting set: do they still work?</h3>' + set.map(rowHtml).join('');
+    if (lead.length) h += '<h3>Your team’s tasks with no owner yet: who takes them?</h3>' + lead.map(rowHtml).join('');
     h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving…' : E(saveLabel())) + '</button>'
       + (S.failed ? '<button type="button" class="later" data-w213later="1">Try again later</button>' : '')
       + '<span class="note">You can change any of this later on the task itself.</span>'
@@ -162,33 +225,50 @@
       if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
       if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
       if ((b = t.closest('[data-w213act]'))) { S.act[b.getAttribute('data-w213act')] = b.getAttribute('data-a'); S.err = ''; paint(); return; }
+      if ((b = t.closest('[data-w213mine]'))) { S.mine[b.getAttribute('data-w213mine')] = b.getAttribute('data-v') === '1'; S.err = ''; paint(); return; }
       if (t.closest('[data-w213save]')) { save(); return; }
       if (t.closest('[data-w213later]')) { close(); toastS('Your due dates are still to check: they will come back next time.'); return; }
     });
     el.addEventListener('change', function (e) {
       var i = e.target.closest('[data-w213date]'); if (i) { S.pick[i.getAttribute('data-w213date')] = i.value; paint(); return; }
-      var k = e.target.closest('[data-w213bank]'); if (k) { S.bank[k.getAttribute('data-w213bank')] = k.value; paint(); }
+      var k = e.target.closest('[data-w213bank]'); if (k) { S.bank[k.getAttribute('data-w213bank')] = k.value; paint(); return; }
+      var w = e.target.closest('[data-w213who]'); if (w) { S.who[w.getAttribute('data-w213who')] = w.value; S.err = ''; paint(); }
     });
     document.addEventListener('keydown', trapKey, true);
   }
 
   async function save() {
     if (S.busy) return;
-    var items = [], missing = 0, past = 0, bankBad = 0, today = new Date(); today.setHours(0, 0, 0, 0);
+    var items = [], missing = 0, past = 0, bankBad = 0, unanswered = 0, nobody = 0, today = new Date(); today.setHours(0, 0, 0, 0);
     (S.rows || []).forEach(function (r) {
-      var id = r.task_id, a = actOf(id);
-      if (a === 'done') { items.push({ id: id, action: 'done' }); return; }
-      if (a === 'discard') { items.push({ id: id, action: 'discard' }); return; }
+      var id = r.task_id, a = actOf(id), mine = null;
+      /* wave237: the lead's rows: an owner, or done, or discard */
+      if (isLead(r)) {
+        if (a === 'done') { items.push({ id: id, action: 'done' }); return; }
+        if (a === 'discard') { items.push({ id: id, action: 'discard' }); return; }
+        if (!S.who[id]) { nobody++; return; }
+        var dd = S.pick[id]; items.push({ id: id, action: 'assign', owner: S.who[id], due: dd && /^\d{4}-\d{2}-\d{2}$/.test(dd) && new Date(dd + 'T12:00:00') >= today ? dd : undefined }); return;
+      }
+      /* wave237: "Is this yours?" has to be answered; Not mine needs nothing else */
+      if (isUnsure(r)) {
+        mine = mineOf(id);
+        if (mine === null) { unanswered++; return; }
+        if (mine === false) { items.push({ id: id, action: 'notmine' }); return; }
+      }
+      if (a === 'done') { items.push(mine ? { id: id, action: 'done', mine: true } : { id: id, action: 'done' }); return; }
+      if (a === 'discard') { items.push(mine ? { id: id, action: 'discard', mine: true } : { id: id, action: 'discard' }); return; }
       if (a === 'bank') {
         var u = S.bank[id];
         if (!u || !/^\d{4}-\d{2}-\d{2}$/.test(u) || new Date(u + 'T12:00:00') <= today) { bankBad++; return; }
-        items.push({ id: id, action: 'bank', until: u }); return;
+        items.push(mine ? { id: id, action: 'bank', until: u, mine: true } : { id: id, action: 'bank', until: u }); return;
       }
       var v = S.pick[id];
       if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) { missing++; return; }
       if (new Date(v + 'T12:00:00') < today) { past++; return; }
-      items.push({ id: id, due: v });
+      items.push(mine ? { id: id, due: v, mine: true } : { id: id, due: v });
     });
+    if (unanswered) { S.err = unanswered === 1 ? 'One task is waiting for Mine or Not mine.' : unanswered + ' tasks are waiting for Mine or Not mine.'; paint(); return; }
+    if (nobody) { S.err = nobody === 1 ? 'One of your team’s tasks has nobody picked: choose who takes it, or Done or Discard.' : nobody + ' of your team’s tasks have nobody picked: choose who takes each, or Done or Discard.'; paint(); return; }
     if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or choose Done, To the bank or Discard.' : missing + ' tasks have no date: pick one for each, or choose Done, To the bank or Discard.'; paint(); return; }
     if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
     if (bankBad) { S.err = 'A task going to the bank needs a day in the future to come back on.'; paint(); return; }
@@ -202,6 +282,8 @@
       if (c.done) bits.push(c.done + ' done');
       if (c.bank) bits.push(c.bank + ' to the bank');
       if (c.discard) bits.push(c.discard + ' discarded');
+      if (c.assign) bits.push(c.assign + ' given an owner');
+      if (c.notmine) bits.push(c.notmine + ' passed to your lead');
       close();
       toastS('Saved: ' + bits.join(', ') + '.' + (skipped.length ? ' ' + skipped.length + (skipped.length === 1 ? ' task' : ' tasks') + ' could not be changed (' + String(skipped[0].why || '') + ').' : ''));
       try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
@@ -215,8 +297,8 @@
     if (!staff()) return;
     var rows = await load();
     if (!rows || !rows.length) return;
-    S.rows = rows; S.pick = {}; S.act = {}; S.bank = {};
-    rows.forEach(function (r) { S.pick[r.task_id] = r.why === 'meeting_set' ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); });
+    S.rows = rows; S.pick = {}; S.act = {}; S.bank = {}; S.mine = {}; S.who = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = (r.why === 'meeting_set' || (r.why === 'owner_check' && r.due_date)) ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); if (r.for_lead) S.act[r.task_id] = 'assign'; });
     var tries = 0;
     (function wait() {
       if (S.shown || S.gone) return;
@@ -228,7 +310,7 @@
 
   if (typeof startApp === 'function') {
     var __sa = startApp;
-    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 1500); };
+    startApp = async function () { await __sa.apply(this, arguments); setTimeout(function () { start(); }, 5000); };   /* wave238: after the Loop's gate and the meeting pop-up have had their moment */
   }
   window.w213 = { start: start, state: function () { return S; } };
 })();

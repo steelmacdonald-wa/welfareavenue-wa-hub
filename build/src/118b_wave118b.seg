@@ -1,5 +1,6 @@
 /* =====================================================================
    WA v118b check-in nudges: the little note under the Check in pill (25/09/26)
+   WA v238 No way out of the pop-ups: the Welcome back gate over the whole Hub, the meeting check and the due-date check (Steel, 14/10/26)
    =====================================================================
    Steel: "When people open the dashboard if they aren't yet checked in and
    they haven't opened it for a while prompt them to check in with a little
@@ -33,6 +34,13 @@
    back note, writes hub_checkins.still_in_at (the DM skips someone who said so in the last 40 minutes), which also
    tells the person's other devices that mark is answered. The DM's links land here: ?loop=still answers Still in,
    ?loop=close opens the wrap-up sheet.
+   wave238 (14/10/26), the gate. Steel: "I don't want people to exit out of closing their tasks or change due dates on the
+   pop up - they must do it to use the hub." Welcome back (note 2) is now a gate over the whole Hub (#w238loop, a dialog
+   with no x, no Escape and no click outside): someone who comes back with a loop still open from before they left must
+   close it as of the time they left, set the time, or, when they were away less than three hours on the same day, say
+   they are still working. The decision is kept (w118bHid stays until it is answered), so a reload or a new tab brings
+   the same gate back. The meeting pop-up (177) and the due-date check (213) wait for it. Still in? (note 3) keeps no x
+   either: it stays until Still in, Close the loop or Set the time. The first note (Starting some work?) is unchanged.
    ===================================================================== */
 (function () {
   if (window.__wa118b) return; window.__wa118b = { version: 1 };
@@ -66,6 +74,21 @@
     + '#w118ck .when{display:flex;gap:6px;align-items:center;margin:2px 0 8px;}'
     + '#w118ck .when input{font-family:' + BODY + ';font-size:14px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,250,242,.4);background:rgba(255,250,242,.12);color:' + CREAM + ';color-scheme:dark;}'
     + '#w118ck .err{color:#F5C9BF;font-size:12px;margin:-4px 0 8px;}'
+    + '#w238loop{position:fixed;inset:0;z-index:2147483100;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(16,32,30,.52);font-family:' + BODY + ';}'
+    + '#w238loop .box{background:' + GREEN + ';color:' + CREAM + ';border-radius:18px;padding:22px 24px 20px;width:100%;max-width:480px;box-shadow:0 22px 60px rgba(0,0,0,.35);font-size:14px;line-height:1.5;}'
+    + '#w238loop .k{font-family:' + BODY + ';font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:' + GOLD + ';margin:0 0 6px;font-weight:700;}'
+    + '#w238loop b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:26px;letter-spacing:.3px;margin:0 0 8px;color:' + CREAM + ';}'
+    + '#w238loop p{margin:0 0 14px;color:rgba(255,250,242,.88);}'
+    + '#w238loop .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}'
+    + '#w238loop button{font-family:' + HEAD + ';font-weight:600;font-size:14px;letter-spacing:.8px;text-transform:uppercase;border-radius:10px;padding:9px 14px;border:none;cursor:pointer;line-height:1.2;}'
+    + '#w238loop button.go{background:' + GOLD + ';color:' + GREEN + ';}'
+    + '#w238loop button.ghost{background:transparent;color:' + CREAM + ';border:1.5px solid rgba(255,250,242,.55);}'
+    + '#w238loop button.link{background:transparent;color:rgba(255,250,242,.85);padding:9px 6px;letter-spacing:.4px;text-transform:none;font-family:' + BODY + ';font-weight:600;font-size:13px;}'
+    + '#w238loop .when{display:flex;gap:8px;align-items:center;margin:2px 0 10px;}'
+    + '#w238loop .when input{font-family:' + BODY + ';font-size:15px;padding:7px 9px;border-radius:9px;border:1px solid rgba(255,250,242,.4);background:rgba(255,250,242,.12);color:' + CREAM + ';color-scheme:dark;}'
+    + '#w238loop .err{color:#F5C9BF;font-size:12.5px;margin:-4px 0 8px;}'
+    + '#w238loop .note{font-size:12px;color:rgba(255,250,242,.7);margin:12px 0 0;}'
+    + '@media (max-width:600px){#w238loop{align-items:flex-end;padding:0;}#w238loop .box{max-width:none;border-radius:20px 20px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom));}}'
     + '@keyframes w118ck{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}'
     + '@media (prefers-reduced-motion:reduce){#w118ck{animation:none;}}';
   document.head.appendChild(css);
@@ -87,7 +110,14 @@
   function myName() { try { var em = myEmail(); var m = (DB_MEMBERS || []).filter(function (x) { return String(x.email || '').toLowerCase() === em; })[0]; return (m && m.name) || (USER && USER.name) || em; } catch (e) { return ''; } }
 
   /* ---------- the note ---------- */
-  function hide() { var n = document.getElementById('w118ck'); if (n) n.parentNode.removeChild(n); S.kind = null; }
+  function hide() {
+    var n = document.getElementById('w118ck'); if (n) n.parentNode.removeChild(n);
+    var g = document.getElementById('w238loop'); if (g) { g.parentNode.removeChild(g); document.removeEventListener('keydown', gateKey, true); }
+    S.kind = null;
+  }
+  /* wave238: Escape does nothing while the gate is up */
+  function gateKey(e) { if (e.key === 'Escape' && document.getElementById('w238loop')) { e.preventDefault(); e.stopPropagation(); } }
+  function myFirst() { var n = String(myName() || '').trim().split(/\s+/)[0]; return /@/.test(n) ? '' : n; }
   function place() {
     var n = document.getElementById('w118ck'), p = pill();
     if (!n || !p) return;
@@ -101,7 +131,8 @@
   function show(kind, html) {
     hide();
     var n = document.createElement('div'); n.id = 'w118ck'; n.setAttribute('role', 'status'); n.setAttribute('data-kind', kind);
-    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button>' + html;
+    /* wave238: Still in? has no x (it stays until answered); Starting some work? keeps its Not now */
+    n.innerHTML = (kind === 'long' ? '' : '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button>') + html;
     document.body.appendChild(n); S.kind = kind; place();
   }
   window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
@@ -117,9 +148,25 @@
     show('in', '<b><i></i>Starting some work?</b><div class="row"><button class="go" data-w118b="in">I\u2019m in</button><button class="link" data-w118b="later">Not now</button></div>');
     return true;
   }
+  /* wave238: Welcome back is a gate over the Hub. Away less than three hours on the same day: Still working is an answer too;
+     longer, or another day: the loop closes as of the time they left, or the time they set. */
   function nudgeBack(row, leftAt) {
-    show('back', '<b><i></i>Welcome back</b><p>You are still in, and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Finished then? Close the loop as of that time and share what moved.</p>'
-      + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Close as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Close now</button><button class="link" data-w118b="still">Still working</button></div>');
+    hide();
+    var away = Date.now() - leftAt, sameDay = new Date(leftAt).toDateString() === new Date().toDateString();
+    var canStill = away < 3 * 3600000 && sameDay;
+    var g = document.createElement('div'); g.id = 'w238loop'; g.setAttribute('data-kind', 'back');
+    g.innerHTML = '<div class="box" role="dialog" aria-modal="true" aria-labelledby="w238k">'
+      + '<p class="k" id="w238k">The Loop</p><b>Welcome back' + (myFirst() ? ', ' + E(myFirst()) : '') + '</b>'
+      + '<p>Your loop has been open since ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + ', and you were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. '
+      + (canStill ? 'Finished then? Close the loop as of that time and share what moved. Still at it? Say so.' : 'Close the loop as of that time and share what moved, or set the time you finished.') + '</p>'
+      + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Close as of ' + E(clock(leftAt)) + '</button>'
+      + '<button class="ghost" data-w118b="settime">Set the time</button>'
+      + (canStill ? '<button class="link" data-w118b="still">Still working</button>' : '') + '</div>'
+      + '<p class="note">Hours are yours and HR\u2019s only; what you share is the note. This stays until you answer.</p></div>';
+    g.addEventListener('click', function (e) { if (e.target === g) { e.stopPropagation(); } });
+    document.body.appendChild(g); S.kind = 'back';
+    document.addEventListener('keydown', gateKey, true);
+    try { var b = g.querySelector('button.go'); if (b) b.focus(); } catch (e) { /* fine */ }
   }
   /* wave217: the marks. -1 before the first hour, then 0 at 1h, 1 at 1.5h, 2 at 2h, 3 at 2.5h ... */
   function markAt(row, t) { var age = t - new Date(row.started_at).getTime(); return age < FIRST_MS ? -1 : Math.floor((age - FIRST_MS) / EVERY_MS); }
@@ -145,12 +192,14 @@
     try { db.from('hub_checkins').update({ still_in_at: at }).eq('id', row.id).is('ended_at', null).then(function () { /* fine */ }, function () { /* fine */ }); } catch (e) { /* the note is answered either way */ }
   }
   function timeForm(row) {
-    var n = document.getElementById('w118ck'); if (!n) return;
-    var guess = num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now();
-    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you finish?</b><p>You were in from ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. Your session ends at this time; then you share what moved.</p>'
+    var gate = document.getElementById('w238loop');
+    var n = gate ? gate.querySelector('.box') : document.getElementById('w118ck'); if (!n) return;
+    var guess = num(K.hid) && num(K.hid) > new Date(row.started_at).getTime() ? num(K.hid) : (num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now());
+    /* wave238: inside the gate there is no Cancel out of the gate, only back to its choices */
+    n.innerHTML = (gate ? '<p class="k" id="w238k">The Loop</p>' : '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button>') + '<b>' + (gate ? '' : '<i></i>') + 'When did you finish?</b><p>You were in from ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. Your session ends at this time; then you share what moved.</p>'
       + '<div class="when"><input type="time" id="w118bt" value="' + hhmm(guess) + '" step="60"><span>' + E(dayWord(guess)) + '</span></div><div class="err" id="w118berr"></div>'
-      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="x">Cancel</button></div>';
-    place();
+      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="' + (gate ? 'back' : 'x') + '">' + (gate ? 'Back' : 'Cancel') + '</button></div>';
+    if (!gate) place();
   }
 
   /* ---------- writing a check-out at a chosen moment ---------- */
@@ -184,7 +233,9 @@
     var row = open();
     if (!row) { if (reason !== 'tick') nudgeIn(); return; }
     var hid = num(K.hid);
-    if (hid && Date.now() - hid > GONE_MS && hid > new Date(row.started_at).getTime()) { drop(K.hid); nudgeBack(row, hid); return; }
+    /* wave238: the moment they left is kept until the gate is answered (a reload brings the same gate back) */
+    if (hid && Date.now() - hid > GONE_MS && hid > new Date(row.started_at).getTime()) { if (!document.getElementById('w238loop')) nudgeBack(row, hid); return; }
+    if (document.getElementById('w238loop')) return;
     /* wave217: Still in? at each mark not had yet; an unanswered note just moves on to the next mark */
     var mark = markAt(row, Date.now());
     if (mark >= 0 && mark > markDone(row) && !(S.kind === 'long' && S.mark === mark) && S.kind !== 'back') nudgeLong(row, mark);
@@ -192,12 +243,13 @@
   document.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-w118b]') : null; if (!t) return;
     var a = t.getAttribute('data-w118b'), row = open();
-    if (a === 'x' || a === 'still') { hide(); if (a === 'still') { put(K.asked, Date.now()); stillIn(row); } return; }
+    if (a === 'x' || a === 'still') { hide(); if (a === 'still') { drop(K.hid); put(K.asked, Date.now()); stillIn(row); } return; }
     if (a === 'later') { put(K.snooze, Date.now() + SNOOZE_MS); hide(); return; }
     if (a === 'in') { hide(); var p = pill(); if (p) p.click(); return; }
-    if (a === 'out') { hide(); put(K.asked, Date.now()); var p2 = pill(); if (p2) p2.click(); return; }
+    if (a === 'out') { hide(); drop(K.hid); put(K.asked, Date.now()); var p2 = pill(); if (p2) p2.click(); return; }
     if (a === 'settime') { if (row) timeForm(row); return; }
-    if (a === 'asof') { if (!row) { hide(); return; } t.disabled = true; checkOutAt(row, Number(t.getAttribute('data-t'))).then(function (err) { if (err) { t.disabled = false; toastS(err); } else hide(); }); return; }
+    if (a === 'back') { if (row && num(K.hid)) nudgeBack(row, num(K.hid)); else hide(); return; }   /* wave238: back to the gate's choices */
+    if (a === 'asof') { if (!row) { hide(); return; } t.disabled = true; checkOutAt(row, Number(t.getAttribute('data-t'))).then(function (err) { if (err) { t.disabled = false; var ge = document.getElementById('w118berr'); if (ge) ge.textContent = err; else toastS(err); } else { drop(K.hid); hide(); } }); return; }
     if (a === 'save') {
       if (!row) { hide(); return; }
       var inp = document.getElementById('w118bt'), err = document.getElementById('w118berr');
@@ -205,7 +257,7 @@
       if (!v || v.length < 2) { if (err) err.textContent = 'Pick a time.'; return; }
       var d = new Date(t.getAttribute('data-day') || new Date().toDateString()); d.setHours(Number(v[0]), Number(v[1]), 0, 0);
       t.disabled = true;
-      checkOutAt(row, d.getTime()).then(function (msg) { if (msg) { t.disabled = false; if (err) err.textContent = msg; } else hide(); });
+      checkOutAt(row, d.getTime()).then(function (msg) { if (msg) { t.disabled = false; if (err) err.textContent = msg; } else { drop(K.hid); hide(); } });
       return;
     }
   }, true);
@@ -252,5 +304,5 @@
   } else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 3500); });
   else setTimeout(boot, 3500);
 
-  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K, markAt: markAt, markDone: markDone, fromLink: fromLink, state: function () { return { kind: S.kind, mark: S.mark }; } };
+  window.__wa118b = { version: 2, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K, markAt: markAt, markDone: markDone, fromLink: fromLink, nudgeBack: nudgeBack, state: function () { return { kind: S.kind, mark: S.mark, gate: !!document.getElementById('w238loop') }; } };
 })();

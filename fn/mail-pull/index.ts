@@ -1,3 +1,9 @@
+// v11 (14/10/26, wave237): meetings come from Loom only. Steel: "we should only be reading from Loom, not Read AI or Otter AI. Those
+// are no longer supposed to be added to the meetings." A meeting recap email is no longer filed as a transcript of its own: a Loom
+// recap hands its recording's id to loom-pull ({action: 'pull'}), which files the full transcript once by the pull's rules (filed.type
+// 'loom', with the pull's answer: filed, waiting, needs_look, skipped); a recap from Read AI, Otter, Fireflies, tl;dv, Plaud or Fathom
+// is ignored (filed.type 'recap_skipped', the email labelled Hub/Ignored, no Slack line). Before this every team meeting was processed
+// two or three times (the Loom recap, the Read AI recap, then the Loom transcript two days later), which doubled its tasks.
 // v10 (30/09/26, wave170): mail sent to info@ (which forwards to hub@) is passed on to the team or the person who should handle
 // it with one line saying what to do (routeInfo: the model picks the team and, when a role clearly fits, the person, and writes the
 // ask; hub_mail.mailbox info, ask, assignee, assignee_email); an info@ update is filed straight into the team's inbox (filed.type
@@ -444,7 +450,38 @@ async function fileUpdate(row: MailRow, site: string): Promise<Record<string, un
   return { type: 'update', id: ins.data.id, department: dept, title: row.title || row.subject, site };
 }
 
+/* v11 (wave237): the Loom recording a recap email is about */
+function loomIdIn(texts: string[]): string | null {
+  for (const t of texts) { const m = /loom\.com\/(?:share|embed)\/([0-9a-f]{32})/i.exec(String(t || '')); if (m) return m[1].toLowerCase(); }
+  return null;
+}
+function recapSource(row: MailRow): string {
+  const t = (row.from_email + ' ' + row.subject + ' ' + (row.links || []).join(' ') + ' ' + (row.body_text || '').slice(0, 4000)).toLowerCase();
+  if (/read\.ai|invited to view this report|readai/.test(t)) return 'Read AI';
+  if (/otter\.ai/.test(t)) return 'Otter';
+  if (/fireflies/.test(t)) return 'Fireflies';
+  if (/tldv|tl;dv/.test(t)) return 'tl;dv';
+  if (/plaud/.test(t)) return 'Plaud';
+  if (/fathom/.test(t)) return 'Fathom';
+  return 'a meeting recap';
+}
 async function fileSummary(row: MailRow, site: string): Promise<Record<string, unknown>> {
+  /* v11 (wave237): meetings come from Loom only. A Loom recap hands its recording to loom-pull (the full transcript, filed once by
+     the pull's rules); any other recap is not filed. The old path (the recap's text as a transcript) is kept below for an email
+     that is a transcript someone pasted with no recorder behind it (no recorder named, 300 characters or more, kind meeting_summary). */
+  const loomId = loomIdIn([...(row.links || []), row.body_text || '']);
+  if (loomId) {
+    try {
+      const secret = await getSecret('WA_TRIGGER_SECRET');
+      const res = await fetch(SUPABASE_URL + '/functions/v1/loom-pull', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, 'Authorization': 'Bearer ' + ANON_KEY, 'apikey': ANON_KEY }, body: JSON.stringify({ action: 'pull', loom_id: loomId, why: 'recap email' }) });
+      const out = await res.json().catch(() => ({})) as Record<string, unknown>;
+      return { type: 'loom', id: null, loom_id: loomId, status: String(out.status || (res.ok ? 'ok' : 'error')), transcript_id: out.transcript_id || null, reason: out.reason || out.error || null, department: out.department || row.department, title: row.title || row.subject, site };
+    } catch (e) {
+      return { type: 'loom', id: null, loom_id: loomId, status: 'error', reason: String(e).slice(0, 200), department: row.department, title: row.title || row.subject, site };
+    }
+  }
+  const src = recapSource(row);
+  if (src !== 'a meeting recap') return { type: 'recap_skipped', id: null, department: row.department, title: row.title || row.subject, reason: 'Meeting recaps come from Loom only (Steel, 14/10/26); this one is from ' + src, site };
   if (!row.department) return { type: 'inbox', id: null, needs: 'department', title: row.title || row.subject, site };
   const dept = row.department;
   const body = (row.body_text || '').trim();
@@ -641,11 +678,20 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
       try {
         const result = await fileOne(token, row, site);
         if (toInfo && already && !result.on_thread) result.on_thread = already.name;   /* v10: team-inbox files it quietly */
+        /* v11 (wave237): a recap from anything but Loom is ignored, quietly */
+        if (result.type === 'recap_skipped') {
+          await svc.from('hub_mail').update({ filed: result, status: 'ignored', reason: String(result.reason || '').slice(0, 300) }).eq('id', row.id);
+          await labelMessage(id, 'ignored');
+          await log(String(row.id), 'ignored', null, String(result.reason || 'recap from another recorder').slice(0, 300));
+          ignored++;
+          continue;
+        }
         await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', row.id);
         await labelMessage(id, result.type === 'inbox' ? 'needs' : result.type === 'candidate' ? 'recruit' : 'filed');
-        const where = result.type === 'candidate' ? 'Recruitment (HR centre)' : result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
+        const where = result.type === 'candidate' ? 'Recruitment (HR centre)' : result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'loom' ? 'the Loom pull (' + String(result.status || '') + (result.transcript_id ? ', transcript ' + result.transcript_id : '') + ')' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
         await log(String(row.id), 'filed', null, cls.kind + ' -> ' + where + ': ' + (cls.title || base.subject));
-        lines.push('*' + (cls.kind === 'invoice' ? 'Invoice' : cls.kind === 'meeting_summary' ? 'Meeting summary' : cls.kind === 'application' ? 'Job application' : 'Update') + '* from ' + (from.name || from.email) + ' filed as ' + where + ': ' + (cls.title || base.subject) + (cls.amount != null ? ' ($' + cls.amount + ')' : ''));
+        /* v11: the Loom pull's own processing posts the meeting's line; the recap email itself gets none */
+        if (result.type !== 'loom') lines.push('*' + (cls.kind === 'invoice' ? 'Invoice' : cls.kind === 'meeting_summary' ? 'Meeting summary' : cls.kind === 'application' ? 'Job application' : 'Update') + '* from ' + (from.name || from.email) + ' filed as ' + where + ': ' + (cls.title || base.subject) + (cls.amount != null ? ' ($' + cls.amount + ')' : ''));
         filed++;
       } catch (e) {
         failed++;

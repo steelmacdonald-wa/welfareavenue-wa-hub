@@ -1,4 +1,11 @@
-// Welfare Avenue: loom-pull (v2.1, 29/09/26, wave165; v1 28/09/26, wave162)
+// Welfare Avenue: loom-pull (v3, 14/10/26, wave237; v2.1 29/09/26, wave165; v1 28/09/26, wave162)
+// v3: pull one recording on demand. Steel (14/10/26): "we should only be reading from Loom, not Read AI or Otter AI". Loom's
+// recap email used to be filed as a meeting of its own (and processed into tasks) while the pull filed the real transcript two
+// days later, so every team meeting made its tasks twice. Now mail-pull v11 hands the recap email's Loom id to this function
+// ({action: 'pull', loom_id, why}) and files nothing itself: the recording is fetched, classified and filed by the same rules as
+// the scheduled sync (team meeting, leadership, one-on-one, needs a look, waiting for Loom's transcript), so a meeting reaches
+// the Hub within the half hour, from its full transcript, once. The scheduled sync (every half hour through the day since wave237)
+// stays the safety net for recordings with no recap email and for ones that were still waiting.
 // v2.1: Loom's transcript does not always name every voice, so a one-on-one's people are the speakers Loom names, plus the names
 // its title joins (Suhaib / Steel), plus, when that still leaves one person, the people Loom lists on the meeting (not its recorder).
 // v2: Steel (29/09/26): "pull all these in, including July and August but don't create any tasks from them just enhance the
@@ -868,6 +875,39 @@ async function fileOne(body: Json, who: string): Promise<Json> {
   return { ok: true, transcript_id: r.transcript_id, already: !!r.already };
 }
 
+/* v3 (wave237): one recording, now. The same decision as the sync; 'waiting' when Loom has no transcript yet (the sync retries). */
+async function pullOne(body: Json, who: { kind: string; who: string }): Promise<Json> {
+  const id = String(body.loom_id || '').toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(id)) throw new Error('A Loom id is needed');
+  const { data: row } = await svc.from('loom_videos').select('*').eq('loom_id', id).maybeSingle();
+  if (row && (row.status === 'filed' || row.status === 'personal')) return { ok: true, status: row.status, transcript_id: row.transcript_id || null, already: true };
+  const ctx = await rpc('loom_pull_context', {}) as Json;
+  const people: Ctx = { roster: (ctx.roster || []) as Person[], leaders: (ctx.leaders || []) as string[] };
+  const s = await connect(ctx);
+  const addedBy = who.kind === 'admin' ? 'Loom pull (' + who.who + ')' : 'Loom pull (' + String(body.why || 'recap email').replace(/[^\w .:-]/g, '').slice(0, 40) + ')';
+  const base: Video = normVideo({ id, name: row ? row.title : '', createdAt: row && row.recorded_at ? row.recorded_at : '', owner: row ? row.owner_name : '' });
+  let v = base;
+  try {
+    const got = await fetchVideo(s, id, '', 'phrases');
+    v = got.meta ? merged(base, got.meta) : base;
+    if (PERSONAL_TITLE.test(v.title) || PERSONAL_TITLE.test(v.folder || '')) { await save(v, { status: 'personal', reason: '' }, [], addedBy); return { ok: true, status: 'personal' }; }
+    const created = isoOrNull(v.created);
+    const ageDays = created ? (Date.now() - Date.parse(created)) / 86400000 : 0;
+    const dec = classify(v, got.tx, people, ageDays, Number((row && row.attempts) || 0));
+    if (dec.status === 'filed') {
+      const r = await rpc('loom_file', { p: filePayload(v, got.tx, dec, addedBy) }) as Json;
+      await svc.from('change_log').insert({ entity_type: 'loom', entity_id: id, field: 'pulled', old_value: null, new_value: 'transcript ' + r.transcript_id + (r.already ? ' (already in the archive)' : '') + ': ' + dec.reason, changed_by: addedBy }).then(() => null, () => null);
+      return { ok: true, status: 'filed', transcript_id: r.transcript_id, already: !!r.already, reason: dec.reason, department: dec.department };
+    }
+    await save(v, dec, got.tx.speakers, addedBy);
+    return { ok: true, status: dec.status, reason: dec.reason };
+  } catch (e) {
+    if (e instanceof McpError && e.kind === 'refused') throw e;
+    await save(v, { status: 'error', reason: String((e as Error).message || e).slice(0, 250) }, [], addedBy).catch(() => null);
+    throw e;
+  }
+}
+
 /* =====================================================================================================================
    v2: the backfill. Older recordings kept for the archive and Ask the Hub only: never processed into tasks, updates,
    decisions, suggestions or ideas (transcripts.archive_only; the insert triggers skip them), each with a summary
@@ -1003,6 +1043,7 @@ async function handler(req: Request): Promise<Response> {
       return json(await fileOne(body, who.who));
     }
     if (action === 'backfill') return json(await backfill(body, who.kind === 'admin' ? who.who : 'automation'));
+    if (action === 'pull') return json(await pullOne(body, who));   /* v3 (wave237): one recording, from mail-pull's recap email or an admin */
     if (action === 'sync') {
       const why = who.kind === 'admin' ? 'pull now (' + who.who + ')' : String(body.why || 'schedule').slice(0, 60);
       const runId = await rpc('loom_pull_begin', { p_why: why }) as number | null;
@@ -1023,4 +1064,4 @@ async function handler(req: Request): Promise<Response> {
 }
 
 if (Deno.env.get('WA_FN_TEST') !== '1') Deno.serve(handler);
-export { handler, sync, probe, fileOne, backfill, connect, listAll, fetchVideo };
+export { handler, sync, probe, fileOne, backfill, pullOne, connect, listAll, fetchVideo };
