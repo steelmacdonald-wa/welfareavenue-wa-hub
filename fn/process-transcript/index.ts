@@ -1,3 +1,5 @@
+// v18.2 (15/10/26, wave243): a task with no assignee named goes to its owner (assignees = [owner]), so the task shows on the
+// owner's My page and in their task reminders; the 14/10 marketing meeting left most tasks with an owner and no assignee.
 // v18.1 (14/10/26, wave237): Jev's due-date check sees upcoming_dates too, so a date that comes from a named event or meeting
 // (the day before the Oberoi event, the next marketing meeting) holds instead of being cleared as unsupported.
 // v18 (14/10/26, wave237): tasks set right. Steel, after the 14/10 marketing meeting came out with missing, doubled and wrongly
@@ -469,7 +471,7 @@ const IDEAS_TOOL = {
   }
 };
 
-function normText(x: string): string { return String(x || '').toLowerCase().replace(/[^a-z0-9À-ɏ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function normText(x: string): string { return String(x || '').toLowerCase().replace(/[^a-z0-9\u00c0-\u024f]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 /* v18: do two task titles describe the same work? The words that carry meaning (no stop words, no plurals), then the overlap:
    three fifths of the smaller set shared, or one title inside the other. "Check assigned hub tasks for the upcoming week" and
    "Check the Hub tasks for next week" match; "Find a photographer for Sunday" and "Send Roberto last year's post" do not. */
@@ -683,6 +685,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   (Array.isArray(result.new_tasks) ? result.new_tasks as Array<Record<string, unknown>> : []).forEach(t => {
     if (typeof t.owner === 'string') t.owner = canon(t.owner);
     if (Array.isArray(t.assignees)) t.assignees = (t.assignees as unknown[]).map(a => canon(String(a)));
+    /* v18.2 (wave243): a task with no assignee named goes to its owner (a roster name), so it shows on their My page and in their reminders */
+    if (typeof t.owner === 'string' && t.owner.trim() && (!Array.isArray(t.assignees) || !t.assignees.length) && rosterAll.some(m => m.name === t.owner)) t.assignees = [t.owner];
   });
   const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''), projRows.map(p => ({ id: p.id, name: (p.parent_id && projName.get(p.parent_id) ? projName.get(p.parent_id) + ' > ' : '') + p.name, description: p.description, department: p.department, parent_id: p.parent_id })), dept, tx.meeting_date || null, context.upcoming_dates);
 
