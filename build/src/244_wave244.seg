@@ -1,0 +1,109 @@
+/* =====================================================================
+   WA v244 Two roles at most, and the coordinator places people who picked two (Steel, 15/10/26)
+   =====================================================================
+   Steel, 15/10/26: "I want to limit people from being able to sign up to two or more positions ... it can get difficult
+   for our team to kind of decide where to put them." Asked where someone who picks two goes: "Wait for coordinator to
+   choose". The forms allow 2 roles (crm_forms max 2, form-submit v8); one role picked lands in that role as before, two
+   land on the roster as role 'volunteer' with detail.role_choices (crm_form_apply, migration wa244_two_roles), and their
+   7-day confirmation text waits until the coordinator chooses (wa171_queue_confirms).
+   - The serving's roster board (wave119): a card waiting for a role says "Picked Driver or Server" with a button for each
+     choice; one click moves the card (the board's own Move, so the change log, the toast and the counts are the same), and
+     the column's head says what the cards are waiting for.
+   - The serving cards' spots bar (wave234): "N to place" when people wait for a role.
+   Dishwasher is off the website and the forms but stays here: the board, Plan the roster and the bench still offer it.
+   Reads only what waves 119 and 234 already hold (WA_VOL_DETAIL, window.w234.state()). ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa244) return; window.__wa244 = true;
+  var GOLD = '#DCA527', INK = '#103F39';
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : true; } catch (e) { return true; } }
+  function one(r) { var l = r; try { l = waVolRoleLabel(r); } catch (e) { /* fine */ } return String(l || r).replace(/_/g, ' ').replace(/s$/, ''); }
+  function choicesOf(r) { var c = r && r.detail && r.detail.role_choices; return lower(r && r.role) === 'volunteer' && Array.isArray(c) && c.length > 1 ? c.map(String) : null; }
+  function gone(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
+  function detail() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+
+  var css = document.createElement('style'); css.id = 'wa244css';
+  css.textContent =
+    '#w119 .pc .w244{display:block;margin-top:6px;padding:6px 7px;border-radius:9px;background:rgba(220,165,39,.16);font-size:11.5px;line-height:1.35;color:' + INK + '}' +
+    '#w119 .pc .w244 b{display:inline;font-size:11.5px;padding:0}' +
+    '#w119 .pc .w244 .bt{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}' +
+    '#w119 .pc .w244 button{font:inherit;font-weight:700;font-size:11.5px;border:1px solid ' + INK + ';background:#fff;color:' + INK + ';border-radius:999px;padding:3px 9px;cursor:pointer}' +
+    '#w119 .pc .w244 button:hover,#w119 .pc .w244 button:focus-visible{background:' + INK + ';color:#fff}' +
+    '#w119 .pc .w244 small{display:block;margin-top:4px;color:#5b5a57;font-size:10.5px}' +
+    '#w119 .rc .w244h{display:block;font-size:11px;color:#5b5a57;margin:-2px 0 6px;line-height:1.35}' +
+    '#volunteering .vl-ev .w234 .t .w244p{color:' + GOLD + ';font-weight:700;filter:brightness(.8)}';
+  document.head.appendChild(css);
+
+  /* ---------- the roster board: cards waiting for a role ---------- */
+  function cardLine(r, ch) {
+    var names = ch.map(function (k) { return one(k); });
+    return '<span class="w244" data-w244="' + E(r.id + ':' + ch.join(',')) + '">Picked <b>' + E(names.join(' or ')) + '</b>' +
+      (staff() && !gone(r) ? '<span class="bt">' + ch.map(function (k) { return '<button type="button" data-w244pick="' + E(k) + '" data-w244id="' + E(r.id) + '" title="Place ' + E(r.person_name || 'them') + ' as ' + E(one(k).toLowerCase()) + '">Make ' + E(one(k).toLowerCase()) + '</button>'; }).join('') + '</span>' : '') +
+      '<small>Their confirmation text waits until a role is chosen.</small></span>';
+  }
+  function decorateBoard() {
+    var D = detail(); var board = document.querySelector('#w119 .board'); if (!D || !board) return;
+    var rows = {}; (D.roster || []).forEach(function (r) { rows[String(r.id)] = r; });
+    board.querySelectorAll('.pc[data-w119card]').forEach(function (pc) {
+      var r = rows[pc.getAttribute('data-w119card')]; var ch = r ? choicesOf(r) : null;
+      var old = pc.querySelector('.w244');
+      if (!ch) { if (old) old.remove(); return; }
+      var key = r.id + ':' + ch.join(',');
+      if (old && old.getAttribute('data-w244') === key) return;
+      if (old) old.remove();
+      var at = pc.querySelector('.sel2'); var box = document.createElement('div'); box.innerHTML = cardLine(r, ch);
+      if (at) pc.insertBefore(box.firstChild, at); else pc.appendChild(box.firstChild);
+    });
+    var col = board.querySelector('.rc[data-w119role="volunteer"]');
+    if (col) {
+      var waiting = (D.roster || []).filter(function (r) { return choicesOf(r) && !gone(r); }).length;
+      var h = col.querySelector('.w244h');
+      if (waiting && !h) { var hd = col.querySelector('.h'); if (hd) hd.insertAdjacentHTML('afterend', '<span class="w244h">Picked two roles on the form: choose one for each.</span>'); }
+      if (!waiting && h) h.remove();
+    }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('#w119 [data-w244pick]') : null; if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var id = b.getAttribute('data-w244id'), role = b.getAttribute('data-w244pick');
+    var sel = document.querySelector('#w119 select[data-w119mv="' + id + '"]');
+    if (!sel) return;
+    if (!Array.prototype.some.call(sel.options, function (o) { return o.value === role; })) { var o = document.createElement('option'); o.value = role; o.textContent = 'To ' + one(role).toLowerCase(); sel.appendChild(o); }
+    sel.value = role; sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }, true);
+
+  /* ---------- the serving cards: N to place ---------- */
+  function decorateBars() {
+    var st = null; try { st = window.w234 && window.w234.state ? window.w234.state() : null; } catch (e) { st = null; }
+    var D = st && st.data; if (!D || !D.roster) return;
+    document.querySelectorAll('#volunteering .vl-ev[data-vlev]').forEach(function (el) {
+      var t = el.querySelector('.w234 .t'); if (!t) return;
+      var n = (D.roster[Number(el.getAttribute('data-vlev'))] || []).filter(function (r) { return choicesOf(r) && !gone(r); }).length;
+      var sp = t.querySelector('.w244p');
+      if (!n) { if (sp) sp.remove(); return; }
+      var txt = ' \u00b7 ' + n + ' to place';
+      if (sp) { if (sp.textContent !== txt) sp.textContent = txt; return; }
+      t.insertAdjacentHTML('beforeend', '<span class="w244p" title="Picked two roles: the coordinator chooses one">' + E(txt) + '</span>');
+    });
+  }
+
+  /* ---------- wiring: after the board or the bars change ---------- */
+  var pend = null;
+  function soon() { if (pend) return; pend = setTimeout(function () { pend = null; try { decorateBoard(); } catch (e) { /* fine */ } try { decorateBars(); } catch (e) { /* fine */ } }, 120); }
+  try {
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes;
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j]; if (!n || n.nodeType !== 1) continue;
+          if (n.classList && (n.classList.contains('w244') || n.classList.contains('w244h') || n.classList.contains('w244p'))) continue;
+          if ((n.matches && (n.matches('.board, .pc, .w234, .vl-ev, #w119') || (n.querySelector && n.querySelector('.board, .pc, .w234'))))) { soon(); return; }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+
+  window.w244 = { paint: function () { decorateBoard(); decorateBars(); }, choicesOf: choicesOf };
+})();

@@ -8,7 +8,9 @@
    and someone is signed in on this site (window.WA, site.js), the questions that fill a contact field come filled from
    their profile (account_prefill), the answers go with their own sign-in so form-submit saves them to their record, and a
    line above the form says so ("Not you?" signs out). Signed out, with accounts on, the line offers to sign in first and
-   come back (/account/?next=). */
+   come back (/account/?next=).
+   wave236 (14/10/26, Steel: the sign-up and application forms pop up over the page instead of taking up room in it): a
+   form box with data-wa-popup opens in a pop-up; see Popup() at the end. */
 (function () {
   'use strict';
   var B = document.body, SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
@@ -16,7 +18,7 @@
   var PAGE_LANG = B.getAttribute('data-lang') === 'fr' ? 'fr' : 'en';
   var ACCT_URL = PAGE_LANG === 'fr' ? '/fr/compte/' : '/account/', PRIV_URL = PAGE_LANG === 'fr' ? '/fr/confidentialite/' : '/privacy/';
   var TX = {
-    en: { optional: '(optional)', send: 'Send', sending: 'Sending…', fix: 'Please check the answers marked below.', required: 'Please answer this question.', email: 'Please enter a valid email address.',
+    en: { maxN: 'Please pick at most {n}.', optional: '(optional)', send: 'Send', sending: 'Sending…', fix: 'Please check the answers marked below.', required: 'Please answer this question.', email: 'Please enter a valid email address.',
       phone: 'Please enter a phone number we can reach.', consent: 'Please tick the box to sign up.', rate: 'Too many tries from here. Please wait a few minutes and send again.',
       expired: 'This page was open a long time, so we refreshed the form. Please check your answers and send again.', server: 'Something went wrong on our side. Please try again in a minute.',
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
@@ -25,7 +27,7 @@
       acctIn: 'Signed in as {n}. We filled in what we have, and what you change here is saved to your profile.', acctMine: 'My account', acctNot: 'Not you?',
       acctOffer: 'Have an account? {a} and this form fills in for you.', acctSignIn: 'Sign in', saved: 'Your profile is updated too.',
       fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.', jd: 'Job description' },
-    fr: { optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
+    fr: { maxN: 'Veuillez en choisir {n} au plus.', optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous avons actualisé le formulaire. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
@@ -109,11 +111,12 @@
           opts.map(function (o) { return '<option value="' + E(o.v) + '"' + (v === o.v ? ' selected' : '') + '>' + E(o.l) + '</option>'; }).join('') + '</select>' + e + '</div>';
       }
       var picked = multi ? (Array.isArray(v) ? v : []) : v;
-      return '<fieldset class="' + cls + '" data-q="' + E(q.id) + '"' + (err ? ' aria-invalid="true"' : '') + (desc ? ' aria-describedby="' + desc + '"' : '') + '>' + head('legend') +
-        '<div class="choices' + (opts.length > 3 && opts.every(function (o) { return String(o.l).length < 28; }) ? ' two' : '') + '">' +
+      var mx = multi && q.max ? Number(q.max) : 0, full = mx && picked.length >= mx;   /* wave244: at most q.max choices (the roles: 2) */
+      return '<fieldset class="' + cls + '" data-q="' + E(q.id) + '"' + (mx ? ' data-max="' + mx + '"' : '') + (err ? ' aria-invalid="true"' : '') + (desc ? ' aria-describedby="' + desc + '"' : '') + '>' + head('legend') +
+        '<div class="choices' + (opts.length > 3 && !opts.some(function (o) { return o.d; }) && opts.every(function (o) { return String(o.l).length < 28; }) ? ' two' : '') + '">' +
         opts.map(function (o, i) {
           var on = multi ? picked.indexOf(o.v) >= 0 : picked === o.v;
-          return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + '><span>' + E(o.l) + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + '</span></label>';
+          return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (full && !on ? ' disabled' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + '><span>' + E(o.l) + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + (o.d ? '<small class="cd">' + E(o.d) + '</small>' : '') + '</span></label>';
         }).join('') + '</div>' + (q.lead_note ? '<p class="waf-lead" data-waf-lead="' + E(q.id) + '"' + (opts.some(function (o) { return o.lead && picked === o.v; }) ? '' : ' hidden') + '>' + E(q.lead_note) + '</p>' : '') + e + '</fieldset>';
     }
     function acctLine() {
@@ -122,6 +125,11 @@
       if (MODE !== 'on') return '';
       var at = box.closest('[id]'), next = window.location.pathname + (at ? '#' + at.id : ''), parts = t('acctOffer').split('{a}');
       return '<p class="waf-acct">' + E(parts[0]) + '<a href="' + ACCT_URL + '?next=' + encodeURIComponent(next) + '">' + E(t('acctSignIn')) + '</a>' + E(parts[1] || '') + '</p>';
+    }
+    function limitMax(fs) {
+      var n = Number(fs.getAttribute('data-max')) || 0, bs = fs.querySelectorAll('input[type="checkbox"]'), c = 0;
+      Array.prototype.forEach.call(bs, function (b) { if (b.checked) c++; });
+      Array.prototype.forEach.call(bs, function (b) { if (!b.checked) b.disabled = n > 0 && c >= n; });
     }
     function render(keep) {
       var f = S.form, c = f.consent || {}, cerr = S.errors._consent, heading = box.getAttribute('data-heading');
@@ -141,6 +149,8 @@
           r.addEventListener('change', function () { var on = box.querySelector('input[name="' + name + '"]:checked'); note.hidden = !(on && on.getAttribute('data-lead') === '1'); });
         });
       });
+      /* wave244: once the most choices are ticked, the others wait until one is unticked */
+      Array.prototype.forEach.call(box.querySelectorAll('fieldset[data-max]'), function (fs) { fs.addEventListener('change', function () { limitMax(fs); }); });
       Array.prototype.forEach.call(box.querySelectorAll('input[type="file"]'), function (inp) {
         inp.addEventListener('change', function () {
           var f0 = inp.files && inp.files[0]; if (!f0) return;
@@ -170,6 +180,7 @@
         var v = a[q.id], empty = v == null || (typeof v === 'string' && !v.trim()) || (Array.isArray(v) && !v.length);
         if (empty) { if (q.required && !(q.type === 'serving_dates' && !(q.options || []).length)) errs[q.id] = t('required'); return; }
         if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim())) errs[q.id] = t('email');
+        if (q.max && Array.isArray(v) && v.length > Number(q.max)) errs[q.id] = t('maxN').replace('{n}', q.max);
         if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) errs[q.id] = t('phone');
         if (q.type === 'file') {
           var f0 = S.files[q.id], ext = (f0.name.match(/\.[a-z0-9]{2,5}$/i) || [''])[0].toLowerCase();
@@ -238,5 +249,77 @@
     }
     if (SUPA && KEY && window.fetch && slugs.length) load(0);
   }
-  Array.prototype.forEach.call(document.querySelectorAll('[data-wa-form]'), function (box, i) { Form(box, i); });
+  /* wave236 (14/10/26, Steel: the sign-up and application forms pop up over the page instead of taking up room in it).
+     <div data-wa-form="…" data-wa-popup="Button label" data-wa-popup-note="Optional line"> stays in the page as a short card
+     (its fallback's heading, the line and the button); the form itself is built inside a <dialog> whose id is the section's
+     id plus "-form" (#apply-form, #groups-form). The pop-up opens on that button, on any link on this page to the section or
+     to the pop-up (#apply, #groups, #apply-form…) and when the page is opened at one of those addresses, so links from other
+     pages and emails (welfareavenue.com/volunteer/#groups) land on the open form. The × , Escape and a click outside close
+     it; what someone typed is kept if they reopen it. A role link on the Join page (data-pick) ticks that role in the form,
+     and since wave237 so does "Apply for this role" on a Montreal role card (data-role, a value of the roles question).
+     Its styles are forms.css, loaded only on pages with a pop-up. Without JavaScript the card keeps the page's own message. */
+  var CSS_V = 'cb125b2b', POPS = {};
+  function Popup(box, n) {
+    var sec = box.closest('section[id]'), sid = sec ? sec.id : 'waf' + n, fr = PAGE_LANG === 'fr';
+    var label = box.getAttribute('data-wa-popup') || (fr ? 'Ouvrir le formulaire' : 'Open the form');
+    var note = box.getAttribute('data-wa-popup-note') || '';
+    var h = box.querySelector('.waf-fallback h3'), title = h ? h.textContent : label;
+    var d = document.createElement('dialog'); d.className = 'waf-dialog'; d.id = sid + '-form'; d.setAttribute('aria-label', title);
+    d.innerHTML = '<div class="waf-sheet"><div class="waf-bar"><button type="button" class="waf-x" aria-label="' + E(fr ? 'Fermer' : 'Close') + '">×</button></div>' +
+      '<div class="form-card waf-dbody"></div></div>';
+    var body = d.querySelector('.waf-dbody');
+    body.setAttribute('data-wa-form', box.getAttribute('data-wa-form') || '');
+    if (box.hasAttribute('data-heading')) body.setAttribute('data-heading', box.getAttribute('data-heading'));
+    body.innerHTML = box.innerHTML;
+    document.body.appendChild(d);
+    box.removeAttribute('data-wa-form'); box.classList.add('waf-launch');
+    box.innerHTML = '<h3>' + E(title) + '</h3>' + (note ? '<p class="waf-note">' + E(note) + '</p>' : '') +
+      '<button type="button" class="btn waf-open" aria-haspopup="dialog" aria-controls="' + E(d.id) + '">' + E(label) + '</button>';
+    var opener = null, downOut = false;
+    function open(from) {
+      opener = from && from.focus ? from : document.activeElement;
+      if (!d.open) { if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', ''); }
+      document.documentElement.classList.add('waf-locked');
+      var pick = from && from.getAttribute ? from.getAttribute('data-pick') : null;
+      if (pick) {
+        var r = d.querySelector('input[name="position"][value="' + pick.replace(/["\\]/g, '') + '"]'), s = d.querySelector('select[name="position"]');
+        if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); } else if (s) s.value = pick;
+      }
+      /* wave237: "Apply for this role" on a Montreal role card (data-role) ticks that role; the others stay as they are */
+      var role = from && from.getAttribute ? from.getAttribute('data-role') : null;
+      if (role) {
+        var c = d.querySelector('input[name="roles"][value="' + role.replace(/["\\]/g, '') + '"]');
+        if (c && !c.checked && !c.disabled) { c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); }
+      }
+    }
+    function close() { if (!d.open) return; if (typeof d.close === 'function') d.close(); else { d.removeAttribute('open'); done(); } }
+    function done() {
+      document.documentElement.classList.remove('waf-locked');
+      if (opener && opener.focus && document.contains(opener)) { try { opener.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    }
+    d.addEventListener('close', done);
+    d.querySelector('.waf-x').addEventListener('click', close);
+    // a click outside the sheet (on the dimmed page) closes it, but not a text selection dragged out of a field
+    d.addEventListener('mousedown', function (e) { downOut = e.target === d; });
+    d.addEventListener('click', function (e) { if (e.target === d && downOut) close(); downOut = false; });
+    box.querySelector('.waf-open').addEventListener('click', function (e) { open(e.currentTarget); });
+    POPS[sid] = open; POPS[d.id] = open;
+    return body;
+  }
+  var boxes = document.querySelectorAll('[data-wa-form]');
+  var pops = typeof document.createElement('dialog').showModal === 'function' && !!document.querySelector('[data-wa-form][data-wa-popup]');
+  if (pops) { var css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/assets/forms.css?v=' + CSS_V; document.head.appendChild(css); }
+  Array.prototype.forEach.call(boxes, function (box, i) { Form(pops && box.hasAttribute('data-wa-popup') ? Popup(box, i) : box, i); });
+  if (pops) {
+    var here = function (u) { return u.hostname.replace(/^www\./, '') === location.hostname.replace(/^www\./, '') && u.pathname.replace(/index\.html$/, '') === location.pathname.replace(/index\.html$/, ''); };
+    document.addEventListener('click', function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      var a = e.target && e.target.closest ? e.target.closest('a[href]') : null; if (!a) return;
+      var u; try { u = new URL(a.getAttribute('href'), location.href); } catch (x) { return; }
+      var go = u.hash && here(u) ? POPS[decodeURIComponent(u.hash.slice(1))] : null; if (!go) return;
+      e.preventDefault(); go(a);
+    });
+    var fromHash = function () { var go = POPS[decodeURIComponent((location.hash || '').slice(1))]; if (go) go(); };
+    fromHash(); window.addEventListener('hashchange', fromHash);
+  }
 })();

@@ -1,0 +1,46 @@
+/* Welfare Avenue website, wave236 (14/10/26, Steel: the sign-up and application forms pop up over the page instead of
+   taking up room in it). Loaded by forms.js only when a page has a pop-up form (data-wa-popup); the form fields keep
+   their site.css styles. On phones the pop-up fills the screen. */
+html.waf-locked{overflow:hidden}
+
+/* The short card left in the page */
+.form-card.waf-launch{display:grid;justify-items:start;gap:12px;border-top:6px solid var(--gold)}
+.waf-launch h3{margin:0}
+.waf-launch .waf-note{margin:0}
+.waf-launch .btn{margin-top:6px}
+
+/* The pop-up */
+dialog.waf-dialog{border:0;padding:0;margin:auto;width:min(680px,calc(100vw - 32px));max-width:none;
+  max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow:hidden;background:var(--white);color:var(--ink);
+  box-shadow:0 18px 60px rgba(16,63,57,.35)}
+dialog.waf-dialog::backdrop{background:rgba(16,63,57,.55)}
+.waf-sheet{max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);overflow-y:auto;overscroll-behavior:contain;
+  border-top:6px solid var(--gold);-webkit-overflow-scrolling:touch}
+.waf-bar{position:sticky;top:0;z-index:2;height:0;display:flex;justify-content:flex-end}
+.waf-x{flex:none;width:44px;height:44px;margin:10px 10px 0 0;border:0;border-radius:50%;background:rgba(255,255,255,.94);
+  color:var(--green);font-size:30px;line-height:1;cursor:pointer;box-shadow:0 1px 6px rgba(16,63,57,.12)}
+.waf-x:hover{color:var(--purple)}
+.form-card.waf-dbody{border:0;padding:30px 22px 26px}
+@media (min-width:640px){.form-card.waf-dbody{padding:40px 40px 32px}}
+.waf-dbody h3{margin-right:44px}
+@media (max-width:639px){
+  dialog.waf-dialog{width:100vw;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;margin:0}
+  .waf-sheet{height:100vh;height:100dvh;max-height:100vh;max-height:100dvh}
+}
+@media (prefers-reduced-motion:no-preference){
+  dialog.waf-dialog[open]{animation:waf-in .18s ease-out}
+  @keyframes waf-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+}
+
+/* wave237 (14/10/26, Steel: describe each role so people know what they will do before signing up): the "What you'll do"
+   panel on the Montreal role cards of the volunteer page (details.more from site.css, made a little tighter in a card) */
+.role details.more{margin-top:18px}
+.role details.more>summary{padding:14px 18px;font-size:18px}
+.role details.more>.in{padding:0 18px 18px}
+.role details.more .ticks{margin-top:2px;font-size:15.5px;line-height:1.55}
+.role .role-bring{margin:14px 0 0;font-size:15.5px;line-height:1.55}
+#roles .roles{align-items:start}
+
+/* wave244: what each role involves, under its name; a role that cannot be picked while two are ticked */
+.waf .choice small.cd,.waf-dialog .choice small.cd{display:block;margin-top:3px;font-size:12.5px;line-height:1.4;color:#5b5a57;font-weight:400}
+.waf .choice input:disabled+span,.waf-dialog .choice input:disabled+span{opacity:.45}

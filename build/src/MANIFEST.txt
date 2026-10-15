@@ -271,6 +271,8 @@
 240_wave240
 # 242_wave242: the notification centre (Steel, 14/10/26 marketing meeting): Settings > Notifications lists every kind of notification with a Hub switch and a Slack switch each (wa_notify_prefs.prefs.kinds, wa242_prefs_set; wave116j's checkboxes and wave219's radios step aside), what is due for the person today and Send me today's reminder (wa242_remind_me). Data: build/data/wa242_notifications.sql (wa242_due_reminders, cron wa-task-due weekdays 8:30); notify v14, hub-push v3, social-publish v5 read the switches.
 242_wave242
+# 244_wave244: two roles at most (Steel, 15/10/26): the roster board's cards for people who picked two roles on the form (role volunteer, detail.role_choices) say what they picked with a Make button for each (the board's own Move); the serving cards' spots bar says N to place. Data: build/data/wa244_two_roles.sql (forms max 2 with descriptions and a read box, dishwasher off the forms and website accounts, crm_form_apply, confirmations held, sign-up text).
+244_wave244
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

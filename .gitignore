@@ -9,3 +9,5 @@ build/w1*.html
 build/rebase_check.html
 node_modules/
 test/shots_w*.png
+build/base2*.html
+build/cand2*.html

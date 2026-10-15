@@ -1,4 +1,5 @@
-// Welfare Avenue: form-submit (v7, 07/10/26, wave216d: each open position option carries its job description's public PDF (u)
+// Welfare Avenue: form-submit (v8, 15/10/26, wave244: a multi question's options carry their description (d) and the
+//   question its most picks (max, the volunteer roles: 2), checked on submit. v7, 07/10/26, wave216d: each open position option carries its job description's public PDF (u)
 //   and whether it is a leadership role (lead); the positions question carries lead_note, shown by the page only when a
 //   leadership role is picked. v6, 07/10/26, wave216: application forms (kind application, "Join our team"): a choice question
 //   with source "positions" lists the open positions live (wa216_open_positions) plus a general application; a file question
@@ -54,8 +55,8 @@ const MON_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
 const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const T = {
-  en: { required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application' },
-  fr: { required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale' }
+  en: { max: 'Please pick at most {n}.', required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application' },
+  fr: { max: 'Veuillez en choisir {n} au plus.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale' }
 };
 
 // deno-lint-ignore no-explicit-any
@@ -88,8 +89,8 @@ function longDate(iso: string, lang: string): string {
   const p = iso.split('-').map(Number); const dt = new Date(Date.UTC(p[0], p[1] - 1, p[2], 12));
   return lang === 'fr' ? DAY_FR[dt.getUTCDay()] + ' ' + p[2] + ' ' + MON_FR[p[1] - 1] + ' ' + p[0] : DAY_EN[dt.getUTCDay()] + ' ' + p[2] + ' ' + MON_EN[p[1] - 1] + ' ' + p[0];
 }
-function opts(q: Json): Array<{ v: string; l: string }> {
-  return (Array.isArray(q.options) ? q.options : []).map((o: Json) => typeof o === 'string' ? { v: o, l: o } : { v: String(o.v ?? o.value ?? ''), l: String(o.l ?? o.label ?? o.v ?? '') }).filter((o: { v: string }) => o.v !== '');
+function opts(q: Json): Array<{ v: string; l: string; d?: string }> {
+  return (Array.isArray(q.options) ? q.options : []).map((o: Json) => typeof o === 'string' ? { v: o, l: o } : { v: String(o.v ?? o.value ?? ''), l: String(o.l ?? o.label ?? o.v ?? ''), ...(o.d ? { d: String(o.d) } : {}) }).filter((o: { v: string }) => o.v !== '');
 }
 async function openDates(form: Json): Promise<Array<{ v: string; l: string }>> {
   const loc = String((form.settings || {}).serving_location || 'Montreal');
@@ -134,6 +135,7 @@ async function publicForm(form: Json): Promise<Json> {
         id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
         options: q.type === 'serving_dates' ? dates : q.source === 'positions' ? positions : opts(q), ...(fill ? { fill } : {}),
         ...(q.source === 'positions' && q.lead_note ? { lead_note: String(q.lead_note) } : {}),
+        ...(q.type === 'multi' && Number(q.max) > 0 ? { max: Number(q.max) } : {}),   // v8 (wave244)
         ...(q.type === 'file' ? { accept: Object.keys(FILE_EXT).map(x => '.' + x).join(','), max_mb: MAX_FILE / 1048576 } : {})
       };
     }),
@@ -189,6 +191,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
         const picked = pq.options.filter((o: Json) => list.includes(o.v));
         if (picked.length !== new Set(list).size) { errors[pq.id] = t.choice; break; }
         if (!picked.length) { if (pq.required) errors[pq.id] = t.required; break; }
+        if (pq.max && picked.length > pq.max) { errors[pq.id] = t.max.replace('{n}', String(pq.max)); break; }   // v8 (wave244)
         val = picked.map((o: Json) => o.v); shown = picked.map((o: Json) => o.l).join(', '); break;
       }
     }

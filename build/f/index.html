@@ -55,6 +55,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--green);box-shadow:0 0
 .choice:hover{border-color:rgba(16,63,57,.4)}
 .choice input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--green);flex:none}
 .choice:has(input:checked){border-color:var(--green);background:rgba(16,63,57,.04)}
+.choice small.cd{display:block;margin-top:3px;font-size:12.5px;line-height:1.4;color:var(--muted);font-weight:400}
+.choice:has(input:disabled){opacity:.5;cursor:not-allowed}
 .choice:has(input:focus-visible){box-shadow:0 0 0 3px rgba(220,165,39,.45)}
 .none{color:var(--muted);font-size:14px;margin:0}
 .err{color:var(--flag);font-size:14px;margin:6px 0 0}
@@ -92,7 +94,7 @@ a{color:var(--green)}
   var KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3bm11bG1udm9wY2x6Y3Z5dGNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NjQxMjUsImV4cCI6MjA5ODM0MDEyNX0.YVeW1e8ffqkp3nOWdEyYXx4Kq-Tms61uReqDgypt3A4';
   var TX = {
     en: { loading: 'Loading the form…', nf: 'This form is not available.', nfh: 'It may have been moved or taken down. You can reach us at ', closed: 'This form is closed.', closedh: 'It no longer takes answers. Thank you for your interest; you can reach us at ',
-      optional: '(optional)', send: 'Send', sending: 'Sending…', fix: 'Please check the answers marked below.', required: 'Please answer this question.', email: 'Please enter a valid email address.',
+      maxN: 'Please pick at most {n}.', optional: '(optional)', send: 'Send', sending: 'Sending…', fix: 'Please check the answers marked below.', required: 'Please answer this question.', email: 'Please enter a valid email address.',
       phone: 'Please enter a phone number we can reach.', consent: 'Please tick the box to sign up.', rate: 'Too many tries from here. Please wait a few minutes and send again.',
       expired: 'This page was open a long time, so we refreshed it. Please check your answers and send again.', server: 'Something went wrong on our side. Please try again in a minute.',
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
@@ -100,7 +102,7 @@ a{color:var(--green)}
       back: 'Visit welfareavenue.com', select: 'Choose…', ey_volunteer: 'Volunteer with us', ey_newsletter: 'Stay in touch', ey_general: 'Welfare Avenue', ey_application: 'Join our team', brand: 'Service is solidarity, not charity.',
       fileType: 'Please attach a PDF, Word document or photo.', fileBig: 'That file is over {n} MB. Please attach a smaller one.', attached: 'Attached: ', uploading: 'Uploading your file…', fileFail: 'Your file could not be uploaded. Please try again.', jd: 'Job description' },
     fr: { loading: 'Chargement du formulaire…', nf: 'Ce formulaire n’est pas disponible.', nfh: 'Il a peut-être été déplacé ou retiré. Vous pouvez nous écrire à ', closed: 'Ce formulaire est fermé.', closedh: 'Il n’accepte plus de réponses. Merci de votre intérêt; vous pouvez nous écrire à ',
-      optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
+      maxN: 'Veuillez en choisir {n} au plus.', optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous l’avons actualisée. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
@@ -195,11 +197,12 @@ a{color:var(--green)}
         opts.map(function (o) { return '<option value="' + E(o.v) + '"' + (v === o.v ? ' selected' : '') + '>' + E(o.l) + '</option>'; }).join('') + '</select>' + e + '</div>';
     }
     var picked = multi ? (Array.isArray(v) ? v : []) : v;
-    return '<fieldset class="' + cls + '" data-q="' + E(q.id) + '"' + (err ? ' aria-invalid="true"' : '') + (desc.trim() ? ' aria-describedby="' + desc.trim() + '"' : '') + '>' + head('legend') +
-      '<div class="choices' + (opts.length > 3 && opts.every(function (o) { return o.l.length < 28; }) ? ' two' : '') + '">' +
+    var mx = q.type === 'multi' && q.max ? Number(q.max) : 0, full = mx && picked.length >= mx, hasD = opts.some(function (o) { return o.d; });   /* wave244: at most q.max, each with what it involves */
+    return '<fieldset class="' + cls + '" data-q="' + E(q.id) + '"' + (err ? ' aria-invalid="true"' : '') + (desc.trim() ? ' aria-describedby="' + desc.trim() + '"' : '') + (mx ? ' data-max="' + mx + '"' : '') + '>' + head('legend') +
+      '<div class="choices' + (!hasD && opts.length > 3 && opts.every(function (o) { return o.l.length < 28; }) ? ' two' : '') + '">' +
       opts.map(function (o, i) {
         var on = multi ? picked.indexOf(o.v) >= 0 : picked === o.v;
-        return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + '><span>' + E(o.l) + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + '</span></label>';
+        return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + (o.lead ? ' data-lead="1"' : '') + (full && !on ? ' disabled' : '') + '><span>' + E(o.l) + (o.d ? '<small class="cd">' + E(o.d) + '</small>' : '') + (o.u ? ' <a class="jdlink" href="' + E(o.u) + '" target="_blank" rel="noopener">' + E(t('jd')) + '</a>' : '') + '</span></label>';
       }).join('') + '</div>' + (q.lead_note ? '<p class="small lead" data-waf-lead="' + E(q.id) + '"' + (opts.some(function (o) { return o.lead && picked === o.v; }) ? '' : ' hidden') + '>' + E(q.lead_note) + '</p>' : '') + e + '</fieldset>';
   }
   function render(keep) {
@@ -214,6 +217,15 @@ a{color:var(--green)}
       '<button type="submit" id="send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button></form>';
     footer();
     document.getElementById('waf').addEventListener('submit', submit);
+    /* wave244: a question with at most N picks switches the other boxes off at N */
+    Array.prototype.forEach.call(app.querySelectorAll('fieldset[data-max]'), function (fs) {
+      var n = Number(fs.getAttribute('data-max')) || 0;
+      fs.addEventListener('change', function () {
+        var bs = fs.querySelectorAll('input[type="checkbox"]'), c = 0;
+        Array.prototype.forEach.call(bs, function (b) { if (b.checked) c++; });
+        Array.prototype.forEach.call(bs, function (b) { if (!b.checked) b.disabled = n > 0 && c >= n; });
+      });
+    });
     /* wave216d: the leadership note shows only while a leadership role is picked */
     Array.prototype.forEach.call(app.querySelectorAll('[data-waf-lead]'), function (note) {
       var name = note.getAttribute('data-waf-lead');
@@ -248,6 +260,7 @@ a{color:var(--green)}
       if (empty) { if (q.required && !(q.type === 'serving_dates' && !(q.options || []).length)) errs[q.id] = t('required'); return; }
       if (q.type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v).trim())) errs[q.id] = t('email');
       if (q.type === 'phone' && String(v).replace(/\D/g, '').length < 7) errs[q.id] = t('phone');
+      if (q.max && Array.isArray(v) && v.length > Number(q.max)) errs[q.id] = t('maxN').replace('{n}', q.max);   /* wave244 */
       if (q.type === 'file') {
         var f0 = S.files[q.id], ext = (f0.name.match(/\.[a-z0-9]{2,5}$/i) || [''])[0].toLowerCase();
         if (q.accept && q.accept.split(',').indexOf(ext) < 0) errs[q.id] = t('fileType');
