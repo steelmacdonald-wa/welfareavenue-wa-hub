@@ -180,7 +180,9 @@
     volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
       groups: function () {
         return [{ label: 'Servings', items: [
-          { h: '#volunteering', l: 'Calendar', ic: 'cal', page: 'volunteering' },
+          /* wave257 (Steel, 15/10/26: "the calendar should be its own page"): Servings is this week and every upcoming serving; Calendar is the month */
+          { h: '#volunteering', l: 'Servings', ic: 'list', page: 'volunteering' },
+          { h: '#volunteering/calendar', l: 'Calendar', ic: 'cal', page: 'volunteering' },
           { h: '#volunteering/sop', l: 'The SOP', ic: 'clip', page: 'volunteering' },
           { h: '#volunteering/recipes', l: 'Recipes', ic: 'pot', page: 'volunteering' },
           { h: '#volunteering/inventory', l: 'Inventory', ic: 'box', page: 'volunteering' }

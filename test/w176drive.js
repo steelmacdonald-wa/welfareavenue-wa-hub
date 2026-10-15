@@ -120,7 +120,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
       } else ok('CRM: its page renders', false);
     }
     await f.hash('#volunteering/e/900', 2200);
-    ok('a serving opens inside the app with Calendar marked', await f.ev(() => document.body.classList.contains('w153volunteer') && /Calendar/.test((document.querySelector('#w153rail .w153it.on') || {}).textContent || '')));
+    ok('a serving opens inside the app with Servings marked (wave257: Calendar is its own page)', await f.ev(() => document.body.classList.contains('w153volunteer') && /Servings/.test((document.querySelector('#w153rail .w153it.on') || {}).textContent || '')));
     await f.hash('#mypage', 1500);
     ok('a Hub page leaves the app', await f.ev(() => !document.body.classList.contains('w153app')));
     await f.page.click('#w153dock .w153grid'); await f.page.waitForTimeout(300);

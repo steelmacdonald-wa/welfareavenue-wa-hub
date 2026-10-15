@@ -1,0 +1,369 @@
+/* =====================================================================
+   WA v257 Where everyone is placed, and placing them (15/10/26)
+   =====================================================================
+   Steel (15/10/26): "the calendar should be its own page. And once you click into a serving on the calendar, it opens
+   this upcoming serving page." "For the people section of volunteer manager, like the volunteers page ... I can't see
+   what ... upcoming events each individual is signed up for, which doesn't give me an idea of where they are placed."
+   "In applicants received, I can't really open ... their profile up and assign them to an event. ... when we get the
+   application, we can assign them to an event and they get the notification on text and email ... Once I assign her to
+   an event or a few ... that confirmation goes to [her] ... please confirm ... we can have her confirmed early." "For
+   applicants received and volunteers, I should be able to see when their upcoming volunteering dates are, if they've
+   confirmed to them or not ... it needs to be easier to assign them to events rather than just keep them as an applicant
+   that's received."
+
+   - Calendar, its own page (#volunteering/calendar; the rail: Servings > Servings, Calendar): the month, bigger, each
+     serving with its spots filled; a click opens the serving. #volunteering (Servings) keeps This week, the next serving
+     and every upcoming serving, without the month.
+   - Upcoming servings on each person: Volunteers (under the name) and Applicants received (on the card): each upcoming
+     serving they are on, with the role and where it stands (Confirmed; Signed up, not confirmed; Placed, waiting to
+     confirm; Role to choose; Can't make it), each opening the serving. Volunteers adds On a serving / Not placed yet.
+   - Assign to servings (Volunteers: Assign on the row; Applicants received: the card's gold button): the next ten
+     servings with the role's open spots and where the person already is; one role for all or per serving; Tell them by
+     text and email (leaders, HR, admins) with the exact text first (wa257_preview, rolled back); from an application,
+     it moves to Welcomed with the dates. wa257_assign places them (Waiting For Response, confirm_early: their page lets
+     them confirm at once), texts once (kind signup; 9 am to 7 pm; STOP) and emails once (volunteer_assigned). */
+(function () {
+  'use strict';
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E', MUTED = '#797773';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif", HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var ROLES = [['server', 'Server'], ['cook', 'Cook'], ['driver', 'Driver'], ['dishwasher', 'Dishwasher'], ['team_leader', 'Team leader'], ['community_debrief', 'Community lead'], ['photographer', 'Photographer'], ['videographer', 'Videographer']];
+  var U = { at: 0, by: null, evs: [], loading: null, filter: '' };
+  var A = { p: null, app: null, opt: null, picked: {}, role: '', roles: {}, text: true, email: true, welcome: true, prev: null, prevT: null, busy: false, seq: 0 };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function lower(s) { return String(s || '').toLowerCase(); }
+  function roleName(k) { k = lower(k); if (k === 'community_talker') k = 'community_debrief'; var x = ROLES.filter(function (r) { return r[0] === k; })[0]; return x ? x[1] : (k === 'volunteer' ? 'Volunteer' : k ? k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ') : ''); }
+  function todayIso() { var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function dayTxt(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso || ''); } }
+  function msgOf(e) { return String((e && (e.message || e.details)) || e || '').replace(/^.*?ERROR:\s*/, '').slice(0, 160); }
+  function here(sub) { var h = String(location.hash || ''); return sub === '' ? /^#volunteering\/?$/.test(h) : h.indexOf('#volunteering/' + sub) === 0; }
+
+  /* ---------- where people are placed: the upcoming servings' rosters, once for the page ---------- */
+  function upcomingEvents() {
+    var t = todayIso();
+    return ((typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []).filter(function (e) {
+      return e && (e.kind || 'service') === 'service' && String(e.event_date) >= t && e.status !== 'cancelled' && e.status !== 'completed';
+    }).sort(function (a, b) { return String(a.event_date) < String(b.event_date) ? -1 : 1; });
+  }
+  async function loadPlaces(force) {
+    if (!force && U.by && Date.now() - U.at < 30000) return U.by;
+    if (U.loading) return U.loading;
+    U.loading = (async function () {
+      try {
+        /* the servings themselves (not only the calendar's list), so every upcoming serving counts */
+        var evs = [];
+        try {
+          var q = await db.from('volunteer_events').select('id,code,title,event_date,status,kind').gte('event_date', todayIso()).order('event_date', { ascending: true });
+          evs = ((q && q.data) || []).filter(function (e) { return (e.kind || 'service') === 'service' && e.status !== 'cancelled' && e.status !== 'completed' && String(e.event_date) >= todayIso(); });
+        } catch (e) { evs = []; }
+        if (!evs.length) evs = upcomingEvents();
+        U.evs = evs;
+        var by = {};
+        if (evs.length) {
+          var r = await db.from('event_roster').select('id,event_id,person_id,role,status,confirm_status,detail').in('event_id', evs.map(function (e) { return e.id; }));
+          var ev = {}; evs.forEach(function (e) { ev[e.id] = e; });
+          ((r && r.data) || []).forEach(function (x) {
+            if (!x.person_id || !ev[x.event_id] || lower(x.status) === 'cancelled') return;
+            (by[x.person_id] = by[x.person_id] || []).push({ id: x.id, e: ev[x.event_id], role: x.role, status: x.status, cs: x.confirm_status, d: x.detail || {} });
+          });
+          Object.keys(by).forEach(function (k) { by[k].sort(function (a, b) { return String(a.e.event_date) < String(b.e.event_date) ? -1 : 1; }); });
+        }
+        U.by = by; U.at = Date.now();
+      } catch (e) { U.by = U.by || {}; }
+      U.loading = null;
+      return U.by;
+    })();
+    return U.loading;
+  }
+  function stateOf(x) {
+    var s = lower(x.status), c = lower(x.cs);
+    if (s === 'confirmed' || c === 'confirmed') return ['ok', 'Confirmed'];
+    if (s === 'unavailable' || s === 'declined' || c === 'declined') return ['no', 'Can\u2019t make it'];
+    if (lower(x.role) === 'volunteer' && x.d && x.d.role_choices) return ['wait', 'Role to choose'];
+    if (s === 'tbd') return ['wait', 'Signed up, not confirmed'];
+    if (s === 'waiting for response') return ['wait', x.d && (x.d.confirm_early || x.d.source === 'assigned') ? 'Placed, waiting to confirm' : x.d && x.d.source === 'recruit' ? 'Invited, no answer yet' : 'Waiting to confirm'];
+    return ['wait', x.status || 'On the list'];
+  }
+  function placesHtml(pid, compact) {
+    var rows = (U.by && U.by[pid]) || [];
+    if (!rows.length) return '<div class="w257up none"><span class="w257lbl">Upcoming servings</span><span class="w257no">Not on a serving yet</span></div>';
+    return '<div class="w257up"><span class="w257lbl">Upcoming servings</span>' + rows.map(function (x) {
+      var st = stateOf(x); var role = lower(x.role) === 'volunteer' && x.d && x.d.role_choices ? (x.d.role_choices || []).map(roleName).join(' or ') : roleName(x.role);
+      return '<a class="w257pl ' + st[0] + '" href="#volunteering/e/' + x.e.id + '" title="' + E((x.e.code || '') + (x.e.title ? ' \u00b7 ' + x.e.title : '') + ': open the serving') + '"><b>' + E(dayTxt(x.e.event_date)) + '</b><span>' + E(role) + '</span><i>' + E(st[1]) + '</i></a>';
+    }).join('') + '</div>';
+  }
+
+  /* ---------- Volunteers: the row's servings and Assign; On a serving / Not placed yet ---------- */
+  function decoratePeople() {
+    if (!here('people')) return;
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    var rows = sec.querySelectorAll('tr[data-p26]'); if (!rows.length) return;
+    if (!U.by) { loadPlaces(false).then(decoratePeople); return; }
+    var on = 0, off = 0;
+    rows.forEach(function (tr) {
+      var pid = tr.getAttribute('data-p26'); var has = !!((U.by[pid] || []).length); if (has) on++; else off++;
+      tr.classList.toggle('w257hide', (U.filter === 'on' && !has) || (U.filter === 'off' && has));
+      if (tr.getAttribute('data-w257') === String(U.at)) return;
+      tr.setAttribute('data-w257', String(U.at));
+      var td = tr.querySelector('td'); if (!td) return;
+      var old = td.querySelector('.w257up'); if (old) old.remove();
+      td.insertAdjacentHTML('beforeend', placesHtml(pid, true));
+      if (staff()) {
+        var last = tr.querySelector('td:last-child');
+        if (last && !last.querySelector('[data-w257assign]')) last.insertAdjacentHTML('afterbegin', '<button type="button" class="w257as" data-w257assign="' + E(pid) + '">Assign</button>');
+      }
+    });
+    var bar = sec.querySelector('.w257bar');
+    var html = '<span class="w257lbl">Placed</span>' + [['', 'Everyone'], ['on', 'On a serving (' + on + ')'], ['off', 'Not placed yet (' + off + ')']].map(function (x) {
+      return '<span class="fchip' + (U.filter === x[0] ? ' on' : '') + '" data-w257f="' + x[0] + '">' + E(x[1]) + '</span>';
+    }).join('');
+    if (!bar) {
+      var anchor = sec.querySelector('.w239bar') || sec.querySelector('.w26search');
+      if (!anchor) return;
+      bar = document.createElement('div'); bar.className = 'w257bar'; anchor.insertAdjacentElement('afterend', bar);
+    }
+    if (bar.__h !== html) { bar.innerHTML = html; bar.__h = html; }
+  }
+
+  /* ---------- Applicants received: the card's servings and Assign to servings ---------- */
+  function appOf(id) { try { return ((window.w209 && window.w209.state().list) || []).filter(function (a) { return String(a.id) === String(id); })[0] || null; } catch (e) { return null; } }
+  function decorateApplicants() {
+    if (!here('applicants')) return;
+    var cards = document.querySelectorAll('#volunteering li.w209app[data-w209id]'); if (!cards.length) return;
+    if (!U.by) { loadPlaces(false).then(decorateApplicants); return; }
+    cards.forEach(function (li) {
+      var a = appOf(li.getAttribute('data-w209id')); if (!a || !a.person_id) return;
+      if (li.getAttribute('data-w257') === String(U.at) && li.querySelector('.w257up')) return;
+      li.setAttribute('data-w257', String(U.at));
+      var old = li.querySelector('.w257up'); if (old) old.remove();
+      var acts = li.querySelector('.w209acts');
+      var html = placesHtml(a.person_id);
+      if (acts) acts.insertAdjacentHTML('beforebegin', html); else li.insertAdjacentHTML('beforeend', html);
+      if (acts && staff() && !acts.querySelector('[data-w257assign]')) acts.insertAdjacentHTML('afterbegin', '<button type="button" class="w197b sm pri w257go" data-w257assign="' + E(a.person_id) + '" data-w257app="' + E(a.id) + '">Assign to servings</button>');
+    });
+  }
+
+  /* ---------- Calendar, its own page; Servings without the month ---------- */
+  function sectionMode() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    var mode = here('calendar') ? 'cal' : here('') ? 'home' : '';
+    if (sec.getAttribute('data-w257') !== mode) { if (mode) sec.setAttribute('data-w257', mode); else sec.removeAttribute('data-w257'); }
+    var m = sec.querySelector('.w118mast');
+    if (m && mode) {
+      var h1 = m.querySelector('h1'), p = m.querySelector(':scope > p');
+      var want = mode === 'cal' ? ['Calendar', 'Every serving, month by month. Click one to open it.'] : ['Servings', 'This week and every upcoming serving'];
+      if (h1 && h1.textContent !== want[0]) h1.textContent = want[0];
+      if (p && p.textContent !== want[1]) p.textContent = want[1];
+    }
+    /* the classic chips: Servings and Calendar */
+    var sub = sec.querySelector('.vl-sub');
+    if (sub && !sub.querySelector('[data-w257cal]')) {
+      var c0 = sub.querySelector('[data-vl="calendar"]');
+      if (c0) { c0.textContent = 'Servings'; c0.classList.toggle('on', mode === 'home'); c0.insertAdjacentHTML('afterend', '<a class="fchip' + (mode === 'cal' ? ' on' : '') + '" data-w257cal="1" href="#volunteering/calendar">Calendar</a>'); }
+    }
+    if (mode === 'cal') calChips();
+  }
+  /* each serving on the month: its code and spots filled (wave234's numbers) */
+  function calChips() {
+    var cal = document.getElementById('w119cal'); if (!cal) return;
+    cal.querySelectorAll('.ev[data-vlev]').forEach(function (el) {
+      var f = null; try { f = window.w234 && window.w234.fillOf ? window.w234.fillOf(Number(el.getAttribute('data-vlev'))) : null; } catch (e) { f = null; }
+      var e = ((typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []).filter(function (x) { return String(x.id) === el.getAttribute('data-vlev'); })[0] || {};
+      var line = (e.code || '') + (f && f.total ? ' \u00b7 ' + f.filled + '/' + f.total + ' filled' + (f.waiting ? ', ' + f.waiting + ' to confirm' : '') : '');
+      var s = el.querySelector('.w257ln');
+      if (!s) { el.insertAdjacentHTML('beforeend', '<span class="w257ln"></span>'); s = el.querySelector('.w257ln'); }
+      if (s.textContent !== line) s.textContent = line;
+    });
+  }
+
+  /* ---------- Assign to servings ---------- */
+  async function openAssign(pid, appId) {
+    A.p = Number(pid); A.app = appId ? Number(appId) : null; A.opt = null; A.picked = {}; A.roles = {}; A.prev = null; A.busy = false; A.welcome = !!appId;
+    try { openModal('<div class="w257m" id="w257m"><p class="m-sub">Loading their servings\u2026</p></div>'); } catch (e) { return; }
+    try {
+      var r = await db.rpc('wa257_assign_options', { p_person: A.p }); if (r && r.error) throw r.error;
+      A.opt = r.data || {};
+    } catch (e) { var m = document.getElementById('w257m'); if (m) m.innerHTML = '<p class="m-sub">Could not load: ' + E(msgOf(e)) + '</p><div class="m-foot"><button class="btn" data-w257x>Close</button></div>'; return; }
+    var pr = (A.opt.person || {}), mine = (A.opt.roles || pr.roles || []).map(lower).filter(function (k) { return ROLES.some(function (x) { return x[0] === k; }); });
+    /* the role they are already on for an upcoming serving, else the first role they applied for */
+    var onRole = ((A.opt.servings || []).filter(function (s) { return s.mine && ROLES.some(function (x) { return x[0] === lower(s.mine.role); }); })[0] || {}).mine;
+    A.role = (onRole && lower(onRole.role)) || mine[0] || 'server';
+    (A.opt.servings || []).forEach(function (s) {
+      if (s.mine && !/^(confirmed)$/i.test(s.mine.status || '') && lower(s.mine.cs) !== 'confirmed' && !/^unavailable$/i.test(s.mine.status || '')) A.picked[s.id] = true;
+    });
+    A.text = !!A.opt.can_tell && !!pr.phone; A.email = !!A.opt.can_tell && !!pr.email;
+    paintAssign(); schedPreview();
+  }
+  function openOf(s, role) {
+    var need = Number((s.spots || {})[role] || 0), have = Number((s.filled || {})[role] || 0);
+    if (s.mine && lower(s.mine.role) === role) have = Math.max(0, have - 1);
+    return { need: need, have: have, open: need - have };
+  }
+  function roleFor(s) { return A.roles[s.id] || A.role; }
+  function assignHtml() {
+    var o = A.opt || {}, pr = o.person || {}, sv = o.servings || [];
+    var mineRoles = (pr.roles || []).map(lower);
+    var n = Object.keys(A.picked).filter(function (k) { return A.picked[k]; }).length;
+    var roleSel = '<div class="w257roles" role="group" aria-label="Role">' + ROLES.map(function (r) {
+      return '<button type="button" data-w257role="' + r[0] + '" class="' + (A.role === r[0] ? 'on' : '') + '" aria-pressed="' + (A.role === r[0]) + '">' + E(r[1]) + (mineRoles.indexOf(r[0]) >= 0 ? ' <small>applied</small>' : '') + '</button>';
+    }).join('') + '</div>';
+    var list = sv.length ? sv.map(function (s) {
+      var role = roleFor(s), op = openOf(s, role), st = s.mine ? stateOf({ role: s.mine.role, status: s.mine.status, cs: s.mine.cs, d: { role_choices: s.mine.choices } }) : null;
+      var confirmed = st && st[0] === 'ok';
+      var spot = op.need ? (op.open > 0 ? op.open + ' of ' + op.need + ' ' + roleName(role).toLowerCase() + ' spots open' : 'all ' + op.need + ' ' + roleName(role).toLowerCase() + ' spots taken') : 'no ' + roleName(role).toLowerCase() + ' spot on this serving';
+      return '<label class="w257sv' + (A.picked[s.id] ? ' on' : '') + (op.open <= 0 ? ' full' : '') + '"><input type="checkbox" data-w257pick="' + s.id + '"' + (A.picked[s.id] ? ' checked' : '') + '>'
+        + '<span class="d"><b>' + E(dayTxt(s.date)) + '</b><span>' + E([s.code, s.title, s.start].filter(Boolean).join(' \u00b7 ')) + '</span></span>'
+        + '<span class="sp ' + (op.open > 0 ? 'ok' : 'no') + '">' + E(spot) + '</span>'
+        + (s.mine ? '<span class="mn ' + st[0] + '">Already on: ' + E(roleName(s.mine.role)) + ', ' + E(st[1].toLowerCase()) + (confirmed && A.picked[s.id] ? ' (stays confirmed)' : '') + '</span>' : '')
+        + (A.picked[s.id] ? '<select data-w257rrole="' + s.id + '" aria-label="Role on ' + E(dayTxt(s.date)) + '">' + ROLES.map(function (r) { return '<option value="' + r[0] + '"' + (role === r[0] ? ' selected' : '') + '>' + E(r[1]) + '</option>'; }).join('') + '</select>' : '')
+        + '</label>';
+    }).join('') : '<p class="m-sub">No upcoming servings.</p>';
+    var can = !!o.can_tell;
+    var tell = '<div class="w257tell"><b>Tell them</b>'
+      + '<label><input type="checkbox" data-w257t="text"' + (A.text ? ' checked' : '') + (can && pr.phone ? '' : ' disabled') + '> Text ' + (pr.phone ? E(pr.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')) : '<i>(no phone number)</i>') + '</label>'
+      + '<label><input type="checkbox" data-w257t="email"' + (A.email ? ' checked' : '') + (can && pr.email ? '' : ' disabled') + '> Email ' + (pr.email ? E(pr.email) : '<i>(no email)</i>') + '</label>'
+      + (A.app ? '<label><input type="checkbox" data-w257t="welcome"' + (A.welcome ? ' checked' : '') + '> Mark the application Welcomed</label>' : '')
+      + (can ? '' : '<p class="m-sub">Only leaders, HR and admins can text or email volunteers: they will be placed without a message.</p>') + '</div>';
+    var pv = A.prev, prevBox = '';
+    if (n) {
+      prevBox = '<div class="w257pv">' + (pv === null ? '<p class="m-sub">Working out what they will get\u2026</p>' : pv && pv.error ? '<p class="m-sub warn">' + E(pv.error) + '</p>'
+        : '<div class="ln">' + E(pv.to_confirm ? (pv.to_confirm + ' serving' + (pv.to_confirm === 1 ? '' : 's') + ' to confirm') : 'Nothing new to confirm') + (pv.already_confirmed ? ' \u00b7 ' + pv.already_confirmed + ' already confirmed' : '') + '</div>'
+          + (A.text && pv.body ? '<div class="bub">' + E(pv.body) + '</div><div class="ln sm">Text: ' + E(pv.text) + '</div>' : '')
+          + (A.email && pv.to_confirm ? '<div class="ln sm">Email to ' + E(pv.email_to || '') + ': ' + E(pv.email) + ' (\u201cYou\u2019re on the team\u201d, with the dates and a Confirm button)</div>' : '')
+          + '<div class="ln sm">Their page lets them confirm right away, whatever the date.</div>') + '</div>';
+    }
+    var go = n ? (A.text || A.email ? 'Place on ' + n + ' serving' + (n === 1 ? '' : 's') + ' and tell them' : 'Place on ' + n + ' serving' + (n === 1 ? '' : 's')) : 'Pick a serving';
+    return '<div class="w257m" id="w257m"><h3>Place ' + E(pr.name || 'them') + ' on servings</h3>'
+      + '<p class="m-sub">Applied for: ' + E(((pr.roles || []).map(roleName).join(', ')) || 'no role on file') + '. Pick the role, then the servings.</p>'
+      + roleSel + '<div class="w257svs">' + list + '</div>' + tell + prevBox
+      + '<div class="m-foot"><button class="btn ghost" data-w257x>Cancel</button><button class="btn" data-w257do' + (n && !A.busy ? '' : ' disabled') + '>' + E(A.busy ? 'Placing\u2026' : go) + '</button></div></div>';
+  }
+  function paintAssign() {
+    var m = document.getElementById('w257m'); if (!m) return;
+    var box = document.getElementById('modalBox'), st = box ? box.scrollTop : 0;
+    var t = document.createElement('div'); t.innerHTML = assignHtml(); m.replaceWith(t.firstChild);
+    if (box) box.scrollTop = st;
+  }
+  function picked() { return Object.keys(A.picked).filter(function (k) { return A.picked[k]; }).map(Number); }
+  function rolesArg() { var o = {}; picked().forEach(function (id) { if (A.roles[id] && A.roles[id] !== A.role) o[String(id)] = A.roles[id]; }); return Object.keys(o).length ? o : null; }
+  function schedPreview() { clearTimeout(A.prevT); if (!picked().length) { A.prev = null; paintAssign(); return; } A.prevT = setTimeout(preview, 350); }
+  async function preview() {
+    var my = ++A.seq; A.prev = null; paintAssign();
+    try {
+      var r = await db.rpc('wa257_preview', { p_person: A.p, p_events: picked(), p_role: A.role, p_roles: rolesArg() });
+      if (my !== A.seq) return; if (r && r.error) throw r.error; A.prev = r.data || {};
+    } catch (e) { if (my !== A.seq) return; A.prev = { error: 'Could not preview: ' + msgOf(e) }; }
+    paintAssign();
+  }
+  async function doAssign() {
+    if (A.busy || !picked().length) return;
+    A.busy = true; paintAssign();
+    try {
+      var r = await db.rpc('wa257_assign', { p_person: A.p, p_events: picked(), p_role: A.role, p_text: !!A.text, p_email: !!A.email, p_app: A.app && A.welcome ? A.app : null, p_roles: rolesArg() });
+      if (r && r.error) throw r.error;
+      var d = r.data || {}, nm = String(((A.opt || {}).person || {}).name || 'They').split(' ')[0];
+      var told = [d.text && d.text !== 'not asked' ? 'text: ' + d.text : '', d.email && d.email !== 'not asked' ? 'email: ' + d.email : ''].filter(Boolean).join('; ');
+      T(nm + ' is on ' + picked().length + ' serving' + (picked().length === 1 ? '' : 's') + (told ? ' (' + told + ')' : ''));
+      try { closeModal(); } catch (e) { /* fine */ }
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+      await loadPlaces(true);
+      try { if (A.app && window.w209 && window.w209.load) { await window.w209.load(); if (window.w209.paint) window.w209.paint(); } } catch (e) { /* fine */ }
+      try { var st234 = window.w234 && window.w234.state ? window.w234.state() : null; if (st234) st234.at = 0; } catch (e) { /* fine */ }
+      decoratePeople(); decorateApplicants();
+    } catch (e) { A.busy = false; paintAssign(); T('Could not place them: ' + msgOf(e)); }
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b;
+    if ((b = t.closest('[data-w257assign]'))) { e.preventDefault(); e.stopPropagation(); openAssign(b.getAttribute('data-w257assign'), b.getAttribute('data-w257app')); return; }
+    if ((b = t.closest('[data-w257f]'))) { U.filter = b.getAttribute('data-w257f'); var bar = document.querySelector('.w257bar'); if (bar) bar.__h = ''; document.querySelectorAll('#volunteering tr[data-p26]').forEach(function (tr) { tr.removeAttribute('data-w257'); }); decoratePeople(); return; }
+    if (t.closest('[data-w257x]')) { try { closeModal(); } catch (x) { /* fine */ } return; }
+    if (t.closest('[data-w257do]')) { doAssign(); return; }
+    if ((b = t.closest('#w257m [data-w257role]'))) { A.role = b.getAttribute('data-w257role'); A.roles = {}; paintAssign(); schedPreview(); return; }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute || !t.closest || !t.closest('#w257m')) return;
+    var k;
+    if ((k = t.getAttribute('data-w257pick'))) { A.picked[k] = t.checked; if (!t.checked) delete A.roles[k]; paintAssign(); schedPreview(); return; }
+    if ((k = t.getAttribute('data-w257rrole'))) { A.roles[k] = t.value; paintAssign(); schedPreview(); return; }
+    if ((k = t.getAttribute('data-w257t'))) { if (k === 'text') A.text = t.checked; else if (k === 'email') A.email = t.checked; else A.welcome = t.checked; paintAssign(); return; }
+  });
+
+  /* ---------- wiring: one quiet watcher on the Volunteering section (ignores its own nodes) ---------- */
+  var pend = null;
+  function run() { pend = null; try { sectionMode(); decoratePeople(); decorateApplicants(); } catch (e) { /* fine */ } }
+  function schedule() { if (pend) return; pend = setTimeout(run, 60); }
+  function own(m) {
+    var nodes = Array.prototype.slice.call(m.addedNodes || []).concat(Array.prototype.slice.call(m.removedNodes || []));
+    return nodes.length && nodes.every(function (n) { return n.nodeType === 1 && (/\bw257/.test(n.className || '') || (n.querySelector && n.querySelector('.w257up') && n.classList && n.classList.contains('w257up'))); });
+  }
+  function watch() {
+    var sec = document.getElementById('volunteering'); if (!sec || sec.getAttribute('data-w257mo')) return !!sec;
+    sec.setAttribute('data-w257mo', '1');
+    try { new MutationObserver(function (muts) { for (var i = 0; i < muts.length; i++) { if (!own(muts[i])) { schedule(); return; } } }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+    return true;
+  }
+  if (!watch()) { var tries = 0, iv = setInterval(function () { if (watch() || ++tries > 60) clearInterval(iv); }, 500); }
+  window.addEventListener('hashchange', function () { if (/^#volunteering\/(people|applicants)/.test(location.hash || '')) loadPlaces(false).then(schedule); schedule(); });
+  if (typeof startApp === 'function') {
+    var __sa257 = startApp;
+    startApp = async function () { var out = await __sa257.apply(this, arguments); try { schedule(); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* ---------- the look ---------- */
+  var css = document.createElement('style'); css.id = 'w257css';
+  css.textContent =
+    '#volunteering[data-w257="cal"] #w191week,#volunteering[data-w257="cal"] .vl-hero,#volunteering[data-w257="cal"] .card > h3.block,#volunteering[data-w257="cal"] .vl-month,#volunteering[data-w257="cal"] .vl-grid,#volunteering[data-w257="cal"] details.vl-phase{display:none!important;}' +
+    '#volunteering[data-w257="home"] #w119cal{display:none!important;}' +
+    '#volunteering[data-w257="cal"] #w119cal .d{min-height:104px;}#volunteering[data-w257="cal"] #w119cal .d .ev{font-size:12px;padding:6px 8px;}' +
+    '#w119cal .ev .w257ln{display:none;}#volunteering[data-w257="cal"] #w119cal .ev .w257ln{display:block;font-size:10.5px;opacity:.85;margin-top:2px;}' +
+    '.w257up{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:7px 0 2px;font-family:' + BODY + ';}' +
+    '.w257lbl{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:' + MUTED + ';margin-right:2px;}' +
+    '.w257no{font-size:12px;color:' + FLAG + ';font-weight:600;}' +
+    '.w257pl{display:inline-flex;gap:6px;align-items:baseline;padding:3px 9px;border-radius:999px;font-size:11.5px;text-decoration:none;border:1px solid rgba(16,63,57,.18);color:' + GREEN + ';background:' + CREAM + ';white-space:nowrap;}' +
+    '.w257pl b{font-weight:700;}.w257pl span{color:' + INK + ';}.w257pl i{font-style:normal;font-weight:600;}' +
+    '.w257pl.ok{border-color:rgba(42,140,122,.45);background:rgba(42,140,122,.08);}.w257pl.ok i{color:' + TEAL + ';}' +
+    '.w257pl.wait{border-color:rgba(220,165,39,.6);background:rgba(220,165,39,.1);}.w257pl.wait i{color:#8A6510;}' +
+    '.w257pl.no{border-color:rgba(179,64,47,.35);background:rgba(179,64,47,.05);}.w257pl.no i{color:' + FLAG + ';}' +
+    '.w257pl:hover{filter:brightness(.97);text-decoration:underline;}' +
+    '.w257bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 12px;}' +
+    'tr.w257hide{display:none!important;}' +
+    '.w257as{border:1px solid ' + GREEN + ';background:' + GREEN + ';color:' + CREAM + ';border-radius:999px;font:600 11.5px ' + BODY + ';padding:4px 10px;cursor:pointer;margin:0 6px 4px 0;}' +
+    '.w257m h3{font-family:' + HEAD + ';font-size:24px;color:' + GREEN + ';margin:0 0 4px;}' +
+    '.w257roles{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 12px;}.w257roles button{border:1px solid rgba(16,63,57,.25);background:' + CREAM + ';border-radius:999px;padding:6px 11px;font:600 12.5px ' + BODY + ';color:' + GREEN + ';cursor:pointer;}' +
+    '.w257roles button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}.w257roles small{font-weight:500;opacity:.75;}' +
+    '.w257svs{display:flex;flex-direction:column;gap:6px;max-height:min(46vh,420px);overflow:auto;padding:2px;}' +
+    '#w257m .w257sv{display:grid!important;margin:0;grid-template-columns:22px minmax(0,1fr) auto;gap:4px 10px;align-items:center;padding:9px 11px;border:1px solid rgba(16,63,57,.14);border-radius:12px;cursor:pointer;background:' + CREAM + ';}' +
+    '.w257sv.on{border-color:' + GREEN + ';background:rgba(16,63,57,.05);}.w257sv input{margin:0;accent-color:' + GREEN + ';}' +
+    '.w257sv .d{display:flex;flex-direction:column;min-width:0;}.w257sv .d b{font-size:13.5px;color:' + GREEN + ';}.w257sv .d span{font-size:11.5px;color:' + MUTED + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#w257m .w257sv .sp{display:block;font-size:11.5px;font-weight:600;white-space:nowrap;}.w257sv .sp.ok{color:' + TEAL + ';}.w257sv .sp.no{color:' + FLAG + ';}' +
+    '#w257m .w257sv .mn{display:block;grid-column:2 / -1;font-size:11.5px;font-weight:600;}.w257sv .mn.ok{color:' + TEAL + ';}.w257sv .mn.wait{color:#8A6510;}.w257sv .mn.no{color:' + FLAG + ';}' +
+    '#w257m .w257sv select{display:block;width:auto;grid-column:2 / -1;justify-self:start;font:inherit;font-size:12px;padding:4px 8px;border-radius:8px;border:1px solid rgba(16,63,57,.25);background:' + CREAM + ';}' +
+    '.w257tell{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin:12px 0 0;font-size:13px;}.w257tell b{width:100%;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:' + MUTED + ';}.w257tell label{display:inline-flex;gap:6px;align-items:center;}.w257tell i{color:' + MUTED + ';}' +
+    '.w257pv{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.05);display:flex;flex-direction:column;gap:6px;}.w257pv .ln{font-size:12.5px;font-weight:600;color:' + GREEN + ';}.w257pv .ln.sm{font-size:11.5px;font-weight:500;color:' + MUTED + ';}' +
+    '.w257pv .bub{background:' + GREEN + ';color:' + CREAM + ';border-radius:16px 16px 6px 16px;padding:9px 12px;font-size:13px;line-height:1.42;max-width:520px;overflow-wrap:anywhere;}.w257pv .warn{color:' + FLAG + ';}' +
+    '@media (max-width:700px){.w257sv{grid-template-columns:22px minmax(0,1fr);}.w257sv .sp{grid-column:2;}.w257pl{white-space:normal;}}';
+  document.head.appendChild(css);
+
+  /* ---------- the Calendar page's tour (wave122's engine; trainings row tour:volcalendar) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return false; if (W.tours.volcalendar) return true;
+      var OPT = { opt: 1 };
+      var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.volcalendar = { tab: 'volunteering', icon: 'cal', hash: '#volunteering/calendar', steps: [
+        Tt('#w153rail [data-w153go="#volunteering/calendar"] || #volunteering [data-w257cal] || #volunteering .w118mast', 'The Calendar', 'Every serving, month by month. Servings, just above it, is this week and the list of upcoming servings.'),
+        Tt('#w119cal', 'The month', 'Each serving shows its code and how many spots are filled and still to confirm. Click one to open it; the arrows move a month, Next event jumps to the next one.', OPT),
+        Tt('#w106add', 'Add an event', 'A serving or a special event, with the master SOP\u2019s checklist copied in.', OPT),
+        { c: 1, t: 'Where everyone is placed', p: 'Volunteers and Applicants received show each person\u2019s upcoming servings and whether they confirmed. Assign (Assign to servings on an application) places them on one or more servings and tells them by text and email; they can confirm right away.' }
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  if (!addTour()) { var tt = 0, tv = setInterval(function () { if (addTour() || ++tt > 40) clearInterval(tv); }, 500); }
+
+  window.w257 = { places: loadPlaces, state: function () { return { U: U, A: A }; }, open: openAssign, stateOf: stateOf };
+})();
