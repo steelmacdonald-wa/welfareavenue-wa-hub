@@ -1,6 +1,31 @@
 
   /* ---------- the library: templates, hashtag groups, saved replies, tags ---------- */
-  var LIBT = [['templates', 'Templates', 'template'], ['hashtags', 'Hashtag groups', 'hashtags'], ['replies', 'Saved replies', 'reply'], ['tags', 'Tags', null]];
+  var LIBT = [['templates', 'Templates', 'template'], ['hashtags', 'Hashtag groups', 'hashtags'], ['replies', 'Saved replies', 'reply'], ['tags', 'Tags', null], ['partners', 'By partner', null]];
+  /* wave241: past posts by partner organization (content_posts.partner_id, set in the composer) */
+  async function loadPartners() { if (S.partners) return S.partners; try { var r = await db.from('wa_partners').select('id,name,status').order('name'); S.partners = ((r && r.data) || []).filter(function (x) { return x.status !== 'declined'; }); } catch (e) { S.partners = []; } return S.partners; }
+  async function loadPartnerPosts() {
+    await loadPartners();
+    var id = S.f.partner; if (!id) { S.partnerPosts = null; S.partnerFor = null; return; }
+    if (S.partnerFor === id && S.partnerPosts) return;
+    try { var r = await db.from('content_posts').select('id,title,platforms,format,status,scheduled_at,published_at,link_url,canva_url,campaign,caption,partner_id').eq('partner_id', Number(id)).order('scheduled_at', { ascending: false, nullsFirst: false }).limit(120); S.partnerPosts = (r && r.data) || []; }
+    catch (e) { S.partnerPosts = []; }
+    S.partnerFor = id;
+  }
+  function partnersHtml() {
+    var list = S.partners || [], sel = S.f.partner || '';
+    var pick = '<div class="card" style="margin:0 0 12px"><div class="row"><b>Partner</b><select data-w241partner style="flex:1;min-width:220px"><option value="">Choose an organization\u2026</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (String(sel) === String(x.id) ? ' selected' : '') + '>' + E(x.name) + '</option>'; }).join('') + '</select></div><p class="muted" style="margin:6px 0 0">Every post that names the organization in the composer, newest first: a throwback, a recap, last year\u2019s LinkedIn article. Set the partner on a post to find it here later.</p></div>';
+    if (!sel) return pick;
+    var ps = S.partnerPosts;
+    if (!ps) return pick + '<div class="card"><div class="empty">Loading\u2026</div></div>';
+    if (!ps.length) return pick + '<div class="card"><div class="empty">No post names this organization yet. Open a post, pick the partner under Partner organization, save.</div></div>';
+    return pick + '<div class="lib">' + ps.map(function (p) {
+      var when = p.published_at || p.scheduled_at; var st = stateOf(p);
+      return '<div class="it"><div class="row"><b style="flex:1;min-width:0">' + E(p.title || (p.caption || '').split('\n')[0] || 'Untitled post') + '</b><span class="pill">' + E(st.label || p.status) + '</span></div>' +
+        '<div>' + (p.platforms || []).map(function (k) { return mark(k); }).join('') + (p.format === 'article' ? ' <span class="muted">LinkedIn article</span>' : '') + (when ? ' <span class="muted">' + E(niceWhen(when)) + '</span>' : '') + (p.campaign ? ' <span class="muted">\u00b7 ' + E(p.campaign) + '</span>' : '') + '</div>' +
+        '<p>' + E(clip(p.caption || '', 220)) + '</p>' +
+        '<div class="row" style="margin-top:auto"><a class="btn225 sm" data-w225open="' + p.id + '">' + I('eye') + ' Open</a>' + (p.canva_url ? '<a class="btn225 sm" href="' + E(p.canva_url) + '" target="_blank" rel="noopener">Canva</a>' : '') + (p.link_url ? '<a class="btn225 sm" href="' + E(p.link_url) + '" target="_blank" rel="noopener">Link</a>' : '') + '<span class="sp"></span></div></div>';
+    }).join('') + '</div>';
+  }
   var TAGCOLORS = ['#6F64AB', '#2A8C7A', '#B4467A', '#DCA527', '#1877F2', '#B3402F', '#103F39', '#C13584'];
   function libTab() { var t = LIBT.filter(function (x) { return x[0] === S.sub; })[0]; return t || LIBT.filter(function (x) { return x[0] === S.f.lib; })[0] || LIBT[0]; }
   function hashCount(s) { return (String(s || '').match(/#[\p{L}\p{N}_]+/gu) || []).length; }
@@ -27,11 +52,12 @@
   function libraryHtml() {
     var t = libTab(), mk = S.mk, qq = lower(S.f.lq);
     var tabs = '<div class="row" style="margin:0 0 12px"><span class="seg">' + LIBT.map(function (x) {
-      var n = x[2] ? lib().filter(function (s) { return s.kind === x[2]; }).length : tagsAll().length;
+      var n = x[0] === 'partners' ? (S.partnerPosts ? S.partnerPosts.length : (S.partners ? S.partners.length : 0)) : x[2] ? lib().filter(function (s) { return s.kind === x[2]; }).length : tagsAll().length;
       return '<a data-w225go="#studio/library/' + x[0] + '" class="' + (t[0] === x[0] ? 'on' : '') + '">' + E(x[1]) + '<span class="n">' + n + '</span></a>';
     }).join('') + '</span><span class="sp"></span><input type="search" data-w225lq placeholder="Search the library" value="' + E(S.f.lq || '') + '">' + (mk ? '<a class="btn225 sm pri" data-w225lnew="' + t[0] + '">' + I('plus') + ' New</a>' : '') + '</div>';
     var intro = { templates: 'Start a post from a template: the platforms, caption, first comment and tags come with it. Save one from the composer with Save as template, or make one here.', hashtags: 'Groups of hashtags to drop into a caption from the composer. Instagram counts 5 at most since December 2025, so keep the groups short.', replies: 'Answers the team sends often, ready in the Comments inbox.', tags: 'Tags sort posts by theme or campaign. Filter the calendar and the report by them.' }[t[0]];
     var items;
+    if (t[0] === 'partners') return tabs + partnersHtml();   /* wave241 */
     if (t[0] === 'tags') {
       var used = {}; posts().forEach(function (p) { (p.tags || []).forEach(function (g) { used[g] = (used[g] || 0) + 1; }); });
       items = tagsAll().filter(function (g) { return !qq || lower(g.name).indexOf(qq) >= 0; }).map(function (g) {

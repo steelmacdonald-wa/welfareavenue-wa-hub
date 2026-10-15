@@ -235,7 +235,7 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
     const f = await fresh(browser, { who: 'plain', width: 1366, hash: '#studio/approvals', fixture: JSON.parse(JSON.stringify(FX)), rpcs: { wa225_publisher: false, wa225_marketing: true }, init: INIT, wait: 5000 });
     let t = await f.ev(HOST);
     const d = await f.ev(() => ({ approve: !!document.querySelector('#w225host [data-w225dec]'), r: (document.getElementById('w153rail') || {}).innerText || '' }));
-    ok('a member: Approvals explains sending for approval, no Approve buttons', /Send a post for approval from the composer/.test(t) && !d.approve, [t.slice(0, 300), d]);
+    ok('a member: Approvals explains sending for approval, no Approve buttons', /Scheduling a post sends it here/.test(t) && !d.approve, [t.slice(0, 300), d]);
     await f.hash('#studio/inbox', 1200);
     const del = await f.ev(() => ({ del: !!document.querySelector('#w225host [data-w225act^="delete|"]'), rp: !!document.querySelector('#w225host [data-w225rp]') }));
     ok('a member answers comments but does not delete them', !del.del && del.rp, del);

@@ -1,4 +1,9 @@
-// Welfare Avenue: social-publish (v3, 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-publish (v4, 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// v4 (wave241, Steel 14/10/26: scheduling goes to approval, "sent a message to you and KK, and it's like a button, you can
+//   literally just click a button to approve in Slack"): the pending notice goes to the approvers (hub_settings
+//   content_studio.approvers, else the marketing leads and admins) with Approve and Send it back links into the Hub
+//   (#studio/approvals?post=<id>&do=approve|back), and names the Canva design (content_posts.canva_url), the partner and a
+//   LinkedIn article (format article). The decision notice names the time the post goes out.
 // The Content Studio's publisher, reminder and confirmer.
 // v3 (wave225, Steel 09/10/26: "Make it the most sophisticated content calendar possible"):
 //   - Instagram: feed photos (alt text, people tags, location, collaborators), carousels (alt text and tags per photo), reels
@@ -169,6 +174,16 @@ async function emailOfName(name: string | null): Promise<string | null> {
   const low = n.toLowerCase();
   const hit = rows.find(r => String(r.name || '').toLowerCase() === low) || rows.find(r => String(r.name || '').toLowerCase().split(' ')[0] === low.split(' ')[0]);
   return hit && hit.email ? hit.email.toLowerCase() : null;
+}
+/* v4 (wave241): the people pinged when a post waits; empty means every publisher */
+async function approvers(): Promise<string[]> {
+  try {
+    const { data } = await svc.from('hub_settings').select('value').eq('key', 'content_studio').maybeSingle();
+    const listed = ((((data || {}) as Any).value || {}).approvers || []) as Any[];
+    const out = listed.map(x => String(x || '').trim().toLowerCase()).filter(x => /@/.test(x));
+    if (out.length) return out;
+  } catch (_) { /* the publishers */ }
+  return publishers();
 }
 async function publishers(): Promise<string[]> {
   const { data: roles } = await svc.from('hub_roles').select('email, role, profile');
@@ -835,9 +850,12 @@ Deno.serve(async (req: Request) => {
       if (state === 'pending') {
         const who0 = await svc.from('team_members').select('name').eq('email', post.submitted_by || '').maybeSingle();
         const from = (who0.data && who0.data.name) || String(post.submitted_by || 'Someone').split('@')[0];
-        const to = (await publishers()).filter(e => e !== String(post.submitted_by || '').toLowerCase());
-        const out = await tell(to, 'A post waits for your approval', from + ': ' + label(post) + ' (' + plats + ', ' + when + ')', '/#studio/approvals', 'studio-approval-' + post.id,
-          ':raised_hand: *' + from + '* sent a post for approval: *' + label(post) + '* (' + plats + ', ' + when + ')' + (post.approval_note ? '\n>' + String(post.approval_note).slice(0, 300) : '') + '\n<' + link + '|Approve or send it back>');
+        const to = (await approvers()).filter(e => e !== String(post.submitted_by || '').toLowerCase());
+        const extra = (post as Any).canva_url ? '\n<' + String((post as Any).canva_url) + '|Open the design in Canva>' : '';
+        const kind = (post as Any).format === 'article' ? 'a LinkedIn article' : 'a post';
+        const out = await tell(to, kind === 'a post' ? 'A post waits for your approval' : 'A LinkedIn article waits for your approval', from + ': ' + label(post) + ' (' + plats + ', ' + when + ')', '/#studio/approvals?post=' + post.id, 'studio-approval-' + post.id,
+          ':raised_hand: *' + from + '* sent ' + kind + ' for approval: *' + label(post) + '* (' + plats + ', ' + when + ')' + (post.approval_note ? '\n>' + String(post.approval_note).slice(0, 300) : '') + extra
+          + '\n<' + SITE + '/#studio/approvals?post=' + post.id + '&do=approve|Approve>   \u00b7   <' + SITE + '/#studio/approvals?post=' + post.id + '&do=back|Send it back>   \u00b7   <' + link + '|Open the Studio>');
         return json({ ok: true, told: out });
       }
       const to = String(post.submitted_by || '').toLowerCase();

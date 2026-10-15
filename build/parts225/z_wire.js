@@ -29,6 +29,8 @@
     S.sub = sub; S.sub2 = p[3] || '';
     if (S.sec === 'library') { if (LIBT.some(function (x) { return x[0] === sub; })) S.f.lib = sub; else S.sub = S.f.lib || 'templates'; if (S.libEdit && S.libEdit.tab !== S.sub) S.libEdit = null; }
     if (S.sec === 'connections' && qi >= 0) connFlash();
+    if (S.sec === 'approvals' && qi >= 0) { try { var qa = new URLSearchParams(raw.slice(qi + 1)); S.apDo = qa.get('post') ? { post: qa.get('post'), do: qa.get('do') === 'back' ? 'back' : 'approve' } : null; } catch (e) { S.apDo = null; } }   /* wave241 */
+    if (S.sec === 'library' && S.sub === 'partners' && qi >= 0) { try { var qp = new URLSearchParams(raw.slice(qi + 1)); if (qp.get('partner')) S.f.partner = qp.get('partner'); } catch (e) { /* fine */ } }
   }
   async function show(hh) {
     route(hh || location.hash);
@@ -39,6 +41,8 @@
     if (S.sec === 'pages') { try { await lpLoad(); } catch (e) { /* drawn below */ } }
     paint();
     try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* fine */ }
+    if (S.sec === 'approvals' && S.apDo) { try { await applyApDo(); } catch (e) { /* fine */ } }   /* wave241 */
+    if (S.sec === 'library' && S.sub === 'partners') { try { var hadP = !!S.partners; await loadPartnerPosts(); if (!hadP) paint(); } catch (e) { /* fine */ } }
   }
   function reload() { S.loaded = 0; S.conn = null; return show(location.hash); }
 
@@ -100,6 +104,7 @@
     if (el.hasAttribute('data-w225sug')) { S.suggest = S.suggest ? null : suggestTimes(); paint(); return; }
     if (el.hasAttribute('data-w225goalsave')) { saveGoals(); return; }
     if ((x = arg(el, 'data-w225apr'))) { S.f.apr = x; paint(); return; }
+    if (el.hasAttribute('data-w241apsave')) { saveApprovers(); return; }
     if ((x = arg(el, 'data-w225dec'))) { var dp = x.split('|'); el.setAttribute('disabled', '1'); decideFrom(dp[0], dp[1]); return; }
     /* comments */
     if ((x = arg(el, 'data-w225rp'))) { S.reply[x] = S.reply[x] || { text: '' }; paint(); var ta = document.querySelector('#w225host [data-w225rtext="' + x + '"]'); if (ta) ta.focus(); return; }
@@ -130,6 +135,10 @@
     /* report */
     if (el.hasAttribute('data-w225rcopy')) { copyText(reportSummary()); return; }
     if (el.hasAttribute('data-w225print')) { printReport(); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!inApp(t) || !t.matches) return;
+    if (t.matches('[data-w241partner]')) { S.f.partner = t.value; S.partnerPosts = null; S.partnerFor = null; paint(); loadPartnerPosts().then(function () { paint(); }); }   /* wave241 */
   });
   document.addEventListener('input', function (e) {
     var t = e.target; if (!inApp(t) || !t.matches) return;

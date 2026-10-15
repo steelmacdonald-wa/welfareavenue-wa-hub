@@ -91,7 +91,8 @@
   var S = {
     sec: 'overview', sub: '', loaded: 0, loading: null, err: null, pub: null, mk: null,
     comments: [], links: [], clicks: [], social: [], conn: null, cap: null, settings: {}, linkPage: {}, inboxLast: null,
-    f: { inbox: lsGet('w225ib') || 'open', ipl: '', imine: false, iq: '', apr: 'pending', lib: 'templates', lq: '' },
+    f: { inbox: lsGet('w225ib') || 'open', ipl: '', imine: false, iq: '', apr: 'pending', lib: 'templates', lq: '', partner: '' },
+    apDo: null, partners: null, partnerPosts: null, partnerFor: null,   /* wave241: the Approve / Send back links, the partners */
     reply: {}, busy: {}, reportMonth: null, suggest: null, linkSel: null, bioDraft: null, keys: {}
   };
   function W() { return window.w121 || null; }

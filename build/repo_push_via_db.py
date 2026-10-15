@@ -8,7 +8,7 @@ the table. Usage: python3 build/repo_push_via_db.py <from_commit> [to_commit]   
 """
 import base64, hashlib, json, subprocess, sys, os
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-URL = "https://zwnmulmnvopclzcvytce.supabase.co/rest/v1/wa_stage_push"
+URL = "https://zwnmulmnvopclzcvytce.supabase.co/rest/v1/" + os.environ.get("PUSH_TABLE", "wa_stage_push")
 anon = open('/tmp/anon.key').read().strip()
 a, b = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else 'HEAD')
 files = [f for f in subprocess.run(['git', '-C', ROOT, 'diff', '--name-only', '-z', a, b], capture_output=True, text=True).stdout.split('\0') if f]

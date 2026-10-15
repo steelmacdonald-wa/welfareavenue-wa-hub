@@ -315,6 +315,10 @@
   function fn(name, body) { return db.functions.invoke(name, { body: body }).then(function (r) { if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
   /* wave225b: a post can be scheduled to go out when Instagram and Facebook can publish (the Meta token); every other platform
      goes out directly when connected, or by the reminder flow (social-publish tells the owner at the post's time) */
+  /* wave241: the partner organizations (wa_partners), loaded once */
+  var PARTNERS = null;
+  function loadPartners() { if (PARTNERS) return Promise.resolve(PARTNERS); return db.from('wa_partners').select('id,name,status').order('name').then(function (r) { PARTNERS = ((r && r.data) || []).filter(function (x) { return x.status !== 'declined'; }); return PARTNERS; }).catch(function () { PARTNERS = []; return PARTNERS; }); }
+  function partnerOpts(sel) { return (PARTNERS || []).map(function (x) { return '<option value="' + x.id + '"' + (String(sel || '') === String(x.id) ? ' selected' : '') + '>' + E(x.name) + '</option>'; }).join('') + (sel && !(PARTNERS || []).some(function (x) { return String(x.id) === String(sel); }) ? '<option value="' + E(String(sel)) + '" selected>Partner ' + E(String(sel)) + '</option>' : ''); }
   function canPublish(pls) { var c = C.cap; if (!c) return false; return (pls || []).length > 0 && (pls || []).every(function (p) { return (p === 'instagram' || p === 'facebook') ? !!(c.token && c.can && c.can[p] === true) : true; }); }
   function modeOf(p) { var m = C.cap && C.cap.mode && C.cap.mode[p]; if (m) return m; if (p === 'instagram' || p === 'facebook') return C.cap && C.cap.can && C.cap.can[p] ? 'direct' : 'reminder'; return 'reminder'; }
   function isPub() { return C.pub === true; }
@@ -651,12 +655,14 @@
     var slot = bestSlot(); var ns = day && day !== '1' && day !== 'idea' ? { date: day, time: slot && slot.h != null ? String(slot.h).padStart(2, '0') + ':00' : '18:00' } : (day === 'idea' ? { date: '', time: '' } : nextSlotDate(slot));
     return { id: null, title: '', platforms: ['instagram', 'facebook'], caption: '', link_url: '', media: [], date: ns.date, time: ns.time, owner: me(), campaign: '', notes: '', status: 'draft', results: {}, live: {}, error: null, dirty: false, tab: 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false,
       /* wave225d: the Content Studio */
-      variants: {}, first_comment: '', tags: [], repeat: '', repeat_times: 4, track_links: true, utm_campaign: '', approval_status: 'none', approval_note: '', submitted_by: null, manualMap: {}, vtab: 'instagram', altIdx: null, apNote: '' };
+      variants: {}, first_comment: '', tags: [], repeat: '', repeat_times: 4, track_links: true, utm_campaign: '', approval_status: 'none', approval_note: '', submitted_by: null, manualMap: {}, vtab: 'instagram', altIdx: null, apNote: '',
+      /* wave241 */ canva_url: '', partner_id: null, article: false };
   }
   function fromPost(p) {
     var rr = p.repeat_rule || {};
     return { id: p.id, title: p.title || '', platforms: (p.platforms || []).slice(), caption: p.caption || '', link_url: p.link_url || '', media: (p.media || []).map(function (m) { var c = Object.assign({}, m); if (m.tags) c.tags = m.tags.map(function (t) { return Object.assign({}, t); }); return c; }), date: p.scheduled_at ? dayOf(p.scheduled_at) : '', time: p.scheduled_at ? hm(p.scheduled_at) : '', owner: p.owner || '', campaign: p.campaign || '', notes: p.notes || '', status: p.status || 'draft', results: p.results || {}, live: p.live || {}, error: p.error || null, published_at: p.published_at || null, dirty: false, tab: (p.platforms || [])[0] || 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false,
-      variants: JSON.parse(JSON.stringify(p.variants || {})), first_comment: p.first_comment || '', tags: (p.tags || []).slice(), repeat: rr.every || '', repeat_times: rr.times || 4, track_links: p.track_links !== false, utm_campaign: (p.utm && p.utm.campaign) || '', approval_status: p.approval_status || 'none', approval_note: p.approval_note || '', submitted_by: p.submitted_by || null, manualMap: p.manual || {}, vtab: (p.platforms || [])[0] || 'instagram', altIdx: null, apNote: '' };
+      variants: JSON.parse(JSON.stringify(p.variants || {})), first_comment: p.first_comment || '', tags: (p.tags || []).slice(), repeat: rr.every || '', repeat_times: rr.times || 4, track_links: p.track_links !== false, utm_campaign: (p.utm && p.utm.campaign) || '', approval_status: p.approval_status || 'none', approval_note: p.approval_note || '', submitted_by: p.submitted_by || null, manualMap: p.manual || {}, vtab: (p.platforms || [])[0] || 'instagram', altIdx: null, apNote: '',
+      /* wave241 */ canva_url: p.canva_url || '', partner_id: p.partner_id || null, article: p.format === 'article' };
   }
   function openComposer(pOrDay, prefill) {
     if (!allowed()) return;
@@ -803,6 +809,7 @@
       html = '<div class="mock th3"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + '</b><span>Threads</span></div></div><div class="mc">' + linkify(cap.length > 500 ? cap.slice(0, 500) + '\u2026' : cap) + '</div>' + mediaBox(vi.length ? '0.8' : (Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3))) + (fc ? '<div class="mc" style="color:var(--wa-muted)">\u21b3 ' + E(fc) + '</div>' : '') + '</div>';
     } else if (tab === 'linkedin') {
       var lt = cap + (e.link_url && cap.indexOf(e.link_url) < 0 ? '\n\n' + e.link_url : '');
+      if (e.article) html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>Article \u00b7 ' + E(e.date ? niceDate(e.date) : 'Draft') + '</span></div></div>' + (im.length ? '<div class="grid one"><img src="' + E(im[0].url) + '" alt=""></div>' : '') + '<div class="mc"><b style="font-size:16px;display:block;margin:0 0 6px">' + E(e.title || 'Headline') + '</b>' + E(cap) + '</div></div>'; else
       html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>Nonprofit Organization \u00b7 ' + E(e.date ? niceDate(e.date) : 'now') + '</span></div></div><div class="mc">' + E(lt.length > 210 ? lt.slice(0, 210) + '\u2026 see more' : lt) + '</div>' + mediaBox(vi.length ? '1.7778' : (Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3))) + '</div>';
     } else if (tab === 'tiktok') {
       html = '<div class="mock"><div class="yt">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>' : 'A video goes here') + '</div><div class="mc"><b>@' + E(igHandle()) + '</b> ' + linkify(cap.slice(0, 150)) + '</div></div>';
@@ -941,6 +948,7 @@
     } catch (x) { if (C.edit && C.edit.bank) { C.edit.bank.busy = false; paintDrawer(); } toastS(bankErr(x)); }
   }
   function paintDrawer() {
+    if (!PARTNERS) { loadPartners().then(function () { if (C.edit && document.getElementById('w121dr')) paintDrawer(); }); }
     var e = C.edit; var old = document.getElementById('w121dr');
     if (!e) { if (old) old.remove(); return; }
     var ro = readOnly(); var v = validate(e); var slot = bestSlot(); var pubOk = canPublish(e.platforms);
@@ -964,7 +972,11 @@
       '<div class="sec"><label>When</label><div class="row2"><input type="date" id="w121date" value="' + E(e.date) + '"' + (ro ? ' disabled' : '') + '><input type="time" id="w121time" value="' + E(e.time) + '"' + (ro ? ' disabled' : '') + '></div>' + (ro ? '' : '<div class="qk">' + (qs ? '<button class="best" data-w225slot="1" title="The next free time in the posting schedule">Next in the queue: ' + E(niceDate(qs.date)) + ' ' + E(qs.time) + '</button>' : '') + (slot ? '<button class="best" data-w121best="1" title="From the analytics insights">Best: ' + E(slot.label) + '</button>' : '') + '<button data-w121quick="tomorrow">Tomorrow 12:00</button><button data-w121quick="nodate">No date yet</button></div>') +
       '<div class="w225rep"><select id="w225rep"' + (ro ? ' disabled' : '') + '>' + [['', 'Does not repeat'], ['week', 'Repeats every week'], ['2weeks', 'Repeats every 2 weeks'], ['month', 'Repeats every month']].map(function (x) { return '<option value="' + x[0] + '"' + (e.repeat === x[0] ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>' + (e.repeat ? '<input type="number" id="w225rept" min="2" max="52" value="' + E(e.repeat_times || 4) + '" title="How many times in all"' + (ro ? ' disabled' : '') + '>' : '') + '</div>' +
       '<div class="tz">Times are in your time zone' + (tz() ? ' (' + E(tz()) + ')' : '') + '.' + (e.date ? ' ' + (pubOk ? 'Goes out at this time once scheduled (platforms that are not connected send the owner a reminder).' : 'Instagram and Facebook are in plan and confirm mode: the Hub reminds you and confirms the post once it is up.') : '') + '</div></div>' +
+      /* wave241: the Canva design, the partner organization, a LinkedIn article */
+      '<div class="sec"><label>Canva design (optional)</label><div class="row2"><input type="url" id="w241canva" placeholder="https://www.canva.com/design/..." value="' + E(e.canva_url || '') + '"' + (ro ? ' disabled' : '') + '>' + (e.canva_url ? '<a class="btn mini ghost" href="' + E(e.canva_url) + '" target="_blank" rel="noopener" style="justify-self:start">Open in Canva</a>' : '<span class="w225hint" style="align-self:center">The design the post uses; the approvers see the link.</span>') + '</div></div>' +
+      (e.platforms.indexOf('linkedin') >= 0 ? '<div class="sec"><label style="display:flex;gap:8px;align-items:center;font-weight:600"><input type="checkbox" id="w241art"' + (e.article ? ' checked' : '') + (ro ? ' disabled' : '') + '> LinkedIn article</label><small class="w225hint">An article has a headline (the name above) and a long body (the caption). LinkedIn articles are posted by hand: the Hub reminds the owner at the time and asks for the link once it is up.</small></div>' : '') +
       '<div class="sec row2"><div><span class="lbl">Owner</span><select id="w121owner"' + (ro ? ' disabled' : '') + '>' + ownerOpts(e.owner) + '</select></div><div><span class="lbl">Campaign</span><input type="text" id="w121camp" list="w121camps" value="' + E(e.campaign) + '" placeholder="e.g. Rally Paper 2026"' + (ro ? ' disabled' : '') + '><datalist id="w121camps">' + campaigns().map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div class="sec"><label>Partner organization (optional)</label><select id="w241partner"' + (ro ? ' disabled' : '') + '><option value="">None</option>' + partnerOpts(e.partner_id) + '</select><small class="w225hint">Posts about a partner are found again under Library > By partner (a throwback, a recap, last year\u2019s article).</small></div>' +
       '<div class="sec"><label>Tags</label>' + tagsHtml(e, ro) + '</div>' +
       '<div class="sec"><label>Notes for the team</label><textarea id="w121notes" style="min-height:70px" placeholder="Brief, sources, who to tag, the photo credit"' + (ro ? ' disabled' : '') + '>' + E(e.notes) + '</textarea></div>' +
       '<div class="sec"><label>Preview</label>' + previewHtml(e) + '</div>' +
@@ -985,7 +997,7 @@
     /* wave225d: who publishes (marketing leads and admins) schedules and publishes; everyone else sends it for approval first */
     var approved = e.approval_status === 'approved';
     if (!isPub() && !approved) {
-      if (e.approval_status !== 'pending') parts += '<button class="btn mini go" data-w121save="submit"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>Send for approval</button>';
+      if (e.approval_status !== 'pending') parts += '<button class="btn mini go" data-w121save="submit"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + (hasDate ? ' title="Keeps the date: once approved it is scheduled"' : '') + '>' + (hasDate ? 'Schedule for approval' : 'Send for approval') + '</button>';
       return parts + '<button class="lnk" data-w121man="1">Mark as posted</button></footer>';
     }
     if (hasDate) parts += '<button class="btn mini go" data-w121save="schedule"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (pubOk ? 'Schedule' : 'Plan it') + '</button>';
@@ -1010,6 +1022,10 @@
     if ((v = g('w225fc')) != null) e.first_comment = v;
     if ((v = c('w225track')) != null) e.track_links = v;
     if ((v = g('w225utm')) != null) e.utm_campaign = v.trim();
+    /* wave241 */
+    if ((v = g('w241canva')) != null) e.canva_url = v.trim();
+    if ((v = g('w241partner')) != null) e.partner_id = v ? Number(v) : null;
+    if ((v = c('w241art')) != null) e.article = v;
     if ((v = g('w225rep')) != null) e.repeat = v;
     if ((v = g('w225rept')) != null) e.repeat_times = Math.max(2, Math.min(52, Number(v) || 4));
     if ((v = g('w225apnote')) != null) e.apNote = v;
@@ -1029,7 +1045,7 @@
   }
   function rowFromEdit(e) {
     var variants = {}; Object.keys(e.variants || {}).forEach(function (k) { if (e.platforms.indexOf(k) >= 0) { var vv = Object.assign({}, e.variants[k]); Object.keys(vv).forEach(function (x) { if (vv[x] === '' || vv[x] == null) delete vv[x]; }); if (Object.keys(vv).length) variants[k] = vv; } });
-    return { title: e.title.trim() || null, platforms: e.platforms.slice(), format: vids(e).length ? 'reel' : imgs(e).length > 1 ? 'carousel' : imgs(e).length ? 'post' : e.link_url ? 'link' : 'post', caption: e.caption || null, link_url: e.link_url || null,
+    return { title: e.title.trim() || null, platforms: e.platforms.slice(), format: e.article && e.platforms.indexOf('linkedin') >= 0 ? 'article' : vids(e).length ? 'reel' : imgs(e).length > 1 ? 'carousel' : imgs(e).length ? 'post' : e.link_url ? 'link' : 'post', canva_url: String(e.canva_url || '').trim() || null, partner_id: e.partner_id || null, caption: e.caption || null, link_url: e.link_url || null,
       media: e.media.filter(function (m) { return m.url && !m.uploading; }).map(function (m) { var o = { path: m.path || null, url: m.url, mime: m.mime || null, kind: m.kind || (String(m.mime || '').indexOf('video') >= 0 ? 'video' : 'image'), w: m.w || null, h: m.h || null, size: m.size || null, dur: m.dur || null }; if (m.alt) o.alt = String(m.alt).slice(0, 1000); if (m.tags && m.tags.length) o.tags = m.tags; if (m.photo_id) o.photo_id = m.photo_id; return o; }),
       scheduled_at: e.date && e.time ? isoOf(e.date, e.time) : (e.date ? isoOf(e.date, '18:00') : null), owner: e.owner || null, campaign: e.campaign || null, notes: e.notes || null,
       variants: variants, first_comment: String(e.first_comment || '').trim() || null, tags: (e.tags || []).slice(), repeat_rule: e.repeat ? { every: e.repeat, times: e.repeat_times || 4 } : null, track_links: e.track_links !== false, utm: e.utm_campaign ? { campaign: e.utm_campaign } : null };
@@ -1056,7 +1072,7 @@
       if (mode === 'submit') {
         var sr = await db.rpc('studio_submit', { p_id: Number(e.id), p_note: String(e.apNote || '').trim() || null });
         if (sr.error) throw sr.error;
-        toastS('Sent for approval: the marketing leads and admins are told');
+        toastS(e.date && e.time ? 'Sent for approval: the approvers are told; once approved it is scheduled for ' + niceDate(e.date) + ' at ' + e.time : 'Sent for approval: the approvers are told');
         await load(true); closeComposer(true); paint(); C.busy = false; return;
       }
       if (mode === 'publish') {

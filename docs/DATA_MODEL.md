@@ -980,6 +980,8 @@ Content calendar posts: planned, scheduled and published to the Facebook Page an
 - `track_links`: wave225: links in the caption become hub.welfareavenue.com/l/<code> short links with UTM tags when the post goes out (short_links counts the clicks).
 - `utm`: wave225: UTM overrides {source, medium, campaign}; the default is the platform, social, and the post's campaign.
 - `manual`: wave225: the reminder flow for platforms the Hub cannot post to directly: {platform: {reminded_at, posted_at, posted_by, url}}.
+- `canva_url`: wave241: the design in Canva (a link; the approvers see it)
+- `partner_id`: wave241: the partner organization the post is about (wa_partners.id); Library > By partner
 
 ### `social_accounts`
 
