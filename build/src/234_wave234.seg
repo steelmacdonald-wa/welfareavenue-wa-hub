@@ -27,9 +27,9 @@
   function isOut(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
   function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }
   var NAMES = { team_leader: ['team leader', 'team leaders'], cook: ['cook', 'cooks'], driver: ['driver', 'drivers'], server: ['server', 'servers'],
-    dishwasher: ['dishwasher', 'dishwashers'], photographer: ['photographer', 'photographers'], community_debrief: ['community lead', 'community leads'] };
+    dishwasher: ['dishwasher', 'dishwashers'], photographer: ['photographer', 'photographers'], videographer: ['videographer', 'videographers'], community_debrief: ['community lead', 'community leads'] };
   function nameOf(k, n) { var x = NAMES[k]; if (x) return n === 1 ? x[0] : x[1]; var l = lower(S.labels[k] || k.replace(/_/g, ' ')); return n === 1 ? l : l + 's'; }
-  var ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
+  var ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'videographer', 'community_debrief'];
 
   var css = document.createElement('style'); css.id = 'wa234css';
   css.textContent =

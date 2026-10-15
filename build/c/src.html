@@ -371,7 +371,11 @@ a.rbig svg{width:20px;height:20px;flex:none}
       pjSend: 'Sign me up', pjOk: 'You are on the team!', pjOkP: 'Thank you for joining us. Your page has everything for the day.', pjOpen: 'Open my page', pjAlready: 'You were already on the team for this serving.',
       pjClosed: 'Sign-ups for this serving are closed. Thank you for your interest!', pjErrName: 'Please enter your first name.', pjErrContact: 'Please enter an email or a mobile phone.', pjErrEmail: 'Please check the email.', pjErrPhone: 'Please check the phone number (10 digits).',
       pjPriv: 'Welfare Avenue keeps your name and contact details to organize this serving and to invite you to future ones. Reply STOP to any text to stop texts.', pjJoined: '{n} from your group already signed up',
-      acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots on welfareavenue.com. Sign in with Google or a code we email you.' },
+      acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots on welfareavenue.com. Sign in with Google or a code we email you.',
+      /* wave239: Still in? (a text to past volunteers) */
+      plEy: 'Still volunteering with us?', plT: 'Hi {f}!', plP: 'A while back you signed up to volunteer with Welfare Avenue as {r}. Are you still up for it? One tap tells us.',
+      plYes: 'Yes, count me in', plNo: 'Not any more', plNoteL: 'Anything to tell us? (optional)', plOkYes: 'Wonderful, {f}! We’ll be in touch about the next servings.',
+      plOkNo: 'Thank you for letting us know, {f}. You’re welcome back any time.', plAgain: 'Changed your mind?', plSaved: 'Your answer is saved.', plPriv: 'Welfare Avenue keeps your name and contact details to organise its servings. Reply STOP to any text to stop them.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
@@ -445,7 +449,10 @@ a.rbig svg{width:20px;height:20px;flex:none}
       pjSend: 'Je m’inscris', pjOk: 'Vous faites partie de l’équipe!', pjOkP: 'Merci de vous joindre à nous. Votre page a tout ce qu’il faut pour le jour J.', pjOpen: 'Ouvrir ma page', pjAlready: 'Vous faisiez déjà partie de l’équipe pour ce service.',
       pjClosed: 'Les inscriptions pour ce service sont fermées. Merci de votre intérêt!', pjErrName: 'Veuillez entrer votre prénom.', pjErrContact: 'Veuillez entrer un courriel ou un cellulaire.', pjErrEmail: 'Veuillez vérifier le courriel.', pjErrPhone: 'Veuillez vérifier le numéro (10 chiffres).',
       pjPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ce service et vous inviter aux prochains. Répondez STOP à un texto pour ne plus en recevoir.', pjJoined: '{n} de votre groupe déjà inscrits',
-      acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres sur welfareavenue.com. Connectez-vous avec Google ou un code reçu par courriel.' }
+      acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres sur welfareavenue.com. Connectez-vous avec Google ou un code reçu par courriel.',
+      plEy: 'Toujours bénévole avec nous?', plT: 'Bonjour {f}!', plP: 'Il y a quelque temps, vous vous êtes inscrit(e) comme bénévole chez Welfare Avenue ({r}). Êtes-vous toujours partant(e)? Un seul clic nous le dit.',
+      plYes: 'Oui, je suis partant(e)', plNo: 'Plus maintenant', plNoteL: 'Quelque chose à nous dire? (facultatif)', plOkYes: 'Formidable, {f}! Nous vous écrirons pour les prochains services.',
+      plOkNo: 'Merci de nous l’avoir dit, {f}. La porte reste ouverte, à tout moment.', plAgain: 'Vous avez changé d’avis?', plSaved: 'Votre réponse est enregistrée.', plPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ses services. Répondez STOP à un texto pour ne plus en recevoir.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
@@ -1211,6 +1218,8 @@ a.rbig svg{width:20px;height:20px;flex:none}
     }
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
     if (b.id === 'pjsend') { pjSend(); return; }
+    if (b.id === 'plyes') { plSend('yes'); return; }
+    if (b.id === 'plno') { plSend('no'); return; }
     if (b.hasAttribute('data-inv')) { invTap(b); return; }
     if (b.id === 'invsend') { invSend(); return; }
     if (b.id === 'invedit') { S.invEdit = true; paint(); invScroll(); return; }
@@ -1228,7 +1237,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (S.d) { S.form = Object.assign({}, S.form, readForm()); if (document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead()); }
     if (S.pj && !S.d && document.getElementById('pjfirst')) S.pjf = Object.assign({}, S.pjf || {}, pjRead());
     S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
-    if (S.d) paint(); else if (S.pj) pjPaint(); else langButtons();
+    if (S.d) paint(); else if (S.pj) pjPaint(); else if (S.pl) plPaint(); else langButtons();
   });
   document.getElementById('itv').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
@@ -1293,9 +1302,55 @@ a.rbig svg{width:20px;height:20px;flex:none}
   }
   function tryPartner(tk) {
     rpc('volunteer_partner_get', { p_token: tk }).then(function (r) {
-      if (!r.ok || !r.body) { notFound(); return; }
+      if (!r.ok) { notFound(t('offline')); return; }
+      if (!r.body) { tryPool(tk); return; }
       S.pj = r.body; pjPaint();
     }).catch(function () { notFound(t('offline')); });
+  }
+  /* ---------- wave239: Still in? (hub.welfareavenue.com/c/<the text's link>): a past volunteer says whether they are still up for it ---------- */
+  function tryPool(tk) {
+    rpc('wa239_pool_get', { p_token: tk }).then(function (r) {
+      if (!r.ok) { notFound(t('offline')); return; }
+      if (!r.body) { notFound(); return; }
+      S.pl = r.body;
+      if (!S.chosen && r.body.lang === 'fr') S.lang = 'fr';
+      plPaint();
+    }).catch(function () { notFound(t('offline')); });
+  }
+  function plRole() { var x = S.pl || {}; return String((S.lang === 'fr' ? x.role_fr : x.role_en) || x.role || '').toLowerCase(); }
+  function plPaint() {
+    var x = S.pl; if (!x) return;
+    langButtons(); footer();
+    var f = x.first || (S.lang === 'fr' ? 'bonjour' : 'there');
+    document.getElementById('ey').textContent = t('plEy'); document.getElementById('ht').textContent = x.first || 'Welfare Avenue';
+    var role = plRole(), art = S.lang === 'fr' ? role : (/^[aeiou]/.test(role) ? 'an ' : 'a ') + role;
+    var h = '<h2>' + E(t('plT').replace('{f}', f)) + '</h2><div class="rule"></div>';
+    if (x.answer) {
+      h += '<div class="ok">' + tick() + '<div><p style="color:var(--ink);font-weight:600;font-size:16px">' + E((x.answer === 'yes' ? t('plOkYes') : t('plOkNo')).replace('{f}', f)) + '</p>' + (S.plJust ? '<p>' + E(t('plSaved')) + '</p>' : '') + '</div></div>';
+      h += '<p style="margin:14px 0 8px">' + E(t('plAgain')) + '</p><div class="q" style="display:flex;gap:10px;flex-wrap:wrap">'
+        + '<button type="button" class="no" id="pl' + (x.answer === 'yes' ? 'no' : 'yes') + '" style="margin:0">' + E(x.answer === 'yes' ? t('plNo') : t('plYes')) + '</button></div>';
+    } else {
+      h += '<p style="margin:0 0 14px;font-size:16px">' + E(t('plP').replace('{r}', art)) + '</p>'
+        + '<div class="q"><label class="l" for="plnote">' + E(t('plNoteL')) + '</label><textarea id="plnote" rows="2" maxlength="500" style="width:100%;font:inherit;padding:10px;border:1px solid rgba(16,63,57,.25);border-radius:10px;background:#FFFDF8;box-sizing:border-box">' + E(S.plNote || '') + '</textarea></div>'
+        + (S.plErr ? '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.plErr) + '</div>' : '')
+        + '<button type="button" id="plyes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('plYes')) + '</button>'
+        + '<button type="button" class="no" id="plno"' + (S.busy ? ' disabled' : '') + '>' + E(t('plNo')) + '</button>';
+    }
+    h += '<p class="m" style="margin:16px 0 0">' + E(t('plPriv')) + '</p>' + callHtml();
+    app.innerHTML = h;
+  }
+  function plSend(ans) {
+    if (S.busy || !S.pl) return;
+    var ta = document.getElementById('plnote'); S.plNote = ta ? ta.value : (S.plNote || ''); S.plErr = '';
+    if (S.test) { S.pl.answer = ans; S.pl.answered_at = new Date().toISOString(); S.plJust = true; plPaint(); return; }
+    S.busy = true; plPaint();
+    rpc('wa239_pool_answer', { p_token: token(), p: { answer: ans, note: S.plNote || '', via: 'page' } }).then(function (r) {
+      S.busy = false;
+      var b = r.body || {};
+      if (r.ok && b.ok) { S.pl.answer = ans; S.pl.answered_at = new Date().toISOString(); S.plJust = true; }
+      else S.plErr = t('offline');
+      plPaint();
+    }).catch(function () { S.busy = false; S.plErr = t('offline'); plPaint(); });
   }
   function notFound(msg) {
     document.getElementById('ey').textContent = 'Welfare Avenue';

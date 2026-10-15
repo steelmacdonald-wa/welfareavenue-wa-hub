@@ -1,3 +1,8 @@
+// v14 (waves 239 and 242, 15/10/26): two events and a per-kind choice. volunteer_applied (a photographer or videographer applied:
+// the database names the SOP's photographer owner, to_name/to_email) and task_due (wa242_due_reminders: a person's tasks due
+// today, tomorrow or overdue, once a day). The notification centre (wave242) keeps each kind's Hub and Slack switch in
+// wa_notify_prefs.prefs.kinds[kind] = {hub, slack}: slack false means no DM for that kind; a kind with no entry follows
+// the old rules (disabled list, channel hub with a device on). ROLE_WORDS names the volunteer roles.
 // v12 (wave219, 07/10/26): Hub notifications. A person who chose Hub notifications only (wa_notify_prefs.prefs.channel 'hub')
 // and has a device on (hub_push_subs) gets no Slack DM for an @mention, a meeting mention, a task handed to them, a request
 // for their team or an accepted suggestion: hub-push sends those to their devices. With no device on, Slack still does.
@@ -80,25 +85,46 @@ async function memberByName(name: string): Promise<{ email: string | null; name:
   return hit ? { email: (hit.email || '').toLowerCase() || null, name: hit.name } : null;
 }
 
+/* v14 (wave242): the person's choice for this kind. prefs.kinds[kind].slack false: no DM. Else the disabled list, then
+   (wave219) Hub only with a device on. */
+type Prefs = { disabled: string[]; channel: string; kinds: Record<string, { hub?: boolean; slack?: boolean }> };
+async function prefsOf(email: string): Promise<Prefs> {
+  const out: Prefs = { disabled: [], channel: 'both', kinds: {} };
+  try {
+    const { data } = await svc.from('wa_notify_prefs').select('disabled, prefs').eq('email', email.toLowerCase()).maybeSingle();
+    if (Array.isArray(data?.disabled)) out.disabled = data!.disabled as string[];
+    const p = (data?.prefs || {}) as Record<string, unknown>;
+    out.channel = String(p.channel || 'both');
+    if (p.kinds && typeof p.kinds === 'object') out.kinds = p.kinds as Prefs['kinds'];
+  } catch (_) { /* defaults */ }
+  return out;
+}
 async function optedOut(email: string, event: string): Promise<boolean> {
   if (!email) return false;
-  const { data } = await svc.from('wa_notify_prefs').select('disabled').eq('email', email).maybeSingle();
-  const d = (data?.disabled || []) as string[];
-  return Array.isArray(d) && d.indexOf(event) >= 0;
+  const p = await prefsOf(email);
+  const k = p.kinds[event];
+  if (k && typeof k.slack === 'boolean') return !k.slack;
+  return p.disabled.indexOf(event) >= 0;
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted'];
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due'];
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
     const e = email.toLowerCase();
-    const { data } = await svc.from('wa_notify_prefs').select('prefs').eq('email', e).maybeSingle();
-    if (String((data?.prefs as Record<string, unknown> | null)?.channel || 'both') !== 'hub') return false;
+    const p = await prefsOf(e);
+    const k = p.kinds[event];
+    if (k && typeof k.slack === 'boolean') return false;   /* v14: an explicit Slack choice for this kind wins */
+    if (p.channel !== 'hub') return false;
     const { count } = await svc.from('hub_push_subs').select('id', { count: 'exact', head: true }).eq('email', e);
     return (count || 0) > 0;
   } catch (_) { return false; }
 }
+const ROLE_WORDS: Record<string, string> = { team_leader: 'team leader', cook: 'cook', driver: 'driver', server: 'server', dishwasher: 'dishwasher',
+  photographer: 'photographer', videographer: 'videographer', community_debrief: 'community lead', community_talker: 'community lead', volunteer: 'volunteer' };
+const SOURCE_WORDS: Record<string, string> = { website: 'the website', cabm: 'CABM', fcabq: 'Je B\u00e9n\u00e9vole', email: 'by email', manual: 'added by hand', linkedin: 'LinkedIn', referral: 'a referral', event: 'an event' };
+function listWords(xs: string[]): string { return xs.length <= 1 ? (xs[0] || '') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]; }
 
 function norm(s: string): string { return (s || '').toLowerCase().replace(/[^a-z]/g, ''); }
 
@@ -427,6 +453,43 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
       + (!restricted && m.quote ? '\n> ' + String(m.quote).slice(0, 200) : '')
       + '\n' + siteLink('#mypage');
     const out = await deliver(event, String(m.person || ''), null, text);
+    return { event, outcome: out };
+  }
+
+  if (event === 'volunteer_applied') {
+    /* v14 (wave239): a photographer or videographer applied; the database named the SOP's photographer owner */
+    const id = Number(body.application_id);
+    const { data: a } = await svc.from('volunteer_applications').select('id, name, roles, role_text, source, message, applied_at, language').eq('id', id).maybeSingle();
+    if (!a) return { error: 'application not found' };
+    const roles = ((a.roles || []) as string[]).filter(r => r === 'photographer' || r === 'videographer').map(r => ROLE_WORDS[r] || r);
+    const others = ((a.roles || []) as string[]).filter(r => r !== 'photographer' && r !== 'videographer').map(r => ROLE_WORDS[r] || r);
+    const text = ':camera_with_flash: A new ' + (listWords(roles) || 'photographer') + ' applied: *' + slackEsc(String(a.name || 'a volunteer')) + '*'
+      + (a.source ? ' (' + (SOURCE_WORDS[String(a.source)] || String(a.source)) + ')' : '')
+      + (others.length ? ', also as ' + listWords(others) : '')
+      + (a.language === 'fr' ? ', in French' : '')
+      + (a.message ? '\n> ' + slackEsc(String(a.message).replace(/\s+/g, ' ').slice(0, 220)) : '')
+      + '\nYou own the Volunteer Photographers step in the serving SOP, so this one is yours to welcome.'
+      + '\n' + siteLink('#volunteering/applicants');
+    const toEmail = String(body.to_email || '').toLowerCase() || null;
+    const out = await deliver(event, toEmail ? null : String(body.to_name || ''), toEmail, text);
+    return { event, outcome: out };
+  }
+
+  if (event === 'task_due') {
+    /* v14 (wave242): the day's reminder, composed by wa242_due_reminders */
+    const email = String(body.email || '').toLowerCase();
+    if (!email) return { error: 'email required' };
+    const lines: string[] = [];
+    const one = (t: { id: number; title: string; due: string }) => '\u2022 <' + siteLink('#task/' + t.id) + '|' + slackEsc(String(t.title || 'a task').replace(/\|/g, '/').slice(0, 90)) + '>';
+    const over = (Array.isArray(body.overdue) ? body.overdue : []) as Array<{ id: number; title: string; due: string }>;
+    const today = (Array.isArray(body.due_today) ? body.due_today : []) as Array<{ id: number; title: string; due: string }>;
+    const tomorrow = (Array.isArray(body.due_tomorrow) ? body.due_tomorrow : []) as Array<{ id: number; title: string; due: string }>;
+    if (!over.length && !today.length && !tomorrow.length) return { event, outcome: 'nothing due' };
+    if (today.length) lines.push('*Due today* (' + today.length + ')\n' + today.slice(0, 8).map(one).join('\n') + (today.length > 8 ? '\n\u2026 and ' + (today.length - 8) + ' more' : ''));
+    if (over.length) lines.push('*Overdue* (' + over.length + ')\n' + over.slice(0, 8).map(t => one(t) + ' (' + t.due + ')').join('\n') + (over.length > 8 ? '\n\u2026 and ' + (over.length - 8) + ' more' : ''));
+    if (tomorrow.length) lines.push('*Due tomorrow* (' + tomorrow.length + ')\n' + tomorrow.slice(0, 8).map(one).join('\n') + (tomorrow.length > 8 ? '\n\u2026 and ' + (tomorrow.length - 8) + ' more' : ''));
+    const text = ':alarm_clock: Your tasks, ' + String(body.day || 'today') + ':\n' + lines.join('\n') + '\nClose them or move the dates in the Hub: ' + siteLink('#mypage');
+    const out = await deliver(event, null, email, text);
     return { event, outcome: out };
   }
 

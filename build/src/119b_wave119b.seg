@@ -22,7 +22,7 @@
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_debrief: 1 };
-  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'videographer', 'community_debrief'];   /* wave239: videographer */
   var S = { hist: null, histAt: 0, sort: 'reliable', dupOnly: false, q: '', plan: null, recap: null, channels: null };
 
   var css = document.createElement('style'); css.id = 'wa119bcss';

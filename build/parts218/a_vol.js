@@ -20,7 +20,7 @@
   'use strict';
   var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', INK = '#1F201E';
   var ROLES = [['cook', 'Cook'], ['server', 'Server'], ['driver', 'Driver'], ['team_leader', 'Team leader'], ['community_debrief', 'Community lead'],
-               ['photographer', 'Photographer'], ['dishwasher', 'Dishes']];
+               ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['dishwasher', 'Dishes']];   /* wave239: videographer */
   var D = { c: null, roles: [], events: [], picked: [], note: '', busy: false, err: '', evAt: 0, evs: null };
 
   function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }

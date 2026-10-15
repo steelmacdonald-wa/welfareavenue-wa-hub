@@ -18,7 +18,7 @@
 (function () {
   'use strict';
   var GREEN = '#103F39', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
-  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishes'], ['photographer', 'Photographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];
+  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishes'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];   /* wave239: videographer */
   var SOURCES = [['linkedin', 'LinkedIn'], ['cabm', 'CABM'], ['fcabq', 'Je Bénévole'], ['email', 'Email'], ['referral', 'Referral'], ['website', 'Website'], ['event', 'An event'], ['manual', 'Other']];
   var STATUS = [['received', 'To handle'], ['contacted', 'Contacted'], ['welcomed', 'Welcomed'], ['not_fit', 'Not a fit'], ['withdrawn', 'Withdrawn']];
   var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, busy: false, n: null };
@@ -47,6 +47,7 @@
     if (/(\bservers?\b|serveu|\bserving\b|service des repas|service aux repas)/.test(t)) r.push('server');
     if (/(dish|vaisselle|plonge)/.test(t)) r.push('dishwasher');
     if (/photo/.test(t)) r.push('photographer');
+    if (/(video|film)/.test(t)) r.push('videographer');   /* wave239 */
     if (/(community lead|community leader|responsable communaut|leader communaut)/.test(t)) r.push('community_debrief');
     if (/(community welcome|community talk|accueil)/.test(t)) { if (r.indexOf('community_debrief') < 0) r.push('community_debrief'); }   /* wave234: one role, Community lead */
     if (!r.length && /(benevol|volunteer)/.test(t)) r.push('volunteer');
@@ -245,9 +246,10 @@
     var all = V.list || [], open = all.filter(isOpen).length, wel = all.filter(function (a) { return a.status === 'welcomed'; }).length, cl = all.filter(function (a) { return a.status === 'not_fit' || a.status === 'withdrawn'; }).length;
     var tabs = [['open', 'To handle', open], ['welcomed', 'Welcomed', wel], ['closed', 'Not a fit or withdrawn', cl], ['all', 'All', all.length]];
     var list = V.list ? shown() : null;
-    var rolesHere = ROLES.filter(function (r) { return all.some(function (a) { return (a.roles || []).indexOf(r[0]) >= 0; }); });
+    var roleN = {}; all.forEach(function (a) { (a.roles || []).forEach(function (r) { roleN[r] = (roleN[r] || 0) + 1; }); });   /* wave239: every role, with its count */
+    var rolesHere = ROLES.map(function (r) { return [r[0], r[1] + ' (' + (roleN[r[0]] || 0) + ')']; });
     var srcHere = SOURCES.filter(function (s) { return all.some(function (a) { return a.source === s[0]; }); });
-    return '<div id="w209v"><p class="w209lead">Volunteers who applied (CABM, Je Bénévole, an email to volunteer@ or job@, or added by hand). Each one is already in the CRM and the volunteer directory, tagged volunteer applicant, so Volunteers, the CRM and Find volunteers find them. Reply within two weeks (CABM asks it), then mark them.</p>' +
+    return '<div id="w209v"><p class="w209lead">Volunteers who applied (the website’s volunteer forms, CABM, Je Bénévole, an email to volunteer@ or job@, or added by hand). Each one is already in the CRM and the volunteer directory, tagged volunteer applicant, so Volunteers, the CRM and Find volunteers find them. Reply within two weeks (CABM asks it), then mark them.</p>' +
       '<div class="w209bar"><div class="w209tabs" role="tablist">' + tabs.map(function (t) { return '<button type="button" role="tab" aria-selected="' + (V.tab === t[0]) + '" class="' + (V.tab === t[0] ? 'on' : '') + '" data-w209tab="' + t[0] + '">' + E(t[1]) + ' <em>' + t[2] + '</em></button>'; }).join('') + '</div>' +
       btn('Add an applicant', 'data-w209a="add" data-ctx="volunteers"', 'sm pri') + '</div>' +
       '<div class="w209filt"><input type="search" id="w209q" placeholder="Search a name, email, phone or message" value="' + E(V.q) + '" aria-label="Search the applicants">' +

@@ -1,0 +1,230 @@
+/* =====================================================================
+   WA v239 The volunteer roles set right (Steel, 14/10/26 marketing meeting; built 15/10/26)
+   =====================================================================
+   Steel: the Volunteers list's filters for photographers, servers, community leads and drivers must work; "we should
+   text the people who signed up as photographers to see if they are still in", saying it is Welfare Avenue; a videographer
+   role; website photographer applicants in Applicants received (crm_form_apply step 7c, wa239_roles_pool).
+   - The Volunteers list (Volunteering > Volunteers): the chips are the roles in a fixed order (Everyone, Team leaders,
+     Cooks, Drivers, Servers, Dishwashers, Photographers, Videographers, Community lead), counted from each person's roles
+     and role tags; the other tags (recurring volunteer, cabm, applied 2026-04...) moved behind a Tag select. A role and a
+     tag filter together; the search still narrows the rows. A role chip tells the person that role's count.
+   - Still in?: with a role chip on, leaders, HR and admins see "Text: still in?". It lists the people shown (those with a
+     phone), each ticked, with the text they will get ("Hi <first>, it's Welfare Avenue! A while back you signed up to
+     volunteer with us as a photographer. Are you still up for it? Tell us here, one tap: <link> (or reply YES or NO).
+     Reply STOP to stop texts."; French for French contacts). wa239_pool_send queues one text a person (not again within 14
+     days; no phone, STOP and the test phones skipped; sms_mode decides) and quo-send drains inside the 9 to 19 window,
+     else the tick sends at 9. The link opens the /c/ page's Still in? screen (Yes, count me in / Not any more, a note);
+     a YES or NO reply counts too (wa171_inbound). The list shows the answer in a Still in? column (Yes 3 Oct, No, Asked
+     12 Oct, no answer) and filters by it (Said yes, Said no, No answer yet).
+   Wrapped: waVolRenderPeople (final; wave26's version is replaced, its search, flags and edit link kept). Reads
+   volunteer_people (already loaded), wa239_pool_list(); writes through wa239_pool_send only. ASCII only.
+   ===================================================================== */
+(function () {
+  if (window.__wa239) return; window.__wa239 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', TEAL = '#2A8C7A', MUTED = '#797773', FLAG = '#B3402F';
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'videographer', 'community_debrief'];
+  var ONE = { team_leader: 'team leader', cook: 'cook', driver: 'driver', server: 'server', dishwasher: 'dishwasher', photographer: 'photographer',
+    videographer: 'videographer', community_debrief: 'community lead' };
+  var W = { tag: '', pool: '', poolRows: null, poolAt: 0, poolBusy: null, can: null, canAt: 0, busy: false };
+  window.__wa239state = W;
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function roleOf(r) { var k = lower(r); return k === 'community_talker' ? 'community_debrief' : k; }
+  function isRole(k) { return ROLE_ORDER.indexOf(roleOf(k)) >= 0; }
+  function label(k) { try { return waVolRoleLabel(k); } catch (e) { return k; } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function dayWords(iso) { if (!iso) return ''; var d = new Date(iso); if (isNaN(d)) return ''; try { return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); } }
+  function first(p) { return String((p && p.full_name) || '').trim().split(/\s+/)[0] || 'there'; }
+  function digits(p) { var out = ''; ((p && p.phones) || []).some(function (x) { var d = String(x || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); if (d.length === 10) { out = d; return true; } return false; }); return out; }
+  function roleSet(p) { var set = {}; ((p && p.roles) || []).forEach(function (r) { set[roleOf(r)] = 1; }); ((p && p.tags) || []).forEach(function (r) { if (isRole(r)) set[roleOf(r)] = 1; }); return set; }
+  function tagSet(p) { var set = {}; ((p && p.tags) || []).forEach(function (r) { if (!isRole(r)) set[String(r)] = 1; }); return set; }
+
+  var css = document.createElement('style'); css.id = 'wa239css';
+  css.textContent =
+    '#volunteering .w239bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}' +
+    '#volunteering .w239bar .filters{margin:0;flex:1 1 auto}' +
+    '#volunteering .w239bar select{font:inherit;font-size:12.5px;border:1px solid rgba(16,63,57,.25);border-radius:18px;padding:5px 10px;background:#FFFAF2;color:' + GREEN + ';max-width:260px}' +
+    '#volunteering .w239pool{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-4px 0 12px}' +
+    '#volunteering .w239pool .fchip.yes.on{background:' + TEAL + ';border-color:' + TEAL + '}' +
+    '#volunteering .w239pool .fchip.no.on{background:' + FLAG + ';border-color:' + FLAG + '}' +
+    '#volunteering .w239pool button{font:inherit;font-size:12.5px;font-weight:600;border:1px solid ' + GREEN + ';background:' + GREEN + ';color:#FFFAF2;border-radius:18px;padding:5px 13px;cursor:pointer;margin-left:auto}' +
+    '#volunteering .w239pool button[disabled]{opacity:.55;cursor:default}' +
+    '#volunteering td .w239a{font-size:12px;font-weight:600;white-space:nowrap}' +
+    '#volunteering td .w239a.yes{color:' + TEAL + '}#volunteering td .w239a.no{color:' + FLAG + '}#volunteering td .w239a.ask{color:' + MUTED + ';font-weight:500}' +
+    '#modalBox .w239list{max-height:260px;overflow:auto;border:1px solid rgba(16,63,57,.15);border-radius:10px;padding:8px 10px;margin:8px 0;background:#FFFDF8}' +
+    '#modalBox .w239list label{display:flex;gap:8px;align-items:center;font-size:13px;margin:3px 0}' +
+    '#modalBox .w239list label input{width:15px;height:15px}' +
+    '#modalBox .w239list label em{font-style:normal;color:' + MUTED + ';font-size:12px}' +
+    '#modalBox .w239pre{background:#F4EFE3;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.45;margin:8px 0}' +
+    '#modalBox .w239note{font-size:12.5px;color:' + MUTED + ';margin:6px 0 0}';
+  document.head.appendChild(css);
+
+  /* ---------- who may text (leaders, HR, admins); the database decides anyway ---------- */
+  function can() {
+    if (W.can && Date.now() - W.canAt < 60000) return Promise.resolve(W.can);
+    var out = { text: false };
+    return Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr')]).then(function (r) {
+      out.text = !!(r[0] && r[0].data === true) || !!(r[1] && r[1].data === true) || !!(r[2] && r[2].data === true);
+      W.can = out; W.canAt = Date.now(); return out;
+    }).catch(function () { W.can = out; W.canAt = Date.now(); return out; });
+  }
+  /* ---------- the latest Still in? check per person ---------- */
+  function pool(force) {
+    if (!force && W.poolRows && Date.now() - W.poolAt < 30000) return Promise.resolve(W.poolRows);
+    if (W.poolBusy) return W.poolBusy;
+    W.poolBusy = db.rpc('wa239_pool_list').then(function (r) {
+      var rows = (r && Array.isArray(r.data)) ? r.data : [];
+      var by = {}; rows.forEach(function (x) { by[String(x.person_id)] = x; });
+      W.poolRows = by; W.poolAt = Date.now(); W.poolBusy = null; return by;
+    }).catch(function () { W.poolBusy = null; W.poolRows = W.poolRows || {}; W.poolAt = Date.now(); return W.poolRows; });
+    return W.poolBusy;
+  }
+  function poolOf(p) { return (W.poolRows && W.poolRows[String(p.id)]) || null; }
+  function poolWord(x) {
+    if (!x) return '';
+    if (x.answer === 'yes') return '<span class="w239a yes" title="Said yes on ' + E(dayWords(x.answered_at)) + (x.via === 'reply' ? ' (by reply)' : '') + (x.note ? ': ' + E(x.note) : '') + '">Yes \u00b7 ' + E(dayWords(x.answered_at)) + (x.note ? ' *' : '') + '</span>';
+    if (x.answer === 'no') return '<span class="w239a no" title="Said no on ' + E(dayWords(x.answered_at)) + (x.via === 'reply' ? ' (by reply)' : '') + (x.note ? ': ' + E(x.note) : '') + '">No \u00b7 ' + E(dayWords(x.answered_at)) + (x.note ? ' *' : '') + '</span>';
+    var st = String(x.status || 'queued');
+    var how = st === 'sent' ? 'no answer yet' : st === 'queued' ? 'text waiting to go' : st === 'dry_run' ? 'dry run' : st === 'skipped' ? 'not sent (' + (x.error || 'skipped') + ')' : st === 'failed' ? 'the text failed' : st;
+    return '<span class="w239a ask" title="Asked by ' + E(x.asked_by || 'the Hub') + ' on ' + E(dayWords(x.asked_at)) + ' as ' + E(ONE[x.role] || x.role) + '">Asked ' + E(dayWords(x.asked_at)) + ', ' + E(how) + '</span>';
+  }
+  function poolState(x) { if (!x) return ''; if (x.answer === 'yes') return 'yes'; if (x.answer === 'no') return 'no'; return 'asked'; }
+
+  /* ---------- the list ---------- */
+  function shown() {
+    var q = lower(WA26_Q), qd = q.replace(/\D/g, '');
+    return WA_VOL_PEOPLE.filter(function (p) {
+      if (WA_VOL_ROLEFILTER && !roleSet(p)[roleOf(WA_VOL_ROLEFILTER)]) return false;
+      if (W.tag && !tagSet(p)[W.tag]) return false;
+      if (W.pool && poolState(poolOf(p)) !== W.pool) return false;
+      return true;
+    });
+  }
+  function render() {
+    var roleCounts = {}, tagCounts = {}, poolCounts = { yes: 0, no: 0, asked: 0 };
+    WA_VOL_PEOPLE.forEach(function (p) {
+      Object.keys(roleSet(p)).forEach(function (r) { roleCounts[r] = (roleCounts[r] || 0) + 1; });
+      Object.keys(tagSet(p)).forEach(function (t) { tagCounts[t] = (tagCounts[t] || 0) + 1; });
+      var s = poolState(poolOf(p)); if (s) poolCounts[s]++;
+    });
+    if (WA_VOL_ROLEFILTER) WA_VOL_ROLEFILTER = roleOf(WA_VOL_ROLEFILTER);
+    var chips = '<span class="fchip' + (WA_VOL_ROLEFILTER ? '' : ' on') + '" data-vlrole="">Everyone (' + WA_VOL_PEOPLE.length + ')</span>'
+      + ROLE_ORDER.filter(function (r) { return roleCounts[r] || WA_VOL_ROLEFILTER === r; }).map(function (r) {
+        return '<span class="fchip' + (WA_VOL_ROLEFILTER === r ? ' on' : '') + '" data-vlrole="' + E(r) + '" title="' + E(label(r)) + ': in their roles or their tags">' + E(label(r)) + ' (' + (roleCounts[r] || 0) + ')</span>';
+      }).join('');
+    var tags = Object.keys(tagCounts).sort(function (a, b) { return a.localeCompare(b); });
+    var tagSel = '<select id="w239tag" aria-label="Tag"><option value="">Any tag</option>' + tags.map(function (t) { return '<option value="' + E(t) + '"' + (W.tag === t ? ' selected' : '') + '>' + E(t) + ' (' + tagCounts[t] + ')</option>'; }).join('') + '</select>';
+    var list = shown();
+    var showAddr = WA_VOL_ROLEFILTER === 'cook', showCar = WA_VOL_ROLEFILTER === 'driver';
+    var st = staff(), canText = st && W.can && W.can.text;
+    var hasPool = poolCounts.yes + poolCounts.no + poolCounts.asked > 0;
+    var flagged = WA_VOL_PEOPLE.filter(function (p) { return p.needs_review; }).length;
+    var html = '<input class="w26search" id="w26q" type="search" placeholder="Search name, email or phone" value="' + E(WA26_Q) + '" />';
+    html += '<div class="w239bar"><div class="filters">' + chips + '</div>' + tagSel + '</div>';
+    if (st && (hasPool || canText)) {
+      html += '<div class="w239pool">' + (hasPool ? '<span style="font-size:12px;color:' + MUTED + ';font-weight:600">Still in?</span>'
+        + [['yes', 'Said yes'], ['no', 'Said no'], ['asked', 'No answer yet']].filter(function (x) { return poolCounts[x[0]] || W.pool === x[0]; }).map(function (x) {
+          return '<span class="fchip ' + x[0] + (W.pool === x[0] ? ' on' : '') + '" data-w239pool="' + x[0] + '">' + x[1] + ' (' + poolCounts[x[0]] + ')</span>';
+        }).join('') : '')
+        + (canText ? '<button type="button" data-w239ask="1"' + (WA_VOL_ROLEFILTER ? '' : ' title="Pick a role chip first"') + '>Text: still in?</button>' : '') + '</div>';
+    }
+    if (flagged) html += '<div class="vl-flag" style="margin:0 0 14px">' + flagged + ' records need a human eye before any bulk message goes out. They are marked below; open one to clear its flag.</div>';
+    html += '<div class="vl-tblwrap"><table class="wa-tbl"><thead><tr><th>Name</th><th>Roles and tags</th><th>Phone</th><th>Email</th>'
+      + (showAddr ? '<th>Address</th>' : '') + (showCar ? '<th>Car</th>' : '')
+      + (st && hasPool ? '<th>Still in?</th>' : '') + '<th>Notes</th>' + (st ? '<th></th>' : '') + '</tr></thead><tbody>'
+      + list.map(function (p) {
+        var rs = Object.keys(roleSet(p)).sort(function (a, b) { return ROLE_ORDER.indexOf(a) - ROLE_ORDER.indexOf(b); });
+        var ts = Object.keys(tagSet(p)).sort();
+        return '<tr data-p26="' + p.id + '" data-search="' + E(wa26PersonRowData(p)) + '"><td><b>' + E(p.full_name || '') + '</b>'
+          + (p.quo_contact_id ? ' <span class="vl-bub" title="Linked to Quo contacts">Quo</span>' : '')
+          + (p.needs_review ? '<br /><span class="vl-bub warn">' + E(p.review_note || 'needs review') + '</span>' : '') + '</td>'
+          + '<td>' + rs.map(function (r) { return '<span class="vl-bub" style="background:' + GREEN + ';color:#FFFAF2">' + E(label(r)) + '</span>'; }).join('') + ts.map(function (t) { return '<span class="vl-bub">' + E(t) + '</span>'; }).join('') + '</td>'
+          + '<td>' + E((p.phones || []).join(', ')) + '</td>'
+          + '<td>' + E((p.emails || []).join(', ')) + '</td>'
+          + (showAddr ? '<td style="max-width:220px">' + E(p.address || '') + '</td>' : '')
+          + (showCar ? '<td>' + E(p.car_type || '') + '</td>' : '')
+          + (st && hasPool ? '<td>' + poolWord(poolOf(p)) + '</td>' : '')
+          + '<td style="max-width:220px">' + E((p.notes || '').slice(0, 120)) + '</td>'
+          + (st ? '<td><a class="ed" data-w26e="' + p.id + '" style="color:#103F39;cursor:pointer;text-decoration:underline;font-size:12px">edit</a></td>' : '')
+          + '</tr>';
+      }).join('') + '</tbody></table></div>';
+    if (!list.length) html += '<p class="read" style="margin:10px 0 0">Nobody matches these filters.</p>';
+    waVolPaint(html);
+    var q = document.getElementById('w26q');
+    if (q) q.addEventListener('input', function () { WA26_Q = this.value; wa26ApplySearch(); });
+    var ts = document.getElementById('w239tag');
+    if (ts) ts.addEventListener('change', function () { W.tag = this.value; render(); });
+    wa26ApplySearch();
+  }
+  if (typeof waVolRenderPeople === 'function') {
+    waVolRenderPeople = function () {
+      var had = !!(W.can && W.poolRows), stale = had && Date.now() - W.poolAt > 30000;
+      render();
+      if (!staff()) return;
+      if (!had) Promise.all([can(), pool(false)]).then(function () { if (WA_VOL_VIEW === 'people') render(); });
+      else if (stale) pool(true).then(function () { if (WA_VOL_VIEW === 'people') render(); });
+    };
+  }
+
+  /* ---------- Text: still in? ---------- */
+  function sample(role) {
+    var r = ONE[role] || label(role).toLowerCase(), art = /^[aeiou]/.test(r) ? 'an ' : 'a ';
+    return 'Hi <first name>, it\u2019s Welfare Avenue! A while back you signed up to volunteer with us as ' + art + r + '. Are you still up for it? Tell us here, one tap: hub.welfareavenue.com/c/<their link> (or reply YES or NO). Reply STOP to stop texts.';
+  }
+  function askModal() {
+    if (!WA_VOL_ROLEFILTER) { toastS('Pick a role chip first (photographers, servers...), then Text: still in?'); return; }
+    var role = roleOf(WA_VOL_ROLEFILTER);
+    var people = shown().filter(function (p) {
+      var tr = document.querySelector('#volunteering tr[data-p26="' + p.id + '"]');
+      return (!tr || tr.style.display !== 'none') && digits(p);
+    });
+    var noPhone = shown().length - people.length;
+    if (!people.length) { toastS('Nobody shown has a phone number.'); return; }
+    var recent = people.filter(function (p) { var x = poolOf(p); return x && x.asked_at && Date.now() - new Date(x.asked_at).getTime() < 14 * 86400000; });
+    openModal('<h3 style="margin:0 0 6px">Text: still in?</h3>'
+      + '<p class="read" style="font-size:13px;margin:0 0 8px">One text each to the ' + E(label(role).toLowerCase()) + ' shown, asking whether they are still up for volunteering. They answer with one tap on their page, or by replying YES or NO; the answers show in the Still in? column.</p>'
+      + '<div class="w239pre">' + E(sample(role)) + '</div>'
+      + '<p class="w239note">French contacts get the French text. Sent now between 9 and 19 (Toronto), otherwise at 9 tomorrow. Nobody who texted STOP, and nobody asked in the last 14 days' + (recent.length ? ' (' + recent.length + ' here)' : '') + '. Texts follow the sms_mode switch (test mode: the test phones only).</p>'
+      + '<div class="w239list" id="w239list">' + people.map(function (p) {
+        var x = poolOf(p), st = poolState(x);
+        return '<label><input type="checkbox" data-w239p="' + p.id + '"' + (st === 'no' ? '' : ' checked') + '> ' + E(p.full_name || '') + ' <em>' + E(digits(p).replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3')) + (st === 'yes' ? ' \u00b7 said yes ' + E(dayWords(x.answered_at)) : st === 'no' ? ' \u00b7 said no ' + E(dayWords(x.answered_at)) + ' (unticked)' : st === 'asked' ? ' \u00b7 asked ' + E(dayWords(x.asked_at)) : '') + '</em></label>';
+      }).join('') + '</div>'
+      + (noPhone ? '<p class="w239note">' + noPhone + ' of the people shown have no phone number and get nothing.</p>' : '')
+      + '<div class="m-actions"><button class="btn" id="w239send">Send to <span id="w239n">' + people.filter(function (p) { return poolState(poolOf(p)) !== 'no'; }).length + '</span></button> <button class="btn ghost" id="w239cancel">Cancel</button></div>');
+    var box = document.getElementById('w239list');
+    if (box) box.addEventListener('change', function () { var n = box.querySelectorAll('input:checked').length; var el = document.getElementById('w239n'); if (el) el.textContent = String(n); });
+  }
+  function send() {
+    if (W.busy) return;
+    var role = roleOf(WA_VOL_ROLEFILTER);
+    var ids = [].map.call(document.querySelectorAll('#w239list input:checked'), function (i) { return Number(i.getAttribute('data-w239p')); }).filter(function (n) { return isFinite(n) && n > 0; });
+    if (!ids.length) { toastS('Nobody is ticked.'); return; }
+    var b = document.getElementById('w239send'); if (b) { b.disabled = true; b.textContent = 'Sending\u2026'; }
+    W.busy = true;
+    db.rpc('wa239_pool_send', { p_role: role, p_people: ids }).then(function (r) {
+      W.busy = false;
+      if (r && r.error) { toastS(r.error.message || 'That did not go through.'); if (b) { b.disabled = false; b.textContent = 'Send'; } return; }
+      var d = (r && r.data) || {};
+      var parts = [];
+      if (d.reason) parts.push(d.reason + ' (sms_mode ' + (d.mode || 'off') + ')');
+      else parts.push((d.queued || 0) + ' text' + (d.queued === 1 ? '' : 's') + (d.window_open ? ' on their way' : ' queued for 9 am'));
+      if (d.asked_recently) parts.push(d.asked_recently + ' asked in the last 14 days');
+      if (d.opted_out) parts.push(d.opted_out + ' opted out');
+      if (d.no_phone) parts.push(d.no_phone + ' without a phone');
+      if (d.held_by_test_mode) parts.push(d.held_by_test_mode + ' held by test mode');
+      toastS(parts.join(', ') + '.');
+      try { closeModal(); } catch (e) { /* fine */ }
+      pool(true).then(function () { if (WA_VOL_VIEW === 'people') render(); });
+    }).catch(function (e) { W.busy = false; toastS('That did not go through: ' + ((e && e.message) || 'offline')); if (b) { b.disabled = false; b.textContent = 'Send'; } });
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var ask = t.closest('#volunteering [data-w239ask]'); if (ask) { e.preventDefault(); askModal(); return; }
+    var pf = t.closest('#volunteering [data-w239pool]');
+    if (pf) { e.preventDefault(); var v = pf.getAttribute('data-w239pool'); W.pool = W.pool === v ? '' : v; render(); return; }
+    if (t.closest('#w239send')) { e.preventDefault(); send(); return; }
+    if (t.closest('#w239cancel')) { e.preventDefault(); try { closeModal(); } catch (x) { /* fine */ } return; }
+  }, true);
+})();

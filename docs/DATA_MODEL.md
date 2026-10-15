@@ -2029,6 +2029,10 @@ wave230: where a link page visit comes from: /links/<slug>?s=<code> (each platfo
 
 wave230: one row per link page view or click. No cookie and no address: visitor is a keyed hash of the network and the browser that changes every month (unique and returning visitors within the month); ipm is the same keyed network hash the CRM forms and the donation page keep, so a sign-up or a gift soon after a click is credited to the page, the link and the source. Written by the linkpage and go functions only.
 
+### `volunteer_pool_checks`
+
+wave239: one "Still in?" text to a past volunteer (the token is the /c/ link; answer yes or no from the page or a reply).
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
 

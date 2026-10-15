@@ -113,7 +113,7 @@ var WA_VOL_PHASES = [
   ['anytime', 'Anytime']
 ];
 var WA_VOL_ROLELABEL = {
-  server: 'Servers', cook: 'Cooks', driver: 'Drivers', photographer: 'Photographers',
+  server: 'Servers', cook: 'Cooks', driver: 'Drivers', photographer: 'Photographers', videographer: 'Videographers',
   dishwasher: 'Dishwashers', team_leader: 'Team leaders', community_debrief: 'Community lead',
   community_talker: 'Community lead'
 };

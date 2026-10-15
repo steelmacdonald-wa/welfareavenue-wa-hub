@@ -40,7 +40,7 @@
   var ST = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
   var FORMATS = { home_cooked: 'Home-cooked', community_kitchen: 'Community kitchen' };
   var MODES = { off: 'Texts off', test: 'Test mode', live: 'Texts on' };
-  var ROLES = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief', 'volunteer'];
+  var ROLES = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'videographer', 'community_debrief', 'volunteer'];   /* wave239: videographer */
   var S = { can: null, canAt: 0, mode: null, modeAt: 0, cfg: {}, msgs: {}, msgsAt: {}, sig: {}, poll: null, busy: false,
             next: null, nextAt: 0, guides: null, photos: null, set: { role: 'cook' }, dec: null };
 
@@ -53,7 +53,7 @@
   function fmtDay(iso, long) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', long ? { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' } : { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
   function fmtWhen(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return String(ts).slice(0, 16); } }
   function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
-  var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community lead', community_debrief: 'Community lead', volunteer: 'Volunteer' };
+  var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', videographer: 'Videographer', community_talker: 'Community lead', community_debrief: 'Community lead', volunteer: 'Volunteer' };
   function one(r) { return ONE[r] || String(r || 'volunteer').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); }); }
   function roleLabel(r) { try { return typeof waVolRoleLabel === 'function' ? waVolRoleLabel(r) : r; } catch (e) { return r; } }
   function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }

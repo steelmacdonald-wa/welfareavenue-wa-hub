@@ -1,4 +1,8 @@
-// Welfare Avenue: hub-push (v2, 09/10/26: wave225 adds the studio event; v1 07/10/26, wave219)
+// Welfare Avenue: hub-push (v3, 15/10/26: waves 239 and 242; v2 09/10/26: wave225 adds the studio event; v1 07/10/26, wave219)
+// v3: volunteer_applied (a photographer or videographer applied; the database names the SOP's photographer owner, to_email or
+// to_name) and task_due (wa242_due_reminders: a person's tasks due today, tomorrow or overdue, once a day). The notification
+// centre (wave242) keeps each kind's Hub and Slack switch in wa_notify_prefs.prefs.kinds[kind] = {hub, slack}: hub false
+// means no Hub notification for that kind; a kind with no entry follows the old rules (channel, the disabled list).
 // Hub notifications on computers and phones (Web Push). Steel (07/10/26): "if it can send in-app notifications on updates,
 // I would like to do that if it's possible, especially browser use for those that are using the computer". His choices:
 // mentions and assigned work, and announcements; each person chooses Hub notifications, Slack or both (both by default,
@@ -207,12 +211,20 @@ async function ownersOf(owner: string | null): Promise<Member[]> {
 const PREF_KEY: Record<string, string> = { task_assigned: 'task_reassigned', studio: 'content_studio' };
 async function wants(email: string, event: string): Promise<string | null> {
   const { data } = await svc.from('wa_notify_prefs').select('disabled, prefs').eq('email', email.toLowerCase()).maybeSingle();
-  const channel = String((data?.prefs as Record<string, unknown> | null)?.channel || 'both');
+  const prefs = (data?.prefs || {}) as Record<string, unknown>;
+  const key = PREF_KEY[event] || event;
+  /* v3 (wave242): an explicit choice for this kind wins */
+  const kinds = (prefs.kinds && typeof prefs.kinds === 'object' ? prefs.kinds : {}) as Record<string, { hub?: boolean }>;
+  const k = kinds[key];
+  if (k && typeof k.hub === 'boolean') return k.hub ? null : 'Hub off for this kind';
+  const channel = String(prefs.channel || 'both');
   if (channel === 'slack') return 'Slack only';
   const off = (Array.isArray(data?.disabled) ? data?.disabled : []) as string[];
-  if (off.indexOf(PREF_KEY[event] || event) >= 0) return 'switched off';
+  if (off.indexOf(key) >= 0) return 'switched off';
   return null;
 }
+const ROLE_WORDS: Record<string, string> = { team_leader: 'team leader', cook: 'cook', driver: 'driver', server: 'server', dishwasher: 'dishwasher',
+  photographer: 'photographer', videographer: 'videographer', community_debrief: 'community lead', community_talker: 'community lead', volunteer: 'volunteer' };
 
 /* one person: their choice, their devices, the log line */
 async function toPerson(event: string, email: string, msg: Msg, dry: boolean, plan: unknown[]): Promise<string> {
@@ -368,6 +380,36 @@ async function handleEvent(event: string, body: Record<string, unknown>, dry: bo
     const to = (Array.isArray(body.to) ? body.to : []).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 40);
     const msg: Msg = { title: clip(String(body.title || 'Content Studio'), 80), body: clip(plain(String(body.body || '')), 180), url: String(body.url || '/#studio').startsWith('/') ? String(body.url || '/#studio') : '/#studio', tag: clip(String(body.tag || 'studio'), 60) };
     for (const e of Array.from(new Set(to))) outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
+    return done();
+  }
+
+  if (event === 'volunteer_applied') {
+    /* v3 (wave239): a photographer or videographer applied; the owner of the SOP's Volunteer Photographers step */
+    const { data: a } = await svc.from('volunteer_applications').select('id, name, roles, source').eq('id', Number(body.application_id)).maybeSingle();
+    if (!a) return { error: 'application not found' };
+    let e = String(body.to_email || '').toLowerCase();
+    if (!e) { const m = await byName(String(body.to_name || '')); e = m ? m.email : ''; }
+    if (!e) { outs.push('no owner'); return done(); }
+    const roles = ((a.roles || []) as string[]).filter(r => r === 'photographer' || r === 'videographer').map(r => ROLE_WORDS[r] || r);
+    const msg: Msg = { title: 'A ' + (roles.join(' and ') || 'photographer') + ' applied', body: clip(String(a.name || 'A volunteer') + (a.source === 'website' ? ' · on the website' : a.source ? ' · ' + String(a.source) : '') + ' · yours to welcome (the SOP\u2019s photographer step)', 160), url: '/#volunteering/applicants', tag: 'vol-app-' + a.id };
+    outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
+    return done();
+  }
+
+  if (event === 'task_due') {
+    /* v3 (wave242): the day's reminder, composed by wa242_due_reminders */
+    const e = String(body.email || '').toLowerCase();
+    if (!e) return { error: 'email required' };
+    const n = (k: string) => (Array.isArray(body[k]) ? (body[k] as unknown[]).length : 0);
+    const today = n('due_today'), over = n('overdue'), tomorrow = n('due_tomorrow');
+    if (!today && !over && !tomorrow) { outs.push('nothing due'); return done(); }
+    const first = ((Array.isArray(body.due_today) && body.due_today[0]) || (Array.isArray(body.overdue) && body.overdue[0]) || (Array.isArray(body.due_tomorrow) && body.due_tomorrow[0])) as { title?: string } | undefined;
+    const bits: string[] = [];
+    if (today) bits.push(today + ' due today');
+    if (over) bits.push(over + ' overdue');
+    if (tomorrow) bits.push(tomorrow + ' due tomorrow');
+    const msg: Msg = { title: 'Your tasks ' + String(body.day || 'today'), body: clip(bits.join(', ') + (first && first.title ? ' · ' + String(first.title) : ''), 160), url: '/#mypage', tag: 'task-due-' + String(body.day || '') };
+    outs.push(e + ': ' + await toPerson(event, e, msg, dry, plan));
     return done();
   }
 

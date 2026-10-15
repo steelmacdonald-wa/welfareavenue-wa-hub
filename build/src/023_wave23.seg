@@ -29,7 +29,7 @@ function waTxtAudiences(ev) {
   var a = [];
   if (ev) a.push(['roster', 'This event roster']);
   a.push(['cook', 'All cooks'], ['driver', 'All drivers'], ['server', 'All servers'],
-    ['dishwasher', 'All dishwashers'], ['photographer', 'All photographers'],
+    ['dishwasher', 'All dishwashers'], ['photographer', 'All photographers'], ['videographer', 'All videographers'],
     ['all', 'Everyone with a phone']);
   return a;
 }

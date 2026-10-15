@@ -265,6 +265,8 @@
 232_wave232
 # 234_wave234: volunteer spots on each serving card (a bar of confirmed and waiting over the serving's spots: role targets, its own spot counts, a partner's share) and one Community lead (Steel, 14/10/26: Community welcome folded into Community lead in 020, 119, 119b, 152, 171, 191, 209, 218; data wa234_community_lead). wave235 in the same release: Plan the roster suggests past community leads first, then servers with 2 or more servings (119b), the roster card says whether the lead read the briefing (parts171); data wa235_community_lead_briefing; the confirm page build/c.
 234_wave234
+# 239_wave239: the volunteer roles set right (Steel, 14/10/26 marketing meeting): the Volunteers list's chips are the roles in a fixed order (plus a videographer role everywhere: 020, 023, 119, 119b, 152, 171, 191, 209, 218, 234), the other tags behind a select; "Text: still in?" sends one text a person by role (wa239_pool_send, kind reconfirm, the /c/ page's Still in? screen, YES/NO replies) and the answers show and filter; Applicants received's role filter lists every role with counts and takes the website's volunteer forms (crm_form_apply step 7c). Data: build/data/wa239_roles_pool.sql.
+239_wave239
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

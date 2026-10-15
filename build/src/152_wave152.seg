@@ -42,10 +42,10 @@
   /* the kinds someone can give a contact by hand (staff and alumni come from the roster, volunteers from MTL volunteering) */
   var KIND_HAND = ['donor', 'partner', 'supporter', 'board'];
   var ROLES = {
-    team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer',
+    team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', videographer: 'Videographer',
     community_talker: 'Community lead', community_debrief: 'Community lead'
   };
-  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_debrief'];
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'videographer', 'community_debrief'];   /* wave239: videographer */
   var SOURCES = {
     django_website_export: ['Old website sign-ups', 'Everyone who signed up to volunteer on welfareavenue.com before July 2026 (the Django site).'],
     hub_roster: ['Hub roster', 'Staff and alumni from the Hub roster.'],

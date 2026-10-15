@@ -15,7 +15,7 @@
   async function myEmail() { try { var u = await db.auth.getUser(); return (u && u.data && u.data.user && u.data.user.email) || null; } catch (e) { return null; } }
   function guideOf(role) { return (S.guides || []).filter(function (g) { return g.role === role; })[0] || null; }
   /* wave172: the survey after the serving (the Volunteer Survey from the master SOP) */
-  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher', 'volunteer'];
+  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'videographer', 'team_leader', 'community_debrief', 'dishwasher', 'volunteer'];
   function surveyHtml(cn) {
     var all = String(S.cfg.sms_survey_roles || '*').trim() === '*';
     var on = all ? SV_ROLES.slice() : String(S.cfg.sms_survey_roles || '').split(',').map(function (x) { return x.trim(); });
