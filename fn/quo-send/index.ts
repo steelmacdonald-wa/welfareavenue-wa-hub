@@ -1,4 +1,9 @@
-// Welfare Avenue: quo-send (v6, wave191h, 01/10/26)
+// Welfare Avenue: quo-send (v7, wave258, 15/10/26)
+// v7 (wave258): the people app_config text_staff names (Ibrahim, Mary, Terry) may text too: authorize asks wa256_can_text
+// (leaders, HR, admins, text_staff). 'delivery' (the trigger secret, or anyone who may text): what Quo says happened to
+// the texts the Hub sent in the last two days (GET /v1/messages/{id}: queued, sent, delivered, undelivered, failed), at
+// most 60 a call, saved in quo_messages.delivery and delivery_at; {event_id} for one serving's texts (the Text log's
+// Check delivery). wa171_sms_tick calls it every quarter hour while texts of the last two days have no final status.
 // v6 (wave191h): 'sync_threads' copies the texts the team typed in the Quo app (to people who texted the ops line in the
 // last 21 days) into quo_messages (kind manual, sent_by 'Quo app', status sent; never sent again), and marks their texts
 // answered, so the Hub's conversations and its "waiting for an answer" count match what happened in Quo. Cron wa-quo-threads.
@@ -12,7 +17,8 @@
 // Purpose: every text the Hub sends from the ops line (438) 808-7754 through Quo (OpenPhone), logged in quo_messages.
 // Trigger: staff in the Hub (Text volunteers, Send me a test) with their sign-in; the Hub itself (cron wa-sms-tick,
 //   wa171_text_to_confirm, quo-events) with the trigger secret.
-// Auth: the trigger secret, or a signed-in leader, HR person or admin (audit 17: no longer any staff address).
+// Auth: the trigger secret, or a signed-in leader, HR person or admin (audit 17: no longer any staff address), or (v7) a
+//   person named in app_config text_staff (wa256_can_text).
 // Actions:
 //   (none) / 'send'  the Text volunteers window: {message, person_ids|phones, event_id?, event_date?, role?, dry_run}
 //                    {{first_name}} {{event_date}} {{confirm_link}} (the personal link, now hub.welfareavenue.com/c/<token>).
@@ -75,9 +81,9 @@ async function authorize(req: Request): Promise<Who> {
     const { data } = await asUser.auth.getUser();
     const email = (data?.user?.email || '').toLowerCase();
     if (!email) return { ok: false, who: '', system: false, admin: false };
-    const [a, l, h] = await Promise.all([asUser.rpc('is_wa_admin'), asUser.rpc('is_wa_leader'), asUser.rpc('wa_is_hr')]);
+    const [a, l, h, t] = await Promise.all([asUser.rpc('is_wa_admin'), asUser.rpc('is_wa_leader'), asUser.rpc('wa_is_hr'), asUser.rpc('wa256_can_text')]);
     const admin = a.data === true;
-    if (admin || l.data === true || h.data === true) return { ok: true, who: email, system: false, admin };
+    if (admin || l.data === true || h.data === true || t.data === true) return { ok: true, who: email, system: false, admin };   /* v7: text_staff too */
   }
   return { ok: false, who: '', system: false, admin: false };
 }
@@ -236,6 +242,33 @@ async function thread(phone: string): Promise<Record<string, unknown>> {
     at: m.createdAt || null, status: m.status || null, by: m.userId || null,
   }));
   return { phone: d, messages };
+}
+
+/* ---------- v7: what Quo says happened to the texts ---------- */
+const FINAL = ['delivered', 'undelivered', 'failed', 'unknown'];
+async function delivery(eventId: number | null): Promise<Record<string, unknown>> {
+  const since = new Date(Date.now() - (eventId ? 30 : 2) * 86400000).toISOString();
+  let q = svc.from('quo_messages').select('id, quo_id, delivery').eq('direction', 'out').eq('status', 'sent').not('quo_id', 'is', null)
+    .or('delivery.is.null,delivery.in.(queued,sent)').gte('sent_at', since).order('sent_at', { ascending: true }).limit(eventId ? 200 : 60);
+  if (eventId) q = q.eq('event_id', eventId);
+  const { data: rows } = await q;
+  const list = (rows || []).filter((r: any) => FINAL.indexOf(String(r.delivery || '')) < 0).slice(0, 60);
+  if (!list.length) return { checked: 0 };
+  const key = await getSecret('QUO_API_KEY');
+  const counts: Record<string, number> = {};
+  let checked = 0, limited = false;
+  for (const r of list) {
+    let res = await fetch(OP + '/messages/' + encodeURIComponent(String(r.quo_id)), { headers: { 'Authorization': key } });
+    if (res.status === 429) { await new Promise(x => setTimeout(x, 2000)); res = await fetch(OP + '/messages/' + encodeURIComponent(String(r.quo_id)), { headers: { 'Authorization': key } }); }
+    if (res.status === 429) { limited = true; break; }
+    const b: any = await res.json().catch(() => ({}));
+    const st = res.ok ? String((b && b.data && b.data.status) || '').toLowerCase() : '';
+    await svc.from('quo_messages').update({ delivery: st || (res.status === 404 ? 'unknown' : null), delivery_at: new Date().toISOString() }).eq('id', r.id);
+    if (st) counts[st] = (counts[st] || 0) + 1;
+    checked++;
+    await new Promise(x => setTimeout(x, 150));
+  }
+  return { checked, counts, rate_limited: limited };
 }
 
 /* ---------- the Quo webhook ---------- */
@@ -416,7 +449,7 @@ async function manual(body: any, auth: Who): Promise<Response> {
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const auth = await authorize(req);
-  if (!auth.ok) return json({ error: 'Only leaders, HR and admins can text volunteers.' }, 401);
+  if (!auth.ok) return json({ error: 'Only leaders, HR, admins and the volunteer team can text volunteers.' }, 401);
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || 'send');
   try {
@@ -435,6 +468,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'webhook_status') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await webhookStatus()); }
     if (action === 'thread') return json(await thread(String(body.phone || '')));
     if (action === 'sync_threads') { if (!auth.system) return json({ error: 'sync_threads is for the Hub itself' }, 403); return json(await syncThreads()); }
+    if (action === 'delivery') { const ev = Number(body.event_id); return json(await delivery(Number.isInteger(ev) && ev > 0 ? ev : null)); }   /* v7 */
     if (action === 'send') return await manual(body, auth);
     return json({ error: 'unknown action' }, 400);
   } catch (e) {

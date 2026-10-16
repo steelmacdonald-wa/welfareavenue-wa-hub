@@ -106,12 +106,12 @@
       var cancelled = String(ev.status || '').indexOf('cancel') === 0;
       wrap.innerHTML = cancelled
         ? '<button class="btn mini" id="w106rest">Restore this event</button>'
-        : '<button class="btn ghost mini" id="w106can">Cancel this event</button>';
+        : '<button class="btn ghost mini" id="w106can">Cancel this serving</button>';
       hero.appendChild(wrap);
       var can = document.getElementById('w106can');
       if (can) can.addEventListener('click', function () {
         openModal(
-          '<h3>Cancel this event?</h3>' +
+          '<h3>Cancel this serving?</h3>' +
           '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ('This serving' + (ev.code ? ' (' + ev.code + ')' : ''))) + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
           '<label class="w101lbl">Reason (kept in the event notes)</label>' +
           '<input type="text" id="w106why" maxlength="200" style="width:100%;box-sizing:border-box" />' +

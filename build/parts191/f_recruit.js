@@ -42,7 +42,7 @@
   async function canText() {
     if (R.can && Date.now() - R.canAt < 60000) return R.can;
     var out = { text: false };
-    try { var r = await Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr')]); out.text = [0, 1, 2].some(function (i) { return r[i] && r[i].data === true; }); } catch (e) { /* the database decides anyway */ }
+    try { var r = await Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr'), db.rpc('wa256_can_text')]); out.text = [0, 1, 2, 3].some(function (i) { return r[i] && r[i].data === true; }); } catch (e) { /* the database decides anyway */ }
     R.can = out; R.canAt = Date.now(); return out;
   }
   /* the servings people can be invited to: upcoming, not cancelled, the next six */
@@ -256,7 +256,7 @@
     var tIn = 0, tMe = 0; msgs.forEach(function (m) { var t = new Date(m.at).getTime() || 0; if (m.dir === 'in') tIn = Math.max(tIn, t); else if (m.quo || m.kind === 'reply' || m.kind === 'manual') tMe = Math.max(tMe, t); });
     var waitLine = c && c.wait && can && !(tMe && tMe > tIn) ?'<div class="wl"><span><i class="dot"></i>' + (c.open > 1 ? c.open + ' texts wait' : 'Their text waits') + ' for an answer</span><button class="lnk" data-rdone>No reply needed</button></div>' : '';
     var foot = th.out ? '<div class="note warn">They texted STOP, so the Hub cannot text them. If they text START to the ops line, texts work again.</div>'
-      : !can ? '<div class="note">Only leaders, HR and admins can reply from the Hub. Quo has the same conversation on the ops line.</div>'
+      : !can ? '<div class="note">Only leaders, HR, admins and the volunteer team can reply from the Hub. Quo has the same conversation on the ops line.</div>'
       : waitLine + '<div class="rp"><textarea rows="2" placeholder="Reply from the ops line" data-rreplyta>' + E(R.drafts[th.ph] || '') + '</textarea><button class="w191btn" data-rreply>' + (open ? 'Send' : 'Send at 9 am') + '</button></div>' + (open ? '' : '<p class="gn">It is outside 9 am to 7 pm in Montreal: your reply waits and goes at 9 am.</p>');
     return head + placesHtml(th) + '<div class="msgs">' + body + '</div>' + foot;
   }
@@ -287,7 +287,7 @@
       var n = selList().length; var roles = ROLE_ORDER.filter(function (r) { return r !== 'community_talker'; });
       html = '<span class="cnt"><b>' + n + '</b> selected' + (n ? ' <button class="lnk" data-rgo="clear">Clear</button>' : '') + '</span>'
         + '<label class="ask">Ask them as <select data-raskrole><option value="">their usual role</option>' + roles.map(function (r) { return '<option value="' + r + '"' + (R.askRole === r ? ' selected' : '') + '>' + E(one(r).toLowerCase()) + '</option>'; }).join('') + '</select></label>'
-        + (R.can && !R.can.text ? '<span class="ask" title="Only leaders, HR and admins can text volunteers">Added without a text</span>' : '<label class="ask"><input type="checkbox" data-rtext' + (R.textThem ? ' checked' : '') + '> Text them</label>')
+        + (R.can && !R.can.text ? '<span class="ask" title="Only leaders, HR, admins and the volunteer team can text volunteers">Added without a text</span>' : '<label class="ask"><input type="checkbox" data-rtext' + (R.textThem ? ' checked' : '') + '> Text them</label>')
         + '<button class="w191btn gold" data-rgo="compose"' + (n && chosen().length ? '' : ' disabled') + '>' + (R.textThem ? 'Review the texts' : 'Review') + '</button>';
     } else if (R.step === 'compose') {
       var pv = R.preview || {}; var n2 = selList().length;

@@ -70,7 +70,7 @@ const shot = async (f, n) => { if (SHOTS) await f.page.screenshot({ path: SHOTS 
     await f.ev(INSTALL, DATA);
     await f.page.waitForTimeout(600);
     const rail = await f.ev(() => { const a = document.querySelector('#w153rail [data-w153go="#volunteering/phone"]'); return a ? { t: a.innerText, on: a.classList.contains('on') } : null; });
-    ok('the rail: People > Phone, current, with what waits (2 numbers)', rail && /Phone/.test(rail.t) && rail.on && /2/.test(rail.t), rail);
+    ok('the rail: People > Messages (wave259), current, with what waits (2 numbers)', rail && /Messages/.test(rail.t) && rail.on && /2/.test(rail.t), rail);
     const head = await f.ev(() => { const r = document.getElementById('w256'); return r ? { h: r.querySelector('.hd h2').textContent, p: r.querySelector('.hd p').textContent, st: r.querySelector('.st').innerText, acts: Array.from(r.querySelectorAll('.acts .w191btn')).map(b => b.textContent) } : null; });
     ok('the header: Phone, the ops line, texts send now, New text, Text a group, How calls work', head && head.h === 'Phone' && /\(438\) 808-7754/.test(head.p) && /Texts send now/.test(head.p) && head.acts.join('|') === 'New text|Text a group|How calls work', head);
     ok('the counts: 1 text waiting, 2 missed calls to return, calls checked minutes ago, Check now', head && /1\s*text waiting/.test(head.st) && /2\s*missed calls to return/.test(head.st) && /Calls checked 4 min ago/.test(head.st) && /Check now/.test(head.st), head && head.st);
@@ -148,7 +148,7 @@ const shot = async (f, n) => { if (SHOTS) await f.page.screenshot({ path: SHOTS 
     f = await fresh(browser, { who: 'admin', hash: '#volunteering/phone', fixture: fx191(), rpcs: Object.assign({}, RPCS, { wa256_phone_inbox: INBOX2, wa256_phone_calls: CALLS2, is_wa_admin: false, is_wa_leader: false, wa256_can_text: false }), width: 1366, wait: 5200 });
     await f.page.click('#w256 [data-w256conv="5145550103"]'); await f.page.waitForTimeout(700);
     const ro2 = await f.ev(() => ({ acts: Array.from(document.querySelectorAll('#w256 .acts .w191btn')).map(b => b.textContent), note: (document.querySelector('#w256thr .note') || {}).textContent || '', rp: !!document.querySelector('#w256thr [data-w256ta]'), sum: /summary/i.test(document.getElementById('w256thr').innerText), check: !!document.querySelector('#w256 [data-w256go="check"]'), call: !!document.querySelector('#w256thr .th a[data-w256call]') }));
-    ok('cannot text: How calls work only, the note, no reply box, no summary, no Check now, Call still there', ro2.acts.join('|') === 'How calls work' && /Only leaders, HR and admins/.test(ro2.note) && !ro2.rp && !ro2.sum && !ro2.check && ro2.call, ro2);
+    ok('cannot text: How calls work only, the note, no reply box, no summary, no Check now, Call still there', ro2.acts.join('|') === 'How calls work' && /Only leaders, HR, admins/.test(ro2.note) && !ro2.rp && !ro2.sum && !ro2.check && ro2.call, ro2);
     await f.close();
 
     /* a phone */

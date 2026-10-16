@@ -5,9 +5,9 @@
     if (S.can && Date.now() - S.canAt < 60000) return S.can;
     var out = { admin: false, text: false };
     try {
-      var r = await Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr')]);
+      var r = await Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr'), db.rpc('wa256_can_text')]);   /* wave258: and text_staff */
       out.admin = !!(r[0] && r[0].data === true);
-      out.text = out.admin || !!(r[1] && r[1].data === true) || !!(r[2] && r[2].data === true);
+      out.text = out.admin || !!(r[1] && r[1].data === true) || !!(r[2] && r[2].data === true) || !!(r[3] && r[3].data === true);
     } catch (e) { /* offline: nothing extra */ }
     S.can = out; S.canAt = Date.now();
     return out;

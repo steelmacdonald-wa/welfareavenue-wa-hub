@@ -225,7 +225,7 @@
       + '<label><input type="checkbox" data-w257t="text"' + (A.text ? ' checked' : '') + (can && pr.phone ? '' : ' disabled') + '> Text ' + (pr.phone ? E(pr.phone.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')) : '<i>(no phone number)</i>') + '</label>'
       + '<label><input type="checkbox" data-w257t="email"' + (A.email ? ' checked' : '') + (can && pr.email ? '' : ' disabled') + '> Email ' + (pr.email ? E(pr.email) : '<i>(no email)</i>') + '</label>'
       + (A.app ? '<label><input type="checkbox" data-w257t="welcome"' + (A.welcome ? ' checked' : '') + '> Mark the application Welcomed</label>' : '')
-      + (can ? '' : '<p class="m-sub">Only leaders, HR and admins can text or email volunteers: they will be placed without a message.</p>') + '</div>';
+      + (can ? '' : '<p class="m-sub">Only leaders, HR, admins and the volunteer team can text or email volunteers: they will be placed without a message.</p>') + '</div>';
     var pv = A.prev, prevBox = '';
     if (n) {
       prevBox = '<div class="w257pv">' + (pv === null ? '<p class="m-sub">Working out what they will get\u2026</p>' : pv && pv.error ? '<p class="m-sub warn">' + E(pv.error) + '</p>'

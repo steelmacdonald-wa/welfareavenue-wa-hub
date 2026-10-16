@@ -24,7 +24,12 @@
      wave174 (30/09/26): the role's own times (from the serving's start time; in the calendar entries too); the survey, tailored
      to the role, on this page an hour after the serving starts (volunteer_survey_submit); the itinerary by role from the day
      before (team leaders and drivers, servers and photographers, the Community lead; none for cooks). ?test=1 previews both.
-     wave175 (30/09/26): "Save to my account"; since 11/10/26 (website accounts on) it goes to welfareavenue.com/account/?link=<token> (or /fr/compte/). -->
+     wave175 (30/09/26): "Save to my account"; since 11/10/26 (website accounts on) it goes to welfareavenue.com/account/?link=<token> (or /fr/compte/).
+     wave258 (15/10/26): before Confirm, every role sees what it involves (the guide, the links) and its own questions, and ticks
+     "If I can't make it, I'll tell Welfare Avenue at least 4 days before (by <date>)" (and, when the role has a guide, "I've read what
+     my role involves"); a cook must choose a dish and pick-up or drop-off, a driver say their car, a Community lead read the
+     briefing (volunteer_confirm_submit refuses otherwise: reason rule or needs). Confirm saves the details first. Confirmed: the
+     rule and its date. A confirmed volunteer saying no under 4 days before is asked once to call us too; the team hears. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -302,6 +307,12 @@ a.rbig svg{width:20px;height:20px;flex:none}
     en: { loading: 'Loading…', ey: 'Your volunteer spot', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.', introInv: 'We’d love to have you on this serving. Can you make it? One tap tells the team.', confirmInv: 'Yes, I’ll be there',
       role: 'Role', date: 'Date', place: 'Where', format: 'Format', home: 'Home-cooked', kitchen: 'Community kitchen', shift: 'Kitchen shift',
       confirm: 'Confirm, I will be there', cant: 'I can’t make it', saving: 'Saving…',
+      /* wave258: the 4-day rule, the role's details before Confirm, a late cancellation */
+      ruleT: 'Before you confirm', ruleBox: 'If I can’t make it, I’ll tell Welfare Avenue at least {n} days before (by {d}). Every role counts on it.', guideBox: 'I’ve read what my role involves (above).',
+      ruleNeed: 'Please tick the box first: it’s how we keep every serving covered.', guideNeed: 'Please tick that you’ve read what your role involves.',
+      needRecipe: 'Please choose your dish first (above).', needPickup: 'Please choose pick-up or drop-off first (above).', needCar: 'Please tell us about your car first (above).', needBriefing: 'Please tick that you’ve read the briefing first (above).',
+      ruleOk: 'You agreed to tell us at least {n} days before (by {d}) if you can’t make it.', earlyRule: 'When you confirm, you’ll agree to tell us at least {n} days before (by {d}) if you can’t come.',
+      lateT: 'It’s less than {n} days before the serving', lateP: 'Please also call or text us right away at 438-808-7754 so we can find someone for your role.', lateYes: 'I still can’t come', lateBack: 'Keep my spot',
       okT: 'You’re confirmed!', okP: 'Thank you. The team can see it now.', okWhen: 'Confirmed',
       earlyT: 'You’re signed up!', earlyP: 'Thank you for volunteering with us. There is nothing to confirm yet:',
       earlyWhen: 'We will text you on {d} to confirm your spot.', earlyCal: 'Add it to your calendar so you don’t miss it.',
@@ -382,6 +393,11 @@ a.rbig svg{width:20px;height:20px;flex:none}
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
+      ruleT: 'Avant de confirmer', ruleBox: 'Si je ne peux pas venir, je préviens Welfare Avenue au moins {n} jours avant (d’ici le {d}). Chaque rôle compte.', guideBox: 'J’ai lu ce que mon rôle demande (ci-dessus).',
+      ruleNeed: 'Veuillez d’abord cocher la case : c’est ainsi que chaque service reste couvert.', guideNeed: 'Veuillez cocher que vous avez lu ce que votre rôle demande.',
+      needRecipe: 'Veuillez d’abord choisir votre plat (ci-dessus).', needPickup: 'Veuillez d’abord choisir le ramassage ou le dépôt (ci-dessus).', needCar: 'Veuillez d’abord nous parler de votre voiture (ci-dessus).', needBriefing: 'Veuillez d’abord cocher que vous avez lu les consignes (ci-dessus).',
+      ruleOk: 'Vous avez accepté de nous prévenir au moins {n} jours avant (d’ici le {d}) si vous ne pouvez pas venir.', earlyRule: 'En confirmant, vous accepterez de nous prévenir au moins {n} jours avant (d’ici le {d}) si vous ne pouvez pas venir.',
+      lateT: 'Le service est dans moins de {n} jours', lateP: 'Merci de nous appeler ou de nous écrire aussi tout de suite au 438-808-7754 pour que nous trouvions quelqu’un pour votre rôle.', lateYes: 'Je ne peux toujours pas venir', lateBack: 'Je garde ma place',
       okT: 'C’est confirmé!', okP: 'Merci. L’équipe le voit dès maintenant.', okWhen: 'Confirmé',
       earlyT: 'Vous êtes inscrit!', earlyP: 'Merci de faire du bénévolat avec nous. Rien à confirmer pour l’instant :',
       earlyWhen: 'Nous vous texterons le {d} pour confirmer votre place.', earlyCal: 'Ajoutez-le à votre agenda pour ne pas l’oublier.',
@@ -635,6 +651,55 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (role === 'photographer') { var s = r('share'); if (s) p.photos_share = s; }
     if (role === 'community_debrief') { var cb = document.getElementById('briefed'); if (cb) p.briefed = cb.checked; }
     return p;
+  }
+  /* wave258: before Confirm, the 4-day rule (every role), what the role involves, and the role's details */
+  function ruleWords(k) { var d = S.d || {}; return t(k).replace('{n}', d.cancel_days == null ? 4 : d.cancel_days).replace('{d}', d.cancel_by ? day(d.cancel_by) : ''); }
+  function hasGuide() {
+    var g = (S.d || {}).guide || {};
+    return !isLead() && !!((((S.lang === 'fr' ? g.expect_fr : g.expect_en) || []).length) || ((g.links || []).filter(function (l) { return safeUrl(l.url); }).length));
+  }
+  function ruleHtml() {
+    return '<div class="sec rule4" id="rule4box"><h3>' + E(t('ruleT')) + '</h3>'
+      + (hasGuide() ? '<label class="opt"><input type="checkbox" id="guide4"' + (S.guide4 ? ' checked' : '') + '><span>' + E(t('guideBox')) + '</span></label>' : '')
+      + '<label class="opt"><input type="checkbox" id="rule4"' + (S.rule4 ? ' checked' : '') + '><span>' + E(ruleWords('ruleBox')) + '</span></label></div>';
+  }
+  function missing() {
+    var d = S.d, x = d.details || {}, f = S.form || {}, role = String(d.role || '').toLowerCase();
+    function has(k) { return f[k] !== undefined ? f[k] : x[k]; }
+    if (role === 'cook' && (d.recipes || []).length && !has('recipe_id')) return t('needRecipe');
+    if (role === 'cook' && d.cook_pickup && !has('pickup')) return t('needPickup');
+    if (role === 'driver' && !x.car_on_file && !f.vehicle && !x.vehicle) return t('needCar');
+    if (role === 'community_debrief' && !(f.briefed !== undefined ? f.briefed : x.briefed_at)) return t('needBriefing');
+    return '';
+  }
+  function needWords(n) { return t({ recipe: 'needRecipe', pickup: 'needPickup', car: 'needCar', briefing: 'needBriefing' }[n] || 'ruleNeed'); }
+  /* a cook's pick-up checks (wave173), shared by Save and Confirm: '' when fine, else what to fix */
+  function pickupCheck(p) {
+    if (String(S.d.role || '').toLowerCase() === 'cook' && S.d.cook_pickup) {
+      var pk = S.form.pickup || (S.d.details || {}).pickup;
+      if (!pk) return t('errPick');
+      if (pk === 'pickup') {
+        if (!S.form.neighbourhood || S.form.neighbourhood === '__other') return t('errArea');
+        if (!String(S.form.address || '').trim()) return t('errAddr');
+        if (String(S.form.postal_code || '').trim() && !/^[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d$/.test(String(S.form.postal_code).trim())) return t('errPostal');
+        p.pickup = 'pickup'; p.neighbourhood = S.form.neighbourhood; p.address = S.form.address; p.postal_code = S.form.postal_code || '';
+      }
+    }
+    return '';
+  }
+  function applyDetails(p) {
+    var x = S.d.details = S.d.details || {};
+    if ('recipe_id' in p) x.recipe_id = p.recipe_id;
+    if ('donations' in p) x.donations = p.donations;
+    if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
+    if ('photos_share' in p) x.photos_share = p.photos_share;
+    if ('briefed' in p) x.briefed_at = p.briefed ? new Date().toISOString() : null;
+    if ('pickup' in p) { x.pickup = p.pickup; if (p.pickup === 'pickup') { x.neighbourhood = p.neighbourhood; x.address = p.address; x.postal_code = p.postal_code; } if ('stay_to_serve' in p) x.stay_to_serve = p.stay_to_serve; }
+    S.form = {}; S.saved = true;
+  }
+  function detailErr(r) {
+    var b = (r && r.body) || {};
+    return b.reason === 'area' ? t('errArea') : b.reason === 'address' ? t('errAddr') : b.reason === 'postal' ? t('errPostal') : b.reason === 'recipe' ? t('needRecipe') : t('offline');
   }
   /* Add to calendar (wave172): all-day, the date, the place and the link */
   function ymd(iso) { return String(iso).slice(0, 10).replace(/-/g, ''); }
@@ -1154,58 +1219,75 @@ a.rbig svg{width:20px;height:20px;flex:none}
       return;
     }
     if (d.state === 'confirmed') {
-      app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + teaserHtml() + (S.inv && S.inv.open ? invHtml() : '') + spotHtml() + guideHtml() + briefHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+      app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p>' + (d.cancel_by ? '<p class="m" style="margin:6px 0 0">' + E(ruleWords('ruleOk')) + '</p>' : '') + '</div></div><div class="rule"></div>'
+        + teaserHtml() + (S.inv && S.inv.open ? invHtml() : '') + spotHtml() + guideHtml() + briefHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml()
+        + (S.lateAsk ? '<div class="banner warn" id="lateask" role="alert"><b>' + E(ruleWords('lateT')) + '</b><p style="margin:6px 0 10px">' + E(t('lateP')) + '</p><button type="button" class="no" id="cant2"' + (S.busy ? ' disabled' : '') + '>' + E(t('lateYes')) + '</button><button type="button" class="sec2" id="lateback">' + E(t('lateBack')) + '</button></div>'
+                     : '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>')
         + (S.test && d.survey ? surveyHtml() : '') + (S.test && !(S.inv && S.inv.open) ? invHtml() : '');
     } else if (d.state === 'declined') {
-      app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
+      app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + (S.lateDone ? '<div class="banner warn" role="alert">' + E(t('lateP')) + '</div>' : '') + spotHtml()
         + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + eventsHtml() + callHtml();
     } else if (d.state === 'early') {
       app.innerHTML = test + err + '<h2>' + E(t('earlyT')) + '</h2><div class="rule"></div><p style="margin:0 0 12px">' + E(t('hi')) + ' ' + E(d.first || '') + '. ' + E(t('earlyP')) + '</p>'
-        + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + '</div></div>'
+        + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + (d.cancel_by ? ' ' + E(ruleWords('earlyRule')) : '') + '</div></div>'
         + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + briefHtml() + linksHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else {
+      /* wave258: what the role involves, its details and the 4-day rule come before Confirm */
       app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t(d.invited ? 'introInv' : 'intro')) + '</p>' + spotHtml()
+        + guideHtml() + briefHtml() + linksHtml() + detailsHtml() + ruleHtml()
+        + (S.cerr ? '<div class="banner warn" id="cerr" role="alert">' + E(S.cerr) + '</div>' : '')
         + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t(d.invited ? 'confirmInv' : 'confirm')) + '</button>'
-        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + (isLead() ? guideHtml() + linksHtml() : '') + detailsHtml() + calHtml() + eventsHtml() + callHtml();
+        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + calHtml() + eventsHtml() + callHtml();
     }
   }
-  function answer(att) {
+  function cerr(msg) { S.cerr = msg; paint(); var el = document.getElementById('cerr') || document.getElementById('rule4box'); try { if (el) el.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ } }
+  function answer(att, force) {
     if (S.busy) return;
-    S.err = '';
-    if (S.test) { S.d.state = att === 'yes' ? 'confirmed' : 'declined'; S.d.confirmed_at = new Date().toISOString(); paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ } return; }
-    S.busy = true; paint();
-    rpc('volunteer_confirm_submit', { p_token: token(), p: { attending: att, via: 'link', lang: S.lang } }).then(function (r) {
-      S.busy = false;
-      if (r.ok && r.body && r.body.ok) { S.d.state = r.body.state; S.d.confirmed_at = new Date().toISOString(); (S.d.events || []).forEach(function (o) { if (o.current) o.state = r.body.state; }); }
-      else if (r.body && r.body.reason === 'past') { S.d.past = true; }
-      else { S.err = t('offline'); }
+    S.err = ''; S.cerr = '';
+    var d = S.d, p = {}, details = false;
+    /* wave258: a confirmed volunteer saying no under 4 days before is asked once to call us too */
+    if (att === 'no' && d.state === 'confirmed' && d.late && !force) { S.lateAsk = true; paint(); var la = document.getElementById('lateask'); try { if (la) la.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ } return; }
+    if (att === 'yes' && d.state !== 'confirmed') {
+      var rb = document.getElementById('rule4'), gb = document.getElementById('guide4');
+      if (rb) S.rule4 = rb.checked; if (gb) S.guide4 = gb.checked;
+      p = readForm(); S.form = Object.assign({}, S.form, p);
+      var miss = missing(); if (miss) { cerr(miss); return; }
+      var pc = pickupCheck(p); if (pc) { cerr(pc); return; }
+      if (gb && !S.guide4) { cerr(t('guideNeed')); return; }
+      if (!S.rule4) { cerr(t('ruleNeed')); return; }
+      details = Object.keys(p).length > 0;
+    }
+    var done = function (state, late) {
+      S.d.state = state; S.d.confirmed_at = new Date().toISOString(); S.lateAsk = false;
+      if (state === 'confirmed') S.d.rule_ok = true; if (late) S.lateDone = true;
+      (S.d.events || []).forEach(function (o) { if (o.current) o.state = state; });
       paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+    };
+    if (S.test) { if (details) applyDetails(p); done(att === 'yes' ? 'confirmed' : 'declined', att === 'no' && d.state === 'confirmed' && d.late); return; }
+    S.busy = true; paint();
+    var submit = function () {
+      rpc('volunteer_confirm_submit', { p_token: token(), p: { attending: att, via: 'link', lang: S.lang, cancel_rule_ok: att === 'yes' ? true : undefined, guide_read: att === 'yes' && S.guide4 ? true : undefined } }).then(function (r) {
+        S.busy = false;
+        if (r.ok && r.body && r.body.ok) { done(r.body.state, r.body.late); return; }
+        if (r.body && r.body.reason === 'past') { S.d.past = true; paint(); return; }
+        if (r.body && r.body.reason === 'rule') { cerr(t('ruleNeed')); return; }
+        if (r.body && r.body.reason === 'needs') { cerr(needWords((r.body.needs || [])[0])); return; }
+        S.err = t('offline'); paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+      }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
+    };
+    if (!details) { submit(); return; }
+    rpc('volunteer_confirm_details', { p_token: token(), p: p }).then(function (r) {
+      if (r.ok && r.body && r.body.ok) { applyDetails(p); submit(); return; }
+      S.busy = false;
+      if (r.body && r.body.reason === 'past') { S.d.past = true; paint(); return; }
+      cerr(detailErr(r));
     }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
   }
   function save() {
     if (S.busy) return;
     var p = readForm(); S.form = Object.assign({}, S.form, p); S.saved = false; S.err = ''; S.derr = '';
-    if (String(S.d.role || '').toLowerCase() === 'cook' && S.d.cook_pickup) {
-      var pk = S.form.pickup || (S.d.details || {}).pickup;
-      if (!pk) { S.derr = t('errPick'); paint(); return; }
-      if (pk === 'pickup') {
-        if (!S.form.neighbourhood || S.form.neighbourhood === '__other') { S.derr = t('errArea'); paint(); return; }
-        if (!String(S.form.address || '').trim()) { S.derr = t('errAddr'); paint(); return; }
-        if (String(S.form.postal_code || '').trim() && !/^[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d$/.test(String(S.form.postal_code).trim())) { S.derr = t('errPostal'); paint(); return; }
-        p.pickup = 'pickup'; p.neighbourhood = S.form.neighbourhood; p.address = S.form.address; p.postal_code = S.form.postal_code || '';
-      }
-    }
-    var apply = function () {
-      var x = S.d.details = S.d.details || {};
-      if ('recipe_id' in p) x.recipe_id = p.recipe_id;
-      if ('donations' in p) x.donations = p.donations;
-      if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
-      if ('photos_share' in p) x.photos_share = p.photos_share;
-      if ('briefed' in p) x.briefed_at = p.briefed ? new Date().toISOString() : null;
-      if ('pickup' in p) { x.pickup = p.pickup; if (p.pickup === 'pickup') { x.neighbourhood = p.neighbourhood; x.address = p.address; x.postal_code = p.postal_code; } if ('stay_to_serve' in p) x.stay_to_serve = p.stay_to_serve; }
-      S.form = {}; S.saved = true;
-    };
+    var pc = pickupCheck(p); if (pc) { S.derr = pc; paint(); return; }   /* wave258: shared with Confirm */
+    var apply = function () { applyDetails(p); };
     if (S.test) { apply(); paint(); return; }
     S.busy = true; paint();
     rpc('volunteer_confirm_details', { p_token: token(), p: p }).then(function (r) {
@@ -1234,11 +1316,14 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (b.id === 'invsend') { invSend(); return; }
     if (b.id === 'invedit') { S.invEdit = true; paint(); invScroll(); return; }
     if (b.hasAttribute('data-open-it')) { showView('it'); return; }
+    if (b.id === 'cant2') { answer('no', true); return; }   /* wave258 */
+    if (b.id === 'lateback') { S.lateAsk = false; paint(); return; }
     if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no'); else if (b.id === 'save') save();
     else if (b.id === 'svsend') svSend(); else if (b.id === 'svedit') { S.svEdit = true; paint(); svScroll(); }
   });
   app.addEventListener('change', function (e) {
     var el = e.target; if (!el) return;
+    if (el.id === 'rule4' || el.id === 'guide4') { S[el.id] = el.checked; if (S.cerr) { S.cerr = ''; var ce = document.getElementById('cerr'); if (ce) ce.remove(); } return; }   /* wave258 */
     if (el.name === 'invin') { S.invIn = el.value === 'yes'; if (S.invErr === 'place') { S.invErr = ''; var q = el.closest('.svq'); if (q) q.classList.remove('err'); } return; }
     if (el.name === 'dish' || el.name === 'food' || el.name === 'stay' || el.id === 'area') { S.form = Object.assign({}, S.form, readForm()); if (el.name === 'food') S.form.pickup = el.value; if (el.id === 'area') S.form.neighbourhood = el.value; S.saved = false; paint(); }
   });

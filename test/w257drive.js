@@ -128,7 +128,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
     await f.page.waitForTimeout(500);
     await f.page.click('tr[data-p26="705"] [data-w257assign]'); await f.page.waitForTimeout(900);
     const ct = await f.ev(() => { const x = document.getElementById('w257m'); return { text: x.querySelector('[data-w257t="text"]').disabled, email: x.querySelector('[data-w257t="email"]').disabled, note: x.querySelector('.w257tell').innerText, go: x.querySelector('[data-w257do]').textContent }; });
-    ok('cannot text: Tell them greyed out, placed without a message', ct.text && ct.email && /Only leaders, HR and admins/.test(ct.note) && ct.go === 'Place on 2 servings', ct);
+    ok('cannot text: Tell them greyed out, placed without a message', ct.text && ct.email && /Only leaders, HR, admins and the volunteer team/.test(ct.note) && ct.go === 'Place on 2 servings', ct);
     await f.close();
 
     /* ---------- a phone ---------- */

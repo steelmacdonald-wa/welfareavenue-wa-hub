@@ -276,7 +276,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
     await f.ev(() => window.w191.openRecruit({ tab: 'conv' })); await f.page.waitForTimeout(500);
     await f.page.click('#w191rec [data-rconv="5145550103"]'); await f.page.waitForTimeout(700);
     const pn = await txt(f, '#w191rec .thr');
-    ok('staff who cannot text: the thread reads, the reply box says who can', /Only leaders, HR and admins can reply/.test(pn) && !(await f.ev(() => !!document.querySelector('#w191rec [data-rreplyta]'))), pn.slice(-200));
+    ok('staff who cannot text: the thread reads, the reply box says who can', /Only leaders, HR, admins and the volunteer team can reply/.test(pn) && !(await f.ev(() => !!document.querySelector('#w191rec [data-rreplyta]'))), pn.slice(-200));
     ok('staff who cannot text: they still set someone’s place on a serving, and No reply needed is not theirs', await f.ev(() => !!document.querySelector('#w191rec .srv [data-rset]') && !document.querySelector('#w191rec [data-rdone]')));
     await f.close();
   } catch (e) { fail++; console.log('FAIL crashed :: ' + (e && e.stack || e)); }

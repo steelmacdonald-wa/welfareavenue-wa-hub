@@ -373,12 +373,12 @@ function waVolRenderEvent() {
   var ev = null;
   WA_VOL_EVENTS.forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; });
   if (!ev || !WA_VOL_DETAIL || WA_VOL_DETAIL.id !== WA_VOL_EVENT) {
-    waVolPaint('<p class="vl-empty">Loading event...</p>');
+    waVolPaint('<p class="vl-empty">Loading the serving...</p>');
     return;
   }
   var D = WA_VOL_DETAIL;
   var pct = D.steps.length ? Math.round((D.steps.filter(function (s) { return s.done; }).length / D.steps.length) * 100) : 0;
-  var html = '<button class="vl-back" data-vl="calendar">&larr; All events</button>';
+  var html = '<button class="vl-back" data-vl="calendar">&larr; All servings</button>';
 
   html += '<div class="vl-hero"><h3>' + esc(waVolDate(ev.event_date, true)) + ' &middot; ' + esc(ev.title || '') + '</h3>'
     + '<div class="vl-when">' + esc(ev.code || '') + ' &middot; ' + esc(ev.season || '') + ' &middot; ' + esc(ev.location || '') + ' ' + waVolStatusPill(ev.status) + '</div>'
@@ -388,7 +388,7 @@ function waVolRenderEvent() {
     + '</div>';
 
   /* roster */
-  html += '<h3 class="block">Who is on this event</h3>';
+  html += '<h3 class="block">Who is on this serving</h3>';
   if (!D.roster.length) {
     html += '<p class="vl-empty">Nobody is rostered yet for this date.</p>';
   } else {
@@ -431,7 +431,7 @@ function waVolRenderEvent() {
   if (isStaff()) html += '<div class="add-row"><button class="btn ghost mini" data-vladd="1">+ Add a task for this event</button></div>';
 
   /* SOP checklist */
-  html += '<h3 class="block" style="margin-top:22px">The checklist for this event</h3>';
+  html += '<h3 class="block" style="margin-top:22px">The checklist for this serving</h3>';
   var rows = waVolStepTree(D.steps);
   var nowPhase = waVolPhaseNow(ev.event_date);
   WA_VOL_PHASES.forEach(function (p) {
@@ -491,7 +491,7 @@ async function waVolRender() {
     await waVolLoad(false);
     if (WA_VOL_VIEW === 'event' && WA_VOL_EVENT) {
       if (!WA_VOL_DETAIL || WA_VOL_DETAIL.id !== WA_VOL_EVENT) {
-        waVolPaint('<p class="vl-empty">Loading event...</p>');
+        waVolPaint('<p class="vl-empty">Loading the serving...</p>');
         await waVolLoadEvent(WA_VOL_EVENT);
       }
       waVolRenderEvent();

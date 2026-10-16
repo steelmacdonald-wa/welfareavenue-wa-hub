@@ -1,5 +1,7 @@
   /* ---------- the page's title names the view (inside the Volunteer Manager) ---------- */
-  var TITLES = { calendar: ['Servings', 'This week, the calendar and every serving'], sop: ['The SOP', 'The master checklist every serving starts from, in six stages'], people: ['Volunteers', 'Everyone who volunteers in Montreal, one record with the CRM'], inventory: ['Inventory', 'The kit in storage, counted and reordered'], recipes: ['Recipes', 'What the cooks make'], event: ['Serving', ''] };
+  var TITLES = { calendar: ['Servings', 'This week and every upcoming serving'], sop: ['The SOP', 'The master checklist every serving starts from, in six stages'], people: ['Volunteers', 'Everyone who volunteers in Montreal, one record with the CRM'], inventory: ['Inventory', 'The kit in storage, counted and reordered'], recipes: ['Recipes', 'What the cooks make'], event: ['Serving', ''],
+    /* wave259: the places wave195, 209, 256 and 259 added, so the title never falls back to Servings */
+    applicants: ['Applicants received', 'Volunteers who applied, waiting for a reply'], signoffs: ['Sign-offs', 'Letters and forms volunteers ask us to sign'], phone: ['Messages', 'The ops line: every conversation, group texts and calls'], setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'] };
   function title() {
     try {
       if (!document.body.classList.contains('w153volunteer')) return;

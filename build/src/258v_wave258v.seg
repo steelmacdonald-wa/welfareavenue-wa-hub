@@ -1,0 +1,431 @@
+/* =====================================================================
+   WA v258 The volunteer texts, clear and checked (15/10/26)
+   =====================================================================
+   Steel (15/10/26, after the operations meeting): "all of them should be able to text"; "Clarify what automated texts are
+   going out to the volunteers so that we know going forward what [and] when"; confirmations "a week and a half before the
+   event"; "the Thursday before"; "they need to check a box saying they must cancel four days before ... All the roles
+   should say that"; "the cooks should have been able to choose their recipe before then". The meeting: Ibrahim checks
+   the texts went ("Are there some logs?"), the rows copied from the old sheet are checked by their owners, Mary owns
+   cooks, drivers and team leaders, Terry servers, the dishwasher and the photographer.
+
+   - The serving page: a Texts strip under the stages: every automatic text for this serving with its date (Confirmation
+     10 days before at 10 am, Monday reminder, the last day to cancel, Thursday check-in, Itinerary, Thank-you and survey)
+     and how many went; Text log; My roles; Role owners. More > Text log too.
+   - Text log (wa258_text_log): each person, their answer (and the 4-day box), every text the Hub sent them with what Quo
+     says happened to it (delivered, waiting for 9 am, failed and why, skipped), their replies; filters (Not delivered, Not
+     answered, My roles); Check delivery now (quo-send v7 delivery); Text the ones not answered (the serving's Text to
+     confirm).
+   - The roster cards: "4-day rule agreed", "Cancelled late", the last text and its delivery, "No phone number", and on a
+     row copied from the old sheet "From the old sheet: check" with Keep (wa258_sheet_keep) or Remove (the card's own Take
+     off). My roles dims the other roles' columns.
+   - Applicants received: My roles in the role filter (parts209), and on each card who last texted them from the Hub
+     (wa258_contacted), so two people do not text the same person. Volunteers rows too.
+   - Role owners (app_config volunteer_role_owners; leaders and admins change it).
+   Texting itself (Ibrahim, Mary, Terry): wa256_can_text and quo-send v7; the client checks in 171, 191 and 239 ask it.
+   ASCII only. */
+(function () {
+  'use strict';
+  if (window.__wa258v) return; window.__wa258v = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', MUTED = '#797773';
+  var S = { owners: null, ownersAt: 0, ownersBusy: null, mineOn: false, log: {}, logAt: {}, logBusy: {}, cont: {}, contAt: 0, contBusy: null, filter: 'all', checking: false };
+  try { S.mineOn = localStorage.getItem('wa258mine') === '1'; } catch (e) { /* fine */ }
+  var ROLES = [['team_leader', 'Team leader'], ['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishwasher'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead']];
+  var KIND = { confirm: 'Confirmation', reminder: 'Monday reminder', checkin: 'Thursday check-in', signup: 'Sign-up text', recruit: 'Invitation', reconfirm: 'Still in?', itinerary: 'Itinerary', survey: 'Survey', ack: 'Thank-you', manual: 'Text', reply: 'Reply' };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function lower(s) { return String(s || '').toLowerCase(); }
+  function msgOf(e) { return String((e && (e.message || e.details)) || e || '').replace(/^.*?ERROR:\s*/, '').slice(0, 160); }
+  function roleName(k) { k = lower(k); if (k === 'community_talker') k = 'community_debrief'; var x = ROLES.filter(function (r) { return r[0] === k; })[0]; if (x) return x[1]; try { return waVolRoleLabel(k); } catch (e) { return k; } }
+  function dayTxt(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function hm(h) { var m = String(h || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var n = Number(m[1]); return (n % 12 || 12) + (m[2] === '00' ? '' : ':' + m[2]) + (n < 12 ? ' am' : ' pm'); }
+  function whenTxt(ts) {
+    if (!ts) return ''; var d = new Date(ts); if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '').toLowerCase();
+  }
+  function evId() { try { return (typeof WA_VOL_EVENT !== 'undefined' && WA_VOL_EVENT) ? Number(WA_VOL_EVENT) : null; } catch (e) { return null; } }
+  function detail() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+  function onServing() { return /^#volunteering\/e\/\d+/.test(String(location.hash || '')) && !!document.getElementById('w119'); }
+  function here(sub) { return String(location.hash || '').indexOf('#volunteering/' + sub) === 0; }
+  function gone(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
+  function nameOf(email) { var n = S.owners && S.owners.names && S.owners.names[lower(email)]; return n ? String(n).split(' ')[0] : String(email || '').split('@')[0]; }
+
+  /* ---------- data ---------- */
+  function mine() { return (S.owners && S.owners.mine) || []; }
+  async function loadOwners(force) {
+    if (!staff()) return null;
+    if (!force && S.owners && Date.now() - S.ownersAt < 120000) return S.owners;
+    if (S.ownersBusy) return S.ownersBusy;
+    S.ownersBusy = (async function () {
+      try { var r = await db.rpc('wa258_role_owners'); if (r && !r.error && r.data) { S.owners = r.data; S.ownersAt = Date.now(); } } catch (e) { /* fine */ }
+      S.ownersBusy = null; return S.owners;
+    })();
+    return S.ownersBusy;
+  }
+  async function loadLog(id, force) {
+    if (!id || !staff()) return null;
+    if (!force && S.log[id] && Date.now() - (S.logAt[id] || 0) < 30000) return S.log[id];
+    if (S.logBusy[id]) return S.logBusy[id];
+    S.logBusy[id] = (async function () {
+      try { var r = await db.rpc('wa258_text_log', { p_event: id }); if (r && !r.error && r.data) { S.log[id] = r.data; S.logAt[id] = Date.now(); } } catch (e) { /* fine */ }
+      S.logBusy[id] = null; return S.log[id] || null;
+    })();
+    return S.logBusy[id];
+  }
+  async function loadContacted(ids, force) {
+    ids = (ids || []).filter(function (x) { return x; }).map(Number);
+    var want = ids.filter(function (x) { return !(String(x) in S.cont); });
+    if (!force && !want.length && Date.now() - S.contAt < 60000) return S.cont;
+    if (S.contBusy) return S.contBusy;
+    S.contBusy = (async function () {
+      try {
+        var r = await db.rpc('wa258_contacted', { p_people: ids.slice(0, 400) });
+        if (r && !r.error) { ids.forEach(function (x) { S.cont[String(x)] = null; }); Object.keys(r.data || {}).forEach(function (k) { S.cont[k] = r.data[k]; }); S.contAt = Date.now(); }
+      } catch (e) { /* fine */ }
+      S.contBusy = null; return S.cont;
+    })();
+    return S.contBusy;
+  }
+
+  /* ---------- words ---------- */
+  function textLabel(x) {
+    var k = KIND[x.kind] || x.kind;
+    if (x.kind === 'manual' || x.kind === 'reply') k = (x.kind === 'reply' ? 'Reply' : 'Text') + (x.by && x.by.indexOf('@') > 0 ? ' from ' + nameOf(x.by) : x.by === 'Quo app' ? ' from the Quo app' : '');
+    var st = x.status === 'queued' ? ['wait', 'waiting to send'] : x.status === 'failed' ? ['bad', 'failed' + (x.error ? ': ' + x.error : '')] : x.status === 'skipped' ? ['mute', 'skipped' + (x.error ? ': ' + x.error : '')]
+      : x.delivery === 'delivered' ? ['ok', 'delivered'] : (x.delivery === 'undelivered' || x.delivery === 'failed') ? ['bad', 'not delivered'] : ['', 'sent'];
+    return { cls: st[0], txt: k + ': ' + st[1], at: whenTxt(x.at) };
+  }
+  function lastAuto(lr) {
+    var auto = (lr && lr.texts || []).filter(function (x) { return ['confirm', 'reminder', 'checkin', 'signup', 'recruit', 'reconfirm'].indexOf(x.kind) >= 0; });
+    return auto.length ? auto[auto.length - 1] : null;
+  }
+  function answerOf(r) {
+    if (lower(r.status) === 'confirmed' || r.cs === 'confirmed') return ['ok', 'Confirmed' + (r.rule ? ', 4-day rule agreed' : r.via === 'reply' ? ' by text' : '')];
+    if (lower(r.status) === 'unavailable' || r.cs === 'declined') return ['bad', 'Can\u2019t make it' + (r.late ? ' (late)' : '')];
+    return ['wait', 'Not answered yet'];
+  }
+  function schedLine(s, L) {
+    var n = 0; (L.rows || []).forEach(function (r) { (r.texts || []).forEach(function (x) { if (x.kind === s.kind && x.status === 'sent') n++; }); });
+    var at = String(s.at || ''), d = at.slice(0, 10), t = at.slice(11, 16);
+    var past = d < new Date().toISOString().slice(0, 10);
+    var state = !s.on ? 'off' : n ? n + ' sent' : s.kind === 'deadline' ? '' : past ? 'none sent' : 'planned';
+    return { label: s.label, when: dayTxt(d) + (t ? ', ' + hm(t) : ''), who: s.who, state: state, on: s.on, done: n > 0, kind: s.kind };
+  }
+
+  /* ---------- the serving page: the Texts strip ---------- */
+  function stripHtml(L) {
+    var sch = (L.schedule || []).map(function (s) { return schedLine(s, L); });
+    var own = S.owners && S.owners.owners ? groupOwners(S.owners.owners) : '';
+    return '<div class="w258strip" data-w258="strip"><div class="hd"><b>Texts to volunteers</b><span>9 am to 7 pm, from the ops line. Each one once.</span></div>'
+      + '<ol class="sch">' + sch.map(function (x) {
+        return '<li class="' + (x.kind === 'deadline' ? 'dl' : x.done ? 'done' : !x.on ? 'off' : '') + '" title="' + E(x.who) + '"><b>' + E(x.label) + '</b><span>' + E(x.when) + '</span>' + (x.state ? '<i>' + E(x.state) + '</i>' : '') + '</li>';
+      }).join('') + '</ol>'
+      + '<div class="ft">' + (own ? '<span class="own">' + own + '</span>' : '')
+      + '<span class="bt"><button type="button" class="w258b pri" data-w258go="log">Text log</button>'
+      + (mine().length ? '<button type="button" class="w258b' + (S.mineOn ? ' on' : '') + '" data-w258go="mine" aria-pressed="' + S.mineOn + '">My roles</button>' : '')
+      + '<button type="button" class="w258b" data-w258go="owners">Role owners</button></span></div></div>';
+  }
+  function groupOwners(o) {
+    var by = {}; Object.keys(o || {}).forEach(function (k) { var e = lower(o[k]); (by[e] = by[e] || []).push(roleName(k).toLowerCase() + 's'); });
+    return Object.keys(by).map(function (e) { return '<em>' + E(nameOf(e)) + '</em>: ' + E(by[e].join(', ')); }).join(' \u00b7 ');
+  }
+  function cardTags(r, lr) {
+    var d = r.detail || {}, c = r.confirm || {}, out = [];
+    if (c.cancel_rule_ok === true || c.cancel_rule_ok === 'true') out.push('<span class="w258t ok" title="Ticked on their page: tell us at least 4 days before">4-day rule agreed</span>');
+    if (c.late_cancel) out.push('<span class="w258t bad">Cancelled late</span>');
+    if (lr && !lr.partner && !lr.phone && !gone(r)) out.push('<span class="w258t bad">No phone number</span>');
+    var la = lastAuto(lr); if (la) { var l = textLabel(la); out.push('<span class="w258t ' + l.cls + '" title="' + E(l.at) + '">' + E(l.txt.replace(/: (.{40}).+$/, ': $1\u2026')) + '</span>'); }
+    var sheet = d.source === 'sheet' && !d.sheet_checked && !d.partner && !gone(r);
+    var h = out.join('');
+    if (sheet) h += '<span class="w258sheet">From the old sheet: check' + (staff() ? '<span class="bt"><button type="button" data-w258keep="' + r.id + '" title="Keep ' + E(r.person_name || 'them') + ' on this serving">Keep</button><button type="button" data-w258rm="' + r.id + '" title="Take ' + E(r.person_name || 'them') + ' off this serving">Remove</button></span>' : '') + '</span>';
+    return h;
+  }
+  function decorateServing() {
+    if (!onServing() || !staff()) return;
+    var id = evId(); if (!id) return;
+    var L = S.log[id];
+    if (!L || Date.now() - (S.logAt[id] || 0) > 30000) { loadLog(id).then(function (x) { if (x) soon(); }); if (!L) return; }
+    if (!S.owners) { loadOwners().then(function (x) { if (x) soon(); }); }
+    /* the strip, under the stages */
+    var bar = document.querySelector('#w119 .w191bar'), head = bar && bar.parentElement && bar.parentElement.id !== 'w119' ? bar.parentElement : bar;   /* after the green header */
+    var strip = document.querySelector('#w119 .w258strip');
+    var html = stripHtml(L);
+    if (head) {
+      if (!strip) { var w = document.createElement('div'); w.innerHTML = html; strip = w.firstChild; head.insertAdjacentElement('afterend', strip); strip.__h = html; }
+      else if (strip.__h !== html) { strip.outerHTML = html; strip = document.querySelector('#w119 .w258strip'); if (strip) strip.__h = html; }
+    }
+    /* More > Text log */
+    var menu = document.querySelector('#w119 .acts .menu');
+    if (menu && !menu.querySelector('[data-w258go="log"]')) {
+      var t171 = menu.querySelector('[data-w191go="text171"]');
+      var b = document.createElement('button'); b.setAttribute('data-w258go', 'log'); b.textContent = 'Text log';
+      if (t171) t171.insertAdjacentElement('afterend', b); else menu.appendChild(b);
+    }
+    /* the cards */
+    var D = detail(); if (!D) return;
+    var rows = {}; (D.roster || []).forEach(function (r) { rows[String(r.id)] = r; });
+    var lrs = {}; (L.rows || []).forEach(function (r) { lrs[String(r.id)] = r; });
+    document.querySelectorAll('#w119 .pc[data-w119card]').forEach(function (pc) {
+      var k = pc.getAttribute('data-w119card'), r = rows[k]; if (!r) return;
+      var h = cardTags(r, lrs[k]);
+      var box = pc.querySelector('.w258c');
+      if (!h) { if (box) box.remove(); return; }
+      if (box && box.__h === h) return;
+      if (!box) { box = document.createElement('div'); box.className = 'w258c'; pc.appendChild(box); }
+      box.innerHTML = h; box.__h = h;
+    });
+    /* My roles: the other roles' columns dimmed */
+    var mi = mine(), on = S.mineOn && mi.length > 0;
+    document.querySelectorAll('#w119 .rc[data-w119role]').forEach(function (rc) {
+      var role = lower(rc.getAttribute('data-w119role')); var yours = mi.indexOf(role) >= 0;
+      rc.classList.toggle('w258dim', on && !yours);
+      var hd = rc.querySelector('.h'); var chip = rc.querySelector('.w258yours');
+      if (yours && hd && !chip) hd.insertAdjacentHTML('beforeend', '<span class="w258yours">Yours</span>');
+      if (!yours && chip) chip.remove();
+    });
+  }
+
+  /* ---------- the Text log ---------- */
+  function counts(L) {
+    var c = { all: 0, undel: 0, noans: 0, mine: 0 }, mi = mine();
+    (L.rows || []).forEach(function (r) {
+      if (r.partner) return; c.all++;
+      if (bad(r)) c.undel++;
+      if (answerOf(r)[0] === 'wait') c.noans++;
+      if (mi.indexOf(lower(r.role)) >= 0) c.mine++;
+    });
+    return c;
+  }
+  function bad(r) {
+    if (!r.phone) return true;
+    var la = lastAuto(r); if (!la) return answerOf(r)[0] === 'wait';
+    return la.status === 'failed' || la.status === 'skipped' || la.delivery === 'undelivered' || la.delivery === 'failed';
+  }
+  function logHtml(L) {
+    var ev = L.event || {}, c = counts(L), mi = mine();
+    var rows = (L.rows || []).filter(function (r) {
+      if (r.partner) return false;
+      if (S.filter === 'undel') return bad(r);
+      if (S.filter === 'noans') return answerOf(r)[0] === 'wait';
+      if (S.filter === 'mine') return mi.indexOf(lower(r.role)) >= 0;
+      return true;
+    });
+    var sch = (L.schedule || []).map(function (s) { return schedLine(s, L); });
+    var chips = [['all', 'Everyone', c.all], ['undel', 'Not delivered or no phone', c.undel], ['noans', 'Not answered', c.noans]].concat(mi.length ? [['mine', 'My roles', c.mine]] : []);
+    return '<div class="w258m" id="w258m"><h3>Text log: ' + E(dayTxt(ev.date)) + (ev.code ? ' \u00b7 ' + E(ev.code) : '') + '</h3>'
+      + '<p class="m-sub">Every text the Hub sent for this serving, what Quo says happened to it, and who answered. Texts go between 9 am and 7 pm' + (L.mode && L.mode !== 'live' ? ' (texts are in ' + E(L.mode) + ' mode)' : '') + '. Anyone who has to cancel must tell us ' + E(L.notice_days || 4) + ' days before.</p>'
+      + '<ol class="w258sch">' + sch.map(function (x) { return '<li class="' + (x.kind === 'deadline' ? 'dl' : x.done ? 'done' : !x.on ? 'off' : '') + '"><b>' + E(x.label) + '</b><span>' + E(x.when) + '</span><em>' + E(x.who) + '</em>' + (x.state ? '<i>' + E(x.state) + '</i>' : '') + '</li>'; }).join('') + '</ol>'
+      + '<div class="w258f">' + chips.map(function (x) { return '<button type="button" class="fchip' + (S.filter === x[0] ? ' on' : '') + '" data-w258f="' + x[0] + '">' + E(x[1]) + ' (' + x[2] + ')</button>'; }).join('') + '</div>'
+      + (rows.length ? '<ul class="w258list">' + rows.map(function (r) {
+        var a = answerOf(r);
+        var tx = (r.texts || []).map(function (x) { var l = textLabel(x); return '<span class="w258t ' + l.cls + '" title="' + E(l.at) + '">' + E(l.txt) + (l.at ? ' \u00b7 ' + E(l.at) : '') + '</span>'; }).join('');
+        return '<li><div class="who"><b>' + E(r.name || 'Unnamed') + '</b><span>' + E(roleName(r.role)) + (r.source === 'sheet' ? ' \u00b7 from the old sheet' : '') + '</span></div>'
+          + '<span class="w258t ' + a[0] + '">' + E(a[1]) + '</span>'
+          + '<div class="tx">' + (tx || (r.phone ? '<span class="w258t mute">No text yet</span>' : '')) + (!r.phone ? '<span class="w258t bad">No phone number</span>' : '') + (r.replies ? '<span class="w258t">' + r.replies + ' repl' + (r.replies === 1 ? 'y' : 'ies') + '</span>' : '') + '</div></li>';
+      }).join('') + '</ul>' : '<p class="m-sub">Nobody here.</p>')
+      + '<div class="m-foot"><button type="button" class="btn" data-w258go="check"' + (S.checking ? ' disabled' : '') + '>' + (S.checking ? 'Checking with Quo\u2026' : 'Check delivery now') + '</button>'
+      + (L.can_text && c.noans ? '<button type="button" class="btn" data-w258go="text">Text the ones not answered</button>' : '')
+      + '<button type="button" class="btn primary" data-w258x>Close</button></div></div>';
+  }
+  async function openLog() {
+    var id = evId(); if (!id) return;
+    S.filter = 'all';
+    try { openModal('<div class="w258m" id="w258m"><p class="m-sub">Loading the texts\u2026</p></div>'); } catch (e) { return; }
+    await loadOwners();
+    var L = await loadLog(id, true);
+    paintLog(L);
+  }
+  function paintLog(L) {
+    var m = document.getElementById('w258m'); if (!m) return;
+    if (!L) { m.innerHTML = '<p class="m-sub">Could not load the texts.</p><div class="m-foot"><button class="btn" data-w258x>Close</button></div>'; return; }
+    var w = document.createElement('div'); w.innerHTML = logHtml(L); m.replaceWith(w.firstChild);
+  }
+  async function checkDelivery() {
+    var id = evId(); if (!id || S.checking) return;
+    S.checking = true; paintLog(S.log[id]);
+    try {
+      var r = await db.functions.invoke('quo-send', { body: { action: 'delivery', event_id: id } });
+      if (r && r.error) throw r.error;
+      var n = (r && r.data && r.data.checked) || 0;
+      T(n ? 'Checked ' + n + ' text' + (n === 1 ? '' : 's') + ' with Quo' : 'Every text already has its final status');
+    } catch (e) { T('Could not check: ' + msgOf(e)); }
+    S.checking = false;
+    var L = await loadLog(id, true); paintLog(L); soon();
+  }
+
+  /* ---------- Role owners ---------- */
+  async function openOwners() {
+    var o = await loadOwners(true);
+    if (!o) { T('Could not load the role owners'); return; }
+    var mem = []; try { mem = (DB_MEMBERS || []).filter(function (m) { return m && m.email; }); } catch (e) { mem = []; }
+    var can = !!o.can_edit;
+    var rows = ROLES.map(function (r) {
+      var cur = lower((o.owners || {})[r[0]] || '');
+      var opts = '<option value="">Nobody yet</option>' + mem.map(function (m) { return '<option value="' + E(lower(m.email)) + '"' + (lower(m.email) === cur ? ' selected' : '') + '>' + E(m.name || m.email) + '</option>'; }).join('')
+        + (cur && !mem.some(function (m) { return lower(m.email) === cur; }) ? '<option value="' + E(cur) + '" selected>' + E(cur) + '</option>' : '');
+      return '<label class="w258own"><span>' + E(r[1]) + 's</span>' + (can ? '<select data-w258own="' + r[0] + '">' + opts + '</select>' : '<b>' + E(cur ? nameOf(cur) : 'Nobody yet') + '</b>') + '</label>';
+    }).join('');
+    openModal('<div class="w258m" id="w258o"><h3>Role owners</h3><p class="m-sub">Who finds and texts the volunteers for each role. Their My roles shows only those roles on Applicants received and the serving page, and they hear when someone in their role cancels.' + (can ? '' : ' Leaders and admins change it.') + '</p>'
+      + '<div class="w258owns">' + rows + '</div><div class="m-foot">' + (can ? '<button type="button" class="btn primary" data-w258go="ownsave">Save</button>' : '') + '<button type="button" class="btn" data-w258x>Close</button></div></div>');
+  }
+  async function saveOwners() {
+    var p = {}; document.querySelectorAll('#w258o select[data-w258own]').forEach(function (s) { if (s.value) p[s.getAttribute('data-w258own')] = s.value; });
+    try {
+      var r = await db.rpc('wa258_role_owners_set', { p: p }); if (r && r.error) throw r.error;
+      S.owners = r.data; S.ownersAt = Date.now(); T('Role owners saved'); closeModal(); soon(); repaintApplicants();
+    } catch (e) { T('Could not save: ' + msgOf(e)); }
+  }
+
+  /* ---------- Applicants received and Volunteers: who last texted them ---------- */
+  function contLine(pid) {
+    var c = S.cont[String(pid)]; if (!c) return '';
+    return '<p class="w258ct">Texted by ' + E(String(c.name || '').split(' ')[0] || 'the team') + ' ' + E(whenTxt(c.at)) + (c.kind && c.kind !== 'manual' && c.kind !== 'reply' ? ' (' + E((KIND[c.kind] || c.kind).toLowerCase()) + ')' : '') + '</p>';
+  }
+  function decoratePeople() {
+    if (!staff()) return;
+    var apps = here('applicants') ? document.querySelectorAll('#volunteering li.w209app[data-w209id]') : [];
+    var vols = here('people') ? document.querySelectorAll('#volunteering tr[data-p26]') : [];
+    if (!apps.length && !vols.length) return;
+    var list = []; try { list = (window.w209 && window.w209.state().list) || []; } catch (e) { list = []; }
+    var byApp = {}; list.forEach(function (a) { byApp[String(a.id)] = a; });
+    var ids = [];
+    Array.prototype.forEach.call(apps, function (li) { var a = byApp[li.getAttribute('data-w209id')]; if (a && a.person_id) ids.push(a.person_id); });
+    Array.prototype.forEach.call(vols, function (tr) { var p = Number(tr.getAttribute('data-p26')); if (p) ids.push(p); });
+    var missing = ids.filter(function (x) { return !(String(x) in S.cont); });
+    if (missing.length || Date.now() - S.contAt > 60000) { if (!S.contBusy) loadContacted(ids, Date.now() - S.contAt > 60000).then(function () { soon(); }); if (missing.length === ids.length) return; }
+    Array.prototype.forEach.call(apps, function (li) {
+      var a = byApp[li.getAttribute('data-w209id')]; if (!a || !a.person_id) return;
+      put(li, contLine(a.person_id), li.querySelector('.w209acts'));
+    });
+    Array.prototype.forEach.call(vols, function (tr) {
+      var td = tr.querySelector('td'); if (!td) return;
+      put(td, contLine(tr.getAttribute('data-p26')), null);
+    });
+  }
+  function put(host, html, before) {
+    var old = host.querySelector('.w258ct');
+    if (!html) { if (old) old.remove(); return; }
+    if (old && old.outerHTML === html) return;
+    if (old) old.remove();
+    if (before) before.insertAdjacentHTML('beforebegin', html); else host.insertAdjacentHTML('beforeend', html);
+  }
+  var repainted = false;
+  function repaintApplicants() {
+    try { if (here('applicants') && window.w209 && window.w209.paint) { var sel = document.getElementById('w209role'); if (sel && mine().length && !sel.querySelector('option[value="__mine"]')) window.w209.paint(); } } catch (e) { /* fine */ }
+  }
+  function applicantsMine() {
+    if (!here('applicants') || !staff()) return;
+    if (!S.owners) { loadOwners().then(function (o) { if (o && !repainted) { repainted = true; repaintApplicants(); } }); return; }
+    repaintApplicants();
+  }
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w258go]');
+    if (b) {
+      e.preventDefault(); e.stopPropagation();
+      var go = b.getAttribute('data-w258go');
+      try { var mn = b.closest('.more'); if (mn) mn.classList.remove('open'); } catch (x) { /* fine */ }
+      if (go === 'log') openLog();
+      else if (go === 'check') checkDelivery();
+      else if (go === 'text') { closeModal(); var tb = document.querySelector('#w119 [data-w191go="text171"]'); if (tb) tb.click(); }
+      else if (go === 'mine') { S.mineOn = !S.mineOn; try { localStorage.setItem('wa258mine', S.mineOn ? '1' : '0'); } catch (x) { /* fine */ } soon(); }
+      else if (go === 'owners') openOwners();
+      else if (go === 'ownsave') saveOwners();
+      return;
+    }
+    var f = t.closest('#w258m [data-w258f]');
+    if (f) { S.filter = f.getAttribute('data-w258f'); paintLog(S.log[evId()]); return; }
+    if (t.closest('[data-w258x]')) { closeModal(); return; }
+    var k = t.closest('[data-w258keep]');
+    if (k) {
+      e.preventDefault(); e.stopPropagation();
+      var rid = Number(k.getAttribute('data-w258keep')); k.disabled = true;
+      try {
+        var r = await db.rpc('wa258_sheet_keep', { p_roster: rid }); if (r && r.error) throw r.error;
+        var D = detail(); (D && D.roster || []).forEach(function (x) { if (x.id === rid) x.detail = Object.assign({}, x.detail || {}, { sheet_checked: { at: new Date().toISOString() } }); });
+        T('Kept: checked against the old sheet'); soon();
+      } catch (er) { k.disabled = false; T('Could not keep: ' + msgOf(er)); }
+      return;
+    }
+    var rm = t.closest('[data-w258rm]');
+    if (rm) {
+      e.preventDefault(); e.stopPropagation();
+      var x = document.querySelector('#w119 [data-w119rm="' + rm.getAttribute('data-w258rm') + '"]');
+      if (x) x.click(); else T('Use the card\u2019s \u2715 to take them off');
+    }
+  }, true);
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'wa258css';
+  css.textContent =
+    '#w119 .w258strip{margin:12px 0 4px;padding:12px 14px;border-radius:14px;background:rgba(16,63,57,.05);border:1px solid rgba(16,63,57,.12);}' +
+    '#w119 .w258strip .hd{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:8px;}#w119 .w258strip .hd b{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';}#w119 .w258strip .hd span{font-size:12px;color:' + MUTED + ';}' +
+    '.w258strip .sch,.w258sch{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px;}' +
+    '.w258strip .sch li,.w258sch li{display:flex;flex-direction:column;gap:1px;padding:6px 10px;border-radius:10px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.14);font-size:12px;min-width:118px;}' +
+    '.w258strip .sch li b,.w258sch li b{font-size:12px;color:' + GREEN + ';}.w258strip .sch li span,.w258sch li span{color:#3c4a47;}.w258strip .sch li i,.w258sch li i{font-style:normal;font-weight:700;font-size:11px;color:' + MUTED + ';}' +
+    '.w258strip .sch li.done,.w258sch li.done{border-color:' + TEAL + ';}.w258strip .sch li.done i,.w258sch li.done i{color:' + TEAL + ';}' +
+    '.w258strip .sch li.dl,.w258sch li.dl{background:rgba(220,165,39,.16);border-color:' + GOLD + ';}.w258strip .sch li.off,.w258sch li.off{opacity:.55;}' +
+    '.w258sch li em{font-style:normal;font-size:11px;color:' + MUTED + ';max-width:220px;line-height:1.3;}' +
+    '#w119 .w258strip .ft{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between;margin-top:10px;}#w119 .w258strip .own{font-size:12px;color:#3c4a47;}#w119 .w258strip .own em{font-style:normal;font-weight:700;color:' + GREEN + ';}' +
+    '#w119 .w258strip .bt{display:flex;flex-wrap:wrap;gap:6px;}' +
+    '.w258b{font:inherit;font-size:12px;font-weight:700;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:5px 12px;cursor:pointer;}' +
+    '.w258b.pri{background:' + GREEN + ';color:' + CREAM + ';}.w258b.on{background:' + GOLD + ';border-color:' + GOLD + ';color:' + GREEN + ';}.w258b:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
+    '#w119 .pc .w258c{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}' +
+    '.w258t{display:inline-block;font-size:10.5px;font-weight:600;line-height:1.3;padding:2px 7px;border-radius:999px;background:rgba(16,63,57,.08);color:' + GREEN + ';max-width:100%;overflow-wrap:anywhere;}' +
+    '.w258t.ok{background:rgba(42,140,122,.16);color:#1d6b5c;}.w258t.bad{background:rgba(179,64,47,.14);color:' + FLAG + ';}.w258t.wait{background:rgba(220,165,39,.2);color:#6b4f0e;}.w258t.mute{background:rgba(121,119,115,.14);color:#5b5a57;}' +
+    '#w119 .pc .w258sheet{display:block;width:100%;margin-top:2px;padding:6px 7px;border-radius:9px;background:rgba(220,165,39,.18);font-size:11.5px;font-weight:700;color:' + GREEN + ';}' +
+    '#w119 .pc .w258sheet .bt{display:flex;gap:5px;margin-top:5px;}#w119 .pc .w258sheet button{font:inherit;font-size:11.5px;font-weight:700;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:3px 10px;cursor:pointer;}' +
+    '#w119 .pc .w258sheet button:hover,#w119 .pc .w258sheet button:focus-visible{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w119 .rc.w258dim{opacity:.42;}#w119 .rc .w258yours{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:' + GOLD + ';color:' + GREEN + ';}' +
+    '#modalBox:has(#w258m),#modalBox:has(#w258o){max-width:min(940px,94vw);}#modalBox .w258m{min-width:0;}#modalBox .w258m h3{margin:0 0 4px;}#modalBox .w258sch{margin:12px 0 10px;}' +
+    '#modalBox .w258f{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px;}' +
+    '#modalBox .w258list{list-style:none;margin:0;padding:0;max-height:52vh;overflow:auto;border-top:1px solid rgba(16,63,57,.12);}' +
+    '#modalBox .w258list li{display:grid;grid-template-columns:minmax(150px,1.1fr) auto minmax(0,2.4fr);gap:6px 12px;align-items:start;padding:9px 2px;border-bottom:1px solid rgba(16,63,57,.1);}' +
+    '#modalBox .w258list .who b{display:block;font-size:13.5px;}#modalBox .w258list .who span{font-size:12px;color:' + MUTED + ';}#modalBox .w258list .tx{display:flex;flex-wrap:wrap;gap:4px;}' +
+    '#modalBox .w258owns{display:flex;flex-direction:column;gap:8px;margin:10px 0;}#modalBox .w258own{display:grid;grid-template-columns:140px minmax(0,1fr);gap:10px;align-items:center;font-size:13px;}#modalBox .w258own select{width:100%;}' +
+    '.w258ct{margin:4px 0 0;font-size:11.5px;color:#6b4f0e;font-weight:600;}' +
+    '@media (max-width:700px){#modalBox .w258list li{grid-template-columns:minmax(0,1fr);}#w119 .w258strip .sch li{min-width:0;flex:1 1 44%;}#modalBox .w258own{grid-template-columns:minmax(0,1fr);}}';
+  document.head.appendChild(css);
+
+  /* ---------- the tour (wave122's engine; trainings row tour:voltexts) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return false; if (W.tours.voltexts) return true;
+      var OPT = { opt: 1 };
+      var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.voltexts = { tab: 'volunteering', icon: 'msg', hash: '#volunteering', steps: [
+        { c: 1, t: 'The texts volunteers get', p: 'For a Sunday serving: the confirmation 10 days before at 10 am (the Thursday before the week before), a Monday reminder, the last day to cancel 4 days before (Wednesday), a Thursday check-in, the itinerary the day before, and the thank-you and survey after. Every confirmation says: tell us at least 4 days before if you cannot come.' },
+        Tt('#w119 .w258strip', 'On each serving', 'The Texts strip shows each of those texts with its date and how many went. Open a serving to see it.', OPT),
+        Tt('#w119 [data-w258go="log"]', 'Text log', 'Who was texted, whether Quo delivered it, who answered and who ticked the 4-day box. Check delivery now asks Quo again; Text the ones not answered sends the confirmation to those still waiting.', OPT),
+        Tt('#w119 [data-w258go="mine"]', 'My roles', 'Shows your roles first: Mary has cooks, drivers and team leaders; Terry servers, the dishwasher and the photographer. Applicants received has My roles in its role filter, and each card says who last texted them, so nobody texts twice.', OPT),
+        Tt('#w119 .w258sheet', 'From the old sheet', 'A person copied from the old Excel sheet: Keep them if they are really coming, or Remove them, before the confirmations go.', OPT)
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  if (!addTour()) { var tt = 0, tv = setInterval(function () { if (addTour() || ++tt > 40) clearInterval(tv); }, 500); }
+
+  /* ---------- wiring ---------- */
+  var pend = null;
+  function soon() { if (pend) return; pend = setTimeout(function () { pend = null; try { decorateServing(); } catch (e) { /* fine */ } try { decoratePeople(); } catch (e) { /* fine */ } try { applicantsMine(); } catch (e) { /* fine */ } }, 150); }
+  try {
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes;
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j]; if (!n || n.nodeType !== 1) continue;
+          var cl = String(n.className || '');
+          if (/(^|\s)w258/.test(cl)) continue;
+          if (n.matches && (n.matches('#w119, .board, .pc, .rc, .w191bar, .menu, li.w209app, tr[data-p26], #w209v, .w257up') || (n.querySelector && n.querySelector('.board, .pc, .w191bar, li.w209app, tr[data-p26]')))) { soon(); return; }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+  window.addEventListener('hashchange', soon);
+  soon();
+
+  window.w258v = { mine: mine, owners: function () { return S.owners; }, loadOwners: loadOwners, openOwners: openOwners, log: loadLog, openLog: openLog, state: function () { return S; }, paint: soon };
+})();

@@ -1,0 +1,302 @@
+/* =====================================================================
+   WA v259 The Volunteer Manager refresh (15/10/26, late evening)
+   =====================================================================
+   Steel (15/10/26, 23:15): "the UI is just getting really messy. So take a look at Volunteer Manager, review everything
+   ... and consider some sort of refresh so that navigation, applications, the phone, everything makes more sense."
+   The review (claude/15-10-26 - Volunteer Manager refresh, proposal and the text schedule): two navigations that
+   disagreed, six ways to text, a page per people list, "event" and "serving" mixed. This wave is parts A and C of
+   the proposal; the serving page (B) and one placement window (D) follow.
+
+   - Five places, the same on the rail (computer) and the chip row (phone), in the same words and order:
+     Servings, Calendar | People, Messages | Setup. Every old address still opens (#volunteering/applicants,
+     /signoffs, /sop, /recipes, /inventory, /phone; /messages is an alias of /phone).
+   - People (#volunteering/people): one page, three tabs under the title: Volunteers, New applicants (n), Sign-offs (n).
+     The tabs are wave239/257's Volunteers, wave209's Applicants received and wave195's Sign-offs, unchanged inside.
+   - Messages (#volunteering/phone): wave256's page under its right name (the ops line: every conversation, Text a
+     group, calls). The app bar's Text volunteers still opens the group text window.
+   - Setup (#volunteering/setup, new): The SOP, Recipes and Inventory (as cards that open them); the usual spot counts
+     (volunteer_role_guides.target, as wave256's "Make these the usual counts"); Role owners (wave258); Texts: the
+     schedule for the next servings in plain words with its switches (wa259_text_setup, wa259_text_switch), Text
+     settings (wave171) and Text log hints. Things touched once a season, out of the daily rail.
+   - The rail marks the right place for every address (People for applicants and sign-offs; Setup for the SOP, recipes,
+     inventory). Words: "serving" everywhere "event" meant one (020, 106, 119b); "Dishwashers" (209, 218); the Text
+     settings window reads the real confirmation days.
+   Reads only what the earlier waves expose (window.w209, w195, w256, w258, WA_VOL_VIEW). ASCII only. */
+(function () {
+  'use strict';
+  if (window.__wa259) return; window.__wa259 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var S = { setup: null, setupAt: 0, busy: false, err: '' };
+  var ROLES = [['team_leader', 'Team leaders'], ['cook', 'Cooks'], ['driver', 'Drivers'], ['server', 'Servers'], ['dishwasher', 'Dishwashers'], ['photographer', 'Photographers'], ['videographer', 'Videographers'], ['community_debrief', 'Community lead']];
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function msgOf(e) { return String((e && (e.message || e.details)) || e || '').replace(/^.*?ERROR:\s*/, '').slice(0, 160); }
+  function view() { try { return typeof WA_VOL_VIEW !== 'undefined' ? WA_VOL_VIEW : ''; } catch (e) { return ''; } }
+  function sub() { var h = String(location.hash || ''); var m = h.match(/^#volunteering\/([a-z]+)/); return m ? m[1] : (h === '#volunteering' || h === '#volunteering/' ? '' : ''); }
+  function dayTxt(iso, long) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', long ? { weekday: 'long', month: 'long', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); d.setDate(d.getDate() + n); var p = function (x) { return (x < 10 ? '0' : '') + x; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+  function hour12(h) { h = Number(h); if (!isFinite(h)) return ''; return (h % 12 || 12) + (h < 12 ? ' am' : ' pm'); }
+
+  /* ---------- the five places ---------- */
+  var PLACES = [['', 'Servings', '#volunteering', 'calendar'], ['calendar', 'Calendar', '#volunteering/calendar', ''], ['people', 'People', '#volunteering/people', 'people'], ['phone', 'Messages', '#volunteering/phone', 'phone'], ['setup', 'Setup', '#volunteering/setup', 'setup']];
+  var PEOPLE = ['people', 'applicants', 'signoffs'];
+  var SETUP = ['setup', 'sop', 'recipes', 'inventory'];
+  function placeOf(s) { if (PEOPLE.indexOf(s) >= 0) return 'people'; if (SETUP.indexOf(s) >= 0) return 'setup'; if (s === 'phone' || s === 'messages') return 'phone'; if (s === 'calendar') return 'calendar'; return ''; }
+  function nApps() { try { return Number((window.w209 && window.w209.state().n) || 0); } catch (e) { return 0; } }
+  function nSign() { try { return Number((window.w195 && window.w195.state().waiting) || 0); } catch (e) { return 0; } }
+  function peopleBadge() { var n = nApps() + nSign(); return n ? String(n) : null; }
+
+  /* the chip row on phones: the same five, then wave23's Text volunteers (it appends itself) */
+  function chipsHtml() {
+    var cur = placeOf(sub());
+    return PLACES.map(function (p) { return '<a class="fchip' + (cur === p[0] ? ' on' : '') + '" href="' + p[2] + '" data-w259chip="' + (p[0] || 'home') + '"' + (p[3] ? ' data-vl="' + p[3] + '"' : ' data-w257cal="1"') + '>' + E(p[1]) + (p[0] === 'people' && peopleBadge() ? ' (' + peopleBadge() + ')' : '') + '</a>'; }).join('');
+  }
+  /* the People tabs under the title */
+  function tabsHtml() {
+    var s = sub() || 'people';
+    var tabs = [['people', 'Volunteers', null, '#volunteering/people'], ['applicants', 'New applicants', nApps(), '#volunteering/applicants'], ['signoffs', 'Sign-offs', nSign(), '#volunteering/signoffs']];
+    return '<nav class="w259tabs" aria-label="People">' + tabs.map(function (t) { return '<a href="' + t[3] + '" data-vl="' + t[0] + '" class="' + (s === t[0] ? 'on' : '') + '"' + (s === t[0] ? ' aria-current="page"' : '') + '>' + E(t[1]) + (t[2] ? '<em>' + t[2] + '</em>' : '') + '</a>'; }).join('') + '</nav>';
+  }
+  function placeTabs() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    var want = staff() && PEOPLE.indexOf(view()) >= 0 && PEOPLE.indexOf(sub()) >= 0;
+    var old = sec.querySelector('.w259tabs');
+    if (!want) { if (old) old.remove(); return; }
+    var html = tabsHtml();
+    if (old && old.outerHTML === html) return;
+    if (old) old.remove();
+    var mast = sec.querySelector('.w118mast'), card = sec.querySelector(':scope > .card');
+    var anchor = mast || (card && card.querySelector('.vl-sub')) || card;
+    if (!anchor) return;
+    if (mast) mast.insertAdjacentHTML('afterend', html); else if (anchor.classList.contains('vl-sub')) anchor.insertAdjacentHTML('afterend', html); else anchor.insertAdjacentHTML('afterbegin', html);
+  }
+  function fixChips() {
+    var row = document.querySelector('#volunteering .vl-sub'); if (!row) return;
+    var html = chipsHtml();
+    var mine = row.querySelector('[data-w259chip]');
+    if (mine && row.getAttribute('data-w259') === html) return;
+    /* keep wave23's Text volunteers chip; replace the rest */
+    var keep = row.querySelector('[data-vtxt]');
+    row.innerHTML = html; if (keep) row.appendChild(keep);
+    row.setAttribute('data-w259', html);
+  }
+  /* the rail: no separate Applicants and Sign-offs items (they are People's tabs); the right item lit for every address */
+  function railGroups() {
+    var A = window.WA_APP && window.WA_APP.apps; if (!A || !A.volunteer || typeof A.volunteer.groups !== 'function') return;
+    if (A.volunteer.groups.__w259) return;
+    var g0 = A.volunteer.groups;
+    var g = function () {
+      var gs = g0.apply(this, arguments);
+      try {
+        gs.forEach(function (grp) { grp.items = grp.items.filter(function (it) { return !/#volunteering\/(applicants|signoffs)$/.test(it.h); }); });
+        gs = gs.filter(function (grp) { return grp.items.length; });
+      } catch (e) { /* fine */ }
+      return gs;
+    };
+    g.__w259 = true; A.volunteer.groups = g;
+    try { if (window.WA_APP && typeof WA_APP.renderRail === 'function') WA_APP.renderRail(); } catch (e) { /* fine */ }
+  }
+  function fixRail() {
+    railGroups();
+    var r = document.getElementById('w153rail'); if (!r || !document.body.classList.contains('w153volunteer')) return;
+    var s = sub(); var want = placeOf(s); if (!want && s && s !== 'e') want = ''; if (/^#volunteering\/e\//.test(location.hash || '')) want = '';
+    var hash = want ? PLACES.filter(function (p) { return p[0] === want; })[0][2] : '#volunteering';
+    r.querySelectorAll('.w153it[data-w153go^="#volunteering"]').forEach(function (a) {
+      var on = a.getAttribute('data-w153go') === hash;
+      if (a.classList.contains('on') !== on) { a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+    });
+    /* the People badge: new applicants plus sign-offs waiting (wave195 and 209 used to badge their own items) */
+    var pa = r.querySelector('.w153it[data-w153go="#volunteering/people"]');
+    if (pa) { var n = peopleBadge(), bd = pa.querySelector('.w153n'); if (n) { if (!bd) { bd = document.createElement('small'); bd.className = 'w153n'; pa.appendChild(bd); } if (bd.textContent !== n) bd.textContent = n; } else if (bd) bd.remove(); }
+    var where = document.querySelector('#w153bar .w153bc > span');
+    if (where) { var lbl = (PLACES.filter(function (p) { return p[0] === want; })[0] || PLACES[0])[1]; if (/^#volunteering\/e\//.test(location.hash || '')) lbl = 'Serving'; if (where.textContent !== lbl) where.textContent = lbl; }
+  }
+
+  /* ---------- Setup ---------- */
+  async function loadSetup(force) {
+    if (!force && S.setup && Date.now() - S.setupAt < 30000) return S.setup;
+    try { var r = await db.rpc('wa259_text_setup'); if (r && r.error) throw r.error; S.setup = r.data || {}; S.setupAt = Date.now(); S.err = ''; } catch (e) { S.err = msgOf(e); }
+    return S.setup;
+  }
+  function on(k) { return String((S.setup || {})[k] || 'on') === 'on'; }
+  function num(k, d) { var v = Number((S.setup || {})[k]); return isFinite(v) && v > 0 ? v : d; }
+  function scheduleRows(ev) {
+    var d = ev.date, h = hour12(num('sms_confirm_hour', 10));
+    return [
+      { k: 'confirm', l: 'Confirmation', when: addDays(d, -num('sms_confirm_days', 10)), at: h, who: 'Everyone on the list who has not answered: the role, the date, their link, and "tell us at least ' + num('cancel_notice_days', 4) + ' days before if you can\u2019t make it". Cooks are asked to choose their dish and pick-up or drop-off first.', on: true },
+      { k: 'reminder', l: 'Monday reminder', when: addDays(d, -num('sms_reminder_days', 6)), at: h, who: 'Confirmed: "you\u2019re confirmed, tell us by the deadline if anything changes". Not answered: "we still need your answer".', on: on('sms_reminder_on'), sw: 'sms_reminder_on' },
+      { k: 'deadline', l: 'Last day to cancel', when: addDays(d, -num('cancel_notice_days', 4)), at: '', who: num('cancel_notice_days', 4) + ' days before. No text; the date every other text names.', on: true },
+      { k: 'checkin', l: 'Thursday check-in', when: addDays(d, -num('sms_checkin_days', 3)), at: h, who: 'Confirmed: "see you Sunday, your details, call us right away if anything came up". Not answered: "can you still come? reply today".', on: on('sms_checkin_on'), sw: 'sms_checkin_on' },
+      { k: 'itinerary', l: 'Itinerary', when: addDays(d, -1), at: hour12(num('sms_itinerary_hour', 17)), who: 'Confirmed team leaders, drivers and the roles with an itinerary (text or email, per serving).', on: true },
+      { k: 'survey', l: 'Thank-you and survey', when: d, at: hour12(num('sms_survey_hour', 18)), who: 'Everyone confirmed.', on: true }
+    ];
+  }
+  function setupHtml() {
+    var st = S.setup || {}, can = !!st.can_text, next = st.next || [], ev = next[0];
+    var card = function (id, title, body, foot) { return '<section class="w259card" id="' + id + '"><h3>' + E(title) + '</h3>' + body + (foot ? '<div class="ft">' + foot + '</div>' : '') + '</section>'; };
+    var h = '<div class="w259setup">';
+    /* the three reference pages */
+    h += '<div class="w259grid">'
+      + '<a class="w259tile" href="#volunteering/sop"><b>The SOP</b><span>The master checklist every serving starts from, in six stages.</span></a>'
+      + '<a class="w259tile" href="#volunteering/recipes"><b>Recipes</b><span>What the cooks make, with the recipe links.</span></a>'
+      + '<a class="w259tile" href="#volunteering/inventory"><b>Inventory</b><span>The kit in storage, counted and reordered.</span></a></div>';
+    /* texts */
+    var sched = ev ? scheduleRows(ev) : [];
+    var rows = sched.map(function (r) {
+      return '<li class="' + (r.k === 'deadline' ? 'dl' : '') + (r.on ? '' : ' off') + '"><div class="w"><b>' + E(r.l) + '</b><span>' + E(dayTxt(r.when)) + (r.at ? ', ' + E(r.at) : '') + '</span></div><p>' + E(r.who) + '</p>'
+        + (r.sw ? '<label class="sw"><input type="checkbox" data-w259sw="' + r.sw + '"' + (r.on ? ' checked' : '') + (can ? '' : ' disabled') + '><span>' + (r.on ? 'On' : 'Off') + '</span></label>' : '') + '</li>';
+    }).join('');
+    var others = next.slice(1).map(function (e) { return dayTxt(e.date) + ': confirmations ' + dayTxt(addDays(e.date, -num('sms_confirm_days', 10))) + ', reminder ' + dayTxt(addDays(e.date, -num('sms_reminder_days', 6))) + ', last day to cancel ' + dayTxt(addDays(e.date, -num('cancel_notice_days', 4))) + ', check-in ' + dayTxt(addDays(e.date, -num('sms_checkin_days', 3))); }).join('. ');
+    h += card('w259texts', 'Texts to volunteers',
+      '<p class="lead">Every automatic text, from the ops line 438-808-7754, between ' + E(hour12(num('sms_window_start', 9))) + ' and ' + E(hour12(num('sms_window_end', 19))) + ' Toronto time, once per person per serving. ' + (st.sms_mode && st.sms_mode !== 'live' ? '<b style="color:' + FLAG + '">Texts are in ' + E(st.sms_mode) + ' mode.</b> ' : '') + (ev ? 'For the next serving, <b>' + E(dayTxt(ev.date, true)) + '</b>' + (ev.code ? ' (' + E(ev.code) + ')' : '') + ':' : 'No upcoming serving.') + '</p>'
+      + (sched.length ? '<ol class="w259sched">' + rows + '</ol>' : '')
+      + (others ? '<p class="m">Then ' + E(others) + '.</p>' : '')
+      + '<p class="m">Not on a schedule: the sign-up text the moment a form puts someone on a serving; the text and email when the team places someone (Assign to servings); invitations from Find volunteers; Still in?; the thank-you after a YES or NO reply. A confirmed volunteer who says they can\u2019t come on their page tells the role\u2019s owner and the volunteer team at once.</p>'
+      + '<div class="w259days">' + [['sms_confirm_days', 'Confirmation, days before'], ['sms_reminder_days', 'Reminder, days before'], ['sms_checkin_days', 'Check-in, days before'], ['cancel_notice_days', 'Days\u2019 notice to cancel']].map(function (x) {
+        return '<label><span>' + E(x[1]) + '</span><input type="number" min="1" max="30" value="' + E(num(x[0], 0) || '') + '" data-w259d="' + x[0] + '"' + (can ? '' : ' disabled') + '></label>';
+      }).join('') + (can ? '<button type="button" class="w259b pri" data-w259go="days">Save the days</button>' : '<span class="m">Leaders, HR, admins and the volunteer team change these.</span>') + '</div>',
+      '<button type="button" class="w259b" data-w171set="1">Text settings</button><span class="m">The mode, the test phone, each role\u2019s page, the survey and the itineraries.</span><span class="m">Who got what: open a serving, then <b>Text log</b>.</span>');
+    /* the usual spot counts */
+    var usual = st.usual || {};
+    h += card('w259spots', 'The usual spot counts',
+      '<p class="lead">How many of each role a serving needs unless it sets its own (a serving\u2019s More menu, Spot counts).</p><div class="w259spots">' + ROLES.map(function (r) {
+        return '<label><span>' + E(r[1]) + '</span><input type="number" min="0" max="60" value="' + E(usual[r[0]] == null ? '' : usual[r[0]]) + '" data-w259sp="' + r[0] + '"' + (can ? '' : ' disabled') + '></label>';
+      }).join('') + '</div>',
+      can ? '<button type="button" class="w259b pri" data-w259go="spots">Save the usual counts</button>' : '<span class="m">Leaders, HR, admins and the volunteer team change these.</span>');
+    /* role owners */
+    h += card('w259owners', 'Role owners',
+      '<p class="lead">Who finds and texts the volunteers for each role; their My roles shows those roles first and they hear when someone in their role cancels.</p>' + ownersLine(),
+      '<button type="button" class="w259b" data-w259go="owners">Role owners</button>');
+    h += '</div>';
+    return h;
+  }
+  function ownersLine() {
+    var o = null; try { o = window.w258v && window.w258v.owners && window.w258v.owners(); } catch (e) { o = null; }
+    if (!o || !o.owners) return '<p class="m" id="w259ownl">Loading\u2026</p>';
+    var by = {}; Object.keys(o.owners).forEach(function (k) { var e = String(o.owners[k] || '').toLowerCase(); (by[e] = by[e] || []).push((ROLES.filter(function (r) { return r[0] === k; })[0] || [k, k])[1].toLowerCase()); });
+    return '<p class="m" id="w259ownl">' + Object.keys(by).map(function (e) { var n = (o.names && o.names[e]) || e; return '<b>' + E(String(n).split(' ')[0]) + '</b>: ' + E(by[e].join(', ')); }).join(' \u00b7 ') + '</p>';
+  }
+  async function renderSetup() {
+    try { if (typeof waVolPaint === 'function') waVolPaint('<p class="vl-empty">Loading the setup\u2026</p>'); } catch (e) { return; }
+    await loadSetup(true);
+    try { if (window.w258v && window.w258v.loadOwners) await window.w258v.loadOwners(); } catch (e) { /* fine */ }
+    if (view() !== 'setup') return;
+    if (S.err && !S.setup) { waVolPaint('<p class="vl-empty">Could not load the setup: ' + E(S.err) + '</p>'); return; }
+    waVolPaint(setupHtml());
+    masthead();
+  }
+  async function saveSpots() {
+    var val = {}, usual = (S.setup && S.setup.usual) || {}, changed = [];
+    document.querySelectorAll('#w259spots [data-w259sp]').forEach(function (inp) { var k = inp.getAttribute('data-w259sp'), n = Math.max(0, Math.min(60, Math.round(Number(inp.value)))); if (isFinite(n) && inp.value !== '') { val[k] = n; if (n !== Number(usual[k] || 0)) changed.push(k); } });
+    if (!changed.length) { T('These are already the usual counts'); return; }
+    for (var i = 0; i < changed.length; i++) {
+      var k = changed[i]; var r = await db.from('volunteer_role_guides').update({ target: val[k] }).eq('role', k);
+      if (r && r.error) { T('Could not save ' + k + ': ' + r.error.message); return; }
+    }
+    try { await db.from('change_log').insert({ entity_type: 'volunteer_role_guides', entity_id: 'target', field: 'usual_spot_counts', old_value: JSON.stringify(usual), new_value: JSON.stringify(val), changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'hub' }); } catch (e) { /* audit only */ }
+    try { var st234 = window.w234 && window.w234.state ? window.w234.state() : null; if (st234) st234.at = 0; } catch (e) { /* fine */ }
+    T('The usual counts are saved'); S.setupAt = 0; renderSetup();
+  }
+  async function saveDays() {
+    var inputs = Array.prototype.slice.call(document.querySelectorAll('#w259texts [data-w259d]')), n = 0;
+    for (var i = 0; i < inputs.length; i++) {
+      var k = inputs[i].getAttribute('data-w259d'), v = String(Math.round(Number(inputs[i].value)) || '');
+      if (!v || v === String(num(k, 0))) continue;
+      try { var r = await db.rpc('wa259_text_switch', { p_key: k, p_value: v }); if (r && r.error) throw r.error; S.setup = r.data; S.setupAt = Date.now(); n++; } catch (e) { T('Could not save: ' + msgOf(e)); return; }
+    }
+    T(n ? 'Saved: the schedule below is updated' : 'Nothing changed'); if (n) renderSetup();
+  }
+  async function flip(sw, box) {
+    box.disabled = true;
+    try { var r = await db.rpc('wa259_text_switch', { p_key: sw, p_value: box.checked ? 'on' : 'off' }); if (r && r.error) throw r.error; S.setup = r.data; S.setupAt = Date.now(); T((sw === 'sms_reminder_on' ? 'Monday reminder' : 'Thursday check-in') + (box.checked ? ' on' : ' off')); renderSetup(); }
+    catch (e) { box.checked = !box.checked; box.disabled = false; T('Could not change it: ' + msgOf(e)); }
+  }
+
+  /* ---------- the page title for the places wave191's map does not know ---------- */
+  var TITLES = { setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'], phone: ['Messages', 'The ops line: every conversation, group texts and calls'] };
+  function masthead() {
+    var v = view(); var t = TITLES[v]; if (!t) return;
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    var m = sec.querySelector('.w118mast'); if (!m) return;
+    var h1 = m.querySelector('h1'), p = m.querySelector(':scope > p');
+    if (h1 && h1.textContent !== t[0]) h1.textContent = t[0];
+    if (p && p.textContent !== t[1]) p.textContent = t[1];
+  }
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w259go]'); if (!b) return;
+    e.preventDefault();
+    var go = b.getAttribute('data-w259go');
+    if (go === 'spots') saveSpots();
+    else if (go === 'days') saveDays();
+    else if (go === 'owners') { try { if (window.w258v && window.w258v.openOwners) window.w258v.openOwners(); } catch (x) { /* fine */ } }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    var sw = t.getAttribute('data-w259sw'); if (sw) flip(sw, t);
+  }, true);
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'wa259css';
+  css.textContent =
+    /* on a computer the page title already says where you are: the card's own repeated header goes */
+    '@media (min-width:901px){body.w153app.w153volunteer #volunteering > .card > h2:first-child,body.w153app.w153volunteer #volunteering > .card > h2:first-child + p.read,body.w153app.w153volunteer #volunteering > .card > h2:first-child + p.read + p.read{display:none;}}' +
+    '.w259tabs{display:flex;flex-wrap:wrap;gap:4px;margin:-4px 0 14px;border-bottom:2px solid rgba(16,63,57,.12);}' +
+    '.w259tabs a{font-family:' + HEAD + ';font-weight:600;font-size:17px;letter-spacing:.4px;text-transform:uppercase;color:' + MUTED + ';text-decoration:none;padding:8px 14px 9px;margin-bottom:-2px;border-bottom:3px solid transparent;display:inline-flex;align-items:center;gap:7px;}' +
+    '.w259tabs a:hover{color:' + GREEN + ';}.w259tabs a.on{color:' + GREEN + ';border-bottom-color:' + GOLD + ';}' +
+    '.w259tabs a em{font-family:inherit;font-style:normal;font-size:12px;letter-spacing:0;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:1px 7px;}' +
+    '.w259setup{display:flex;flex-direction:column;gap:16px;}' +
+    '.w259grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}' +
+    '.w259tile{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:14px;background:' + GREEN + ';color:' + CREAM + ';text-decoration:none;}.w259tile b{font-family:' + HEAD + ';font-size:20px;letter-spacing:.4px;text-transform:uppercase;}.w259tile span{font-size:12.5px;opacity:.85;}.w259tile:hover{background:#0c312c;}' +
+    '.w259card{padding:16px 18px;border-radius:14px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.14);}.w259card h3{font-family:' + HEAD + ';font-weight:600;font-size:22px;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 6px;}' +
+    '.w259card .lead{margin:0 0 10px;font-size:13.5px;color:#3c4a47;}.w259card .m{font-size:12.5px;color:' + MUTED + ';margin:8px 0 0;}.w259card .ft{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:12px;}.w259card .ft .m{margin:0;}' +
+    '.w259sched{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}' +
+    '.w259sched li{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(0,2.2fr) auto;gap:4px 14px;align-items:start;padding:9px 12px;border-radius:10px;background:#FFFAF2;border:1px solid rgba(16,63,57,.12);}' +
+    '.w259sched li.dl{background:rgba(220,165,39,.16);border-color:' + GOLD + ';}.w259sched li.off{opacity:.55;}' +
+    '.w259sched .w b{display:block;font-size:13.5px;color:' + GREEN + ';}.w259sched .w span{font-size:12.5px;color:#3c4a47;}.w259sched p{margin:0;font-size:12.5px;color:#3c4a47;line-height:1.4;}' +
+    '.w259sched .sw{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:700;color:' + GREEN + ';}' +
+    '.w259days,.w259spots{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:flex-end;margin-top:12px;}.w259days label,.w259spots label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:' + MUTED + ';}.w259days input,.w259spots input{width:84px;font:inherit;padding:6px 8px;border:1px solid rgba(16,63,57,.3);border-radius:8px;}' +
+    '.w259b{font:inherit;font-size:12.5px;font-weight:700;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:6px 14px;cursor:pointer;}.w259b.pri{background:' + GREEN + ';color:' + CREAM + ';}.w259b:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
+    '@media (max-width:700px){.w259sched li{grid-template-columns:minmax(0,1fr);}.w259tabs a{font-size:15px;padding:7px 10px 8px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- wiring ---------- */
+  /* /messages is /phone */
+  function alias() { if (/^#volunteering\/messages/.test(location.hash || '')) { try { history.replaceState(null, '', '#volunteering/phone'); } catch (e) { location.hash = '#volunteering/phone'; return; } try { WA_VOL_VIEW = 'phone'; } catch (e) { /* fine */ } if (typeof waVolRender === 'function') waVolRender(); } }
+  window.addEventListener('hashchange', alias);
+  var pend = null;
+  function soon() { if (pend) return; pend = setTimeout(function () { pend = null; try { fixRail(); } catch (e) { /* fine */ } try { fixChips(); } catch (e) { /* fine */ } try { placeTabs(); } catch (e) { /* fine */ } try { masthead(); } catch (e) { /* fine */ } }, 80); }
+  function arm() {
+    if (typeof waVolRender === 'function' && !waVolRender.__w259) {
+      var vr = waVolRender;
+      waVolRender = async function () {
+        if (view() === 'setup') { if (!staff()) { WA_VOL_VIEW = 'calendar'; return await vr.apply(this, arguments); } await renderSetup(); soon(); return; }
+        var out = await vr.apply(this, arguments); soon(); return out;
+      };
+      waVolRender.__w259 = true;
+    }
+    railGroups();
+  }
+  if (typeof startApp === 'function') { var sa = startApp; startApp = async function () { var r = await sa.apply(this, arguments); try { arm(); alias(); soon(); } catch (e) { /* fine */ } return r; }; }
+  else arm();
+  try {
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var a = muts[i].addedNodes;
+        for (var j = 0; j < a.length; j++) {
+          var n = a[j]; if (!n || n.nodeType !== 1) continue;
+          if (n.classList && (n.classList.contains('w259tabs') || n.hasAttribute('data-w259chip'))) continue;
+          if (n.id === 'w153rail' || n.id === 'w153bar' || n.closest && (n.closest('#w153rail') || n.closest('#w153bar') || n.closest('#volunteering'))) { soon(); return; }
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+  window.addEventListener('hashchange', soon);
+
+  window.w259 = { peopleBadge: peopleBadge, setup: function () { return S; }, renderSetup: renderSetup, paint: soon, placeOf: placeOf };
+})();

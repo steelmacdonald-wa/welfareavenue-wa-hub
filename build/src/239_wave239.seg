@@ -64,8 +64,8 @@
   function can() {
     if (W.can && Date.now() - W.canAt < 60000) return Promise.resolve(W.can);
     var out = { text: false };
-    return Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr')]).then(function (r) {
-      out.text = !!(r[0] && r[0].data === true) || !!(r[1] && r[1].data === true) || !!(r[2] && r[2].data === true);
+    return Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr'), db.rpc('wa256_can_text')]).then(function (r) {   /* wave258: and text_staff */
+      out.text = !!(r[0] && r[0].data === true) || !!(r[1] && r[1].data === true) || !!(r[2] && r[2].data === true) || !!(r[3] && r[3].data === true);
       W.can = out; W.canAt = Date.now(); return out;
     }).catch(function () { W.can = out; W.canAt = Date.now(); return out; });
   }

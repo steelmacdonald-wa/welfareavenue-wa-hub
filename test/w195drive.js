@@ -98,7 +98,7 @@ const txt = (f, sel) => f.ev(s => { const e = document.querySelector(s); return 
     ok('the page opens at #volunteering/signoffs with its own title', p.view === 'signoffs' && p.h1 === 'Sign-offs', p);
     ok('Waiting first: the three waiting requests, oldest first', JSON.stringify(p.rows) === JSON.stringify(['Alex Tremblay', 'Camille Roy', 'Sam Lee']), p.rows);
     ok('the filters with their counts', /Waiting\s*3/.test(p.filters[0]) && /Signed\s*1/.test(p.filters[1]) && /^Declined$/.test(p.filters[2]) && /All\s*4/.test(p.filters[3]), p.filters);
-    ok('the rail: Sign-offs under People, current, with the waiting count', p.rail.some(t => /^Sign-offs\s*3$/.test(t.trim())) && /Sign-offs/.test(p.on), p.rail);
+    ok('the rail (wave259): People current, with the waiting count', p.rail.some(t => /^People\s*3$/.test(t.trim())) && /People/.test(p.on), p.rail);
     ok('My signature says none is saved and what is missing', /No signature saved yet/.test(p.mine) && /Before you sign: your signature, your title/.test(p.mine) && /Add my signature/.test(p.mine), p.mine);
     ok('Signers: who signs and why, and an admin can add someone', /Steel MacDonald/.test(p.signers) && /Admin/.test(p.signers) && /Tate Weinstein/.test(p.signers) && /Assigned/.test(p.signers) && /Add a signer/.test(p.signers), p.signers);
     ok('the lead says where requests come from', /welfareavenue\.com/.test(p.lead), p.lead);
@@ -147,7 +147,7 @@ const txt = (f, sel) => f.ev(s => { const e = document.querySelector(s); return 
     const after = await f.ev(() => ({ ok: (document.querySelector('#w195sheet .w195ok') || {}).textContent || '', st: (document.querySelector('#w195sheet .w195st') || {}).textContent, pdf: !!document.querySelector('#w195sheet [data-w195letter]'),
       rows: Array.from(document.querySelectorAll('#w195 .w195row b')).map(b => b.textContent) }));
     ok('signed: the reference, the email went to the test recipients, the PDF to open', /WA-VS-NEW001/.test(after.ok) && /test mode/.test(after.ok) && after.st === 'Signed' && after.pdf, after);
-    ok('the list drops it from Waiting and the rail counts 2', JSON.stringify(after.rows) === JSON.stringify(['Camille Roy', 'Sam Lee']) && /Sign-offs\s*2/.test(await txt(f, '#w153rail a[data-w153go="#volunteering/signoffs"]')), after.rows);
+    ok('the list drops it from Waiting and the rail counts 2', JSON.stringify(after.rows) === JSON.stringify(['Camille Roy', 'Sam Lee']) && /People\s*2/.test(await txt(f, '#w153rail a[data-w153go="#volunteering/people"]')), after.rows);
     await f.page.click('#w195sheet [data-w195letter]'); await f.page.waitForTimeout(300);
     ok('the signed PDF opens through a short link', (await calls(f)).some(c => c.fn === 'signoff' && c.body.action === 'letter_url' && c.body.id === 1));
     await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
@@ -241,9 +241,11 @@ const txt = (f, sel) => f.ev(s => { const e = document.querySelector(s); return 
     const f = await fresh(browser, { who: 'admin', width: 390, hash: '#mypage', fixture: fx(), candidate: cand });
     await f.ev(fake({ hasSig: true, title: 'Founder and Chair' }));
     await f.hash('#volunteering', 1600);
-    const chip = await f.ev(() => { const c = document.querySelector('#volunteering .vl-sub [data-vl="signoffs"]'); return c ? { text: c.textContent, shown: getComputedStyle(c.parentNode).display !== 'none' } : null; });
-    ok('on a phone the Sign-offs chip sits with the others', chip && chip.text === 'Sign-offs' && chip.shown, chip);
-    await f.page.click('#volunteering .vl-sub [data-vl="signoffs"]'); await f.page.waitForTimeout(1500);
+    /* wave259: People is one chip; Sign-offs is a tab of the People page */
+    await f.page.click('#volunteering .vl-sub [data-vl="people"]'); await f.page.waitForTimeout(1800);
+    const chip = await f.ev(() => { const c = document.querySelector('#volunteering .w259tabs [data-vl="signoffs"]'); return c ? { text: c.textContent.replace(/\d+$/, ''), shown: getComputedStyle(c.parentNode).display !== 'none' } : null; });
+    ok('on a phone the Sign-offs tab sits with Volunteers and New applicants', chip && chip.text === 'Sign-offs' && chip.shown, chip);
+    await f.page.click('#volunteering .w259tabs [data-vl="signoffs"]'); await f.page.waitForTimeout(1500);
     const p = await f.ev(() => ({ hash: location.hash, rows: document.querySelectorAll('#w195 .w195row').length, sw: document.documentElement.scrollWidth }));
     ok('the chip opens the page, and nothing scrolls sideways', p.hash === '#volunteering/signoffs' && p.rows === 3 && p.sw <= 390, p);
     await f.page.click('#w195 [data-w195open="1"]'); await f.page.waitForTimeout(500);

@@ -262,7 +262,7 @@
       if (row.missed) lines += '<div class="wl miss"><span>' + ICO.missed + (row.missed > 1 ? row.missed + ' missed calls' : 'A missed call') + ' to return</span><span><a class="lnk" href="tel:+1' + E(P.ph) + '" data-w256call="' + E(P.ph) + '">Call back</a><button class="lnk" data-w256go="calldone">No call back needed</button></span></div>';
     }
     var foot = th.out ? '<div class="note warn">They texted STOP, so the Hub cannot text them. If they text START to the ops line, texts work again. You can still call.</div>'
-      : !P.can ? '<div class="note">Only leaders, HR and admins can text from the Hub. Quo has the same conversation on the ops line.</div>'
+      : !P.can ? '<div class="note">Only leaders, HR, admins and the volunteer team can text from the Hub. Quo has the same conversation on the ops line.</div>'
       : lines + '<div class="rp"><textarea rows="2" placeholder="Text from the ops line" data-w256ta>' + E(P.drafts[P.ph] || '') + '</textarea><button class="w191btn" data-w256go="send">' + (P.win ? 'Send' : 'Send at 9 am') + '</button></div>';
     return head + placesHtml(th) + '<div class="msgs" id="w256msgs">' + body + '</div>' + foot;
   }

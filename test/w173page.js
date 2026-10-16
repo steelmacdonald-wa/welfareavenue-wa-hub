@@ -49,6 +49,14 @@ async function open(browser, tok, handler, opts, qs) {
 const text = p => p.evaluate(() => document.getElementById('app').innerText + '\n' + document.body.innerText);
 const TOK = 'abcdef1234567890ab';
 
+/* wave258: Confirm needs the 4-day box (and the guide box, a cook's dish and pick-up or drop-off) */
+async function prep258(page) {
+  await page.evaluate(() => { const c = s => { const e = document.querySelector(s); if (e && !e.checked) e.click(); }; c('input[name="dish"]:not([value=""])'); });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => { const e = document.querySelector('input[name="food"][value="dropoff"]'); if (e && !e.checked) e.click(); });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => { ['guide4', 'rule4'].forEach(id => { const e = document.getElementById(id); if (e && !e.checked) e.click(); }); });
+}
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -61,6 +69,7 @@ const TOK = 'abcdef1234567890ab';
     ok('open: get sends the token with the publishable key', f.calls[0].body.p_token === TOK && /^Bearer /.test(f.calls[0].headers.authorization || '') && !!f.calls[0].headers.apikey);
     ok('open: the band shows the role photo', await f.page.evaluate(() => /home-cooked-tray/.test(document.getElementById('band').style.backgroundImage)));
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/01-open.png', fullPage: true });
+    await prep258(f.page);
     await f.page.click('#yes'); await f.page.waitForTimeout(300);
     const sub = f.calls.filter(c => c.url.endsWith('volunteer_confirm_submit'))[0];
     ok('confirm: submit sends attending yes via link', sub && sub.body.p_token === TOK && sub.body.p.attending === 'yes' && sub.body.p.via === 'link', sub && sub.body);
@@ -98,6 +107,7 @@ const TOK = 'abcdef1234567890ab';
     f = await open(browser, TOK, () => ({ body: spot() }), null, '?test=1');
     t = await text(f.page);
     ok('test: the banner', /Test link: nothing is saved/.test(t));
+    await prep258(f.page);
     await f.page.click('#yes'); await f.page.waitForTimeout(200);
     t = await text(f.page);
     ok('test: shows confirmed without calling submit', /You.re confirmed!/i.test(t) && f.calls.filter(c => c.url.endsWith('volunteer_confirm_submit')).length === 0);
@@ -213,6 +223,7 @@ const TOK = 'abcdef1234567890ab';
     const btn = await f.page.$eval('#yes', b => b.getBoundingClientRect().height);
     ok('phone: a big Confirm button', btn >= 48, btn);
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/04-phone-open.png', fullPage: true });
+    await prep258(f.page);
     await f.page.click('#yes'); await f.page.waitForTimeout(300);
     ok('phone: no sideways scroll (confirmed)', await f.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/05-phone-confirmed.png', fullPage: true });

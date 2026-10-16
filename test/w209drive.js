@@ -91,7 +91,7 @@ const INIT = `window.__INV = []; window.__WA_INVOKE = function (name, opts) { va
   ok('Applicants received: the page draws with its title', v.host && v.h1 === 'Applicants received', v);
   ok('Applicants received: To handle shows received then contacted, not the welcomed', v.cards.join('|') === 'Niloofar Bakhshaee|Dan Driver', v.cards);
   ok('Applicants received: the tabs count', /To handle 2/.test(v.tabs[0]) && /Welcomed 1/.test(v.tabs[1]) && /All 3/.test(v.tabs[3]), v.tabs);
-  ok('Applicants received: the chip and the rail item', /Applicants/.test(v.chip || '') && v.rail, v);
+  ok('Applicants received: the tab (wave259) and a way in', /applicants/i.test(v.chip || '') && v.rail, v);
   const c1 = await f.ev(() => { var c = document.querySelector('#w209v [data-w209id="1"]'); return { t: c.textContent, cv: !!c.querySelector('a[href*="yapla"]'), crm: !!c.querySelector('a[href="#crm/c/7001"]'), more: !!c.querySelector('[data-w209more="1"]') }; });
   ok('Applicants received: a card shows the role, when, where, contact, CV and the CRM', /Cook/.test(c1.t) && /Applied today \(Sep 24, 2026\)/.test(c1.t) && /CABM/.test(c1.t) && /nili@example.com/.test(c1.t) && c1.cv && c1.crm, c1);
   ok('Applicants received: the contacted one says who and the note', await f.ev(() => /Contacted by Shima/.test(document.querySelector('#w209v [data-w209id="2"]').textContent) && /Left a voicemail/.test(document.querySelector('#w209v [data-w209id="2"]').textContent)));

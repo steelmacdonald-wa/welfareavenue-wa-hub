@@ -85,7 +85,7 @@
     return '<div class="w171h">Texts</div><div class="modes">'
       + opt('off', 'Off', 'Nothing is texted. Replies are still kept, and STOP is always honoured.')
       + opt('test', 'Test', 'Only the test phone gets texts; everyone else is held back. Use it to try the whole flow on yourself.')
-      + opt('live', 'On', 'Confirmation texts go to volunteers 7 days before each serving, and YES, NO and STOP replies update the roster.')
+      + opt('live', 'On', 'Confirmation texts go to volunteers ' + (S.cfg.sms_confirm_days || 10) + ' days before each serving (then the Monday reminder and the Thursday check-in, see Setup), and YES, NO and STOP replies update the roster.')
       + '</div>' + (cn.admin ? '<div id="w171mconf"></div>' : '<p class="w171note">Only an admin can switch texts on or off.</p>');
   }
   async function settingsModal() {
@@ -98,7 +98,7 @@
     var g = guideOf(S.set.role) || { role: S.set.role, label_en: one(S.set.role), label_fr: '', expect_en: [], expect_fr: [] };
     var pics = (S.photos || []).filter(function (p) { return p.orientation !== 'portrait' || p.id === g.photo_id || true; });
     var hook = S.cfg.quo_webhook_id ? 'Replies come back through Quo (webhook ' + String(S.cfg.quo_webhook_id).split(' ')[0] + ').' : 'Replies are not connected yet.';
-    var html = '<div class="w171m"><h3>Text settings</h3><p class="sub">Volunteers get a text from the ops line, 438-808-7754, 7 days before their serving (at ' + E(S.cfg.sms_confirm_hour || 10) + ' am), with their own link to confirm. ' + E(hook) + '</p>'
+    var html = '<div class="w171m"><h3>Text settings</h3><p class="sub">Volunteers get a text from the ops line, 438-808-7754, ' + E(S.cfg.sms_confirm_days || 10) + ' days before their serving (at ' + E(S.cfg.sms_confirm_hour || 10) + ' am), with their own link to confirm. ' + E(hook) + '</p>'
       + modeHtml(cn)
       + '<label class="f">Test phone</label><input type="text" id="w171tp" value="' + E(S.cfg.sms_test_phones || '') + '"' + (cn.admin ? '' : ' disabled') + ' placeholder="438 555 0100">'
       + surveyHtml(cn)

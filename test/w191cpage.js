@@ -29,10 +29,19 @@ async function open(browser, d, lang) {
     let res = null;
     if (fn === 'volunteer_confirm_get') res = Object.assign({}, d, lang ? { lang } : {});
     if (fn === 'volunteer_confirm_submit') res = { ok: true, state: body.p.attending === 'yes' ? 'confirmed' : 'declined' };
+    if (fn === 'volunteer_confirm_details') res = { ok: true };   /* wave258: Confirm saves the role's details first */
     await r.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(res) });
   });
   await page.goto('https://hub.welfareavenue.com/c/abcdef1234567890ab'); await page.waitForTimeout(600);
   return { ctx, page, calls, errors };
+}
+/* wave258: Confirm needs the 4-day box (and the guide box, a cook's dish and pick-up or drop-off) */
+async function prep258(page) {
+  await page.evaluate(() => { const c = s => { const e = document.querySelector(s); if (e && !e.checked) e.click(); }; c('input[name="dish"]:not([value=""])'); });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => { const e = document.querySelector('input[name="food"][value="dropoff"]'); if (e && !e.checked) e.click(); });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => { ['guide4', 'rule4'].forEach(id => { const e = document.getElementById(id); if (e && !e.checked) e.click(); }); });
 }
 (async () => {
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
@@ -41,6 +50,7 @@ async function open(browser, d, lang) {
     let t = await o.page.evaluate(() => document.getElementById('app').innerText);
     ok('an invitation: a warm ask, Yes and Can’t make it, three weeks out', /love to have you on this serving/.test(t) && /Can you make it\?/.test(t) && /Yes, I’ll be there/.test(t) && /I can’t make it/.test(t) && !/nothing to confirm yet/i.test(t), t.slice(0, 400));
     ok('an invitation: the other invited serving is listed to answer', /Your servings/i.test(t) && /To confirm/.test(t), t.slice(-400));
+    await prep258(o.page);
     await o.page.click('#yes'); await o.page.waitForTimeout(500);
     t = await o.page.evaluate(() => document.getElementById('app').innerText);
     const sub = o.calls.filter(c => c.fn === 'volunteer_confirm_submit');

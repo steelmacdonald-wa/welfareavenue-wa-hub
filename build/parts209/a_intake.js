@@ -18,7 +18,7 @@
 (function () {
   'use strict';
   var GREEN = '#103F39', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
-  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishes'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];   /* wave239: videographer */
+  var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishwashers'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];   /* wave239: videographer */
   var SOURCES = [['linkedin', 'LinkedIn'], ['cabm', 'CABM'], ['fcabq', 'Je Bénévole'], ['email', 'Email'], ['referral', 'Referral'], ['website', 'Website'], ['event', 'An event'], ['manual', 'Other']];
   var STATUS = [['received', 'To handle'], ['contacted', 'Contacted'], ['welcomed', 'Welcomed'], ['not_fit', 'Not a fit'], ['withdrawn', 'Withdrawn']];
   var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, busy: false, n: null };
@@ -221,7 +221,10 @@
       if (V.tab === 'open' && !isOpen(a)) return false;
       if (V.tab === 'welcomed' && a.status !== 'welcomed') return false;
       if (V.tab === 'closed' && a.status !== 'not_fit' && a.status !== 'withdrawn') return false;
-      if (V.role && (a.roles || []).indexOf(V.role) < 0) return false;
+      if (V.role === '__mine') {   /* wave258: My roles (the roles this person owns) */
+        var mine = []; try { mine = (window.w258v && window.w258v.mine && window.w258v.mine()) || []; } catch (e) { mine = []; }
+        if (!(a.roles || []).some(function (r) { return mine.indexOf(r) >= 0; })) return false;
+      } else if (V.role && (a.roles || []).indexOf(V.role) < 0) return false;
       if (V.src && a.source !== V.src) return false;
       if (q && lower([a.name, a.email, a.phone, a.role_text, a.message, (a.roles || []).map(roleLabel).join(' ')].join(' ')).indexOf(q) < 0) return false;
       return true;
@@ -242,6 +245,13 @@
       STATUS.filter(function (s) { return s[0] !== a.status && s[0] !== 'received'; }).map(function (s) { return btn(s[0] === 'welcomed' ? 'Welcome' : s[1], 'data-w209st="' + a.id + '" data-s="' + s[0] + '"', 'sm' + (s[0] === 'welcomed' ? ' pri' : '')); }).join('') +
       (a.status !== 'received' ? btn('Back to To handle', 'data-w209st="' + a.id + '" data-s="received"', 'sm link') : '') + '</div></li>';
   }
+  /* wave258: My roles, when the signed-in person owns roles (window.w258v) */
+  function mineOpt() {
+    var mine = []; try { mine = (window.w258v && window.w258v.mine && window.w258v.mine()) || []; } catch (e) { mine = []; }
+    if (!mine.length) return '';
+    var n = (V.list || []).filter(function (a) { return (a.roles || []).some(function (r) { return mine.indexOf(r) >= 0; }); }).length;
+    return '<option value="__mine"' + (V.role === '__mine' ? ' selected' : '') + '>My roles: ' + E(mine.map(roleLabel).join(', ')) + ' (' + n + ')</option>';
+  }
   function pageHtml() {
     var all = V.list || [], open = all.filter(isOpen).length, wel = all.filter(function (a) { return a.status === 'welcomed'; }).length, cl = all.filter(function (a) { return a.status === 'not_fit' || a.status === 'withdrawn'; }).length;
     var tabs = [['open', 'To handle', open], ['welcomed', 'Welcomed', wel], ['closed', 'Not a fit or withdrawn', cl], ['all', 'All', all.length]];
@@ -253,7 +263,7 @@
       '<div class="w209bar"><div class="w209tabs" role="tablist">' + tabs.map(function (t) { return '<button type="button" role="tab" aria-selected="' + (V.tab === t[0]) + '" class="' + (V.tab === t[0] ? 'on' : '') + '" data-w209tab="' + t[0] + '">' + E(t[1]) + ' <em>' + t[2] + '</em></button>'; }).join('') + '</div>' +
       btn('Add an applicant', 'data-w209a="add" data-ctx="volunteers"', 'sm pri') + '</div>' +
       '<div class="w209filt"><input type="search" id="w209q" placeholder="Search a name, email, phone or message" value="' + E(V.q) + '" aria-label="Search the applicants">' +
-      '<select id="w209role" aria-label="Role"><option value="">Every role</option>' + rolesHere.map(function (r) { return '<option value="' + r[0] + '"' + (V.role === r[0] ? ' selected' : '') + '>' + E(r[1]) + '</option>'; }).join('') + '</select>' +
+      '<select id="w209role" aria-label="Role"><option value="">Every role</option>' + mineOpt() + rolesHere.map(function (r) { return '<option value="' + r[0] + '"' + (V.role === r[0] ? ' selected' : '') + '>' + E(r[1]) + '</option>'; }).join('') + '</select>' +
       '<select id="w209src" aria-label="Where they applied"><option value="">Every source</option>' + srcHere.map(function (s) { return '<option value="' + s[0] + '"' + (V.src === s[0] ? ' selected' : '') + '>' + E(s[1]) + '</option>'; }).join('') + '</select></div>' +
       (list === null ? '<p class="w197note">Loading the applicants…</p>' : (list.length ? '<ul class="w209list">' + list.map(cardHtml).join('') + '</ul>' : '<p class="w197note">' + (V.tab === 'open' ? 'Nobody waits for an answer.' : 'No one here.') + '</p>')) + '</div>';
   }

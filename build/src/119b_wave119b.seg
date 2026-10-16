@@ -345,7 +345,7 @@
   async function openRecap() {
     var e = ev(); if (!e) return;
     var chan = ''; try { chan = localStorage.getItem('wa119ch') || 'operations-mtl'; } catch (x) { chan = 'operations-mtl'; }
-    openModal('<div class="w119brecap"><h3>Event recap</h3><p class="read" style="margin:4px 0 8px">Drafted from the roster and the checklist. Edit it, then post it to Slack or copy it.</p><textarea id="w119brt" placeholder="Drafting\u2026"></textarea>' +
+    openModal('<div class="w119brecap"><h3>Serving recap</h3><p class="read" style="margin:4px 0 8px">Drafted from the roster and the checklist. Edit it, then post it to Slack or copy it.</p><textarea id="w119brt" placeholder="Drafting\u2026"></textarea>' +
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 0"><label style="font-size:12px;color:var(--wa-muted)">Channel</label><select id="w119bch"><option value="' + E(chan) + '">#' + E(chan) + '</option></select><button class="btn ghost mini" id="w119bredo">Draft again</button></div>' +
       '<div class="m-actions"><button class="btn" id="w119bpost" disabled>Post to Slack</button> <button class="btn ghost" id="w119bcopy">Copy</button> <button class="btn ghost" id="w119bx">Close</button></div></div>');
     document.getElementById('w119bx').addEventListener('click', function () { closeModal(); });

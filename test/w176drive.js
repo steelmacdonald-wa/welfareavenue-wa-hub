@@ -89,7 +89,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.ev(INSTALL);
     let st = await f.ev(() => ({ app: document.body.classList.contains('w153volunteer'), inApp: document.body.classList.contains('w153app'), rail: (document.getElementById('w153rail') || {}).innerText || '', bar: (document.getElementById('w153bar') || {}).innerText || '', tab: (function () { const t = document.querySelector('#tabBar .tab[data-tab="volunteering"]'); return t ? getComputedStyle(t).display : 'none'; })(), chips: (function () { const c = document.querySelector('#volunteering .vl-sub'); return c ? getComputedStyle(c).display : 'none'; })() }));
     ok('#volunteering opens the Volunteer Manager app', st.app && st.inApp, st);
-    ok('rail: servings and people', /Volunteer Manager/i.test(st.rail + st.bar) && /Calendar/.test(st.rail) && /The SOP/.test(st.rail) && /Recipes/.test(st.rail) && /Inventory/.test(st.rail) && /Volunteers/.test(st.rail), st.rail);
+    ok('rail: servings and people (wave259: five places)', /Volunteer Manager/i.test(st.rail + st.bar) && /Calendar/.test(st.rail) && /People/.test(st.rail) && /Messages/.test(st.rail) && /Setup/.test(st.rail), st.rail);
     ok('the Hub menu no longer lists MTL volunteering', st.tab === 'none', st.tab);
     ok('the page chips give way to the rail on a computer', st.chips === 'none', st.chips);
     ok('Text volunteers in the page header (wave197: no app bar on a computer)', await f.ev(() => /Text volunteers/.test((document.querySelector('.panel.active > .w118mast [data-w197proxy="text"]') || {}).textContent || '')), st.bar);
@@ -97,7 +97,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.page.click('.panel.active > .w118mast [data-w197proxy="text"]'); await f.page.waitForTimeout(300);
     ok('Text volunteers opens the texting window', await f.ev(() => window.__tx === 1));
     await f.hash('#volunteering/people', 1800);
-    ok('rail marks Volunteers', await f.ev(() => { const on = document.querySelector('#w153rail .w153it.on, #w153rail [aria-current="page"]'); return !!on && /Volunteers/.test(on.textContent); }));
+    ok('rail marks Volunteers', await f.ev(() => { const on = document.querySelector('#w153rail .w153it.on, #w153rail [aria-current="page"]'); return !!on && /People/.test(on.textContent); }));
     const pid = await f.ev(() => { const a = document.querySelector('[data-w26e]'); return a ? a.getAttribute('data-w26e') : null; });
     if (pid) {
       await f.page.click('[data-w26e="' + pid + '"]'); await f.page.waitForTimeout(400);
