@@ -2,7 +2,7 @@
 
 Steel, 16/10/26: "nobody should have access to the executive dashboard", then "Admins yes, add Shima"; and "people need to do trainings for each page and or app before they start using it. Can we prevent individuals going on to different tools and pages with an indication that they first must do a training to unlock the page". His choices: the lock applies to everyone but the admins (current staff included: the next time they open a page they have not toured, it is locked until they do); what unlocks a page is that page's tour.
 
-Live 16/10/26 (Toronto, early afternoon): index.html `43d938a65eb0b4558d08973a8a3d36e0` (7,518,968 bytes) over the waves 258v and 259 build `7678c616`. Migrations `wa260_page_gate` and `wa260b_profiles_module1_release` (source: `build/data/wa260_page_gate.sql`).
+Live 16/10/26 (Toronto, early afternoon): index.html `1cecc2a367cc40157ab74d5b02797f29` (7,519,552 bytes; first shipped as `43d938a65eb0b4558d08973a8a3d36e0` over the waves 258v and 259 build `7678c616`, then a fix: a director refused the Dashboard landed on an empty Board overview, because a fallback skips a registered page's own drawing; `landed()` now draws it). Migrations `wa260_page_gate` and `wa260b_profiles_module1_release` (source: `build/data/wa260_page_gate.sql`).
 
 ## 1. The Executive dashboard: the admins and Shima
 

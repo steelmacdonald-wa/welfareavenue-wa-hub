@@ -194,6 +194,14 @@
       return t && allowed().indexOf(t) >= 0 ? t : null;
     } catch (e) { return null; }
   }
+  /* a registered page (the Board overview) draws itself on its own route, which a fallback skips: draw it */
+  function landed(id) {
+    try {
+      if (rootOf() === id) return;
+      var pg = null; ((window.WA_NAV && WA_NAV.pages) || []).forEach(function (x) { if (x && x.id === id) pg = x; });
+      if (pg && typeof pg.onShow === 'function') setTimeout(function () { try { if (activePanel() && activePanel().id === id) pg.onShow(id); } catch (e) { /* fine */ } }, 0);
+    } catch (e) { /* fine */ }
+  }
   /* wave40's showPanel calls this for a page the person may not open */
   function fallback(id) {
     try {
@@ -205,7 +213,7 @@
         if (t) { S.decGo = { team: t, id: parts[1], at: Date.now() }; setTimeout(goDecision, 0); return home(); }
       }
       if (root && DASH_ROOTS.indexOf(root) >= 0) { S.refused = Date.now(); if (!S.cfgLoaded) S.early = location.hash; }
-      return home();
+      var h = home(); landed(h); return h;
     } catch (e) { return 'mypage'; }
   }
   function goDecision() {
@@ -308,12 +316,16 @@
       /* the Dashboard reached some other way (the first paint before the roles were in, an old link) */
       if (known() && !dashOk() && (id === 'overview' || id === 'dashboard') && typeof showPanel === 'function') {
         if (DASH_ROOTS.indexOf(rootOf()) >= 0) S.refused = Date.now();
-        var h = home(); if (h !== id && document.getElementById(h)) { showPanel(h); return; }
+        var h = home(); if (h !== id && document.getElementById(h)) { showPanel(h); landed(h); return; }
       }
       if (S.refused && Date.now() - S.refused < 4000) {
         S.refused = 0; showNote();
         /* the address says where the person is (as wave130 does for a refused page) */
-        try { if (DASH_ROOTS.indexOf(rootOf()) >= 0 && history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#' + id); } catch (e) { /* fine */ }
+        try {
+          if (DASH_ROOTS.indexOf(rootOf()) >= 0 && history.replaceState) {
+            history.replaceState(null, '', location.pathname + location.search + '#' + id);
+          }
+        } catch (e) { /* fine */ }
       } else noteTidy();
       if (!p || tourRunning() || S.touring) { unlockAll(); return; }
       var t = lockedFor(id);
