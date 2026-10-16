@@ -287,6 +287,8 @@
 260_wave260
 # 262_wave262: a simpler Hub for each person (Steel, 20/10/26, after the 19/10 leadership meeting): Home shows what matters first, the rest behind Show everything on Home (wa262.home); the What changed pop-up on Home, once per person, with its tour (tour:whatsnew) and the person's apps. Also in this wave: 134 (the More fold and Other teams under your team), 153 (Your apps, More apps), 127 and 131 (The Brain in Other Tools), 118 (its crumb), 122 (the chrome and Home tours), 213 (batched saves, All in this section, due today). Data: build/data/wa262a_confirm_fast.sql, wa262b_due_today.sql.
 262_wave262
+# 261_wave261: the Holiday Gift Basket Drive's pop-up forms (website), the CRM's form groups (crm_forms.purpose: chips and sections in Forms, the editor's Group; saving keeps a multi's max and the options' descriptions; parts152 i_forms) and Gifts collected on the drive's event in the Fundraising app (this segment, called from parts124 f_sheet openFund: wa261_gifts, wa261_gift_save). Data: build/data/wa261_drive_forms.sql, build/data/wa261_forms.py.
+261_wave261
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

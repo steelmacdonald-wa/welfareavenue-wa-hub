@@ -1,0 +1,182 @@
+/* =====================================================================
+   WA v261 The Holiday Gift Basket Drive's forms, the CRM's form groups, and Gifts collected (16/10/26)
+   =====================================================================
+   Steel (16/10/26): "I think we should have a new volunteer application form via the hub so that we can collect them on
+   that page as a pop-up form, to donate gifts and essentials, to volunteer with us. I don't want it to bring people to a
+   different page. I want it to pop up a form for each of those actions that they can take. Same thing for companies and
+   sponsors and schools and groups. The forms in the CRM need to be maybe grouped. We can maybe group forms for different
+   purposes, like volunteers." And, about the drive page's gift counter: "this should be editable".
+
+   1. The website (welfareavenue.com/gift-basket-drive/, /fr/paniers-cadeaux/): four pop-up forms from the CRM (build/www/
+      patches/261_drive_popups.py, assets/forms.js), the gift counter (assets/drive.js). Data: build/data/wa261_drive_forms.sql.
+   2. The CRM's Forms tab (parts152/i_forms.js): the form groups (crm_forms.purpose) as chips and sections; the editor picks
+      the group; saving keeps what the editor does not show (a multi's max, the options' descriptions).
+   3. This segment: Gifts collected on the drive's event in the Fundraising app (the wave124 sheet, openFund calls
+      w261.slot and w261.fill): the count toward the gift goal (what the website shows: received batches and confirmed
+      pledges), the pledges that wait for a Confirm (a pledge from the website form waits, so the public number never grows
+      from an unverified submission), every batch, and Add gifts, Edit, Confirm, Mark received, Remove. Reads wa261_gifts,
+      writes wa261_gift_save (both check wa_fund_ok() inside: people who can open the Fundraising app). Money stays in the
+      CRM's gifts. The campaign of an event is app_config donate_campaigns' fund_event_id. */
+(function () {
+  'use strict';
+  if (window.__wa261) return; window.__wa261 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', SAND = '#F5ECD9';
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var S = { cfg: null, cfgP: null, data: {}, form: null, confirmDel: null, busy: false, err: '', msg: '' };
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function num(n) { try { return Number(n || 0).toLocaleString('en-CA'); } catch (e) { return String(n || 0); } }
+  function day(d) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d || '')); return m ? Number(m[3]) + ' ' + MON[Number(m[2]) - 1] + ' ' + m[1] : ''; }
+  function today() { var d = new Date(); try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); } catch (e) { return d.toISOString().slice(0, 10); } }
+  function client() { try { return typeof db !== 'undefined' ? db : null; } catch (e) { return null; } }
+  function staff() { try { return typeof isStaff === 'function' ? !!isStaff() : true; } catch (e) { return false; } }
+
+  /* the campaigns, from app_config donate_campaigns (staff read app_config): which one is this event's */
+  function loadCfg() {
+    if (S.cfg) return Promise.resolve(S.cfg);
+    if (S.cfgP) return S.cfgP;
+    var c = client(); if (!c) return Promise.resolve({});
+    S.cfgP = Promise.resolve(c.from('app_config').select('value').eq('key', 'donate_campaigns').maybeSingle()).then(function (r) {
+      var v = r && r.data ? r.data.value : null; try { v = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { v = null; }
+      S.cfg = v && typeof v === 'object' ? v : {}; return S.cfg;
+    }).catch(function () { S.cfg = {}; return S.cfg; });
+    return S.cfgP;
+  }
+  function slugFor(eventId) {
+    var c = S.cfg || {}, out = null;
+    Object.keys(c).forEach(function (k) { if (c[k] && String(c[k].fund_event_id) === String(eventId)) out = k; });
+    return out;
+  }
+  function slot(f) {
+    if (!f || !f.id || !staff()) return '';
+    return '<div class="w261g" data-w261ev="' + E(f.id) + '" hidden></div>';
+  }
+  function box() { return document.querySelector('#w124sheet .w261g'); }
+  function load(slug) {
+    var c = client(); if (!c) return Promise.resolve(null);
+    return Promise.resolve(c.rpc('wa261_gifts', { p_slug: slug })).then(function (r) {
+      if (!r || r.error || !r.data) return null;
+      S.data[slug] = r.data; return r.data;
+    }).catch(function () { return null; });
+  }
+  function fill(f) {
+    var b = box(); if (!b) return Promise.resolve();
+    S.form = null; S.confirmDel = null; S.err = ''; S.msg = '';
+    return loadCfg().then(function () {
+      var slug = slugFor(f.id), b2 = box();
+      if (!slug || !b2 || b2.getAttribute('data-w261ev') !== String(f.id)) { if (b2) b2.remove(); return; }
+      b2.setAttribute('data-w261slug', slug);
+      return load(slug).then(function (d) { var b3 = box(); if (!b3) return; if (!d) { b3.remove(); return; } paint(); });
+    });
+  }
+  function rowHtml(g) {
+    var waiting = g.status === 'pledged' && !g.confirmed_at;
+    var chip = g.status === 'received' ? ['Received' + (g.received_on ? ' ' + day(g.received_on) : ''), GREEN] : waiting ? ['Pledged, waiting to confirm', FLAG] : ['Pledged, confirmed' + (g.received_on ? ', expected ' + day(g.received_on) : ''), GOLD];
+    var acts = [];
+    if (waiting) acts.push('<button type="button" class="w261b" data-w261do="confirm" data-id="' + E(g.id) + '">Confirm</button>');
+    if (g.status === 'pledged') acts.push('<button type="button" class="w261b ghost" data-w261do="receive" data-id="' + E(g.id) + '">Mark received</button>');
+    acts.push('<button type="button" class="w261b ghost" data-w261do="edit" data-id="' + E(g.id) + '">Edit</button>');
+    acts.push('<button type="button" class="w261b ghost" data-w261do="remove" data-id="' + E(g.id) + '">Remove</button>');
+    var del = S.confirmDel === String(g.id) ? '<div class="w261cf" role="alert">Remove this batch of ' + num(g.quantity) + '? It leaves the count on the website too.' +
+      '<span><button type="button" class="w261b" data-w261do="removeok" data-id="' + E(g.id) + '">Remove it</button><button type="button" class="w261b ghost" data-w261do="keep">Keep it</button></span></div>' : '';
+    return '<li class="w261r' + (waiting ? ' wait' : '') + '" data-w261row="' + E(g.id) + '"><div class="w261rt"><b>' + num(g.quantity) + '</b><span>' + E(g.what || 'Gifts') + '</span>' +
+      '<i class="w261chip" style="--c:' + chip[1] + '">' + E(chip[0]) + '</i></div>' +
+      ((g.given_by || g.note) ? '<p class="w261rm">' + (g.given_by ? 'From ' + E(g.given_by) : '') + (g.given_by && g.note ? ' \u00b7 ' : '') + (g.note ? E(g.note) : '') + '</p>' : '') +
+      (S.form && S.form.id === String(g.id) ? formHtml(g) : '<div class="w261ra">' + acts.join('') + '</div>') + del + '</li>';
+  }
+  function formHtml(g) {
+    var isNew = !g, v = g || { quantity: '', what: '', given_by: '', received_on: today(), status: 'received', note: '', confirmed_at: null };
+    var conf = isNew ? true : !!v.confirmed_at, pid = 'w261f' + (isNew ? 'n' : v.id);
+    return '<form class="w261f" data-w261form="' + (isNew ? '' : E(v.id)) + '" novalidate><h4>' + (isNew ? 'Add gifts' : 'Edit this batch') + '</h4>' +
+      '<div class="w261two"><label for="' + pid + 'q">How many<input id="' + pid + 'q" name="quantity" type="number" min="1" step="1" inputmode="numeric" required value="' + E(v.quantity) + '"></label>' +
+      '<label for="' + pid + 'w">What<input id="' + pid + 'w" name="what" maxlength="300" placeholder="Books, toys, hygiene kits" value="' + E(v.what || '') + '"></label></div>' +
+      '<div class="w261two"><label for="' + pid + 'g">From <em>optional</em><input id="' + pid + 'g" name="given_by" maxlength="200" placeholder="A company, a school, a person" value="' + E(v.given_by || '') + '"></label>' +
+      '<label for="' + pid + 'd">Date<input id="' + pid + 'd" name="received_on" type="date" value="' + E(v.received_on || '') + '"></label></div>' +
+      '<div class="w261two"><label for="' + pid + 's">Status<select id="' + pid + 's" name="status"><option value="received"' + (v.status === 'received' ? ' selected' : '') + '>Received (in our hands)</option><option value="pledged"' + (v.status === 'pledged' ? ' selected' : '') + '>Pledged (promised)</option></select></label>' +
+      '<label class="w261ck"' + (v.status === 'pledged' ? '' : ' hidden') + ' data-w261conf><input type="checkbox" name="confirmed"' + (conf ? ' checked' : '') + '> Confirmed with the giver (counts on the website)</label></div>' +
+      '<label for="' + pid + 'n">Note <em>optional</em><textarea id="' + pid + 'n" name="note" maxlength="2000" rows="2">' + E(v.note || '') + '</textarea></label>' +
+      (S.err ? '<p class="w261err" role="alert">' + E(S.err) + '</p>' : '') +
+      '<div class="w261ra"><button type="submit" class="w261b"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : isNew ? 'Add them' : 'Save') + '</button><button type="button" class="w261b ghost" data-w261do="cancel">Cancel</button></div></form>';
+  }
+  function paint() {
+    var b = box(); if (!b) return;
+    var slug = b.getAttribute('data-w261slug'), d = S.data[slug]; if (!d) return;
+    var goal = Number(d.gift_goal) || 0, n = Number(d.counted) || 0, pct = goal ? Math.max(0, Math.min(100, n / goal * 100)) : 0;
+    var rows = d.rows || [];
+    b.hidden = false;
+    b.innerHTML = '<div class="w261hd"><h3>Gifts collected</h3><span class="w261n"><b>' + num(n) + '</b>' + (goal ? ' of ' + num(goal) : '') + '</span></div>' +
+      (goal ? '<div class="w261bar" role="progressbar" aria-label="Gifts collected toward ' + num(goal) + '" aria-valuemin="0" aria-valuemax="' + goal + '" aria-valuenow="' + Math.min(n, goal) + '"><span style="width:' + (n > 0 ? Math.max(pct, 1.5) : 0).toFixed(1) + '%"></span></div>' : '') +
+      '<p class="w261m">The drive\u2019s page on the website shows ' + num(n) + ': the batches received and the pledges someone confirmed. Money is counted apart, in the CRM\u2019s gifts.' +
+      (Number(d.waiting_n) ? ' <b>' + (Number(d.waiting_n) === 1 ? 'One pledge waits' : num(d.waiting_n) + ' pledges wait') + ' for a Confirm (' + num(d.waiting) + ' items).</b>' : '') + '</p>' +
+      (S.msg ? '<p class="w261ok" role="status">' + E(S.msg) + '</p>' : '') +
+      (S.form && S.form.id === '' ? formHtml(null) : '<div class="w261ra"><button type="button" class="w261b" data-w261do="add">+ Add gifts</button></div>') +
+      (S.err && !S.form ? '<p class="w261err" role="alert">' + E(S.err) + '</p>' : '') +
+      (rows.length ? '<ul class="w261l">' + rows.map(rowHtml).join('') + '</ul>' : '<p class="w261m">No gifts recorded yet.</p>');
+    syncConf();
+  }
+  function syncConf() {
+    var f = document.querySelector('#w124sheet .w261f'); if (!f) return;
+    var st = f.querySelector('select[name="status"]'), ck = f.querySelector('[data-w261conf]');
+    if (st && ck) ck.hidden = st.value !== 'pledged';
+  }
+  function save(p, done) {
+    var c = client(), b = box(); if (!c || !b) return;
+    var slug = b.getAttribute('data-w261slug');
+    S.busy = true; S.err = ''; if (S.form) paint();
+    Promise.resolve(c.rpc('wa261_gift_save', { p: Object.assign({ slug: slug }, p) })).then(function (r) {
+      S.busy = false;
+      if (!r || r.error) { S.err = String((r && r.error && r.error.message) || 'Not saved. Try again.'); paint(); return; }
+      S.form = null; S.confirmDel = null; S.msg = done || 'Saved.';
+      return load(slug).then(function () { paint(); var a = document.querySelector('#w124sheet [data-w261do="add"]'); if (a) { try { a.focus({ preventScroll: true }); } catch (e) { /* fine */ } } });
+    }).catch(function () { S.busy = false; S.err = 'Not saved: the Hub could not be reached.'; paint(); });
+  }
+  function rowById(id) { var b = box(), d = b && S.data[b.getAttribute('data-w261slug')]; return d ? (d.rows || []).filter(function (g) { return String(g.id) === String(id); })[0] || null : null; }
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w261do]') : null; if (!t || !t.closest('.w261g')) return;
+    e.preventDefault();
+    var a = t.getAttribute('data-w261do'), id = t.getAttribute('data-id');
+    S.msg = '';
+    if (a === 'add') { S.form = { id: '' }; S.err = ''; paint(); var q = document.querySelector('#w124sheet .w261f input[name="quantity"]'); if (q) q.focus(); return; }
+    if (a === 'edit') { S.form = { id: String(id) }; S.err = ''; paint(); var q2 = document.querySelector('#w124sheet .w261f input[name="quantity"]'); if (q2) q2.focus(); return; }
+    if (a === 'cancel') { S.form = null; S.err = ''; paint(); return; }
+    if (a === 'remove') { S.confirmDel = String(id); paint(); return; }
+    if (a === 'keep') { S.confirmDel = null; paint(); return; }
+    if (a === 'removeok') { save({ action: 'remove', id: id }, 'Removed.'); return; }
+    if (a === 'confirm') { var g = rowById(id); save({ action: 'confirm', id: id }, 'Confirmed: ' + num(g ? g.quantity : 0) + ' more on the website.'); return; }
+    if (a === 'receive') { save({ action: 'receive', id: id, received_on: today() }, 'Marked received today.'); return; }
+  });
+  document.addEventListener('change', function (e) { if (e.target && e.target.closest && e.target.closest('.w261f') && e.target.name === 'status') syncConf(); });
+  document.addEventListener('submit', function (e) {
+    var f = e.target; if (!f || !f.matches || !f.matches('.w261f')) return;
+    e.preventDefault();
+    var v = function (n) { var el = f.elements[n]; return el ? (el.type === 'checkbox' ? el.checked : el.value) : ''; };
+    var q = String(v('quantity')).trim();
+    if (!/^\d{1,7}$/.test(q) || Number(q) < 1) { S.err = 'How many gifts? A whole number above 0.'; paint(); var qi = document.querySelector('#w124sheet .w261f input[name="quantity"]'); if (qi) qi.focus(); return; }
+    var id = f.getAttribute('data-w261form');
+    save({ action: id ? 'edit' : 'add', id: id || null, quantity: q, what: v('what'), given_by: v('given_by'), received_on: v('received_on'), status: v('status'), confirmed: v('status') === 'pledged' ? !!v('confirmed') : false, note: v('note') },
+      id ? 'Saved.' : 'Added: ' + num(q) + (v('status') === 'received' || v('confirmed') ? ' more on the website.' : ', waiting for a Confirm.'));
+  });
+
+  var css = document.createElement('style'); css.id = 'w261css';
+  css.textContent = ''
+    + '.w261g{margin:16px 0 4px;border:1px solid rgba(16,63,57,.14);border-top:4px solid ' + GOLD + ';border-radius:14px;padding:14px 16px;background:' + CREAM + ';}'
+    + '.w261hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;}.w261hd h3{margin:0;font-family:"Barlow Condensed",sans-serif;font-size:20px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';}'
+    + '.w261n{font-size:14px;color:' + MUTED + ';}.w261n b{font-family:"Barlow Condensed",sans-serif;font-size:30px;color:' + GREEN + ';margin-right:4px;}'
+    + '.w261bar{position:relative;height:10px;border-radius:6px;background:rgba(16,63,57,.1);overflow:hidden;margin:10px 0 6px;}.w261bar span{position:absolute;left:0;top:0;bottom:0;background:' + GOLD + ';border-radius:6px;}'
+    + '.w261m{font-size:13px;color:' + MUTED + ';margin:6px 0 10px;line-height:1.45;}.w261m b{color:' + FLAG + ';font-weight:600;}.w261ok{font-size:13px;color:' + GREEN + ';font-weight:600;margin:4px 0 8px;}.w261err{font-size:13px;color:' + FLAG + ';font-weight:600;margin:6px 0;}'
+    + '.w261ra{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px;}'
+    + '.w261b{font:inherit;font-size:13px;font-weight:600;border:1px solid ' + GREEN + ';background:' + GREEN + ';color:' + CREAM + ';border-radius:999px;padding:6px 13px;cursor:pointer;min-height:32px;}'
+    + '.w261b.ghost{background:transparent;color:' + GREEN + ';border-color:rgba(16,63,57,.3);}.w261b:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}.w261b[disabled]{opacity:.6;cursor:default;}'
+    + '.w261l{list-style:none;margin:8px 0 0;padding:0;}.w261r{border-top:1px solid rgba(16,63,57,.1);padding:10px 0;}.w261r.wait{background:linear-gradient(90deg,rgba(179,64,47,.06),transparent);}'
+    + '.w261rt{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;}.w261rt b{font-family:"Barlow Condensed",sans-serif;font-size:22px;color:' + GREEN + ';}.w261rt span{font-weight:600;color:' + INK + ';}'
+    + '.w261chip{font-style:normal;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);}'
+    + '.w261rm{margin:3px 0 4px;font-size:13px;color:' + MUTED + ';overflow-wrap:anywhere;}'
+    + '.w261cf{margin:6px 0 0;padding:8px 10px;border-radius:10px;background:' + SAND + ';font-size:13px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.w261cf span{display:flex;gap:6px;}'
+    + '.w261f{margin:8px 0 4px;padding:10px 12px;border:1px dashed rgba(16,63,57,.25);border-radius:12px;}.w261f h4{margin:0 0 8px;font-size:14px;color:' + GREEN + ';}'
+    + '.w261f label{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:' + INK + ';margin:0 0 8px;}.w261f label em{font-style:normal;font-weight:400;color:' + MUTED + ';}'
+    + '.w261f input,.w261f select,.w261f textarea{font:inherit;font-size:14px;font-weight:400;border:1px solid rgba(16,63,57,.22);border-radius:9px;padding:7px 9px;background:' + CREAM + ';color:' + INK + ';width:100%;box-sizing:border-box;}'
+    + '.w261f label.w261ck{flex-direction:row;align-items:center;gap:7px;font-weight:500;}.w261f label.w261ck input{width:16px;height:16px;accent-color:' + GREEN + ';}.w261ck[hidden]{display:none;}'
+    + '.w261two{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;align-items:end;}@media (max-width:560px){.w261two{grid-template-columns:1fr;}}';
+  document.head.appendChild(css);
+
+  window.w261 = { slot: slot, fill: fill, state: function () { return S; } };
+})();

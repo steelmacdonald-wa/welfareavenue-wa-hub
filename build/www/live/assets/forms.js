@@ -10,7 +10,10 @@
    line above the form says so ("Not you?" signs out). Signed out, with accounts on, the line offers to sign in first and
    come back (/account/?next=).
    wave236 (14/10/26, Steel: the sign-up and application forms pop up over the page instead of taking up room in it): a
-   form box with data-wa-popup opens in a pop-up; see Popup() at the end. */
+   form box with data-wa-popup opens in a pop-up; see Popup() at the end.
+   wave261 (16/10/26, Steel: on the Holiday Gift Basket Drive page "I want it to pop up a form for each of those actions that
+   they can take"): several pop-ups in one section (data-wa-popup-id names each one), and a pop-up whose launcher is just
+   its button or link in the page's own card (data-wa-popup-bare="<the launcher's classes>"). */
 (function () {
   'use strict';
   var B = document.body, SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
@@ -258,12 +261,15 @@
      it; what someone typed is kept if they reopen it. A role link on the Join page (data-pick) ticks that role in the form,
      and since wave237 so does "Apply for this role" on a Montreal role card (data-role, a value of the roles question).
      Its styles are forms.css, loaded only on pages with a pop-up. Without JavaScript the card keeps the page's own message. */
-  var CSS_V = 'cb125b2b', POPS = {};
+  var CSS_V = 'e5d8d961', POPS = {};
   function Popup(box, n) {
-    var sec = box.closest('section[id]'), sid = sec ? sec.id : 'waf' + n, fr = PAGE_LANG === 'fr';
+    var sec = box.closest('section[id]'), fr = PAGE_LANG === 'fr';
+    /* wave261: data-wa-popup-id names the pop-up when a section holds several (#give-items opens give-items-form) */
+    var pid = (box.getAttribute('data-wa-popup-id') || '').replace(/[^a-z0-9-]/gi, ''), sid = pid || (sec ? sec.id : 'waf' + n);
     var label = box.getAttribute('data-wa-popup') || (fr ? 'Ouvrir le formulaire' : 'Open the form');
     var note = box.getAttribute('data-wa-popup-note') || '';
-    var h = box.querySelector('.waf-fallback h3'), title = h ? h.textContent : label;
+    var bare = box.getAttribute('data-wa-popup-bare');
+    var h = box.querySelector('.waf-fallback h3'), title = box.getAttribute('data-wa-popup-title') || (h ? h.textContent : label);
     var d = document.createElement('dialog'); d.className = 'waf-dialog'; d.id = sid + '-form'; d.setAttribute('aria-label', title);
     d.innerHTML = '<div class="waf-sheet"><div class="waf-bar"><button type="button" class="waf-x" aria-label="' + E(fr ? 'Fermer' : 'Close') + '">×</button></div>' +
       '<div class="form-card waf-dbody"></div></div>';
@@ -272,9 +278,17 @@
     if (box.hasAttribute('data-heading')) body.setAttribute('data-heading', box.getAttribute('data-heading'));
     body.innerHTML = box.innerHTML;
     document.body.appendChild(d);
-    box.removeAttribute('data-wa-form'); box.classList.add('waf-launch');
-    box.innerHTML = '<h3>' + E(title) + '</h3>' + (note ? '<p class="waf-note">' + E(note) + '</p>' : '') +
-      '<button type="button" class="btn waf-open" aria-haspopup="dialog" aria-controls="' + E(d.id) + '">' + E(label) + '</button>';
+    box.removeAttribute('data-wa-form');
+    if (bare != null) {
+      /* wave261: only the launcher, styled like the link or button it replaces (its arrow kept) */
+      var ar = box.querySelector('svg.ar'), arh = ar ? ar.outerHTML : '';
+      box.classList.add('waf-bare');
+      box.innerHTML = '<button type="button" class="' + E(bare || 'btn') + ' waf-open" aria-haspopup="dialog" aria-controls="' + E(d.id) + '">' + E(label) + arh + '</button>';
+    } else {
+      box.classList.add('waf-launch');
+      box.innerHTML = '<h3>' + E(title) + '</h3>' + (note ? '<p class="waf-note">' + E(note) + '</p>' : '') +
+        '<button type="button" class="btn waf-open" aria-haspopup="dialog" aria-controls="' + E(d.id) + '">' + E(label) + '</button>';
+    }
     var opener = null, downOut = false;
     function open(from) {
       opener = from && from.focus ? from : document.activeElement;

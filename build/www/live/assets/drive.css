@@ -29,3 +29,12 @@
 @media (min-width:860px){.drg{grid-template-columns:repeat(5,1fr)}.drg button:last-child{grid-column:auto}.drg img,.drg button:last-child img{aspect-ratio:3/4}}
 .drw .way p+p{margin-top:12px}
 .drw .way .fine{font-size:14px}
+/* wave261 (16/10/26): the gifts collected so far, under the goal; hidden while it is 0 */
+.drp-gifts{margin-top:26px;padding-top:22px;border-top:1px solid var(--rule)}
+.drp-gifts[hidden],.drp-gifts [hidden]{display:none}
+.drp-gn{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.drp-gn b{font-family:var(--hf);font-weight:600;font-size:clamp(44px,4.6vw,58px);line-height:1;color:var(--green)}
+.drp-gn span{font-family:var(--hf);font-weight:600;font-size:21px;color:var(--green)}
+.drp-gifts .drp-bar{margin:16px 0 0;max-width:30em}
+.drp-gifts .drp-bar span{background:var(--gold)}
+.drp-gifts .fine{margin:10px 0 0}
