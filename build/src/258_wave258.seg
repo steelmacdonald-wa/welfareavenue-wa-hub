@@ -171,7 +171,8 @@
   function decCard() { var h = document.getElementById('w116host'); var x = h && h.querySelector('.w116dec'); return x ? (x.closest('.w116card') || x) : null; }
 
   /* ---------- 1. Home: the chips ---------- */
-  function routeDecisions() { return !admin() && !execTeam() && !!myTeam(); }
+  /* wave260: the people who open the Dashboard (admins and the people Admin names, Shima first) keep the executive view */
+  function routeDecisions() { if (window.w260 && window.w260.dashOk) return !window.w260.dashOk() && !!myTeam(); return !admin() && !execTeam() && !!myTeam(); }
   function decorateChips() {
     var body = document.getElementById('mpBody'); if (!body) return;
     var chips = Array.prototype.slice.call(body.querySelectorAll('.mp-chips .mp-chip')); if (!chips.length) return;

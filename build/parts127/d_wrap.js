@@ -55,7 +55,8 @@
     try {
       if (typeof wa40Allowed === 'function' && wa40Allowed !== MINE_FN) {
         var inner = wa40Allowed;
-        var fn = function () { var a = inner.apply(this, arguments) || []; try { return shape(a); } catch (e) { return a; } };
+        /* wave260: the Dashboard rule (admins and the people Admin names) applies after the profile, whatever the profile says */
+        var fn = function () { var a = inner.apply(this, arguments) || []; try { a = shape(a); } catch (e) { /* keep */ } try { if (window.w260 && window.w260.trim) a = window.w260.trim(a); } catch (e) { /* keep */ } return a; };
         Object.keys(inner).forEach(function (k) { try { fn[k] = inner[k]; } catch (e) { /* fine */ } });
         MINE_FN = fn; wa40Allowed = fn;
       }

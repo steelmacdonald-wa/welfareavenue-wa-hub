@@ -6,7 +6,8 @@
    Identities: admin (an admin), member (a member on the HR profile), leader, board (a board viewer), plain (a member on a team profile).
    The fixture defaults to test/fixture_live.json when present, else the scratchpad copy, else test/fixture.json.
    Clock fixed at 2026-09-25 16:00 Toronto; all network except the page and the stubbed libraries is blocked.
-   o.csp (wave204): serve the page with that Content-Security-Policy header, as Netlify does (build/site/_headers). */
+   o.csp (wave204): serve the page with that Content-Security-Policy header, as Netlify does (build/site/_headers).
+   o.gate (wave260): keep train-to-unlock on (otherwise the fixture gets app_config page_gate off). */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
@@ -42,6 +43,9 @@ async function fresh(browser, o) {
     const m = (fx.team_members || []).filter(x => (x.email || '').toLowerCase() === (r.email || '').toLowerCase())[0] || {};
     C.email = r.email; C.name = m.name || r.email;
   }
+  /* wave260: the drive tests written before train-to-unlock describe the pages, not the lock: they run with the gate off
+     (app_config page_gate off) unless they ask for it with o.gate (test/w260drive.js does) */
+  if (!o.gate) { fx.app_config = (fx.app_config || []).filter(x => x.key !== 'page_gate'); fx.app_config.push({ key: 'page_gate', value: 'off' }); }
   C.patch.forEach(p => { const r = (fx.hub_roles || []).filter(x => x.email === p.email)[0]; if (r) Object.assign(r, p, { tabs: null }); else (fx.hub_roles = fx.hub_roles || []).push(Object.assign({ tabs: null, note: null }, p)); });
   if (!fx.org_positions && fs.existsSync(SP + 'org_positions.json')) fx.org_positions = JSON.parse(fs.readFileSync(SP + 'org_positions.json', 'utf8'));
   const ctx = await browser.newContext({ viewport: { width: W, height: o.height || (PHONE ? 844 : 900) }, isMobile: PHONE, hasTouch: PHONE });

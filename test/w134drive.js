@@ -31,16 +31,18 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
   /* wave163: Avenue Academy under Home, The Brain after the Calendar, then Departments, Other Tools and Organization;
      the goal pages are the Strategy app and Partners is in the CRM (wave153 keeps them out of the menu) */
   const WANT = {
-    admin: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'], tools: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'], org: ['orgchart', 'ourstory', 'hubmail'] },
-    member: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'] },
-    leader: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'] },
-    board: { top: ['overview', 'calendar'] }
+    /* 09/10/26: Team Requests sits above the Calendar; wave260 (16/10/26): the Executive dashboard is for the admins and
+       app_config dashboard_people (the fixture's leader is Shima, who is named there), so members and directors do not have it */
+    admin: { top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'], tools: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'], org: ['orgchart', 'ourstory', 'hubmail'] },
+    member: { top: ['mypage', 'training', 'requests', 'calendar', 'brain'] },
+    leader: { top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'] },
+    board: { top: ['calendar'] }
   };
   for (const who of ['admin', 'member', 'leader', 'board']) {
     const f = await fresh(browser, { who });
     const m = await f.ev(MENU);
     ok(who + ': the layout holds and no Strategy or More group is left', m.ok && !m.old, m);
-    ok(who + ': ' + (who === 'board' ? 'the Executive dashboard and the Calendar lead' : 'Home, Avenue Academy, the Executive dashboard, the Calendar and The Brain lead') + ' the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
+    ok(who + ': ' + (who === 'board' ? 'the Calendar leads' : (who === 'member' ? 'Home, Avenue Academy, Team Requests, the Calendar and The Brain lead' : 'Home, Avenue Academy, the Executive dashboard, Team Requests, the Calendar and The Brain lead')) + ' the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
     if (who === 'admin') {
       ['tools', 'org'].forEach(g => ok('admin: ' + g + ' holds its pages in order', m.groups[g] && JSON.stringify(m.groups[g].items) === JSON.stringify(WANT.admin[g]), m.groups[g]));
       ok('admin: the group names read as the layout says (Other Tools, Organization; no Goals and projects, Meetings, Requests and inbox, People or Resources)', m.groups.tools && m.groups.tools.label === 'Other Tools' && m.groups.org && m.groups.org.label === 'Organization' && !['goals', 'meetings', 'inbox', 'people', 'resources', 'apps'].some(g => m.groups[g]), m.groups);

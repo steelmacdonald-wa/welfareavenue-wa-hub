@@ -66,6 +66,8 @@
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
   };
   var LOCK = {
+    overview: 'Only admins and the people named in Admin, Page tours open the Executive dashboard, whatever the profile says (Steel, 16/10/26).',
+    dashboard: 'Only admins and the people named in Admin, Page tours open the Executive dashboard, whatever the profile says (Steel, 16/10/26).',
     finances: 'The ledger, budgets and statements follow the profile in the database, not just the menu.',
     governance: 'Board data follows the profile in the database. Directors always see it.',
     committees: 'Board data follows the profile in the database. Directors always see it.',

@@ -1196,7 +1196,7 @@
     var list = A.trainings.filter(function (t) { return kindOf(t) === 'tour' && visibleT(t); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
     if (!list.length) return '';
     var done = list.filter(function (t) { return isDone(t.id); }).length;
-    return '<section class="w122sec" data-sec="tours"><div class="w122sech"><div><h2>Page tours</h2><div class="sub">A guided walkthrough of every page you can open, section by section. Each takes a minute or two.</div></div></div>' +
+    return '<section class="w122sec" data-sec="tours"><div class="w122sech"><div><h2>Page tours</h2><div class="sub">A guided walkthrough of every page you can open, section by section. Each takes a minute or two, and a page opens for you once you have taken its tour.</div></div></div>' +
       '<div class="w122tourbar">' + ic('map') + '<b>' + done + ' of ' + list.length + '</b><span>toured</span><div class="bar"><i style="width:' + Math.round(100 * done / list.length) + '%"></i></div><span style="color:#797773">Tour them all for the Hub Navigator certificate.</span></div>' +
       '<div class="w122tours">' + list.map(function (t) {
         var k = tourKeyOf(t), d = TOURS[k] || {}, ok = isDone(t.id);
@@ -1774,7 +1774,7 @@
       S('#overview .add-row', 'Add a decision', 'Anyone can raise a call that needs an executive.', OPT),
       S('#decDoneWrap', 'Decided', 'Every decision made, with its note, stays here for the record.', OPT)
     ] },
-    dashboard: { tab: 'dashboard', icon: 'target', hash: '#dashboard', avail: function () { return staffOk() && !!document.getElementById('overview'); }, steps: [
+    dashboard: { tab: 'dashboard', icon: 'target', hash: '#dashboard', avail: function () { return staffOk() && !!document.getElementById('overview') && (!window.w260 || window.w260.dashOk()); }, steps: [   /* wave260: the Dashboard is for the admins (and the people Admin names) */
       S('#w111body .w118mast || #dashboard .w118mast', 'How work moves', 'Time to close, open workload and aging, team by team.'),
       S('#w111body .progress-box', 'The headline', 'Open versus completed tasks, and the average days to close across the organization.', OPT),
       S('#w111body .dash', 'Days to close, by team', 'How long tasks take from first raised to closed, per department. Shorter bars mean work moves faster.', OPT),
@@ -1881,7 +1881,7 @@
       S('#w122 [data-sec="next"]', 'Up next', 'What you started, what was assigned to you, and what is recommended for your team.', OPT),
       S('#w122 [data-sec="paths"]', 'Learning Avenues', 'Short series with a certificate at the end.', OPT),
       S('#w122 [data-sec="sops"]', 'Our SOPs', 'How we run the things we do again and again, step by step, with what we learned last time. Your team\u2019s come first, and each one links to its events on the events calendar. Leaders and team members can write and update them.', OPT),
-      S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Tour them all for the Hub Navigator certificate.', OPT),
+      S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Each page opens for you once you have taken its tour. Tour them all for the Hub Navigator certificate.', OPT),
       S('#w122 [data-sec="library"]', 'The library', 'Every training: videos, lessons, reading and documents. Filter by type or topic, or search.', OPT),
       S('#w122 [data-sec="trophies"]', 'Trophy case', 'Your certificates and badges. Certificates can be printed or shared with the team.', OPT),
       S('#w122 [data-sec="feed"]', 'Celebrate each other', 'What people across Welfare Avenue earned recently.', OPT)
@@ -2052,6 +2052,7 @@
     closeSheet(true); endTour(true);
     var steps = (typeof d.steps === 'function' ? d.steps() : d.steps).slice();
     T = { key: key, d: d, steps: steps, i: -1, max: 0, tr: A.byKey['tour:' + key] || null, busy: false, navAt: performance.now() };
+    tourEvent('start', key);
     var tr = T.tr; if (tr) { var cur = mine(tr.id); if (!cur || cur.status !== 'done') saveProg(tr, { status: cur && cur.status === 'assigned' ? 'assigned' : 'started', started_at: (cur && cur.started_at) || nowIso(), last_step: 0 }); }
     tourLayer();
     var h = typeof d.hash === 'function' ? d.hash() : d.hash;
@@ -2131,13 +2132,21 @@
     if (T && !silent && T.tr && !isDone(T.tr.id)) saveProg(T.tr, { last_step: T.max, pct: Math.min(95, Math.round(100 * (T.max + 1) / Math.max(1, T.steps.length))) });
     var was = T; T = null;
     if (was && !silent) toastS('Tour paused. Pick it up again from the Avenue Academy.');
+    if (was) tourEvent('end', was.key, { silent: !!silent });
+  }
+  /* wave260: the page gate (train to unlock) listens: start, end (stopped before the last step) and finish (completion saved) */
+  function tourEvent(kind, key, extra) {
+    try { window.dispatchEvent(new CustomEvent('w122tour', { detail: Object.assign({ kind: kind, key: key }, extra || {}) })); } catch (e) { /* fine */ }
   }
   async function finishTour() {
     if (!T) return;
     var tr = T.tr, key = T.key;
     var L = document.querySelector('.w122tp'); if (L) L.remove();
     T = null;
-    if (tr) await complete(tr, { last_step: TOURS[key] ? TOURS[key].steps.length : 0 });
+    /* complete() saves the local copy before its first wait, so the gate sees the tour done when it hears finish */
+    var p = tr ? complete(tr, { last_step: TOURS[key] ? TOURS[key].steps.length : 0 }) : null;
+    tourEvent('finish', key);
+    if (p) await p;
     else celebrate(null, { s: stats() });
   }
 
@@ -2654,6 +2663,7 @@
     state: function () { return { R: R, T: T }; },
     load: load, paint: paint, stats: stats, evaluate: evaluate, levelOf: levelOf, resolveStep: resolveStep,
     startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf,
+    isDone: isDone, minutesOf: minutesOf, me: me,   /* wave260: the page gate reads these */
     sop: { html: sopHtml, form: openSopForm, card: injectSopCard, fund: sopFundLoad, body: sopBody, phasesIn: phasesIn, phasesOut: phasesOut }
   };
 })();

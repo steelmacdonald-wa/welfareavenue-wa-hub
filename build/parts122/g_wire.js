@@ -247,6 +247,7 @@
     state: function () { return { R: R, T: T }; },
     load: load, paint: paint, stats: stats, evaluate: evaluate, levelOf: levelOf, resolveStep: resolveStep,
     startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf,
+    isDone: isDone, minutesOf: minutesOf, me: me,   /* wave260: the page gate reads these */
     sop: { html: sopHtml, form: openSopForm, card: injectSopCard, fund: sopFundLoad, body: sopBody, phasesIn: phasesIn, phasesOut: phasesOut }
   };
 })();

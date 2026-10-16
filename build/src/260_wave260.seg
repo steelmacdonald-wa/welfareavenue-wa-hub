@@ -1,0 +1,544 @@
+/* =====================================================================
+   WA v260 Train to unlock, and the Dashboard for the admins (16/10/26)
+   =====================================================================
+   Steel (16/10/26): "nobody should have access to the executive dashboard", then "Admins yes, add Shima";
+   and "people need to do trainings for each page and or app before they start using it. Can we prevent
+   individuals going on to different tools and pages with an indication that they first must do a training
+   to unlock the page". His choices: the lock applies to everyone but the admins (current staff included);
+   what unlocks a page is that page's tour.
+
+   1. The Executive dashboard (page overview, and the Delivery numbers section dashboard) opens for the admins
+      (hub_roles role admin) and the people in app_config dashboard_people (Shima first), whatever the access
+      profile says. window.w260.trim() takes overview and dashboard out of wa40Allowed() for everyone else (wave40's
+      list, and wave127's profile wrapper calls it last), so the menu, the Academy's tour list and every gate that
+      reads wa40Allowed agree. A refused page (wave40's showPanel) lands on w260.landing(): Home, or the Board
+      overview for directors, never the Dashboard; an address that was the Dashboard (#overview, #decisions,
+      #dashboard) says so in one line, "The Dashboard is for the admins." A decision link (#decision/<id>, from
+      search) opens the decision's team page at its decisions instead. wave130's notice lands on the same page.
+   2. Train to unlock: a page with an active page tour (trainings tour:<key>) shows a lock card in its place until
+      the person has finished that tour (training_progress done, the Academy's own record): the page's name, what it
+      is for, "Take the n-minute tour to unlock it", Start the tour, Back to Home. Start the tour shows the page and
+      runs its tour on it (wave122's engine, which records completion exactly as from the Academy); stopping midway
+      locks the page again. Locked pages carry a small lock in the menu and still open (to the card). Never locked:
+      Home, the Avenue Academy, people pages, Needs me, the sign-in and the must-answer pop-ups (they sit above the
+      page), and any page without an active tour or whose tour the person cannot take. Admins never see a lock.
+      The map of page to tour is app_config page_gate_map (built-in default below); the switch is page_gate
+      (on/off), the people let through are page_gate_exempt. Every page arrival goes through showPanel, so menu
+      clicks, links, notifications and deep links follow the same rule.
+   3. Admin, Page tours (#adminpanel/tours): the switch, the people let through, who opens the Dashboard, and every
+      person against every page tour (done, locked, or a page they cannot open), from wa260_page_tours(). Changes go
+      through wa260_gate_set() (admins only, logged in change_log).
+   Data: build/data/wa260_page_gate.sql. Ask the Hub is unchanged. ASCII only.
+   ===================================================================== */
+(function () {
+  'use strict';
+  if (window.__wa260) return; window.__wa260 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+
+  /* ---------- the defaults (app_config wins once it has loaded) ---------- */
+  var DASH_DEFAULT = ['shima.butera@welfareavenue.com'];
+  var MAP_DEFAULT = {
+    overview: 'overview', dashboard: 'dashboard',
+    team: 'team', opsmtl: 'team', progdev: 'team', opsto: 'team', marketing: 'team', fundraising: 'team', hr: 'team', board: 'team',
+    requests: 'requests', calendar: 'calendar', brain: 'brain', transcripts: 'transcripts', agendas: 'agendas', hubmail: 'hubmail',
+    orgchart: 'orgchart', volunteering: 'volunteering', hrcentre: 'hrcentre', finances: 'finances', contentcal: 'contentcal',
+    socialstats: 'socialstats', create: 'create', importantinfo: 'importantinfo', photos: 'photos', activity: 'activity',
+    adminpanel: 'adminpanel', fundevents: 'fundevents', governance: 'governance', committees: 'committees', bank: 'bank',
+    ourstory: 'ourstory', partners: 'partners', documents: 'documents', crm: 'crm', fund: 'fund', grants: 'grants',
+    studio: 'contentstudio', orggoals: 'orggoals', projects: 'projects', goalmap: 'goalmap', projectpage: 'project'
+  };
+  /* never locked, whatever the map says */
+  var NEVER = ['mypage', 'training', 'personpage', 'needsme'];
+  var DASH_ROOTS = ['overview', 'decisions', 'decision', 'dashboard'];
+  var NAMES = {
+    overview: 'Executive dashboard', dashboard: 'Delivery numbers', team: 'Team pages', requests: 'Team Requests', calendar: 'Calendar',
+    brain: 'The Brain', transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart',
+    volunteering: 'Volunteer Manager', hrcentre: 'HR centre', finances: 'Finance', contentcal: 'Content calendar', socialstats: 'Analytics',
+    create: 'Create studio', importantinfo: 'Important info', photos: 'Photo library', activity: 'Activity', adminpanel: 'Admin',
+    fundevents: 'Events calendar', governance: 'Board overview', committees: 'Committees', bank: 'The Task Bank', ourstory: 'Our story',
+    partners: 'Partners', documents: 'Document finder', crm: 'CRM', fund: 'Fundraising', grants: 'Grants', studio: 'Content Studio',
+    orggoals: 'Organizational goals', projects: 'Projects', goalmap: 'Goal alignment', projectpage: 'Project pages'
+  };
+  var S = {
+    cfg: { dash: DASH_DEFAULT.slice(), gate: true, exempt: [], map: null }, cfgLoaded: false,
+    refused: 0, decGo: null, touring: null, adm: { rows: null, busy: false, err: '', saving: false, dashAdd: '' }
+  };
+
+  var css = document.createElement('style');
+  css.id = 'wa260css';
+  css.textContent = ''
+    + '.panel.active.w260hid{display:none !important;}'
+    + '#w260lock{max-width:640px;margin:34px auto 40px;padding:0 4px;}'
+    + '#w260lock .w260in{background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.14);border-radius:22px;padding:30px 30px 24px;box-shadow:0 18px 44px -26px rgba(16,63,57,.45);position:relative;overflow:hidden;}'
+    + '#w260lock .w260in::before{content:"";position:absolute;left:0;top:0;right:0;height:6px;background:' + GREEN + ';}'
+    + '#w260lock .w260ic{width:54px;height:54px;border-radius:16px;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;margin:4px 0 16px;}'
+    + '#w260lock .w260ic svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}'
+    + '#w260lock .w260k{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#a87f2c;margin:0 0 4px;}'
+    + '#w260lock h2{font-family:' + HEAD + ';font-size:34px;line-height:1.05;font-weight:700;color:' + GREEN + ';margin:0 0 10px;text-transform:none;}'
+    + '#w260lock .w260what{font-size:15px;line-height:1.5;color:' + INK + ';margin:0 0 14px;}'
+    + '#w260lock .w260how{font-size:14px;line-height:1.5;color:' + INK + ';margin:0 0 20px;padding:12px 14px;border-radius:12px;background:rgba(220,165,39,.14);border-left:4px solid ' + GOLD + ';}'
+    + '#w260lock .w260how b{color:' + GREEN + ';}'
+    + '#w260lock .w260acts{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}'
+    + '#w260lock .w260go{font-family:' + BODY + ';font-size:15px;font-weight:700;border:none;border-radius:12px;padding:12px 20px;background:' + GREEN + ';color:' + CREAM + ';cursor:pointer;display:inline-flex;align-items:center;gap:8px;}'
+    + '#w260lock .w260go:hover{background:#0b2f2a;}'
+    + '#w260lock .w260go svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}'
+    + '#w260lock .w260home{font-size:14px;font-weight:700;color:' + GREEN + ';text-decoration:underline;cursor:pointer;}'
+    + '#w260lock .w260small{font-size:12.5px;color:' + MUTED + ';margin:16px 0 0;line-height:1.45;}'
+    + '.tab[data-w260lock="1"]::after{content:"";display:inline-block;width:11px;height:11px;margin-left:6px;vertical-align:-1px;background:currentColor;opacity:.55;'
+    + '-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M7 10V7.5a5 5 0 0 1 10 0V10h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10zm2.2 0h5.6V7.5a2.8 2.8 0 0 0-5.6 0z%27/%3E%3C/svg%3E") center/contain no-repeat;'
+    + 'mask:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27M7 10V7.5a5 5 0 0 1 10 0V10h.5A1.5 1.5 0 0 1 19 11.5v8a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10zm2.2 0h5.6V7.5a2.8 2.8 0 0 0-5.6 0z%27/%3E%3C/svg%3E") center/contain no-repeat;}'
+    + '.w260note{display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:11px 14px;border-radius:12px;background:rgba(16,63,57,.07);border-left:4px solid ' + GREEN + ';font-size:14px;color:' + INK + ';}'
+    + '.w260note span{flex:1;min-width:0;}'
+    + '.w260note button{border:none;background:none;font-size:18px;line-height:1;color:' + MUTED + ';cursor:pointer;padding:2px 4px;}'
+    + 'body.w260nodash .w116card h3 .lnk[data-w116go="#overview"]{display:none !important;}'
+    /* Admin, Page tours */
+    + '.w118adm[data-sec="tours"] ~ .card:not(#w260card){display:none !important;}'
+    + '#w260card .w260a-top{font-size:14px;line-height:1.5;margin:0 0 14px;color:' + INK + ';}'
+    + '#w260card .w260a-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:12px 14px;border:1px solid rgba(16,63,57,.12);border-radius:14px;margin:0 0 12px;background:var(--wa-card,' + CREAM + ');}'
+    + '#w260card .w260a-row h4{margin:0;font-size:14px;color:' + GREEN + ';flex:1 1 220px;}'
+    + '#w260card .w260a-row h4 small{display:block;font-weight:400;color:' + MUTED + ';font-size:12.5px;margin-top:3px;line-height:1.4;}'
+    + '#w260card .w260a-btn{font-family:' + BODY + ';font-size:13px;font-weight:700;border-radius:10px;padding:8px 13px;cursor:pointer;border:1px solid rgba(16,63,57,.2);background:var(--wa-card,' + CREAM + ');color:' + GREEN + ';}'
+    + '#w260card .w260a-btn.pri{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w260card .w260a-btn[disabled]{opacity:.5;cursor:default;}'
+    + '#w260card .w260a-pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(16,63,57,.08);color:' + GREEN + ';margin:2px 4px 2px 0;}'
+    + '#w260card .w260a-pill button{border:none;background:none;cursor:pointer;color:' + MUTED + ';font-size:14px;line-height:1;padding:0;}'
+    + '#w260card .w260a-on{color:' + GREEN + ';font-weight:700;}'
+    + '#w260card .w260a-off{color:#a8442f;font-weight:700;}'
+    + '#w260card select{font-family:' + BODY + ';font-size:13px;padding:7px 9px;border-radius:9px;border:1px solid rgba(16,63,57,.2);max-width:100%;flex:none;}'
+    + '#w260card .w260a-sum{font-size:14px;margin:4px 0 10px;line-height:1.5;}'
+    + '#w260card .w260a-sum b{color:' + GREEN + ';}'
+    + '#w260card .w260a-wrap{overflow-x:auto;border:1px solid rgba(16,63,57,.12);border-radius:14px;max-width:100%;}'
+    + '#w260card table.w260a-m{border-collapse:separate;border-spacing:0;font-size:12px;min-width:100%;}'
+    + '#w260card table.w260a-m th,#w260card table.w260a-m td{padding:5px 6px;border-bottom:1px solid rgba(16,63,57,.08);text-align:center;white-space:nowrap;}'
+    + '#w260card table.w260a-m thead th{vertical-align:bottom;height:120px;background:var(--wa-card,' + CREAM + ');}'
+    + '#w260card table.w260a-m thead th span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:700;color:' + GREEN + ';}'
+    + '#w260card table.w260a-m .p{position:sticky;left:0;background:var(--wa-card,' + CREAM + ');text-align:left;z-index:1;min-width:150px;}'
+    + '#w260card table.w260a-m .p b{display:block;color:' + INK + ';font-size:13px;}'
+    + '#w260card table.w260a-m .p small{color:' + MUTED + ';}'
+    + '#w260card table.w260a-m .p .w260a-x{font-size:11.5px;font-weight:700;color:' + GREEN + ';text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;margin-top:2px;}'
+    + '#w260card .c-done{color:' + GREEN + ';font-weight:700;}'
+    + '#w260card .c-lock{color:#a87f2c;}'
+    + '#w260card .c-na{color:#c9c6bf;}'
+    + '#w260card .w260a-leg{font-size:12px;color:' + MUTED + ';margin:8px 2px 0;}'
+    + '#w260card .w260a-most{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px;}'
+    + '@media (max-width:700px){#w260lock{margin:18px auto 28px;}#w260lock .w260in{padding:24px 18px 20px;border-radius:18px;}#w260lock h2{font-size:28px;}'
+    + '#w260lock .w260acts{flex-direction:column;align-items:stretch;}#w260lock .w260go{justify-content:center;}#w260lock .w260home{text-align:center;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; } catch (e) { return null; } }
+  function known() { return !!mine(); }
+  function role() { var m = mine(); return (m && m.role) || ''; }
+  function isAdmin() { return role() === 'admin'; }
+  function myEmail() { var m = mine(); var e = (m && m.email) || ''; if (!e) { try { e = (USER && USER.email) || ''; } catch (x) { e = ''; } } return lower(e); }
+  function staffMode() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function allowed() { try { return (typeof wa40Allowed === 'function' && wa40Allowed()) || []; } catch (e) { return []; } }
+  function rootOf(h) { var s = String(h == null ? location.hash : h); try { s = decodeURIComponent(s); } catch (e) { /* keep */ } return s.replace(/^#/, '').split('/')[0]; }
+  function W() { return window.w122 || null; }
+  function svg(n) {
+    var P = {
+      lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+      play: '<path d="M8 5.5v13l10.5-6.5z"/>'
+    };
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (P[n] || '') + '</svg>';
+  }
+
+  /* ---------- 1. who opens the Dashboard ---------- */
+  function dashOk() {
+    if (isAdmin()) return true;
+    var em = myEmail(); if (!em) return false;
+    return (S.cfg.dash || []).indexOf(em) >= 0;
+  }
+  function trim(a) {
+    if (!Array.isArray(a) || !known()) return a;
+    if (dashOk()) {
+      var out = a.slice(); ['overview', 'dashboard'].forEach(function (t) { if (out.indexOf(t) < 0) out.push(t); }); return out;
+    }
+    return a.filter(function (t) { return t !== 'overview' && t !== 'dashboard'; });
+  }
+  /* Home for staff; directors (no Home in the board view) get the Board overview */
+  function home() {
+    var a = allowed();
+    if (staffMode() && a.indexOf('mypage') >= 0) return 'mypage';
+    var order = ['governance', 'committees', 'calendar', 'orgchart', 'mypage'];
+    for (var i = 0; i < order.length; i++) if (a.indexOf(order[i]) >= 0 && document.getElementById(order[i])) return order[i];
+    return 'mypage';
+  }
+  function landing() { return dashOk() ? 'overview' : home(); }
+  function homeLabel() { var h = home(); return h === 'mypage' ? 'Home' : (NAMES[h] || 'Home'); }
+
+  /* a decision's team (the same reading of the area as wave258's team decisions) */
+  function areaDept(area) {
+    var s = lower(area);
+    var M = { 'ops mtl': 'opsmtl', 'program development': 'progdev', 'ops to': 'opsto', 'marketing': 'marketing', 'fundraising': 'fundraising', 'grants': 'fundraising', 'events': 'fundraising', 'finance': 'fundraising', 'hr': 'hr', 'board': 'board' };
+    if (M[s]) return M[s];
+    if (s.indexOf('program dev') >= 0) return 'progdev';
+    if (s.indexOf('montreal') >= 0) return 'opsmtl';
+    if (s.indexOf('toronto') >= 0) return 'opsto';
+    if (s.indexOf('fund') >= 0 || s.indexOf('grant') >= 0 || s.indexOf('financ') >= 0 || s.indexOf('event') >= 0) return 'fundraising';
+    if (s.indexOf('market') >= 0) return 'marketing';
+    if (s.indexOf('human') >= 0 || s === 'hr') return 'hr';
+    if (s.indexOf('board') >= 0) return 'board';
+    return null;
+  }
+  function decisionTeam(id) {
+    try {
+      var list = typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : [];
+      var d = list.filter(function (x) { return String(x.id) === String(id) || String(x.ref) === String(id); })[0];
+      var t = d ? areaDept(d.area) : null;
+      return t && allowed().indexOf(t) >= 0 ? t : null;
+    } catch (e) { return null; }
+  }
+  /* wave40's showPanel calls this for a page the person may not open */
+  function fallback(id) {
+    try {
+      if (dashOk()) return 'overview';
+      var parts = String(decodeURIComponent(location.hash || '')).replace(/^#/, '').split('/');
+      var root = parts[0];
+      if (root === 'decision' && parts[1]) {
+        var t = decisionTeam(parts[1]);
+        if (t) { S.decGo = { team: t, id: parts[1], at: Date.now() }; setTimeout(goDecision, 0); return home(); }
+      }
+      if (root && DASH_ROOTS.indexOf(root) >= 0) { S.refused = Date.now(); if (!S.cfgLoaded) S.early = location.hash; }
+      return home();
+    } catch (e) { return 'mypage'; }
+  }
+  function goDecision() {
+    var g = S.decGo; if (!g) return; S.decGo = null;
+    location.hash = '#team/' + g.team;
+    var tries = 0;
+    (function look() {
+      var h = document.getElementById('w116host'); var x = h && h.querySelector('.w116dec');
+      var card = x ? (x.closest('.w116card') || x) : null;
+      if (card) { try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ } return; }
+      if (++tries < 16) setTimeout(look, 250);
+    })();
+  }
+  function showNote() {
+    var p = activePanel(); if (!p) return;
+    var el = document.getElementById('w260note');
+    if (!el) { el = document.createElement('div'); el.id = 'w260note'; el.className = 'w260note'; el.setAttribute('role', 'status'); el.innerHTML = '<span>The Dashboard is for the admins.</span><button type="button" data-w260nx="1" aria-label="Close">&times;</button>'; }
+    var mast = p.querySelector(':scope > .w118mast');
+    if (mast) { if (mast.nextElementSibling !== el) mast.insertAdjacentElement('afterend', el); }
+    else if (p.firstElementChild !== el) p.insertBefore(el, p.firstChild);
+    el.setAttribute('data-for', p.id);
+  }
+  function noteTidy() {
+    var el = document.getElementById('w260note'); if (!el) return;
+    var p = activePanel(); if (!p || el.getAttribute('data-for') !== p.id || !p.contains(el)) el.remove();
+  }
+
+  /* ---------- 2. train to unlock ---------- */
+  function activePanel() { return document.querySelector('main > .panel.active') || document.querySelector('.panel.active'); }
+  function gateMap() { return S.cfg.map || MAP_DEFAULT; }
+  function exempt() { return (S.cfg.exempt || []).indexOf(myEmail()) >= 0; }
+  function gateApplies() {
+    if (!S.cfg.gate || !known() || isAdmin() || exempt()) return false;
+    if (role() === 'blocked') return false;
+    /* directors on the board view cannot read the Academy (trainings are staff rows), so they are never asked */
+    if (!staffMode()) return false;
+    var w = W(); if (!w || !w.A || !w.A.loaded || w.A.err) return false;
+    return true;
+  }
+  function tourFor(id) {
+    var key = gateMap()[id]; if (!key || NEVER.indexOf(id) >= 0) return null;
+    var w = W(); var tr = w.A.byKey && w.A.byKey['tour:' + key];
+    if (!tr || tr.active === false || !w.tours || !w.tours[key]) return null;
+    try { if (!w.tourAvail(key)) return null; } catch (e) { return null; }
+    return { key: key, tr: tr };
+  }
+  function lockedFor(id) {
+    if (!gateApplies()) return null;
+    var t = tourFor(id); if (!t) return null;
+    try { if (W().isDone(t.tr.id)) return null; } catch (e) { return null; }
+    return t;
+  }
+  function tourRunning() { try { var st = W() && W().state(); return !!(st && st.T); } catch (e) { return false; } }
+  function unlockAll() {
+    var c = document.getElementById('w260lock'); if (c) c.remove();
+    document.querySelectorAll('.panel.w260hid').forEach(function (p) { p.classList.remove('w260hid'); });
+  }
+  function pageName(id) {
+    if (id === 'team' || (window.WA_TEAMS && WA_TEAMS.order && WA_TEAMS.order.indexOf(id) >= 0)) {
+      var d = id;
+      if (id === 'team') { var m = String(location.hash || '').match(/^#team\/([a-z]+)/); if (m) d = m[1]; else { try { if (window.W116 && W116.cur && W116.cur.d) d = W116.cur.d; } catch (e) { /* fine */ } } }
+      var lab = (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || '';
+      return lab || 'Team pages';
+    }
+    if (NAMES[id]) return NAMES[id];
+    try { var b = document.querySelector('.tab[data-tab="' + id + '"]'); var t = b ? String(b.textContent || '').replace(/\s+/g, ' ').trim() : ''; if (t) return t; } catch (e) { /* fine */ }
+    return 'This page';
+  }
+  function firstSentence(s) { s = String(s || '').trim(); var m = s.match(/^.*?[.!?](\s|$)/); return (m ? m[0] : s).trim(); }
+  function minutes(tr) { var n = 0; try { n = Number(W().minutesOf(tr)) || Number(tr.minutes) || 2; } catch (e) { n = Number(tr.minutes) || 2; } return Math.max(1, Math.round(n)); }
+  function cardHtml(id, t) {
+    var n = minutes(t.tr);
+    var what = firstSentence(t.tr.description) || 'What this page is for, in a few short steps.';
+    var started = false; try { var r = (W().A.prog || []).filter(function (p) { return String(p.training_id) === String(t.tr.id) && lower(p.person_name) === lower(W().me().name); })[0]; started = !!(r && r.status !== 'done' && (r.started_at || r.pct)); } catch (e) { started = false; }
+    return '<div class="w260in" role="region" aria-label="' + E(pageName(id)) + ' is locked">'
+      + '<div class="w260ic">' + svg('lock') + '</div>'
+      + '<div class="w260k">Take the tour first</div>'
+      + '<h2>' + E(pageName(id)) + '</h2>'
+      + '<p class="w260what">' + E(what) + '</p>'
+      + '<p class="w260how"><b>Take the ' + n + '-minute tour to unlock it.</b> It walks you through the page, section by section. Once you finish, the page stays open for you.</p>'
+      + '<div class="w260acts"><button type="button" class="w260go" data-w260start="' + E(t.key) + '">' + svg('play') + 'Start the tour</button>'
+      + '<a class="w260home" data-w260home="1" href="#' + E(home()) + '">Back to ' + E(homeLabel()) + '</a></div>'
+      + '<p class="w260small">' + (started ? 'You started this tour before. Start it again and go through to the end to open the page.' : 'Every page of the Hub has a short tour like this one. You can also take them all in the Avenue Academy, under Page tours.') + '</p>'
+      + '</div>';
+  }
+  function lock(p, t) {
+    p.classList.add('w260hid');
+    document.querySelectorAll('.panel.w260hid').forEach(function (x) { if (x !== p) x.classList.remove('w260hid'); });
+    var c = document.getElementById('w260lock');
+    if (!c) { c = document.createElement('section'); c.id = 'w260lock'; }
+    if (c.parentNode !== p.parentNode || c.nextElementSibling !== p) p.parentNode.insertBefore(c, p);
+    var k = p.id + ':' + t.key + ':' + home();
+    if (c.getAttribute('data-k') !== k) { c.innerHTML = cardHtml(p.id, t); c.setAttribute('data-k', k); }
+    c.setAttribute('data-page', p.id);
+  }
+  function guard() {
+    try {
+      var p = activePanel(); var id = p ? p.id : '';
+      document.body.classList.toggle('w260nodash', known() && !dashOk());
+      /* the Dashboard reached some other way (the first paint before the roles were in, an old link) */
+      if (known() && !dashOk() && (id === 'overview' || id === 'dashboard') && typeof showPanel === 'function') {
+        if (DASH_ROOTS.indexOf(rootOf()) >= 0) S.refused = Date.now();
+        var h = home(); if (h !== id && document.getElementById(h)) { showPanel(h); return; }
+      }
+      if (S.refused && Date.now() - S.refused < 4000) {
+        S.refused = 0; showNote();
+        /* the address says where the person is (as wave130 does for a refused page) */
+        try { if (DASH_ROOTS.indexOf(rootOf()) >= 0 && history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#' + id); } catch (e) { /* fine */ }
+      } else noteTidy();
+      if (!p || tourRunning() || S.touring) { unlockAll(); return; }
+      var t = lockedFor(id);
+      if (!t) { unlockAll(); return; }
+      lock(p, t);
+    } catch (e) { unlockAll(); }
+  }
+  function paintMenu() {
+    try {
+      document.querySelectorAll('.tab[data-tab]').forEach(function (b) {
+        var id = b.getAttribute('data-tab');
+        var want = lockedFor(id) ? '1' : '';
+        var cur = b.getAttribute('data-w260lock') || '';
+        if (want !== cur) { if (want) { b.setAttribute('data-w260lock', '1'); b.setAttribute('title', 'Take its tour to unlock it'); } else { b.removeAttribute('data-w260lock'); if (b.getAttribute('title') === 'Take its tour to unlock it') b.removeAttribute('title'); } }
+      });
+    } catch (e) { /* fine */ }
+  }
+  function startFromCard(key) {
+    var w = W(); if (!w) return;
+    S.touring = key; unlockAll();
+    try { w.startTour(key); } catch (e) { /* below */ }
+    setTimeout(function () {
+      if (!tourRunning()) { S.touring = null; guard(); toastS('The tour could not start here. Try it from the Avenue Academy, under Page tours.'); }
+      else S.touring = null;
+    }, 700);
+  }
+  window.addEventListener('w122tour', function (e) {
+    var d = (e && e.detail) || {};
+    if (d.kind === 'start') { unlockAll(); return; }
+    setTimeout(function () { S.touring = null; guard(); paintMenu(); }, 0);
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w260start]'); if (b) { e.preventDefault(); startFromCard(b.getAttribute('data-w260start')); return; }
+    if (t.closest('[data-w260nx]')) { var n = document.getElementById('w260note'); if (n) n.remove(); return; }
+  });
+
+  /* ---------- the settings ---------- */
+  function parseList(v) { try { var a = JSON.parse(v); return Array.isArray(a) ? a.map(lower).filter(Boolean) : []; } catch (e) { return String(v || '').split(/[\s,;]+/).map(lower).filter(Boolean); } }
+  async function loadCfg() {
+    try {
+      var r = await db.from('app_config').select('key, value').in('key', ['dashboard_people', 'page_gate', 'page_gate_exempt', 'page_gate_map']);
+      if (!r || r.error) return;
+      (r.data || []).forEach(function (x) {
+        if (x.key === 'dashboard_people') S.cfg.dash = parseList(x.value);
+        if (x.key === 'page_gate') S.cfg.gate = !/^(off|false|0|"off")$/i.test(String(x.value || '').trim());
+        if (x.key === 'page_gate_exempt') S.cfg.exempt = parseList(x.value);
+        if (x.key === 'page_gate_map') { try { var m = JSON.parse(x.value); if (m && typeof m === 'object' && !Array.isArray(m)) S.cfg.map = m; } catch (e2) { /* the built-in map */ } }
+      });
+      S.cfgLoaded = true;
+    } catch (e) { /* the defaults hold */ }
+  }
+
+  /* ---------- tour words for people the Dashboard is not for ---------- */
+  function tourWords() {
+    try {
+      var w = W(); if (!w || !w.tours || dashOk()) return;
+      var ch = w.tours.chrome; if (ch && Array.isArray(ch.steps)) ch.steps.forEach(function (st) { if (st && st.p && st.p.indexOf('the Executive dashboard and the Calendar') >= 0) st.p = st.p.replace('Home, the Executive dashboard and the Calendar at the top', 'Home, the Avenue Academy, Team Requests and the Calendar at the top'); });
+      var tm = w.tours.team; if (tm && Array.isArray(tm.steps)) tm.steps.forEach(function (st) { if (st && st.p && st.p.indexOf('Decide them on the Executive dashboard.') >= 0) st.p = st.p.replace('Decide them on the Executive dashboard.', 'The executives record what was decided.'); });
+    } catch (e) { /* fine */ }
+  }
+  /* the Admin tour shows the new section */
+  (function () {
+    try {
+      var w = W(); var ap = w && w.tours && w.tours.adminpanel; if (!ap || !Array.isArray(ap.steps)) return;
+      if (ap.steps.some(function (s) { return s && s.s === '#w260card'; })) return;
+      var at = ap.steps.length; ap.steps.forEach(function (s, i) { if (s && s.s === '#w96card') at = i; });
+      ap.steps.splice(at, 0, { s: '#w260card', t: 'Page tours', p: 'Every page opens once its tour is done. See who has taken which tour, turn the lock off or let someone through, and choose who opens the Executive dashboard besides the admins.', opt: 1, hash: '#adminpanel/tours' });
+    } catch (e) { /* fine */ }
+  })();
+
+  /* ---------- 3. Admin, Page tours ---------- */
+  (function addSection() {
+    try {
+      var A = window.__wa118; if (!A || !Array.isArray(A.ADMIN)) return;
+      if (A.ADMIN.some(function (a) { return a[0] === 'tours'; })) return;
+      var at = A.ADMIN.length; A.ADMIN.forEach(function (a, i) { if (a[0] === 'change') at = i; });
+      A.ADMIN.splice(at, 0, ['tours', 'Page tours', '#w260card', 'Who has taken each page tour, the lock that asks for it, and who opens the Executive dashboard.']);
+    } catch (e) { /* fine */ }
+  })();
+  function onTours() { return /^#adminpanel\/tours/.test(location.hash || ''); }
+  function cardEl() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !isAdmin()) return null;
+    var c = document.getElementById('w260card');
+    if (!c) { c = document.createElement('div'); c.className = 'card'; c.id = 'w260card'; c.innerHTML = '<div id="w260a"></div>'; panel.appendChild(c); }
+    return c;
+  }
+  async function loadAdmin() {
+    if (S.adm.busy) return; S.adm.busy = true; S.adm.err = '';
+    try { var r = await db.rpc('wa260_page_tours'); if (r && r.error) throw r.error; S.adm.rows = (r && r.data) || []; }
+    catch (e) { S.adm.err = String((e && e.message) || e).slice(0, 160); }
+    S.adm.busy = false; paintAdmin();
+  }
+  function TL(k) {
+    var w = W(); var tr = w && w.A && w.A.byKey && w.A.byKey['tour:' + k];
+    var t = tr ? String(tr.title || '').replace(/^Page tour:\s*/i, '') : k;
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  function summary(rows) {
+    var people = {}, per = {};
+    rows.forEach(function (r) {
+      if (r.exempt) return;
+      if (r.can_open && !r.done) { people[r.email] = (people[r.email] || 0) + 1; per[r.tour_key] = (per[r.tour_key] || 0) + 1; }
+    });
+    var all = {}; rows.forEach(function (r) { all[r.email] = 1; });
+    var most = Object.keys(per).sort(function (a, b) { return per[b] - per[a] || (a < b ? -1 : 1); });
+    return { locked: Object.keys(people).length, total: Object.keys(all).length, per: per, most: most };
+  }
+  function paintAdmin() {
+    var c = cardEl(); if (!c) return;
+    var host = document.getElementById('w260a'); if (!host) return;
+    var rows = S.adm.rows;
+    var gateOn = S.cfg.gate;
+    var html = '<p class="w260a-top">Every page with a tour opens once the person has finished that tour (the Avenue Academy keeps the record). Admins never see a lock. Home, the Avenue Academy, people pages and Needs me are always open.</p>'
+      + '<div class="w260a-row"><h4>Train to unlock is <span class="' + (gateOn ? 'w260a-on' : 'w260a-off') + '">' + (gateOn ? 'on' : 'off') + '</span><small>' + (gateOn ? 'Pages stay locked until their tour is done.' : 'Nobody sees a lock. The tours still count in the Academy.') + '</small></h4>'
+      + '<button type="button" class="w260a-btn' + (gateOn ? '' : ' pri') + '" data-w260set="gate"' + (S.adm.saving ? ' disabled' : '') + '>' + (gateOn ? 'Turn it off' : 'Turn it on') + '</button></div>';
+    var staffOpts = function (skip) {
+      var ppl = []; try { ppl = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.email; }); } catch (e) { ppl = []; }
+      return ppl.filter(function (m) { return skip.indexOf(lower(m.email)) < 0; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); })
+        .map(function (m) { return '<option value="' + E(lower(m.email)) + '">' + E(m.name) + '</option>'; }).join('');
+    };
+    html += '<div class="w260a-row"><h4>Who opens the Executive dashboard<small>The admins always do. Add anyone else here.</small></h4><div style="flex:1 1 260px">'
+      + (S.cfg.dash.length ? S.cfg.dash.map(function (em) { return '<span class="w260a-pill">' + E(nameOf(em)) + ' <button type="button" title="Take off" aria-label="Take ' + E(nameOf(em)) + ' off" data-w260dash-rm="' + E(em) + '">&times;</button></span>'; }).join('') : '<span style="color:' + MUTED + ';font-size:13px">Only the admins.</span>')
+      + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select data-w260dash-pick="1"><option value="">Add a person</option>' + staffOpts(S.cfg.dash) + '</select>'
+      + '<button type="button" class="w260a-btn" data-w260dash-add="1"' + (S.adm.saving ? ' disabled' : '') + '>Add</button></div></div></div>';
+    html += '<div class="w260a-row"><h4>Let someone through<small>They open every page without its tour. Use it sparingly, for a test account or a short stay.</small></h4><div style="flex:1 1 260px">'
+      + (S.cfg.exempt.length ? S.cfg.exempt.map(function (em) { return '<span class="w260a-pill">' + E(nameOf(em)) + ' <button type="button" title="Take off" aria-label="Take ' + E(nameOf(em)) + ' off" data-w260ex-rm="' + E(em) + '">&times;</button></span>'; }).join('') : '<span style="color:' + MUTED + ';font-size:13px">Nobody.</span>')
+      + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"><select data-w260ex-pick="1"><option value="">Add a person</option>' + staffOpts(S.cfg.exempt) + '</select>'
+      + '<button type="button" class="w260a-btn" data-w260ex-add="1"' + (S.adm.saving ? ' disabled' : '') + '>Add</button></div></div></div>';
+    if (!rows) html += '<p class="w260a-sum">' + (S.adm.err ? 'The page tours could not load: ' + E(S.adm.err) : 'Loading who has taken which tour...') + '</p>';
+    else {
+      var sm = summary(rows);
+      var tours = []; rows.forEach(function (r) { if (tours.indexOf(r.tour_key) < 0) tours.push(r.tour_key); });
+      tours.sort(function (a, b) { return (sm.per[b] || 0) - (sm.per[a] || 0) || (TL(a) < TL(b) ? -1 : 1); });
+      var people = []; var byP = {};
+      rows.forEach(function (r) { if (!byP[r.email]) { byP[r.email] = { email: r.email, name: r.name, role: r.role, exempt: r.exempt, cells: {} }; people.push(byP[r.email]); } byP[r.email].cells[r.tour_key] = r; });
+      people.forEach(function (p) { p.open = 0; p.done = 0; tours.forEach(function (k) { var x = p.cells[k]; if (x && x.can_open) { p.open++; if (x.done) p.done++; } }); });
+      people.sort(function (a, b) { return (a.done / Math.max(1, a.open)) - (b.done / Math.max(1, b.open)) || String(a.name).localeCompare(String(b.name)); });
+      html += '<p class="w260a-sum"><b>' + sm.locked + ' of ' + sm.total + '</b> people (admins aside) will see at least one lock on their next visit' + (gateOn ? '' : ' once the lock is back on') + '. The pages most of them still have to tour:</p>'
+        + '<div class="w260a-most">' + sm.most.slice(0, 8).map(function (k) { return '<span class="w260a-pill">' + E(TL(k)) + ' ' + sm.per[k] + '</span>'; }).join('') + '</div>'
+        + '<div class="w260a-wrap"><table class="w260a-m"><thead><tr><th class="p" style="vertical-align:bottom">Person</th>' + tours.map(function (k) { return '<th title="' + E(TL(k)) + '"><span>' + E(TL(k)) + '</span></th>'; }).join('') + '</tr></thead><tbody>'
+        + people.map(function (p) {
+          return '<tr><td class="p"><b>' + E(p.name) + '</b><small>' + p.done + ' of ' + p.open + ' toured' + (p.exempt ? ', let through' : '') + '</small>'
+            + '<br><button type="button" class="w260a-x" data-w260ex-' + (p.exempt ? 'rm' : 'one') + '="' + E(p.email) + '">' + (p.exempt ? 'Lock again' : 'Let through') + '</button></td>'
+            + tours.map(function (k) { var x = p.cells[k]; if (!x || !x.can_open) return '<td class="c-na" title="Cannot open this page">&middot;</td>'; return x.done ? '<td class="c-done" title="Toured">&#10003;</td>' : '<td class="c-lock" title="Locked until the tour is done">' + svg('lock').replace('<svg ', '<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" ') + '</td>'; }).join('') + '</tr>';
+        }).join('') + '</tbody></table></div>'
+        + '<p class="w260a-leg">&#10003; toured &nbsp; lock: not yet, the page is locked &nbsp; &middot; the person cannot open that page. From the access profiles, so a page someone was given by hand may show as &middot;.</p>';
+    }
+    if (host.__h !== html) { host.innerHTML = html; host.__h = html; }
+  }
+  function nameOf(em) {
+    try { var m = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (x) { return lower(x.email) === lower(em); })[0]; if (m && m.name) return m.name; } catch (e) { /* fine */ }
+    return String(em || '').split('@')[0];
+  }
+  async function save(key, value) {
+    if (S.adm.saving) return; S.adm.saving = true; paintAdmin();
+    try {
+      var r = await db.rpc('wa260_gate_set', { p_key: key, p_value: value });
+      if (r && r.error) throw r.error;
+      if (key === 'page_gate') S.cfg.gate = value === 'on';
+      if (key === 'page_gate_exempt') S.cfg.exempt = value.slice();
+      if (key === 'dashboard_people') S.cfg.dash = value.slice();
+      toastS('Saved.');
+      S.adm.rows = S.adm.rows ? S.adm.rows.map(function (x) { return Object.assign({}, x, { exempt: S.cfg.exempt.indexOf(lower(x.email)) >= 0 }); }) : S.adm.rows;
+    } catch (e) { toastS('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    S.adm.saving = false; paintAdmin(); try { if (typeof wa40Enforce === 'function') wa40Enforce(); } catch (e) { /* fine */ } guard(); paintMenu();
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w260card') || !isAdmin()) return;
+    var b;
+    if ((b = t.closest('[data-w260set="gate"]'))) { save('page_gate', S.cfg.gate ? 'off' : 'on'); return; }
+    if ((b = t.closest('[data-w260dash-rm]'))) { var em = b.getAttribute('data-w260dash-rm'); save('dashboard_people', S.cfg.dash.filter(function (x) { return x !== em; })); return; }
+    if ((b = t.closest('[data-w260dash-add]'))) { var s = document.querySelector('#w260card [data-w260dash-pick]'); var v = s && s.value; if (!v) { toastS('Pick a person first.'); return; } save('dashboard_people', S.cfg.dash.concat([v])); return; }
+    if ((b = t.closest('[data-w260ex-rm]'))) { var em2 = b.getAttribute('data-w260ex-rm'); save('page_gate_exempt', S.cfg.exempt.filter(function (x) { return x !== em2; })); return; }
+    if ((b = t.closest('[data-w260ex-one]'))) { var em3 = b.getAttribute('data-w260ex-one'); if (S.cfg.exempt.indexOf(em3) < 0) save('page_gate_exempt', S.cfg.exempt.concat([em3])); return; }
+    if ((b = t.closest('[data-w260ex-add]'))) { var s2 = document.querySelector('#w260card [data-w260ex-pick]'); var v2 = s2 && s2.value; if (!v2) { toastS('Pick a person first.'); return; } save('page_gate_exempt', S.cfg.exempt.concat([v2])); return; }
+  });
+  function adminSoon() {
+    if (!isAdmin() || !onTours()) return;
+    if (!cardEl()) return;
+    paintAdmin();
+    if (!S.adm.rows && !S.adm.busy) loadAdmin();
+  }
+  window.addEventListener('hashchange', function () { setTimeout(adminSoon, 60); });
+
+  /* ---------- wiring: wa40Allowed, showPanel, startApp ---------- */
+  if (typeof wa40Allowed === 'function' && !wa40Allowed.__w260) {
+    var __al260 = wa40Allowed;
+    wa40Allowed = function () { var a = __al260.apply(this, arguments) || []; try { return trim(a); } catch (e) { return a; } };
+    Object.keys(__al260).forEach(function (k) { try { wa40Allowed[k] = __al260[k]; } catch (e) { /* fine */ } });
+    wa40Allowed.__w260 = true;
+  }
+  if (typeof showPanel === 'function') {
+    var __sp260 = showPanel;
+    showPanel = function (id) {
+      var out = __sp260.apply(this, arguments);
+      try { guard(); if (id === 'adminpanel') setTimeout(adminSoon, 120); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  window.addEventListener('hashchange', function () { setTimeout(guard, 0); });
+  if (typeof startApp === 'function') {
+    var __sa260 = startApp;
+    startApp = async function () {
+      /* the settings load beside the start, so the first route usually has them; if not, an early refusal is undone below */
+      var cfgP = null; try { if (typeof db !== 'undefined' && db) cfgP = loadCfg(); } catch (e) { cfgP = null; }
+      var out = await __sa260.apply(this, arguments);
+      try {
+        if (cfgP) await cfgP; if (!S.cfgLoaded) await loadCfg();
+        /* refused before the settings were in, but the settings name this person: back to the Dashboard */
+        if (S.early && dashOk()) { var back = S.early; S.early = null; S.refused = 0; var n0 = document.getElementById('w260note'); if (n0) n0.remove(); location.hash = back; }
+        S.early = null;
+        var w = W();
+        if (w && w.load && staffMode()) await Promise.race([w.load(), new Promise(function (r) { setTimeout(r, 5000); })]);
+        tourWords();
+        if (typeof wa40Enforce === 'function') wa40Enforce();
+        guard(); paintMenu(); adminSoon();
+      } catch (e) { /* the Hub opens as before */ }
+      return out;
+    };
+  }
+
+  window.w260 = {
+    dashOk: dashOk, trim: trim, home: home, landing: landing, fallback: fallback,
+    lockedFor: lockedFor, guard: guard, paintMenu: paintMenu, cfg: function () { return S.cfg; }, map: gateMap,
+    state: function () { return { refused: S.refused, touring: S.touring, cfgLoaded: S.cfgLoaded, adm: S.adm }; }
+  };
+})();

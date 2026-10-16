@@ -145,10 +145,11 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     const f = await fresh(browser, { who: 'board', width: 375, height: 667, hash: '#overview', wait: 5000 });
     const p = f.page;
     const b = await f.ev(BAR);
-    ok('director: the bar reads Dashboard, Calendar, Board, Menu (no Home, and Ask only where the chat is)', b && /^home:Dashboard\*\|cal:Calendar\|(ask:Ask\|)?team:Board\|menu:Menu$/.test(b.slots.join('|')), b);
+    /* wave260 (16/10/26): the Executive dashboard is for the admins; a director lands on the Board overview (the Board slot, marked) */
+    ok('director: the bar reads Calendar, Board, Menu (no Home or Dashboard, and Ask only where the chat is)', b && /^cal:Calendar\|(ask:Ask\|)?team:Board\*\|menu:Menu$/.test(b.slots.join('|')), b);
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(400);
     const s = await f.ev(SHEET);
-    ok('director: no apps in the sheet; the Board section with the Board overview marked as theirs', s.apps.length === 0 && s.secs.indexOf('Board') >= 0 && s.rows.indexOf('Board overview(mine)') >= 0, s);
+    ok('director: no apps in the sheet; the Board section with the Board overview marked as theirs', s.apps.length === 0 && s.secs.indexOf('Board') >= 0 && s.rows.some(r => /^Board overview\*?\(mine\)$/.test(r)), s);
     ok('no page errors (director, phone)', f.errs.length === 0, f.errs);
     await f.close();
   }

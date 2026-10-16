@@ -105,7 +105,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     showPanel = function (id) {
       var allowed = wa40Allowed();
       if (WA40_MINE && allowed.indexOf(id) < 0 && id !== 'needsme' && id !== 'personpage' && id !== 'projectpage' && id !== 'volunteering' && id !== 'importantinfo') {
-        id = 'overview';
+        /* wave260 (16/10/26): the Dashboard is for the admins; everyone else lands on Home (directors on the Board overview) */
+        id = (window.w260 && typeof window.w260.fallback === 'function') ? window.w260.fallback(id) : 'overview';
       }
       __sp40(id);
       if (id === 'adminpanel') { try { wa40Render(); } catch (e) { /* non-fatal */ } }

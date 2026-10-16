@@ -824,7 +824,7 @@
     var d = p[1] || '', page = p[2] || 'overview', sub = p[3] || '';
     if (d === 'finance') { try { location.replace('#finances/tasks'); } catch (e) { go('#finances/tasks'); } return; }   /* wave164: Finance has no team page; its tasks are in the Finance app */
     if (!d || T.order.indexOf(d) < 0) { go('#mypage'); return; }
-    if (!allowedDept(d)) { go('#overview'); return; }
+    if (!allowedDept(d)) { go('#' + ((window.w260 && window.w260.landing) ? window.w260.landing() : 'overview')); return; }   /* wave260: Home for anyone the Dashboard is not for */
     if (page === 'volunteering') { go('#volunteering'); return; }
     var board = boardDef(d, page);
     var key = board ? page : page;

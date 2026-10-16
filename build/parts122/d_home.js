@@ -142,7 +142,7 @@
     var list = A.trainings.filter(function (t) { return kindOf(t) === 'tour' && visibleT(t); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
     if (!list.length) return '';
     var done = list.filter(function (t) { return isDone(t.id); }).length;
-    return '<section class="w122sec" data-sec="tours"><div class="w122sech"><div><h2>Page tours</h2><div class="sub">A guided walkthrough of every page you can open, section by section. Each takes a minute or two.</div></div></div>' +
+    return '<section class="w122sec" data-sec="tours"><div class="w122sech"><div><h2>Page tours</h2><div class="sub">A guided walkthrough of every page you can open, section by section. Each takes a minute or two, and a page opens for you once you have taken its tour.</div></div></div>' +
       '<div class="w122tourbar">' + ic('map') + '<b>' + done + ' of ' + list.length + '</b><span>toured</span><div class="bar"><i style="width:' + Math.round(100 * done / list.length) + '%"></i></div><span style="color:#797773">Tour them all for the Hub Navigator certificate.</span></div>' +
       '<div class="w122tours">' + list.map(function (t) {
         var k = tourKeyOf(t), d = TOURS[k] || {}, ok = isDone(t.id);

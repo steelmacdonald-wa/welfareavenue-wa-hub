@@ -154,14 +154,19 @@
   /* staff: a menu page their access profile leaves out */
   function staffDenied(root) {
     if (!root || OV.indexOf(root) >= 0 || /[=&]/.test(root)) return false;
+    /* wave260: the Dashboard's numbers are for the admins; wave260 says so in its own line (no Request more access) */
+    if (root === 'dashboard' && window.w260 && !window.w260.dashOk()) return false;
     if (['needsme', 'needs-me', 'personpage', 'projectpage', 'volunteering', 'importantinfo', 'person', 'project', 'task', 'tx', 'team', 'dept'].indexOf(root) >= 0) return false;
     if (knownTabs().indexOf(root) < 0) return false;
     return !!mine() && allowedList().indexOf(root) < 0;
   }
   var DENY = { req: rootOf(location.hash), t: null, closed: null };
   function hideDeny() { var el = document.getElementById('w130deny'); if (el && el.parentNode) el.parentNode.removeChild(el); }
+  /* wave260: where a refused page lands: the Executive dashboard for the people who open it, else Home (directors: the Board overview) */
+  function land() { try { return (window.w260 && window.w260.landing) ? window.w260.landing() : 'overview'; } catch (e) { return 'overview'; } }
+  function landName() { var l = land(); return l === 'overview' ? 'the Executive dashboard' : (l === 'mypage' ? 'Home' : (l === 'governance' ? 'the Board overview' : labelOf(l)[0])); }
   function showDeny(root, kind) {
-    var panel = document.getElementById('overview'); if (!panel) return;
+    var panel = document.getElementById(land()); if (!panel) return;
     var el = document.getElementById('w130deny');
     if (!el) { el = document.createElement('div'); el.id = 'w130deny'; el.className = 'w130deny'; el.setAttribute('role', 'status'); }
     var mast = panel.querySelector(':scope > .w118mast');
@@ -170,9 +175,9 @@
     var html;
     if (kind === 'board') {
       var al = allowedList();
-      var pages = BOARD_PAGES.filter(function (p) { return p[0] !== 'overview' && al.indexOf(p[0]) >= 0; });
+      var pages = BOARD_PAGES.filter(function (p) { return p[0] !== land() && al.indexOf(p[0]) >= 0; });
       html = '<span class="ic">' + svg('lock') + '</span><div><b>' + E(sentence(root, 'for staff accounts')) + '</b>'
-        + '<p>The board view does not open ' + itThem(root) + ', so you are on the Executive dashboard. The board view opens these pages:</p>'
+        + '<p>The board view does not open ' + itThem(root) + ', so you are on ' + E(landName()) + '. The board view opens these pages:</p>'
         + '<div class="lk">' + pages.map(function (p) { return '<a href="#' + p[0] + '">' + E(p[1]) + '</a>'; }).join('') + '</div></div>';
     } else {
       var m = mine(), prof = m && m.profile ? String(m.profile) : '';
@@ -183,14 +188,14 @@
     }
     el.innerHTML = html + '<button type="button" class="x" data-w130x aria-label="Close">&times;</button>';
     /* the address matches the page the viewer is on */
-    try { if (history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#overview'); } catch (e) { /* fine */ }
+    try { if (history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#' + land()); } catch (e) { /* fine */ }
   }
   function denyCheck() {
     clearTimeout(DENY.t);
     DENY.t = setTimeout(function () {
       try {
         var gate = document.getElementById('gate'); if (gate && gate.style.display !== 'none') return;
-        if (activeId() !== 'overview') { hideDeny(); return; }
+        if (activeId() !== land()) { hideDeny(); return; }
         var root = DENY.req;
         if (DENY.closed !== null && DENY.closed === root) { hideDeny(); return; }
         if (boardMode()) { if (!boardOk(root)) showDeny(root, 'board'); else hideDeny(); return; }
