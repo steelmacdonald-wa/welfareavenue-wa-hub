@@ -1,0 +1,31 @@
+/* Welfare Avenue website: campaign pages (15/10/26, the Holiday Gift Basket Drive page, /gift-basket-drive/ and
+   /fr/paniers-cadeaux/). Loaded only by those pages, after site.css; reuses its tokens. No inline styles (CSP). */
+.drp{display:grid;gap:40px;align-items:stretch}
+@media (min-width:900px){.drp{grid-template-columns:1fr 1fr;gap:64px}}
+.drp-goal{align-self:center}
+.drp-big{margin:0;font-family:var(--hf);font-weight:600;font-size:clamp(72px,9vw,120px);line-height:.95;color:var(--green);letter-spacing:-.5px}
+.drp-big+p{margin:10px 0 0;font-family:var(--hf);font-weight:600;font-size:clamp(22px,2.2vw,28px);line-height:1.2;color:var(--green);max-width:18em}
+.drp-goal .fine{margin:18px 0 0}
+.drp-card{background:var(--sand);border-top:4px solid var(--gold);padding:30px 30px 28px;display:flex;flex-direction:column}
+.drp-card .over{margin-bottom:8px}
+.drp-raised{margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px}
+.drp-raised b{font-family:var(--hf);font-weight:600;font-size:clamp(46px,5vw,60px);line-height:1;color:var(--green)}
+.drp-raised span{font-family:var(--hf);font-weight:600;font-size:21px;color:var(--green)}
+.drp-people{margin:12px 0 0;font-size:16px}
+.drp-bar{position:relative;height:12px;margin:18px 0 6px;background:rgba(16,63,57,.12);overflow:hidden}
+.drp-bar[hidden]{display:none}
+.drp-bar span{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--green);transition:width .8s ease}
+.drp-card .btn{width:100%;justify-content:center;margin-top:24px}
+.drp-card .fine{margin:14px 0 0}
+.drt{list-style:none;margin:0;padding:0;display:grid;gap:24px;counter-reset:drt}
+@media (min-width:860px){.drt{grid-template-columns:repeat(3,1fr);gap:28px}}
+.drt li{counter-increment:drt;border-top:1px solid var(--rule);padding-top:20px}
+.drt li::before{content:counter(drt,decimal-leading-zero);display:block;font-family:var(--hf);font-weight:600;font-size:18px;color:var(--gold);margin-bottom:6px}
+.drt h3{margin:0 0 8px;font-size:26px}
+.drt p{margin:0}
+.drg{grid-template-columns:repeat(2,1fr)}
+.drg button:last-child{grid-column:1 / -1}
+.drg button:last-child img{aspect-ratio:4/3}
+@media (min-width:860px){.drg{grid-template-columns:repeat(5,1fr)}.drg button:last-child{grid-column:auto}.drg img,.drg button:last-child img{aspect-ratio:3/4}}
+.drw .way p+p{margin-top:12px}
+.drw .way .fine{font-size:14px}

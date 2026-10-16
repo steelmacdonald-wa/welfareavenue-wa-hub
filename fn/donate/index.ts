@@ -1,4 +1,13 @@
-// Welfare Avenue: donate (v4, 29/09/26, wave162b; v3 28/09/26, wave161b)
+// Welfare Avenue: donate (v5, 15/10/26, the Holiday Gift Basket Drive page; v4 29/09/26, wave162b; v3 28/09/26, wave161b)
+// v5: campaigns. app_config donate_campaigns (JSON keyed by a slug, admins only) names the campaigns a link may ask for:
+//   hub.welfareavenue.com/give/?c=<slug> (the website's campaign buttons pass data-wa-campaign through give/embed.js).
+//   GET ?c=<slug> adds campaign {slug, designation, designation_fr, title, title_fr, intro, intro_fr, photo, monthly} when
+//   that campaign exists and is open; the page then locks where the gift goes. POST checkout with campaign <slug>: the
+//   designation is the campaign's (even when it is not in donate_designations), a campaign with monthly false takes one-time
+//   gifts only, and the session's metadata carries wa_campaign (the campaign's name, which crm_stripe_gift records in
+//   crm_donations.campaign; www_campaign_totals sums it for the page's progress) and wa_campaign_slug. An unknown or closed
+//   campaign is ignored and the gift goes through as before, so a stale link never stops a gift. Nothing else changed:
+//   a request without a campaign behaves exactly as v4.
 // v4: French. The page sends lang 'fr' (hub.welfareavenue.com/give/?lang=fr: the French website's buttons and popup ask
 //   for it). GET adds fr: the page's words in French (the donate_*_fr settings, or the defaults below until an admin sets
 //   them; a note left empty in English stays empty in French), with where the gift goes as French labels in the same order.
@@ -45,7 +54,8 @@ const MIN_SECONDS = 3, MAX_AGE = 86400, PER_IP = 10, PER_IP_WINDOW = 10, PER_HOU
 const KEYS = ['donate_mode', 'donate_title', 'donate_intro', 'donate_amounts_once', 'donate_amounts_monthly', 'donate_min', 'donate_max', 'donate_designations',
   'donate_fee_cover', 'donate_fee_percent', 'donate_fee_fixed', 'donate_consent_label', 'donate_thanks', 'donate_receipt_note', 'donate_monthly_note', 'donate_product',
   'mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number',
-  'donate_title_fr', 'donate_intro_fr', 'donate_designations_fr', 'donate_consent_label_fr', 'donate_thanks_fr', 'donate_receipt_note_fr', 'donate_monthly_note_fr'];
+  'donate_title_fr', 'donate_intro_fr', 'donate_designations_fr', 'donate_consent_label_fr', 'donate_thanks_fr', 'donate_receipt_note_fr', 'donate_monthly_note_fr',
+  'donate_campaigns'];
 // v4: the French words until an admin sets the donate_*_fr settings (translations of the English settings of 28/09/26)
 const FR: Record<string, string> = {
   title: 'Donner à Welfare Avenue',
@@ -161,12 +171,34 @@ function publicConfig(m: Record<string, string>): Json {
   };
 }
 
+// v5: a campaign the link asked for (app_config donate_campaigns), or null when it is unknown, closed or badly set
+function campaignFor(m: Record<string, string>, slug: unknown): Json {
+  const k = String(slug || '').trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(k)) return null;
+  let all: Json = null;
+  try { all = JSON.parse(m.donate_campaigns || '{}'); } catch (_) { return null; }
+  const c = all && typeof all === 'object' ? all[k] : null;
+  if (!c || typeof c !== 'object' || c.open === false) return null;
+  const name = String(c.name || '').trim().slice(0, 120), des = String(c.designation || '').trim().slice(0, 80);
+  if (!name || !des) return null;
+  const str = (x: unknown, n: number) => String(x == null ? '' : x).trim().slice(0, n);
+  const photo = str(c.photo, 400);
+  return { slug: k, name, designation: des, designation_fr: str(c.designation_fr, 80) || des, title: str(c.title, 120), title_fr: str(c.title_fr, 120),
+    intro: str(c.intro, 400), intro_fr: str(c.intro_fr, 400), monthly: c.monthly === true,
+    photo: /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\//.test(photo) ? photo : '' };
+}
+function publicCampaign(c: Json): Json {
+  if (!c) return undefined;
+  return { slug: c.slug, designation: c.designation, designation_fr: c.designation_fr, title: c.title, title_fr: c.title_fr, intro: c.intro, intro_fr: c.intro_fr, monthly: c.monthly, photo: c.photo || undefined };
+}
+
 // ---------- the donor's choices against the settings ----------
-function check(cfg: Json, body: Json) {
+function check(cfg: Json, body: Json, camp: Json = null) {
   const errors: Record<string, string> = {};
   const fr = body.lang === 'fr';
   const freq = body.frequency === 'monthly' ? 'monthly' : body.frequency === 'once' ? 'once' : '';
   if (!freq) errors.frequency = fr ? 'Choisissez une fois ou chaque mois.' : 'Choose once or monthly.';
+  else if (camp && !camp.monthly && freq === 'monthly') errors.frequency = fr ? 'Ce don se fait une seule fois.' : 'This gift is a one-time gift.';
   const amt = Number(body.amount), base = Math.round(amt * 100);
   if (!isFinite(amt) || Math.abs(amt * 100 - base) > 0.001) errors.amount = fr ? 'Entrez un montant en dollars et en cents.' : 'Enter an amount in dollars and cents.';
   else if (base < Math.round(cfg.min * 100)) errors.amount = fr ? 'Le don minimum en ligne est de ' + cfg.min + '\u00a0$.' : 'The smallest gift online is $' + cfg.min + '.';
@@ -174,7 +206,8 @@ function check(cfg: Json, body: Json) {
   let designation = String(body.designation || '').trim();
   if (!designation) designation = cfg.designations[0];
   if (!cfg.designations.includes(designation) && cfg.fr && cfg.fr.designations.indexOf(designation) >= 0) designation = cfg.designations[cfg.fr.designations.indexOf(designation)];
-  if (!cfg.designations.includes(designation)) errors.designation = fr ? 'Choisissez où va votre don.' : 'Choose where your gift goes.';
+  if (camp) designation = camp.designation; /* v5: a campaign's gift goes where the campaign says, whatever the page sent */
+  else if (!cfg.designations.includes(designation)) errors.designation = fr ? 'Choisissez où va votre don.' : 'Choose where your gift goes.';
   const tk = body.tribute_kind === 'honour' || body.tribute_kind === 'memory' ? body.tribute_kind : '';
   const tn = tk ? String(body.tribute_name || '').trim().replace(/\s+/g, ' ') : '';
   if (tk && !tn) errors.tribute_name = fr ? 'Quel nom devons-nous inscrire\u00a0?' : 'Whose name should we record?';
@@ -193,7 +226,8 @@ Deno.serve(async (req: Request) => {
       const ts = Math.floor(Date.now() / 1000);
       const token = ts + '.' + (await hmac(await secret('WA_FORM_SECRET'), 'donate|' + ts)).slice(0, 32);
       const pk = publishable();
-      return reply(req, { ...publicConfig(m), token, pay: pk ? 'embedded' : 'redirect', stripe_pk: pk || undefined });
+      const camp = campaignFor(m, new URL(req.url).searchParams.get('c'));
+      return reply(req, { ...publicConfig(m), token, pay: pk ? 'embedded' : 'redirect', stripe_pk: pk || undefined, campaign: publicCampaign(camp) });
     }
     if (req.method !== 'POST') return reply(req, { error: 'method' }, 405);
     const raw = await req.text();
@@ -258,7 +292,8 @@ Deno.serve(async (req: Request) => {
       if ((all || 0) >= PER_HOUR) { await attempt({ ...base, status: 'refused', error: 'too many in an hour' }); return reply(req, { error: 'rate' }, 429); }
     }
 
-    const c = check(cfg, body);
+    const camp = campaignFor(m, body.campaign);
+    const c = check(cfg, body, camp);
     if (Object.keys(c.errors).length) return reply(req, { error: 'invalid', fields: c.errors }, 400);
     // v3: Stripe's form inside the page when it asks for it and the publishable key is there; Stripe's own page otherwise
     // (a test with the trigger secret may ask for one before the publishable key exists, to check Stripe accepts the session)
@@ -269,6 +304,7 @@ Deno.serve(async (req: Request) => {
       wa_consent: c.consent ? 'yes' : 'no', wa_consent_label: c.consent ? String(c.lang === 'fr' ? cfg.fr.consent_label : cfg.consent_label).slice(0, 480) : '',
       wa_base_cents: String(c.base), wa_fee_cover_cents: String(c.cover), wa_lang: c.lang, wa_page: 'give v2 ' + (embedded ? 'embedded' : 'hosted') + (isTest ? ' test' : '')
     };
+    if (camp) { meta.wa_campaign = camp.name; meta.wa_campaign_slug = camp.slug; } /* v5 */
     const product = (m.donate_product || '').trim();
     const price: Json = { currency: 'cad', unit_amount: c.total };
     if (product) price.product = product; else price.product_data = { name: 'Gift to Welfare Avenue' };
@@ -282,11 +318,11 @@ Deno.serve(async (req: Request) => {
       metadata: meta,
       expires_at: Math.floor(Date.now() / 1000) + 3600
     };
-    const lq = c.lang === 'fr' ? '&lang=fr' : '';
+    const lq = (c.lang === 'fr' ? '&lang=fr' : '') + (camp ? '&c=' + encodeURIComponent(camp.slug) : '');
     if (embedded) { params.ui_mode = 'embedded'; params.return_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}' + lq; }
     else { params.success_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}' + lq; params.cancel_url = SITE + '/give?cancelled=1' + lq; }
     if (c.freq === 'monthly') params.subscription_data = { metadata: meta, description: 'Monthly gift to Welfare Avenue' };
-    else { params.submit_type = 'donate'; params.customer_creation = 'always'; params.payment_intent_data = { metadata: meta, description: 'Gift to Welfare Avenue' }; }
+    else { params.submit_type = 'donate'; params.customer_creation = 'always'; params.payment_intent_data = { metadata: meta, description: camp ? 'Gift to Welfare Avenue: ' + camp.designation : 'Gift to Welfare Avenue' }; }
 
     const r = await stripe('POST', '/v1/checkout/sessions', params, 'wa-give-' + crypto.randomUUID());
     if (!r.ok || !r.body || !(embedded ? r.body.client_secret : r.body.url)) {
@@ -296,7 +332,7 @@ Deno.serve(async (req: Request) => {
     }
     await attempt({ ...base, status: isTest ? 'test' : 'session', frequency: c.freq, amount_cents: c.total, session_id: r.body.id });
     const out: Json = embedded ? { client_secret: r.body.client_secret } : { url: r.body.url };
-    return reply(req, isTest ? { ...out, session_id: r.body.id, ui_mode: r.body.ui_mode, total_cents: c.total, cover_cents: c.cover } : out);
+    return reply(req, isTest ? { ...out, session_id: r.body.id, ui_mode: r.body.ui_mode, total_cents: c.total, cover_cents: c.cover, designation: c.designation, campaign: camp ? camp.name : null } : out);
   } catch (e) {
     return reply(req, { error: 'server', detail: String((e as Error).message || e).slice(0, 200) }, 500);
   }

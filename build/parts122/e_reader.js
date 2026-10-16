@@ -289,12 +289,16 @@
   /* ---------- assign (leaders) ---------- */
   function renderAssign(sh, t) {
     var q = (R.q || '').toLowerCase();
-    var ppl = people().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }).filter(function (p) { return !q || String(p.name + ' ' + (p.role || '') + ' ' + (p.department || '')).toLowerCase().indexOf(q) >= 0; });
+    /* wave258 (Steel in the 15/10/26 Fundraising meeting: "Weird, I can't assign Alex to it"): search the email and the names people
+       go by too, and say plainly when someone already finished the training (their box was greyed out with no reason) */
+    var nickOf = function (p) { try { var m = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (x) { return String(x.id) === String(p.id) || (p.email && String(x.email || '').toLowerCase() === String(p.email).toLowerCase()); })[0]; return m && Array.isArray(m.nicknames) ? m.nicknames.join(' ') : ''; } catch (e) { return ''; } };
+    var ppl = people().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }).filter(function (p) { return !q || String(p.name + ' ' + (p.role || '') + ' ' + (p.department || '') + ' ' + (p.email || '') + ' ' + nickOf(p)).toLowerCase().indexOf(q) >= 0; });
+    var finished = ppl.filter(function (p) { var r0 = rowFor(t.id, p.name); return r0 && r0.status === 'done'; });
     R.pick = R.pick || {};
     sh.innerHTML = headHtml(t, 'Assign: ' + t.title) + '<div class="bd"><div class="main"><div class="wrap"><div class="prose"><p>Pick the people who should take this training. It shows up in their Up next with your name on it, and HR sees it on the training board.</p></div>' +
-      '<label class="w122srch" style="max-width:none;background:#FFFAF2">' + ic('search') + '<input type="search" data-w122aq="1" placeholder="Search people" value="' + E(R.q || '') + '"></label><div class="ppl">' + ppl.map(function (p) {
-        var r = rowFor(t.id, p.name), st = r ? (r.status === 'done' ? 'done ' + fmtShort(r.done_at) : (r.assigned_by ? 'assigned' : 'started')) : '';
-        return '<label><input type="checkbox" data-w122pick="' + E(p.name) + '"' + (R.pick[p.name] ? ' checked' : '') + (r && r.status === 'done' ? ' disabled' : '') + '><span>' + E(p.name) + ' <em>' + E(p.role || '') + '</em></span><em>' + E(st) + '</em></label>';
+      (finished.length ? '<p class="w258finnote">' + E(finished.length === 1 ? finished[0].name + ' already finished this training, so their box is greyed out.' : finished.length + ' people already finished this training, so their boxes are greyed out.') + '</p>' : '') + '<label class="w122srch" style="max-width:none;background:#FFFAF2">' + ic('search') + '<input type="search" data-w122aq="1" placeholder="Search people" value="' + E(R.q || '') + '"></label><div class="ppl">' + ppl.map(function (p) {
+        var r = rowFor(t.id, p.name), fin = !!(r && r.status === 'done'), st = r ? (fin ? 'Already finished' + (r.done_at ? ' ' + fmtShort(r.done_at) : '') : (r.assigned_by ? 'Already assigned' : 'Started')) : '';
+        return '<label' + (fin ? ' class="w258fin" title="' + E(p.name + ' already finished this training, so there is nothing to assign') + '"' : '') + '><input type="checkbox" data-w122pick="' + E(p.name) + '"' + (R.pick[p.name] ? ' checked' : '') + (fin ? ' disabled' : '') + '><span>' + E(p.name) + ' <em>' + E(p.role || '') + '</em></span><em' + (fin ? ' class="w258fint"' : '') + '>' + E(st) + '</em></label>';
       }).join('') + '</div></div></div></div><div class="ft"><button class="w122btn soft" data-w122assignx="1">' + ic('back') + ' Back</button><span class="sp"></span><button class="w122btn" data-w122assigngo="1">' + ic('check') + ' Assign to ' + Object.keys(R.pick).filter(function (k) { return R.pick[k]; }).length + '</button></div>';
   }
   async function doAssign() {

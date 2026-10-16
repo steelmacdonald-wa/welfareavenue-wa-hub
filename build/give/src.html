@@ -18,7 +18,11 @@
      v3 (28/09/26, wave161c): inside the popup on welfareavenue.com (give/embed.js), or with ?embed=1, the page takes the
      embed layout: a photo beside the form, no green band or page footer (a short footer sits in the card), and it tells
      the popup its height and whether a payment is open; the thank-you has Close; Stripe's own page (the fallback) opens
-     at the top of the window through a link, since Stripe's page cannot be shown inside a frame. -->
+     at the top of the window through a link, since Stripe's page cannot be shown inside a frame.
+     v5 (15/10/26, the Holiday Gift Basket Drive page): ?c=<slug> asks the donate function for a campaign (app_config
+     donate_campaigns); when it is open, the page shows the campaign's title and words, locks where the gift goes (no choice
+     to make), keeps to one-time gifts when the campaign says so, and sends the campaign with the checkout, so the gift lands
+     under the campaign in the CRM. give/embed.js passes it from a button's data-wa-campaign. Without ?c= nothing changed. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
 *{box-sizing:border-box}
@@ -32,6 +36,9 @@ main{max-width:640px;margin:-44px auto 0;padding:0 16px 40px}
 h1{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:34px;line-height:1.05;letter-spacing:.2px;text-transform:uppercase;color:var(--green);margin:0 0 6px}
 .rule{width:56px;height:4px;border-radius:4px;background:var(--gold);margin:10px 0 14px}
 .intro{margin:0 0 22px;color:#3d3c39;white-space:pre-line}
+.lockdes{display:flex;flex-direction:column;gap:2px;margin:0 0 22px;padding:12px 14px;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:12px;background:var(--soft)}
+.lockdes span{font-size:13px;font-weight:600;color:var(--muted)}
+.lockdes b{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:21px;font-weight:700;line-height:1.15;color:var(--green)}
 fieldset{border:0;padding:0;margin:0 0 22px;min-width:0}
 legend,.lbl{display:block;font-weight:600;margin:0 0 8px;padding:0}
 .freq{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1.5px solid var(--green);border-radius:999px;padding:3px;background:#fff}
@@ -119,6 +126,8 @@ a{color:var(--green)}
   var q = new URLSearchParams(location.search);
   /* v4 (wave162b, 29/09/26): French with ?lang=fr (the French website's buttons and its popup ask for it), English otherwise */
   var L = q.get('lang') === 'fr' ? 'fr' : 'en', FR = L === 'fr';
+  /* v5 (15/10/26): a campaign link (?c=<slug>, e.g. the Holiday Gift Basket Drive page's buttons) */
+  var CAMP = (function (c) { c = String(c || '').toLowerCase(); return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : ''; })(q.get('c'));
   waLogoLang(FR);
   var W = {
     en: { cancelled: 'No payment was made. You can change anything below and try again.', charity: ' · Registered charity ',
@@ -174,7 +183,10 @@ a{color:var(--green)}
       visit_html: '<p><a href="https://welfareavenue.com/fr/">Visiter welfareavenue.com</a></p>', gave_html: '<p>Si vous venez de donner, merci : le paiement paraît sur votre relevé de carte ou de compte.</p>',
       loading: 'Chargement…', title_tag: 'Donner à Welfare Avenue', site: 'https://welfareavenue.com/fr/', other_lang: 'English' }
   }[L];
-  function cf(k) { var c = S.cfg || {}; return FR && c.fr && c.fr[k] != null ? c.fr[k] : c[k]; } /* a setting in the page's language (the function sends both) */
+  function camp() { return S.cfg && S.cfg.campaign && S.cfg.campaign.slug ? S.cfg.campaign : null; } /* v5: the campaign the function confirmed */
+  function cdes() { var k = camp(); return k ? (FR ? k.designation_fr || k.designation : k.designation) : ''; }
+  function cf(k) { var c = S.cfg || {}, cp = camp(); if (cp && (k === 'title' || k === 'intro') && (FR ? cp[k + '_fr'] : cp[k])) return FR ? cp[k + '_fr'] : cp[k];
+    return FR && c.fr && c.fr[k] != null ? c.fr[k] : c[k]; } /* a setting in the page's language (the function sends both); v5: a campaign's title and words first */
   function dlabel(d) { var c = S.cfg || {}, i = (c.designations || []).indexOf(d); return FR && c.fr && c.fr.designations && c.fr.designations[i] ? c.fr.designations[i] : d; }
   (function () { /* the language link keeps the rest of the address (the team's ?preview=1, a thank-you's session) */
     var ll = document.getElementById('langlink'), home = document.getElementById('home'), p2 = new URLSearchParams(location.search);
@@ -225,7 +237,7 @@ a{color:var(--green)}
   function call(method, body) {
     var opt = { method: method, headers: { apikey: KEY, Authorization: 'Bearer ' + KEY } };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-    return fetch(URL_FN, opt).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; }); });
+    return fetch(URL_FN + (method === 'GET' && CAMP ? '?c=' + encodeURIComponent(CAMP) : ''), opt).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; }); });
   }
   function footer(o) {
     o = o || (S.cfg && S.cfg.org) || {};
@@ -253,7 +265,8 @@ a{color:var(--green)}
     var fee = ok ? feeCents(bc) : 0;
     return { ok: ok, base: ok ? bc : 0, fee: fee, total: ok ? bc + (S.cover ? fee : 0) : 0 };
   }
-  function message(title, html) { app.innerHTML = '<h1>' + E(title) + '</h1><div class="rule"></div>' + html; footer(); }
+  function message(title, html) { app.innerHTML = '<h1>' + E(title) + '</h1><div class="rule"></div>' + html; footer();
+    if (CAMP) app.querySelectorAll('a[href^="/give"]').forEach(function (a) { var h = a.getAttribute('href'); a.setAttribute('href', h + (h.indexOf('?') < 0 ? '?' : '&') + 'c=' + encodeURIComponent(CAMP)); }); }
   function amountError() {
     var b = base(), c = S.cfg;
     if (b == null || b === '' || !isFinite(b) || b <= 0) return W.err_choose;
@@ -268,14 +281,14 @@ a{color:var(--green)}
     var html = '<form id="give" novalidate><h1>' + E(cf('title')) + '</h1><div class="rule"></div>' + (cf('intro') ? '<p class="intro">' + E(cf('intro')) + '</p>' : '') +
       (preview ? '<div class="banner info" role="status">' + W.preview + '</div>' : '') +
       (S.banner ? '<div class="banner ' + S.bannerKind + '" role="alert">' + E(S.banner) + '</div>' : '') +
-      '<fieldset><legend id="lf">' + W.how_often + '</legend><div class="freq" role="radiogroup" aria-labelledby="lf">' +
+      (camp() && !camp().monthly ? '' : '<fieldset><legend id="lf">' + W.how_often + '</legend><div class="freq" role="radiogroup" aria-labelledby="lf">' +
         '<button type="button" role="radio" aria-checked="' + (!mon) + '" data-freq="once">' + W.give_once + '</button>' +
-        '<button type="button" role="radio" aria-checked="' + mon + '" data-freq="monthly">' + W.give_monthly + '</button></div></fieldset>' +
+        '<button type="button" role="radio" aria-checked="' + mon + '" data-freq="monthly">' + W.give_monthly + '</button></div></fieldset>') +
       '<fieldset class="' + (e.amount ? 'bad' : '') + '"><legend>' + W.legend(mon) + '</legend><div class="amts">' +
         amts.map(function (a) { var on = S.other === '' && S.amount === a; return '<button type="button" class="amt" data-amt="' + a + '" aria-pressed="' + on + '">' + E(money(a)) + (mon ? '<small>' + W.a_month + '</small>' : '') + '</button>'; }).join('') + '</div>' +
         '<label class="other' + (S.other !== '' ? ' on' : '') + '">' + (FR ? '' : '<span aria-hidden="true">$</span>') + '<input id="other" inputmode="decimal" autocomplete="off" placeholder="' + W.other + '" aria-label="' + W.other_aria + '" value="' + E(S.other) + '"' +
           (e.amount ? ' aria-invalid="true" aria-describedby="e_amount"' : '') + '>' + (FR ? '<span aria-hidden="true">$</span>' : '') + '</label>' + (e.amount ? '<p class="err" id="e_amount">' + E(e.amount) + '</p>' : '') + '</fieldset>' +
-      (c.designations.length > 1 ? '<fieldset><label class="lbl" for="des">' + W.where + '</label><select id="des">' + c.designations.map(function (d) { return '<option value="' + E(d) + '"' + (d === S.designation ? ' selected' : '') + '>' + E(dlabel(d)) + '</option>'; }).join('') + '</select></fieldset>' : '') +
+      (camp() ? '<p class="lockdes"><span>' + W.where + '</span><b>' + E(cdes()) + '</b></p>' : c.designations.length > 1 ? '<fieldset><label class="lbl" for="des">' + W.where + '</label><select id="des">' + c.designations.map(function (d) { return '<option value="' + E(d) + '"' + (d === S.designation ? ' selected' : '') + '>' + E(dlabel(d)) + '</option>'; }).join('') + '</select></fieldset>' : '') +
       '<fieldset class="' + (e.tribute_name ? 'bad' : '') + '"><legend class="hp">' + W.extras + '</legend>' +
         '<label class="check"><input type="checkbox" id="trib"' + (S.tribute ? ' checked' : '') + '><span>' + W.tribute + '</span></label>' +
         (S.tribute ? '<div class="sub"><div class="radios" role="radiogroup" aria-label="' + W.tribute_aria + '"><label><input type="radio" name="tk" value="honour"' + (S.tkind === 'honour' ? ' checked' : '') + '> ' + W.honour + '</label>' +
@@ -295,7 +308,7 @@ a{color:var(--green)}
   }
   function paintPay() { /* the choices in one line with Change, and Stripe's form below them */
     var c = S.cfg, t = totals(), mon = S.freq === 'monthly', bits = [];
-    if (c.designations.length > 1) bits.push(dlabel(S.designation || c.designations[0]));
+    if (camp()) bits.push(cdes()); else if (c.designations.length > 1) bits.push(dlabel(S.designation || c.designations[0]));
     if (S.tribute && S.tname.trim()) bits.push((S.tkind === 'memory' ? W.memory : W.honour) + ' ' + S.tname.trim());
     if (S.cover && t.fee) bits.push(W.includes_fee(cents(t.fee / 100)));
     app.innerHTML = '<h1>' + E(cf('title')) + '</h1><div class="rule"></div>' +
@@ -389,7 +402,8 @@ a{color:var(--green)}
     if (c.mode !== 'live') { S.banner = W.preview_submit; S.bannerKind = 'info'; render(); return; }
     S.sending = true; S.banner = ''; render();
     var body = { action: 'checkout', token: S.token, hp: (document.getElementById('hp') || {}).value || '', frequency: S.freq, amount: Number(base()),
-      designation: S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: L };
+      designation: camp() ? camp().designation : S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: L };
+    if (camp()) body.campaign = camp().slug; /* v5 */
     if (embedded()) body.ui = 'embedded';
     var wait = Math.max(0, 3300 - (Date.now() - S.loadedAt)); /* the token must be a few seconds old (a person, not a script) */
     setTimeout(function () {
@@ -410,8 +424,9 @@ a{color:var(--green)}
       if (r.status !== 200 || !r.body.amounts) { message(W.wrong, W.wrong_html); return; }
       var first = !S.cfg;
       S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
-      if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String(S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
-      if (first) { var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+      if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String((camp() && camp().photo) || S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
+      if (first) { if (camp() && !camp().monthly) S.freq = 'once'; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+      if (first && camp()) document.title = cf('title');
       if (S.cfg.mode !== 'live' && !q.get('preview')) {
         var mail = S.cfg.org.email || 'info@welfareavenue.com';
         message(W.soon, W.soon_html(E(mail)));

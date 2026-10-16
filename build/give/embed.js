@@ -9,7 +9,10 @@
    Keela donate buttons (class keela-popup-button with a give-can.keela.co data-src), whose Keela handler is set aside for
    that click; the click still reaches the site's own listeners (analytics). window.WADonate.open() and .close() do the same
    from code. The page inside tells the popup its height and whether a payment is open (postMessage, from the Hub only):
-   while a payment is open, a click outside the popup does not close it. Escape and the close button always do. */
+   while a payment is open, a click outside the popup does not close it. Escape and the close button always do.
+   15/10/26 (the Holiday Gift Basket Drive page): a button with data-wa-campaign="<slug>" (or a link with c=<slug>) opens the
+   page for that campaign (?c=<slug>), which locks where the gift goes and tags the gift with the campaign; when a gift is
+   complete, the window gets a wa-donate-done event (detail {campaign}), so a page can refresh its progress. */
 (function () {
   'use strict';
   if (window.WADonate) return;
@@ -20,6 +23,13 @@
     if (/[?&]lang=fr\b/.test(h) || (t && t.getAttribute && t.getAttribute('data-wa-lang') === 'fr')) return true;
     return String(document.documentElement.getAttribute('lang') || '').toLowerCase().indexOf('fr') === 0;
   }
+  function campOf(t) { /* 15/10/26: the campaign a button asks for (data-wa-campaign, or c= in its link) */
+    var c = t && t.getAttribute ? (t.getAttribute('data-wa-campaign') || '') : '';
+    if (!c) { var m = /[?&]c=([a-z0-9-]+)/i.exec(t && t.getAttribute ? (t.getAttribute('href') || '') : ''); c = m ? m[1] : ''; }
+    c = String(c).toLowerCase();
+    return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : '';
+  }
+  var camp = '';
   var WORDS = { en: { title: 'Give to Welfare Avenue', close: 'Close', loading: 'Loading…', failed: 'The giving page did not load here.', tab: 'Open it in a new tab' },
     fr: { title: 'Donner à Welfare Avenue', close: 'Fermer', loading: 'Chargement…', failed: 'La page de dons ne s’est pas chargée ici.', tab: 'L’ouvrir dans un nouvel onglet' } };
   var PICK = '[data-wa-donate],a[href^="' + HUB + '/give"],.keela-popup-button[data-src*="give-can.keela.co"]';
@@ -41,7 +51,9 @@
     if (back) return;
     css();
     last = trigger || document.activeElement;
-    var fr = isFr(trigger), w = WORDS[fr ? 'fr' : 'en'], src = SRC + (fr ? '&lang=fr' : ''), page = HUB + '/give' + (fr ? '/?lang=fr' : '');
+    camp = campOf(trigger);
+    var fr = isFr(trigger), w = WORDS[fr ? 'fr' : 'en'], cq = camp ? 'c=' + camp : '', src = SRC + (fr ? '&lang=fr' : '') + (cq ? '&' + cq : ''),
+      page = HUB + '/give' + (fr || cq ? '/?' + [fr ? 'lang=fr' : '', cq].filter(Boolean).join('&') : '');
     paying = false; contentH = 0;
     back = document.createElement('div');
     back.className = 'wa-dn-back';
@@ -87,7 +99,10 @@
     if (ev.origin !== HUB || !frame || ev.source !== frame.contentWindow || !ev.data || ev.data.wa !== 'give') return;
     var d = ev.data;
     if (d.type === 'height') { contentH = Number(d.height) || 0; if (wait) { wait.parentNode.removeChild(wait); wait = null; } fit(); }
-    else if (d.type === 'state') paying = !!d.paying;
+    else if (d.type === 'state') {
+      paying = !!d.paying;
+      if (d.done) { try { window.dispatchEvent(new CustomEvent('wa-donate-done', { detail: { campaign: camp } })); } catch (e) { /* an old browser: the page refreshes on its own */ } }
+    }
     else if (d.type === 'close' || d.type === 'escape') close();
   });
   document.addEventListener('keydown', function (ev) { if (back && ev.key === 'Escape') close(); });

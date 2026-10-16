@@ -404,6 +404,7 @@
     + '#w122sheet .ppl label{display:flex;align-items:center;gap:10px;background:#FFFAF2;border-radius:12px;padding:9px 12px;font-size:14px;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(16,63,57,.08);}'
     + '#w122sheet .ppl label span{flex:1;}'
     + '#w122sheet .ppl label em{font-style:normal;font-size:11.5px;color:#797773;}'
+    + '#w122sheet .ppl label.w258fin{cursor:default;opacity:.75;}#w122sheet .ppl label em.w258fint{color:#103F39;font-weight:700;}#w122sheet .w258finnote{margin:8px 0 0;font-size:12.5px;color:#797773;}'   /* wave258 */
     + '#w122sheet .onbwrap .w37week{box-shadow:' + SH1 + ';border-radius:18px;}'
     /* celebration */
     + '#w122cel{position:fixed;inset:0;z-index:2147483200;display:flex;align-items:center;justify-content:center;padding:20px;}'

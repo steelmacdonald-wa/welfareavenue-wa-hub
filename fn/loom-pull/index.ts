@@ -1,4 +1,11 @@
-// Welfare Avenue: loom-pull (v3, 14/10/26, wave237; v2.1 29/09/26, wave165; v1 28/09/26, wave162)
+// Welfare Avenue: loom-pull (v4, 15/10/26, wave258; v3 14/10/26, wave237; v2.1 29/09/26, wave165; v1 28/09/26, wave162)
+// v4: a transcript Loom has not finished is waiting, never filed. On 15/10/26 at 19:00 the Fundraising meeting was filed with the
+// body 'unknown' (Loom answered before its transcript was ready), marked filed and never tried again. transcriptReady() now treats
+// an empty transcript, a placeholder ('unknown', 'pending', 'not available' and the like), fewer than five words, or a text far
+// shorter than the recording's length implies (under one character a second for a recording of a minute or more; people
+// speak about twelve to fifteen, and the thinnest real meeting on file has two) as not ready: the recording is saved as
+// waiting and the next pulls try again, as with no transcript at all (skipped after five attempts or five days, so an admin
+// can still file it). The admin's file action and the archive backfill refuse a placeholder too.
 // v3: pull one recording on demand. Steel (14/10/26): "we should only be reading from Loom, not Read AI or Otter AI". Loom's
 // recap email used to be filed as a meeting of its own (and processed into tasks) while the pull filed the real transcript two
 // days later, so every team meeting made its tasks twice. Now mail-pull v11 hands the recap email's Loom id to this function
@@ -585,12 +592,27 @@ function teamOf(title: string, people: Person[]): string {
   if (top.length > 1 && top[0][1] === top[1][1]) return '';
   return top[0][0];
 }
+/* v4 (wave258): is Loom's transcript really there? A placeholder or a text far too short for the recording means Loom is still
+   working on it: the recording waits for the next pull instead of being filed. */
+const PLACEHOLDER = /^[\s\[\]().:*_-]*(unknown|n\/?a|none|null|undefined|pending|processing|in progress|not (yet )?available|unavailable|no transcript( available| yet)?|transcript (is )?(not (yet )?)?(available|ready|pending|processing)|transcribing|generating( transcript)?|coming soon)[\s\[\]().:!*_-]*$/i;
+export function transcriptReady(tx: { lines: string[] }, durationS: number | null | undefined): { ok: boolean; why: string } {
+  const lines = (tx && tx.lines) || [];
+  if (!lines.length) return { ok: false, why: 'no transcript' };
+  const body = lines.join('\n').trim();
+  const words = body.replace(/^\s*(?:\d+:)?\d{1,2}:\d{2}\s*/gm, '').split(/\s+/).filter((w) => /[a-z0-9]/i.test(w));
+  if (!body || PLACEHOLDER.test(body.replace(/^\s*(?:\d+:)?\d{1,2}:\d{2}\s*/gm, '').replace(/^[^:\n]{1,40}:\s*/gm, ''))) return { ok: false, why: 'a placeholder, "' + body.slice(0, 40) + '"' };
+  if (words.length < 5) return { ok: false, why: 'only ' + words.length + (words.length === 1 ? ' word' : ' words') };
+  const d = Number(durationS || 0);
+  if (d >= 60 && body.length < d) return { ok: false, why: body.length + ' characters for a ' + Math.round(d / 60) + '-minute recording' };
+  return { ok: true, why: '' };
+}
 export function classify(v: Video, tx: { lines: string[]; speakers: string[] }, ctx: Ctx, ageDays: number, attempts: number): Decision {
   const title = v.title || '';
   if (PERSONAL_TITLE.test(title) || PERSONAL_TITLE.test(v.folder || '') || /^(personal|private|me|recovery)$/i.test(v.folder || '')) return { status: 'personal', reason: '' };
-  if (!tx.lines.length) {
-    if (ageDays >= 5 || attempts >= 5) return { status: 'skipped', reason: 'Loom has no transcript for it' };
-    return { status: 'waiting', reason: 'Loom has no transcript for it yet; the next pull tries again' };
+  const ready = transcriptReady(tx, v.duration_s);
+  if (!ready.ok) {
+    if (ageDays >= 5 || attempts >= 5) return { status: 'skipped', reason: tx.lines.length ? 'Loom never finished the transcript (' + ready.why + ')' : 'Loom has no transcript for it' };
+    return { status: 'waiting', reason: tx.lines.length ? 'Loom has not finished the transcript yet (' + ready.why + '); the next pull tries again' : 'Loom has no transcript for it yet; the next pull tries again' };
   }
   const body = tx.lines.join('\n');
   if (personalText(body)) return { status: 'personal', reason: '' };
@@ -864,6 +886,7 @@ async function fileOne(body: Json, who: string): Promise<Json> {
   const s = await connect(ctx);
   const got = await fetchVideo(s, id);
   if (!got.tx.lines.length) throw new Error('Loom has no transcript for it yet');
+  { const rd = transcriptReady(got.tx, null); if (!rd.ok) throw new Error('Loom has not finished the transcript yet (' + rd.why + ')'); }
   if (personalText(got.tx.lines.join('\n'))) throw new Error('That recording looks personal, so the Hub leaves it out');
   const base: Video = normVideo({ id, name: row ? row.title : '', createdAt: row && row.recorded_at ? row.recorded_at : '', owner: row ? row.owner_name : '' });
   const v = got.meta ? merged(base, got.meta) : base;
@@ -992,9 +1015,10 @@ async function backfill(body: Json, who: string): Promise<Json> {
         if (!dry) await save(v, { status: 'personal', reason: '' }, [], addedBy);
         out.push(r); continue;
       }
-      if (!got.tx.lines.length) {
-        r.status = 'no_transcript';
-        if (!dry) await save(v, { status: 'skipped', reason: 'Loom has no transcript for it' }, [], addedBy);
+      const rd = transcriptReady(got.tx, v.duration_s);   /* v4: a placeholder or a far too short transcript counts as none */
+      if (!rd.ok) {
+        r.status = 'no_transcript'; r.why = rd.why;
+        if (!dry) await save(v, { status: 'skipped', reason: got.tx.lines.length ? 'Loom never finished the transcript (' + rd.why + ')' : 'Loom has no transcript for it' }, [], addedBy);
         out.push(r); continue;
       }
       /* a meeting for everyone that may hold something sensitive goes to the leaders instead (an admin can open it up) */

@@ -1,5 +1,6 @@
 /* =====================================================================
    WA v213 The due-date check (06/10/26)
+   WA v237 Tasks set right: the owner questions in the due-date check, Mine / Not mine and Who owns this? (Steel, 14/10/26)
    =====================================================================
    Steel (06/10/26), after wave210 showed 52 of 62 recent meeting tasks had no due date: "I'd rather a pop up when the
    user gets on to the hub that they should [set] their due dates for the tasks or confirm the due dates provided make
@@ -23,7 +24,10 @@
    that without it prompting people to clarify tasks as much." A task whose owner a meeting left unsure (dept_tasks.owner_unsure)
    opens with "Is this yours?": Mine (then the usual date choices) or Not mine (it goes to the team's lead to re-home). A team's
    lead also sees the team's tasks nobody on the roster owns and names the owner. The list comes from wa237_due_check().
-   wave238 (14/10/26): it also waits for the Loop's Welcome back gate (#w238loop). */
+   wave238 (14/10/26): it also waits for the Loop's Welcome back gate (#w238loop).
+   wave258 (15/10/26, the Fundraising meeting: a new member got stuck on "this tab that only shows the tasks" and did not know how
+   to leave): one plain line at the top says what to do to carry on, and "x of n answered" shows how far along you are. Still no
+   way to skip it. */
 (function () {
   'use strict';
   if (window.__wa213) return; window.__wa213 = true;
@@ -61,6 +65,12 @@
     + '#w213pop .note{font-size:12px;color:#6b6a65;margin-left:auto;}'
     + '#w213pop .ask{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:8px;font-size:12.5px;color:#444;}'
     + '#w213pop .ask .q{font-weight:700;color:' + GREEN + ';}'
+    + '#w213pop .how{margin:0 0 8px;background:' + GREEN + ';color:' + CREAM + ';border-radius:9px;padding:9px 12px;font-size:13.5px;font-weight:600;line-height:1.4;}'
+    + '#w213pop .prog{display:flex;align-items:center;gap:10px;margin:10px 0 0;font-size:12.5px;color:#444;}'
+    + '#w213pop .prog b{color:' + GREEN + ';white-space:nowrap;}'
+    + '#w213pop .prog .bar{flex:1;height:6px;border-radius:3px;background:rgba(16,63,57,.12);overflow:hidden;}'
+    + '#w213pop .prog .bar i{display:block;height:100%;background:' + GOLD + ';}'
+    + '#w213pop .prog.all b{color:' + GREEN + ';}'
     + '#w213pop select{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;max-width:100%;}'
     + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -164,6 +174,20 @@
     });
     return c;
   }
+  /* wave258: is this task answered enough to save? (the same rules save() checks) */
+  function answered(r) {
+    var id = r.task_id, a = actOf(id), today = new Date(); today.setHours(0, 0, 0, 0);
+    function future(d, strict) { if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false; var t = new Date(d + 'T12:00:00'); return strict ? t > today : t >= today; }
+    if (isLead(r)) return a === 'done' || a === 'discard' || !!S.who[id];
+    if (isUnsure(r)) { var m = mineOf(id); if (m === null) return false; if (m === false) return true; }
+    if (a === 'done' || a === 'discard') return true;
+    if (a === 'bank') return future(S.bank[id], true);
+    return future(S.pick[id], false);
+  }
+  function progressHtml() {
+    var rows = S.rows || [], n = rows.length, x = rows.filter(answered).length, pct = n ? Math.round(x / n * 100) : 0;
+    return '<div class="prog' + (x === n ? ' all' : '') + '" role="status" aria-live="polite"><b>' + (x === n ? 'All ' + n + ' answered. Save, and you are in.' : x + ' of ' + n + ' answered') + '</b><span class="bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></div>';
+  }
   function saveLabel() {
     var c = counts(), bits = [];
     if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' date' : ' dates'));
@@ -189,11 +213,11 @@
     if (none.length) bits.push(none.length + (none.length === 1 ? ' task' : ' tasks') + ' with no due date');
     if (set.length) bits.push(set.length + (set.length === 1 ? ' task' : ' tasks') + ' with a date a meeting set');
     if (lead.length) bits.push(lead.length + (lead.length === 1 ? ' task of your team' : ' tasks of your team') + ' with no owner yet');
-    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><h2 id="w213h">' + E(hello()) + 'let’s get your tasks on track</h2>'
+    var h = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w213h"><div class="hd"><p class="how">Answer each task to carry on: Done, a new date, or Not mine. The Hub opens right after you save.</p><h2 id="w213h">' + E(hello()) + 'let’s get your tasks on track</h2>'
       + '<p class="lead">You have ' + E(bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits.join('')) + '. '
       + (unsure.length ? 'A meeting gave you a task without being sure it was yours: say if it is. ' : '')
       + 'We’ve suggested a due date for each one, usually your team’s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it.'
-      + (lead.length ? ' For your team’s tasks nobody owns yet, name who takes them.' : '') + ' Then save, and you’re all set.</p></div><div class="bd">';
+      + (lead.length ? ' For your team’s tasks nobody owns yet, name who takes them.' : '') + ' Then save, and you’re all set.</p>' + progressHtml() + '</div><div class="bd">';
     if (unsure.length) h += '<h3>Is this yours? A meeting was not sure</h3>' + unsure.map(rowHtml).join('');
     if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + over.map(rowHtml).join('');
     if (none.length) h += '<h3>No due date yet: here’s our suggestion</h3>' + none.map(rowHtml).join('');

@@ -12,3 +12,7 @@ Since the Toronto page (09/10/26), several website changes were made on the buil
 `build/www/live/` is a copy of every text file the site serves, taken 12/10/26. Until those changes are ported into
 `make.py`, **do not deploy a `make.py` build**: it would erase them. Edit the live files instead (pull them from `www_files`,
 patch, md5-guarded swap, `www-sync`), keep the patch script under `build/www/patches/`, and refresh `build/www/live/`.
+
+15/10/26: the Holiday Gift Basket Drive page (`gift-basket-drive/`, `fr/paniers-cadeaux/`, `assets/drive.css`, `assets/drive.js`, the
+events cards' links and the sitemap) was made the same way: `build/www/patches/gbd_gift_basket_drive.py` writes it from the live
+Donate pages' header and footer; its outputs are in `build/www/live/`.

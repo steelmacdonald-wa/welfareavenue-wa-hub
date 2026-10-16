@@ -24,4 +24,6 @@
   <url><loc>https://welfareavenue.com/fr/conditions/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/terms/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/conditions/"/></url>
   <url><loc>https://welfareavenue.com/data-deletion/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/data-deletion/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/suppression-des-donnees/"/></url>
   <url><loc>https://welfareavenue.com/fr/suppression-des-donnees/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/data-deletion/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/suppression-des-donnees/"/></url>
+  <url><loc>https://welfareavenue.com/gift-basket-drive/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/gift-basket-drive/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/paniers-cadeaux/"/></url>
+  <url><loc>https://welfareavenue.com/fr/paniers-cadeaux/</loc><xhtml:link rel="alternate" hreflang="en" href="https://welfareavenue.com/gift-basket-drive/"/><xhtml:link rel="alternate" hreflang="fr" href="https://welfareavenue.com/fr/paniers-cadeaux/"/></url>
 </urlset>

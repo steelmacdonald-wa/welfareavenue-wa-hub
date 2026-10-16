@@ -46,7 +46,7 @@
   var TAB_LABEL = {
     dashboard: 'Delivery numbers and donations', opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', studio: 'Content Studio', fundraising: 'Fundraising',
-    fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
+    fundevents: 'Events calendar', grants: 'Grants', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
     activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', orggoals: 'Goals and the Strategy Library', adminpanel: 'Admin'
   };

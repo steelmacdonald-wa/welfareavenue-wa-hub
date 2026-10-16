@@ -843,7 +843,7 @@
 
   /* ---------- nav: the Departments menu ---------- */
   /* tools that live inside a team's menu: the real tab button moves in, so its wiring and role gating stay intact */
-  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finance']],   /* wave164: the Finance app's page (hidden from the Hub's menu since wave153; Finance is not Fundraising's) */ hr: [['hrcentre', 'HR centre']] };
+  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finance'], ['grants', 'Grants']],   /* wave258: the Grants page (Steel, 15/10/26 Fundraising meeting) sits in the Fundraising row */   /* wave164: the Finance app's page (hidden from the Hub's menu since wave153; Finance is not Fundraising's) */ hr: [['hrcentre', 'HR centre']] };
   function flyout(d) {
     var pages = pagesOf(d).filter(function (p) { return !p.tool && p.key !== 'volunteering'; });
     var html = pages.map(function (p) {

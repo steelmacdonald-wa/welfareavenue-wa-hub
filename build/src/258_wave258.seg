@@ -1,0 +1,467 @@
+/* =====================================================================
+   WA v258 the Fundraising meeting's follow-through (15/10/26)
+   =====================================================================
+   Steel, in the 15/10/26 Fundraising meeting with Amanda (the lead), Alyx and Alexis (new): "I'll make those improvements
+   tonight". Amanda opened Open decisions on Home and landed on the executive view with everyone's tasks; the Grants workstream
+   (14 open) cluttered the Fundraising page; "Fundraising homepage should just say the requests, so whenever a department asks
+   for something at another meeting"; Alexis got stuck on the task check pop-up (wave213; the explainer and the answered count
+   live in parts213).
+   - Home chips (renderMyPage, decorated after each render; the clicks are taken in the capture phase so the older chip
+     handlers stand aside): my open tasks scrolls to My tasks and lights it; team tasks opens the person's team page; open
+     decisions, for anyone who is not an admin or on the executive team, counts their team's open decisions and opens the team
+     page at its decisions (or says plainly that there are none); admins and the executive team keep the executive view
+     (#overview). Who may open the Dashboard is unchanged. incoming requests lands on the team page's requests.
+   - Team pages: when a team has open requests (asked of it by another team, in a meeting or through Requests), they show at
+     the top, above the page's tabs (#w258req); a click opens the request in place (wave123's sheet).
+   - Grants gets its own page (#grants, in the Fundraising row of the menu; WA_TEAMS ADOPT in wave116): the Grants workstream's
+     tasks on the standard board (tick, open, the bank in the drawer), Add a grants task (filed under fundraising / Grants),
+     Overseen by the grants lead (Suhaib), and the Fundraising app's grants pipeline. On the Fundraising team page the Grants
+     group is a pointer, and the page's totals leave grants out (window.w116TasksFor, wrapped). No new team code: grants stay
+     dept_tasks.department fundraising, subsection Grants. Seen by whoever can see Fundraising (wa40Allowed, wrapped).
+   ===================================================================== */
+(function () {
+  if (window.__wa258) return; window.__wa258 = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', GRANT = '#b8902f';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+
+  var css = document.createElement('style');
+  css.id = 'wa258css';
+  css.textContent = ''
+    + '@keyframes w258hl{0%{box-shadow:0 0 0 0 rgba(220,165,39,0)}15%{box-shadow:0 0 0 4px ' + GOLD + '}70%{box-shadow:0 0 0 4px rgba(220,165,39,.6)}100%{box-shadow:0 0 0 0 rgba(220,165,39,0)}}'
+    + '.w258hl{animation:w258hl 2.4s ease-out;border-radius:14px;scroll-margin-top:84px;}'
+    + '#w258req{margin:0 0 16px;border-left:4px solid ' + GOLD + ';}'
+    + '#w258req .w258sub{margin:-4px 0 10px;font-size:12.5px;color:var(--wa-muted);}'
+    + '#w258req .w258rr{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;cursor:pointer;border-top:1px dashed rgba(16,63,57,.12);}'
+    + '#w258req .w258rr:first-of-type{border-top:none;}'
+    + '#w258req .w258rr:hover,#w258req .w258rr:focus{background:rgba(16,63,57,.05);outline:none;}'
+    + '#w258req .w258rr .tx{flex:1;min-width:0;}'
+    + '#w258req .w258rr .t{font-weight:700;font-size:13.5px;color:' + GREEN + ';}'
+    + '#w258req .w258rr .m{font-size:11.5px;color:var(--wa-muted);margin-top:2px;}'
+    + '#w258req .w258rr .m .late{color:' + FLAG + ';font-weight:700;}'
+    + '#w258req .w258pill{flex:0 0 auto;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:rgba(220,165,39,.22);color:' + GREEN + ';}'
+    + '#w258req .w258more{font-size:12px;color:var(--wa-muted);margin:8px 0 0;}'
+    + '#w258req .w258more a{color:' + GREEN + ';font-weight:700;cursor:pointer;}'
+    + '.w258ptr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--wa-card);border:1px dashed rgba(184,144,47,.6);border-radius:14px;padding:12px 16px;margin:0 0 12px;font-size:13px;color:var(--wa-text);}'
+    + '.w258ptr .dot{width:10px;height:10px;border-radius:3px;background:' + GRANT + ';flex:0 0 auto;}'
+    + '.w258ptr a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:underline;}'
+    + '#grants{max-width:1240px;}'
+    + '#grants .w258over{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--wa-text);margin:6px 0 0;}'
+    + '#grants .w258over b{color:' + GREEN + ';}'
+    + '#grants .w258acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
+    + '#grants .w258btn{font-family:' + BODY + ';font-size:13px;font-weight:700;border-radius:10px;padding:9px 14px;cursor:pointer;border:1px solid rgba(16,63,57,.18);background:var(--wa-card);color:' + GREEN + ';}'
+    + '#grants .w258btn.pri{background:' + GOLD + ';border-color:' + GOLD + ';color:' + GREEN + ';}'
+    + '#grants .w258stat{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;}'
+    + '#grants .w258stat b{color:' + GREEN + ';font-size:15px;margin-right:4px;}'
+    + '#grants .w258stat b.warn{color:' + FLAG + ';}'
+    + '#grants .w258deny{padding:30px 0;color:var(--wa-muted);font-size:14px;}'
+    + '@media (max-width:700px){#grants .w258acts{width:100%;}#grants .w258btn{flex:1 1 auto;text-align:center;}}';
+  document.head.appendChild(css);
+
+  /* ---------- small helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function admin() { return role() === 'admin'; }
+  function me() { try { return (typeof WA_ME !== 'undefined' && WA_ME) || null; } catch (e) { return null; } }
+  function execTeam() {
+    try {
+      var m = me(); if (m && m.department === 'exec') return true;
+      var p = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile) || ''; return p === 'executive';
+    } catch (e) { return false; }
+  }
+  function allowed() { try { return (typeof wa40Allowed === 'function' && wa40Allowed()) || []; } catch (e) { return []; } }
+  function canSee(id) { var a = allowed(); return !a || a.indexOf(id) >= 0; }
+  function myTeam() { var m = me(); var d = m && m.department; return d && T.order.indexOf(d) >= 0 ? d : null; }
+  function label(d) { return (T.labels && T.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function day(s) { try { return new Date(String(s).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (e) { return String(s || ''); } }
+  function ago(iso) {
+    var t = Date.parse(iso || ''); if (!t) return '';
+    var d = Math.floor((Date.now() - t) / 86400000);
+    return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? d + ' days ago' : day(iso);
+  }
+  function todayKey() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  /* ---------- grants: which tasks are the Grants workstream's ---------- */
+  function grantsBoard() { return ((T.boards && T.boards.fundraising) || []).filter(function (b) { return b.key === 'grants'; })[0] || null; }
+  function grantIds() { try { return window.w116BoardIds ? window.w116BoardIds('grants') : ((T.boardProjects && T.boardProjects.grants) || []); } catch (e) { return []; } }
+  function isGrant(t, ids) {
+    if (!t || t.department !== 'fundraising') return false;
+    var b = grantsBoard(); var ws = b ? b.ws : 'Grants';
+    if (t.subsection === ws) return true;
+    return !!(t.project_id && (ids || grantIds()).indexOf(Number(t.project_id)) >= 0);
+  }
+  /* the Fundraising team page leaves grants out (its board, its counts); the Grants page and #team/fundraising/grants keep them */
+  function wrapTasksFor() {
+    if (typeof window.w116TasksFor !== 'function' || window.w116TasksFor.__w258) return;
+    var inner = window.w116TasksFor;
+    var fn = function (d, board, ws) {
+      var rows = inner.apply(this, arguments);
+      try {
+        var b = grantsBoard();
+        if (d === 'fundraising' && !board && !(b && ws === b.ws)) { var ids = grantIds(); rows = rows.filter(function (t) { return !isGrant(t, ids); }); }
+      } catch (e) { /* the rows as they were */ }
+      return rows;
+    };
+    fn.__w258 = true; window.w116TasksFor = fn;
+  }
+  wrapTasksFor();
+
+  /* ---------- access: Grants follows Fundraising ---------- */
+  function wrapAllowed() {
+    try {
+      if (typeof wa40Allowed !== 'function' || wa40Allowed.__w258) return;
+      var __al = wa40Allowed;
+      wa40Allowed = function () {
+        var a = __al.apply(this, arguments) || [];
+        if (a.indexOf('grants') >= 0 && a.indexOf('fundraising') < 0) a = a.filter(function (x) { return x !== 'grants'; });
+        return a;
+      };
+      Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+      wa40Allowed.__w258 = true;
+    } catch (e) { /* fine */ }
+  }
+  wrapAllowed();
+
+  /* ---------- go somewhere and light up what we came for ---------- */
+  var FOC = { seq: 0 };
+  function flash(el) {
+    try {
+      el.classList.remove('w258hl'); void el.offsetWidth; el.classList.add('w258hl');
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      setTimeout(function () { el.classList.remove('w258hl'); }, 2600);
+    } catch (e) { /* fine */ }
+  }
+  /* find() answers an element, the string 'none' (the page is ready and has nothing), or null (not ready yet) */
+  function goFocus(hash, find, noneMsg) {
+    var token = ++FOC.seq, t0 = Date.now();
+    if (hash) { if (location.hash !== hash) location.hash = hash; else { try { applyHash(); } catch (e) { /* fine */ } } }
+    (function poll() {
+      if (token !== FOC.seq) return;
+      var r = null; try { r = find(); } catch (e) { r = null; }
+      if (r === 'none') { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* fine */ } if (noneMsg) toastS(noneMsg); return; }
+      if (r) { flash(r); return; }
+      if (Date.now() - t0 > 8000) return;
+      setTimeout(poll, 150);
+    })();
+  }
+  function W116cur() { try { return (window.W116 && window.W116.cur) || null; } catch (e) { return null; } }
+  function overviewReady(d) {
+    var c = W116cur(); if (!c || c.d !== d || c.page !== 'overview') return false;
+    var h = document.getElementById('w116host'); return !!(h && h.querySelector('.w116kpis'));
+  }
+
+  /* ---------- decisions for one team (the same rule as the team page's card) ---------- */
+  var AREA = { 'ops mtl': 'opsmtl', 'program development': 'progdev', 'ops to': 'opsto', 'marketing': 'marketing', 'fundraising': 'fundraising', 'grants': 'fundraising', 'events': 'fundraising', 'finance': 'fundraising', 'hr': 'hr', 'board': 'board' };
+  function areaDept(area) {
+    var s = lower(area);
+    if (AREA[s]) return AREA[s];
+    if (s.indexOf('program dev') >= 0) return 'progdev';
+    if (s.indexOf('montreal') >= 0) return 'opsmtl';
+    if (s.indexOf('toronto') >= 0) return 'opsto';
+    if (s.indexOf('fund') >= 0 || s.indexOf('grant') >= 0 || s.indexOf('financ') >= 0 || s.indexOf('event') >= 0) return 'fundraising';
+    if (s.indexOf('market') >= 0) return 'marketing';
+    if (s.indexOf('human') >= 0 || s === 'hr') return 'hr';
+    if (s.indexOf('board') >= 0) return 'board';
+    return null;
+  }
+  function teamDecisions(d) { try { return (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []).filter(function (x) { return !x.done && areaDept(x.area) === d; }); } catch (e) { return []; } }
+  function decCard() { var h = document.getElementById('w116host'); var x = h && h.querySelector('.w116dec'); return x ? (x.closest('.w116card') || x) : null; }
+
+  /* ---------- 1. Home: the chips ---------- */
+  function routeDecisions() { return !admin() && !execTeam() && !!myTeam(); }
+  function decorateChips() {
+    var body = document.getElementById('mpBody'); if (!body) return;
+    var chips = Array.prototype.slice.call(body.querySelectorAll('.mp-chips .mp-chip')); if (!chips.length) return;
+    var plain = chips.filter(function (c) { return !c.hasAttribute('data-mphash') && !c.hasAttribute('data-mpgo') && !c.hasAttribute('data-w74men'); });
+    var d = myTeam();
+    if (plain[0]) plain[0].setAttribute('data-w258chip', 'mine');
+    if (plain[1] && d) plain[1].setAttribute('data-w258chip', 'team');
+    chips.forEach(function (c) {
+      if (c.hasAttribute('data-mpgo')) c.setAttribute('data-w258chip', 'req');
+      if (c.getAttribute('data-mphash') === '#overview') {
+        var known = false; try { known = typeof WA40_MINE !== 'undefined' && !!WA40_MINE && !!me(); } catch (e) { known = false; }
+        if (c.__w258orig === undefined) c.__w258orig = c.innerHTML;
+        if (!(known && routeDecisions())) {
+          /* roles not in yet, or an admin or the executive team: the chip as it was (the executive view) */
+          if (c.getAttribute('data-w258chip') === 'dec') { c.removeAttribute('data-w258chip'); c.removeAttribute('data-w258n'); c.removeAttribute('title'); c.innerHTML = c.__w258orig; }
+        } else {
+          var n = teamDecisions(d).length;
+          c.setAttribute('data-w258chip', 'dec');
+          var html = '<b>' + n + '</b>' + (n === 1 ? 'open decision' : 'open decisions') + ' for ' + E(label(d));
+          if (c.getAttribute('data-w258n') !== String(n)) { c.innerHTML = html; c.setAttribute('data-w258n', String(n)); }
+          c.setAttribute('title', n ? 'Open your team page at its decisions' : label(d) + ' has no open decisions right now');
+        }
+      }
+    });
+    chips.forEach(function (c) {
+      if (!c.hasAttribute('data-w258chip') && !c.hasAttribute('data-mphash') && !c.hasAttribute('data-w74men')) return;
+      if (!c.hasAttribute('role')) { c.setAttribute('role', 'button'); c.setAttribute('tabindex', '0'); }
+    });
+  }
+  function chipGo(kind) {
+    var d = myTeam();
+    if (kind === 'mine') {
+      goFocus(null, function () {
+        var hs = document.querySelectorAll('#mpBody .mp-sec > h3');
+        for (var i = 0; i < hs.length; i++) if (/^(my tasks|mes t)/i.test((hs[i].textContent || '').trim())) return hs[i].parentNode;
+        return null;
+      });
+      return true;
+    }
+    if (kind === 'team' && d) { location.hash = '#team/' + d; return true; }
+    if (kind === 'req' && d) {
+      goFocus('#team/' + d, function () {
+        var r = document.getElementById('w258req'); if (r) return r;
+        if (!overviewReady(d)) return null;
+        return document.getElementById('w123tcard') || null;
+      });
+      return true;
+    }
+    if (kind === 'dec' && d && routeDecisions()) {
+      goFocus('#team/' + d, function () {
+        if (!overviewReady(d)) return null;
+        return decCard() || (teamDecisions(d).length ? null : 'none');
+      }, label(d) + ' has no open decisions right now.');
+      return true;
+    }
+    return false;
+  }
+  function onChip(e) {
+    var c = e.target && e.target.closest && e.target.closest('#mpBody [data-w258chip]'); if (!c) return;
+    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    if (chipGo(c.getAttribute('data-w258chip'))) { e.stopPropagation(); e.preventDefault(); }
+  }
+  document.addEventListener('click', onChip, true);
+  document.addEventListener('keydown', onChip, true);
+  function wrapHome() {
+    if (typeof renderMyPage !== 'function' || renderMyPage.__w258) return;
+    var __rm = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm.apply(this, arguments);
+      try { decorateChips(); } catch (e) { /* fine */ }
+      return r;
+    };
+    renderMyPage.__w258 = true;
+  }
+  wrapHome();
+
+  /* ---------- 2. Team pages: requests first; Fundraising's grants pointer and totals ---------- */
+  function teamOfHash() {
+    var p = decodeURIComponent(location.hash || '').replace(/^#/, '').split('/');
+    return p[0] === 'team' && T.order.indexOf(p[1]) >= 0 ? p[1] : null;
+  }
+  function reqsFor(d) {
+    try { return (window.w123 && window.w123.items) ? window.w123.items(d, 'open') : []; } catch (e) { return []; }
+  }
+  function reqBlock(d) {
+    var items = reqsFor(d);
+    var reqs = items.filter(function (it) { return it.k === 'r'; }), sugs = items.filter(function (it) { return it.k === 's'; });
+    if (!reqs.length) return '';
+    var shown = reqs.slice(0, 4);
+    return '<div class="w116card" id="w258req" data-d="' + E(d) + '" data-n="' + reqs.length + '"><h3>Asked of ' + E(label(d)) + ' (' + reqs.length + ') <span class="lnk" data-w116go="#requests/team/' + E(d) + '">open the team inbox</span></h3>'
+      + '<p class="w258sub">What other teams asked ' + E(label(d)) + ' for, in their meetings or through Requests. Open one to move it along.</p>'
+      + shown.map(function (it) {
+        var r = it.x || {};
+        var need = r.needed_by || null, late = need && String(need).slice(0, 10) < todayKey();
+        var who = String(r.requested_by || '').replace(/^Meeting AI \(accepted by (.+)\)$/, '$1 (from a meeting)') || 'someone';
+        var meta = ['from ' + E(who), E(ago(r.created_at))];
+        if (need) meta.push('<span class="' + (late ? 'late' : '') + '">needed by ' + E(day(need)) + '</span>');
+        var st = String(r.status || 'requested'); st = st.charAt(0).toUpperCase() + st.slice(1);
+        return '<div class="w258rr" data-w258r="' + E(r.id) + '" role="button" tabindex="0" aria-label="' + E(r.title) + '"><div class="tx"><div class="t">' + E(r.title) + '</div><div class="m">' + meta.join(' &middot; ') + '</div></div><span class="w258pill">' + E(st) + '</span></div>';
+      }).join('')
+      + (reqs.length > shown.length || sugs.length ? '<p class="w258more">' + (reqs.length > shown.length ? 'And ' + (reqs.length - shown.length) + ' more. ' : '') + (sugs.length ? sugs.length + (sugs.length === 1 ? ' ask' : ' asks') + ' the Hub heard in meetings ' + (sugs.length === 1 ? 'waits' : 'wait') + ' to be accepted. ' : '') + '<a data-w116go="#requests/team/' + E(d) + '">Open the team inbox</a></p>' : '')
+      + '</div>';
+  }
+  var REQV = { loading: false };
+  function placeReq(host, d) {
+    var cur = document.getElementById('w258req');
+    if (!staff()) { if (cur) cur.remove(); return; }
+    if (window.w123 && !window.w123.loaded()) {
+      if (!REQV.loading) { REQV.loading = true; Promise.resolve(window.w123.load()).then(function () { REQV.loading = false; schedule(); }, function () { REQV.loading = false; }); }
+      return;
+    }
+    var seg = host.querySelector(':scope > .w116seg');
+    var html = reqBlock(d);
+    var ver = d + '|' + (window.w123 && window.w123.ver ? window.w123.ver() : '') + '|' + html.length;
+    if (!html) { if (cur) cur.remove(); return; }
+    if (cur && cur.parentNode === host && cur.getAttribute('data-v') === ver && (!seg || cur.nextElementSibling === seg)) return;
+    if (cur) cur.remove();
+    var tmp = document.createElement('div'); tmp.innerHTML = html; var el = tmp.firstElementChild; el.setAttribute('data-v', ver);
+    if (seg) host.insertBefore(el, seg); else host.insertBefore(el, host.firstChild);
+  }
+  function fixFundraising(host) {
+    var c = W116cur(); if (!c || c.d !== 'fundraising') return;
+    /* the page's tabs: Grants, beside the Events calendar */
+    var seg = host.querySelector(':scope > .w116seg');
+    if (seg && canSee('grants') && !seg.querySelector('[data-w116go="#grants"]')) {
+      var a = document.createElement('a'); a.setAttribute('data-w116go', '#grants'); a.textContent = 'Grants'; seg.appendChild(a);
+    }
+    /* Overview: the totals without grants */
+    if (c.page === 'overview') {
+      var rows = window.w116TasksFor ? window.w116TasksFor('fundraising', null, null) : [];
+      var tdy = todayKey(), since = new Date(Date.now() - 30 * 86400000).toISOString();
+      var open = rows.filter(function (t) { return !t.done; });
+      var vals = { open: open.length, overdue: open.filter(function (t) { return t.due_date && t.due_date < tdy; }).length, done: rows.filter(function (t) { return t.done && ((t.closed_at && t.closed_at >= since) || (!t.closed_at && t.updated_at && t.updated_at >= since)); }).length };
+      var tiles = host.querySelectorAll('.w116kpis > .w116kpi');
+      Array.prototype.forEach.call(tiles, function (k, i) {
+        var q = k.getAttribute('data-w116q'), key = q === 'overdue' ? 'overdue' : q === 'done' ? 'done' : (i === 0 && !q ? 'open' : null);
+        if (!key) return; var b = k.querySelector('b'); if (b && b.textContent !== String(vals[key])) b.textContent = String(vals[key]);
+        if (key === 'overdue') k.classList.toggle('warn', vals.overdue > 0);
+      });
+    }
+    /* Tasks: the Grants group becomes a pointer */
+    var slot = document.getElementById('w116tasks');
+    if (slot && c.page === 'tasks') {
+      ['bgrants', 'wGrants'].forEach(function (k) {
+        var g = slot.querySelector('.w116g[data-g="' + k + '"]'); if (!g) return;
+        var p = document.createElement('div'); p.className = 'w258ptr'; p.setAttribute('data-w258ptr', '1');
+        p.innerHTML = '<span class="dot"></span><span>Grants has its own page now: <a data-w116go="#grants">open Grants</a></span>';
+        g.parentNode.replaceChild(p, g);
+      });
+    }
+  }
+  var schT = null;
+  function schedule() { clearTimeout(schT); schT = setTimeout(decorateTeam, 40); }
+  var busy = false;
+  function decorateTeam() {
+    if (busy) return;
+    var d = teamOfHash(); var host = document.getElementById('w116host');
+    if (!d || !host) return;
+    busy = true;
+    try { placeReq(host, d); fixFundraising(host); } catch (e) { /* fine */ }
+    busy = false;
+  }
+  function watchTeam() {
+    var sec = document.getElementById('team'); if (!sec || sec.__w258obs) return;
+    sec.__w258obs = true;
+    try { new MutationObserver(function () { if (!busy) schedule(); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  /* a request opens in place (wave123's sheet) */
+  function onReq(e) {
+    var r = e.target && e.target.closest && e.target.closest('#w258req [data-w258r]'); if (!r) return;
+    if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault(); e.stopPropagation();
+    var id = r.getAttribute('data-w258r');
+    try { if (window.w123 && window.w123.open) window.w123.open('r', id, true); else location.hash = '#requests/r/' + id; } catch (x) { location.hash = '#requests/r/' + id; }
+  }
+  document.addEventListener('click', onReq, true);
+  document.addEventListener('keydown', onReq, true);
+
+  /* ---------- 3. The Grants page ---------- */
+  function lead() {
+    var ms = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && /grants lead/i.test(m.role || ''); });
+    return ms[0] || { name: 'Suhaib' };
+  }
+  function grantRows() {
+    var b = grantsBoard(); var f = window.w116TasksFor; if (!b || !f) return [];
+    try { return f('fundraising', b, null) || []; } catch (e) { return []; }
+  }
+  function statsHtml() {
+    var rows = grantRows().filter(function (t) { return !t.done; }), tdy = todayKey();
+    var wk = new Date(Date.now() + 7 * 86400000); var wkKey = wk.getFullYear() + '-' + String(wk.getMonth() + 1).padStart(2, '0') + '-' + String(wk.getDate()).padStart(2, '0');
+    var over = rows.filter(function (t) { return t.due_date && t.due_date < tdy; }).length;
+    var soon = rows.filter(function (t) { return t.due_date && t.due_date >= tdy && t.due_date <= wkKey; }).length;
+    var none = rows.filter(function (t) { return !t.due_date; }).length;
+    return '<span><b>' + rows.length + '</b>open</span><span><b class="' + (over ? 'warn' : '') + '">' + over + '</b>overdue</span><span><b>' + soon + '</b>due this week</span><span><b>' + none + '</b>with no date</span>';
+  }
+  function paintGrants() {
+    var sec = document.getElementById('grants'); if (!sec) return;
+    try { document.title = 'Grants \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    try { var gb = document.querySelector('#tabBar .tab[data-tab="grants"]'); var row = gb && gb.closest ? gb.closest('.w42d') : null; if (row) row.classList.add('w116open', 'w116act'); } catch (e) { /* fine */ }
+    if (!staff() || !canSee('grants')) { sec.innerHTML = '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; Grants</div><p class="w258deny">The Grants page is for the people who can open the Fundraising team page.</p>'; return; }
+    var L = lead(), av = '';
+    try { if (window.w116Avatar && L.id) av = window.w116Avatar(L, 24); } catch (e) { av = ''; }
+    var pipe = canSee('fund');
+    sec.innerHTML = '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/fundraising">Fundraising</a> &middot; Grants</div>'
+      + '<div class="w116top"><div><h2><span class="dot" style="background:' + GRANT + '"></span>Grants</h2>'
+      + '<p class="sub">Applications, reports and funder relationships. Grants left the Fundraising page so its tasks have room of their own.</p>'
+      + '<p class="w258over">' + av + '<span>Overseen by <b>' + E(String(L.name || 'Suhaib').split(' ')[0]) + '</b></span></p></div>'
+      + '<div class="w258acts">' + (pipe ? '<button type="button" class="w258btn" data-w258g="pipe">Open the grants pipeline</button>' : '') + '<button type="button" class="w258btn pri" data-w258g="add">+ Add a grants task</button></div></div>'
+      + '<div class="w258stat" id="w258gstat">' + statsHtml() + '</div>'
+      + '<div id="w258gtasks"><p class="w116empty">Loading the grants tasks\u2026</p></div>';
+    var slot = document.getElementById('w258gtasks');
+    var go = function () {
+      if (!document.body.contains(slot)) return;
+      if (window.w116Board && window.w116Board.render && grantsBoard()) window.w116Board.render(slot, { dept: 'fundraising', board: grantsBoard(), ws: null });
+      else slot.innerHTML = '<p class="w116empty">The task board is not available in this build.</p>';
+    };
+    try { if (window.w116LoadProjects) Promise.resolve(window.w116LoadProjects()).then(go, go); else go(); } catch (e) { go(); }
+  }
+  function addGrantTask() {
+    var slot = document.getElementById('w258gtasks'); if (!slot) return;
+    var list = slot.querySelector('[data-act="view"][data-v="list"]');
+    if (list && !list.classList.contains('on')) list.click();
+    setTimeout(function () {
+      var qa = slot.querySelector('[data-act="qa"][data-g="p0"]') || slot.querySelector('[data-act="qa"]');
+      if (qa) { qa.click(); var box = qa.closest('.w116g'); if (box) flash(box); }
+      else toastS('Open the Grants list to add a task.');
+    }, 60);
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#grants [data-w258g]'); if (!b) return;
+    e.preventDefault();
+    var k = b.getAttribute('data-w258g');
+    if (k === 'pipe') location.hash = '#fund/grants';
+    if (k === 'add') addGrantTask();
+  });
+  /* the stats under the title follow the board (a tick, an add, a new date) */
+  var stT = null;
+  function watchGrants() {
+    var sec = document.getElementById('grants'); if (!sec || sec.__w258obs) return;
+    sec.__w258obs = true;
+    try { new MutationObserver(function (ms) { if (ms.every(function (m) { return m.target && m.target.id === 'w258gstat'; })) return; clearTimeout(stT); stT = setTimeout(function () { var s = document.getElementById('w258gstat'); if (s) { var h = statsHtml(); if (s.innerHTML !== h) s.innerHTML = h; } }, 120); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  function register() {
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'grants'; })) WA_NAV.register({ id: 'grants', label: 'Grants', dot: GRANT, gate: 'member', onShow: function () { paintGrants(); watchGrants(); } });
+    try { if (window.w116Nav) window.w116Nav(); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- the page tour (wave122's engine; trainings row tour:grants) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return false; if (W.tours.grants) return true;
+      var OPT = { opt: 1 };
+      var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.grants = { tab: 'grants', icon: 'target', hash: '#grants', steps: [
+        Tt('#grants .w116top', 'Grants', 'Grant applications, reports and funder follow-ups, on a page of their own. It sits in the Fundraising row of the menu.'),
+        Tt('#grants .w258over', 'Who oversees it', 'The grants lead looks after this list. Ask them before you change a funder deadline.', OPT),
+        Tt('#grants [data-w258g="pipe"]', 'The grants pipeline', 'Every grant we are watching, writing or waiting on lives in the Fundraising app. This opens it.', OPT),
+        Tt('#grants [data-w258g="add"]', 'Add a grants task', 'A new task here is filed under Fundraising, Grants, so it never lands back on the Fundraising page.', OPT),
+        Tt('#grants #w258gtasks .w116g, #grants #w258gtasks .w116b', 'The tasks', 'Tick one when it is done, click it for the details, comments and To the bank. Drag to reorder or to another project.', OPT)
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  if (!addTour()) { var tries = 0, iv = setInterval(function () { if (addTour() || ++tries > 40) clearInterval(iv); }, 500); }
+
+  /* ---------- start: inside the startApp chain, so the first paint already has the requests (wave222) ---------- */
+  function homeOn() { var m = document.getElementById('mypage'); return !!(m && m.classList.contains('active')); }
+  if (typeof startApp === 'function') {
+    var __sa258 = startApp;
+    startApp = async function () {
+      var out = await __sa258.apply(this, arguments);
+      try {
+        wrapTasksFor(); wrapAllowed(); wrapHome();
+        register(); watchTeam();
+        var hadReq = !!document.querySelector('#mpBody [data-mpgo]');
+        if (staff() && window.w123 && !window.w123.loaded()) {
+          await Promise.race([Promise.resolve(window.w123.load()).catch(function () { return null; }), new Promise(function (r) { setTimeout(r, 3000); })]);
+        }
+        /* Home drew its chips before the requests came in: draw it once more, still inside the start */
+        var d0 = myTeam(), nReq = 0;
+        try { nReq = (typeof REQ_CACHE !== 'undefined' ? REQ_CACHE : []).filter(function (x) { return d0 && x.department === d0 && !x.done; }).length; } catch (e) { nReq = 0; }
+        if (homeOn() && !hadReq && nReq && typeof renderMyPage === 'function') { try { await renderMyPage(); } catch (e) { /* fine */ } }
+        decorateTeam(); decorateChips();
+        if (decodeURIComponent(location.hash || '').replace(/^#/, '').split('/')[0] === 'grants') { try { applyHash(); } catch (e) { /* fine */ } }
+      } catch (e) { console.warn('wave258 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w258 = { isGrant: isGrant, teamDecisions: teamDecisions, decorateChips: decorateChips, decorateTeam: decorateTeam, paintGrants: paintGrants, chipGo: chipGo, routeDecisions: routeDecisions, reqBlock: reqBlock };
+})();

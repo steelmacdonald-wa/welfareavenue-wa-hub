@@ -35,7 +35,7 @@
   var GROUPS = [ /* wave134: the same groups as the menu */
     /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
     ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'requests', 'calendar', 'brain']],
-    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app */
+    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'grants', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app; wave258: grants, the Grants page */
     ['Board', ['board', 'governance', 'committees']],
     ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'create']],
     ['Organization', ['orgchart', 'ourstory', 'hubmail']],
@@ -49,7 +49,7 @@
     orggoals: 'Goals and the Strategy Library', goals: 'Department goals (retired)', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', studio: 'Content Studio', fundraising: 'Fundraising',
-    fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
+    fundevents: 'Events calendar', grants: 'Grants', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
     transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
