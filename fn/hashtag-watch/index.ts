@@ -1,4 +1,4 @@
-// Welfare Avenue: hashtag-watch (v1, 20/10/26, wave262c)
+// Welfare Avenue: hashtag-watch (v2, 21/10/26, wave262c)
 // Kahkashan, 19/10/26 leadership meeting: "one place where we can ... monitor the hashtags, so we can put out a fire before it
 // becomes a wildfire" (the OneBagChallenge). Finds public Instagram posts under the hashtags in social_hashtag_watch through the
 // Instagram Graph API's hashtag search (ig_hashtag_search once per tag, then recent_media: the last 24 hours, and top_media),
@@ -10,6 +10,8 @@
 // Tables: social_hashtag_watch (ig_hashtag_id, last_checked_at, last_error), social_hashtag_posts (insert new posts; update
 //   likes and comments; never the review fields), change_log (a line when a sync finds new posts or a tag fails).
 // Vault: META_SYSTEM_TOKEN (instagram_basic). Instagram allows 30 different hashtags in 7 days per account.
+// v2 (21/10/26): only posts from 7 days before the tag was added onwards are kept (the first check of #onebagchallenge
+//   brought Instagram's 50 top posts from 2013 to March 2026, none of them ours).
 // Side effects: none outside the Hub (no Slack, no email).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -62,7 +64,7 @@ Deno.serve(async (req: Request) => {
   if (action !== 'sync') return json({ error: 'unknown action' }, 400);
   try {
     const token = await getSecret('META_SYSTEM_TOKEN');
-    let q = svc.from('social_hashtag_watch').select('id, tag, ig_hashtag_id').eq('active', true);
+    let q = svc.from('social_hashtag_watch').select('id, tag, ig_hashtag_id, added_at').eq('active', true);
     if (body.tag) q = q.eq('tag', String(body.tag).toLowerCase().replace(/[^a-z0-9_]/g, ''));
     const { data: tags, error } = await q;
     if (error) throw new Error(error.message);
@@ -82,6 +84,10 @@ Deno.serve(async (req: Request) => {
           const m = await graph('/' + hid + '/' + src + '_media', token, { user_id: IG_USER, fields: FIELDS, limit: '50' });
           for (const p of (m.data || []) as Any[]) rows.push({ src, p });
         }
+        /* v2: only what was posted from a week before the tag was added */
+        const since = new Date(t.added_at || Date.now()).getTime() - 7 * 86400000;
+        const kept = rows.filter((x) => !x.p.timestamp || new Date(x.p.timestamp).getTime() >= since);
+        rows.length = 0; rows.push(...kept);
         r.found = rows.length;
         const ids = Array.from(new Set(rows.map((x) => String(x.p.id))));
         const { data: known } = ids.length ? await svc.from('social_hashtag_posts').select('media_id').eq('tag', t.tag).in('media_id', ids) : { data: [] };

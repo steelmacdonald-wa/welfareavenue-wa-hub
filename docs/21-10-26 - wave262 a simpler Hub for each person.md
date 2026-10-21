@@ -35,6 +35,10 @@ through the apps that are available to them".
 - **Tate** leads Operations Toronto in the Hub (the lead option of his profile, as Ahmed and Shima have). That lead option also
   opens Agendas, Activity, the HR centre, the Content calendar, Analytics, the board pages and Committees, as for the other leads.
   The org chart stays with the Executive and Admin profiles.
+- **Ask the Hub finds pages (Steel, 21/10/26).** A question that asks where something is gets a "Where to find it" box under
+  the answer: up to three matching pages, where each sits in the menu and Open, or Request access for a page the person's access
+  does not open (a wa_access_requests row, wanted tab:<page>, reason "Asked Ask the Hub: ...", and the same admin ping as Request
+  more access on Home; then "Requested, waiting for an admin"). Client side only (parts262/d_nav.js); ask is unchanged.
 - **Onboarding.** A lead's step "Walk them through the Hub, live (30 minutes)" (hrm05, day 3); the Loom step names
   hub@welfareavenue.com.
 
@@ -48,3 +52,19 @@ through the apps that are available to them".
 - Data: `build/data/wa262a_confirm_fast.sql` (applied 20/10/26), `wa262b_due_today.sql` (with the build: due today, tour row,
   Hub module 1 wording, Tate, onboarding step), `wa262c_hashtags.sql` (tables, functions, seed, cron).
 - Docs: `docs/EDGE_FUNCTIONS.md` (hashtag-watch, the cron), `docs/HUB_RELEASE_CHECKLIST.md` (the folds rule).
+
+## Release (21/10/26)
+
+- Live: index.html `aec989a28cf7116f419a49396e3ac93e` (from `1cecc2a3`), host-sync 18:41 UTC, the hosted page checked byte for
+  byte. GitHub main `18a784e6` on `525b38a9` (94 files).
+- Database: wa262a applied 20/10/26 through the Supabase connection. The rest went in through Steel's SQL editor because Claude's
+  write approvals were being cancelled: step 1 (stage table wa_stage_262 and wa262c hashtags), step 2 (the gated swap of site_files,
+  wa262b, the release line, the stage table closed). The parts were posted from the build with the anon key and checked against
+  the gate's md5s before Steel ran it. The hourly sweep drops wa_stage_262.
+- Steel ran step 3 (cron wa-hashtag-watch, :07 and :37). His dashboard deploy made a function `swift-api` holding Supabase's Hello
+  template (left in place for Steel to delete); Claude deployed hashtag-watch through the Supabase connection (v1, then v2: posts
+  from a week before the tag was added onwards). First check: Instagram knew #onebagchallenge (id 17841519709076422); its 50 top
+  posts (2013 to March 2026, none ours) were removed; 0 recent posts so far.
+- Tests: w134 34/34 (updated for The Brain in More), w163, w153, w225 47/47, w260 49/49; w127 fails the same way on the old live
+  build (fixture drift); new checks for the folds, Home, apps, the due-date check (a failed batch mid-save), Ask the Hub's box,
+  the pop-up and its tour, desktop and phone.
