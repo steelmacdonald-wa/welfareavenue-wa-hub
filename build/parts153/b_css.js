@@ -29,6 +29,7 @@
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
     + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
+    + '#w153pop .w153ph.w262ph{padding-top:12px;}'
     + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
     + '#w153pop .w153ext .w153ai{color:' + GREEN + ';}'

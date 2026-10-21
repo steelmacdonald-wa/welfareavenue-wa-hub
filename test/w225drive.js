@@ -59,7 +59,7 @@ const CONN = { ok: true, can_change: true, can_meta: true, redirect_uri: 'https:
 const INIT = `
   window.confirm = function () { window.__CONFIRMS = (window.__CONFIRMS || 0) + 1; return true; };
   window.print = function () { window.__PRINTED = document.body.classList.contains('w225print'); };
-  try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+  try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
   window.__CALLS = [];
   window.__WA_INVOKE = function (name, opts) {
     var b = (opts && opts.body) || {}; window.__CALLS.push([name, b]);

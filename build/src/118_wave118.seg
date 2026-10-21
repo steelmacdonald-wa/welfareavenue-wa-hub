@@ -93,7 +93,7 @@
     "needsme": ["Home", "Needs me", "Everything waiting on you, in one queue.", true, "Needs me"],
     "activity": ["Admin", "Activity", "Everything that changed on the Hub, newest first.", true, "Activity"],
     "importantinfo": ["Other Tools", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
-    "brain": ["Home", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
+    "brain": ["Other Tools", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
     "create": ["Other Tools", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
   };
   var ADMIN = [ /* audit 26/09/26: People and access first; the menu shows these as the Admin group */

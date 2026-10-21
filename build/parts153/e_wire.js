@@ -57,6 +57,6 @@
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS };   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS, yours: yours, teamApps: TEAM_APPS };   /* wave262: yours() for the launcher and the What's changed tour */   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();

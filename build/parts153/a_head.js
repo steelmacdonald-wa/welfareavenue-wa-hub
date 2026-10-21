@@ -222,14 +222,15 @@
        (#studio and its sections by address), plus wave121's #contentcal and wave120's #socialstats, framed by the app. */
     studio: { id: 'studio', label: 'Content Studio', color: '#B4467A', ic: 'spark', blurb: 'Plan, approve, publish, answer and measure', pages: ['studio', 'contentcal', 'socialstats'], need: 'studio', home: '#studio',
       groups: function () {
-        var n = { appr: null, inbox: null, msg: null }; try { var W = window.w225 && window.w225.counts ? window.w225.counts() : null; if (W) { n.appr = W.approvals || null; n.inbox = W.inbox || null; n.msg = W.messages || null; } } catch (e) { /* fine */ }
+        var n = { appr: null, inbox: null, msg: null, tags: null }; try { var W = window.w225 && window.w225.counts ? window.w225.counts() : null; if (W) { n.appr = W.approvals || null; n.inbox = W.inbox || null; n.msg = W.messages || null; n.tags = W.hashtags || null; } } catch (e) { /* fine */ }
         return [{ label: 'Content', items: [
           { h: '#studio', l: 'Overview', ic: 'home', page: 'studio' },
           { h: '#contentcal', l: 'Calendar', ic: 'cal', page: 'contentcal' },
           { h: '#studio/queue', l: 'Queue and schedule', ic: 'queue', page: 'studio' },
           { h: '#studio/approvals', l: 'Approvals', ic: 'check', page: 'studio', n: n.appr },
           { h: '#studio/inbox', l: 'Comments', ic: 'chat', page: 'studio', n: n.inbox },
-          { h: '#studio/messages', l: 'Messages', ic: 'chat', page: 'studio', n: n.msg }   /* wave251 */
+          { h: '#studio/messages', l: 'Messages', ic: 'chat', page: 'studio', n: n.msg },   /* wave251 */
+          { h: '#studio/hashtags', l: 'Hashtags', ic: 'search', page: 'studio', n: n.tags }   /* wave262c */
         ] }, { label: 'Toolkit', items: [
           { h: '#studio/library', l: 'Library', ic: 'book', page: 'studio' },
           { h: '#studio/pages', l: 'Link pages', ic: 'link', page: 'studio' },
@@ -259,6 +260,21 @@
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }
   function allowed(id) { var t = tab(id); return !!t && t.style.display !== 'none' && !!document.getElementById(id); }
+  /* wave262 (Steel, 20/10/26: "allow them to look through the apps that are available to them"): the apps that belong to a
+     person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
+     Admins and the Executive profile have every app as theirs. */
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: [], board: [] };
+  function myProfile() {
+    try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
+    try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
+  }
+  function yours() {
+    var can = ORDER.filter(function (id) { return id !== 'hub' && appOk(id); });
+    var p = myProfile(), mine = TEAM_APPS[p];
+    if (!mine || p === 'admin' || p === 'executive' || p === 'exec') return { yours: can, more: [], all: true };
+    var y = can.filter(function (id) { return mine.indexOf(id) >= 0; });
+    return { yours: y, more: can.filter(function (id) { return y.indexOf(id) < 0; }), all: false };
+  }
   function appOk(id) {
     if (boardMode() || !staffOk()) return false;
     var a = APPS[id]; if (!a) return false;

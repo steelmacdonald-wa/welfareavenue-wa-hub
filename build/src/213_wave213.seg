@@ -27,7 +27,12 @@
    wave238 (14/10/26): it also waits for the Loop's Welcome back gate (#w238loop).
    wave258 (15/10/26, the Fundraising meeting: a new member got stuck on "this tab that only shows the tasks" and did not know how
    to leave): one plain line at the top says what to do to carry on, and "x of n answered" shows how far along you are. Still no
-   way to skip it. */
+   way to skip it.
+   wave262 (20/10/26, the 19/10 leadership meeting: Ian answered 20 of his 50 tasks and Save failed every time): the save
+   goes in batches of 15 (confirm_due_check also reads the list once per call now, wave262a), and a batch that fails keeps
+   what the earlier batches saved; each section has "All in this section: Done / Next meeting" for long lists; and, Steel:
+   "continue the prompt ... or change due dates if it's the day that these tasks are due": tasks due today join the check
+   (why due_today, kept for today unless the person changes it) until they are confirmed that day. */
 (function () {
   'use strict';
   if (window.__wa213) return; window.__wa213 = true;
@@ -71,6 +76,8 @@
     + '#w213pop .prog .bar{flex:1;height:6px;border-radius:3px;background:rgba(16,63,57,.12);overflow:hidden;}'
     + '#w213pop .prog .bar i{display:block;height:100%;background:' + GOLD + ';}'
     + '#w213pop .prog.all b{color:' + GREEN + ';}'
+    + '#w213pop .bulk{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:-2px 0 8px;font-size:12px;color:#6b6a65;}'
+    + '#w213pop .bulk .chip{font-size:11.5px;padding:2px 9px;}'
     + '#w213pop select{font:inherit;font-size:13px;border:1px solid var(--wa-line,#d8d4c8);border-radius:7px;padding:4px 6px;background:#FFFAF2;max-width:100%;}'
     + '@media (max-width:640px){#w213pop{padding:0;align-items:stretch;}#w213pop .dlg{max-height:100vh;border-radius:0;}#w213pop .note{margin-left:0;flex-basis:100%;}}';
   var st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
@@ -118,6 +125,7 @@
     var meta = [team(r.department)];
     if (isLead(r)) meta.push('owner: ' + (r.owner || 'nobody yet'));
     if (isOver) meta.push('was due ' + day(r.due_date));
+    else if (r.why === 'due_today') meta.push('due today');
     else if (r.why === 'meeting_set') meta.push('the meeting set ' + day(r.due_date));
     else if (r.why === 'owner_check' && r.due_date) meta.push('due ' + day(r.due_date));
     if (r.meeting_title) meta.push('from ' + r.meeting_title + (r.meeting_date ? ' (' + day(r.meeting_date) + ')' : ''));
@@ -148,7 +156,7 @@
     }
     h += '<div class="ctl">'
       + '<span class="seg" role="group" aria-label="What to do with it">' + ACTS.map(function (x) {
-          return '<button type="button" data-w213act="' + id + '" data-a="' + x[0] + '" class="' + (a === x[0] ? 'on' : '') + '" aria-pressed="' + (a === x[0]) + '">' + (x[0] === 'keep' && isOver ? 'Keep, push to' : x[1]) + '</button>';
+          return '<button type="button" data-w213act="' + id + '" data-a="' + x[0] + '" class="' + (a === x[0] ? 'on' : '') + '" aria-pressed="' + (a === x[0]) + '">' + (x[0] === 'keep' && isOver ? 'Keep, push to' : (x[0] === 'keep' && r.why === 'due_today' ? 'Keep, due' : x[1])) + '</button>';
         }).join('') + '</span>';
     if (a === 'keep') {
       h += '<input type="date" aria-label="Due date for ' + E(r.title || 'this task') + '" data-w213date="' + id + '" value="' + E(v) + '">'
@@ -199,17 +207,39 @@
     return 'Save: ' + (bits.join(', ') || 'your answers');
   }
 
+  /* wave262: a long section gets one line to answer it all at once (each task can still be changed after) */
+  function bulkHtml(why, list) {
+    if (list.length < 4) return '';
+    return '<div class="bulk"><span>All ' + list.length + ' in this section:</span>'
+      + '<button type="button" class="chip" data-w213bulk="' + why + '" data-a="done">Done</button>'
+      + '<button type="button" class="chip" data-w213bulk="' + why + '" data-a="next">Next meeting</button>'
+      + (why === 'due_today' ? '<button type="button" class="chip" data-w213bulk="' + why + '" data-a="today">Keep for today</button>' : '')
+      + '</div>';
+  }
+  function bulkSet(why, a) {
+    (S.rows || []).forEach(function (r) {
+      if (isUnsure(r) || isLead(r) || r.why !== why) return;
+      var id = r.task_id;
+      if (a === 'done') { S.act[id] = 'done'; return; }
+      S.act[id] = 'keep';
+      S.pick[id] = a === 'today' ? r.due_date : (r.next_meeting || r.suggested);
+    });
+    S.err = ''; paint();
+  }
+
   function html() {
     var rows = S.rows || [];
     var unsure = rows.filter(isUnsure);
     var lead = rows.filter(isLead);
     var plain = rows.filter(function (r) { return !isUnsure(r) && !isLead(r); });
     var over = plain.filter(function (r) { return r.why === 'overdue'; });
+    var tod = plain.filter(function (r) { return r.why === 'due_today'; });   /* wave262 */
     var none = plain.filter(function (r) { return r.why === 'no_date'; });
     var set = plain.filter(function (r) { return r.why === 'meeting_set'; });
     var bits = [];
     if (unsure.length) bits.push(unsure.length + (unsure.length === 1 ? ' task to confirm as yours' : ' tasks to confirm as yours'));
     if (over.length) bits.push(over.length + (over.length === 1 ? ' overdue task' : ' overdue tasks'));
+    if (tod.length) bits.push(tod.length + (tod.length === 1 ? ' task' : ' tasks') + ' due today');
     if (none.length) bits.push(none.length + (none.length === 1 ? ' task' : ' tasks') + ' with no due date');
     if (set.length) bits.push(set.length + (set.length === 1 ? ' task' : ' tasks') + ' with a date a meeting set');
     if (lead.length) bits.push(lead.length + (lead.length === 1 ? ' task of your team' : ' tasks of your team') + ' with no owner yet');
@@ -219,8 +249,9 @@
       + 'We\u2019ve suggested a due date for each one, usually your team\u2019s next meeting. For each task, keep it with a date that works, mark it done, move it to the task bank for later, or discard it.'
       + (lead.length ? ' For your team\u2019s tasks nobody owns yet, name who takes them.' : '') + ' Then save, and you\u2019re all set.</p>' + progressHtml() + '</div><div class="bd">';
     if (unsure.length) h += '<h3>Is this yours? A meeting was not sure</h3>' + unsure.map(rowHtml).join('');
-    if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + over.map(rowHtml).join('');
-    if (none.length) h += '<h3>No due date yet: here\u2019s our suggestion</h3>' + none.map(rowHtml).join('');
+    if (over.length) h += '<h3>Overdue: is it done, or does it need a new date?</h3>' + bulkHtml('overdue', over) + over.map(rowHtml).join('');
+    if (tod.length) h += '<h3>Due today: done, still on for today, or a new date?</h3>' + bulkHtml('due_today', tod) + tod.map(rowHtml).join('');
+    if (none.length) h += '<h3>No due date yet: here\u2019s our suggestion</h3>' + bulkHtml('no_date', none) + none.map(rowHtml).join('');
     if (set.length) h += '<h3>Dates a meeting set: do they still work?</h3>' + set.map(rowHtml).join('');
     if (lead.length) h += '<h3>Your team\u2019s tasks with no owner yet: who takes them?</h3>' + lead.map(rowHtml).join('');
     h += '</div><div class="ft"><button type="button" class="save" data-w213save="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Saving\u2026' : E(saveLabel())) + '</button>'
@@ -247,6 +278,7 @@
     el.addEventListener('click', function (e) {
       var t = e.target, b;
       if (t === el) { e.stopPropagation(); return; }   /* a click outside does not close it */
+      if ((b = t.closest('[data-w213bulk]'))) { bulkSet(b.getAttribute('data-w213bulk'), b.getAttribute('data-a')); return; }
       if ((b = t.closest('[data-w213set]'))) { S.pick[b.getAttribute('data-w213set')] = b.getAttribute('data-d'); paint(); return; }
       if ((b = t.closest('[data-w213act]'))) { S.act[b.getAttribute('data-w213act')] = b.getAttribute('data-a'); S.err = ''; paint(); return; }
       if ((b = t.closest('[data-w213mine]'))) { S.mine[b.getAttribute('data-w213mine')] = b.getAttribute('data-v') === '1'; S.err = ''; paint(); return; }
@@ -296,11 +328,20 @@
     if (missing) { S.err = missing === 1 ? 'One task has no date: pick one, or choose Done, To the bank or Discard.' : missing + ' tasks have no date: pick one for each, or choose Done, To the bank or Discard.'; paint(); return; }
     if (past) { S.err = past === 1 ? 'One date is already past: push it to a date that is still ahead.' : past + ' dates are already past: push them to dates that are still ahead.'; paint(); return; }
     if (bankBad) { S.err = 'A task going to the bank needs a day in the future to come back on.'; paint(); return; }
-    S.busy = true; S.err = ''; paint();
+    S.busy = true; S.err = ''; S.sent = 0; S.total = items.length; paint();
+    var skipped = [];
     try {
-      var r = await db.rpc('confirm_due_check', { p: items });
-      if (r && r.error) throw new Error(r.error.message || 'could not save');
-      var res = (r && r.data) || {}, skipped = Array.isArray(res.skipped) ? res.skipped : [];
+      /* wave262: batches of 15, so a long list never runs into the database's time limit; what a batch saved stays saved */
+      for (var k = 0; k < items.length; k += 15) {
+        var part = items.slice(k, k + 15);
+        var r = await db.rpc('confirm_due_check', { p: part });
+        if (r && r.error) throw new Error(r.error.message || 'could not save');
+        var res = (r && r.data) || {};
+        if (Array.isArray(res.skipped)) skipped = skipped.concat(res.skipped);
+        S.saved = (S.saved || []).concat(part.map(function (x) { return x.id; }));
+        S.sent = Math.min(items.length, k + part.length);
+        var btn = document.querySelector('#w213pop [data-w213save]'); if (btn) btn.textContent = 'Saving\u2026 ' + S.sent + ' of ' + items.length;
+      }
       var c = counts(), bits = [];
       if (c.keep) bits.push(c.keep + (c.keep === 1 ? ' due date' : ' due dates'));
       if (c.done) bits.push(c.done + ' done');
@@ -312,7 +353,15 @@
       toastS('Saved: ' + bits.join(', ') + '.' + (skipped.length ? ' ' + skipped.length + (skipped.length === 1 ? ' task' : ' tasks') + ' could not be changed (' + String(skipped[0].why || '') + ').' : ''));
       try { if (typeof loadAll === 'function') { await loadAll(); if (typeof renderAllSections === 'function') renderAllSections(); if (typeof renderDashboard === 'function') renderDashboard(); if (typeof renderNeedsMe === 'function') renderNeedsMe(); } } catch (e2) { /* the pages refresh on their next load */ }
     } catch (e) {
-      S.busy = false; S.failed++; S.err = 'That did not save (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.'; paint();
+      /* wave262: the batches that went through are saved: take them off the list, so Save sends only the rest */
+      var kept = {}; (S.saved || []).forEach(function (id) { kept[id] = 1; });
+      var before = (S.rows || []).length;
+      S.rows = (S.rows || []).filter(function (x) { return !kept[x.task_id]; });
+      var n = before - S.rows.length; S.saved = [];
+      S.busy = false; S.failed++;
+      S.err = (n ? n + (n === 1 ? ' task was saved; ' : ' tasks were saved; ') + 'the rest did not save' : 'That did not save') + ' (' + (e && e.message ? e.message : 'no answer') + '). Try Save again.';
+      if (!S.rows.length) { close(); toastS('Saved.'); return; }
+      paint();
     }
   }
 
@@ -321,8 +370,8 @@
     if (!staff()) return;
     var rows = await load();
     if (!rows || !rows.length) return;
-    S.rows = rows; S.pick = {}; S.act = {}; S.bank = {}; S.mine = {}; S.who = {};
-    rows.forEach(function (r) { S.pick[r.task_id] = (r.why === 'meeting_set' || (r.why === 'owner_check' && r.due_date)) ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); if (r.for_lead) S.act[r.task_id] = 'assign'; });
+    S.rows = rows; S.saved = []; S.pick = {}; S.act = {}; S.bank = {}; S.mine = {}; S.who = {};
+    rows.forEach(function (r) { S.pick[r.task_id] = (r.why === 'meeting_set' || r.why === 'due_today' || (r.why === 'owner_check' && r.due_date)) ? r.due_date : r.suggested; S.bank[r.task_id] = plusDays(90); if (r.for_lead) S.act[r.task_id] = 'assign'; });
     var tries = 0;
     (function wait() {
       if (S.shown || S.gone) return;

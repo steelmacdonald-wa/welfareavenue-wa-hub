@@ -25,7 +25,7 @@ function fx() {
 const CAP = { ok: true, token: true, accounts: [{ platform: 'facebook' }, { platform: 'instagram' }], granted: ['pages_manage_posts', 'instagram_content_publish'], missing: [], can: { facebook: true, instagram: true, linkedin: false }, mode: { facebook: 'direct', instagram: 'direct', linkedin: 'reminder' }, settings: {}, studio: {}, connections: {} };
 const INIT = `
   window.confirm = function () { return true; };
-  try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+  try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
   window.__CALLS = [];
   window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__CALLS.push([name, b]); if (name === 'social-publish' && b.action === 'capabilities') return { data: ${JSON.stringify(CAP)}, error: null }; return { data: { ok: true }, error: null }; };
   window.__REC = function () {

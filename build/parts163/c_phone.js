@@ -220,11 +220,17 @@
     });
     /* directors: their team is the board (the Board group's first page) */
     if (boardView()) out.forEach(function (it) { if (it.k === mine) it.mine = true; });
+    /* wave262: your team first in its section */
+    var mi = -1; out.forEach(function (it, i) { if (it.mine && mi < 0) mi = i; });
+    if (mi > 0) { var sec0 = out[mi].sec, fi = -1; out.forEach(function (it, i) { if (fi < 0 && it.sec === sec0) fi = i; }); if (fi >= 0 && fi < mi) out.splice(fi, 0, out.splice(mi, 1)[0]); }
     return out;
   }
   function appList() {
     var A = window.WA_APP; if (!A || !A.order) return [];
-    return A.order.filter(function (id) { try { return A.ok(id); } catch (e) { return false; } }).map(function (id) { return A.apps[id]; });
+    var ids = A.order.filter(function (id) { try { return A.ok(id); } catch (e) { return false; } });
+    /* wave262: the Hub, then your team's apps, then the others */
+    try { if (typeof A.yours === 'function') { var Y = A.yours(); if (!Y.all) ids = ids.filter(function (id) { return id === 'hub'; }).concat(Y.yours, Y.more); } } catch (e) { /* the menu order */ }
+    return ids.map(function (id) { return A.apps[id]; });
   }
   /* 01/10/26: links shown after the apps (the website), from wave153's list */
   function linkList() { var A = window.WA_APP; return A && Array.isArray(A.links) ? A.links : []; }

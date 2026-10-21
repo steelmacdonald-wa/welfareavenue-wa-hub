@@ -37,7 +37,7 @@ const META = { app_secret: true, verify_token: true, page_token: true, page_subs
 const WA = { ok: true, mode: 'off', channel: 'off', test_phones: 0, is_admin: true, number: { display_phone_number: '+1 555-676-5057', verified_name: 'Test Number' }, account: { business_verification_status: 'pending_submission' }, templates: [{ name: 'wa_serving_reminder', language: 'en', status: 'PENDING' }, { name: 'wa_still_in', language: 'fr', status: 'APPROVED' }], last_30_days: {} };
 const INIT = `
   window.confirm = function () { return true; };
-  try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+  try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
   window.__CALLS = [];
   window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__CALLS.push([name, b]);
     if (name === 'social-ads') return { data: b.action === 'summary' ? { ok: true, summary: ${JSON.stringify(ADS)} } : { ok: true, rows: 2, accounts: [] }, error: null };

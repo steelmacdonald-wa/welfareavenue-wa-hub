@@ -45,10 +45,10 @@
   var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
   var GROUPS = [ /* wave134: the same groups as the menu */
     /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
-    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'requests', 'calendar', 'brain']],
+    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'requests', 'calendar']],   /* wave262: The Brain moved into More (Other Tools) */
     ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'studio', 'fundraising', 'fundevents', 'grants', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app; wave258: grants, the Grants page */
     ['Board', ['board', 'governance', 'committees']],
-    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'create']],
+    ['Other Tools', ['brain', 'importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'create']],
     ['Organization', ['orgchart', 'ourstory', 'hubmail']],
     ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
     ['CRM', ['crm', 'partners']],

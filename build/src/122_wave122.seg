@@ -1718,7 +1718,7 @@
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Teams, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A team folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
+      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here. Home, the Avenue Academy, Team Requests and the Calendar sit at the top. Under Teams your own team comes first and opens on its own pages; the other teams fold under Other teams. More holds The Brain, Other Tools (Important info, the Task Bank, the Document finder, the Transcript archive, the Photo library) and Organization (the Org chart, Our story). Apps, at the bottom, opens your team\u2019s apps first.'),   /* wave262 */
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
@@ -1739,7 +1739,8 @@
       H(/^Time commitments/i, '.mp-sec', 'Time commitments', 'Check-in hours for the last three weeks, so everyone can see how time is being spent.', OPT),
       S('#w89box', 'Slack notifications', 'Choose which Hub updates reach you in Slack.', OPT),
       S('#w105my', 'Time off', 'Request time off here. HR approves it in the HR centre and your days update.', OPT),
-      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Avenue Academy.', OPT)
+      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Avenue Academy.', OPT),
+      S('#w262homebar', 'Show everything on Home', 'Home shows what matters first. In the loop, Updates for you, time commitments, Slack notifications and time off wait behind this button; one click shows them, another hides them again.', OPT)   /* wave262 */
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
       S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together the team\u2019s pulse, decisions, updates and meetings. The line under the name is the Hub\u2019s read of how the team is doing, from recent meetings.'),

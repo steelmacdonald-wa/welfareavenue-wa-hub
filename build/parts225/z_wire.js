@@ -1,6 +1,6 @@
 
   /* ---------- paint and route ---------- */
-  var KEEP = ['data-w250q', 'data-w250rtext', 'data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote', 'data-w230b', 'data-w230p', 'data-w230s', 'data-w230so', 'data-w230tc', 'data-w230ab', 'data-w230st'];
+  var KEEP = ['data-w262hq', 'data-w250q', 'data-w250rtext', 'data-w225iq', 'data-w225lq', 'data-w225kq', 'data-w225lf', 'data-w225bf', 'data-w225bsoc', 'data-w225rtext', 'data-w225rnote', 'data-w225blabel', 'data-w225burl', 'data-w225apnote', 'data-w230b', 'data-w230p', 'data-w230s', 'data-w230so', 'data-w230tc', 'data-w230ab', 'data-w230st'];
   function paint() {
     if (S.sec === 'calendar') return;
     var h = host(); if (!h) return;
@@ -15,7 +15,7 @@
     else if (!S.loaded && !W()) html = '<div class="card"><div class="empty">Loading the Content Studio…</div></div>';
     else {
       try {
-        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'messages' ? messagesHtml() : S.sec === 'ads' ? adsHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
+        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'messages' ? messagesHtml() : S.sec === 'hashtags' ? hashtagsHtml() : S.sec === 'ads' ? adsHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
       } catch (e) { console.warn('wave225 paint', e); html = '<div class="card"><div class="empty">Something went wrong drawing this page: ' + E(e.message || e) + '</div></div>'; }
     }
     if (!(S.sec === 'pages' && S.sub === 'edit' && lpPatch(h, html))) h.innerHTML = html;
@@ -40,6 +40,7 @@
     if (S.sec === 'connections' && !S.conn) await loadConn();
     if (S.sec === 'pages') { try { await lpLoad(); } catch (e) { /* drawn below */ } }
     if (S.sec === 'messages') { try { await load250(); } catch (e) { /* drawn below */ } }   /* wave251 */
+    if (S.sec === 'hashtags') { try { await load262(); } catch (e) { /* drawn below */ } }   /* wave262c */
     if (S.sec === 'ads') { try { await loadAds250(); } catch (e) { /* drawn below */ } }   /* wave253 */
     paint();
     try { if (window.w153 && window.w153.paint) window.w153.paint(); } catch (e) { /* fine */ }
@@ -217,7 +218,7 @@
   /* ---------- test hook ---------- */
   window.w225 = {
     counts: counts, state: function () { return S; }, paint: paint, show: show, load: loadAll, route: route, reload: reload,
-    html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
+    html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, hashtags: hashtagsHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
     m250: function () { return M250; }, load250: load250, loadAds250: loadAds250,   /* waves 250 to 254 */
     monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl
   };

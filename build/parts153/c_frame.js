@@ -35,7 +35,10 @@
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
     var cur = S.app || 'hub';
-    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') +
+    /* wave262: Your apps first, then More apps (the other apps this person can open) */
+    var Y = yours(), tiles = function (ids) { return ids.map(function (id) { return tileHtml(APPS[id], id === cur); }).join(''); };
+    p.innerHTML = '<div class="w153ph">' + (Y.all ? 'Apps' : 'Your apps') + '</div><div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) +
+      (Y.more.length ? '</div><div class="w153ph w262ph">More apps</div><div class="w153tiles">' + tiles(Y.more) : '') +
       (LINKS.length ? '<div class="w153sep" role="presentation"></div>' + LINKS.map(linkHtml).join('') : '') + '</div>';
   }
   function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }

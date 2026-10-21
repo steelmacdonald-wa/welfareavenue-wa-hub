@@ -25,7 +25,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
       FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate;
       window.__WA_TEST_ROLE = ${JSON.stringify(ROLE)}; window.__WA_TEST_EMAIL = ${JSON.stringify(EMAIL)}; window.__WA_TEST_NAME = ${JSON.stringify(NAME)};
       window.confirm = function(){ return true; }; window.alert = function(){}; window.prompt = function(){ return null; };
-      try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+      try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
       window.__CALLS = []; window.__WRITES = [];
       var PUB = ${JSON.stringify(PUB)};
       function dayIso(n, hhmm) { var d = new RealDate(FIXED + n * 86400000); var ds = d.toISOString().slice(0, 10); return new RealDate(ds + 'T' + hhmm + ':00').toISOString(); }

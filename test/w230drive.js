@@ -68,7 +68,7 @@ const beforeGoto = async page => {
 };
 const INIT = `
   window.confirm = function () { window.__CONFIRMS = (window.__CONFIRMS || 0) + 1; return true; };
-  try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+  try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
   window.__WA_INVOKE = function () { return { data: { ok: true, can: {}, mode: {}, accounts: [] }, error: null }; };
   window.__REC = function () {
     if (window.__RECON || typeof db === 'undefined') return; window.__RECON = true; window.__W = [];

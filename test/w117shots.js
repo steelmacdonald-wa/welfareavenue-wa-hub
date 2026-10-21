@@ -21,7 +21,7 @@ const [, , CAND, OUT, ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com
     "FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate;" +
     identity +
     "window.confirm = function(){ return true; }; window.alert = function(){}; window.prompt = function(){ return null; };" +
-    "try { localStorage.setItem('wa84tour', '1'); } catch (e) {} })();"
+    "try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {} })();"
   );
   await page.addInitScript("window.__WAFIX = " + fixture + ";");
   await page.route("**/*", route => {

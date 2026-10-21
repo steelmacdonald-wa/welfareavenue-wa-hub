@@ -7,7 +7,8 @@
    The fixture defaults to test/fixture_live.json when present, else the scratchpad copy, else test/fixture.json.
    Clock fixed at 2026-09-25 16:00 Toronto; all network except the page and the stubbed libraries is blocked.
    o.csp (wave204): serve the page with that Content-Security-Policy header, as Netlify does (build/site/_headers).
-   o.gate (wave260): keep train-to-unlock on (otherwise the fixture gets app_config page_gate off). */
+   o.gate (wave260): keep train-to-unlock on (otherwise the fixture gets app_config page_gate off).
+   o.whatsnew (wave262): let the What changed pop-up show (otherwise it counts as seen, so older tests are not covered by it). */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
@@ -52,7 +53,7 @@ async function fresh(browser, o) {
   const page = await ctx.newPage();
   const errs = [];
   page.on('pageerror', e => errs.push(String(e).slice(0, 300)));
-  await page.addInitScript(`(function(){ var FIXED = new Date("2026-09-25T16:00:00-04:00").getTime(); var RealDate = Date; function FDate(a,b,c,d,e,f,g){ if (!(this instanceof FDate)) return new RealDate(FIXED).toString(); switch (arguments.length) { case 0: return new RealDate(FIXED); case 1: return new RealDate(a); default: return new RealDate(a,b,c,d,e,f,g); } } FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate; window.__WA_TEST_ROLE = ${JSON.stringify(C.role)}; window.__WA_TEST_EMAIL = ${JSON.stringify(C.email)}; window.__WA_TEST_NAME = ${JSON.stringify(C.name)}; window.confirm = function(){ return true; }; try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa112done', '1'); localStorage.setItem('wa75nudge', '1'); localStorage.setItem('w118bSnooze', String(FIXED + 9e9)); } catch (e) {} })();`);
+  await page.addInitScript(`(function(){ var FIXED = new Date("2026-09-25T16:00:00-04:00").getTime(); var RealDate = Date; function FDate(a,b,c,d,e,f,g){ if (!(this instanceof FDate)) return new RealDate(FIXED).toString(); switch (arguments.length) { case 0: return new RealDate(FIXED); case 1: return new RealDate(a); default: return new RealDate(a,b,c,d,e,f,g); } } FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate; window.__WA_TEST_ROLE = ${JSON.stringify(C.role)}; window.__WA_TEST_EMAIL = ${JSON.stringify(C.email)}; window.__WA_TEST_NAME = ${JSON.stringify(C.name)}; window.confirm = function(){ return true; }; try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa112done', '1'); localStorage.setItem('wa75nudge', '1'); localStorage.setItem('w118bSnooze', String(FIXED + 9e9)); if (!${JSON.stringify(!!o.whatsnew)}) localStorage.setItem('wa262.seen', '1'); } catch (e) {} })();`);
   await page.addInitScript('window.__WAFIX = ' + JSON.stringify(fx) + '; window.__WA_RPCS = ' + JSON.stringify(o.rpcs || { wa_org_editor: (o.who || 'admin') === 'admin' }) + ';');
   if (o.init) await page.addInitScript(o.init);
   await page.route('**/*', route => {

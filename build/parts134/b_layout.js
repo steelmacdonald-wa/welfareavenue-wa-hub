@@ -79,6 +79,7 @@
       (LAYOUT.afterEvents || []).forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       var res = null;
       LAYOUT.groups.forEach(function (g) {
+        if (g.fold) { seq.push(foldEl(b, g)); return; }   /* wave262: the More fold's header */
         if (!g.items) { var d = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'); if (d) seq.push(d); return; }
         var el = groupEl(b, g), host = hostOf(el);
         wanted(b, g).forEach(function (t, i) {
@@ -110,6 +111,7 @@
       });
       seq.forEach(function (el, i) { putAt(b, el, i); });
       heads(b);
+      folds(b);
     } catch (e) { console.warn('wave134 layout', e); }
     busy = false; applied++;
     watch();
@@ -120,6 +122,7 @@
       if (!g.classList || !g.classList.contains('tab-group')) return;
       var key = g.getAttribute('data-w42g');
       if (key === 'departments') return;   /* wave116 looks after the Departments header */
+      if (key === 'w262more') return;   /* wave262: folds() decides the More header (not 'more': that was an older group's key) */
       var any = Array.prototype.some.call(g.querySelectorAll('.tab'), function (t) { return shown(t) && t.getAttribute('data-tab') !== 'adminpanel'; });
       if (key === 'admin') {
         var adm = tabOf(g, 'adminpanel'), on = !!adm && shown(adm);
@@ -132,6 +135,89 @@
       if (g.style.display !== want) g.style.display = want;
     });
   }
+  /* ---------- wave262: the folds (More, and the other teams) ----------
+     Steel (20/10/26): keep each person's menu simple, "just really keeping the main important things on the main page and
+     then a drop down of other tabs". Nothing is taken away: the buttons stay where the layout puts them and a fold only
+     hides them until it is opened (a click, remembered on this device), and it opens by itself when you are on one of its
+     pages. Computers only: the phone's Menu sheet (wave163b) already lists every page with its own Find a page. */
+  var FOLD_KEY = { more: 'wa262.more', teams: 'wa262.teams' };
+  function remembered(k) { try { return localStorage.getItem(FOLD_KEY[k]); } catch (e) { return null; } }
+  function remember(k, v) { try { localStorage.setItem(FOLD_KEY[k], v ? '1' : '0'); } catch (e) { /* private mode */ } }
+  function amAdmin() { try { return typeof WA40_MINE !== 'undefined' && !!WA40_MINE && WA40_MINE.role === 'admin'; } catch (e) { return false; } }
+  /* the person's own team: their roster department, when it has a team row they can open */
+  function myTeam(b) {
+    var d = '';
+    try { d = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { d = ''; }
+    if (!d) return '';
+    var t = tabOf(b, d), row = t && t.closest ? t.closest('.w42d') : null;
+    return row && shown(t) ? d : '';
+  }
+  function foldEl(b, g) {
+    var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]');
+    if (!el) {
+      el = document.createElement('span'); el.className = 'tab-group w262fold'; el.setAttribute('data-w42g', g.key);
+      el.innerHTML = '<button type="button" class="w262fh" aria-expanded="false" data-w262fold="more"><span class="w262lb">' + E(g.label) + '</span><span class="w262ch" aria-hidden="true">&#9662;</span></button>';
+      el.querySelector('button').addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var open = !(bar() && bar().classList.contains('w262more'));
+        remember('more', open); folds(bar(), true);
+      });
+    }
+    return el;
+  }
+  function teamsToggle(host) {
+    var t = host.querySelector(':scope > .w262tt');
+    if (!t) {
+      t = document.createElement('button'); t.type = 'button'; t.className = 'w262tt'; t.setAttribute('data-w262fold', 'teams');
+      t.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var open = !(bar() && bar().classList.contains('w262teams'));
+        remember('teams', open); folds(bar(), true);
+      });
+      host.appendChild(t);
+    }
+    return t;
+  }
+  function activeTab(b) { return b.querySelector('.tab.active'); }
+  function folds(b, byHand) {
+    if (!b) return;
+    try {
+      /* More: Other Tools and Organization */
+      var more = b.querySelector(':scope > .tab-group[data-w42g="w262more"]');
+      var inside = (groupDef('w262more') || {}).fold || [];
+      var any = inside.some(function (k) { var g = b.querySelector(':scope > .tab-group[data-w42g="' + k + '"]'); return !!g && g.style.display !== 'none' && Array.prototype.some.call(g.querySelectorAll('.tab'), shown); });
+      var act = activeTab(b), here = !!act && inside.some(function (k) { var g = b.querySelector(':scope > .tab-group[data-w42g="' + k + '"]'); return !!g && g.contains(act); });
+      var r = remembered('more'), open = here || r === '1';
+      if (more) {
+        var want = any ? '' : 'none'; if (more.style.display !== want) more.style.display = want;
+        var hb = more.querySelector('.w262fh'); if (hb && hb.getAttribute('aria-expanded') !== String(open)) hb.setAttribute('aria-expanded', String(open));
+      }
+      if (b.classList.contains('w262more') !== open) b.classList.toggle('w262more', open);
+      /* Teams: your team first; the others behind "Other teams" */
+      var dep = b.querySelector(':scope > .tab-group[data-w42g="departments"]'), host = dep ? hostOf(dep) : null;
+      var mine = myTeam(b);
+      if (!host) return;
+      var rows = Array.prototype.filter.call(host.children, function (c) { return c.classList && c.classList.contains('w42d'); });
+      var others = rows.filter(function (row) { var m = row.querySelector(':scope > .tab'); return !(m && m.getAttribute('data-tab') === mine); });
+      var visibleOthers = others.filter(function (row) { return row.style.display !== 'none' && Array.prototype.some.call(row.querySelectorAll('.tab'), shown); });
+      var useFold = !!mine && visibleOthers.length > 0;
+      if (dep.classList.contains('w262tf') !== useFold) dep.classList.toggle('w262tf', useFold);
+      rows.forEach(function (row) {
+        var isOther = others.indexOf(row) >= 0, isHere = isOther && ((!!act && row.contains(act)) || row.classList.contains('w116act'));
+        if (row.classList.contains('w262other') !== (useFold && isOther)) row.classList.toggle('w262other', useFold && isOther);
+        if (row.classList.contains('w262here') !== isHere) row.classList.toggle('w262here', isHere);
+        if (!isOther && useFold && !row.hasAttribute('data-w262mine')) row.setAttribute('data-w262mine', '1');
+      });
+      if (!useFold) { var old = host.querySelector(':scope > .w262tt'); if (old && old.style.display !== 'none') old.style.display = 'none'; if (b.classList.contains('w262teams')) b.classList.remove('w262teams'); return; }
+      var tr = remembered('teams'), topen = tr === null ? amAdmin() : tr === '1';
+      if (b.classList.contains('w262teams') !== topen) b.classList.toggle('w262teams', topen);
+      var tt = teamsToggle(host); if (tt.style.display) tt.style.display = '';
+      var label = (topen ? 'Hide other teams' : 'Other teams') + ' (' + visibleOthers.length + ')';
+      if (tt.getAttribute('data-l') !== label) { tt.setAttribute('data-l', label); tt.innerHTML = '<span>' + E(label) + '</span><span class="w262ch" aria-hidden="true">&#9662;</span>'; }
+      if (tt.getAttribute('aria-expanded') !== String(topen)) tt.setAttribute('aria-expanded', String(topen));
+    } catch (e) { console.warn('wave262 folds', e); }
+  }
+
   /* true when every page is where the layout wants it (the tests ask this) */
   function ok() {
     var b = bar(); if (!b) return true;

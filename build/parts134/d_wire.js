@@ -41,6 +41,23 @@
     + '#infoBody .w134p small{color:var(--wa-muted);}#infoBody .w134none{font-size:12px;color:var(--wa-muted);}'
     + '#infoBody .w134rm{border:none;background:none;cursor:pointer;color:#8a2f22;font-size:11px;padding:0 5px;}'
     + '#infoBody .w134give{display:inline-flex;gap:6px;align-items:center;}#infoBody .w134give select{font:inherit;font-size:12px;padding:4px 6px;border-radius:8px;border:1px solid #DEE0D8;background:' + CREAM + ';}'
+    /* wave262: the folds (More, and Other teams under your team), on computers; the phone's sheet lists every page */
+    + 'nav.wa-nav #tabBar .w262fold > .w262fh{display:flex;align-items:center;gap:6px;cursor:pointer;width:100%;text-align:left;padding:16px 12px 6px;font-family:' + BODY + ';font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--wa-muted);border:none;background:none;}'
+    + 'nav.wa-nav #tabBar .w262fold > .w262fh:hover,nav.wa-nav #tabBar .w262fold > .w262fh:focus-visible{color:' + GREEN + ';}'
+    + 'nav.wa-nav #tabBar .w262fold > .w262fh:focus-visible,nav.wa-nav #tabBar .w262tt:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;border-radius:8px;}'
+    + 'nav.wa-nav #tabBar .w262ch{display:inline-block;font-size:10px;transition:transform .18s ease;transform:rotate(-90deg);}'
+    + 'nav.wa-nav #tabBar.w262more .w262fold .w262ch,nav.wa-nav #tabBar.w262teams .w262tt .w262ch{transform:none;}'
+    + 'nav.wa-nav #tabBar .w262tt{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;border:none;background:none;cursor:pointer;padding:7px 12px;margin:2px 0;border-radius:10px;font-family:' + BODY + ';font-size:12.5px;font-weight:600;color:var(--wa-muted);}'
+    + 'nav.wa-nav #tabBar .w262tt:hover{background:rgba(16,63,57,.05);color:' + GREEN + ';}'
+    + '@media (min-width:901px){'
+    +   'body nav.wa-nav #tabBar:not(.w262more) > .tab-group[data-w42g="tools"],body nav.wa-nav #tabBar:not(.w262more) > .tab-group[data-w42g="org"]{display:none !important;}'
+    +   'body nav.wa-nav #tabBar.w262more > .w262fold > .w262fh{color:' + GREEN + ';}'
+    +   'body nav.wa-nav #tabBar .tab-group.w262tf > .tab-group-p{display:flex !important;flex-direction:column;}'
+    +   'body nav.wa-nav #tabBar .tab-group.w262tf > .tab-group-p > .w262tt{order:1;}'
+    +   'body nav.wa-nav #tabBar .tab-group.w262tf > .tab-group-p > .w42d.w262other{order:2;}'
+    +   'body nav.wa-nav #tabBar:not(.w262teams) .tab-group.w262tf > .tab-group-p > .w42d.w262other:not(.w262here){display:none !important;}'
+    + '}'
+    + '@media (max-width:900px){nav.wa-nav #tabBar .w262fold,nav.wa-nav #tabBar .w262tt{display:none !important;}}'
     + 'nav.wa-nav #tabBar .tab .w134n{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:' + GOLD + ';color:' + GREEN + ';font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;}';
   if (!document.getElementById('wa134css')) {
     var st = document.createElement('style'); st.id = 'wa134css'; st.textContent = css;
@@ -61,9 +78,19 @@
       return r;
     };
   }
+  /* wave262: the folds follow where you are (every arrival goes through showPanel; the team row lights after it draws) */
+  if (typeof showPanel === 'function') {
+    var __sp262 = showPanel;
+    showPanel = function () {
+      var r = __sp262.apply(this, arguments);
+      try { folds(bar()); requestAnimationFrame(function () { try { folds(bar()); } catch (e) { /* fine */ } }); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
   /* the E can be drawn a little after the button (waves 75 and 117 decorate it on timers) */
   var fabTries = 0, fabIv = setInterval(function () { fabTries++; if (fab() || fabTries > 60) clearInterval(fabIv); }, 300);
 
   /* ---------- test hook ---------- */
-  window.w134 = { apply: apply, ok: ok, layout: LAYOUT, fab: fab, info: renderInfo134, pw: function () { return PW; }, state: function () { return { applied: applied, moves: moves.length }; } };
+  window.w134 = { apply: apply, ok: ok, layout: LAYOUT, fab: fab, info: renderInfo134, pw: function () { return PW; }, state: function () { return { applied: applied, moves: moves.length }; },
+    folds: function () { var b = bar(); return b ? { more: b.classList.contains('w262more'), teams: b.classList.contains('w262teams'), mine: myTeam(b) } : null; }, refold: function () { folds(bar(), true); } };   /* wave262 */
 })();

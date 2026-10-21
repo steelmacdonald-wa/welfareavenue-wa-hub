@@ -33,8 +33,12 @@
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
       { key: 'departments', label: 'Teams' },
+      /* wave262 (Steel, 20/10/26, after the 19/10 leadership meeting: "bringing the brain and a couple of other small tools under
+         a drop down ... keeping the main important things on the main page"): one More fold holds Other Tools and Organization,
+         The Brain first. Nothing leaves the menu: More opens with a click (and by itself on one of its pages). */
+      { key: 'w262more', label: 'More', fold: ['tools', 'org'] },
       /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
-      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
+      { key: 'tools', label: 'Other Tools', items: ['brain', 'importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
       /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
          app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
@@ -45,8 +49,8 @@
     ],
     /* the Events calendar sits in the Fundraising row for people who can open that team page, else right after the Calendar */
     afterCalendar: ['fundevents'],
-    /* wave163: then The Brain */
-    afterEvents: ['brain'],
+    /* wave163: then The Brain; wave262: The Brain moved into More (Other Tools) */
+    afterEvents: [],
     /* pages the older code hides on purpose (merged into others): kept out of sight at the end */
     hidden: ['dashboard', 'create']
   };

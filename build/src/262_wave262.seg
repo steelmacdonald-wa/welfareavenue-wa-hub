@@ -1,0 +1,457 @@
+/* =====================================================================
+   WA v262 A simpler Hub for each person (20/10/26)
+   =====================================================================
+   After the 19/10/26 leadership meeting (Valex: "maybe if we can try to reduce the information"; Ian, for KK: opening the
+   Hub to a pile of tasks "can be a bit overwhelming"; Amanda: "I always open up and have like 80 tasks"; Ian: clearing tasks
+   from the pop-up failed), Steel, 20/10/26: "go for all of these improvements as long as we're not taking functionality away
+   and maybe just storing it in a place that other individuals could go and get afterwards"; and "make an introduction pop-up
+   to take a tour of how things have changed for each person ... allow them to look through the apps that are available to
+   them".
+
+   - The menu (parts134): your team sits open under Teams; the other teams fold under "Other teams (n)" (open by default for
+     admins); The Brain, Other Tools and Organization fold under More. Folds open by themselves on one of their pages and
+     remember a click on this device. Computers only: the phone's Menu sheet lists every page.
+   - The apps (parts153): Your apps (your team's) first, then More apps.
+   - Home (this segment): what matters first (your counts, what needs you, your tasks and your team's requests, your
+     meetings, announcements); the rest (who is online, In the loop, Ask the Hub ideas, Updates for you, time commitments,
+     Slack notifications, time off) waits behind "Show everything on Home". Nothing is removed; the choice is remembered.
+   - What changed (this segment): once per person, a pop-up on Home that says what moved for them (their team, their apps,
+     what sits under More) with a one-minute tour (trainings tour:whatsnew). It waits for the must-answer pop-ups.
+   - The due-date check (parts213, data wa262a and wa262b): batched saves, "All in this section", and tasks due today.
+   ===================================================================== */
+(function () {
+  'use strict';
+  if (window.__wa262) return; window.__wa262 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function readLS(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function writeLS(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  function first() { try { var n = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) ? String(WA_ME.name).trim().split(/\s+/)[0] : ''; return n; } catch (e) { return ''; } }
+  function myDept() { try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; } }
+  function teamLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || ''; } catch (e) { return ''; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+
+  /* ---------- Home: what matters first, the rest one click away ---------- */
+  var KEY_HOME = 'wa262.home';   /* 'all' = Show everything */
+  var homeCss = ''
+    + '#mypage.w262focus #mpBody{display:flex;flex-direction:column;}'
+    + '#mypage.w262focus #mpBody > .mp-head{order:-10;}'
+    + '#mypage.w262focus #mpBody > .mp-chips{order:-9;}'
+    + '#mypage.w262focus #mpBody > #w74attn{order:-8;}'
+    + '#mypage.w262focus #mpBody > .mp-grid{order:-7;}'
+    + '#mypage.w262focus #mpBody > #w116home{order:-6;margin-top:12px;}'
+    + '#mypage.w262focus #mpBody > #w180card{order:-5;}'
+    + '#mypage.w262focus #mpBody > #w112wrap{order:-4;}'
+    /* waiting behind Show everything */
+    + '#mypage.w262focus #mpBody > .mp-online,#mypage.w262focus #mpBody > #w192feed,#mypage.w262focus #mpBody > #w75card,#mypage.w262focus #mpBody > #w114switch{display:none !important;}'
+    + '#mypage.w262focus #mpBody .mp-grid > .w74col:first-child > .mp-sec:nth-child(2){display:none !important;}'   /* Updates for you */
+    + '#mypage.w262focus #mpBody .mp-grid .mp-sec:has(#mpHours),#mypage.w262focus #mpBody #w89box{display:none !important;}'   /* time commitments, Slack notifications */
+    + '#mypage.w262focus > #w105my{display:none !important;}'   /* time off (Policies stay: they are part of onboarding) */
+    + '#w262homebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 2px;padding-top:12px;border-top:1px dashed rgba(16,63,57,.15);font-size:12.5px;color:' + MUTED + ';}'
+    + '#w262homebar button{border:1px solid rgba(16,63,57,.25);background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:5px 14px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}'
+    + '#w262homebar button:hover{background:rgba(16,63,57,.06);}'
+    + '#w262homebar button:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}';
+  function homeAll() { return readLS(KEY_HOME) === 'all'; }
+  function homeBar() {
+    var body = document.getElementById('mpBody'), card = body && body.parentNode;
+    if (!card) return null;
+    var bar = document.getElementById('w262homebar');
+    if (!bar) {
+      bar = document.createElement('div'); bar.id = 'w262homebar';
+      bar.addEventListener('click', function (e) {
+        if (!e.target.closest('button')) return;
+        writeLS(KEY_HOME, homeAll() ? 'focus' : 'all'); applyHome();
+        if (!homeAll()) { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (x) { /* fine */ } }
+      });
+    }
+    if (bar.parentNode !== card) card.appendChild(bar);
+    return bar;
+  }
+  function applyHome() {
+    var p = document.getElementById('mypage'); if (!p || !staff()) return;
+    var all = homeAll();
+    if (p.classList.contains('w262focus') === all) p.classList.toggle('w262focus', !all);
+    var bar = homeBar(); if (!bar) return;
+    var want = all
+      ? '<span>Everything on Home is showing.</span><button type="button" data-w262home="focus" aria-pressed="true">Show less</button>'
+      : '<span>Home shows what matters first. In the loop, updates, time off and the rest are one click away.</span><button type="button" data-w262home="all" aria-pressed="false">Show everything on Home</button>';
+    if (bar.getAttribute('data-k') !== (all ? 'all' : 'focus')) { bar.setAttribute('data-k', all ? 'all' : 'focus'); bar.innerHTML = want; }
+  }
+
+  /* ---------- What changed: once per person, on Home ---------- */
+  var KEY_SEEN = 'wa262.seen', TOUR = 'whatsnew';
+  var newCss = ''
+    + '#w262new{position:fixed;inset:0;z-index:99990;background:rgba(16,24,22,.5);display:flex;align-items:center;justify-content:center;padding:16px;}'
+    + '#w262new .dlg{background:' + CREAM + ';border-radius:16px;max-width:680px;width:100%;max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3);overflow:hidden;font-family:' + BODY + ';color:' + INK + ';}'
+    + '#w262new .hd{background:' + GREEN + ';color:' + CREAM + ';padding:18px 22px 16px;position:relative;}'
+    + '#w262new .hd small{display:block;font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';margin-bottom:4px;}'
+    + '#w262new .hd h2{color:' + CREAM + ' !important;}'
+    + '#w262new h2{margin:0;font-family:' + HEAD + ';font-weight:600;font-size:30px;letter-spacing:.3px;line-height:1.05;}'
+    + '#w262new .hd p{margin:8px 0 0;font-size:13.5px;line-height:1.45;color:rgba(255,250,242,.9);max-width:560px;}'
+    + '#w262new .x{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,250,242,.12);color:' + CREAM + ';font-size:20px;line-height:1;cursor:pointer;}'
+    + '#w262new .x:hover{background:rgba(255,250,242,.22);}'
+    + '#w262new .bd{overflow-y:auto;padding:14px 22px 6px;}'
+    + '#w262new .it{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid rgba(16,63,57,.10);}'
+    + '#w262new .it:last-child{border-bottom:none;}'
+    + '#w262new .n{flex:0 0 26px;height:26px;border-radius:50%;background:rgba(220,165,39,.22);color:#6b4d05;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px;}'
+    + '#w262new h3{margin:0 0 3px;font-size:14.5px;color:' + GREEN + ';}'
+    + '#w262new .it p{margin:0;font-size:13px;line-height:1.5;color:#3b3c38;}'
+    + '#w262new .apps{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}'
+    + '#w262new .app{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(16,63,57,.18);background:' + CREAM + ';border-radius:12px;padding:6px 12px 6px 6px;font:inherit;font-size:13px;font-weight:600;color:' + INK + ';cursor:pointer;}'
+    + '#w262new .app:hover{border-color:' + GREEN + ';}'
+    + '#w262new .app:focus-visible,#w262new button:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w262new .app .ai{width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;color:' + CREAM + ';}'
+    + '#w262new .app .ai svg{width:15px;height:15px;}'
+    + '#w262new .app.more{background:transparent;font-weight:500;}'
+    + '#w262new .sub{font-size:12px;color:' + MUTED + ';margin:8px 0 0;}'
+    + '#w262new .ft{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 22px 16px;border-top:1px solid rgba(16,63,57,.10);}'
+    + '#w262new .go{background:' + GOLD + ';color:' + INK + ';border:0;border-radius:10px;padding:10px 18px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;}'
+    + '#w262new .ok{background:none;border:1px solid rgba(16,63,57,.25);color:' + GREEN + ';border-radius:10px;padding:9px 16px;font:inherit;font-weight:600;font-size:13.5px;cursor:pointer;}'
+    + '#w262new .ft small{margin-left:auto;font-size:12px;color:' + MUTED + ';}'
+    + '@media (max-width:640px){#w262new{padding:0;align-items:stretch;}#w262new .dlg{max-height:100vh;border-radius:0;}#w262new .ft small{margin-left:0;flex-basis:100%;}}';
+  var N = { shown: false, tries: 0, timer: null };
+
+  function w122ok() { return !!(window.w122 && window.w122.tours); }
+  function tourRow() { try { return window.w122.A.byKey['tour:' + TOUR] || null; } catch (e) { return null; } }
+  function tourDone() { try { var t = tourRow(); return !!t && window.w122.isDone(t.id); } catch (e) { return false; } }
+  function seen() { return readLS(KEY_SEEN) === '1' || tourDone(); }
+  function onHome() { var h = String(location.hash || ''); return !h || h === '#' || /^#mypage(\/|$)/.test(h); }
+  function phone() { return window.innerWidth <= 900; }
+  function vis(el) { if (!el) return false; var r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none'; }
+  /* never on top of another window: the Loop's Welcome back, the meeting pop-up, the due-date check, a modal, a running tour */
+  function busy() {
+    if (document.getElementById('w213pop') || vis(document.getElementById('w238loop')) || vis(document.getElementById('w177pop'))) return true;
+    var m = document.getElementById('modalBack'); if (m && m.style.display === 'flex') return true;
+    if (document.querySelector('.w122tp') || document.getElementById('w122sheet') && vis(document.getElementById('w122sheet'))) return true;
+    return false;
+  }
+  function apps() {
+    var A = window.WA_APP; if (!A || typeof A.yours !== 'function') return { yours: [], more: [], all: true };
+    try { return A.yours(); } catch (e) { return { yours: [], more: [], all: true }; }
+  }
+  function appBtn(id, more) {
+    var A = window.WA_APP, a = A && A.apps && A.apps[id]; if (!a) return '';
+    return '<button type="button" class="app' + (more ? ' more' : '') + '" data-w262app="' + E(id) + '" title="' + E(a.blurb || '') + '"><span class="ai" style="background:' + E(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + E(a.label) + '</button>';
+  }
+  function moreLabels() {
+    var out = [];
+    ['tools', 'org'].forEach(function (k) {
+      var g = document.querySelector('#tabBar > .tab-group[data-w42g="' + k + '"]'); if (!g) return;
+      Array.prototype.forEach.call(g.querySelectorAll('.tab'), function (t) {
+        if (t.style.display === 'none' || t.getAttribute('data-w73hide')) return;
+        var l = ''; t.childNodes.forEach(function (n) { if (n.nodeType === 3 || (n.nodeType === 1 && !n.classList.contains('tabdot') && !n.classList.contains('w134n'))) l += n.textContent; });
+        l = l.replace(/\s+/g, ' ').trim(); if (l) out.push(l);
+      });
+    });
+    return out;
+  }
+  function listWords(a) { return a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : (a[0] || ''); }
+  function otherCount() {
+    return Array.prototype.filter.call(document.querySelectorAll('#tabBar .w42d.w262other'), function (row) {
+      return row.style.display !== 'none' && Array.prototype.some.call(row.querySelectorAll('.tab'), function (t) { return t.style.display !== 'none'; });
+    }).length;
+  }
+  function summary() {
+    var f = (window.w134 && window.w134.folds) ? window.w134.folds() : null;
+    var mine = f && f.mine ? teamLabel(f.mine) : '', others = otherCount(), more = moreLabels(), ap = apps();
+    return { mine: mine, others: others, more: more, apps: ap };
+  }
+  function html() {
+    var s = summary(), n = first(), items = [];
+    var menu = 'Home, Team Requests, the Calendar and the Avenue Academy stay at the top. '
+      + (s.mine ? 'Your team, ' + s.mine + ', sits open under Teams with its own pages. ' : '')
+      + (s.others ? 'The other ' + (s.others === 1 ? 'team is' : s.others + ' teams are') + ' folded under Other teams, one click away. ' : '')
+      + (s.more.length ? listWords(s.more) + ' are under More.' : '');
+    if (phone()) menu = 'On a phone, the bar at the bottom has Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open, with Find a page at the top.';
+    items.push(['Your menu is shorter', menu]);
+    items.push(['Home shows what matters first', 'Your counts, what needs you, your tasks and your team\u2019s requests come first, then your meetings and the announcements. In the loop, updates, time off and the rest wait behind Show everything on Home, at the bottom.']);
+    var ap = s.apps, appsHtml = '';
+    if (ap.yours.length || ap.more.length) {
+      appsHtml = '<div class="apps">' + ap.yours.map(function (id) { return appBtn(id, false); }).join('') + '</div>'
+        + (ap.more.length ? '<p class="sub">More apps you can open:</p><div class="apps">' + ap.more.map(function (id) { return appBtn(id, true); }).join('') + '</div>' : '');
+      items.push([ap.all ? 'The apps you can open' : 'Your apps come first', (ap.all ? 'Every app is yours. ' : (phone() ? 'The apps your team uses come first in Menu; the others follow. ' : 'The apps your team uses sit at the top of Apps (bottom of the menu); the others follow under More apps. ')) + 'Click one to open it now.', appsHtml]);
+    }
+    items.push(['Ask the Hub finds pages for you', 'Ask where something is (where are the passwords? where do I find grants?) and the answer shows the page with Open. If your access does not open it yet, Request access sends the ask to the admins.']);
+    items.push(['Clearing your tasks works for long lists', 'When tasks are overdue, due today or have no date, the Hub asks you to close them or pick a new date. Long sections now have All in this section: Done or Next meeting, and saving a big list no longer fails.']);
+    return '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="w262h">'
+      + '<div class="hd"><small>What changed in the Hub</small><h2 id="w262h">' + E(n ? n + ', the Hub got simpler' : 'The Hub got simpler') + '</h2>'
+      + '<p>After Monday\u2019s leadership meeting we trimmed what you see first. Nothing was taken away: a few things moved one click further.</p>'
+      + '<button type="button" class="x" data-w262x="1" aria-label="Close">&times;</button></div>'
+      + '<div class="bd">' + items.map(function (it, i) { return '<div class="it"><span class="n">' + (i + 1) + '</span><div><h3>' + E(it[0]) + '</h3><p>' + E(it[1]) + '</p>' + (it[2] || '') + '</div></div>'; }).join('') + '</div>'
+      + '<div class="ft"><button type="button" class="go" data-w262tour="1">Take the 1-minute tour</button><button type="button" class="ok" data-w262ok="1">Got it</button>'
+      + '<small>The tour stays in the Avenue Academy under Hub page tours.</small></div></div>';
+  }
+  function closeNew() {
+    var el = document.getElementById('w262new'); if (el) el.remove();
+    writeLS(KEY_SEEN, '1');
+    document.removeEventListener('keydown', escNew, true);
+  }
+  function escNew(e) { if (e.key === 'Escape' && document.getElementById('w262new')) { e.stopPropagation(); closeNew(); } }
+  function showNew() {
+    if (document.getElementById('w262new')) return;
+    var el = document.createElement('div'); el.id = 'w262new'; el.innerHTML = html();
+    el.addEventListener('click', function (e) {
+      var t = e.target, b;
+      if (t === el || t.closest('[data-w262x]') || t.closest('[data-w262ok]')) { closeNew(); return; }
+      if (t.closest('[data-w262tour]')) { closeNew(); startTour(); return; }
+      if ((b = t.closest('[data-w262app]'))) {
+        closeNew();
+        var id = b.getAttribute('data-w262app');
+        try { if (window.WA_APP && window.WA_APP.open) window.WA_APP.open(id); } catch (x) { /* fine */ }
+      }
+    });
+    document.body.appendChild(el);
+    document.addEventListener('keydown', escNew, true);
+    N.shown = true;
+    try { var g = el.querySelector('[data-w262tour]'); if (g) g.focus(); } catch (e) { /* fine */ }
+  }
+  function startTour() {
+    if (!w122ok()) return;
+    if (!onHome()) location.hash = '#mypage';
+    try { window.w122.startTour(TOUR); } catch (e) { toastS('The tour is in the Avenue Academy, under Hub page tours.'); }
+  }
+  /* wait for Home, the person's data and the must-answer pop-ups; give up quietly after a while */
+  function tryNew() {
+    clearTimeout(N.timer);
+    if (N.shown || !staff()) return;
+    try { if (typeof MODE !== 'undefined' && MODE === 'board') return; } catch (e) { return; }
+    if (seen()) return;
+    if (N.tries++ > 180) return;
+    var ready = w122ok() && window.w122.A && window.w122.A.loaded;
+    if (!onHome() || busy() || (!ready && N.tries < 20)) { N.timer = setTimeout(tryNew, 1500); return; }
+    if (seen()) return;
+    showNew();
+  }
+
+  /* ---------- the tour ---------- */
+  function tourSteps() {
+    var s = summary(), ap = s.apps;
+    var appLine = ap.all ? 'Every app you can open is here: the Hub, ' + listWords(ap.yours.map(function (id) { return (window.WA_APP.apps[id] || {}).label; }).filter(Boolean)) + '.'
+      : 'Apps opens your team\u2019s apps first' + (ap.yours.length ? ' (' + listWords(ap.yours.map(function (id) { return (window.WA_APP.apps[id] || {}).label; }).filter(Boolean)) + ')' : '') + ', then More apps' + (ap.more.length ? ' (' + listWords(ap.more.map(function (id) { return (window.WA_APP.apps[id] || {}).label; }).filter(Boolean)) + ')' : '') + '.';
+    var all = [
+      { c: 1, t: 'What changed', p: 'A one-minute look at what moved for you. Nothing was taken away: a few things are one click further. Use the arrow keys or the buttons, and Esc to stop.' },
+      { s: '#tabBar > .tab[data-tab="mypage"]', t: 'Home', p: 'Home leads with what matters to you: your counts, what needs you, your tasks and your team\u2019s requests, then your meetings and the announcements.', opt: 1 },
+      { s: '#w163bar', t: 'Your menu on a phone', p: 'Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open, with your apps and Find a page at the top.', opt: 1 },
+      { s: '#tabBar .w42d[data-w262mine]', t: 'Your team', p: (s.mine || 'Your team') + ' sits open under Teams with its own pages: Overview, Agenda, Tasks and the tools your team uses.', opt: 1 },
+      { s: '#tabBar .w262tt', t: 'Other teams', p: 'Every other team is folded here. Open it when you need another team\u2019s page; the Hub remembers your choice on this computer.', opt: 1 },
+      { s: '#tabBar .w262fold', t: 'More', p: (s.more.length ? listWords(s.more) : 'The Brain and the other tools') + ' live under More. It opens with a click, and by itself when you are on one of those pages.', opt: 1 },
+      { s: '#w153dock .w153grid', t: 'Your apps', p: appLine, opt: 1 },
+      { s: '#searchWrap', t: 'Search everything', p: 'Looking for something you cannot see in the menu? Type a page, a task, a person or a meeting here and jump straight to it.', opt: 1 },
+      { s: '#w262homebar', t: 'Show everything on Home', p: 'In the loop, Updates for you, time commitments, Slack notifications and time off wait here. One click shows them, another hides them again.', opt: 1 },
+      { c: 1, t: 'You are set', p: 'Every page still has its own tour in the Avenue Academy, and Ask the Hub (bottom right) can find anything for you.' }
+    ];
+    /* on a phone the side menu is closed: the bar at the bottom and its Menu sheet do that job */
+    var deskOnly = ['#tabBar > .tab[data-tab="mypage"]', '#tabBar .w42d[data-w262mine]', '#tabBar .w262tt', '#tabBar .w262fold', '#w153dock .w153grid'];
+    return phone() ? all.filter(function (st) { return deskOnly.indexOf(st.s) < 0; }) : all.filter(function (st) { return st.s !== '#w163bar'; });
+  }
+  function registerTour() {
+    if (!w122ok() || window.w122.tours[TOUR]) return;
+    window.w122.tours[TOUR] = { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: tourSteps };
+  }
+
+  /* ---------- Ask the Hub finds pages (Steel, 21/10/26) ----------
+     "I also want ask the hub to support with navigation when people ask for information. If the page they are looking
+     for is something they don't have access to they should be able to request access."
+     When a question asks where something is (where, find, open, take me, link, page, how do I get to...), the answer gets a
+     "Where to find it" card: up to three pages that match, each with where it sits in the menu and Open, or, for a page the
+     person's access does not open, Request access (the same wa_access_requests row and admin ping as Request more access on
+     Home, wave110; "Requested" once sent). The model's answer is untouched; the card is drawn under it. No new data. */
+  var NAV = [
+    ['mypage', 'Home', '#mypage', 'home my page my tasks dashboard home page'],
+    ['training', 'Avenue Academy', '#training', 'academy training trainings tours tour course courses onboarding modules learn'],
+    ['overview', 'Executive dashboard', '#overview', 'executive dashboard exec dashboard kpis kpi decisions numbers'],
+    ['requests', 'Team Requests', '#requests', 'requests request team requests ask another team'],
+    ['calendar', 'Calendar', '#calendar', 'calendar schedule meetings dates'],
+    ['brain', 'The Brain', '#brain', 'brain the brain how work flows map'],
+    ['importantinfo', 'Important info', '#importantinfo', 'important info passwords password logins login accounts credentials links key contacts'],
+    ['bank', 'The Task Bank', '#bank', 'task bank bank parked tasks later'],
+    ['agendas', 'Agendas', '#agendas', 'agendas agenda meeting agenda'],
+    ['documents', 'Document finder', '#documents', 'documents document docs files drive google drive find a document'],
+    ['transcripts', 'Transcript archive', '#transcripts', 'transcripts transcript recordings recording loom meeting notes minutes'],
+    ['photos', 'Photo library', '#photos', 'photos photo pictures images library'],
+    ['orgchart', 'Org chart', '#orgchart', 'org chart organization chart who reports reporting structure staff list'],
+    ['ourstory', 'Our story', '#ourstory', 'our story story history mission'],
+    ['hubmail', 'Hub inbox', '#hubmail', 'hub inbox inbox hub mail emails to the hub'],
+    ['opsmtl', 'Operations Montreal', '#team/opsmtl', 'operations montreal montreal ops mtl operations'],
+    ['progdev', 'Program Development', '#team/progdev', 'program development programs progdev'],
+    ['opsto', 'Operations Toronto', '#team/opsto', 'operations toronto toronto ops toronto team'],
+    ['marketing', 'Marketing, Branding & Web', '#team/marketing', 'marketing team branding web marketing page'],
+    ['fundraising', 'Fundraising team page', '#team/fundraising', 'fundraising team fundraising page'],
+    ['hr', 'Human Resources team page', '#team/hr', 'human resources team hr team'],
+    ['board', 'Board team page', '#team/board', 'board team board and governance team'],
+    ['governance', 'Board overview', '#governance', 'board overview board meetings governance directors'],
+    ['committees', 'Committees', '#committees', 'committees committee'],
+    ['volunteering', 'Volunteer Manager', '#volunteering', 'volunteer manager volunteers volunteer servings serving roster sunday serving texts sign ups signups'],
+    ['crm', 'CRM', '#crm', 'crm contacts contact donors donor email campaigns email studio supporters gifts'],
+    ['partners', 'Partners', '#partners', 'partners partner sponsors list collaborators organizations'],
+    ['fund', 'Fundraising app', '#fund', 'fundraising app fundraising events donor program sponsorship'],
+    ['grants', 'Grants', '#fund/grants', 'grants grant funding funders applications grant writer'],
+    ['fundevents', 'Events calendar', '#fundevents', 'events calendar fundraising events'],
+    ['studio', 'Content Studio', '#studio', 'content studio studio social media posts posting queue approvals comments messages dms hashtags hashtag link pages short links'],
+    ['contentcal', 'Content calendar', '#contentcal', 'content calendar post calendar social calendar'],
+    ['socialstats', 'Analytics', '#socialstats', 'analytics insights stats statistics reach followers engagement'],
+    ['hrcentre', 'HR centre', '#hrcentre', 'hr centre hr center hiring recruitment applicants candidates onboarding time off vacation policies offer letters'],
+    ['finances', 'Finance', '#finances', 'finance finances budget budgets expenses reimbursement reimbursements ledger accounting invoices'],
+    ['orggoals', 'Goals and the Strategy Library', '#orggoals', 'goals strategy strategic plan organizational goals strategy library'],
+    ['projects', 'Projects', '#projects', 'projects project'],
+    ['adminpanel', 'Admin centre', '#adminpanel', 'admin admin centre access permissions roles people and access']
+  ];
+  var NAV_INTENT = /\b(where|find|finding|open|opening|go to|take me|get to|navigate|link to|link for|which page|what page|the page|a page|tab|section|menu|how (do|can) i (get|see|reach|open|find|use|access)|show me|access to|can't see|cannot see|can not see|don't see|do not see|where's)\b/i;
+  var NAV_SEEN = { q: '', reqs: null };
+  /* words too general to point at one page on their own */
+  var NAV_STOP = ['page', 'find', 'team', 'list', 'link', 'links', 'home', 'open', 'where', 'library', 'calendar', 'notes', 'people', 'events', 'access'];
+  function navFold(s) { return ' ' + String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' '; }
+  function navAllowed(id) {
+    try { var al = (typeof wa40Allowed === 'function' && wa40Allowed()) || []; if (al.indexOf(id) >= 0) return true; } catch (e) { /* below */ }
+    var t = document.querySelector('#tabBar .tab[data-tab="' + id + '"]');
+    return !!t && t.style.display !== 'none';
+  }
+  function navMatches(q) {
+    if (!q || !NAV_INTENT.test(q)) return [];
+    var f = navFold(q), out = [];
+    NAV.forEach(function (p) {
+      var best = 0;
+      /* every phrase of two or more words, then single words, in the page's word list */
+      var words = p[3].split(' '), n = words.length;
+      for (var len = 4; len >= 1; len--) {
+        for (var i = 0; i + len <= n; i++) {
+          var ph = words.slice(i, i + len).join(' ');
+          if (len === 1 && (ph.length < 4 || NAV_STOP.indexOf(ph) >= 0)) continue;
+          if (f.indexOf(' ' + ph + ' ') >= 0 || (len === 1 && f.indexOf(' ' + ph + 's ') >= 0)) { best = Math.max(best, len * 10 + ph.length); }
+        }
+      }
+      if (f.indexOf(' ' + navFold(p[1]).trim() + ' ') >= 0) best = Math.max(best, 100 + p[1].length);
+      if (best) out.push({ id: p[0], label: p[1], hash: p[2], score: best });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    var top = out.length ? out[0].score : 0;
+    out = out.filter(function (x) { return x.score >= top * 0.7; });
+    /* "content calendar" means the Content calendar, not also the Calendar */
+    out = out.filter(function (x) { return !out.some(function (y) { return y !== x && y.score >= 100 && navFold(y.label).indexOf(navFold(x.label)) >= 0 && y.label.length > x.label.length; }); });
+    return out.slice(0, 3);
+  }
+  function navWhere(id) {
+    var t = document.querySelector('#tabBar .tab[data-tab="' + id + '"]');
+    try { if (window.WA_APP && typeof window.WA_APP.owner === 'function') { var a = window.WA_APP.owner(id); if (a && a !== 'hub' && window.WA_APP.apps[a]) return 'Apps, ' + window.WA_APP.apps[a].label; } } catch (e) { /* below */ }
+    if (!t) return '';
+    var row = t.closest('.w42d'), main = row ? row.querySelector(':scope > .tab') : null;
+    if (row && main && main !== t) return 'Teams, ' + (main.textContent || '').trim();
+    if (row) return 'Teams';
+    var g = t.closest('.tab-group'), k = g ? g.getAttribute('data-w42g') : '';
+    if (k === 'tools') return 'More, Other Tools';
+    if (k === 'org') return 'More, Organization';
+    if (k === 'admin') return 'Admin';
+    if (k === 'board') return 'Board';
+    return 'the top of the menu';
+  }
+  async function navRequests() {
+    if (NAV_SEEN.reqs) return NAV_SEEN.reqs;
+    try {
+      var em = String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      var r = await db.from('wa_access_requests').select('wanted, status').eq('email', em).order('id', { ascending: false }).limit(40);
+      NAV_SEEN.reqs = (r && r.data) || [];
+    } catch (e) { NAV_SEEN.reqs = []; }
+    return NAV_SEEN.reqs;
+  }
+  async function navCard(d, q) {
+    if (!d || d.getAttribute('data-w262nav')) return;
+    var ms = navMatches(q); if (!ms.length) return;
+    d.setAttribute('data-w262nav', '1');
+    var reqs = await navRequests();
+    var waiting = {}; reqs.forEach(function (r) { if (r.status === 'new' || r.status === 'pending' || !r.status) waiting[r.wanted] = 1; });
+    var card = document.createElement('div'); card.className = 'w262nav'; card.setAttribute('data-w198skip', '');
+    card.innerHTML = '<b>Where to find it</b>' + ms.map(function (m) {
+      var ok = navAllowed(m.id), where = ok ? navWhere(m.id) : '';
+      var act = ok ? '<a class="go w226in" href="' + E(m.hash) + '" data-w262go="' + E(m.hash) + '">Open</a>'
+        : (waiting['tab:' + m.id] ? '<em class="wait">Requested, waiting for an admin</em>'
+          : '<button type="button" class="ask" data-w262ask="' + E(m.id) + '">Request access</button>');
+      return '<div class="it"><div><div class="nm">' + E(m.label) + '</div><small>' + E(ok ? (where ? 'In the menu: ' + where : 'Open to you') : 'Not in your access yet') + '</small></div>' + act + '</div>';
+    }).join('');
+    card.setAttribute('data-q', q.slice(0, 200));
+    d.classList.add('w262has'); d.appendChild(card);
+    var box = document.getElementById('wacMsgs'); if (box) box.scrollTop = box.scrollHeight;
+  }
+  async function navAsk(btn) {
+    var id = btn.getAttribute('data-w262ask'), card = btn.closest('.w262nav'), q = card ? card.getAttribute('data-q') || '' : '';
+    var em = String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+    var name = (typeof USER !== 'undefined' && USER && (USER.name || USER.email)) || em;
+    var role = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member';
+    var label = (NAV.filter(function (p) { return p[0] === id; })[0] || [id, id])[1];
+    btn.disabled = true; btn.textContent = 'Sending\u2026';
+    try {
+      var ins = await db.from('wa_access_requests').insert({ email: em, name: name, role_now: role, wanted: 'tab:' + id, reason: q ? 'Asked Ask the Hub: ' + q.slice(0, 240) : 'From Ask the Hub' });
+      if (ins && ins.error) throw ins.error;
+      try { await db.functions.invoke('notify', { body: { event: 'change_request_text', text: ':key: Access request from ' + name + ' (' + em + '): tab:' + id + ' (' + label + '), from Ask the Hub. Review in Admin > Access requests.' } }); } catch (e) { /* best-effort ping, as on Home */ }
+      NAV_SEEN.reqs = (NAV_SEEN.reqs || []).concat([{ wanted: 'tab:' + id, status: 'new' }]);
+      var s = document.createElement('em'); s.className = 'wait'; s.textContent = 'Requested, waiting for an admin'; btn.replaceWith(s);
+      toastS('Request sent to the admins: ' + label);
+    } catch (e) { btn.disabled = false; btn.textContent = 'Request access'; toastS('Could not send the request. Try again, or use Request more access on Home.'); }
+  }
+  var navCss = ''
+    + '#waChatPanel .wac-m.bot.w262has{flex-wrap:wrap;}'
+    + '#waChatPanel .wac-m.bot .w262nav{flex:1 0 100%;margin-left:42px;max-width:calc(100% - 42px);}'
+    + '#waChatPanel .w262nav{margin:8px 0 2px;padding:10px 12px;border-radius:12px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.14);font-size:13px;max-width:100%;box-sizing:border-box;}'
+    + '#waChatPanel .w262nav > b{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';margin-bottom:4px;}'
+    + '#waChatPanel .w262nav .it{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px dashed rgba(16,63,57,.12);}'
+    + '#waChatPanel .w262nav .it:first-of-type{border-top:none;}'
+    + '#waChatPanel .w262nav .it > div{flex:1;min-width:0;}'
+    + '#waChatPanel .w262nav .nm{display:block;font-weight:700;color:' + GREEN + ';}'
+    + '#waChatPanel .w262nav small{display:block;color:' + MUTED + ';font-size:11.5px;}'
+    + '#waChatPanel .w262nav .go,#waChatPanel .w262nav .ask{flex:0 0 auto;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;}'
+    + '#waChatPanel .w262nav .go{background:' + GREEN + ';color:' + CREAM + ';border:none;}'
+    + '#waChatPanel .w262nav .ask{background:' + GOLD + ';color:' + INK + ';border:none;}'
+    + '#waChatPanel .w262nav .ask[disabled]{opacity:.6;cursor:default;}'
+    + '#waChatPanel .w262nav .wait{font-style:normal;flex:0 0 auto;font-size:11.5px;color:#6b4d05;background:rgba(220,165,39,.18);border-radius:999px;padding:4px 10px;}';
+  /* the question as it is sent (wave38's input and button), then the answer as it lands (as waves 117 and 226 do) */
+  function navNote() { var i = document.getElementById('w38in'); if (i && i.value.trim()) NAV_SEEN.q = i.value.trim(); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.id === 'w38in') { navWire(); navNote(); } }, true);
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    navWire();   /* the chat panel can be drawn after the Hub starts */
+    if (t && t.closest && t.closest('#w38send')) { navNote(); return; }
+    var b = t && t.closest && t.closest('[data-w262ask]'); if (b) { e.preventDefault(); navAsk(b); return; }
+    var g = t && t.closest && t.closest('[data-w262go]');
+    if (g && window.innerWidth < 900) { var p = document.getElementById('waChatPanel'); if (p) p.style.display = 'none'; }
+  }, true);
+  var navObs = false;
+  function navWire() {
+    var m = document.getElementById('wacMsgs'); if (!m || navObs || typeof MutationObserver === 'undefined') return;
+    navObs = true;
+    new MutationObserver(function (recs) {
+      recs.forEach(function (r) {
+        r.addedNodes.forEach(function (n) {
+          if (!n.classList || !n.classList.contains('bot')) return;
+          var txt = (n.textContent || '').trim();
+          if (/^Thinking\.\.\.$/.test(txt) || n.classList.contains('w117think')) return;
+          var q = NAV_SEEN.q; NAV_SEEN.q = '';
+          if (q) navCard(n, q);
+        });
+      });
+    }).observe(m, { childList: true });
+  }
+
+  /* ---------- wiring ---------- */
+  if (!document.getElementById('wa262css')) {
+    var st = document.createElement('style'); st.id = 'wa262css'; st.textContent = homeCss + newCss + navCss; document.head.appendChild(st);
+  }
+  registerTour();
+  if (typeof startApp === 'function') {
+    var __sa262 = startApp;
+    startApp = async function () {
+      var r = await __sa262.apply(this, arguments);
+      try { registerTour(); applyHome(); navWire(); } catch (e) { console.warn('wave262 boot', e); }
+      N.timer = setTimeout(tryNew, 2500);
+      return r;
+    };
+  }
+  window.addEventListener('hashchange', function () {
+    /* the pop-up belongs to Home: leaving Home puts it away (unseen), so it comes back on Home */
+    if (!onHome() && document.getElementById('w262new')) { var el = document.getElementById('w262new'); el.remove(); document.removeEventListener('keydown', escNew, true); N.shown = false; }
+    if (onHome()) { try { applyHome(); } catch (e) { /* fine */ } if (!N.shown && !seen()) { N.tries = Math.min(N.tries, 150); clearTimeout(N.timer); N.timer = setTimeout(tryNew, 1200); } } });
+
+  /* ---------- test hook ---------- */
+  window.w262 = { nav: navMatches, navWire: navWire, home: applyHome, homeAll: homeAll, show: showNew, close: closeNew, tryNew: tryNew, seen: seen, summary: summary, steps: tourSteps, state: function () { return N; } };
+})();

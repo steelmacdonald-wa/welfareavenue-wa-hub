@@ -39,7 +39,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
       window.__WA_TEST_NAME = ${JSON.stringify(NAME)};
       window.confirm = function(){ return true; };
       window.alert = function(){};
-      try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+      try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
     })();
   `);
   await page.addInitScript("window.__WAFIX = " + fixture + ";");

@@ -21,13 +21,14 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var HUB = 'https://hub.welfareavenue.com';
-  var SECTIONS = ['overview', 'queue', 'approvals', 'inbox', 'messages', 'library', 'pages', 'links', 'ads', 'report', 'connections'];   /* wave251 messages, wave253 ads */
+  var SECTIONS = ['overview', 'queue', 'approvals', 'inbox', 'messages', 'hashtags', 'library', 'pages', 'links', 'ads', 'report', 'connections'];   /* wave251 messages, wave253 ads */
   var SECT = {
     overview: ['Content Studio', 'The week ahead, what waits for you, and how the content is doing.'],
     queue: ['Queue and schedule', 'When each platform posts, the free slots in the next two weeks, and the weekly goals.'],
     approvals: ['Approvals', 'Posts waiting for a marketing lead or an admin, and the ones sent back.'],
     inbox: ['Comments', 'Every comment on our posts, in one place. Reply, hide, resolve.'],
     messages: ['Messages', 'Direct messages to our Facebook Page and Instagram, read and answered here.'],   /* wave251 */
+    hashtags: ['Hashtags', 'Public Instagram posts under our campaign hashtags, so the team spots one that needs attention early.'],   /* wave262c */
     library: ['Library', 'Templates, hashtag groups, saved replies and tags the whole team shares.'],
     pages: ['Link pages', 'Our link in bio and campaign, event and city pages: who clicks what, where they came from, and who signs up or gives.'],
     links: ['Short links', 'Short links that count clicks, for captions, emails and print.'],
@@ -139,5 +140,5 @@
   function counts() {
     var pend = posts().filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; }).length;
     var open = S.comments.filter(function (c) { return c.status === 'open' && !c.from_us; }).length;
-    return { approvals: pend || null, inbox: open || null, messages: counts250() };   /* wave251 */
+    return { approvals: pend || null, inbox: open || null, messages: counts250(), hashtags: counts262() };   /* wave251; wave262c hashtags */
   }

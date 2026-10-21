@@ -27,7 +27,7 @@ function ok(cond, what) { log.push((cond ? "PASS " : "FAIL ") + what); if (!cond
     "FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate;" +
     "window.__WA_TEST_ROLE = " + JSON.stringify(ROLE) + "; window.__WA_TEST_EMAIL = " + JSON.stringify(EMAIL) + "; window.__WA_TEST_NAME = " + JSON.stringify(NAME) + ";" +
     "window.confirm = function(){ return true; }; window.alert = function(){}; window.prompt = function(){ return null; };" +
-    "try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('w118bSnooze', String(Date.now() + 86400000)); } catch (e) {} })();"
+    "try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); localStorage.setItem('w118bSnooze', String(Date.now() + 86400000)); } catch (e) {} })();"
   );
   await page.addInitScript("window.__WAFIX = " + fixture + ";");
   await page.route("**/*", route => {

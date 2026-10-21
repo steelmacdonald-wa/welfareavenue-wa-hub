@@ -33,16 +33,17 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
   const WANT = {
     /* 09/10/26: Team Requests sits above the Calendar; wave260 (16/10/26): the Executive dashboard is for the admins and
        app_config dashboard_people (the fixture's leader is Shima, who is named there), so members and directors do not have it */
-    admin: { top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'], tools: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'], org: ['orgchart', 'ourstory', 'hubmail'] },
-    member: { top: ['mypage', 'training', 'requests', 'calendar', 'brain'] },
-    leader: { top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'] },
+    /* wave262 (21/10/26): The Brain moved into More (first in Other Tools); the tests open More (wa262.more) to see its groups */
+    admin: { top: ['mypage', 'training', 'overview', 'requests', 'calendar'], tools: ['brain', 'importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'], org: ['orgchart', 'ourstory', 'hubmail'] },
+    member: { top: ['mypage', 'training', 'requests', 'calendar'] },
+    leader: { top: ['mypage', 'training', 'overview', 'requests', 'calendar'] },
     board: { top: ['calendar'] }
   };
   for (const who of ['admin', 'member', 'leader', 'board']) {
-    const f = await fresh(browser, { who });
+    const f = await fresh(browser, { who, init: "try { localStorage.setItem('wa262.more', '1'); } catch (e) {}" });
     const m = await f.ev(MENU);
     ok(who + ': the layout holds and no Strategy or More group is left', m.ok && !m.old, m);
-    ok(who + ': ' + (who === 'board' ? 'the Calendar leads' : (who === 'member' ? 'Home, Avenue Academy, Team Requests, the Calendar and The Brain lead' : 'Home, Avenue Academy, the Executive dashboard, Team Requests, the Calendar and The Brain lead')) + ' the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
+    ok(who + ': ' + (who === 'board' ? 'the Calendar leads' : (who === 'member' ? 'Home, Avenue Academy, Team Requests and the Calendar lead' : 'Home, Avenue Academy, the Executive dashboard, Team Requests and the Calendar lead')) + ' the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
     if (who === 'admin') {
       ['tools', 'org'].forEach(g => ok('admin: ' + g + ' holds its pages in order', m.groups[g] && JSON.stringify(m.groups[g].items) === JSON.stringify(WANT.admin[g]), m.groups[g]));
       ok('admin: the group names read as the layout says (Other Tools, Organization; no Goals and projects, Meetings, Requests and inbox, People or Resources)', m.groups.tools && m.groups.tools.label === 'Other Tools' && m.groups.org && m.groups.org.label === 'Organization' && !['goals', 'meetings', 'inbox', 'people', 'resources', 'apps'].some(g => m.groups[g]), m.groups);
@@ -60,7 +61,7 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
       for (const [h, sel] of [['#orggoals', '#orggoals .crumb'], ['#projects', '#projects .crumb'], ['#bank', '#bank .crumb'], ['#requests', '#requests > .w118mast .crumb'], ['#hubmail', '#hubmail .crumb'], ['#photos', '#photos .crumb'], ['#activity', '#activity > .w118mast .crumb'], ['#overview', '#overview > .w118mast .crumb']]) {
         await f.hash(h, 1500); crumbs[h] = await f.ev(s => { const el = document.querySelector(s); return el ? el.textContent.trim() : null; }, sel);
       }
-      ok('admin: page crumbs name the menu group', crumbs['#orggoals'] === 'Strategy' && crumbs['#projects'] === 'Strategy' && crumbs['#bank'] === 'Other Tools' && crumbs['#requests'] === 'Other Tools' && crumbs['#hubmail'] === 'Organization' && crumbs['#photos'] === 'Other Tools' && crumbs['#activity'] === 'Admin' && crumbs['#overview'] === 'Home', crumbs);
+      ok('admin: page crumbs name the menu group', crumbs['#orggoals'] === 'Strategy' && crumbs['#projects'] === 'Strategy' && crumbs['#bank'] === 'Other Tools' && crumbs['#requests'] === 'Home' && crumbs['#hubmail'] === 'Organization' && crumbs['#photos'] === 'Other Tools' && crumbs['#activity'] === 'Admin' && crumbs['#overview'] === 'Home', crumbs);
       /* the Executive dashboard: Coming up does not repeat the brief's Next up */
       await f.hash('#overview', 2500);
       /* the same event on the same day in both lists would be a repeat (a later serving with the same name is not) */
