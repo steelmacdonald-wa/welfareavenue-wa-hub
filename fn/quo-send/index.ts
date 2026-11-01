@@ -1,4 +1,11 @@
-// Welfare Avenue: quo-send (v7, wave258, 15/10/26)
+// Welfare Avenue: quo-send (v8, wave266, 26/10/26)
+// v8 (wave266): drain stops the silent loop. A Quo 402 (no prepaid credits, the whole account) puts the text back in the
+// queue (error 'waiting: Quo has no prepaid credits'), notes app_config sms_credit_hold (once, when the hold starts) and
+// stops that drain: the queue functions see the queued text and add no more, and it goes by itself after a top-up. A
+// Quo 400 (this number cannot get texts, for example a US number without A2P) is status 'blocked': never sent again and
+// never queued again. The first text that goes clears sms_credit_hold. 'alert' (trigger secret only): {to[], subject,
+// text, tag?} one plain email through Resend from the Hub, for wa266_sms_alerts (once per hold, once per serving and
+// reason), logged in change_log (entity_type sms_alert).
 // v7 (wave258): the people app_config text_staff names (Ibrahim, Mary, Terry) may text too: authorize asks wa256_can_text
 // (leaders, HR, admins, text_staff). 'delivery' (the trigger secret, or anyone who may text): what Quo says happened to
 // the texts the Hub sent in the last two days (GET /v1/messages/{id}: queued, sent, delivered, undelivered, failed), at
@@ -28,7 +35,9 @@
 //                    automatic kinds: off skips them, test sends them only to app_config sms_test_phones, live sends.
 //                    manual and reply go whatever the mode. Anyone who texted STOP since it was queued is skipped.
 //                    A number Quo refuses (a US number the carrier registration does not cover, for example) is
-//                    logged as failed and never retried (Steel, 29/09/26).
+//                    logged as blocked (v8; failed before) and never retried (Steel, 29/09/26). No credits (402): the
+//                    text waits in the queue and the drain stops (v8).
+//   'alert'          trigger secret only (v8): {to[], subject, text, tag?} one plain email to the team through Resend.
 //   'test_confirm'   admins: {roster_id}: that row's confirmation text, with ?test=1 on the link (the page then saves
 //                    nothing), sent only to the test phones, whatever the mode.
 //   'numbers'        admins or the trigger secret: the workspace's Quo numbers (id, number, name), to check
@@ -151,7 +160,7 @@ async function drain(): Promise<Record<string, unknown>> {
   const tests = await testPhones();
   const stopped = await optedOutPhones();
   let key = '';
-  let sent = 0, skipped = 0, failed = 0, waiting = 0;
+  let sent = 0, skipped = 0, failed = 0, waiting = 0, blocked = 0, held = false, cleared = false;
   for (const r of list) {
     const d = normPhone(r.phone);
     const person = PERSON_KINDS.indexOf(String(r.kind)) >= 0;
@@ -174,11 +183,47 @@ async function drain(): Promise<Record<string, unknown>> {
     if (!claimed || !claimed.length) continue;
     if (!key) key = await getSecret('QUO_API_KEY');
     const out = await quoSend(key, '+1' + d, String(r.body));
-    if (out.ok) { sent++; if (out.id) await svc.from('quo_messages').update({ quo_id: out.id }).eq('id', r.id); }
-    else { failed++; await svc.from('quo_messages').update({ status: 'failed', sent_at: null, error: out.error || 'failed' }).eq('id', r.id); }
+    const err = String(out.error || '');
+    if (out.ok) {
+      sent++; if (out.id) await svc.from('quo_messages').update({ quo_id: out.id }).eq('id', r.id);
+      if (!cleared) { cleared = true; await svc.from('app_config').delete().eq('key', 'sms_credit_hold'); }   /* v8: credits are back */
+    } else if (err.startsWith('402')) {
+      /* v8 (wave266): no prepaid credits: the text waits in the queue (so nothing new is queued for it) and the drain stops */
+      await svc.from('quo_messages').update({ status: 'queued', sent_at: null, error: 'waiting: Quo has no prepaid credits' }).eq('id', r.id);
+      await svc.from('app_config').upsert({ key: 'sms_credit_hold', value: new Date().toISOString() + ' ' + err.slice(0, 160), updated_at: new Date().toISOString() },
+        { onConflict: 'key', ignoreDuplicates: true });
+      held = true; break;
+    } else if (err.startsWith('400')) {
+      /* v8 (wave266): Quo refuses this number (A2P, for example): blocked, never sent or queued again */
+      blocked++; await svc.from('quo_messages').update({ status: 'blocked', sent_at: null, error: err || 'refused' }).eq('id', r.id);
+    } else { failed++; await svc.from('quo_messages').update({ status: 'failed', sent_at: null, error: err || 'failed' }).eq('id', r.id); }
     await new Promise(res => setTimeout(res, 250));
   }
-  return { mode, sent, skipped, failed, waiting, window_open: open };
+  return { mode, sent, skipped, failed, blocked, waiting, held_no_credits: held, window_open: open };
+}
+
+/* ---------- v8 (wave266): one alert email to the team ---------- */
+async function alertMail(body: any): Promise<Record<string, unknown>> {
+  const to = (Array.isArray(body.to) ? body.to : []).map((x: unknown) => String(x || '').trim().toLowerCase())
+    .filter((x: string) => /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/.test(x)).slice(0, 12);
+  const subject = String(body.subject || '').replace(/[\r\n]+/g, ' ').trim().slice(0, 150);
+  const text = String(body.text || '').slice(0, 4000);
+  const tag = String(body.tag || '').slice(0, 120);
+  if (!to.length || !subject || !text) return { error: 'to, subject and text required' };
+  const key = Deno.env.get('RESEND_API_KEY') || await getSecret('RESEND_API_KEY').catch(() => '');
+  if (!key) return { error: 'The Resend key is not set (RESEND_API_KEY).' };
+  const from = 'Welfare Avenue Hub <' + ((await cfg('mail_from_email')) || 'info@welfareavenue.com') + '>';
+  const reply = (await cfg('mail_reply_to')) || undefined;
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST', headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to, subject, text, reply_to: reply }),
+  });
+  const raw = (await res.text()).slice(0, 300);
+  let id = '';
+  try { id = String(JSON.parse(raw).id || ''); } catch (_) { /* fine */ }
+  await svc.from('change_log').insert({ entity_type: 'sms_alert', entity_id: tag || 'alert', field: 'email', old_value: to.join(','),
+    new_value: ((res.ok ? 'sent ' + id : 'failed ' + res.status + ' ' + raw) + ' | ' + subject).slice(0, 400), changed_by: 'quo-send v8' });
+  return { ok: res.ok, status: res.status, id, to: to.length };
 }
 
 /* ---------- the team's replies typed in the Quo app, copied into the Hub (v6) ---------- */
@@ -469,6 +514,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'thread') return json(await thread(String(body.phone || '')));
     if (action === 'sync_threads') { if (!auth.system) return json({ error: 'sync_threads is for the Hub itself' }, 403); return json(await syncThreads()); }
     if (action === 'delivery') { const ev = Number(body.event_id); return json(await delivery(Number.isInteger(ev) && ev > 0 ? ev : null)); }   /* v7 */
+    if (action === 'alert') { if (!auth.system) return json({ error: 'alert is for the Hub itself' }, 403); return json(await alertMail(body)); }   /* v8 */
     if (action === 'send') return await manual(body, auth);
     return json({ error: 'unknown action' }, 400);
   } catch (e) {

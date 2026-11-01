@@ -1,4 +1,8 @@
-// Welfare Avenue: form-submit (v8, 15/10/26, wave244: a multi question's options carry their description (d) and the
+// Welfare Avenue: form-submit (v9, 26/10/26, wave264: a choice question with source "organizations" lists the organizations
+//   volunteers come from (volunteer_orgs: listed and on_form, in the form's language) and "Other (not listed)" with a box for
+//   the name (answers[<qid>__other], 2 to 120 characters); the answer goes to mapped.org ({id} or {other}) and the database's
+//   trigger wa264_submission_org files it on the person, the application and the roster rows.
+// v8, 15/10/26, wave244: a multi question's options carry their description (d) and the
 //   question its most picks (max, the volunteer roles: 2), checked on submit. v7, 07/10/26, wave216d: each open position option carries its job description's public PDF (u)
 //   and whether it is a leadership role (lead); the positions question carries lead_note, shown by the page only when a
 //   leadership role is picked. v6, 07/10/26, wave216: application forms (kind application, "Join our team"): a choice question
@@ -34,7 +38,7 @@
 // website account's session; the checks above do the rest. CORS: the Hub, the website and the Hub's Netlify name. Never
 // says whether an email is already known. Secrets (vault): WA_FORM_SECRET signs the tokens and keys the IP hash;
 // WA_TRIGGER_SECRET for tests and for calling mail-send. Tables: crm_forms, crm_form_submissions, volunteer_events,
-// app_config (read), crm_form_apply() (write).
+// app_config, volunteer_orgs (read), crm_form_apply() (write).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -55,8 +59,8 @@ const MON_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
 const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const T = {
-  en: { max: 'Please pick at most {n}.', required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application' },
-  fr: { max: 'Veuillez en choisir {n} au plus.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale' }
+  en: { max: 'Please pick at most {n}.', required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application', other: 'Please write the name of your organization.', otherOpt: 'Other (not listed)', otherBox: 'Name of your organization' },
+  fr: { max: 'Veuillez en choisir {n} au plus.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale', other: 'Veuillez écrire le nom de votre organisme.', otherOpt: 'Autre (pas dans la liste)', otherBox: 'Nom de votre organisme' }
 };
 
 // deno-lint-ignore no-explicit-any
@@ -103,6 +107,13 @@ async function positionOpts(lang: string): Promise<Array<{ v: string; l: string 
   const { data } = await svc.rpc('wa216_open_positions');
   return [...((data || []) as Json[]).map((p: Json) => ({ v: 'p:' + p.id, l: String(p.title), ...(p.jd_url ? { u: String(p.jd_url) } : {}), ...(p.leadership ? { lead: true } : {}) })), { v: 'general', l: T[lang === 'fr' ? 'fr' : 'en'].general }];
 }
+// v9 (wave264): the organizations on the forms, by name in the form's language (French name when there is one)
+async function orgOpts(lang: string): Promise<Array<{ v: string; l: string }>> {
+  const { data } = await svc.from('volunteer_orgs').select('id,name,name_fr').eq('status', 'listed').eq('on_form', true).limit(400);
+  const fr = lang === 'fr';
+  return ((data || []) as Json[]).map((o: Json) => ({ v: 'o:' + o.id, l: String((fr && o.name_fr) || o.name) }))
+    .sort((a, b) => a.l.localeCompare(b.l, fr ? 'fr' : 'en', { sensitivity: 'base' }));
+}
 async function org(): Promise<Json> {
   const { data } = await svc.from('app_config').select('key,value').in('key', ['mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number']);
   const m: Record<string, string> = {}; (data || []).forEach((r: Json) => { m[r.key] = r.value; });
@@ -127,13 +138,17 @@ async function coverOf(form: Json): Promise<Json> {
 async function publicForm(form: Json): Promise<Json> {
   const dates = (form.questions || []).some((q: Json) => q.type === 'serving_dates') ? await openDates(form) : [];
   const positions = (form.questions || []).some((q: Json) => q && q.source === 'positions') ? await positionOpts(form.lang) : [];
+  const orgList = (form.questions || []).some((q: Json) => q && q.source === 'organizations') ? await orgOpts(form.lang) : [];   // v9 (wave264)
+  const TL = T[form.lang === 'fr' ? 'fr' : 'en'];
   return {
     slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '', cover: await coverOf(form),
     questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => {
       const to = String(q.to || ''), fill = to.startsWith('contact.') && FILLS.includes(to.slice(8)) ? to.slice(8) : '';
       return {
         id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
-        options: q.type === 'serving_dates' ? dates : q.source === 'positions' ? positions : opts(q), ...(fill ? { fill } : {}),
+        options: q.type === 'serving_dates' ? dates : q.source === 'positions' ? positions
+          : q.source === 'organizations' ? [...orgList, { v: 'other', l: String(q.other_label || TL.otherOpt), other: true }] : opts(q), ...(fill ? { fill } : {}),
+        ...(q.source === 'organizations' ? { other_box: String(q.other_box || TL.otherBox) } : {}),   // v9 (wave264)
         ...(q.source === 'positions' && q.lead_note ? { lead_note: String(q.lead_note) } : {}),
         ...(q.type === 'multi' && Number(q.max) > 0 ? { max: Number(q.max) } : {}),   // v8 (wave244)
         ...(q.type === 'file' ? { accept: Object.keys(FILE_EXT).map(x => '.' + x).join(','), max_mb: MAX_FILE / 1048576 } : {})
@@ -172,7 +187,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
   for (const pq of pub.questions) {
     const q = byId[pq.id] || {};
     const raw = answers ? answers[pq.id] : undefined;
-    let val: Json = null, shown = '';
+    let val: Json = null, shown = '', otherTxt = '';
     const empty = raw == null || (typeof raw === 'string' && raw.trim() === '') || (Array.isArray(raw) && raw.length === 0);
     if (empty) { if (pq.required) errors[pq.id] = pq.type === 'file' ? t.file : t.required; continue; }
     const s = typeof raw === 'string' ? raw.trim() : '';
@@ -184,7 +199,14 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
       case 'number': { const n = Number(s); if (s === '' || !isFinite(n)) { errors[pq.id] = t.number; break; } val = n; shown = String(n); break; }
       case 'date': { if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) { errors[pq.id] = t.date; break; } val = s; shown = s; break; }
       case 'yes_no': { if (s !== 'yes' && s !== 'no') { errors[pq.id] = t.choice; break; } val = s === 'yes'; shown = val ? t.yes : t.no; break; }
-      case 'choice': { const o = pq.options.find((x: Json) => x.v === s); if (!o) { errors[pq.id] = t.choice; break; } val = o.v; shown = o.l; break; }
+      case 'choice': { const o = pq.options.find((x: Json) => x.v === s); if (!o) { errors[pq.id] = t.choice; break; } val = o.v; shown = o.l;
+        if (o.other) {   // v9 (wave264): Other (not listed) needs the name
+          const ot = typeof answers[pq.id + '__other'] === 'string' ? String(answers[pq.id + '__other']).replace(/\s+/g, ' ').trim() : '';
+          if (ot.length < 2) { errors[pq.id] = t.other; break; }
+          if (ot.length > 120) { errors[pq.id] = t.long; break; }
+          otherTxt = ot; clean[pq.id + '__other'] = ot; shown = o.l + ': ' + ot;
+        }
+        break; }
       case 'file': { if (!raw || typeof raw !== 'object' || !raw.path) { errors[pq.id] = t.file; break; } val = { path: String(raw.path), name: String(raw.name || 'CV') }; shown = String(raw.name || 'CV'); break; }
       case 'multi': case 'serving_dates': {
         const list = Array.isArray(raw) ? raw.map((x: Json) => String(x)) : [];
@@ -203,6 +225,10 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
     else if (to === 'volunteer.roles') mapped.roles = Array.isArray(val) ? val : [val];
     else if (to === 'volunteer.dates') mapped.dates = Array.isArray(val) ? val : [val];
     else if (to.startsWith('field:')) mapped.fields[to.slice(6)] = val;
+    else if (to === 'volunteer.organization') {   // v9 (wave264)
+      if (val === 'other') { if (otherTxt) mapped.org = { other: otherTxt }; }
+      else if (/^o:\d+$/.test(String(val))) mapped.org = { id: Number(String(val).slice(2)) };
+    }
     else if (to === 'note') mapped.note = String(val);
     else if (to.startsWith('application.')) {
       mapped.application = mapped.application || {};

@@ -1,4 +1,7 @@
-// Welfare Avenue: host-sync (v14, 12/10/26)
+// Welfare Avenue: host-sync (v15, 26/10/26)
+// v15 (wave265): also deploys Ask the Hub for guests, /ask/index.html (served for /ask and /ask/* by _redirects): the page where
+// the JDCC 2027 Charity Case delegates and other invited guests sign in with a personal link and ask about Welfare Avenue
+// (it talks only to the ask-guest edge function).
 // v14 (wave231): also deploys platform verification files at the site root: every site_files path that looks like
 // tiktok<letters and digits>.txt (TikTok for Developers' "Verify URL prefix" file for https://hub.welfareavenue.com/).
 // They are plain text, one row each; add or remove the row and run host-sync.
@@ -125,8 +128,8 @@ Deno.serve(async (req: Request) => {
     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
   } catch (_) { /* headers optional */ }
   // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page; v11: the still-interested page;
-  // v12: the app manifest, the service worker and the icons (the .png files are base64 in site_files)
-  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'i/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', 'links/index.html', '_redirects',
+  // v12: the app manifest, the service worker and the icons (the .png files are base64 in site_files); v15: Ask the Hub for guests
+  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'i/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', 'links/index.html', 'ask/index.html', '_redirects',
     'manifest.webmanifest', 'sw.js', 'icons/hub-192.png', 'icons/hub-512.png', 'icons/hub-maskable-512.png', 'icons/hub-badge-96.png', 'icons/apple-touch-180.png']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
@@ -136,7 +139,6 @@ Deno.serve(async (req: Request) => {
       }
     } catch (_) { /* optional */ }
   }
-
   // v14: platform verification files at the root (tiktok<id>.txt), one plain-text row each
   try {
     const { data: vf } = await svc.from('site_files').select('path, part, content').like('path', 'tiktok%').order('part', { ascending: true });
@@ -153,7 +155,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v14'
+      changed_by: 'host-sync v15'
     });
   } catch (_) { /* audit only */ }
 

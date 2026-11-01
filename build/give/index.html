@@ -22,7 +22,10 @@
      v5 (15/10/26, the Holiday Gift Basket Drive page): ?c=<slug> asks the donate function for a campaign (app_config
      donate_campaigns); when it is open, the page shows the campaign's title and words, locks where the gift goes (no choice
      to make), keeps to one-time gifts when the campaign says so, and sends the campaign with the checkout, so the gift lands
-     under the campaign in the CRM. give/embed.js passes it from a button's data-wa-campaign. Without ?c= nothing changed. -->
+     under the campaign in the CRM. give/embed.js passes it from a button's data-wa-campaign. Without ?c= nothing changed.
+     v6 (17/10/26, the drive page's "what your gift provides" tiers): ?a=<whole dollars> chooses that amount when the page
+     opens (one of the amount buttons when it is one, else typed into Other amount), only between the function's min and max;
+     give/embed.js passes it from a button's data-wa-amount. Without ?a= nothing changed. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
 *{box-sizing:border-box}
@@ -128,6 +131,8 @@ a{color:var(--green)}
   var L = q.get('lang') === 'fr' ? 'fr' : 'en', FR = L === 'fr';
   /* v5 (15/10/26): a campaign link (?c=<slug>, e.g. the Holiday Gift Basket Drive page's buttons) */
   var CAMP = (function (c) { c = String(c || '').toLowerCase(); return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : ''; })(q.get('c'));
+  /* v6 (17/10/26): an amount asked for by the link (?a=<whole dollars>, e.g. the drive page's tiers) */
+  var ASK = (function (a) { a = String(a || ''); return /^[1-9][0-9]{0,5}$/.test(a) ? Number(a) : 0; })(q.get('a'));
   waLogoLang(FR);
   var W = {
     en: { cancelled: 'No payment was made. You can change anything below and try again.', charity: ' · Registered charity ',
@@ -425,7 +430,8 @@ a{color:var(--green)}
       var first = !S.cfg;
       S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
       if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String((camp() && camp().photo) || S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
-      if (first) { if (camp() && !camp().monthly) S.freq = 'once'; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+      if (first) { if (camp() && !camp().monthly) S.freq = 'once'; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0];
+        if (ASK && ASK >= S.cfg.min && ASK <= S.cfg.max) { if (a.indexOf(ASK) >= 0) S.amount = ASK; else S.other = String(ASK); } } /* v6 */
       if (first && camp()) document.title = cf('title');
       if (S.cfg.mode !== 'live' && !q.get('preview')) {
         var mail = S.cfg.org.email || 'info@welfareavenue.com';

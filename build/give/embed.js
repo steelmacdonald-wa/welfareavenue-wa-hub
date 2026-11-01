@@ -12,7 +12,9 @@
    while a payment is open, a click outside the popup does not close it. Escape and the close button always do.
    15/10/26 (the Holiday Gift Basket Drive page): a button with data-wa-campaign="<slug>" (or a link with c=<slug>) opens the
    page for that campaign (?c=<slug>), which locks where the gift goes and tags the gift with the campaign; when a gift is
-   complete, the window gets a wa-donate-done event (detail {campaign}), so a page can refresh its progress. */
+   complete, the window gets a wa-donate-done event (detail {campaign}), so a page can refresh its progress.
+   17/10/26 (the drive page's "what your gift provides" tiers): a button with data-wa-amount="<whole dollars>" (or a link
+   with a=<dollars>) opens the page with that amount chosen (?a=<dollars>); the page itself keeps it between its min and max. */
 (function () {
   'use strict';
   if (window.WADonate) return;
@@ -28,6 +30,11 @@
     if (!c) { var m = /[?&]c=([a-z0-9-]+)/i.exec(t && t.getAttribute ? (t.getAttribute('href') || '') : ''); c = m ? m[1] : ''; }
     c = String(c).toLowerCase();
     return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : '';
+  }
+  function amtOf(t) { /* 17/10/26: the amount a button asks for (data-wa-amount, or a= in its link), whole dollars */
+    var a = t && t.getAttribute ? (t.getAttribute('data-wa-amount') || '') : '';
+    if (!a) { var m = /[?&]a=([0-9]+)/.exec(t && t.getAttribute ? (t.getAttribute('href') || '') : ''); a = m ? m[1] : ''; }
+    return /^[1-9][0-9]{0,5}$/.test(String(a)) ? String(a) : '';
   }
   var camp = '';
   var WORDS = { en: { title: 'Give to Welfare Avenue', close: 'Close', loading: 'Loading…', failed: 'The giving page did not load here.', tab: 'Open it in a new tab' },
@@ -52,7 +59,8 @@
     css();
     last = trigger || document.activeElement;
     camp = campOf(trigger);
-    var fr = isFr(trigger), w = WORDS[fr ? 'fr' : 'en'], cq = camp ? 'c=' + camp : '', src = SRC + (fr ? '&lang=fr' : '') + (cq ? '&' + cq : ''),
+    var amt = amtOf(trigger), fr = isFr(trigger), w = WORDS[fr ? 'fr' : 'en'], cq = [camp ? 'c=' + camp : '', amt ? 'a=' + amt : ''].filter(Boolean).join('&'),
+      src = SRC + (fr ? '&lang=fr' : '') + (cq ? '&' + cq : ''),
       page = HUB + '/give' + (fr || cq ? '/?' + [fr ? 'lang=fr' : '', cq].filter(Boolean).join('&') : '');
     paying = false; contentH = 0;
     back = document.createElement('div');

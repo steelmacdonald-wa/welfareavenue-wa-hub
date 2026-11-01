@@ -55,3 +55,11 @@
 /links/*
   X-Frame-Options: SAMEORIGIN
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com https://*.cdninstagram.com https://*.fbcdn.net; connect-src 'self'; frame-src https://www.youtube-nocookie.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'
+# wave265 (26/10/26): Ask the Hub for guests (/ask and /ask/*). The page talks only to the ask-guest function on Supabase
+# (connect-src); staff sign-in for Manage loads supabase-js from cdn.jsdelivr.net (the only script host); never framed.
+/ask
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+/ask/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
