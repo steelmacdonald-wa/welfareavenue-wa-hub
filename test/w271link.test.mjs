@@ -7,7 +7,7 @@ import { loadFn } from './w271rig.mjs';
 
 const URL_ = 'https://stub.supabase.test/functions/v1/onboard-link';
 const NOTIFY = 'https://stub.supabase.test/functions/v1/notify';
-const NOW = '2026-11-01T15:00:00Z';   // 10:00 in Toronto on 01/11/26, the day the clocks go back
+const NOW = '2026-11-01T12:00:00Z';   // 07:00 in Toronto on 01/11/26, the day the clocks go back: the whole of the first day is still ahead
 
 const candidate = (over = {}) => ({
   id: 11, name: 'Alex Tremblay', role: 'Program Coordinator', status: 'offer', owner: 'Ruth Owen', email: 'alex@example.com',
@@ -240,18 +240,20 @@ test('the grid window starts today in Toronto and keeps wall-clock times across 
   assert.equal(w1.days[0].open, '2026-11-01T13:00:00Z');
   assert.equal(w1.slots.length, 14 * 26);
 
-  const eve = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-10-31T15:00:00Z' });   // 31/10/26
+  const eve = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-10-31T11:00:00Z' });   // 07:00 on 31/10/26
   const w0 = (await eve.get(eve.offer)).body.grid;
   assert.equal(w0.days[0].date, '2026-10-31');
   assert.equal(w0.days[0].close, '2026-11-01T01:00:00Z', '21:00 on 31/10/26 in Toronto');
   assert.equal(w0.days[1].open, '2026-11-01T13:00:00Z', 'the day after the change still opens at 8:00 local');
 
-  // today is the Toronto date even when it is already tomorrow in UTC
-  const late = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-11-02T03:30:00Z' });
-  assert.equal((await late.get(late.offer)).body.grid.days[0].date, '2026-11-01');
+  // today is the Toronto date even when it is already tomorrow in UTC (20:10 on 01/11/26 here: one cell of the day is left)
+  const late = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-11-02T01:10:00Z' });
+  const wl = (await late.get(late.offer)).body.grid;
+  assert.equal(wl.days[0].date, '2026-11-01');
+  assert.equal(wl.days[0].open, '2026-11-02T01:30:00Z');
 
   // a window across the spring change (14/03/27): every slot of every day is a local 8:00 to 20:30
-  const spring = await setup({ cand: { accepted_on: '2027-03-01' }, flows: [flow()], now: '2027-03-10T15:00:00Z' });
+  const spring = await setup({ cand: { accepted_on: '2027-03-01' }, flows: [flow()], now: '2027-03-10T12:00:00Z' });
   const w2 = (await spring.get(spring.offer)).body.grid;
   assert.ok(w2.days.some((d) => d.date === '2027-03-14') && w2.days.some((d) => d.date === '2027-03-13'));
   const wall = w2.slots.map(toronto);
@@ -282,7 +284,7 @@ test('grid POST: slots outside the window, off the cell boundary, malformed or o
   const bads = {
     'before the window opens (07:30 local)': [t(slots[0], -30 * 60000)],
     'at the closing time itself (21:00 local)': [t(slots[25], 30 * 60000)],
-    'yesterday': [t(slots[0], -24 * 3600000)],
+    'a bygone slot that is not on a cell': [t(slots[0], -24 * 3600000 + 10 * 60000)],
     'after the last day': [t(slots[slots.length - 1], 24 * 3600000)],
     'ten minutes off a cell': [t(slots[3], 10 * 60000)],
     'a second off a cell': [t(slots[3], 1000)],
@@ -311,7 +313,7 @@ test('a valid grid POST replaces the set and can be repeated; the manager has th
   const { slots } = (await s.get(s.offer)).body.grid;
   const first = await s.post({ t: s.offer, a: 'grid', slots: [slots[4], slots[2]] });
   assert.equal(first.status, 200);
-  assert.deepEqual(first.body, { ok: true, saved: 2, slotsSaved: [slots[2], slots[4]], closed: false });
+  assert.deepEqual(first.body, { ok: true, saved: 2, dropped: 0, slotsSaved: [slots[2], slots[4]], closed: false });
   const rows = () => s.db.rows('hub_onboard_grids');
   assert.equal(rows().length, 1);
   assert.deepEqual([rows()[0].flow_id, rows()[0].who], [11, 'hire']);
@@ -404,4 +406,55 @@ test('every message is in English and French and uses Hub words', async () => {
   }
   assert.match(seen[1].message.en, /HR/);
   assert.match(seen[1].message.fr, /RH/);
+});
+
+test('past cells are not offered: a cell that has started is gone from the window, and a day with none left drops out', async () => {
+  const s = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-11-01T15:00:00Z' });   // 10:00 on 01/11/26
+  const g = (await s.get(s.offer)).body.grid;
+  assert.equal(g.days[0].date, '2026-11-01');
+  assert.equal(g.days[0].open, '2026-11-01T15:30:00Z', 'the first day opens at the next cell, 10:30');
+  assert.equal(g.days[0].close, '2026-11-02T02:00:00Z');
+  assert.equal(g.slots[0], '2026-11-01T15:30:00Z');
+  assert.equal(g.slots.length, 14 * 26 - 5, '08:00 to 10:00 have started');
+  assert.equal(g.slots.includes('2026-11-01T15:00:00Z'), false, 'a cell starting right now has started');
+  // marking only a cell that has started saves nothing and says so
+  const past = await s.post({ t: s.offer, a: 'grid', slots: ['2026-11-01T13:00:00Z'] });
+  assert.equal(past.status, 200);
+  assert.deepEqual([past.body.saved, past.body.dropped, past.body.slotsSaved], [0, 1, []]);
+  const mixed = await s.post({ t: s.offer, a: 'grid', slots: ['2026-11-01T13:00:00Z', g.slots[0]] });
+  assert.deepEqual([mixed.body.saved, mixed.body.dropped, mixed.body.slotsSaved], [1, 1, [g.slots[0]]]);
+  // after the last cell of the day the day is gone
+  s.rig.setNow('2026-11-02T01:40:00Z');   // 20:40
+  const next = (await s.get(s.offer)).body;
+  assert.equal(next.grid.days[0].date, '2026-11-02');
+  assert.equal(next.grid.days.length, 13, 'the window still ends 14 days after today (01/11), so it is one day shorter');
+  assert.deepEqual(next.slotsSaved, [], 'the saved cell is behind us');
+});
+
+test('a return visit on a later day: old slots are not shown, and echoing them back saves instead of looping on bad_slots', async () => {
+  const s = await setup({ cand: { accepted_on: '2026-11-01' }, flows: [flow()] });   // 07:00 on 01/11/26
+  const day1 = (await s.get(s.offer)).body.grid.slots;
+  const [monday, tuesday, wednesday] = [day1[0], day1[26 + 4], day1[52 + 8]];   // 01/11, 02/11 and 03/11
+  assert.equal((await s.post({ t: s.offer, a: 'grid', slots: [monday, tuesday, wednesday] })).body.saved, 3);
+  s.rig.setNow('2026-11-03T12:00:00Z');   // 07:00 on 03/11: day 3 of the offer
+  const back = (await s.get(s.offer)).body;
+  assert.equal(back.grid.days[0].date, '2026-11-03');
+  assert.deepEqual(back.slotsSaved, [wednesday], 'only what is still ahead');
+  const fresh = back.grid.slots[10];
+  // a page that sends everything it ever held, plus a new pick
+  const echo = await s.post({ t: s.offer, a: 'grid', slots: [monday, tuesday, wednesday, fresh] });
+  assert.equal(echo.status, 200);
+  assert.deepEqual([echo.body.saved, echo.body.dropped], [2, 2]);
+  assert.deepEqual(echo.body.slotsSaved, [wednesday, fresh]);
+  assert.deepEqual(s.db.rows('hub_onboard_grids')[0].slots.map((x) => new Date(x).toISOString().replace('.000Z', 'Z')), [wednesday, fresh], 'the stale ones are gone from the row');
+  // and a page that echoes exactly what GET gave it
+  const again = await s.post({ t: s.offer, a: 'grid', slots: (await s.get(s.offer)).body.slotsSaved });
+  assert.equal(again.body.saved, 2);
+  assert.equal(again.body.dropped, 0);
+  // off the cell boundary stays an error, even for a time that is in the past
+  for (const off of ['2026-11-01T13:10:00Z', '2026-11-03T13:10:00Z', '2026-11-01T13:00:30Z']) {
+    const r = await s.post({ t: s.offer, a: 'grid', slots: [wednesday, off] });
+    assert.equal(r.body.error, 'bad_slots', off);
+  }
+  assert.equal((await s.post({ t: s.offer, a: 'grid', slots: [wednesday, '2026-12-30T14:00:00Z'] })).body.error, 'bad_slots', 'beyond the end of the window');
 });
