@@ -789,11 +789,11 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
   if (when.at === instant(old)) return no('same_time', 'That is already the time of the ' + word + '. Pick a different one.', 400);
 
   const eventId: string | null = f[COLUMN[kind]] || null;
-  let t = '', attendees: Array<{ email: string }> = [];
+  let t = '', invite: Invite = { to: [], prefix: '', live: true };
   if (!f.practice && eventId) {   // who the invite goes to is worked out first: in mail test mode that is the test inboxes
     try {
       t = await calToken();
-      attendees = (await inviteList(await makeCtx(f, by, asUser), c, kind)).to.map((email) => ({ email }));
+      invite = await inviteList(await makeCtx(f, by, asUser), c, kind);
     } catch (e) { return no('google', errText(e).replace(/\s*(Add it, then p|P)ress Retry\.$/, '') + ' The ' + word + ' was not changed.', 409); }
   }
   const { data: won, error } = await svc.from('hub_onboard_flows').update({ [col]: when.at, updated_at: new Date().toISOString() }).eq('id', f.id).in('status', AFTER_START).eq(col, old).select('id');
@@ -807,15 +807,41 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
     const { error: moveError } = await svc.rpc('wa271_move_start', { p_onboarding: f.onboarding_id, p_new: torontoDate(when.at) });
     if (moveError) { await back(); return no('save', 'The plan dates could not move: ' + moveError.message + '. The onboarding call was not changed.', 500); }
   }
+  /* no plan yet (its step failed) but the roster step has set day one on the profile and the card: those follow the call too, and go back if it does not move */
+  let dates: { member: Row | null } | null = null;
+  const day = torontoDate(when.at);
+  if (kind === 'call' && !f.onboarding_id && c.member_id && (await readSteps(f.id)).find((r) => r.step === 'roster')?.status === 'done') {
+    const { data: member } = await svc.from('team_members').select('start_date, start_source').eq('id', c.member_id).maybeSingle();
+    dates = { member };
+    const first = await svc.from('team_members').update({ start_date: day, start_source: 'manual' }).eq('id', c.member_id);
+    const second = first.error ? first : await svc.from('hub_candidates').update({ start_date: day, updated_at: new Date().toISOString(), updated_by: by }).eq('id', c.id);
+    if (first.error || second.error) {
+      await restoreDates(c, dates, by);
+      await back();
+      return no('save', 'The start date on the roster profile or the card could not move: ' + (first.error || second.error)!.message + '. The onboarding call was not changed.', 500);
+    }
+  }
+  const undo = async () => {
+    await back();
+    if (movePlan) await svc.rpc('wa271_move_start', { p_onboarding: f.onboarding_id, p_new: torontoDate(old) });
+    if (dates) await restoreDates(c, dates, by);
+  };
   const warnings: string[] = [];
   if (eventId) {
     const minutes = kind === 'call' ? await cfgNum('onboard_call_min', 60) : await cfgNum('onboard_one_on_one_min', 30);
     const out = await patchEvent(t, eventId, {
-      start: { dateTime: new Date(when.at).toISOString(), timeZone: TZ }, end: { dateTime: new Date(Date.parse(when.at) + minutes * 60000).toISOString(), timeZone: TZ }, attendees,
+      start: { dateTime: new Date(when.at).toISOString(), timeZone: TZ }, end: { dateTime: new Date(Date.parse(when.at) + minutes * 60000).toISOString(), timeZone: TZ }, attendees: invite.to.map((email) => ({ email })),
     });
-    if (!out.ok) {
-      await back();
-      if (movePlan) await svc.rpc('wa271_move_start', { p_onboarding: f.onboarding_id, p_new: torontoDate(old) });
+    if (!out.ok && (out.status === 404 || out.status === 410)) {   // the event was deleted in Calendar: HR can still set the time, so book it again at the new one
+      try {
+        await bookEvent(await makeCtx({ ...f, [col]: when.at }, by, asUser), t, c, kind, invite);
+        warnings.push('The ' + word + ' invite had been deleted from Calendar, so a new one was sent for the new time.');
+      } catch (e) {
+        await undo();
+        return no('google', errText(e).replace(/\s*Press Retry\.$/, '') + ' The ' + word + ' was not changed.', 502);
+      }
+    } else if (!out.ok) {
+      await undo();
       return no('google', 'Google refused to move the ' + word + ' invite: ' + why(out) + '. The ' + word + ' was not changed.', 502);
     }
   } else warnings.push('There is no ' + word + ' invite yet, so Google was not asked. The new time is used when the invites are sent.');
@@ -832,6 +858,11 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
   );
   if (told) warnings.push(told);
   return json({ ok: true, which, at: when.at, warnings });
+}
+
+async function restoreDates(c: Row, d: { member: Row | null }, by: string): Promise<void> {   // best effort: puts back what the call move changed on the profile and the card
+  await svc.from('team_members').update({ start_date: d.member?.start_date ?? null, start_source: d.member?.start_source ?? null }).eq('id', c.member_id);
+  await svc.from('hub_candidates').update({ start_date: c.start_date ?? null, updated_at: new Date().toISOString(), updated_by: by }).eq('id', c.id);
 }
 
 async function changeManager(b: Row, by: string, asUser: Row): Promise<Response> {
@@ -943,6 +974,7 @@ async function backedOut(b: Row, by: string, asUser: Row): Promise<Response> {
   const status = new Map((await readSteps(f.id)).map((r) => [r.step, r.status]));
   const remove: string[] = [];
   if (status.get('google') === 'done' && f.wa_email) remove.push('Google account ' + f.wa_email + ': suspend or delete it in Google Admin.');
+  if (status.get('roster') === 'done' && c.member_id) remove.push('Roster profile' + (f.wa_email ? ' (' + f.wa_email + ')' : '') + ': the Hub leaves it as it is. Deactivate it by hand in Roster.');
   if (f.slack_channel_id) remove.push('Slack onboarding channel ' + f.slack_channel_id + ': archive it.');
   if (status.get('hub') === 'done') remove.push('Hub access' + (f.wa_email ? ' for ' + f.wa_email : '') + ': remove it from Roster.');
   return json({ ok: true, remove, warnings });

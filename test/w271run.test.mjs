@@ -1130,7 +1130,8 @@ test('backed_out cancels both events, closes the onboarding and the flow, withdr
   assert.ok(o.completed_at, 'closed the way the Hub closes a plan');
   assert.equal(s.cand().status, 'withdrawn');
   assert.equal(s.cand().close_reason, 'Backed out after accepting: Took another job');
-  assert.equal(r.body.remove.length, 3);
+  assert.equal(r.body.remove.length, 4);
+  assert.match(r.body.remove.find((x) => /^Roster profile/.test(x)), /Deactivate it by hand/);
   assert.match(r.body.remove.find((x) => /Google/.test(x)), /alex\.tremblay@welfareavenue\.com/);
   assert.ok(r.body.remove.some((x) => /Slack/.test(x) && /C0NEW/.test(x)));
   assert.ok(r.body.remove.some((x) => /Hub access/.test(x)));
@@ -1145,17 +1146,18 @@ test('backed_out names only what this flow made', async () => {
   const none = await started();
   const r = await none.post({ action: 'backed_out', flow_id: 21, reason: '' });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.remove, [], 'google, hub and slack are HR tasks that were never done');
+  assert.equal(r.body.remove.length, 1, 'google, hub and slack are HR tasks that were never done; only the roster profile Start made');
+  assert.match(r.body.remove[0], /^Roster profile/);
   assert.equal(none.cand().close_reason, 'Backed out after accepting');
 
   const skipped = await started({}, { skip: ['google', 'hub', 'slack', 'welcome'] });
-  assert.deepEqual((await skipped.post({ action: 'backed_out', flow_id: 21, reason: 'x' })).body.remove, []);
+  assert.deepEqual((await skipped.post({ action: 'backed_out', flow_id: 21, reason: 'x' })).body.remove.map((x) => x.split(' ')[0]), ['Roster']);
 
   const googleOnly = await started();
   await googleOnly.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
   const g = await googleOnly.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
-  assert.equal(g.body.remove.length, 1);
-  assert.match(g.body.remove[0], /Google/);
+  assert.equal(g.body.remove.length, 2);
+  assert.ok(g.body.remove.some((x) => /^Google/.test(x)) && g.body.remove.some((x) => /^Roster/.test(x)));
 });
 
 test('backed_out: two presses cancel once; a Google refusal leaves the flow open, an invite already gone does not', async () => {
@@ -1309,4 +1311,90 @@ test('after backed_out the grid and password links of onboard-link are closed', 
   }
   assert.equal((await get(await link.mod.wa271Token('pw', 21, 'nonce1'))).closed, true, 'the password link');
   assert.deepEqual(link.db.tables, before);
+});
+
+/* ---------- fix round 1 ---------- */
+async function noPlan(over = {}) {   // Start has run, but the plan step failed: the roster step has set day one on the profile and the card
+  const s = await setup(over);
+  s.rig.db.onRpc('onboarding_assign', () => { throw new Error('plan is locked'); });
+  assert.equal((await s.start()).status, 200);
+  assert.equal(s.step('plan').status, 'failed');
+  assert.equal(s.flow().onboarding_id, null);
+  s.moved.length = 0;
+  s.rig.fetchLog.length = 0;
+  return s;
+}
+const member = (s) => s.rows('team_members').find((m) => m.id === s.cand().member_id);
+
+test('change_time on the call with no plan yet still moves day one on the profile and the card', async () => {
+  const s = await noPlan();
+  assert.equal(member(s).start_date, '2026-11-01');
+  assert.equal(s.cand().start_date, '2026-11-01');
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 200);
+  assert.equal(member(s).start_date, '2026-11-04');
+  assert.equal(member(s).start_source, 'manual', 'directory-sync leaves it alone');
+  assert.equal(s.cand().start_date, '2026-11-04');
+  assert.equal(s.moved.length, 0, 'there is no plan to move');
+  assert.equal(Date.parse(s.flow().call_at), Date.parse(NEW_CALL));
+});
+
+test('change_time with no plan puts the profile and card dates back when Google refuses', async () => {
+  const s = await noPlan();
+  s.calReply = () => ({ status: 403, json: { error: { message: 'Forbidden' } } });
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 502);
+  assert.equal(member(s).start_date, '2026-11-01');
+  assert.equal(member(s).start_source, 'manual');
+  assert.equal(s.cand().start_date, '2026-11-01');
+  assert.equal(Date.parse(s.flow().call_at), Date.parse(CALL));
+});
+
+test('change_time with no plan and no roster step done touches no profile, and a 1-on-1 change never moves day one', async () => {
+  const s = await noPlan();
+  s.step('roster').status = 'failed';
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(member(s).start_date, '2026-11-01');
+  const t = await noPlan();
+  await t.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE });
+  assert.equal(member(t).start_date, '2026-11-01');
+  assert.equal(t.cand().start_date, '2026-11-01');
+});
+
+for (const [name, which, id, at, ms] of [['call', 'call', 'onboard21call', NEW_CALL, 60], ['1-on-1', 'one_on_one', 'onboard21oneonone', NEW_ONE, 30]]) {
+  for (const gone of [404, 410]) {
+    test('change_time books the ' + name + ' again at the new time when Calendar says it is gone (' + gone + ')', async () => {
+      const s = await started();
+      s.calReset();
+      s.calReply = (e) => (e.method === 'PATCH' ? { status: gone, json: { error: { message: 'Not Found' } } } : null);
+      const r = await s.post({ action: 'change_time', flow_id: 21, which, at });
+      assert.equal(r.status, 200);
+      assert.equal(Date.parse(s.flow()[which === 'call' ? 'call_at' : 'one_on_one_at']), Date.parse(at));
+      assert.deepEqual(s.calWrites().map((e) => e.method), ['PATCH', 'POST']);
+      const post = s.calWrites()[1];
+      assert.equal(post.body.id, id, 'the same event id');
+      assert.match(post.url, /sendUpdates=all/);
+      assert.equal(post.body.start.dateTime, at);
+      assert.equal(Date.parse(post.body.end.dateTime) - Date.parse(at), ms * 60000);
+      assert.equal(s.flow()[which === 'call' ? 'call_event_id' : 'one_on_one_event_id'], id);
+      assert.ok(r.body.warnings.some((x) => /deleted from Calendar/.test(x) && x.endsWith('.')));
+      assert.equal(s.notifies().length, 1, 'the manager is still told');
+    });
+  }
+}
+
+test('change_time: if booking again also fails, the time, the plan and the dates all go back', async () => {
+  const s = await started();
+  const before = s.snapshot();
+  s.moved.length = 0;
+  s.calReset();
+  s.calReply = (e) => (e.method === 'PATCH' ? { status: 404, json: { error: { message: 'Not Found' } } } : { status: 500, json: { error: { message: 'Backend Error' } } });
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 502);
+  assert.match(r.body.message, /Backend Error/);
+  assert.match(r.body.message, /not changed/);
+  assert.doesNotMatch(r.body.message, /Press Retry/);
+  assert.equal(s.flow().call_at, before.hub_onboard_flows[0].call_at);
+  assert.equal(s.moved.at(-1).p_new, '2026-11-01');
+  assert.equal(s.notifies().length, 0);
 });
