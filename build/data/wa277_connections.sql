@@ -6,7 +6,7 @@
 -- 1. public.studio_platforms: key, label, short, colour, sort, auth, console link and note, connect steps, caps, scopes,
 --    modes, active. Seeded with the six platforms from today's values. Staff read it; admins write it.
 -- 2. public.wa277_platforms(): the whole registry in one call for the Hub (staff and the service role).
--- 3. public.wa277_publishers(): who may publish (admins plus the named approvers); the edge functions call it.
+-- 3. public.wa277_publishers(): who may publish, the set wa225_publisher() allows (admins, marketing leaders, approvers); service role only.
 -- 4. content_slots.platform and social_comments.platform now reference studio_platforms(key) instead of a CHECK list.
 --    Each is guarded: if a row holds a platform outside the six keys the CHECK stays and a notice is raised.
 --    social_accounts.platform keeps its CHECK (it also allows ga4 for analytics accounts, which is not a publishing platform).
@@ -93,17 +93,24 @@ $$;
 revoke all on function public.wa277_platforms() from public, anon;
 grant execute on function public.wa277_platforms() to authenticated, service_role;
 
--- who may publish: admins plus the named approvers (the edge functions call this)
+-- who may publish (final review, wa277_publishers_v2): the same set wa225_publisher() answers true for, over every person:
+-- admins, leaders on the marketing team (profile marketing or an active marketing team_members row), and the approvers
+-- (wa241_approvers); distinct, lower-cased, welfareavenue.com only. Only the edge functions (service role) call it.
 create or replace function public.wa277_publishers()
 returns text[] language sql stable security definer set search_path to '' as $$
-  select coalesce(array_agg(distinct u.e), '{}'::text[]) from (
-    select lower(r.email) as e from public.hub_roles r where r.role = 'admin'
+  select coalesce(array_agg(distinct u.e order by u.e), '{}'::text[]) from (
+    select lower(btrim(r.email)) as e from public.hub_roles r where r.role = 'admin'
     union
-    select lower(x) from unnest(public.wa241_approvers()) x
-  ) u;
+    select lower(btrim(r.email)) from public.hub_roles r
+     where r.role = 'leader'
+       and (r.profile = 'marketing'
+            or exists (select 1 from public.team_members t where lower(t.email) = lower(r.email) and t.active and t.department = 'marketing'))
+    union
+    select lower(btrim(x)) from unnest(public.wa241_approvers()) x
+  ) u where u.e ~ '@welfareavenue\.com$';
 $$;
-revoke all on function public.wa277_publishers() from public, anon;
-grant execute on function public.wa277_publishers() to authenticated, service_role;
+revoke execute on function public.wa277_publishers() from public, anon, authenticated;
+grant execute on function public.wa277_publishers() to service_role;
 
 -- content_slots and social_comments: platform references the registry instead of a CHECK list
 do $do$
