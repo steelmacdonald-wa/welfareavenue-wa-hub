@@ -44,6 +44,8 @@ async function notifyWorld({ prefs = [], subs = [] } = {}) {
   rig.fetchOn('https://slack.com/api/conversations.open', (e) => ({ json: { ok: true, channel: { id: 'D-' + e.body.users } } }));
   rig.fetchOn('https://slack.com/api/chat.postMessage', { json: { ok: true } });
   rig.fetchOn(PUSH, { json: { outcome: 'sent' } });
+  rig.fetchOn('https://slack.com/api/users.lookupByEmail', { json: { ok: false, error: 'users_not_found' } });
+  rig.fetchOn('https://slack.com/api/users.list', { json: { ok: true, members: [] } });
   rig.send = async (body, headers = { 'x-wa-secret': SECRET, Authorization: 'Bearer anon-key-for-tests' }) => {
     const r = await rig.call(new Request(NOTIFY, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }));
     return { status: r.status, body: await r.json() };
@@ -414,4 +416,148 @@ test('remind: when the flows query fails (for example wa271b not applied yet) th
   const again = await w.remind();   // the failure was a one-off: the next hour runs as normal
   assert.equal(again.status, 200);
   assert.equal(again.body.ok, true);
+});
+
+/* ---------- fix round 1: a 200 from notify is not "delivered" ---------- */
+const SAM = 'sam.lee@welfareavenue.com';
+const answer = (outcome, hub = 'off') => () => ({ json: { outcome, hub } });   // notify's answer: HTTP 200 and a word for each person
+const linksSent = (w) => w.sent.filter((m) => m.event === 'onboard_grid').length;
+
+for (const lost of ['failed', 'no_slack', 'no_email']) {
+  test('remind: the manager link is given back when notify says ' + lost + ', listed in skipped, and the next hour sends it', async () => {
+    let word = lost;
+    const w = await runWorld({ notifyReply: (e) => answer({ [SAM]: word })(e) });
+    const r = await w.remind();
+    assert.equal(r.body.grid_links, 0);
+    assert.equal(w.flow().manager_link_sent_at, null);
+    assert.equal(w.flow().manager_link_member_id, null);
+    assert.equal(r.body.skipped.filter((s) => s.includes('grid link') && s.includes(SAM)).length, 1, JSON.stringify(r.body.skipped));
+    word = 'sent';
+    const again = await w.remind();
+    assert.equal(again.body.grid_links, 1);
+    assert.ok(w.flow().manager_link_sent_at);
+    assert.equal(linksSent(w), 2, 'tried twice, delivered once');
+    await w.remind();
+    assert.equal(linksSent(w), 2, 'and then it stops');
+  });
+
+  test('remind: the HR reminder is given back when notify says ' + lost + ' for everyone, and the next hour retries', async () => {
+    let word = lost;
+    const w = await runWorld({ fl: { manager_member_id: 3 }, notifyReply: (e) => answer(Object.fromEntries(HR.map((h) => [h, word])))(e) });
+    const r = await w.remind();
+    assert.equal(r.body.reminded_hr, 0);
+    assert.equal(w.flow().reminded_hire_at, null);
+    assert.ok(r.body.skipped.some((s) => s.includes('HR reminder') && s.includes(HR[0]) && s.includes(HR[1])), JSON.stringify(r.body.skipped));
+    word = 'sent';
+    assert.equal((await w.remind()).body.reminded_hr, 1);
+    assert.ok(w.flow().reminded_hire_at);
+  });
+
+  test('remind: the manager reminder is given back when notify says ' + lost + ', and the next hour retries', async () => {
+    let word = 'sent';
+    const w = await runWorld({ fl: { created_at: '2026-10-20T11:00:00Z', manager_link_sent_at: '2026-10-17T12:00:00Z', manager_link_member_id: 2 }, notifyReply: (e) => answer({ [SAM]: word })(e) });
+    word = lost;
+    const r = await w.remind();
+    assert.equal(r.body.reminded_managers, 0);
+    assert.equal(w.flow().reminded_manager_at, null);
+    assert.ok(r.body.skipped.some((s) => s.includes('manager reminder') && s.includes(SAM)), JSON.stringify(r.body.skipped));
+    word = 'sent';
+    assert.equal((await w.remind()).body.reminded_managers, 1);
+    assert.ok(w.flow().reminded_manager_at);
+  });
+}
+
+test('remind: opted_out is their own choice: handled, marked, and never retried', async () => {
+  const w = await runWorld({ fl: { created_at: '2026-10-15T12:00:00Z' }, notifyReply: (e) => answer(Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'opted_out'])))(e) });
+  const r = await w.remind();
+  assert.equal(r.body.grid_links, 1);
+  assert.equal(r.body.reminded_hr, 1);
+  assert.ok(w.flow().manager_link_sent_at && w.flow().reminded_hire_at);
+  assert.deepEqual(r.body.skipped, []);
+  const before = w.sent.length;
+  await w.remind();
+  assert.equal(w.sent.length, before, 'nothing is sent again');
+});
+
+test('remind: a Hub notification that reached a device counts as reached; one that reached none does not', async () => {
+  const hubOnly = await runWorld({ notifyReply: (e) => answer({ [SAM]: 'no_slack' }, SAM + ': sent to 1 device')(e) });
+  assert.equal((await hubOnly.remind()).body.grid_links, 1);
+  assert.ok(hubOnly.flow().manager_link_sent_at);
+  const two = await runWorld({ notifyReply: (e) => answer({ [SAM]: 'failed' }, 'someone.else@welfareavenue.com: sent to 1 device; ' + SAM + ': sent to 2 devices')(e) });
+  assert.equal((await two.remind()).body.grid_links, 1, 'found among several people in the Hub answer');
+  const none = await runWorld({ notifyReply: (e) => answer({ [SAM]: 'no_slack' }, SAM + ': sent to 0 devices, 1 failed (410)')(e) });
+  assert.equal((await none.remind()).body.grid_links, 0);
+  assert.equal(none.flow().manager_link_sent_at, null);
+  const noDevice = await runWorld({ notifyReply: (e) => answer({ [SAM]: 'no_slack' }, SAM + ': no device')(e) });
+  assert.equal((await noDevice.remind()).body.grid_links, 0);
+  const hubOnlyChoice = await runWorld({ notifyReply: (e) => answer({ [SAM]: 'hub_only' })(e) });
+  assert.equal((await hubOnlyChoice.remind()).body.grid_links, 1, 'hub_only is a Hub delivery by their own choice');
+});
+
+test('remind: HR with several recipients is handled when at least one was reached or opted out, and not when none were', async () => {
+  const cases = [
+    [{ [HR[0]]: 'sent', [HR[1]]: 'no_slack' }, true],
+    [{ [HR[0]]: 'no_email', [HR[1]]: 'sent_channel' }, true],
+    [{ [HR[0]]: 'opted_out', [HR[1]]: 'failed' }, true],
+    [{ [HR[0]]: 'opted_out', [HR[1]]: 'opted_out' }, true],
+    [{ [HR[0]]: 'no_slack', [HR[1]]: 'failed' }, false],
+    [{}, false],
+  ];
+  for (const [outcome, handled] of cases) {
+    const w = await runWorld({ fl: { manager_member_id: 3 }, notifyReply: answer(outcome) });
+    const r = await w.remind();
+    assert.equal(r.body.reminded_hr, handled ? 1 : 0, JSON.stringify(outcome));
+    assert.equal(!!w.flow().reminded_hire_at, handled, JSON.stringify(outcome));
+    if (handled && Object.values(outcome).includes('no_slack')) assert.ok(r.body.skipped.some((s) => s.includes(HR[1]) || s.includes(HR[0])), 'the one missed is named');
+  }
+});
+
+test('step manager: nobody reached makes the step failed, with a sentence HR can act on; Retry then works', async () => {
+  let word = 'no_slack';
+  const w = await runWorld({ notifyReply: (e) => answer({ [SAM]: word })(e) });
+  await w.post({ action: 'start', flow_id: 21, manager_member_id: 2, call_at: CALL, one_on_one_at: ONE, skip: ['google', 'plan', 'invites', 'hub', 'slack', 'welcome'] });
+  assert.equal(w.step('manager').status, 'failed');
+  assert.equal(w.step('manager').detail, 'Sam Lee was not told: they have no Slack account and no Hub notifications on. Tell them yourself, or press Retry.');
+  word = 'sent';
+  const r = await w.post({ action: 'retry', flow_id: 21, step: 'manager' });
+  assert.equal(r.status, 200);
+  assert.equal(w.step('manager').status, 'done');
+  assert.equal(w.step('manager').detail, 'Told Sam Lee the date and time.');
+});
+
+test('step manager: each way of not being reached is a failed step; a Hub delivery is reached', async () => {
+  for (const [word, hub, status] of [['failed', 'off', 'failed'], ['no_email', 'off', 'failed'], ['', 'off', 'failed'], ['no_slack', SAM + ': sent to 1 device', 'done'], ['hub_only', 'off', 'done'], ['sent_channel', 'off', 'done']]) {
+    const w = await runWorld({ notifyReply: answer(word ? { [SAM]: word } : {}, hub) });
+    await w.post({ action: 'start', flow_id: 21, manager_member_id: 2, call_at: CALL, one_on_one_at: ONE, skip: ['google', 'plan', 'invites', 'hub', 'slack', 'welcome'] });
+    assert.equal(w.step('manager').status, status, word + ' / ' + hub);
+    if (status === 'failed') assert.match(w.step('manager').detail, /Sam Lee was not told: .* Tell them yourself, or press Retry[.]$/);
+  }
+});
+
+test('step manager: opted_out is done, and the detail says their switch is off', async () => {
+  const w = await runWorld({ notifyReply: answer({ [SAM]: 'opted_out' }) });
+  await w.post({ action: 'start', flow_id: 21, manager_member_id: 2, call_at: CALL, one_on_one_at: ONE, skip: ['google', 'plan', 'invites', 'hub', 'slack', 'welcome'] });
+  assert.equal(w.step('manager').status, 'done');
+  assert.match(w.step('manager').detail, /Sam Lee was not messaged: their switch for this notification is off/);
+});
+
+test('step manager through the real notify: a manager with no Slack account and no device is a failed step', async () => {
+  const notify = await notifyWorld();
+  notify.db.rows('wa_slack_ids').splice(0, notify.db.rows('wa_slack_ids').length, { email: HR[0], slack_id: 'UHR1' });   // Sam has no Slack row, and Slack cannot find them
+  const w = await runWorld({ notify });
+  await w.post({ action: 'start', flow_id: 21, manager_member_id: 2, call_at: CALL, one_on_one_at: ONE, skip: ['google', 'plan', 'invites', 'hub', 'slack', 'welcome'] });
+  assert.equal(w.step('manager').status, 'failed');
+  assert.match(w.step('manager').detail, /Sam Lee was not told: they have no Slack account and no Hub notifications on/);
+  assert.equal(notify.slack().length, 0);
+});
+
+test('remind: when the manager row was deleted (member id null) the link goes to the manager now named, once', async () => {
+  const w = await runWorld({ fl: { manager_link_sent_at: '2026-10-17T12:00:00Z', manager_link_member_id: null, reminded_manager_at: '2026-10-19T12:00:00Z' } });
+  const r = await w.remind();
+  assert.equal(r.body.grid_links, 1);
+  assert.equal(w.flow().manager_link_member_id, 2);
+  assert.equal(w.flow().reminded_manager_at, null, 'their reminder starts again');
+  assert.equal(linksSent(w), 1);
+  await w.remind();
+  assert.equal(linksSent(w), 1, 'once');
 });

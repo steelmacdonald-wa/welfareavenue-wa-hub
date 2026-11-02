@@ -68,7 +68,7 @@ async function setup({ cand = {}, fl = {}, config = {}, tables = {}, hr = true, 
     const claims = JSON.parse(Buffer.from(e.body.get('assertion').split('.')[1], 'base64url').toString());
     return { json: { access_token: 'tok:' + claims.scope + ':' + claims.sub, expires_in: 3600 } };
   });
-  rig.fetchOn(NOTIFY, (e) => (notifyReply ? notifyReply(e) : { json: { outcome: {}, hub: 'off' } }));
+  rig.fetchOn(NOTIFY, (e) => (notifyReply ? notifyReply(e) : { json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } }));
   rig.fetchOn((u) => u.includes('/calendar/v3/'), (e) => {
     if (s.calReply) { const out = s.calReply(e); if (out) return out; }
     return { json: { id: e.body?.id || e.url.split('/events/')[1]?.split('?')[0], hangoutLink: 'https://meet.example/x' } };

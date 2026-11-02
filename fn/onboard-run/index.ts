@@ -469,6 +469,25 @@ async function addAddressToInvites(ctx: Ctx): Promise<void> {
   }
 }
 
+/* ---------- what notify says happened ---------- */
+/* notify answers 200 with an outcome for each person ({ outcome: { email: sent | sent_channel | hub_only | opted_out | no_slack | no_email | failed }, hub }),
+   so a 200 alone does not mean anyone was told. Reached: the Slack DM went (or the person chose Hub only), or the Hub notification reached a device.
+   opted_out is their own choice and counts as handled. Anything else is not reached, and the caller must be able to try again. */
+const LOST_WHY: Record<string, string> = {
+  no_slack: 'they have no Slack account and no Hub notifications on',
+  no_email: 'they have no email on the roster',
+  failed: 'Slack refused the message and no Hub notification reached them',
+};
+function hubReached(hub: unknown, email: string): boolean {   // hub-push's words: "<email>: sent to 2 devices; <email>: no device"
+  return String(hub ?? '').split(';').some((part) => { const m = /^\s*(.+?): sent to (\d+) device/.exec(part); return !!m && m[1].toLowerCase() === email && Number(m[2]) > 0; });
+}
+function verdict(j: Row, email: string): { kind: 'reached' | 'opted_out' | 'lost'; why: string } {
+  const slack = String(j?.outcome?.[email] ?? '');
+  if (['sent', 'sent_channel', 'hub_only'].includes(slack) || hubReached(j?.hub, email)) return { kind: 'reached', why: '' };
+  if (slack === 'opted_out') return { kind: 'opted_out', why: 'their switch for this notification is off' };
+  return { kind: 'lost', why: LOST_WHY[slack] || 'notify gave no answer for them' };
+}
+
 /* ---------- step: manager ---------- */
 async function runManager(ctx: Ctx): Promise<string> {
   const f = ctx.flow, c = await getCand(f.candidate_id), m = await getMember(f.manager_member_id);
@@ -493,6 +512,9 @@ async function runManager(ctx: Ctx): Promise<string> {
     const j = await res.json().catch(() => ({}));
     throw new Error(m.name + ' was not told: notifications said ' + String(j?.error || res.status).slice(0, 160) + '. Press Retry, or tell them yourself.');
   }
+  const v = verdict(await res.json().catch(() => ({})), String(m.email).toLowerCase());
+  if (v.kind === 'opted_out') return m.name + ' was not messaged: their switch for this notification is off. Tell them yourself if they should know.';
+  if (v.kind === 'lost') throw new Error(m.name + ' was not told: ' + v.why + '. Tell them yourself, or press Retry.');
   return 'Told ' + m.name + ' the date and time.';
 }
 
@@ -712,16 +734,20 @@ const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manage
 const LIVE_FLOW = ['waiting', 'ready', 'running', 'started'];       // a flow that backed out is left alone
 const OPEN_CARD = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // as onboard-link: a card in any other stage is closed
 const slackEsc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-/* one call to notify, as the Hub itself; null when it worked, else the reason */
-async function tell(body: Record<string, unknown>): Promise<string | null> {
+/* one call to notify, as the Hub itself. Handled: at least one person was reached or chose not to be told. Not handled: notify failed, or nobody was reached;
+   the caller gives its claim back so the next hourly run tries again. note says why, or who of several was missed. */
+async function tell(body: Record<string, unknown>): Promise<{ handled: boolean; note: string }> {
   try {
     const res = await fetch(SUPABASE_URL + '/functions/v1/notify', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': await getSecret('WA_TRIGGER_SECRET'), Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify(body),
     });
-    if (res.ok) return null;
     const j = await res.json().catch(() => ({}));
-    return String(j?.error || res.status).slice(0, 160);
-  } catch (e) { return errText(e); }
+    if (!res.ok) return { handled: false, note: 'notify said ' + String(j?.error || res.status).slice(0, 160) };
+    const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map((x) => String(x || '').toLowerCase());
+    const all = to.map((e) => ({ e, ...verdict(j, e) }));
+    const missed = all.filter((x) => x.kind === 'lost').map((x) => x.e + ': ' + x.why).join('; ');
+    return { handled: all.some((x) => x.kind !== 'lost'), note: missed };
+  } catch (e) { return { handled: false, note: errText(e) }; }
 }
 const marked = (grids: Row[], who: string) => grids.some((g) => g.who === who && Array.isArray(g.slots) && g.slots.length > 0);
 
@@ -753,8 +779,8 @@ async function remind(): Promise<Response> {
               body: c.name + ' (' + (c.role || 'new hire') + ') ' + bit + '. Open Onboarding to send the link again or pick a time.',
               text: ':hourglass_flowing_sand: *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') ' + bit + '. <' + HUB + '/#hrcentre/onboarding|Open Onboarding> to send the link again or pick a time.',
             });
-            if (failed) { await svc.from('hub_onboard_flows').update({ reminded_hire_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': HR reminder not sent (' + failed + ')'); }
-            else out.reminded_hr++;
+            if (!failed.handled) { await svc.from('hub_onboard_flows').update({ reminded_hire_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': HR reminder not delivered, will try again (' + failed.note + ')'); }
+            else { out.reminded_hr++; if (failed.note) out.skipped.push('flow ' + f.id + ': HR reminder did not reach ' + failed.note); }
           }
         }
       }
@@ -773,7 +799,8 @@ async function remind(): Promise<Response> {
       if (!f.manager_link_sent_at || String(f.manager_link_member_id) !== String(m.id)) {
         const prev = { manager_link_sent_at: f.manager_link_sent_at ?? null, manager_link_member_id: f.manager_link_member_id ?? null, reminded_manager_at: f.reminded_manager_at ?? null };
         const claim = svc.from('hub_onboard_flows').update({ manager_link_sent_at: new Date().toISOString(), manager_link_member_id: m.id, reminded_manager_at: null }).eq('id', f.id);
-        const { data: won } = await (f.manager_link_sent_at ? claim.eq('manager_link_member_id', f.manager_link_member_id) : claim.is('manager_link_sent_at', null)).select('id');
+        const guarded = !f.manager_link_sent_at ? claim.is('manager_link_sent_at', null) : f.manager_link_member_id == null ? claim.is('manager_link_member_id', null) : claim.eq('manager_link_member_id', f.manager_link_member_id);   // null: the manager's row was deleted
+        const { data: won } = await guarded.select('id');
         if (!(won as unknown[] | null)?.length) continue;
         const failed = await tell({
           event: 'onboard_grid', to_email: String(m.email).toLowerCase(), url: path, tag: 'onboard-grid-' + f.id,
@@ -781,7 +808,7 @@ async function remind(): Promise<Response> {
           body: c.name + ' (' + (c.role || 'new hire') + ') is joining. Please mark when you are free for your 1-on-1 with them. It takes a minute.',
           text: ':calendar: *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') is joining. Please mark when you are free for your 1-on-1 with them. It takes a minute. <' + link + '|Mark my availability>',
         });
-        if (failed) { await svc.from('hub_onboard_flows').update(prev).eq('id', f.id); out.skipped.push('flow ' + f.id + ': grid link not sent (' + failed + ')'); }
+        if (!failed.handled) { await svc.from('hub_onboard_flows').update(prev).eq('id', f.id); out.skipped.push('flow ' + f.id + ': grid link not delivered, will try again (' + failed.note + ')'); }
         else out.grid_links++;
         continue;
       }
@@ -794,7 +821,7 @@ async function remind(): Promise<Response> {
           body: 'You have not marked when you are free for your 1-on-1 with ' + c.name + ' yet. It takes a minute.',
           text: ':hourglass_flowing_sand: You have not marked when you are free for your 1-on-1 with *' + slackEsc(c.name) + '* yet. It takes a minute. <' + link + '|Mark my availability>',
         });
-        if (failed) { await svc.from('hub_onboard_flows').update({ reminded_manager_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': manager reminder not sent (' + failed + ')'); }
+        if (!failed.handled) { await svc.from('hub_onboard_flows').update({ reminded_manager_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': manager reminder not delivered, will try again (' + failed.note + ')'); }
         else out.reminded_managers++;
       }
     } catch (e) {
