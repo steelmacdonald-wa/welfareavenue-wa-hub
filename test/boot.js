@@ -29,7 +29,7 @@ function loadFixture(p) {
 }
 
 async function launch() {
-  return chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  return chromium.launch({ executablePath: process.env.WA_CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 }
 
 async function fresh(browser, o) {
