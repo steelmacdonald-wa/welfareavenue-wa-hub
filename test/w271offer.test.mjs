@@ -184,6 +184,15 @@ test('test mode still goes to the test inbox, and a practice applicant still get
   assert.doesNotMatch(live.mails()[0].body.subject, /TEST|PRACTICE/);
 });
 
+test('I6: the offer goes out from the HR sender, as live wave273 does: mail_from_hr, else job@', async () => {
+  const plain = await setup({ config: { mail_from_email: 'info@welfareavenue.com' } });
+  await plain.send(FORM);
+  assert.match(plain.mails()[0].body.from, /<job@welfareavenue\.com>$/);
+  const set = await setup({ config: { mail_from_hr: 'hiring@welfareavenue.com' } });
+  await set.send(FORM);
+  assert.match(set.mails()[0].body.from, /<hiring@welfareavenue\.com>$/);
+});
+
 test('the PDF is exactly what it was before the buttons', async () => {
   const s = await setup();
   await s.send(FORM);

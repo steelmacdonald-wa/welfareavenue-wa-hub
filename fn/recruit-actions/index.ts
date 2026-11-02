@@ -610,7 +610,7 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     const low = rcpt.map(x => x.toLowerCase());
     const bcc = low.includes(s.email) ? [] : [s.email];
     const replyTo = Array.from(new Set([s.email, who.email].filter(e => e && e !== 'hub@welfareavenue.com')));
-    const fromName = (await cfg('mail_from_name')) || 'Welfare Avenue', fromEmail = (await cfg('mail_from_email')) || 'info@welfareavenue.com';
+    const fromName = (await cfg('mail_from_name')) || 'Welfare Avenue', fromEmail = (await cfg('mail_from_hr')) || 'job@welfareavenue.com';   /* wave273 */
     const subject = (own ? '[PRACTICE] ' : mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
     const note = String(f.note || '').trim();
     const t = fr ? s.title_fr : s.title;
