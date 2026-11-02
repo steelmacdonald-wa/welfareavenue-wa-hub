@@ -46,7 +46,7 @@ const HOURS_REQ = { en: 'Please tick the box to confirm you can give at least 6 
 
 /* the stub function: what onboard-link answers, and how each POST changes it */
 function makeHire(over) {
-  const S = Object.assign({ first: 'Amina', role: 'Event Coordinator', lang: 'en', answered: '', offerHours: 6, mode: 'propose', proposal: { call_at: CALL, one_on_one_at: ONE }, bookedTimes: null, answer: null, askAvailability: true, manager: 'Marc Dubois', ticks: {}, slotsSaved: [], minHours: 10, delay: 250, yesReply: null, noReply: null }, over || {});
+  const S = Object.assign({ first: 'Amina', role: 'Event Coordinator', lang: 'en', answered: '', offerHours: 6, mode: 'propose', proposal: { call_at: CALL, one_on_one_at: ONE }, bookedTimes: null, answer: null, askAvailability: true, manager: 'Marc Dubois', ticks: {}, slotsSaved: [], minHours: 10, delay: 250, yesReply: null, noReply: null, secondNo: null }, over || {});
   const calls = [];
   const handler = async route => {
     const req = route.request();
@@ -60,7 +60,7 @@ function makeHire(over) {
       return send(200, {
         ok: true, kind: 'offer', first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed: false, late: false, booked: !!S.bookedTimes, callBooked: !!S.bookedTimes,
         grid: gridWindow(S.minHours), slotsSaved: S.slotsSaved, offerHours: S.offerHours, hoursConfirmed: accepted && !!S.offerHours, mode: S.mode,
-        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, lengths: { callMin: 60, oneMin: 30 },
+        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 },
         setup: accepted ? { steps: STEPS, ticks: Object.fromEntries(STEPS.map(s => [s.key, !!S.ticks[s.key]])) } : null,
       });
     }
@@ -81,7 +81,7 @@ function makeHire(over) {
     }
     if (b.a === 'no') {
       await new Promise(r => setTimeout(r, S.delay));
-      if (S.noReply) return send(S.noReply.status, S.noReply.body);
+      if (S.noReply) { if (S.noReply.body.error === 'answered') S.secondNo = S.noReply.body.message; return send(S.noReply.status, S.noReply.body); }
       const repeated = S.answer === 'no';
       S.answer = 'no';
       return send(200, { ok: true, answer: 'no', repeated, askAvailability: S.askAvailability });
@@ -241,6 +241,17 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     await f.page.waitForSelector('#closing', { timeout: 5000 });
     t = await text(f.page);
     ok('second no: a person will be in touch, no grid', t.indexOf(ANSWERED.en) >= 0 && (await f.page.locator('[data-slot]').count()) === 0, t.slice(0, 500));
+    await f.page.reload();
+    await f.page.waitForSelector('#closing', { timeout: 5000 });
+    t = await text(f.page);
+    ok('second no, reloaded: still a person will be in touch, and no Yes or No to press again', t.indexOf(ANSWERED.en) >= 0 && (await f.page.locator('[data-act="yes"], [data-act="no"], [data-slot]').count()) === 0, t.slice(0, 500));
+    await f.page.locator('#swap').click();
+    await f.page.waitForTimeout(200);
+    ok('second no: the sentence follows the language toggle', (await text(f.page)).indexOf(ANSWERED.fr) >= 0);
+    await f.ctx.close();
+    f = await open(browser, { qs: '?l=fr', fn: makeHire({ answered: 'accept', secondNo: ANSWERED }) });
+    t = await text(f.page);
+    ok('second no on open, in French: a person will be in touch, no buttons', t.indexOf(ANSWERED.fr) >= 0 && (await f.page.locator('[data-act="yes"], [data-act="no"]').count()) === 0 && f.posts().length === 0, t.slice(0, 400));
     await f.ctx.close();
 
     /* 8. no proposal yet */

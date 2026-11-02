@@ -30,7 +30,8 @@
      behind a button. Yes: the closing page ("Thank you, <name>. Your invites are on their way; <manager> will see you on <date>.") with the link
      to the setup rundown. Yes on times that have moved (stale): the function's sentence, then the grid. No: with availability asked, the grid
      with the hire's minimum hours, whose Save shows the closing page ("<manager> will pick from your times"), with Change my times; with it
-     already communicated, the closing page at once ("<manager> will be in touch with other times"). A second No: a person will be in touch.
+     already communicated, the closing page at once ("<manager> will be in touch with other times"). A second No: a person will be in touch
+     (after a reload too: the function's secondNo).
      No proposal yet: "We are choosing your times now; you will get an email within two days." ?setup is the rundown: each step with a Done
      button that posts setup_tick. A wave271 hire (mode grid) keeps the grid after Accept. -->
 <style>
@@ -264,7 +265,7 @@
 
   /* ---------- state ---------- */
   var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null, minHours: 0, cellMin: 30,
-    close: '', closeMsg: '', notice: '', regrid: false, ticking: {} };   // wave275 Task 3: which closing sentence, the stale notice, Change my times, ticks in flight
+    close: '', closeMsgs: null, notice: '', regrid: false, ticking: {} };   // wave275 Task 3: which closing sentence, the stale notice, Change my times, ticks in flight
   var card = document.getElementById('card');
   var langBox = document.getElementById('lang');
 
@@ -918,6 +919,7 @@
   function hireView(j) {
     if (q.has('setup') && j.setup) return 'setup';
     if (j.bookedTimes) { S.close = 'booked'; return 'closing'; }
+    if (j.secondNo) { S.close = 'person'; S.closeMsgs = j.secondNo; return 'closing'; }   // a second No went to a person: no Yes and No again
     if (j.answer === 'no') {
       if (j.askAvailability === false) { S.close = 'touch'; return 'closing'; }
       if (S.regrid || !(j.slotsSaved || []).length) return 'grid';
@@ -948,7 +950,7 @@
     if (S.close === 'booked') line = say(x.booked, Object.assign({ date: dayWords(j.bookedTimes.call_at) }, mw));
     else if (S.close === 'picked') line = say(x.picked, mw);
     else if (S.close === 'touch') line = say(x.touch, mw);
-    else line = esc(S.closeMsg || '');   // a second No: the function's sentence (a person will be in touch)
+    else line = esc((S.closeMsgs || {})[lang] || '');   // a second No: the function's sentence (a person will be in touch), in the page's language
     var hh = '<h1 id="closing" tabindex="-1">' + say(x.closeH, { first: j.first }) + '</h1>';
     if (S.notice && S.close === 'touch') hh += '<p class="stale" id="notice" role="status">' + esc(S.notice) + '</p>';
     hh += '<div class="ok"><p>' + line + '</p></div>';
@@ -973,7 +975,7 @@
         S.view = hireView(S.j); if (S.view === 'grid') setupGrid(S.j);
         render(true); return;
       }
-      if (j && j.error === 'answered') { S.busy = false; S.close = 'person'; S.closeMsg = serverMsg(j); S.view = 'closing'; render(true); return; }
+      if (j && j.error === 'answered') { S.busy = false; S.close = 'person'; S.closeMsgs = j.message || {}; S.view = 'closing'; render(true); return; }
       if (j && (j.ok || j.error === 'no_proposal')) return load(true);   // saved (or nothing to answer yet): ask again what to show
       again(serverMsg(j) || t().oops);
     }).catch(function () { again(t().oops); });

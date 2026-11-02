@@ -619,7 +619,7 @@ test('google_manual refuses an address another roster profile holds, and a flow 
   assert.equal((await w.post({ action: 'google_manual', flow_id: 21, wa_email: 'a.b@welfareavenue.com' })).status, 409);
 });
 
-test('with the settings on, an entry with no run is still an HR task', async () => {
+test('with the settings on and no first password: google is an HR task with its reason, hub waits on it, and the entries with no run (slack, welcome) are HR tasks', async () => {
   const s = await setup({ config: { onboard_auto_google: 'on', onboard_auto_slack: 'on' } });
   await s.start();
   /* wave275: google and hub have runs now. With no first password in the vault google is HR's (with its reason), and hub waits on it; slack and welcome have no run */
@@ -2550,6 +2550,7 @@ test('w275 book re-checks both times: under 24 hours away, outside the manager\'
     assert.equal(r.body.ask_availability, true);
     const f = s.flow();
     assert.deepEqual([f.call_at, f.one_on_one_at, f.hire_answer, f.status], [null, null, 'no', 'waiting']);
+    assert.equal(f.hire_answered_at ?? null, null, 'the times went stale; the hire has not said no, so their one No is still theirs');
     assert.equal(s.calWrites().length, 0);
     assert.equal(s.planned.length, 0);
     assert.equal(s.step('plan'), undefined);
@@ -2649,4 +2650,44 @@ test('w275 hub-invite: the trigger secret opens invite alone, at member level wh
   assert.equal(blocked.rows('hub_roles')[0].role, 'blocked');
   const leader = await hubInvite([{ email: 'alex.tremblay@welfareavenue.com', role: 'leader' }]);
   assert.equal((await leader.post({ action: 'invite', email: 'alex.tremblay@welfareavenue.com', name: 'Alex Tremblay', send_email: false }, SECRET)).body.hub_role, 'leader', 'never downgraded');
+});
+
+/* ---------- wave275 Task 3, fix round 1 ---------- */
+test('w275 fix: book answers once the times are claimed; the booking steps run after it, handed to EdgeRuntime.waitUntil (Calendar held back here)', async () => {
+  const pending = [];
+  globalThis.EdgeRuntime = { waitUntil: (p) => { pending.push(p); } };
+  try {
+    const s = await t3({ fl: PROPOSED });
+    await s.acceptSetup();   // the at-Accept steps also hand nothing over: accept_setup runs inside its own request
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    s.calReply = async (e) => { await gate; return { json: { id: e.body?.id || e.url.split('/events/')[1]?.split('?')[0], hangoutLink: 'https://meet.example/x' } }; };
+    const r = await s.book();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.deepEqual([r.body.ok, r.body.booked, r.body.repeated, r.body.call_at, r.body.one_on_one_at, r.body.status], [true, true, false, P_CALL, P_ONE, 'running'], 'answered while Calendar has not answered yet');
+    assert.deepEqual([s.flow().call_at, s.flow().hire_answer, s.flow().status], [P_CALL, 'yes', 'running'], 'the claim is saved before the answer');
+    assert.equal(s.step('welcome').status, 'pending', 'the booking rows are made; their steps have not finished');
+    assert.equal(pending.length, 1);
+    release();
+    await Promise.all(pending);
+    assert.deepEqual(s.statuses(), { roster: 'done', google: 'done', plan: 'done', invites: 'done', manager: 'done', hub: 'done', slack: 'hr_task', welcome: 'hr_task' });
+    assert.equal(s.flow().status, 'started');
+    assert.equal(s.calWrites().filter((e) => e.method === 'POST').length, 2);
+    assert.equal(s.notifies().filter((x) => x.body.event === 'onboard_answer').length, 1, 'HR told after the steps');
+    /* stale stays in the request: the hire still gets it, and nothing is handed over */
+    const st = await t3({ fl: PROPOSED, tables: { hub_events: [{ id: 'e9', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-26T15:45:00Z', end_at: '2026-10-26T16:15:00Z' }] } });
+    const before = pending.length;
+    refused(await st.book(), 'stale', 'one_on_one');
+    assert.equal(pending.length, before);
+  } finally { delete globalThis.EdgeRuntime; }
+});
+
+test('w275 fix: new times clear the mark of a second No (no_again_at), so the hire answers them', async () => {
+  const s = await t3({ fl: { ...PROPOSED, hire_answered_at: '2026-10-19T13:00:00Z', setup_ticks: { no_again_at: '2026-10-19T14:00:00Z', rd_profile: '2026-10-19T15:00:00Z' } } });
+  const r = await s.propose({ one_on_one_at: '2026-10-26T18:00:00Z' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.warnings, []);
+  assert.equal(s.flow().setup_ticks.no_again_at, null);
+  assert.equal(s.flow().setup_ticks.rd_profile, '2026-10-19T15:00:00Z', 'the rundown ticks stay');
+  assert.equal(s.flow().hire_answered_at, '2026-10-19T13:00:00Z');
 });

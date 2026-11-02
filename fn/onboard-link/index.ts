@@ -39,7 +39,7 @@
 // wave275 (v3), the offer link. The mode rule above applies to it too (an offered flow, a proposal, or a flow created on or after onboard_v2_since).
 //   GET adds {offerHours (hub_candidates.offer_hours, null for an offer from before wave275), hoursConfirmed, mode, proposal: {call_at, one_on_one_at} | null,
 //   bookedTimes: {call_at, one_on_one_at} | null, answer (hire_answer: yes, no or null), askAvailability, manager (their name), lengths: {callMin, oneMin}
-//   (propose mode only), setup: {steps: [{key, title:
+//   (propose mode only), secondNo: {en, fr} | null (a second No to these times went to a person: the page says so), setup: {steps: [{key, title:
 //   {en, fr}, body: {en, fr}}], ticks: {key: boolean}} | null (once accepted)}; GET ?setup is the same answer, for the rundown page. In propose mode the
 //   link stays open after booking (the closing page and the rundown), and only the grid shuts.
 //   POST accept   with offerHours set, needs hours_ok: true (else 400 hours_required, in both languages, naming the hours) and sets hours_confirmed_at.
@@ -307,6 +307,8 @@ async function view(l: Link) {
       proposal: f?.proposed_at && f.proposed_call_at && f.proposed_one_on_one_at ? { call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at) } : null,
       bookedTimes: f?.call_at ? { call_at: normal(f.call_at), one_on_one_at: normal(f.one_on_one_at) } : null,
       answer: f?.hire_answer ?? null, askAvailability: f ? f.ask_availability !== false : true, manager: m?.name || null,
+      /* a second No to these times went to a person (nothing recorded as a no): a reload says so instead of offering Yes and No again; new times clear it */
+      secondNo: f && !f.call_at && !f.hire_answer && f.setup_ticks?.no_again_at ? MSG.answered : null,
       setup: l.cand.accepted_on && f ? setupOf(f) : null,
     };
     if (l.mode === 'propose') {   // the page shows each meeting as a span ("10 to 11 am")
@@ -658,7 +660,7 @@ async function sayYes(l: Link) {
   if (!f.proposed_at || !f.proposed_call_at || !f.proposed_one_on_one_at) return fail('no_proposal', 409);
   let res: Response | null;
   try {
-    res = await runAsk({ action: 'book', flow_id: f.id, call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at), by: 'hire' }, 60000);
+    res = await runAsk({ action: 'book', flow_id: f.id, call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at), by: 'hire' }, 25000);   // book answers once the times are claimed; its steps run after
   } catch (_) { return fail('unavailable', 503); }
   if (!res) return fail('unavailable', 503);
   // deno-lint-ignore no-explicit-any

@@ -56,7 +56,7 @@ test('a GET saves nothing and gives the page what it needs', async () => {
   assert.equal(a.status, 200);
   assert.deepEqual({ ...a.body, grid: undefined }, {
     ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [],
-    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', setup: null,   // wave275: an offer from before it has no hours and keeps the grid
+    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', secondNo: null, setup: null,   // wave275: an offer from before it has no hours and keeps the grid
   });
   assert.equal(m.body.kind, 'manager');
   assert.equal(m.body.first, 'Sam');
@@ -1147,6 +1147,7 @@ test('w275 integration (practice): Accept with hours runs accept_setup, Yes runs
     const y = await s.post({ t: s.offer, a: 'yes' });
     assert.equal(y.status, 200, JSON.stringify(y.body));
     assert.equal(y.body.answer, 'yes');
+    await Promise.all(pending);   // fix round 1: book runs its steps after its answer
     const f = s.flow();
     assert.deepEqual([f.call_at, f.hire_answer, f.status], [W_CALL, 'yes', 'started']);
     assert.equal(Object.values(steps()).filter((x) => x === 'done').length, 8);
@@ -1156,4 +1157,56 @@ test('w275 integration (practice): Accept with hours runs accept_setup, Yes runs
     assert.equal(g.closed, false);
     assert.equal(g.answer, 'yes');
   });
+});
+
+/* ---------- wave275 Task 3, fix round 1 ---------- */
+test('w275 fix: a Yes on times that went stale does not use up the hire\'s one No: new times, then No, is a first no, told once and not "again"', async () => {
+  const meeting = { id: 'e9', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-11-04T16:45:00Z', end_at: '2026-11-04T17:15:00Z' };
+  let run;
+  const s = await hire({ fl: withProposal, config: { onboard_propose_lead_hours: '48', onboard_yes_lead_hours: '24', onboard_call_min: '60', onboard_one_on_one_min: '30', mail_mode: 'live' }, tables: { hub_events: [meeting] },
+    run: (e) => run.call(new Request(RUN, { method: 'POST', headers: e.headers, body: JSON.stringify(e.body) })) });
+  const { generateKeyPairSync } = await import('node:crypto');
+  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  run = await loadFn('onboard-run', { secrets: { GOOGLE_SA_KEY: JSON.stringify({ client_email: 'hub@stub.iam', private_key: privateKey, token_uri: 'https://oauth2.googleapis.com/token' }) } });
+  run.db.tables = s.db.tables;
+  run.db.onRpc('wa275_tick_set', tickSet);
+  run.setNow(NOW);
+  const runTells = [];
+  run.fetchOn(NOTIFY, (e) => { runTells.push(e.body); return { json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } }; });
+  run.fetchOn('https://oauth2.googleapis.com/token', { json: { access_token: 'tok', expires_in: 3600 } });
+  run.fetchOn('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { json: { id: 'mail1' } });
+  const yes = await s.post({ t: s.offer, a: 'yes' });
+  assert.equal(yes.status, 409, JSON.stringify(yes.body));
+  assert.equal(yes.body.stale, true);
+  assert.deepEqual([s.flow().hire_answer, s.flow().hire_answered_at ?? null], ['no', null], 'the proposal is spent; the hire has not said no');
+  assert.equal(runTells.filter((x) => /no longer work/.test(x.title)).length, 1, 'the manager and HR heard the times went stale');
+  s.db.tables.hub_events = [];   // the manager's calendar clears, and they propose again (Thursday 05/11, 10:00 and 11:30)
+  const p = await s.post({ t: s.mgr, a: 'propose', call_at: '2026-11-05T15:00:00Z', one_on_one_at: '2026-11-05T16:30:00Z' });
+  assert.equal(p.status, 200, JSON.stringify(p.body));
+  assert.equal(s.flow().hire_answer, null);
+  const no = await s.post({ t: s.offer, a: 'no' });
+  assert.equal(no.status, 200, JSON.stringify(no.body));
+  assert.deepEqual([no.body.answer, no.body.repeated], ['no', false]);
+  assert.deepEqual([s.flow().hire_answer, s.flow().hire_answered_at], ['no', '2026-11-01T12:00:00.000Z']);
+  assert.equal(s.tells.length, 1, 'told once');
+  assert.equal(s.tells[0].title, 'Alex Tremblay said no to the times', 'a first no, not "again"');
+  assert.ok(!s.flow().setup_ticks?.no_again_at);
+  assert.deepEqual(s.rig.unregistered(), []);
+  assert.deepEqual(run.unregistered(), []);
+});
+
+test('w275 fix: GET after a second No gives secondNo (a person will be in touch, both languages) instead of the times to answer again; new times clear it', async () => {
+  const s = await hire({ fl: { ...withProposal, hire_answered_at: '2026-10-31T15:00:00Z' } });
+  assert.equal((await s.get(s.offer)).body.secondNo, null);
+  assert.equal((await s.post({ t: s.offer, a: 'no' })).body.error, 'answered');
+  const before = s.snapshot();
+  const g = (await s.get(s.offer)).body;
+  assert.deepEqual(s.snapshot(), before, 'scanner safety');
+  assert.ok(hasBoth(g.secondNo));
+  assert.match(g.secondNo.en, /A person from Welfare Avenue will be in touch/);
+  assert.deepEqual([g.answer, g.bookedTimes], [null, null]);
+  s.flow().setup_ticks.no_again_at = null;   // what propose does with new times
+  assert.equal((await s.get(s.offer)).body.secondNo, null);
+  const booked = await hire({ fl: { ...withProposal, hire_answer: 'yes', call_at: W_CALL, one_on_one_at: W_ONE, setup_ticks: { no_again_at: '2026-10-31T16:00:00Z' } } });
+  assert.equal((await booked.get(booked.offer)).body.secondNo, null, 'once booked, the closing page wins');
 });

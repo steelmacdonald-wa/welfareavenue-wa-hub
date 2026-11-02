@@ -39,7 +39,7 @@
 //               Opened by HR, an admin or the flow's manager (wa275_manager_of, by = the caller's email), and by the trigger secret, which is the mgr link
 //               (onboard-link relays with by 'manager': by = the manager's roster email). The claim is a conditional update on proposed_at as it was read, so a
 //               double press saves and tells once; the same times by the same person again are {repeated: true}. Saved: HR (hr_notify_emails) is told through
-//               notify (event onboard_answer, "<proposer> proposed times for <hire>"), setup_ticks.hire_times_at is cleared (wa275_tick_set), and hire_times
+//               notify (event onboard_answer, "<proposer> proposed times for <hire>"), setup_ticks.hire_times_at and no_again_at are cleared (wa275_tick_set), hire_answer is cleared, and hire_times
 //               runs after the claim whatever the card said when it was read (not yet accepted is a quiet no). Practice: saved, no fetch.
 //   hire_times {flow_id}   {ok, mode, to} | {ok, skipped: 'already_sent'} | {ok, practice: true}. The trigger secret only. Emails the hire the /o/ offer link that asks
 //               yes or no about the proposed times (Task 3 writes the email's words), once per proposal: the send is claimed with wa275_tick_set(flow,
@@ -51,12 +51,13 @@
 //               no flow qualifies, so James MacDonald's wave271 card keeps its path), the steps timed 'accept' run: roster (the profile active, with no start date
 //               and start_source manual; the card stays at offer), google, hub. Claimed with wa275_tick_set(flow, 'accept_setup_at'), so two calls run them once.
 //               accounts_at is set once all three are done or skipped.
-//   book {flow_id, call_at, one_on_one_at, by: 'hire'}   {ok, repeated, call_at, one_on_one_at, status, steps}. The hire's Yes (onboard-link relays it). The two
+//   book {flow_id, call_at, one_on_one_at, by: 'hire'}   {ok, booked: true, repeated, call_at, one_on_one_at, status}. The hire's Yes (onboard-link relays it). The two
 //               times must be the proposal. Both are checked again: at least onboard_yes_lead_hours (24) ahead, inside the manager's availability, clear of hub@
 //               meetings they are invited to and of their other new hires' times. A time that has moved is stale (409 {error: 'stale', which, reason,
-//               messages, ask_availability}): hire_answer becomes no and the manager and HR are told (onboard_answer); nothing is booked. Otherwise the flow
-//               is claimed (waiting or ready to running, hire_answer yes, the manager as started_by, so both invites go to them), the rows not yet made are
-//               seeded, and every step that can run does: plan (fills team_members.start_date and hub_candidates.start_date from the call and moves the card
+//               messages, ask_availability}): hire_answer becomes no (the proposal is spent; hire_answered_at stays empty, so the hire's own one No is still
+//               theirs) and the manager and HR are told (onboard_answer); nothing is booked. Otherwise the flow is claimed (waiting or ready to running,
+//               hire_answer yes, the manager as started_by, so both invites go to them), the rows not yet made are seeded, and the answer goes back at once:
+//               the steps run after it (EdgeRuntime.waitUntil; a local run waits), and every step that can run does: plan (fills team_members.start_date and hub_candidates.start_date from the call and moves the card
 //               to Hired, then makes the plan), invites, manager, and the rest; welcome stays as wave271 has it. HR is told (onboard_answer). The flow is
 //               started once nothing is left for HR. Refused: changed, no_proposal, answered (the hire said no), not_accepted, closed, already_booked.
 //   The step google (setting onboard_auto_google): users.insert as steel.macdonald@welfareavenue.com into the root unit, first.last from the name when
@@ -1576,6 +1577,9 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   const warnings: string[] = [];
   /* new times: the record of the last email to the hire is cleared (merged, one key), so hire_times can claim the send for these */
   const { error: clearErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'hire_times_at', p_value: null });
+  /* and the mark of a second No to the last times: these are new, so the hire answers them (a No to them is refused and told again, once) */
+  const { error: againErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'no_again_at', p_value: null });
+  if (againErr) warnings.push('The record of ' + firstName(c.name) + '\'s second no could not be cleared (' + againErr.message + '), so their link may still say a person will be in touch.');
   if (clearErr) warnings.push('The record of the last email to ' + firstName(c.name) + ' could not be cleared (' + clearErr.message + '), so they were not emailed these times. Send them from the card.');
   if (f.practice || c.practice) return json({ ok: true, repeated: false, practice: true, proposal: saved, hire_emailed: false, warnings });
 
@@ -1706,7 +1710,9 @@ const STALE_WHY: Record<string, (manager: string, n: number) => string> = {
 };
 async function staleTimes(f: Row, c: Row, m: Row, code: string, which: Which, lead: number): Promise<Response> {
   const now = new Date().toISOString(), ask = f.ask_availability !== false, practice = !!(f.practice || c.practice);
-  const { data: won } = await svc.from('hub_onboard_flows').update({ hire_answer: 'no', hire_answered_at: now, updated_at: now })
+  /* hire_answer no marks the proposal spent (the grid shows, and it no longer counts as taken). hire_answered_at stays empty: the times going stale is not
+     the hire saying no, so their one No is still theirs to give (onboard-link counts a No as a second one only when hire_answered_at is set). */
+  const { data: won } = await svc.from('hub_onboard_flows').update({ hire_answer: 'no', updated_at: now })
     .eq('id', f.id).is('hire_answer', null).is('call_at', null).eq('proposed_at', f.proposed_at).select('id');
   if ((won as unknown[] | null)?.length) {
     await log('onboard_flow', f.id, 'hire_answer', null, 'no (the times had moved: ' + code + ')', BOOKED_BY);
@@ -1771,20 +1777,29 @@ async function book(b: Row): Promise<Response> {
   }
   await log('onboard_flow', f.id, 'call_at', null, callAt, BOOKED_BY);
   await log('onboard_flow', f.id, 'one_on_one_at', null, oneAt, BOOKED_BY);
-  await advance(await makeCtx(flow, BOOKED_BY, null));
-  const warnings: string[] = [];
-  if (!practice) {   // HR hears it here; the manager hears it from the manager step, with the date
-    const hr = await hrList();
-    const title = c.name + ' said yes to the times';
-    const said = c.name + ' (' + (c.role || 'new hire') + ') said yes: the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '. Both are booked.';
-    if (!hr.length) warnings.push('HR was not told: hr_notify_emails is empty.');
-    else {
+  /* the booking steps (plan, invites, manager, welcome and the rest) talk to Calendar and notify, which can take longer than the hire's page waits: they run
+     after the answer, handed to the runtime (EdgeRuntime.waitUntil), as accept_setup does after Accept. A step that fails shows on the card with Retry. */
+  const steps = (async () => {
+    try {
+      await advance(await makeCtx(flow, BOOKED_BY, null));
+      if (practice) return;
+      const hr = await hrList();   // HR hears it here; the manager hears it from the manager step, with the date
+      const title = c.name + ' said yes to the times';
+      const said = c.name + ' (' + (c.role || 'new hire') + ') said yes: the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '. Both are booked.';
+      if (!hr.length) { console.error('onboard-run book: HR was not told for flow ' + f.id + ': hr_notify_emails is empty.'); return; }
       const told = await tell({ event: 'onboard_answer', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-yes-' + f.id, title, body: said, text: ':white_check_mark: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
-      if (!told.handled) warnings.push('HR was not told: ' + (told.note || 'notify gave no answer') + '.');
-    }
-  }
-  const fresh = await getFlow(f.id);
-  return json({ ok: true, repeated: false, call_at: callAt, one_on_one_at: oneAt, status: fresh?.status || 'running', steps: await readSteps(f.id), warnings });
+      if (!told.handled) console.error('onboard-run book: HR was not told for flow ' + f.id + ': ' + (told.note || 'notify gave no answer'));
+    } catch (e) { console.error('onboard-run book: the booking steps stopped for flow ' + f.id + ': ' + errText(e)); }
+  })();
+  await inBackground(steps);   // returns at once under the runtime; a local run waits
+  return json({ ok: true, booked: true, repeated: false, call_at: callAt, one_on_one_at: oneAt, status: 'running' });
+}
+/* work that must outlive the answer: the runtime keeps it alive (Supabase's EdgeRuntime.waitUntil); without one (a local run) the caller waits for it */
+function inBackground(p: Promise<unknown>): Promise<unknown> | void {
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt && typeof rt.waitUntil === 'function') { rt.waitUntil(p); return; }
+  return p;
 }
 /* ---------- remind: the hourly job ---------- */
 const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id';
