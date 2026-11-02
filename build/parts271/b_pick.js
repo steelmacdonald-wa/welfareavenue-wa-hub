@@ -76,16 +76,31 @@
     return '<option value="">Choose a manager...</option>' + S.people.filter(function (p) { return p.active !== false; }).map(function (p) { return '<option value="' + E(p.id) + '"' + (String(p.id) === String(chosen) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('');
   }
   function startBlock(P) {
-    var addr = String(P.addr || '').trim().toLowerCase(), googleOn = !P.skip.google, g = P.g;
+    var addr = String(P.addr || '').trim().toLowerCase(), googleOn = !P.skip.google, g = P.g, canva = String(P.canva || '').trim();
+    if (canva && !CANVA_LINK.test(canva)) return 'The Canva link must start with https://www.canva.com/. Copy it from Invite people in Canva, or leave it empty.';
     if (!g.vals.call) return 'Pick a time for the onboarding call.';
     if (toInstant(g.vals.call) == null) return 'That call time does not exist on the Toronto clock. Pick another.';
     if (g.vals.one && toInstant(g.vals.one) == null) return 'That 1-on-1 time does not exist on the Toronto clock. Pick another.';
     if (!P.managerId) return 'Choose a manager.';
     if (addr && !ADDR.test(addr)) return 'The new address must be a plain address ending in @welfareavenue.com.';
     if (!addr && googleOn) return 'Type the new address, or turn off the Google account step.';
-    if (googleOn && P.takenAddr && P.takenAddr === addr) return addr + ' is already in use. Change the address, or turn off the Google account step.';
+    if (P.takenAddr && P.takenAddr === addr) {
+      if (P.owner) return addr + ' is on the roster profile of ' + P.owner + '. Change the address, or clear it.';
+      if (googleOn) return addr + ' is already in use. Change the address, or turn off the Google account step.';
+      if (!P.own) return addr + ' is already in use, so the Hub will not store it. Change the address, or clear it.';
+    }
     return '';
   }
+  /* HR turned the Google step off while the address clashes: it must not stay in the box and reach another person's mailbox. Their own address stays. */
+  function clearClash(id) {
+    var P = S.pick[id]; if (!P) return;
+    var addr = String(P.addr || '').trim().toLowerCase();
+    if (!P.takenAddr || P.takenAddr !== addr || P.own) return;
+    P.addr = ''; P.takenAddr = ''; P.owner = '';
+    var box = document.querySelector('[data-o271flow="' + id + '"] [data-o271i="addr"]'); if (box) box.value = '';
+  }
+  function canvaHowHtml() { return '<div class="o271ln">' + E(CANVA_HOW) + ' <a href="https://www.canva.com/settings/people" target="_blank" rel="noopener">Open Canva people settings</a></div>'; }
+  function canvaSaid(v) { return String(v || '').trim() ? '' : 'No Canva link yet. You can start without one, but get a fresh link before the welcome email goes out.'; }
   function saidBlock(g, mode) { var s = saidHtml(g, mode); return '<div class="o271said ' + s.cl + '" data-o271said="' + mode + '">' + E(s.text) + '</div>'; }
   function pickHtml(x, P) {
     var id = x.flow_id, pv = P.pv, g = P.g, block = startBlock(P);
@@ -100,10 +115,15 @@
       + '<h3 class="o271h">2. The preview</h3>'
       + '<div class="o271two"><div><label class="o271f">New address</label><input type="text" autocomplete="off" data-o271i="addr" data-f="' + E(id) + '" value="' + E(P.addr) + '"></div>'
       + '<div><label class="o271f">Manager</label><select data-o271i="mgr" data-f="' + E(id) + '">' + memberOptions(P.managerId) + '</select><div class="o271said" data-o271said="rule">' + E(ruleLine(P)) + '</div></div></div>'
+      + '<div class="o271ln">Department: ' + E(pv.department || 'not set') + '</div>'
       + '<label class="o271f">Group session (leave blank to leave the line out)</label><input type="text" data-o271i="group" data-f="' + E(id) + '" value="' + E(P.group) + '">'
       + '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o271i="subj" data-f="' + E(id) + '" value="' + E(P.subject) + '">'
       + '<label class="o271f">Welcome email: text</label><textarea data-o271i="text" data-f="' + E(id) + '">' + E(P.text) + '</textarea>'
+      + '<div class="o271ln">Anything in [square brackets] fills in at Start, from the times, manager, address and links you choose here. Leave the brackets in place, even if you change the rest.</div>'
       + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>' : '')
+      + canvaHowHtml()
+      + '<label class="o271f">Fresh Canva invite link</label><input type="text" style="max-width:none" autocomplete="off" data-o271i="canva" data-f="' + E(id) + '" value="' + E(P.canva) + '">'
+      + '<div class="o271said" data-o271said="canva">' + E(canvaSaid(P.canva)) + '</div>'
       + '<h3 class="o271h">3. The steps that will run</h3>'
       + (pv.steps || []).map(function (s) {
           var locked = s.key === 'roster', word = s.mode === 'hr_task' ? 'HR does this one' : s.mode === 'practice' ? 'Practice: nothing real changes' : 'The Hub does this';
@@ -117,8 +137,28 @@
   }
   function ruleLine(P) {
     if (!P.managerId) return RULE.none;
-    if (String(P.managerId) === String(P.pv.manager && P.pv.manager.member_id)) return 'The Hub used: ' + (RULE[P.pv.manager.how] || P.pv.manager.how);
+    if (String(P.managerId) === String(P.pv.manager && P.pv.manager.member_id) && P.pv.manager.how !== 'chosen') return 'The Hub used: ' + (RULE[P.pv.manager.how] || P.pv.manager.how);
     return RULE.chosen;
+  }
+  /* HR changed the dropdown: saved now, so the hourly job sends the right manager their link before Start. The other manager's marks went with it. */
+  async function saveManager(id, member, before) {
+    var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
+    try {
+      var r = await run('set_manager', { flow_id: Number(id), member_id: Number(member) });
+      if (x) x.manager_member_id = Number(member);
+      var P = S.pick[id]; if (!P) { paint(); return; }
+      P.err = '';
+      if (!r.practice) {
+        P.pv.manager = { member_id: Number(member), name: nameOf(member), how: 'chosen' };
+        if (r.cleared) { P.pv.grids = Object.assign({}, P.pv.grids, { manager: [] }); P.g.manager = {}; }
+        P.g.hideManager = false;
+      }
+      paint();
+    } catch (e) {
+      var Q = S.pick[id];
+      if (Q) { Q.managerId = before; Q.err = e.message; Q.g.hideManager = String(before) !== String(Q.pv.manager && Q.pv.manager.member_id); }
+      toast(e.message); paint();
+    }
   }
   /* an input changed: what depends on it, without redrawing what HR is typing in */
   function liveUpdate(id) {
@@ -126,6 +166,7 @@
     var root = document.querySelector('[data-o271flow="' + id + '"]'); if (!root) return;
     ['call', 'one'].forEach(function (m) { var el = root.querySelector('[data-o271said="' + m + '"]'); if (el) { var s = saidHtml(P.g, m); el.textContent = s.text; el.className = 'o271said ' + s.cl; } });
     var rule = root.querySelector('[data-o271said="rule"]'); if (rule) rule.textContent = ruleLine(P);
+    var cs = root.querySelector('[data-o271said="canva"]'); if (cs) cs.textContent = canvaSaid(P.canva);
     var block = startBlock(P), bl = root.querySelector('[data-o271said="block"]'); if (bl) bl.textContent = block;
     var b = root.querySelector('[data-o271a="start"]'); if (b && !S.busy['s' + id]) b.disabled = !!block;
   }
@@ -138,7 +179,7 @@
       var g = newGrid('p' + id, pv, 'call');
       if (x.call_at) g.vals.call = toLocal(x.call_at);
       if (x.one_on_one_at) g.vals.one = toLocal(x.one_on_one_at);
-      S.pick[id] = { pv: pv, g: g, addr: pv.address || '', managerId: (pv.manager && pv.manager.member_id) || '', group: '', subject: (pv.welcome && pv.welcome.subject) || '', text: (pv.welcome && pv.welcome.text) || '', skip: {}, takenAddr: pv.address_taken ? String(pv.address || '').toLowerCase() : '', err: '' };
+      S.pick[id] = { pv: pv, g: g, addr: pv.address || '', managerId: (pv.manager && pv.manager.member_id) || '', group: '', subject: (pv.welcome && pv.welcome.subject) || '', text: (pv.welcome && pv.welcome.text) || '', skip: {}, takenAddr: pv.address_taken || pv.address_owner ? String(pv.address || '').toLowerCase() : '', owner: pv.address_owner || '', own: !!pv.address_own, canva: pv.canva_link || '', err: '' };
     } catch (e) { S.note[id] = { err: e.message }; }
     delete S.busy['o' + id]; paint();
   }
@@ -151,7 +192,9 @@
       var pv = await run('preview', { flow_id: Number(id), wa_email: addr });
       if (!S.pick[id] || String(S.pick[id].addr).trim().toLowerCase() !== addr) return;
       P.pv.warnings = pv.warnings; P.pv.address_taken = pv.address_taken;
-      P.takenAddr = pv.address_taken ? addr : '';
+      P.takenAddr = pv.address_taken || pv.address_owner ? addr : '';
+      P.owner = pv.address_owner || ''; P.own = !!pv.address_own;
+      if (P.skip.google) clearClash(id);
       paint();
     } catch (e) { P.err = e.message; paint(); }
   }
@@ -161,7 +204,7 @@
     S.busy['s' + id] = true; P.err = ''; paint();
     var body = {
       flow_id: Number(id), wa_email: String(P.addr || '').trim().toLowerCase(), manager_member_id: Number(P.managerId), call_at: isoOf(P.g.vals.call),
-      one_on_one_at: P.g.vals.one ? isoOf(P.g.vals.one) : null, group_session: P.group || null,
+      one_on_one_at: P.g.vals.one ? isoOf(P.g.vals.one) : null, group_session: P.group || null, canva_link: String(P.canva || '').trim(),
       skip: Object.keys(P.skip).filter(function (k) { return P.skip[k]; })
     };
     var w0 = P.pv.welcome || {};

@@ -48,6 +48,11 @@ function fx271(o) {
     { id: 7002, name: 'Pat Practice', role: 'Practice role', email: 'pat@example.invalid', status: 'offer', practice: true },
     { id: 7003, name: 'Noor Single', role: 'Cook', email: 'noor@example.invalid', status: 'offer', practice: false },
     { id: 7101, name: 'Sam Started', role: 'Driver', email: 'sam@example.invalid', status: 'hired', practice: false },
+    { id: 7201, name: 'Olu <b>Offer</b>', role: 'Writer', email: 'olu@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: null },
+    { id: 7202, name: 'Pam Practiceoffer', role: 'Practice role', email: 'pam@example.invalid', status: 'offer', practice: true, offer_sent_at: '2026-09-21T15:00:00Z', accepted_on: null },
+    { id: 7203, name: 'Nia Notsent', role: 'Writer', email: 'nia@example.invalid', status: 'offer', practice: false, offer_sent_at: null, accepted_on: null },
+    { id: 7204, name: 'Ali Accepted', role: 'Writer', email: 'ali@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-21T15:00:00Z', accepted_on: '2026-09-22' },
+    { id: 7205, name: 'Wes Withdrawn', role: 'Writer', email: 'wes@example.invalid', status: 'withdrawn', practice: false, offer_sent_at: '2026-09-21T15:00:00Z', accepted_on: null },
   ]);
   fx.hub_onboard_flows = [];
   fx.hub_onboard_steps = [];
@@ -78,14 +83,15 @@ const INIT = `(function(){
   function hireSlots() { var o = []; for (var h = 8; h < 12; h++) { o.push(H(h)); o.push(H(h, 30)); } return o; }
   function mgrSlots() { var o = []; for (var h = 10; h < 14; h++) { o.push(H(h)); o.push(H(h, 30)); } return o; }
   function preview(b) {
-    var taken = b.wa_email === 'taken.person@welfareavenue.com';
+    var onRoster = b.wa_email === 'dana@welfareavenue.com', taken = onRoster || b.wa_email === 'taken.person@welfareavenue.com';
     var practice = String(b.flow_id) === '502', noman = String(b.flow_id) === '503';
     var address = b.wa_email || (noman ? null : practice ? 'pat.practice@welfareavenue.com' : String(b.flow_id) === '601' ? 'sam.started@welfareavenue.com' : 'amina.yusuf@welfareavenue.com');
     var warnings = ['The position has no job description link, so the welcome email leaves that line out.'];
-    if (taken) warnings.unshift(address + ' is already in use. Change the address, or skip the Google account step.');
+    if (onRoster) warnings.unshift(address + ' is on the roster profile of Dana Fixture. Change the address, or clear it.');
+    else if (taken) warnings.unshift(address + ' is already in use in Google. Change the address, or skip the Google account step: the Hub then stores no address for this person.');
     if (!address) warnings.unshift('This name does not fit first.last, so HR must type the address.');
     if (practice) warnings.push('This is a practice applicant: the run is a simulation and nothing real changes.');
-    return { address: address, address_taken: taken, needs_address: !address,
+    return { address: address, address_taken: taken, address_owner: onRoster ? 'Dana Fixture' : null, address_own: false, needs_address: !address, department: practice ? null : 'progdev',
       manager: practice || noman ? { member_id: null, name: null, how: 'none' } : { member_id: 9101, name: 'Dana Fixture', how: 'reports_to' },
       grids: { hire: hireSlots(), manager: mgrSlots() },
       hub_events: [
@@ -93,7 +99,7 @@ const INIT = `(function(){
         { id: 'e2', summary: 'Team sync', start_at: H(13), end_at: H(13, 30), who: ['manager'] }
       ],
       steps: KEYS.map(function (k) { return { key: k, label: LABEL[k], needs: k === 'roster' ? [] : ['roster'], mode: practice ? 'practice' : MODE[k], status: null, detail: null }; }),
-      welcome: { subject: 'Welcome to Welfare Avenue! Your Next Steps', text: 'Hi Amina,\\n\\nCongratulations.' },
+      welcome: { subject: 'Welcome to Welfare Avenue! Your Next Steps', text: 'Dear Amina,\\n\\nCongratulations and welcome. Your first day is [first day: fills in at Start].' },
       warnings: warnings };
   }
   window.__WA_INVOKE = function (name, opts) {
@@ -104,11 +110,19 @@ const INIT = `(function(){
     var fx = window.__WAFIX;
     switch (b.action) {
       case 'preview': return { data: preview(b), error: null };
-      case 'send_grid_link': return { data: { ok: true }, error: null };
+      case 'send_grid_link': {
+        var who = (fx.hub_candidates || []).filter(function (c) { return String(c.id) === String(b.candidate_id); })[0];
+        if (b.accepted && who) who.accepted_on = '2026-09-25';
+        return { data: who && who.practice ? { ok: true, practice: true } : window.__O271_MODE === 'live' ? { ok: true, mode: 'live', to: ['x@example.invalid'] } : { ok: true, mode: 'test', to: ['tester@example.invalid'] }, error: null };
+      }
+      case 'set_manager': return { data: String(b.flow_id) === '502' ? { ok: true, practice: true, cleared: false } : { ok: true, cleared: true }, error: null };
+      case 'set_canva_link': flow(b.flow_id).canva_link = b.link || null; return { data: { ok: true, canva_link: b.link || null }, error: null };
+      case 'task_done': setStep(b.flow_id, b.step, 'done', 'Done by hr@example.invalid.'); return { data: { steps: steps(b.flow_id) }, error: null };
       case 'start': {
         var f = { id: b.flow_id, candidate_id: b.flow_id === 501 ? 7001 : b.flow_id === 502 ? 7002 : 7003, practice: b.flow_id === 502, status: 'running', manager_member_id: b.manager_member_id, wa_email: b.wa_email || null,
-          call_at: b.call_at, one_on_one_at: b.one_on_one_at || null, group_session: b.group_session || null, onboarding_id: 41, started_at: null };
+          call_at: b.call_at, one_on_one_at: b.one_on_one_at || null, group_session: b.group_session || null, welcome_subject: b.welcome ? b.welcome.subject : null, welcome_text: b.welcome ? b.welcome.text : null, canva_link: b.canva_link || null, onboarding_id: 41, started_at: null, roster_created: true };
         fx.hub_onboard_flows.push(f);
+        (fx.hub_candidates || []).forEach(function (c) { if (c.id === f.candidate_id) c.member_id = 8001; });
         window.__WA_RPCS.wa271_ready_list = window.__WA_RPCS.wa271_ready_list.filter(function (r) { return r.flow_id !== b.flow_id; });
         var skip = b.skip || [];
         var rows = [['roster', 'done', 'Created the roster profile.'], ['google', 'hr_task', 'Create the account in Google, then press "I created it, continue" on this card.'], ['plan', 'done', 'Made the onboarding plan.'],
@@ -119,10 +133,20 @@ const INIT = `(function(){
       }
       case 'retry': setStep(b.flow_id, b.step, 'done', 'The onboarding call is booked.'); return { data: { steps: steps(b.flow_id) }, error: null };
       case 'google_manual': setStep(b.flow_id, 'google', 'done', 'HR created ' + b.wa_email + ' in Google.'); flow(b.flow_id).wa_email = b.wa_email; return { data: { steps: steps(b.flow_id) }, error: null };
-      case 'book_one_on_one': flow(b.flow_id).one_on_one_at = b.at; return { data: { ok: true, one_on_one_at: b.at, invited: ['x@example.invalid'], mode: 'test' }, error: null };
+      case 'book_one_on_one': flow(b.flow_id).one_on_one_at = b.at; return { data: { ok: true, one_on_one_at: b.at, invited: ['x@example.invalid'], mode: window.__O271_MODE || 'test' }, error: null };
       case 'change_time': if (b.which === 'call') flow(b.flow_id).call_at = b.at; else flow(b.flow_id).one_on_one_at = b.at; return { data: { ok: true, which: b.which, at: b.at, warnings: ['Dana Fixture was not told: they have no Slack account. Tell them yourself.'] }, error: null };
       case 'change_manager': flow(b.flow_id).manager_member_id = b.member_id; return { data: { ok: true, manager: { member_id: b.member_id, name: 'Omar Fixture' }, warnings: [] }, error: null };
-      case 'backed_out': flow(b.flow_id).status = 'backed_out'; return { data: { ok: true, remove: ['Roster profile: the Hub leaves it as it is. Deactivate it by hand in Roster.', 'Slack onboarding channel <C1>: archive it.'], warnings: ['The onboarding plan could not be closed: boom. Close it by hand in Onboarding.'] }, error: null };
+      case 'backed_out': {
+        var was = flow(b.flow_id);
+        if (!was) {   // before Start: the flow is only on the Ready list, so it gets its row now, as it has on the real table
+          var r0 = window.__WA_RPCS.wa271_ready_list.filter(function (r) { return r.flow_id === b.flow_id; })[0];
+          window.__WA_RPCS.wa271_ready_list = window.__WA_RPCS.wa271_ready_list.filter(function (r) { return r.flow_id !== b.flow_id; });
+          fx.hub_onboard_flows.push({ id: b.flow_id, candidate_id: r0.candidate_id, practice: r0.practice, status: 'backed_out', updated_at: new Date().toISOString() });
+          return { data: { ok: true, remove: [], warnings: [] }, error: null };
+        }
+        was.status = 'backed_out'; was.updated_at = new Date().toISOString(); was.slack_channel_id = '<C1>';
+        return { data: { ok: true, remove: ['not what the page shows: it works the list out from the flow'], warnings: ['The onboarding plan could not be closed: boom. Close it by hand in Onboarding.'] }, error: null };
+      }
     }
     return refuse('unknown_action', 'The Hub does not know that action. Reload the page.', 400);
   };

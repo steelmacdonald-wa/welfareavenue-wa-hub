@@ -8,6 +8,8 @@
     var tagClass = status === 'done' ? 'ok' : status === 'failed' ? 'no' : status === 'hr_task' ? 'hr' : '';
     var h = '<li><div class="ttl">' + n + '. ' + E(label) + ' <span class="o271tag ' + tagClass + '">' + E(WORD[status] || status) + '</span>' + (r.practice ? '<span class="o271tag pr">Practice</span>' : '') + '</div>';
     if (r.detail) h += '<div class="dt' + (status === 'failed' ? ' fail' : '') + '">' + (status === 'hr_task' ? 'To do: ' : '') + E(r.detail) + '</div>';
+    if (key === 'welcome' && status === 'hr_task') h += welcomeHtml(f) + canvaCardHtml(f);
+    if (status === 'hr_task' && key !== 'google') h += '<div class="row"><button type="button" class="o271b" data-o271a="taskdone" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['t' + id + key] ? ' disabled' : '') + '>Done</button></div>';
     if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
     if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
       h += '<div class="row"><input type="text" autocomplete="off" aria-label="The address you created" placeholder="first.last@welfareavenue.com" data-o271i="gaddr" data-f="' + E(id) + '" value="' + E(gaddrOf(f)) + '">'
@@ -15,12 +17,53 @@
     }
     return h + '</li>';
   }
+  /* the fresh Canva link under the welcome to-do: Canva's links last 30 days, so HR pastes or replaces it before sending */
+  function canvaCardHtml(f) {
+    var id = f.id, typed = S.canva[id] != null ? S.canva[id] : (f.canva_link || '');
+    return '<div data-o271canva="' + E(id) + '">' + canvaHowHtml()
+      + (f.canva_link
+        ? '<div class="row"><span class="o271ln"><b>Canva link:</b> ' + E(f.canva_link) + '</span><button type="button" class="o271b" data-o271a="copycanva" data-f="' + E(id) + '">Copy the link</button></div>'
+        : '<div class="o271warn">No Canva link yet. Get a fresh one before you send the welcome email.</div>')
+      + '<div class="row"><input type="text" autocomplete="off" aria-label="Fresh Canva invite link" placeholder="https://www.canva.com/..." data-o271i="ccanva" data-f="' + E(id) + '" value="' + E(typed) + '">'
+      + '<button type="button" class="o271b" data-o271a="canvasave" data-f="' + E(id) + '"' + (S.busy['v' + id] ? ' disabled' : '') + '>Save the link</button></div></div>';
+  }
+  async function copyCanva(id) {
+    var f = flowOf(id); if (!f || !f.canva_link) return;
+    try { await navigator.clipboard.writeText(f.canva_link); toast('Copied'); }
+    catch (e) { toast('The browser would not copy it. Select the link and copy it yourself.'); }
+  }
+  async function saveCanva(id) {
+    var f = flowOf(id); if (!f || S.busy['v' + id]) return;
+    var link = String(S.canva[id] != null ? S.canva[id] : (f.canva_link || '')).trim();
+    S.busy['v' + id] = true; delete S.note[id]; paint();
+    try { await run('set_canva_link', { flow_id: Number(id), link: link }); delete S.canva[id]; delete S.busy['v' + id]; S.note[id] = { ok: link ? 'The Canva link is saved.' : 'The Canva link is cleared.' }; await load(); }
+    catch (e) { delete S.busy['v' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
+  /* what HR edited in the preview, under the welcome to-do, to send by hand */
+  function welcomeHtml(f) {
+    var edited = f.welcome_subject || f.welcome_text;
+    return '<div class="dt">'
+      + (edited
+        ? '<div class="o271ln"><b>Subject:</b> ' + E(f.welcome_subject || '') + '</div><div class="o271pre">' + E(f.welcome_text || '') + '</div>'
+        : '<div class="o271ln">No text was saved for this email.</div>')
+      + (f.group_session ? '<div class="o271ln"><b>Group session:</b> ' + E(f.group_session) + '</div>' : '')
+      + (edited || f.group_session ? '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>' : '')
+      + '</div>';
+  }
+  async function copyWelcome(id) {
+    var f = flowOf(id); if (!f) return;
+    var text = [f.welcome_subject, f.welcome_text, f.group_session ? 'Group session: ' + f.group_session : ''].filter(Boolean).join('\n\n');
+    try { await navigator.clipboard.writeText(text); toast('Copied'); }
+    catch (e) { toast('The browser would not copy it. Select the text and copy it yourself.'); }
+  }
   function gaddrOf(f) { if (S.gaddr && S.gaddr[f.id] != null) return S.gaddr[f.id]; return f.wa_email || ''; }
   function nameOf(id) { var p = S.people.filter(function (x) { return String(x.id) === String(id); })[0]; return p ? p.name : 'Not chosen'; }
   function panelHtml(f, A) {
     var id = f.id, g = A.g, h = '<div class="o271pn">', busy = S.busy['a' + id];
     if (A.kind === 'back') {
-      h += '<div class="o271ln"><b>Did ' + E(f.name) + ' back out?</b> This cancels their invites, closes the onboarding and moves the card to Withdrawn. It removes nothing from Google, Slack or the Hub: you get a list of what to take out by hand.</div>'
+      h += '<div class="o271ln"><b>Did ' + E(f.name) + ' back out?</b> ' + (f.before
+          ? 'This closes their flow and moves the card to Withdrawn. No invites have gone out yet.'
+          : 'This cancels their invites, closes the onboarding and moves the card to Withdrawn. It removes nothing from Google, Slack or the Hub: you get a list of what to take out by hand.') + '</div>'
         + '<label class="o271f">Why (optional)</label><input type="text" data-o271i="reason" data-f="' + E(id) + '" value="' + E(A.reason || '') + '">'
         + '<div class="o271btns"><button type="button" class="o271b dngp" data-o271a="actgo" data-f="' + E(id) + '"' + (busy ? ' disabled' : '') + '>Yes, they backed out</button><button type="button" class="o271b" data-o271a="actno" data-f="' + E(id) + '">Cancel</button></div>';
     } else if (A.kind === 'manager') {
@@ -57,7 +100,11 @@
       + (A ? panelHtml(f, A) : '')
       + '</div>';
   }
-  function flowOf(id) { return S.started.filter(function (x) { return String(x.id) === String(id); })[0]; }
+  function flowOf(id) {
+    var f = S.started.filter(function (x) { return String(x.id) === String(id); })[0]; if (f) return f;
+    var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
+    return x ? { id: x.flow_id, name: x.name, before: true } : null;
+  }
 
   /* ---------- the changes ---------- */
   async function openAct(id, kind) {
@@ -84,14 +131,16 @@
     S.busy['a' + id] = true; paint();
     try {
       var note = { ok: 'Done.' };
-      if (A.kind === 'book') { await run('book_one_on_one', { flow_id: Number(id), at: at }); note.ok = 'The 1-on-1 is booked and the invite has gone out.'; }
+      if (A.kind === 'book') {
+        var bk = await run('book_one_on_one', { flow_id: Number(id), at: at });
+        note.ok = bk.practice ? 'Practice: the 1-on-1 time is saved, and no invite was sent.' : bk.mode === 'test' ? 'The 1-on-1 is booked. Email is in test mode, so the invite went only to the test inboxes.' : 'The 1-on-1 is booked and the invite has gone out.';
+      }
       else if (A.kind === 'time') { var r = await run('change_time', { flow_id: Number(id), which: A.which, at: at }); note = { ok: 'The time has changed.', warnings: r.warnings || [] }; }
       else if (A.kind === 'manager') { var m = await run('change_manager', { flow_id: Number(id), member_id: Number(A.member) }); note = { ok: 'The manager has changed.', warnings: m.warnings || [] }; }
       else {
         var b = await run('backed_out', { flow_id: Number(id), reason: A.reason || '' });
-        S.out.push({ name: f.name, remove: b.remove || [], warnings: b.warnings || [] });
         delete S.note[id];
-        note = null;
+        note = (b.warnings || []).length ? { warnings: b.warnings } : null;   /* the list itself is worked out from the flow, on its card */
       }
       delete S.act[id];
       if (note) S.note[id] = note;
@@ -117,19 +166,44 @@
   async function sendLink(id, candidate) {
     if (S.busy['l' + id]) return;
     S.busy['l' + id] = true; delete S.note[id]; paint();
-    try { await run('send_grid_link', { candidate_id: Number(candidate) }); S.note[id] = { ok: 'The availability link has gone out.' }; toast('Link sent'); }
+    try { var r = await run('send_grid_link', { candidate_id: Number(candidate) }); var said = linkWord(r); S.note[id] = { ok: said }; toast(said); }
     catch (e) { S.note[id] = { err: e.message }; toast(e.message); }
     delete S.busy['l' + id]; paint();
   }
+  function linkWord(r) { return r && r.practice ? 'Practice: no email was sent.' : r && r.mode === 'test' ? 'Email is in test mode, so the availability link went only to the test inboxes.' : 'The availability link has gone out.'; }
+  async function saidYes(candidate) {
+    if (S.busy['y' + candidate]) return;
+    S.busy['y' + candidate] = true; paint();
+    try { var r = await run('send_grid_link', { candidate_id: Number(candidate), accepted: true }); toast(linkWord(r)); delete S.note['c' + candidate]; }
+    catch (e) { S.note['c' + candidate] = { err: e.message }; toast(e.message); }   /* the mail can fail after the acceptance is saved: the person then shows above, with Send the availability link */
+    delete S.busy['y' + candidate]; delete S.yes[candidate];
+    await load();
+  }
+  async function taskDone(id, step) {
+    var key = 't' + id + step; if (S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; paint();
+    try { await run('task_done', { flow_id: Number(id), step: step }); delete S.busy[key]; await load(); }
+    catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
 
   /* ---------- the section ---------- */
-  function outHtml() {
-    return S.out.map(function (o, i) {
-      return '<div class="o271out"><div class="o271ln"><b>' + E(o.name) + ' backed out.</b> Take these out by hand:</div>'
-        + (o.remove.length ? '<ul>' + o.remove.map(function (r) { return '<li>' + E(r) + '</li>'; }).join('') + '</ul>' : '<div class="o271ln">Nothing was made for them, so there is nothing to take out.</div>')
-        + o.warnings.map(warnBox).join('')
-        + '<div class="o271btns"><button type="button" class="o271b" data-o271a="outok" data-i="' + i + '">Done</button></div></div>';
-    }).join('');
+  /* what a flow that backed out leaves for HR, worked out from the flow and its steps, so a reload keeps it. The same list and words as backed_out in onboard-run. */
+  function removeList(f) {
+    if (f.practice) return [];
+    var st = {}; (f.steps || []).forEach(function (r) { st[r.step] = r.status; });
+    var out = [];
+    if (st.google === 'done' && f.wa_email) out.push('Google account ' + f.wa_email + ': suspend or delete it in Google Admin.');
+    if (st.roster === 'done' && f.member_id) out.push('Roster profile' + (f.wa_email ? ' (' + f.wa_email + ')' : '') + (f.roster_created ? ': Created for this person. Deactivate it by hand in Roster.' : ': Already on the roster before. Check whether it should stay.'));
+    if (f.slack_channel_id) out.push('Slack onboarding channel ' + f.slack_channel_id + ': archive it.');
+    if (st.hub === 'done') out.push('Hub access' + (f.wa_email ? ' for ' + f.wa_email : '') + ': remove it from Roster.');
+    return out;
+  }
+  function backedHtml(f) {
+    var remove = removeList(f);
+    return '<div class="o271out" data-o271backed="' + E(f.id) + '"><div class="o271ln"><b>' + E(f.name) + ' backed out.</b>' + (f.practice ? ' <i class="o271tag pr" style="font-style:normal">Practice</i>' : '') + (remove.length ? ' Take these out by hand:' : '') + '</div>'
+      + (remove.length ? '<ul>' + remove.map(function (r) { return '<li>' + E(r) + '</li>'; }).join('') + '</ul>' : '<div class="o271ln">Nothing was made for them, so there is nothing to take out.</div>')
+      + noteHtml(f.id)
+      + '</div>';
   }
   function paint() {
     var el = document.getElementById('o271'); if (!el) return;
@@ -140,12 +214,14 @@
     }
     var active = document.activeElement, keep = active && el.contains(active) && active.getAttribute && active.getAttribute('data-o271i');
     var keepFlow = keep ? active.getAttribute('data-f') : '', sel = keep && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
-    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>' + outHtml();
+    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>';
     if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
     if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
-    else if (!S.ready.length && !S.started.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
+    else if (!S.ready.length && !S.started.length && !S.offers.length && !S.backed.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
     html += S.ready.map(readyCard).join('');
+    if (S.offers.length) html += '<h3 class="o271h">Offers waiting for an answer</h3>' + S.offers.map(offerCard).join('');
     if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(startedCard).join('');
+    if (S.backed.length) html += '<h3 class="o271h">Backed out</h3>' + S.backed.map(backedHtml).join('');
     /* each grid keeps its scroll through a repaint */
     var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
     el.innerHTML = html;
@@ -199,13 +275,21 @@
     if (a === 'act') { openAct(f, b.getAttribute('data-kind')); return; }
     if (a === 'actgo') { actGo(f); return; }
     if (a === 'actno') { delete S.act[f]; paint(); return; }
-    if (a === 'outok') { S.out.splice(Number(b.getAttribute('data-i')), 1); paint(); return; }
+    if (a === 'taskdone') { taskDone(f, b.getAttribute('data-step')); return; }
+    if (a === 'copywelcome') { copyWelcome(f); return; }
+    if (a === 'copycanva') { copyCanva(f); return; }
+    if (a === 'canvasave') { saveCanva(f); return; }
+    var cand = b.getAttribute('data-cand');
+    if (a === 'yesask') { S.yes[cand] = true; delete S.note['c' + cand]; paint(); return; }
+    if (a === 'yesno') { delete S.yes[cand]; paint(); return; }
+    if (a === 'yesgo') { saidYes(cand); return; }
   });
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t || !t.getAttribute) return;
     var k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f'); if (!k || !id) return;
     var P = S.pick[id], A = S.act[id];
     if (k === 'gaddr') { S.gaddr = S.gaddr || {}; S.gaddr[id] = t.value; return; }
+    if (k === 'ccanva') { S.canva[id] = t.value; return; }
     if (A && k === 'reason') { A.reason = t.value; return; }
     if (A && k === 'at') {
       A.at = t.value;
@@ -217,20 +301,23 @@
     if (k === 'call' || k === 'one') { P.g.vals[k] = t.value; refreshGrid(P.g); liveUpdate(id); return; }
     if (k === 'addr') { P.addr = t.value; liveUpdate(id); return; }
     if (k === 'group') { P.group = t.value; return; }
+    if (k === 'canva') { P.canva = t.value; liveUpdate(id); return; }
     if (k === 'subj') { P.subject = t.value; return; }
     if (k === 'text') { P.text = t.value; return; }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !t.getAttribute) return;
     var skip = t.getAttribute('data-o271skip'), k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f');
-    if (skip && S.pick[id]) { S.pick[id].skip[skip] = !t.checked; liveUpdate(id); return; }
+    if (skip && S.pick[id]) { S.pick[id].skip[skip] = !t.checked; if (skip === 'google' && !t.checked) clearClash(id); liveUpdate(id); return; }
     if (!k || !id) return;
     var P = S.pick[id], A = S.act[id];
     if (k === 'addr' && P) { P.addr = t.value; recheckAddress(id); return; }
     if (k === 'mgr' && P) {
+      var was = P.managerId;
       P.managerId = t.value;
       var changed = String(P.managerId) !== String(P.pv.manager && P.pv.manager.member_id);
       if (changed !== P.g.hideManager) { P.g.hideManager = changed; paint(); } else liveUpdate(id);
+      if (t.value && t.value !== String(was)) saveManager(id, t.value, was);
       return;
     }
     if (k === 'member' && A) { A.member = t.value; paint(); return; }

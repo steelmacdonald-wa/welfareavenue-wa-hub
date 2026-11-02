@@ -3,7 +3,8 @@
    =====================================================================
    HR Center > Onboarding gets Ready to onboard, above the existing section: everyone who accepted, with their grid status, the time picker
    (the hire's grid, the manager's over it for the 1-on-1, hub@ meetings greyed), the preview, Start onboarding, and a card with each step's
-   result, Retry, "I created it, continue" and the changes after Start. All writes go through the onboard-run edge function; its refusals are
+   result, Retry, "I created it, continue" and the changes after Start. Under the list: offers still out, with the email-reply route, and those who backed
+   out with what HR takes out by hand (kept KEEP_DAYS, worked out from the flow and its steps). All writes go through the onboard-run edge function; its refusals are
    shown as they come. wa46Render is private to wave46 (its wraps elsewhere never fire), so this wave keeps its section in place with an
    observer, the pattern wave93 uses. The server decides who sees it: wa271_ready_list refuses anyone but HR and admins.
    Times are America/Toronto wall clock, through Intl only: an instant is never made by adding an offset. */
@@ -12,21 +13,25 @@
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, onboarding_id, started_at';   /* named: pw_nonce is withheld from the browser */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at';   /* named: pw_nonce is withheld from the browser */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
-  var CAND_COLS = 'id, name, role, email';
+  var CAND_COLS = 'id, name, role, email, member_id';
+  var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
+  var CANVA_LINK = /^https:\/\/www\.canva\.com\/\S*$/;   /* as in onboard-run */
+  var CANVA_HOW = 'Canva links last 30 days, so get a new one for each hire: in Canva, go to Invite people, then Get invite link, then Copy.';
   var STEPS = [['roster', 'Roster profile'], ['google', 'Google account'], ['plan', 'Onboarding plan'], ['invites', 'Calendar invites'], ['manager', 'Tell the manager'], ['hub', 'Hub access'], ['slack', 'Slack channel'], ['welcome', 'Welcome email']];
   var WORD = { done: 'Done', skipped: 'Skipped', failed: 'Failed', waiting: 'Waiting', hr_task: 'For HR', running: 'Running', pending: 'Running' };
   var RULE = { reports_to: 'the position reports to them', team_lead: 'they lead the department', chosen: 'chosen by HR', none: 'HR must choose' };
   var STALE_MS = 10 * 60 * 1000;      /* as in onboard-run: a step left running this long was cut off, so Retry may take it */
-  var KEEP_DAYS = 30;                 /* a finished flow stays on the list this long after its call; then it lives under Onboarding */
+  var KEEP_DAYS = 30;                 /* a finished flow stays on the list this long after its call, and one that backed out this long after that; then it lives under Onboarding */
 
   var S = {
-    ready: [], started: [], people: [], cfg: { days: 14, start: 8, end: 21, cell: 30 }, loaded: false, denied: false, err: '', loading: null,
+    ready: [], started: [], backed: [], offers: [], people: [], cfg: { days: 14, start: 8, end: 21, cell: 30 }, loaded: false, denied: false, err: '', loading: null,
     pick: {},   /* flow id: the open picker and preview */
-    act: {},    /* flow id: the open change panel on a started card */
-    note: {},   /* flow id: { ok, err, warnings } on a card */
-    out: [],    /* what They backed out left for HR: { name, remove, warnings } until HR closes it */
+    act: {},    /* flow id: the open change panel on a card */
+    note: {},   /* flow id, or 'c' and a candidate id: { ok, err, warnings } on a card */
+    yes: {},    /* candidate id: asking whether they really said yes by email */
+    canva: {},  /* flow id: the Canva link being typed on a card */
     busy: {}
   };
 
@@ -96,6 +101,7 @@
     '.o271out{border:1px solid ' + RED + ';border-radius:14px;padding:14px;margin:0 0 10px;}' +
     '.o271out ul{margin:6px 0;padding-left:18px;font-size:13px;}' +
     '.o271out li{margin:3px 0;overflow-wrap:anywhere;}' +
+    '.o271pre{white-space:pre-wrap;font-size:13px;margin:4px 0;padding:8px 10px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + GROUND + ';overflow-wrap:anywhere;}' +
     '@media (max-width:700px){.o271cd{padding:12px;}.o271c{height:30px;}.o271gw{max-height:62vh;overflow:auto;}.o271 input[type=text],.o271 input[type=datetime-local],.o271 select{max-width:none;}}';
   document.head.appendChild(st);
 
@@ -144,11 +150,15 @@
   /* ---------- reads ---------- */
   function hrPage() { return typeof window.wa46IsHr === 'function' && window.wa46IsHr(); }
   function surelyHr() { try { return WA40_MINE.role === 'admin' || WA40_MINE.profile === 'hr'; } catch (e) { return false; } }
+  /* the flows Start has begun, and the ones that backed out: each kept KEEP_DAYS */
   async function readStarted() {
-    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started']);
+    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started', 'backed_out']);
     if (f.error) throw f.error;
     var cut = Date.now() - KEEP_DAYS * 86400000;
-    var flows = (f.data || []).filter(function (x) { return x.status === 'running' || !x.call_at || Date.parse(x.call_at) >= cut; });
+    var flows = (f.data || []).filter(function (x) {
+      if (x.status === 'backed_out') return !x.updated_at || Date.parse(x.updated_at) >= cut;
+      return x.status === 'running' || !x.call_at || Date.parse(x.call_at) >= cut;
+    });
     if (!flows.length) return [];
     var ids = flows.map(function (x) { return x.id; }), cids = flows.map(function (x) { return x.candidate_id; });
     var res = await Promise.all([db.from('hub_onboard_steps').select(STEP_COLS).in('flow_id', ids), db.from('hub_candidates').select(CAND_COLS).in('id', cids)]);
@@ -157,8 +167,14 @@
     return flows.map(function (x) {
       var c = (res[1].data || []).filter(function (y) { return String(y.id) === String(x.candidate_id); })[0] || {};
       var rows = (res[0].data || []).filter(function (y) { return String(y.flow_id) === String(x.id); });
-      return Object.assign({}, x, { name: c.name || 'Someone', role: c.role || '', email: c.email || '', steps: rows });
+      return Object.assign({}, x, { name: c.name || 'Someone', role: c.role || '', email: c.email || '', member_id: c.member_id, steps: rows });
     });
+  }
+  /* an offer that has gone out with no answer on the card, for those who answer by replying to the email */
+  async function readOffers() {
+    var r = await db.from('hub_candidates').select(OFFER_COLS).eq('status', 'offer');
+    if (r.error) throw r.error;
+    return (r.data || []).filter(function (c) { return c.status === 'offer' && c.offer_sent_at && !c.accepted_on; });
   }
   async function readPeople() {
     if (S.people.length) return;
@@ -178,7 +194,10 @@
         if (r && r.error) throw r.error;
         S.denied = false; S.err = '';
         S.ready = ((r && r.data) || []).filter(function (x) { return x.status === 'waiting' || x.status === 'ready'; });
-        S.started = await readStarted();
+        var begun = await readStarted();
+        S.started = begun.filter(function (x) { return x.status !== 'backed_out'; });
+        S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
+        S.offers = await readOffers();
         await Promise.all([readPeople(), readCfg()]);
       } catch (e) {
         var msg = String((e && e.message) || e);
@@ -188,7 +207,7 @@
       S.loaded = true; S.loading = null;
       /* a picker or panel for someone who has left the list goes with them */
       Object.keys(S.pick).forEach(function (id) { if (!S.ready.some(function (x) { return String(x.flow_id) === id; })) delete S.pick[id]; });
-      Object.keys(S.act).forEach(function (id) { if (!S.started.some(function (x) { return String(x.id) === id; })) delete S.act[id]; });
+      Object.keys(S.act).forEach(function (id) { if (!flowOf(id)) delete S.act[id]; });
       paint();
     })();
     return S.loading;
@@ -200,7 +219,9 @@
     var n = S.note[id]; if (!n) return '';
     return (n.ok ? '<div class="o271okn">' + E(n.ok) + '</div>' : '') + (n.warnings || []).map(warnBox).join('') + (n.err ? '<div class="o271err">' + E(n.err) + '</div>' : '');
   }
-  function managerLine(m) {
+  function managerLine(x) {
+    if (x.manager_member_id) return 'Manager: ' + E(nameOf(x.manager_member_id)) + ' (' + E(RULE.chosen) + ')';
+    var m = x.default_manager;
     if (m && m.member_id) return 'Manager: ' + E(m.name) + ' (' + E(RULE[m.how] || m.how) + ')';
     return 'Manager: ' + E(RULE.none);
   }
@@ -214,12 +235,27 @@
       + (x.late ? '<span class="o271tag late">Answered after the reply-by date</span>' : '')
       + '</div>'
       + '<div class="o271ln">' + (x.accepted_on ? 'Accepted ' + E(dayText(x.accepted_on)) : '') + (x.offer_start ? ' &middot; The offer suggested ' + E(dayText(x.offer_start)) : '') + '</div>'
-      + '<div class="o271ln">' + managerLine(x.default_manager) + '</div>'
+      + '<div class="o271ln">' + managerLine(x) + '</div>'
       + (other ? warnBox('This person has ' + other + ' other application' + (other === 1 ? '' : 's') + ' still open. Close ' + (other === 1 ? 'it' : 'them') + ' by hand so they do not get a second account.') : '')
       + noteHtml(id)
       + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
-      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button></div>'
+      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
+      + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
+      + (S.act[id] ? panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')
+      + '</div>';
+  }
+  /* an offer still out: an answer by email has its own button, and asks first */
+  function offerCard(c) {
+    var id = c.id, asking = S.yes[id], busy = S.busy['y' + id];
+    return '<div class="o271cd" data-o271offer="' + E(id) + '">'
+      + '<div class="o271top"><b>' + E(c.name) + '</b><span>' + E(c.role || '') + '</span></div>'
+      + '<div class="o271ln">Offer sent ' + E(dayText(c.offer_sent_at)) + '</div>'
+      + noteHtml('c' + id)
+      + (asking
+        ? '<div class="o271ln"><b>Did ' + E(c.name) + ' say yes?</b> The Hub saves that they accepted today and emails them the availability link.</div>'
+          + '<div class="o271btns"><button type="button" class="o271b pri" data-o271a="yesgo" data-cand="' + E(id) + '"' + (busy ? ' disabled' : '') + '>Yes, send the link</button><button type="button" class="o271b" data-o271a="yesno" data-cand="' + E(id) + '">Cancel</button></div>'
+        : '<div class="o271btns"><button type="button" class="o271b" data-o271a="yesask" data-cand="' + E(id) + '">They said yes by email: send the availability link</button></div>')
       + '</div>';
   }
 
@@ -300,16 +336,31 @@
     return '<option value="">Choose a manager...</option>' + S.people.filter(function (p) { return p.active !== false; }).map(function (p) { return '<option value="' + E(p.id) + '"' + (String(p.id) === String(chosen) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('');
   }
   function startBlock(P) {
-    var addr = String(P.addr || '').trim().toLowerCase(), googleOn = !P.skip.google, g = P.g;
+    var addr = String(P.addr || '').trim().toLowerCase(), googleOn = !P.skip.google, g = P.g, canva = String(P.canva || '').trim();
+    if (canva && !CANVA_LINK.test(canva)) return 'The Canva link must start with https://www.canva.com/. Copy it from Invite people in Canva, or leave it empty.';
     if (!g.vals.call) return 'Pick a time for the onboarding call.';
     if (toInstant(g.vals.call) == null) return 'That call time does not exist on the Toronto clock. Pick another.';
     if (g.vals.one && toInstant(g.vals.one) == null) return 'That 1-on-1 time does not exist on the Toronto clock. Pick another.';
     if (!P.managerId) return 'Choose a manager.';
     if (addr && !ADDR.test(addr)) return 'The new address must be a plain address ending in @welfareavenue.com.';
     if (!addr && googleOn) return 'Type the new address, or turn off the Google account step.';
-    if (googleOn && P.takenAddr && P.takenAddr === addr) return addr + ' is already in use. Change the address, or turn off the Google account step.';
+    if (P.takenAddr && P.takenAddr === addr) {
+      if (P.owner) return addr + ' is on the roster profile of ' + P.owner + '. Change the address, or clear it.';
+      if (googleOn) return addr + ' is already in use. Change the address, or turn off the Google account step.';
+      if (!P.own) return addr + ' is already in use, so the Hub will not store it. Change the address, or clear it.';
+    }
     return '';
   }
+  /* HR turned the Google step off while the address clashes: it must not stay in the box and reach another person's mailbox. Their own address stays. */
+  function clearClash(id) {
+    var P = S.pick[id]; if (!P) return;
+    var addr = String(P.addr || '').trim().toLowerCase();
+    if (!P.takenAddr || P.takenAddr !== addr || P.own) return;
+    P.addr = ''; P.takenAddr = ''; P.owner = '';
+    var box = document.querySelector('[data-o271flow="' + id + '"] [data-o271i="addr"]'); if (box) box.value = '';
+  }
+  function canvaHowHtml() { return '<div class="o271ln">' + E(CANVA_HOW) + ' <a href="https://www.canva.com/settings/people" target="_blank" rel="noopener">Open Canva people settings</a></div>'; }
+  function canvaSaid(v) { return String(v || '').trim() ? '' : 'No Canva link yet. You can start without one, but get a fresh link before the welcome email goes out.'; }
   function saidBlock(g, mode) { var s = saidHtml(g, mode); return '<div class="o271said ' + s.cl + '" data-o271said="' + mode + '">' + E(s.text) + '</div>'; }
   function pickHtml(x, P) {
     var id = x.flow_id, pv = P.pv, g = P.g, block = startBlock(P);
@@ -324,10 +375,15 @@
       + '<h3 class="o271h">2. The preview</h3>'
       + '<div class="o271two"><div><label class="o271f">New address</label><input type="text" autocomplete="off" data-o271i="addr" data-f="' + E(id) + '" value="' + E(P.addr) + '"></div>'
       + '<div><label class="o271f">Manager</label><select data-o271i="mgr" data-f="' + E(id) + '">' + memberOptions(P.managerId) + '</select><div class="o271said" data-o271said="rule">' + E(ruleLine(P)) + '</div></div></div>'
+      + '<div class="o271ln">Department: ' + E(pv.department || 'not set') + '</div>'
       + '<label class="o271f">Group session (leave blank to leave the line out)</label><input type="text" data-o271i="group" data-f="' + E(id) + '" value="' + E(P.group) + '">'
       + '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o271i="subj" data-f="' + E(id) + '" value="' + E(P.subject) + '">'
       + '<label class="o271f">Welcome email: text</label><textarea data-o271i="text" data-f="' + E(id) + '">' + E(P.text) + '</textarea>'
+      + '<div class="o271ln">Anything in [square brackets] fills in at Start, from the times, manager, address and links you choose here. Leave the brackets in place, even if you change the rest.</div>'
       + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>' : '')
+      + canvaHowHtml()
+      + '<label class="o271f">Fresh Canva invite link</label><input type="text" style="max-width:none" autocomplete="off" data-o271i="canva" data-f="' + E(id) + '" value="' + E(P.canva) + '">'
+      + '<div class="o271said" data-o271said="canva">' + E(canvaSaid(P.canva)) + '</div>'
       + '<h3 class="o271h">3. The steps that will run</h3>'
       + (pv.steps || []).map(function (s) {
           var locked = s.key === 'roster', word = s.mode === 'hr_task' ? 'HR does this one' : s.mode === 'practice' ? 'Practice: nothing real changes' : 'The Hub does this';
@@ -341,8 +397,28 @@
   }
   function ruleLine(P) {
     if (!P.managerId) return RULE.none;
-    if (String(P.managerId) === String(P.pv.manager && P.pv.manager.member_id)) return 'The Hub used: ' + (RULE[P.pv.manager.how] || P.pv.manager.how);
+    if (String(P.managerId) === String(P.pv.manager && P.pv.manager.member_id) && P.pv.manager.how !== 'chosen') return 'The Hub used: ' + (RULE[P.pv.manager.how] || P.pv.manager.how);
     return RULE.chosen;
+  }
+  /* HR changed the dropdown: saved now, so the hourly job sends the right manager their link before Start. The other manager's marks went with it. */
+  async function saveManager(id, member, before) {
+    var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
+    try {
+      var r = await run('set_manager', { flow_id: Number(id), member_id: Number(member) });
+      if (x) x.manager_member_id = Number(member);
+      var P = S.pick[id]; if (!P) { paint(); return; }
+      P.err = '';
+      if (!r.practice) {
+        P.pv.manager = { member_id: Number(member), name: nameOf(member), how: 'chosen' };
+        if (r.cleared) { P.pv.grids = Object.assign({}, P.pv.grids, { manager: [] }); P.g.manager = {}; }
+        P.g.hideManager = false;
+      }
+      paint();
+    } catch (e) {
+      var Q = S.pick[id];
+      if (Q) { Q.managerId = before; Q.err = e.message; Q.g.hideManager = String(before) !== String(Q.pv.manager && Q.pv.manager.member_id); }
+      toast(e.message); paint();
+    }
   }
   /* an input changed: what depends on it, without redrawing what HR is typing in */
   function liveUpdate(id) {
@@ -350,6 +426,7 @@
     var root = document.querySelector('[data-o271flow="' + id + '"]'); if (!root) return;
     ['call', 'one'].forEach(function (m) { var el = root.querySelector('[data-o271said="' + m + '"]'); if (el) { var s = saidHtml(P.g, m); el.textContent = s.text; el.className = 'o271said ' + s.cl; } });
     var rule = root.querySelector('[data-o271said="rule"]'); if (rule) rule.textContent = ruleLine(P);
+    var cs = root.querySelector('[data-o271said="canva"]'); if (cs) cs.textContent = canvaSaid(P.canva);
     var block = startBlock(P), bl = root.querySelector('[data-o271said="block"]'); if (bl) bl.textContent = block;
     var b = root.querySelector('[data-o271a="start"]'); if (b && !S.busy['s' + id]) b.disabled = !!block;
   }
@@ -362,7 +439,7 @@
       var g = newGrid('p' + id, pv, 'call');
       if (x.call_at) g.vals.call = toLocal(x.call_at);
       if (x.one_on_one_at) g.vals.one = toLocal(x.one_on_one_at);
-      S.pick[id] = { pv: pv, g: g, addr: pv.address || '', managerId: (pv.manager && pv.manager.member_id) || '', group: '', subject: (pv.welcome && pv.welcome.subject) || '', text: (pv.welcome && pv.welcome.text) || '', skip: {}, takenAddr: pv.address_taken ? String(pv.address || '').toLowerCase() : '', err: '' };
+      S.pick[id] = { pv: pv, g: g, addr: pv.address || '', managerId: (pv.manager && pv.manager.member_id) || '', group: '', subject: (pv.welcome && pv.welcome.subject) || '', text: (pv.welcome && pv.welcome.text) || '', skip: {}, takenAddr: pv.address_taken || pv.address_owner ? String(pv.address || '').toLowerCase() : '', owner: pv.address_owner || '', own: !!pv.address_own, canva: pv.canva_link || '', err: '' };
     } catch (e) { S.note[id] = { err: e.message }; }
     delete S.busy['o' + id]; paint();
   }
@@ -375,7 +452,9 @@
       var pv = await run('preview', { flow_id: Number(id), wa_email: addr });
       if (!S.pick[id] || String(S.pick[id].addr).trim().toLowerCase() !== addr) return;
       P.pv.warnings = pv.warnings; P.pv.address_taken = pv.address_taken;
-      P.takenAddr = pv.address_taken ? addr : '';
+      P.takenAddr = pv.address_taken || pv.address_owner ? addr : '';
+      P.owner = pv.address_owner || ''; P.own = !!pv.address_own;
+      if (P.skip.google) clearClash(id);
       paint();
     } catch (e) { P.err = e.message; paint(); }
   }
@@ -385,7 +464,7 @@
     S.busy['s' + id] = true; P.err = ''; paint();
     var body = {
       flow_id: Number(id), wa_email: String(P.addr || '').trim().toLowerCase(), manager_member_id: Number(P.managerId), call_at: isoOf(P.g.vals.call),
-      one_on_one_at: P.g.vals.one ? isoOf(P.g.vals.one) : null, group_session: P.group || null,
+      one_on_one_at: P.g.vals.one ? isoOf(P.g.vals.one) : null, group_session: P.group || null, canva_link: String(P.canva || '').trim(),
       skip: Object.keys(P.skip).filter(function (k) { return P.skip[k]; })
     };
     var w0 = P.pv.welcome || {};
@@ -408,6 +487,8 @@
     var tagClass = status === 'done' ? 'ok' : status === 'failed' ? 'no' : status === 'hr_task' ? 'hr' : '';
     var h = '<li><div class="ttl">' + n + '. ' + E(label) + ' <span class="o271tag ' + tagClass + '">' + E(WORD[status] || status) + '</span>' + (r.practice ? '<span class="o271tag pr">Practice</span>' : '') + '</div>';
     if (r.detail) h += '<div class="dt' + (status === 'failed' ? ' fail' : '') + '">' + (status === 'hr_task' ? 'To do: ' : '') + E(r.detail) + '</div>';
+    if (key === 'welcome' && status === 'hr_task') h += welcomeHtml(f) + canvaCardHtml(f);
+    if (status === 'hr_task' && key !== 'google') h += '<div class="row"><button type="button" class="o271b" data-o271a="taskdone" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['t' + id + key] ? ' disabled' : '') + '>Done</button></div>';
     if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
     if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
       h += '<div class="row"><input type="text" autocomplete="off" aria-label="The address you created" placeholder="first.last@welfareavenue.com" data-o271i="gaddr" data-f="' + E(id) + '" value="' + E(gaddrOf(f)) + '">'
@@ -415,12 +496,53 @@
     }
     return h + '</li>';
   }
+  /* the fresh Canva link under the welcome to-do: Canva's links last 30 days, so HR pastes or replaces it before sending */
+  function canvaCardHtml(f) {
+    var id = f.id, typed = S.canva[id] != null ? S.canva[id] : (f.canva_link || '');
+    return '<div data-o271canva="' + E(id) + '">' + canvaHowHtml()
+      + (f.canva_link
+        ? '<div class="row"><span class="o271ln"><b>Canva link:</b> ' + E(f.canva_link) + '</span><button type="button" class="o271b" data-o271a="copycanva" data-f="' + E(id) + '">Copy the link</button></div>'
+        : '<div class="o271warn">No Canva link yet. Get a fresh one before you send the welcome email.</div>')
+      + '<div class="row"><input type="text" autocomplete="off" aria-label="Fresh Canva invite link" placeholder="https://www.canva.com/..." data-o271i="ccanva" data-f="' + E(id) + '" value="' + E(typed) + '">'
+      + '<button type="button" class="o271b" data-o271a="canvasave" data-f="' + E(id) + '"' + (S.busy['v' + id] ? ' disabled' : '') + '>Save the link</button></div></div>';
+  }
+  async function copyCanva(id) {
+    var f = flowOf(id); if (!f || !f.canva_link) return;
+    try { await navigator.clipboard.writeText(f.canva_link); toast('Copied'); }
+    catch (e) { toast('The browser would not copy it. Select the link and copy it yourself.'); }
+  }
+  async function saveCanva(id) {
+    var f = flowOf(id); if (!f || S.busy['v' + id]) return;
+    var link = String(S.canva[id] != null ? S.canva[id] : (f.canva_link || '')).trim();
+    S.busy['v' + id] = true; delete S.note[id]; paint();
+    try { await run('set_canva_link', { flow_id: Number(id), link: link }); delete S.canva[id]; delete S.busy['v' + id]; S.note[id] = { ok: link ? 'The Canva link is saved.' : 'The Canva link is cleared.' }; await load(); }
+    catch (e) { delete S.busy['v' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
+  /* what HR edited in the preview, under the welcome to-do, to send by hand */
+  function welcomeHtml(f) {
+    var edited = f.welcome_subject || f.welcome_text;
+    return '<div class="dt">'
+      + (edited
+        ? '<div class="o271ln"><b>Subject:</b> ' + E(f.welcome_subject || '') + '</div><div class="o271pre">' + E(f.welcome_text || '') + '</div>'
+        : '<div class="o271ln">No text was saved for this email.</div>')
+      + (f.group_session ? '<div class="o271ln"><b>Group session:</b> ' + E(f.group_session) + '</div>' : '')
+      + (edited || f.group_session ? '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>' : '')
+      + '</div>';
+  }
+  async function copyWelcome(id) {
+    var f = flowOf(id); if (!f) return;
+    var text = [f.welcome_subject, f.welcome_text, f.group_session ? 'Group session: ' + f.group_session : ''].filter(Boolean).join('\n\n');
+    try { await navigator.clipboard.writeText(text); toast('Copied'); }
+    catch (e) { toast('The browser would not copy it. Select the text and copy it yourself.'); }
+  }
   function gaddrOf(f) { if (S.gaddr && S.gaddr[f.id] != null) return S.gaddr[f.id]; return f.wa_email || ''; }
   function nameOf(id) { var p = S.people.filter(function (x) { return String(x.id) === String(id); })[0]; return p ? p.name : 'Not chosen'; }
   function panelHtml(f, A) {
     var id = f.id, g = A.g, h = '<div class="o271pn">', busy = S.busy['a' + id];
     if (A.kind === 'back') {
-      h += '<div class="o271ln"><b>Did ' + E(f.name) + ' back out?</b> This cancels their invites, closes the onboarding and moves the card to Withdrawn. It removes nothing from Google, Slack or the Hub: you get a list of what to take out by hand.</div>'
+      h += '<div class="o271ln"><b>Did ' + E(f.name) + ' back out?</b> ' + (f.before
+          ? 'This closes their flow and moves the card to Withdrawn. No invites have gone out yet.'
+          : 'This cancels their invites, closes the onboarding and moves the card to Withdrawn. It removes nothing from Google, Slack or the Hub: you get a list of what to take out by hand.') + '</div>'
         + '<label class="o271f">Why (optional)</label><input type="text" data-o271i="reason" data-f="' + E(id) + '" value="' + E(A.reason || '') + '">'
         + '<div class="o271btns"><button type="button" class="o271b dngp" data-o271a="actgo" data-f="' + E(id) + '"' + (busy ? ' disabled' : '') + '>Yes, they backed out</button><button type="button" class="o271b" data-o271a="actno" data-f="' + E(id) + '">Cancel</button></div>';
     } else if (A.kind === 'manager') {
@@ -457,7 +579,11 @@
       + (A ? panelHtml(f, A) : '')
       + '</div>';
   }
-  function flowOf(id) { return S.started.filter(function (x) { return String(x.id) === String(id); })[0]; }
+  function flowOf(id) {
+    var f = S.started.filter(function (x) { return String(x.id) === String(id); })[0]; if (f) return f;
+    var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
+    return x ? { id: x.flow_id, name: x.name, before: true } : null;
+  }
 
   /* ---------- the changes ---------- */
   async function openAct(id, kind) {
@@ -484,14 +610,16 @@
     S.busy['a' + id] = true; paint();
     try {
       var note = { ok: 'Done.' };
-      if (A.kind === 'book') { await run('book_one_on_one', { flow_id: Number(id), at: at }); note.ok = 'The 1-on-1 is booked and the invite has gone out.'; }
+      if (A.kind === 'book') {
+        var bk = await run('book_one_on_one', { flow_id: Number(id), at: at });
+        note.ok = bk.practice ? 'Practice: the 1-on-1 time is saved, and no invite was sent.' : bk.mode === 'test' ? 'The 1-on-1 is booked. Email is in test mode, so the invite went only to the test inboxes.' : 'The 1-on-1 is booked and the invite has gone out.';
+      }
       else if (A.kind === 'time') { var r = await run('change_time', { flow_id: Number(id), which: A.which, at: at }); note = { ok: 'The time has changed.', warnings: r.warnings || [] }; }
       else if (A.kind === 'manager') { var m = await run('change_manager', { flow_id: Number(id), member_id: Number(A.member) }); note = { ok: 'The manager has changed.', warnings: m.warnings || [] }; }
       else {
         var b = await run('backed_out', { flow_id: Number(id), reason: A.reason || '' });
-        S.out.push({ name: f.name, remove: b.remove || [], warnings: b.warnings || [] });
         delete S.note[id];
-        note = null;
+        note = (b.warnings || []).length ? { warnings: b.warnings } : null;   /* the list itself is worked out from the flow, on its card */
       }
       delete S.act[id];
       if (note) S.note[id] = note;
@@ -517,19 +645,44 @@
   async function sendLink(id, candidate) {
     if (S.busy['l' + id]) return;
     S.busy['l' + id] = true; delete S.note[id]; paint();
-    try { await run('send_grid_link', { candidate_id: Number(candidate) }); S.note[id] = { ok: 'The availability link has gone out.' }; toast('Link sent'); }
+    try { var r = await run('send_grid_link', { candidate_id: Number(candidate) }); var said = linkWord(r); S.note[id] = { ok: said }; toast(said); }
     catch (e) { S.note[id] = { err: e.message }; toast(e.message); }
     delete S.busy['l' + id]; paint();
   }
+  function linkWord(r) { return r && r.practice ? 'Practice: no email was sent.' : r && r.mode === 'test' ? 'Email is in test mode, so the availability link went only to the test inboxes.' : 'The availability link has gone out.'; }
+  async function saidYes(candidate) {
+    if (S.busy['y' + candidate]) return;
+    S.busy['y' + candidate] = true; paint();
+    try { var r = await run('send_grid_link', { candidate_id: Number(candidate), accepted: true }); toast(linkWord(r)); delete S.note['c' + candidate]; }
+    catch (e) { S.note['c' + candidate] = { err: e.message }; toast(e.message); }   /* the mail can fail after the acceptance is saved: the person then shows above, with Send the availability link */
+    delete S.busy['y' + candidate]; delete S.yes[candidate];
+    await load();
+  }
+  async function taskDone(id, step) {
+    var key = 't' + id + step; if (S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; paint();
+    try { await run('task_done', { flow_id: Number(id), step: step }); delete S.busy[key]; await load(); }
+    catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
 
   /* ---------- the section ---------- */
-  function outHtml() {
-    return S.out.map(function (o, i) {
-      return '<div class="o271out"><div class="o271ln"><b>' + E(o.name) + ' backed out.</b> Take these out by hand:</div>'
-        + (o.remove.length ? '<ul>' + o.remove.map(function (r) { return '<li>' + E(r) + '</li>'; }).join('') + '</ul>' : '<div class="o271ln">Nothing was made for them, so there is nothing to take out.</div>')
-        + o.warnings.map(warnBox).join('')
-        + '<div class="o271btns"><button type="button" class="o271b" data-o271a="outok" data-i="' + i + '">Done</button></div></div>';
-    }).join('');
+  /* what a flow that backed out leaves for HR, worked out from the flow and its steps, so a reload keeps it. The same list and words as backed_out in onboard-run. */
+  function removeList(f) {
+    if (f.practice) return [];
+    var st = {}; (f.steps || []).forEach(function (r) { st[r.step] = r.status; });
+    var out = [];
+    if (st.google === 'done' && f.wa_email) out.push('Google account ' + f.wa_email + ': suspend or delete it in Google Admin.');
+    if (st.roster === 'done' && f.member_id) out.push('Roster profile' + (f.wa_email ? ' (' + f.wa_email + ')' : '') + (f.roster_created ? ': Created for this person. Deactivate it by hand in Roster.' : ': Already on the roster before. Check whether it should stay.'));
+    if (f.slack_channel_id) out.push('Slack onboarding channel ' + f.slack_channel_id + ': archive it.');
+    if (st.hub === 'done') out.push('Hub access' + (f.wa_email ? ' for ' + f.wa_email : '') + ': remove it from Roster.');
+    return out;
+  }
+  function backedHtml(f) {
+    var remove = removeList(f);
+    return '<div class="o271out" data-o271backed="' + E(f.id) + '"><div class="o271ln"><b>' + E(f.name) + ' backed out.</b>' + (f.practice ? ' <i class="o271tag pr" style="font-style:normal">Practice</i>' : '') + (remove.length ? ' Take these out by hand:' : '') + '</div>'
+      + (remove.length ? '<ul>' + remove.map(function (r) { return '<li>' + E(r) + '</li>'; }).join('') + '</ul>' : '<div class="o271ln">Nothing was made for them, so there is nothing to take out.</div>')
+      + noteHtml(f.id)
+      + '</div>';
   }
   function paint() {
     var el = document.getElementById('o271'); if (!el) return;
@@ -540,12 +693,14 @@
     }
     var active = document.activeElement, keep = active && el.contains(active) && active.getAttribute && active.getAttribute('data-o271i');
     var keepFlow = keep ? active.getAttribute('data-f') : '', sel = keep && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
-    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>' + outHtml();
+    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>';
     if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
     if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
-    else if (!S.ready.length && !S.started.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
+    else if (!S.ready.length && !S.started.length && !S.offers.length && !S.backed.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
     html += S.ready.map(readyCard).join('');
+    if (S.offers.length) html += '<h3 class="o271h">Offers waiting for an answer</h3>' + S.offers.map(offerCard).join('');
     if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(startedCard).join('');
+    if (S.backed.length) html += '<h3 class="o271h">Backed out</h3>' + S.backed.map(backedHtml).join('');
     /* each grid keeps its scroll through a repaint */
     var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
     el.innerHTML = html;
@@ -599,13 +754,21 @@
     if (a === 'act') { openAct(f, b.getAttribute('data-kind')); return; }
     if (a === 'actgo') { actGo(f); return; }
     if (a === 'actno') { delete S.act[f]; paint(); return; }
-    if (a === 'outok') { S.out.splice(Number(b.getAttribute('data-i')), 1); paint(); return; }
+    if (a === 'taskdone') { taskDone(f, b.getAttribute('data-step')); return; }
+    if (a === 'copywelcome') { copyWelcome(f); return; }
+    if (a === 'copycanva') { copyCanva(f); return; }
+    if (a === 'canvasave') { saveCanva(f); return; }
+    var cand = b.getAttribute('data-cand');
+    if (a === 'yesask') { S.yes[cand] = true; delete S.note['c' + cand]; paint(); return; }
+    if (a === 'yesno') { delete S.yes[cand]; paint(); return; }
+    if (a === 'yesgo') { saidYes(cand); return; }
   });
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t || !t.getAttribute) return;
     var k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f'); if (!k || !id) return;
     var P = S.pick[id], A = S.act[id];
     if (k === 'gaddr') { S.gaddr = S.gaddr || {}; S.gaddr[id] = t.value; return; }
+    if (k === 'ccanva') { S.canva[id] = t.value; return; }
     if (A && k === 'reason') { A.reason = t.value; return; }
     if (A && k === 'at') {
       A.at = t.value;
@@ -617,20 +780,23 @@
     if (k === 'call' || k === 'one') { P.g.vals[k] = t.value; refreshGrid(P.g); liveUpdate(id); return; }
     if (k === 'addr') { P.addr = t.value; liveUpdate(id); return; }
     if (k === 'group') { P.group = t.value; return; }
+    if (k === 'canva') { P.canva = t.value; liveUpdate(id); return; }
     if (k === 'subj') { P.subject = t.value; return; }
     if (k === 'text') { P.text = t.value; return; }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !t.getAttribute) return;
     var skip = t.getAttribute('data-o271skip'), k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f');
-    if (skip && S.pick[id]) { S.pick[id].skip[skip] = !t.checked; liveUpdate(id); return; }
+    if (skip && S.pick[id]) { S.pick[id].skip[skip] = !t.checked; if (skip === 'google' && !t.checked) clearClash(id); liveUpdate(id); return; }
     if (!k || !id) return;
     var P = S.pick[id], A = S.act[id];
     if (k === 'addr' && P) { P.addr = t.value; recheckAddress(id); return; }
     if (k === 'mgr' && P) {
+      var was = P.managerId;
       P.managerId = t.value;
       var changed = String(P.managerId) !== String(P.pv.manager && P.pv.manager.member_id);
       if (changed !== P.g.hideManager) { P.g.hideManager = changed; paint(); } else liveUpdate(id);
+      if (t.value && t.value !== String(was)) saveManager(id, t.value, was);
       return;
     }
     if (k === 'member' && A) { A.member = t.value; paint(); return; }

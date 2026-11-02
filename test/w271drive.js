@@ -69,6 +69,23 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     await click(f, card(FLOW.real) + ' [data-o271a="link"]');
     let c = await calls(f, 'send_grid_link');
     ok('Send the availability link calls send_grid_link for the candidate', c.length === 1 && c[0].body.candidate_id === 7001 && !c[0].body.accepted, c);
+    ok('M5: in test mode the card does not say the link has gone out', /test mode/.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.real))) && !/has gone out/.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.real))));
+
+    /* I3: offers still out, with the email-reply route */
+    t = await txt(f);
+    ok('I3: Offers waiting for an answer lists an offer sent with no answer, practice looking the same', /Offers waiting for an answer/i.test(t) && await f.ev(() => !!document.querySelector('[data-o271offer="7201"]') && !!document.querySelector('[data-o271offer="7202"]')) && await f.ev(() => !document.querySelector('[data-o271offer="7202"] .pr')), t.slice(0, 600));
+    ok('I3: not an offer unsent, already accepted or closed', await f.ev(() => ['7203', '7204', '7205'].every(i => !document.querySelector('[data-o271offer="' + i + '"]'))));
+    ok('I3: the name is escaped', await f.ev(() => !document.querySelector('[data-o271offer="7201"] b b')));
+    const off = '[data-o271offer="7201"]';
+    await click(f, off + ' [data-o271a="yesask"]');
+    ok('I3: it asks first and calls nothing', (await calls(f, 'send_grid_link')).length === 1 && /Did Olu/.test(await f.ev(s2 => document.querySelector(s2).innerText, off)));
+    await click(f, off + ' [data-o271a="yesno"]');
+    ok('I3: Cancel leaves it alone', (await calls(f, 'send_grid_link')).length === 1 && await f.page.isVisible(off + ' [data-o271a="yesask"]'));
+    await click(f, off + ' [data-o271a="yesask"]');
+    await click(f, off + ' [data-o271a="yesgo"]');
+    c = await calls(f, 'send_grid_link');
+    ok('I3: confirming sends accepted: true for that candidate', c.length === 2 && c[1].body.candidate_id === 7201 && c[1].body.accepted === true, c);
+    ok('I3: the card has left the offers', await f.ev(s2 => !document.querySelector(s2), off));
 
     /* the existing dropdown still works, and the section comes back after wave46 redraws */
     s = await f.ev(async () => {
@@ -96,10 +113,12 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('preview: both times', /Onboarding call/.test(t) && /1-on-1/.test(t));
     ok('preview: the email is editable', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="text"]') && await f.page.isEditable(card(FLOW.real) + ' [data-o271i="subj"]'));
     ok('preview: Build 1 says who sends the email', /HR sends this one for now/.test(t), t.slice(0, 1500));
+    ok('TEMPLATE: the preview says the bracketed places fill in at Start', /square brackets\] fills in at Start/.test(t), t.slice(0, 1500));
     ok('preview: the group session field', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="group"]'));
     s = await f.ev(sel => Array.from(document.querySelectorAll(sel + ' [data-o271skip]')).map(x => ({ k: x.getAttribute('data-o271skip'), on: x.checked, off: x.disabled })), card(FLOW.real));
     ok('preview: a switch for every step, roster locked', s.length === 8 && s.every(x => x.on) && s.filter(x => x.off).map(x => x.k).join() === 'roster', s);
     ok('preview: warns when the job description link is missing', /no job description link/.test(t));
+    ok('M4: preview: the department shows', /Department: progdev/.test(t), t.slice(0, 1500));
 
     /* grid: 8 am Monday on the Toronto clock, in a browser in Auckland */
     s = await f.ev(sel => { const g = document.querySelector(sel + ' .o271g'); return { rows: Array.from(g.querySelectorAll('tbody th')).map(x => x.textContent), head: g.querySelector('thead').innerText }; }, card(FLOW.real));
@@ -144,6 +163,51 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     await f.page.waitForTimeout(400);
     ok('changing the address clears it', !(await f.page.isDisabled(st)));
 
+    /* C1: turning Google off for a clash empties the box, so the address can never be sent */
+    await fill(f, card(FLOW.real) + ' [data-o271i="addr"]', 'dana@welfareavenue.com');
+    await f.page.dispatchEvent(card(FLOW.real) + ' [data-o271i="addr"]', 'change');
+    await f.page.waitForTimeout(400);
+    t = await txt(f);
+    ok('C1: an address on the roster names the person and stops Start', await f.page.isDisabled(st) && /roster profile of Dana Fixture/.test(t), t.slice(0, 800));
+    await click(f, card(FLOW.real) + ' [data-o271skip="google"]');
+    ok('C1: turning Google off for it empties the address box', await f.page.inputValue(card(FLOW.real) + ' [data-o271i="addr"]') === '');
+    ok('C1: and Start is on, with nothing to send', !(await f.page.isDisabled(st)));
+    await fill(f, card(FLOW.real) + ' [data-o271i="addr"]', 'taken.person@welfareavenue.com');
+    await f.page.dispatchEvent(card(FLOW.real) + ' [data-o271i="addr"]', 'change');
+    await f.page.waitForTimeout(400);
+    ok('C1: typed again with Google off, it is emptied again', await f.page.inputValue(card(FLOW.real) + ' [data-o271i="addr"]') === '');
+    await click(f, card(FLOW.real) + ' [data-o271skip="google"]');
+    await fill(f, card(FLOW.real) + ' [data-o271i="addr"]', 'Amina.Yusuf2@welfareavenue.com ');
+    await f.page.dispatchEvent(card(FLOW.real) + ' [data-o271i="addr"]', 'change');
+    await f.page.waitForTimeout(400);
+
+    /* I4: the dropdown saves the manager before Start, and their marks go with the old one */
+    await f.page.selectOption(card(FLOW.real) + ' [data-o271i="mgr"]', String(MGR.second));
+    await f.page.waitForTimeout(300);
+    c = await calls(f, 'set_manager');
+    ok('I4: changing the dropdown calls set_manager', c.length === 1 && c[0].body.flow_id === FLOW.real && c[0].body.member_id === MGR.second, c);
+    await click(f, card(FLOW.real) + ' [data-o271a="mode"][data-mode="one"]');
+    k = await cls(f, cellOf(FLOW.real, AT(12)));
+    ok('I5: the other manager\'s marks are gone from the grid', !/\bm\b/.test(k), k);
+    await click(f, card(FLOW.real) + ' [data-o271a="mode"][data-mode="call"]');
+    await f.ev(() => { window.__O271_REFUSE = { action: 'set_manager', error: 'no_manager', message: 'Gone Person is not active on the roster. Choose someone else.' }; });
+    await f.page.selectOption(card(FLOW.real) + ' [data-o271i="mgr"]', String(MGR.first));
+    await f.page.waitForTimeout(300);
+    ok('I4: a refusal shows, and the dropdown goes back', /is not active on the roster/.test(await txt(f)) && await f.page.inputValue(card(FLOW.real) + ' [data-o271i="mgr"]') === String(MGR.second));
+    await f.page.selectOption(card(FLOW.real) + ' [data-o271i="mgr"]', String(MGR.first));
+    await f.page.waitForTimeout(300);
+
+    /* CANVA: the box in the preview, its reminder, the warning when empty, and a bad link stops Start */
+    const cb = card(FLOW.real) + ' [data-o271i="canva"]', cs = card(FLOW.real) + ' [data-o271said="canva"]';
+    t = await txt(f);
+    ok('CANVA: the preview has the box and the reminder', await f.page.isEditable(cb) && /Fresh Canva invite link/i.test(t) && /Canva links last 30 days, so get a new one for each hire: in Canva, go to Invite people, then Get invite link, then Copy\./.test(t), t.slice(0, 1500));
+    ok('CANVA: it links to Canva people settings', await f.ev(sel => !!document.querySelector(sel + ' a[href="https://www.canva.com/settings/people"]'), card(FLOW.real)));
+    ok('CANVA: empty warns, and Start stays on', /No Canva link yet/.test(await f.page.innerText(cs)) && !(await f.page.isDisabled(st)));
+    await fill(f, cb, 'https://evil.example/join');
+    ok('CANVA: a link that is not Canva stops Start, in a sentence', await f.page.isDisabled(st) && /must start with https:\/\/www\.canva\.com\//.test(await txt(f)));
+    await fill(f, cb, 'https://www.canva.com/brand/join?token=one');
+    ok('CANVA: a Canva link clears the warning, and Start is on', !/No Canva link yet/.test(await f.page.innerText(cs)) && !(await f.page.isDisabled(st)));
+
     /* email, group session, a skipped step; a refusal is shown as it came */
     await fill(f, card(FLOW.real) + ' [data-o271i="subj"]', 'Edited subject');
     await fill(f, card(FLOW.real) + ' [data-o271i="group"]', 'Group session on Oct 8');
@@ -160,6 +224,7 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     c = await calls(f, 'start');
     const body = c[c.length - 1].body;
     ok('Start: works without a 1-on-1', !body.one_on_one_at, body);
+    ok('CANVA: Start sends the link', body.canva_link === 'https://www.canva.com/brand/join?token=one', body);
     ok('Start: the typed Toronto time is the right instant', body.call_at === new Date(Date.UTC(2026, 8, 30, 19, 30)).toISOString(), body.call_at);
     ok('Start: the address, manager, group session, skip and edited email go', body.wa_email === 'amina.yusuf2@welfareavenue.com' && body.manager_member_id === MGR.first && body.group_session === 'Group session on Oct 8' && body.skip.join() === 'slack' && body.welcome && body.welcome.subject === 'Edited subject', body);
 
@@ -172,6 +237,41 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('started: I created it, continue with an address box', await f.page.isVisible(card(FLOW.real) + ' [data-o271a="gmanual"]') && await f.page.inputValue(card(FLOW.real) + ' [data-o271i="gaddr"]') === 'amina.yusuf2@welfareavenue.com');
     for (const name of ['Change time', 'Change manager', 'Book the 1-on-1', 'They backed out']) ok('started: ' + name + ' is on the card', t.indexOf(name) >= 0, t);
     ok('started: it left the Ready list', await f.ev(() => document.querySelectorAll('[data-o271flow="501"]').length === 1));
+
+    /* I7: what HR edited, under the welcome to-do */
+    ok('I7: the edited subject, the text and the group session show under the welcome task', /Edited subject/.test(t) && /Congratulations/.test(t) && /Group session: ?Group session on Oct 8/.test(t), t);
+    await f.ev(() => { window.__COPIED = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: x => { window.__COPIED = x; return Promise.resolve(); } } }); });
+    await click(f, card(FLOW.real) + ' [data-o271a="copywelcome"]');
+    s = await f.ev(() => window.__COPIED);
+    ok('I7: Copy the text copies the subject and the text', /Edited subject/.test(s) && /Congratulations/.test(s) && /Group session on Oct 8/.test(s), s);
+
+    /* CANVA: under the welcome task: the reminder, the saved link with a copy button, and the box to replace it */
+    const cv = card(FLOW.real) + ' [data-o271canva]';
+    s = await f.ev(sel => document.querySelector(sel).innerText, cv);
+    ok('CANVA: the card shows the reminder and the saved link', /Canva links last 30 days/.test(s) && /https:\/\/www\.canva\.com\/brand\/join\?token=one/.test(s) && !/No Canva link yet/.test(s), s);
+    await click(f, cv + ' [data-o271a="copycanva"]');
+    ok('CANVA: Copy the link copies the saved link', (await f.ev(() => window.__COPIED)) === 'https://www.canva.com/brand/join?token=one');
+    await fill(f, cv + ' [data-o271i="ccanva"]', 'https://www.canva.com/brand/join?token=two');
+    await click(f, cv + ' [data-o271a="canvasave"]');
+    c = await calls(f, 'set_canva_link');
+    ok('CANVA: Save the link calls set_canva_link', c.length === 1 && c[0].body.flow_id === FLOW.real && c[0].body.link === 'https://www.canva.com/brand/join?token=two', c);
+    ok('CANVA: the new link shows', /token=two/.test(await f.ev(sel => document.querySelector(sel).innerText, cv)));
+    await f.ev(() => { window.__O271_REFUSE = { action: 'set_canva_link', error: 'bad_canva_link', message: 'The Canva link must start with https://www.canva.com/. Copy it from Invite people in Canva, or leave it empty.' }; });
+    await fill(f, cv + ' [data-o271i="ccanva"]', 'https://evil.example/');
+    await click(f, cv + ' [data-o271a="canvasave"]');
+    ok('CANVA: a refusal shows as it came, and the box keeps what was typed', /must start with https:\/\/www\.canva\.com\//.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.real))) && await f.page.inputValue(cv + ' [data-o271i="ccanva"]') === 'https://evil.example/');
+    await fill(f, cv + ' [data-o271i="ccanva"]', '');
+    await click(f, cv + ' [data-o271a="canvasave"]');
+    ok('CANVA: cleared, the card warns that there is no link', /No Canva link yet/.test(await f.ev(sel => document.querySelector(sel).innerText, cv)));
+    ok('CANVA: no step row was added for it', await f.ev(() => !window.__WAFIX.hub_onboard_steps.some(r => /canva/i.test(r.step))));
+
+    /* M10: a step left to HR can be marked done, but not the Google one */
+    s = await f.ev(sel => Array.from(document.querySelectorAll(sel + ' [data-o271a="taskdone"]')).map(x => x.getAttribute('data-step')), card(FLOW.real));
+    ok('M10: Done on hub and welcome (slack was skipped), not on google', s.slice().sort().join() === 'hub,welcome', s);
+    await click(f, card(FLOW.real) + ' [data-o271a="taskdone"][data-step="hub"]');
+    c = await calls(f, 'task_done');
+    ok('M10: Done calls task_done for the step', c.length === 1 && c[0].body.flow_id === FLOW.real && c[0].body.step === 'hub', c);
+    ok('M10: the step reads done and its button is gone', await f.ev(sel => !document.querySelector(sel + ' [data-o271a="taskdone"][data-step="hub"]'), card(FLOW.real)));
     await shot(f, 'admin_started_1366');
 
     await click(f, card(FLOW.real) + ' [data-o271a="retry"][data-step="invites"]');
@@ -194,6 +294,7 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     await click(f, card(FLOW.real) + ' [data-o271a="actgo"]');
     c = await calls(f, 'book_one_on_one');
     ok('Book the 1-on-1 calls book_one_on_one', c.length === 1 && c[0].body.at === AT(10), c);
+    ok('M5: in test mode it says the invite went to the test inboxes', /test inboxes/.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.real))));
     ok('once booked, Book is gone and the time shows', !(await f.ev(sel => !!document.querySelector(sel + ' [data-kind="book"]'), card(FLOW.real))) && /Sep.*28/.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.real))));
 
     /* Change time */
@@ -226,10 +327,27 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     c = await calls(f, 'backed_out');
     t = await txt(f);
     ok('after confirming, backed_out goes with the reason', c.length === 1 && c[0].body.reason === 'Took another job', c);
-    ok('the remove list and the warnings show after it', /Deactivate it by hand in Roster/.test(t) && /could not be closed/.test(t), t.slice(0, 800));
+    ok('the remove list and the warnings show after it', /Created for this person\. Deactivate it by hand in Roster/.test(t) && /could not be closed/.test(t), t.slice(0, 800));
     ok('the remove list is escaped', await f.ev(() => /<C1>/.test(document.getElementById('o271').textContent)));
     ok('the card has left the list', !(await f.ev(sel => !!document.querySelector(sel), card(FLOW.real))));
     await shot(f, 'admin_removed_1366');
+    /* D3: the list is worked out from the flow, so it is still there after a reload */
+    await f.ev(() => { const s = o271.state(); s.note = {}; return o271.load(); });
+    await f.page.waitForTimeout(300);
+    t = await txt(f);
+    ok('D3: after a reload the backed-out card still has its list', /Backed out/i.test(t) && /backed out\./.test(t) && /Created for this person/.test(t) && /<C1>/.test(await f.ev(() => document.getElementById('o271').textContent)), t.slice(0, 800));
+
+    /* I1: They backed out on a Ready card, with a confirm */
+    await click(f, card(FLOW.nomanager) + ' [data-o271a="act"][data-kind="back"]');
+    ok('I1: on a Ready card it asks first, and says no invites have gone out', (await calls(f, 'backed_out')).length === 1 && /No invites have gone out/.test(await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.nomanager))));
+    await click(f, card(FLOW.nomanager) + ' [data-o271a="actno"]');
+    ok('I1: Cancel leaves it on the list', await f.page.isVisible(card(FLOW.nomanager) + ' [data-o271a="open"]') && (await calls(f, 'backed_out')).length === 1);
+    await click(f, card(FLOW.nomanager) + ' [data-o271a="act"][data-kind="back"]');
+    await click(f, card(FLOW.nomanager) + ' [data-o271a="actgo"]');
+    c = await calls(f, 'backed_out');
+    ok('I1: confirming calls backed_out for that flow', c.length === 2 && c[1].body.flow_id === FLOW.nomanager, c);
+    t = await txt(f);
+    ok('I1: it leaves the Ready list, with nothing to take out', !(await f.ev(sel => !!document.querySelector(sel), card(FLOW.nomanager))) && /Noor Single backed out\./.test(t) && /nothing to take out/.test(t), t.slice(0, 800));
 
     /* words, and reads */
     t = await txt(f);

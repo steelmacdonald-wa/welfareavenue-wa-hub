@@ -3,7 +3,8 @@
    =====================================================================
    HR Center > Onboarding gets Ready to onboard, above the existing section: everyone who accepted, with their grid status, the time picker
    (the hire's grid, the manager's over it for the 1-on-1, hub@ meetings greyed), the preview, Start onboarding, and a card with each step's
-   result, Retry, "I created it, continue" and the changes after Start. All writes go through the onboard-run edge function; its refusals are
+   result, Retry, "I created it, continue" and the changes after Start. Under the list: offers still out, with the email-reply route, and those who backed
+   out with what HR takes out by hand (kept KEEP_DAYS, worked out from the flow and its steps). All writes go through the onboard-run edge function; its refusals are
    shown as they come. wa46Render is private to wave46 (its wraps elsewhere never fire), so this wave keeps its section in place with an
    observer, the pattern wave93 uses. The server decides who sees it: wa271_ready_list refuses anyone but HR and admins.
    Times are America/Toronto wall clock, through Intl only: an instant is never made by adding an offset. */
@@ -12,21 +13,25 @@
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, onboarding_id, started_at';   /* named: pw_nonce is withheld from the browser */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at';   /* named: pw_nonce is withheld from the browser */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
-  var CAND_COLS = 'id, name, role, email';
+  var CAND_COLS = 'id, name, role, email, member_id';
+  var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
+  var CANVA_LINK = /^https:\/\/www\.canva\.com\/\S*$/;   /* as in onboard-run */
+  var CANVA_HOW = 'Canva links last 30 days, so get a new one for each hire: in Canva, go to Invite people, then Get invite link, then Copy.';
   var STEPS = [['roster', 'Roster profile'], ['google', 'Google account'], ['plan', 'Onboarding plan'], ['invites', 'Calendar invites'], ['manager', 'Tell the manager'], ['hub', 'Hub access'], ['slack', 'Slack channel'], ['welcome', 'Welcome email']];
   var WORD = { done: 'Done', skipped: 'Skipped', failed: 'Failed', waiting: 'Waiting', hr_task: 'For HR', running: 'Running', pending: 'Running' };
   var RULE = { reports_to: 'the position reports to them', team_lead: 'they lead the department', chosen: 'chosen by HR', none: 'HR must choose' };
   var STALE_MS = 10 * 60 * 1000;      /* as in onboard-run: a step left running this long was cut off, so Retry may take it */
-  var KEEP_DAYS = 30;                 /* a finished flow stays on the list this long after its call; then it lives under Onboarding */
+  var KEEP_DAYS = 30;                 /* a finished flow stays on the list this long after its call, and one that backed out this long after that; then it lives under Onboarding */
 
   var S = {
-    ready: [], started: [], people: [], cfg: { days: 14, start: 8, end: 21, cell: 30 }, loaded: false, denied: false, err: '', loading: null,
+    ready: [], started: [], backed: [], offers: [], people: [], cfg: { days: 14, start: 8, end: 21, cell: 30 }, loaded: false, denied: false, err: '', loading: null,
     pick: {},   /* flow id: the open picker and preview */
-    act: {},    /* flow id: the open change panel on a started card */
-    note: {},   /* flow id: { ok, err, warnings } on a card */
-    out: [],    /* what They backed out left for HR: { name, remove, warnings } until HR closes it */
+    act: {},    /* flow id: the open change panel on a card */
+    note: {},   /* flow id, or 'c' and a candidate id: { ok, err, warnings } on a card */
+    yes: {},    /* candidate id: asking whether they really said yes by email */
+    canva: {},  /* flow id: the Canva link being typed on a card */
     busy: {}
   };
 
@@ -96,6 +101,7 @@
     '.o271out{border:1px solid ' + RED + ';border-radius:14px;padding:14px;margin:0 0 10px;}' +
     '.o271out ul{margin:6px 0;padding-left:18px;font-size:13px;}' +
     '.o271out li{margin:3px 0;overflow-wrap:anywhere;}' +
+    '.o271pre{white-space:pre-wrap;font-size:13px;margin:4px 0;padding:8px 10px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + GROUND + ';overflow-wrap:anywhere;}' +
     '@media (max-width:700px){.o271cd{padding:12px;}.o271c{height:30px;}.o271gw{max-height:62vh;overflow:auto;}.o271 input[type=text],.o271 input[type=datetime-local],.o271 select{max-width:none;}}';
   document.head.appendChild(st);
 
@@ -144,11 +150,15 @@
   /* ---------- reads ---------- */
   function hrPage() { return typeof window.wa46IsHr === 'function' && window.wa46IsHr(); }
   function surelyHr() { try { return WA40_MINE.role === 'admin' || WA40_MINE.profile === 'hr'; } catch (e) { return false; } }
+  /* the flows Start has begun, and the ones that backed out: each kept KEEP_DAYS */
   async function readStarted() {
-    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started']);
+    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started', 'backed_out']);
     if (f.error) throw f.error;
     var cut = Date.now() - KEEP_DAYS * 86400000;
-    var flows = (f.data || []).filter(function (x) { return x.status === 'running' || !x.call_at || Date.parse(x.call_at) >= cut; });
+    var flows = (f.data || []).filter(function (x) {
+      if (x.status === 'backed_out') return !x.updated_at || Date.parse(x.updated_at) >= cut;
+      return x.status === 'running' || !x.call_at || Date.parse(x.call_at) >= cut;
+    });
     if (!flows.length) return [];
     var ids = flows.map(function (x) { return x.id; }), cids = flows.map(function (x) { return x.candidate_id; });
     var res = await Promise.all([db.from('hub_onboard_steps').select(STEP_COLS).in('flow_id', ids), db.from('hub_candidates').select(CAND_COLS).in('id', cids)]);
@@ -157,8 +167,14 @@
     return flows.map(function (x) {
       var c = (res[1].data || []).filter(function (y) { return String(y.id) === String(x.candidate_id); })[0] || {};
       var rows = (res[0].data || []).filter(function (y) { return String(y.flow_id) === String(x.id); });
-      return Object.assign({}, x, { name: c.name || 'Someone', role: c.role || '', email: c.email || '', steps: rows });
+      return Object.assign({}, x, { name: c.name || 'Someone', role: c.role || '', email: c.email || '', member_id: c.member_id, steps: rows });
     });
+  }
+  /* an offer that has gone out with no answer on the card, for those who answer by replying to the email */
+  async function readOffers() {
+    var r = await db.from('hub_candidates').select(OFFER_COLS).eq('status', 'offer');
+    if (r.error) throw r.error;
+    return (r.data || []).filter(function (c) { return c.status === 'offer' && c.offer_sent_at && !c.accepted_on; });
   }
   async function readPeople() {
     if (S.people.length) return;
@@ -178,7 +194,10 @@
         if (r && r.error) throw r.error;
         S.denied = false; S.err = '';
         S.ready = ((r && r.data) || []).filter(function (x) { return x.status === 'waiting' || x.status === 'ready'; });
-        S.started = await readStarted();
+        var begun = await readStarted();
+        S.started = begun.filter(function (x) { return x.status !== 'backed_out'; });
+        S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
+        S.offers = await readOffers();
         await Promise.all([readPeople(), readCfg()]);
       } catch (e) {
         var msg = String((e && e.message) || e);
@@ -188,7 +207,7 @@
       S.loaded = true; S.loading = null;
       /* a picker or panel for someone who has left the list goes with them */
       Object.keys(S.pick).forEach(function (id) { if (!S.ready.some(function (x) { return String(x.flow_id) === id; })) delete S.pick[id]; });
-      Object.keys(S.act).forEach(function (id) { if (!S.started.some(function (x) { return String(x.id) === id; })) delete S.act[id]; });
+      Object.keys(S.act).forEach(function (id) { if (!flowOf(id)) delete S.act[id]; });
       paint();
     })();
     return S.loading;
@@ -200,7 +219,9 @@
     var n = S.note[id]; if (!n) return '';
     return (n.ok ? '<div class="o271okn">' + E(n.ok) + '</div>' : '') + (n.warnings || []).map(warnBox).join('') + (n.err ? '<div class="o271err">' + E(n.err) + '</div>' : '');
   }
-  function managerLine(m) {
+  function managerLine(x) {
+    if (x.manager_member_id) return 'Manager: ' + E(nameOf(x.manager_member_id)) + ' (' + E(RULE.chosen) + ')';
+    var m = x.default_manager;
     if (m && m.member_id) return 'Manager: ' + E(m.name) + ' (' + E(RULE[m.how] || m.how) + ')';
     return 'Manager: ' + E(RULE.none);
   }
@@ -214,11 +235,26 @@
       + (x.late ? '<span class="o271tag late">Answered after the reply-by date</span>' : '')
       + '</div>'
       + '<div class="o271ln">' + (x.accepted_on ? 'Accepted ' + E(dayText(x.accepted_on)) : '') + (x.offer_start ? ' &middot; The offer suggested ' + E(dayText(x.offer_start)) : '') + '</div>'
-      + '<div class="o271ln">' + managerLine(x.default_manager) + '</div>'
+      + '<div class="o271ln">' + managerLine(x) + '</div>'
       + (other ? warnBox('This person has ' + other + ' other application' + (other === 1 ? '' : 's') + ' still open. Close ' + (other === 1 ? 'it' : 'them') + ' by hand so they do not get a second account.') : '')
       + noteHtml(id)
       + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
-      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button></div>'
+      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
+      + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
+      + (S.act[id] ? panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')
+      + '</div>';
+  }
+  /* an offer still out: an answer by email has its own button, and asks first */
+  function offerCard(c) {
+    var id = c.id, asking = S.yes[id], busy = S.busy['y' + id];
+    return '<div class="o271cd" data-o271offer="' + E(id) + '">'
+      + '<div class="o271top"><b>' + E(c.name) + '</b><span>' + E(c.role || '') + '</span></div>'
+      + '<div class="o271ln">Offer sent ' + E(dayText(c.offer_sent_at)) + '</div>'
+      + noteHtml('c' + id)
+      + (asking
+        ? '<div class="o271ln"><b>Did ' + E(c.name) + ' say yes?</b> The Hub saves that they accepted today and emails them the availability link.</div>'
+          + '<div class="o271btns"><button type="button" class="o271b pri" data-o271a="yesgo" data-cand="' + E(id) + '"' + (busy ? ' disabled' : '') + '>Yes, send the link</button><button type="button" class="o271b" data-o271a="yesno" data-cand="' + E(id) + '">Cancel</button></div>'
+        : '<div class="o271btns"><button type="button" class="o271b" data-o271a="yesask" data-cand="' + E(id) + '">They said yes by email: send the availability link</button></div>')
       + '</div>';
   }
