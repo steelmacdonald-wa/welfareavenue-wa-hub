@@ -50,6 +50,7 @@
       + C + '.w277adv{border-top:1px solid ' + LINE + ';padding-top:8px;}' + C + '.w277adv summary{cursor:pointer;color:' + MUTED + ';font-weight:600;}' + C + '.w277adv[open] > *:not(summary){margin-top:8px;}'
       + C + '.w277test{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;}' + C + '.w277test b{font-family:' + HEAD + ';font-weight:600;font-size:19px;color:' + GREEN + ';}' + C + '.w277test span{flex:1;min-width:200px;color:' + MUTED + ';font-size:13.5px;}'
       + C + '.w277pre{white-space:pre-wrap;font-size:12.5px;background:' + SURF + ';border-radius:10px;padding:10px 12px;margin:0 16px 14px;}'
+      + C + '.w277extra{margin-top:14px;}'
       + C + '.w277empty{padding:18px;color:' + MUTED + ';}' + C + '.w277empty a{color:' + GREEN + ';font-weight:700;cursor:pointer;}'
       /* the modal, inside the Hub's #modalBox or on its own back */
       + '#w277modal{font-family:' + BODY + ';color:' + INK + ';max-width:420px;}' + M + 'p{margin:0 0 16px;font-size:15px;line-height:1.45;}' + M + '.w277mb{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}'

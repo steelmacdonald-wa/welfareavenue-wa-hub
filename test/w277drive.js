@@ -63,6 +63,8 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     ok('the LinkedIn disclosure opens on click, shows Asked for 6, granted 1 and Reconnect', disc.exp === 'true' && disc.open && /Asked for 6, granted 1/.test(disc.t) && disc.re.indexOf('Reconnect') >= 0, disc);
     const adv = await f.ev(() => { const i = document.getElementById('w277mkhook'); if (!i) return null; const d = i.closest('details'); return { inLi: !!i.closest('[data-w277disc="linkedin"]'), sum: d && d.querySelector('summary') ? d.querySelector('summary').textContent.trim() : null }; });
     ok('no Make card; the hook sits in the LinkedIn disclosure under Advanced', adv && adv.inLi && adv.sum === 'Advanced' && !(await f.ev(() => /Make\.com/.test(document.getElementById('w277conn').innerText) || !!document.querySelector('#w225host [data-w225cx="make_hook"]'))), adv);
+    const extra = await f.ev(() => { const x = document.querySelector('#w277conn .w277extra'); return x ? x.innerText.replace(/\s+/g, ' ') : null; });
+    ok('wave250 cards stay: WhatsApp under the list', extra && /WhatsApp/.test(extra), extra && extra.slice(0, 200));
     /* Enter on a row toggles; one open at a time */
     await f.ev(() => { const r = document.querySelector('#w277conn [data-w277row="threads"]'); r.focus(); });
     await p.keyboard.press('Enter'); await p.waitForTimeout(300);

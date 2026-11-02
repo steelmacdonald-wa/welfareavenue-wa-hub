@@ -133,5 +133,7 @@
       + '<div class="w277bar"><span>Keys and tokens go into the vault and are never shown again.</span>' + btn('reload', '', 'Check again', 'sm') + '</div>'
       + attnHtml()
       + (rows.length ? '<div class="w277card" role="list">' + rows.join('') + '</div>' : '<div class="w277card"><div class="w277empty">No platforms are on yet. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Check again</a></div></div>')
-      + testHtml() + '</div>';
+      + testHtml() + extraHtml() + '</div>';
   }
+  /* wave250's Meta live and WhatsApp cards keep their own markup and handlers (data-w250cx, in wave225) */
+  function extraHtml() { var x = w(); if (!x || !x.connectExtra) return ''; try { var h = x.connectExtra(); return h ? '<div class="w277extra cx">' + h + '</div>' : ''; } catch (e) { return ''; } }

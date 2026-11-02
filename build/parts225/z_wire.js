@@ -221,6 +221,6 @@
     html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, hashtags: hashtagsHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
     m250: function () { return M250; }, load250: load250, loadAds250: loadAds250,   /* waves 250 to 254 */
     monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl,
-    W: W, posts: posts, loadConn: loadConn, connAct: connAct, modeOf: modeOf   /* wave277 reuses these */
+    W: W, posts: posts, loadConn: loadConn, connAct: connAct, modeOf: modeOf, connectExtra: connectExtra250   /* wave277 reuses these */
   };
 })();
