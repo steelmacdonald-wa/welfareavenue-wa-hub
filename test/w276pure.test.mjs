@@ -64,7 +64,7 @@ test('tzNote: Toronto time always, the hint only outside Eastern time', () => {
   assert.equal(w.tzNote('America/New_York'), 'Times are Toronto time.');
   assert.equal(w.tzNote('EST5EDT'), 'Times are Toronto time.');
   assert.equal(w.tzNote('Europe/Paris'), 'Times are Toronto time. You seem to be in Europe/Paris; enter the Toronto hours.');
-  assert.ok(!/—/.test(w.tzNote('Asia/Tokyo')), 'no em dash');
+  assert.ok(!/\u2014/.test(w.tzNote('Asia/Tokyo')), 'no em dash');
 });
 
 test('teamStatus: up to date since the ask, else entered', () => {
