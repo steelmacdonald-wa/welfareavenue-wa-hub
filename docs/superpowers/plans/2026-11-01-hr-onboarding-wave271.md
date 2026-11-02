@@ -32,7 +32,7 @@
 | Step keys, in order | `roster`, `google`, `plan`, `invites`, `manager`, `hub`, `slack`, `welcome` |
 | Step status | `pending`, `running`, `waiting`, `done`, `skipped`, `failed`, `hr_task` |
 | Dependencies | `roster` needs nothing; `plan`, `invites`, `manager`, `slack`, `google` need `roster`; `hub`, `welcome` need `google` |
-| `app_config` keys and defaults | `onboard_grid_days` 14, `onboard_grid_start` 8, `onboard_grid_end` 21, `onboard_grid_cell_min` 30, `onboard_call_min` 60, `onboard_one_on_one_min` 30, `onboard_remind_hours` 48, `onboard_password_days` 7, `onboard_auto_google` off, `onboard_auto_slack` off, `onboard_canva_link`, `onboard_slack_join_link`, `onboard_google_video` |
+| `app_config` keys and defaults | `onboard_grid_days` 14, `onboard_grid_start` 8, `onboard_grid_end` 21, `onboard_grid_cell_min` 30, `onboard_call_min` 60, `onboard_one_on_one_min` 30, `onboard_remind_hours` 48, `onboard_password_days` 7, `onboard_auto_google` off, `onboard_auto_slack` off, `onboard_slack_join_link`, `onboard_google_video` |
 | Token | `<id>.<20-char signature>`, HMAC-SHA256 as in `candidate-confirm`, key `onboard-<purpose>:` + service key. Purposes: `offer` (id = candidate), `mgr` (id = flow), `pw` (id = flow; signs `<id>.<pw_nonce>`) |
 
 ## Review Focus
@@ -289,8 +289,8 @@ git commit -m "wave271a: onboarding flow tables, accept trigger, dated onboardin
 - [ ] **Step 1: Write failing tests:**
   - **hub-invite:** a secret call invites at member level; a secret call for any other action is refused; existing JWT rules are unchanged.
   - **Step `hub`:** a `notify` result of "no Slack account" still counts as `done`.
-  - **Welcome content (EN and FR):** congratulations, role, the call as first day, 1-on-1 time or "will follow", WA address, the one-time password button when `onboard_auto_google` is on or the "HR will share it one to one" line when it isn't, video, Slack and Canva links, DocuSign note, job description from `hub_positions.jd_url`, signature.
-  - **Optional lines:** the group session line and job description line are left out when empty; a missing `onboard_canva_link` is a preview warning, not a broken link.
+  - **Welcome content (EN and FR):** congratulations, role, the call as first day, 1-on-1 time or "will follow", WA address, the one-time password button when `onboard_auto_google` is on or the "HR will share it one to one" line when it isn't, video, Slack link, the flow's `canva_link` (the line is left out, with a warning, if empty), DocuSign note, job description from `hub_positions.jd_url`, signature.
+  - **Optional lines:** the group session line and job description line are left out when empty.
   - **Sending:** from hub@ via `gmail.send` to the personal address, reply-to HR; HR's edits are used; `mail_mode` test redirects to `mail_test_recipients`; a password never appears in the body.
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.** Reuse `hub-invite`'s MIME builder and token pattern, and base the wording on the SOP's email in the spec's source doc.
@@ -300,7 +300,7 @@ git commit -m "wave271a: onboarding flow tables, accept trigger, dated onboardin
 ### Task 12: Release Build 2 and one real test hire
 
 - [ ] **Step 1: Run all `test/w271*`,** and update the release doc and training.
-- [ ] **Step 2: Steel's yes,** then deploy `onboard-run`, `onboard-link`, `hub-invite`; publish `/o/`; set `onboard_canva_link`, `onboard_slack_join_link`, `onboard_google_video` from values Steel gives.
+- [ ] **Step 2: Steel's yes,** then deploy `onboard-run`, `onboard-link`, `hub-invite`; publish `/o/`; set `onboard_slack_join_link` to `https://welfareavenue.slack.com` and `onboard_google_video` from the value Steel gives.
 - [ ] **Step 3: Steel's yes,** then set `onboard_auto_google` to `on`.
 - [ ] **Step 4: One real test hire Steel approves.** Verify: Google forces a change at first sign-in; a second press of the password link is refused; a search of `quo_messages`, `change_log` and `hub_onboard_steps` finds no password; the new account appears on the roster with no "Place on the roster" entry after the next `directory-sync`, and its start date stays the call date. Steel then removes the test account.
 - [ ] **Step 5: Commit** and report. Stop until Steel says to continue.
