@@ -26,7 +26,7 @@
     cfg: { start: 480, end: 1320, cellMin: 30, minHours: 10 },
     cfgLoaded: null,     /* the app_config read, once */
     popped: false,       /* the Home pop-up opens at most once per page load */
-    agenda: { dept: null, tok: 0, view: null },
+    agenda: { dept: null, tok: 0, view: null, busy: null, refused: {} },
     DAYS: DAYS, DAYS_SHORT: DAYS_SHORT
   };
 

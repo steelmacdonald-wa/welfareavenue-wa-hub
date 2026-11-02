@@ -32,7 +32,7 @@
   }
   function popErr(msg) { var e = document.getElementById('w276err'); if (e) { e.textContent = msg || ''; e.hidden = !msg; } }
   async function save() {
-    if (P.busy || !P.g) return;
+    if (P.busy || !P.g || P.loadFailed) return;
     var dept = P.dept, slots = P.g.get(), fromEl = document.getElementById('w276from');
     var from = (fromEl && /^\d{4}-\d{2}-\d{2}$/.test(fromEl.value)) ? fromEl.value : isoToday();
     var btn = document.getElementById('w276save');
@@ -52,15 +52,20 @@
   }
 
   async function openPop(dept, due) {
-    if (!dept || document.getElementById('w276pop')) return;
+    if (!dept || document.getElementById('w276pop')) return false;
     var opener = document.activeElement;
     await loadCfg();
-    if (document.getElementById('w276pop')) return;
-    var mine = null, team = null, me = myEmail();
-    try { mine = rpcData(await db.rpc('wa_avail_mine', { p_dept: dept })); } catch (e) { mine = null; }
-    try { team = rpcData(await db.rpc('wa_avail_team', { p_dept: dept })); } catch (e) { team = null; }   /* members see their team; clashes are optional */
-    if (document.getElementById('w276pop')) return;
-    P.dept = dept; P.due = due || null; P.from = opener; P.busy = false; P.cfg = cfgFrom(team);
+    if (document.getElementById('w276pop')) return false;
+    var mine = null, team = null, me = myEmail(), mineErr = null;
+    /* null data means no saved week. An error means the saved week is unknown, and an empty grid saved over it would
+       replace the person's real week: the Home ask does not open (autoPop tries again later), My availability opens
+       with Save off until Retry reads the week. */
+    try { mine = rpcData(await db.rpc('wa_avail_mine', { p_dept: dept })); } catch (e) { mineErr = e || new Error('wa_avail_mine failed'); console.warn('wave276 mine', e); }
+    if (mineErr && due) return false;
+    try { team = rpcData(await db.rpc('wa_avail_team', { p_dept: dept })); } catch (e) { team = null; console.warn('wave276 team (clashes)', e); }   /* members see their team; clashes are optional */
+    if (document.getElementById('w276pop')) return false;
+    if (due && (otherOpen() || !onHome())) return false;   /* the Home ask never stacks on another window, nor opens off Home */
+    P.dept = dept; P.due = due || null; P.from = opener; P.busy = false; P.cfg = cfgFrom(team); P.loadFailed = !!mineErr;
     var clashes = ((team && team.clashes) || []).filter(function (c) { return String(c.email || '').toLowerCase() === me; }).map(function (c) { return Number(c.slot); });
     var slots = (mine && mine.slots) || [];
     var lbl = teamLabel(dept);
@@ -85,20 +90,44 @@
     bk.addEventListener('click', function (e) {
       if (e.target === bk) { later(); return; }
       var t = e.target.closest && e.target.closest('[data-w276]'); if (!t) return;
-      if (t.getAttribute('data-w276') === 'save') save(); else later();
+      var act = t.getAttribute('data-w276');
+      if (act === 'save') save(); else if (act === 'retry') retryMine(); else later();
     });
+    if (P.loadFailed) loadFailed();
     document.addEventListener('keydown', escPop, true);
     var t = document.getElementById('w276title'); if (t) { try { t.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     if (P.due) W276.popped = true;
+    return true;
   }
   W276.openPop = openPop;
+  function loadFailed() {
+    var b = document.getElementById('w276save'); if (b) b.disabled = true;
+    var e = document.getElementById('w276err'); if (!e) return;
+    e.innerHTML = 'Your saved week could not be loaded, so Save is off to keep it safe. <button type="button" class="lk" data-w276="retry">Retry</button>';
+    e.hidden = false;
+  }
+  async function retryMine() {
+    var dept = P.dept; if (!dept || !P.loadFailed) return;
+    popErr('Loading your saved week...');
+    try {
+      var mine = rpcData(await db.rpc('wa_avail_mine', { p_dept: dept }));
+      if (P.dept !== dept || !P.g) return;
+      P.loadFailed = false;
+      P.g.set((mine && mine.slots) || []);
+      popErr('');
+      var b = document.getElementById('w276save'); if (b) b.disabled = false;
+    } catch (err) {
+      console.warn('wave276 mine retry', err);
+      if (P.dept === dept && P.g) loadFailed();
+    }
+  }
 
   /* Home asks: once per page load, for the first team wa_avail_due() returns, never over another window (it waits
      and looks again a few times, so a pop-up that opened first can finish). */
-  var AUTO = { timer: null, tries: 0, due: null };
+  var AUTO = { timer: null, tries: 0, due: null, busy: false };
   function autoPop(delay) {
     clearTimeout(AUTO.timer);
-    if (W276.popped) return;
+    if (W276.popped || AUTO.busy) return;
     AUTO.timer = setTimeout(async function () {
       if (W276.popped || !onHome()) return;
       try { if (typeof MODE !== 'undefined' && MODE !== 'staff' && MODE !== 'board') return; } catch (e) { return; }
@@ -108,8 +137,11 @@
         var rows = await AUTO.due;
         if (!rows || !rows.length) { W276.popped = true; return; }
         if (W276.popped || !onHome() || otherOpen()) { if (!W276.popped && onHome() && AUTO.tries++ < 20) autoPop(5000); return; }
-        W276.popped = true;
-        await openPop(rows[0].department, rows[0]);
-      } catch (e) { AUTO.due = null; console.warn('wave276 due', e); }
+        AUTO.busy = true;
+        var opened = false;
+        try { opened = await openPop(rows[0].department, rows[0]); } finally { AUTO.busy = false; }
+        /* not opened (the saved week did not load, another window opened, the person left Home): popped stays false */
+        if (!opened && !W276.popped && AUTO.tries++ < 20) autoPop(5000);
+      } catch (e) { AUTO.due = null; AUTO.busy = false; console.warn('wave276 due', e); }
     }, delay == null ? 1500 : delay);
   }

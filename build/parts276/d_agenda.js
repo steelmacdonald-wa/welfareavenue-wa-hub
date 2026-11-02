@@ -90,16 +90,26 @@
   async function paintTeam(dept, tok) {
     var A = W276.agenda;
     await loadCfg();
-    var t = null;
-    try { t = rpcData(await db.rpc('wa_avail_team', { p_dept: dept })); } catch (e) { t = null; console.warn('wave276 team', e); }
+    var t = null, err = null;
+    try { t = rpcData(await db.rpc('wa_avail_team', { p_dept: dept })); } catch (e) { err = e || new Error('wa_avail_team failed'); console.warn('wave276 team', e); }
     if (tok !== A.tok) return;
     var host = document.getElementById('w116agHost');
     var panel = document.getElementById('w276panel');
-    if (!host || !t) { if (panel) { if (A.view) { A.view.destroy(); A.view = null; } panel.remove(); } return; }
+    /* refused (not on the team and not its manager; wa_avail_team's own message): no panel, and the route check stops
+       asking again for this team. No data and no error (an unstubbed test page): no panel either. */
+    var refused = !!err && /only the team and the people who manage it/i.test(String((err && err.message) || err));
+    if (refused) A.refused[dept] = true;
+    if (!host || refused || (!t && !err)) { if (panel) { if (A.view) { A.view.destroy(); A.view = null; } panel.remove(); } return; }
     if (!panel) { panel = document.createElement('section'); panel.id = 'w276panel'; panel.setAttribute('aria-labelledby', 'w276ph'); }
     if (panel.parentNode !== host.parentNode || panel.nextElementSibling !== host) host.parentNode.insertBefore(panel, host);
     if (A.view) { A.view.destroy(); A.view = null; }
     panel.setAttribute('data-dept', dept);
+    if (err) {   /* any other failure: one line and a retry, in place of the panel's content */
+      panel.innerHTML = '<div class="hd"><h3 id="w276ph"><span class="k">' + E(teamLabel(dept)) + '</span>When can we meet?</h3></div>'
+        + '<p class="st" role="alert">Could not load availability. <button type="button" class="b2" id="w276retry">Try again</button></p>';
+      panel.querySelector('#w276retry').addEventListener('click', function () { paintAgenda(dept); });
+      return;
+    }
     var c = cfgFrom(t), members = t.members || [], missing = t.missing || [], can = !!t.can_manage;
     var k = members.length, n = members.length + missing.length;
     var wins = best(members, c.cellMin, t.clashes || []);

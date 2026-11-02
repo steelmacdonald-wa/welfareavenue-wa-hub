@@ -37,6 +37,7 @@
     + '#w276hours{font-weight:700;font-size:14px;margin:8px 0 0;color:var(--wa-green);}'
     + '#w276note{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:var(--wa-paper);font-size:13.5px;line-height:1.45;}'
     + '#w276note p{margin:0;}#w276note p + p{margin-top:6px;}'
+    + '#w276err .lk{border:0;background:none;padding:0;font:inherit;font-weight:700;color:var(--wa-green);text-decoration:underline;cursor:pointer;}'
     + '#w276err,#w276perr{font-size:12.5px;color:var(--wa-flag);margin:10px 0 0;}'
     + '#w276pop .row,#w276prop .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;}'
     + '#w276pop .row button,#w276prop .row button{border:0;border-radius:999px;padding:11px 20px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;flex:1 1 160px;}'
@@ -87,7 +88,7 @@
     if (!code || code !== ROUTE.code) return;
     var host = document.getElementById('w116agHost'), panel = document.getElementById('w276panel');
     var good = host && panel && panel.getAttribute('data-dept') === code && panel.nextElementSibling === host;
-    if (host && !good && W276.agenda.busy !== code) paintAgenda(code);
+    if (host && !good && W276.agenda.busy !== code && !W276.agenda.refused[code]) paintAgenda(code);
     if (ROUTE.tries++ < 10) ROUTE.timer = setTimeout(look, 300);
   }
   function routeAgenda() {
