@@ -1,0 +1,1104 @@
+{
+ "gift-drive-give": {
+  "form": {
+   "slug": "gift-drive-give",
+   "title": "Donate gifts and essentials",
+   "intro": "Thank you for thinking of our Holiday Gift Basket Drive! Tell us what you’d like to give and we’ll write back to plan the drop-off, or a pick-up together.",
+   "lang": "en",
+   "kind": "general",
+   "thank_you": "Your gifts will make someone’s holidays a little brighter. Our team will write to you soon about the drop-off or a pick-up.",
+   "questions": [
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "First name",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Last name",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Email",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Phone",
+     "help": "Only if you’d like us to call or text about the drop-off.",
+     "required": false,
+     "fill": "phone"
+    },
+    {
+     "id": "organization",
+     "type": "text",
+     "label": "Company or organization",
+     "help": "If you’re giving on behalf of a company, a school or a group.",
+     "required": false
+    },
+    {
+     "id": "what",
+     "type": "multi",
+     "label": "What would you like to give?",
+     "help": "Clothing can be gently used. Hygiene essentials and toys must be brand new, so every gift feels like a gift.",
+     "required": true,
+     "options": [
+      {
+       "v": "clothing",
+       "l": "Clothing (gently used is fine)"
+      },
+      {
+       "v": "hygiene",
+       "l": "Hygiene essentials (brand new)"
+      },
+      {
+       "v": "toys",
+       "l": "Toys (brand new)"
+      },
+      {
+       "v": "books",
+       "l": "Books"
+      },
+      {
+       "v": "other",
+       "l": "Something else"
+      }
+     ]
+    },
+    {
+     "id": "what_other",
+     "type": "text",
+     "label": "Something else? Tell us what",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "how_many",
+     "type": "number",
+     "label": "Roughly how many items?",
+     "help": "An estimate is perfect.",
+     "required": true
+    },
+    {
+     "id": "dropoff",
+     "type": "choice",
+     "label": "How would you like to get them to us?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "dropoff",
+       "l": "I’ll drop them off"
+      },
+      {
+       "v": "pickup",
+       "l": "I’d need a pick-up"
+      },
+      {
+       "v": "not_sure",
+       "l": "Not sure yet"
+      }
+     ]
+    },
+    {
+     "id": "area",
+     "type": "text",
+     "label": "Your area or postal code",
+     "help": "So we can plan a drop-off spot or a pick-up near you.",
+     "required": false
+    },
+    {
+     "id": "when",
+     "type": "text",
+     "label": "When will your items be ready?",
+     "help": "We’re collecting donations from mid-November to the end of November.",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Anything else we should know?",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "rule_ok",
+     "type": "multi",
+     "label": "Before you send",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "yes",
+       "l": "I understand that hygiene essentials and toys must be brand new."
+      }
+     ]
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "paniers-donner": {
+  "form": {
+   "slug": "paniers-donner",
+   "title": "Donner des cadeaux et des articles",
+   "intro": "Merci de penser à notre collecte de paniers-cadeaux des Fêtes! Dites-nous ce que vous aimeriez donner et nous vous écrirons pour planifier le dépôt, ou une cueillette ensemble.",
+   "lang": "fr",
+   "kind": "general",
+   "thank_you": "Vos cadeaux vont rendre les Fêtes de quelqu’un un peu plus belles. Notre équipe vous écrira bientôt pour le dépôt ou la cueillette.",
+   "questions": [
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Prénom",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Nom",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Courriel",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Téléphone",
+     "help": "Seulement si vous voulez qu’on vous appelle ou vous texte pour le dépôt.",
+     "required": false,
+     "fill": "phone"
+    },
+    {
+     "id": "organization",
+     "type": "text",
+     "label": "Entreprise ou organisme",
+     "help": "Si vous donnez au nom d’une entreprise, d’une école ou d’un groupe.",
+     "required": false
+    },
+    {
+     "id": "what",
+     "type": "multi",
+     "label": "Qu’aimeriez-vous donner?",
+     "help": "Les vêtements peuvent être usagés, en bon état. Les articles d’hygiène et les jouets doivent être neufs, pour que chaque cadeau en soit vraiment un.",
+     "required": true,
+     "options": [
+      {
+       "v": "clothing",
+       "l": "Vêtements (usagés en bon état, c’est parfait)"
+      },
+      {
+       "v": "hygiene",
+       "l": "Articles d’hygiène (neufs)"
+      },
+      {
+       "v": "toys",
+       "l": "Jouets (neufs)"
+      },
+      {
+       "v": "books",
+       "l": "Livres"
+      },
+      {
+       "v": "other",
+       "l": "Autre chose"
+      }
+     ]
+    },
+    {
+     "id": "what_other",
+     "type": "text",
+     "label": "Autre chose? Dites-nous quoi",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "how_many",
+     "type": "number",
+     "label": "Environ combien d’articles?",
+     "help": "Une estimation, c’est parfait.",
+     "required": true
+    },
+    {
+     "id": "dropoff",
+     "type": "choice",
+     "label": "Comment aimeriez-vous nous les remettre?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "dropoff",
+       "l": "Je vais les déposer"
+      },
+      {
+       "v": "pickup",
+       "l": "J’aurais besoin d’une cueillette"
+      },
+      {
+       "v": "not_sure",
+       "l": "Je ne sais pas encore"
+      }
+     ]
+    },
+    {
+     "id": "area",
+     "type": "text",
+     "label": "Votre quartier ou code postal",
+     "help": "Pour planifier un lieu de dépôt ou une cueillette près de chez vous.",
+     "required": false
+    },
+    {
+     "id": "when",
+     "type": "text",
+     "label": "Quand vos articles seront-ils prêts?",
+     "help": "Nous recueillons les dons de la mi-novembre à la fin novembre.",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Autre chose que nous devrions savoir?",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "rule_ok",
+     "type": "multi",
+     "label": "Avant d’envoyer",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "yes",
+       "l": "Je comprends que les articles d’hygiène et les jouets doivent être neufs."
+      }
+     ]
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Oui, Welfare Avenue peut m’envoyer par courriel des nouvelles, des appels aux bénévoles et des façons d’aider. Je peux me désabonner en tout temps."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "gift-drive-volunteer": {
+  "form": {
+   "slug": "gift-drive-volunteer",
+   "title": "Volunteer with the drive",
+   "intro": "Help us sort, wrap and deliver 6,000 gifts this holiday season. Tell us how you’d like to help and when you’re free, and we’ll be in touch as soon as the dates are set.",
+   "lang": "en",
+   "kind": "volunteer",
+   "thank_you": "You’re signed up to help with the Holiday Gift Basket Drive. We’ll be in touch as soon as the dates are set.",
+   "questions": [
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "First name",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Last name",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Email",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Phone",
+     "help": "So we can reach you about the dates.",
+     "required": true,
+     "fill": "phone"
+    },
+    {
+     "id": "tasks",
+     "type": "multi",
+     "label": "How would you like to help?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "wrapping",
+       "l": "Wrapping gifts at our December event",
+       "d": "One or two weekends in December. Dates are coming soon."
+      },
+      {
+       "v": "sorting",
+       "l": "Collecting and sorting donations",
+       "d": "From mid-November to the end of November."
+      },
+      {
+       "v": "delivery",
+       "l": "Delivering gifts",
+       "d": "Before the holidays, across Montreal."
+      }
+     ]
+    },
+    {
+     "id": "availability",
+     "type": "multi",
+     "label": "When are you usually free?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "weekday_day",
+       "l": "Weekdays, daytime"
+      },
+      {
+       "v": "weekday_evening",
+       "l": "Weekday evenings"
+      },
+      {
+       "v": "weekend",
+       "l": "Weekends"
+      }
+     ]
+    },
+    {
+     "id": "age_16",
+     "type": "yes_no",
+     "label": "Are you 16 or older?",
+     "help": "If not, tell us below and we’ll figure out together how you can join in.",
+     "required": true
+    },
+    {
+     "id": "heard",
+     "type": "text",
+     "label": "How did you hear about the drive?",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Anything else we should know?",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "paniers-benevole": {
+  "form": {
+   "slug": "paniers-benevole",
+   "title": "Faire du bénévolat pour la collecte",
+   "intro": "Aidez-nous à trier, emballer et livrer 6 000 cadeaux cet hiver. Dites-nous comment vous aimeriez aider et quand vous êtes disponible; nous vous écrirons dès que les dates seront fixées.",
+   "lang": "fr",
+   "kind": "volunteer",
+   "thank_you": "Nous avons bien reçu votre inscription pour aider à la collecte de paniers-cadeaux des Fêtes. Nous vous écrirons dès que les dates seront fixées.",
+   "questions": [
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Prénom",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Nom",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Courriel",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Téléphone",
+     "help": "Pour vous joindre au sujet des dates.",
+     "required": true,
+     "fill": "phone"
+    },
+    {
+     "id": "tasks",
+     "type": "multi",
+     "label": "Comment aimeriez-vous aider?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "wrapping",
+       "l": "Emballer des cadeaux à notre événement de décembre",
+       "d": "Une ou deux fins de semaine en décembre. Les dates seront annoncées bientôt."
+      },
+      {
+       "v": "sorting",
+       "l": "Recueillir et trier les dons",
+       "d": "De la mi-novembre à la fin novembre."
+      },
+      {
+       "v": "delivery",
+       "l": "Livrer des cadeaux",
+       "d": "Avant les Fêtes, partout à Montréal."
+      }
+     ]
+    },
+    {
+     "id": "availability",
+     "type": "multi",
+     "label": "Quand êtes-vous habituellement disponible?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "weekday_day",
+       "l": "En semaine, le jour"
+      },
+      {
+       "v": "weekday_evening",
+       "l": "En semaine, le soir"
+      },
+      {
+       "v": "weekend",
+       "l": "La fin de semaine"
+      }
+     ]
+    },
+    {
+     "id": "age_16",
+     "type": "yes_no",
+     "label": "Avez-vous 16 ans ou plus?",
+     "help": "Sinon, dites-le-nous plus bas et nous verrons ensemble comment vous pouvez participer.",
+     "required": true
+    },
+    {
+     "id": "heard",
+     "type": "text",
+     "label": "Comment avez-vous entendu parler de la collecte?",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Autre chose que nous devrions savoir?",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Oui, Welfare Avenue peut m’envoyer par courriel des nouvelles, des appels aux bénévoles et des façons d’aider. Je peux me désabonner en tout temps."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "gift-drive-sponsor": {
+  "form": {
+   "slug": "gift-drive-sponsor",
+   "title": "Companies and sponsors",
+   "intro": "Businesses make the drive possible, with products, wrapping supplies, a collection bin or a team that wraps with us. Tell us a little about your company and we’ll send you our sponsorship package.",
+   "lang": "en",
+   "kind": "general",
+   "thank_you": "We’ll send you our sponsorship package and be in touch to plan it together.",
+   "questions": [
+    {
+     "id": "company",
+     "type": "text",
+     "label": "Company or organization",
+     "help": "",
+     "required": true
+    },
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Your first name",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Your last name",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Email",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "role",
+     "type": "text",
+     "label": "Your role",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Phone",
+     "help": "",
+     "required": false,
+     "fill": "phone"
+    },
+    {
+     "id": "help_how",
+     "type": "multi",
+     "label": "How would you like to help?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "products",
+       "l": "Donating products (in kind)"
+      },
+      {
+       "v": "supplies",
+       "l": "Wrapping supplies"
+      },
+      {
+       "v": "team",
+       "l": "Employee volunteering (wrap with us)"
+      },
+      {
+       "v": "bin",
+       "l": "A collection bin at your location"
+      },
+      {
+       "v": "money",
+       "l": "A financial sponsorship"
+      }
+     ]
+    },
+    {
+     "id": "size",
+     "type": "text",
+     "label": "What size of support do you have in mind?",
+     "help": "A number of items, a budget or a team size: anything helps us plan.",
+     "required": false
+    },
+    {
+     "id": "message",
+     "type": "long_text",
+     "label": "Your message",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "paniers-entreprises": {
+  "form": {
+   "slug": "paniers-entreprises",
+   "title": "Entreprises et commanditaires",
+   "intro": "Les entreprises rendent la collecte possible : des produits, du matériel d’emballage, une boîte de collecte ou une équipe qui vient emballer avec nous. Parlez-nous de votre entreprise et nous vous enverrons notre trousse de commandite.",
+   "lang": "fr",
+   "kind": "general",
+   "thank_you": "Nous vous enverrons notre trousse de commandite et vous écrirons pour planifier la suite ensemble.",
+   "questions": [
+    {
+     "id": "company",
+     "type": "text",
+     "label": "Entreprise ou organisme",
+     "help": "",
+     "required": true
+    },
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Votre prénom",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Votre nom",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Courriel",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "role",
+     "type": "text",
+     "label": "Votre poste",
+     "help": "",
+     "required": false
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Téléphone",
+     "help": "",
+     "required": false,
+     "fill": "phone"
+    },
+    {
+     "id": "help_how",
+     "type": "multi",
+     "label": "Comment aimeriez-vous aider?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "products",
+       "l": "Donner des produits (en nature)"
+      },
+      {
+       "v": "supplies",
+       "l": "Du matériel d’emballage"
+      },
+      {
+       "v": "team",
+       "l": "Du bénévolat d’équipe (emballer avec nous)"
+      },
+      {
+       "v": "bin",
+       "l": "Une boîte de collecte à vos bureaux"
+      },
+      {
+       "v": "money",
+       "l": "Une commandite financière"
+      }
+     ]
+    },
+    {
+     "id": "size",
+     "type": "text",
+     "label": "Quelle ampleur de soutien envisagez-vous?",
+     "help": "Un nombre d’articles, un budget ou la taille de votre équipe : tout nous aide à planifier.",
+     "required": false
+    },
+    {
+     "id": "message",
+     "type": "long_text",
+     "label": "Votre message",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Oui, Welfare Avenue peut m’envoyer par courriel des nouvelles, des appels aux bénévoles et des façons d’aider. Je peux me désabonner en tout temps."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "gift-drive-group": {
+  "form": {
+   "slug": "gift-drive-group",
+   "title": "Schools and groups",
+   "intro": "Bring your class, club or team to collect donations, wrap gifts or volunteer together. Tell us about your group and we’ll find the right fit.",
+   "lang": "en",
+   "kind": "volunteer",
+   "thank_you": "We have your group’s details, and our team will be in touch to plan it with you.",
+   "questions": [
+    {
+     "id": "group_name",
+     "type": "text",
+     "label": "Name of your group or organization",
+     "help": "",
+     "required": true
+    },
+    {
+     "id": "group_type",
+     "type": "choice",
+     "label": "What kind of group is it?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "school",
+       "l": "School, college or university"
+      },
+      {
+       "v": "club",
+       "l": "Club or association"
+      },
+      {
+       "v": "team",
+       "l": "Sports team"
+      },
+      {
+       "v": "company",
+       "l": "Company team"
+      },
+      {
+       "v": "faith",
+       "l": "Faith group"
+      },
+      {
+       "v": "other",
+       "l": "Something else"
+      }
+     ]
+    },
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Your first name",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Your last name",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Email",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Phone",
+     "help": "So we can reach you while we plan.",
+     "required": true,
+     "fill": "phone"
+    },
+    {
+     "id": "size",
+     "type": "number",
+     "label": "How many people?",
+     "help": "An estimate is fine.",
+     "required": true
+    },
+    {
+     "id": "activities",
+     "type": "multi",
+     "label": "What would your group like to do?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "collect",
+       "l": "Collect donations (a drive at your school or workplace)"
+      },
+      {
+       "v": "wrap",
+       "l": "Wrap gifts at our December event"
+      },
+      {
+       "v": "volunteer",
+       "l": "Volunteer as a group"
+      }
+     ]
+    },
+    {
+     "id": "ages",
+     "type": "choice",
+     "label": "Ages in your group",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "adults",
+       "l": "Everyone is 18 or older"
+      },
+      {
+       "v": "mixed",
+       "l": "Some are under 18, with adult supervisors"
+      },
+      {
+       "v": "youth",
+       "l": "Mostly under 18, with adult supervisors"
+      }
+     ]
+    },
+    {
+     "id": "timing",
+     "type": "text",
+     "label": "When would suit your group?",
+     "help": "Donations come in from mid to end of November; wrapping is in December.",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Anything else we should know?",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ },
+ "paniers-groupes": {
+  "form": {
+   "slug": "paniers-groupes",
+   "title": "Écoles et groupes",
+   "intro": "Venez avec votre classe, votre club ou votre équipe pour recueillir des dons, emballer des cadeaux ou faire du bénévolat ensemble. Parlez-nous de votre groupe et nous trouverons la bonne formule.",
+   "lang": "fr",
+   "kind": "volunteer",
+   "thank_you": "Nous avons les détails de votre groupe et notre équipe vous écrira pour planifier le tout avec vous.",
+   "questions": [
+    {
+     "id": "group_name",
+     "type": "text",
+     "label": "Nom de votre groupe ou organisme",
+     "help": "",
+     "required": true
+    },
+    {
+     "id": "group_type",
+     "type": "choice",
+     "label": "De quel type de groupe s’agit-il?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "school",
+       "l": "École, cégep ou université"
+      },
+      {
+       "v": "club",
+       "l": "Club ou association"
+      },
+      {
+       "v": "team",
+       "l": "Équipe sportive"
+      },
+      {
+       "v": "company",
+       "l": "Équipe d’entreprise"
+      },
+      {
+       "v": "faith",
+       "l": "Groupe confessionnel"
+      },
+      {
+       "v": "other",
+       "l": "Autre chose"
+      }
+     ]
+    },
+    {
+     "id": "first_name",
+     "type": "text",
+     "label": "Votre prénom",
+     "help": "",
+     "required": true,
+     "fill": "first_name"
+    },
+    {
+     "id": "last_name",
+     "type": "text",
+     "label": "Votre nom",
+     "help": "",
+     "required": true,
+     "fill": "last_name"
+    },
+    {
+     "id": "email",
+     "type": "email",
+     "label": "Courriel",
+     "help": "",
+     "required": true,
+     "fill": "email"
+    },
+    {
+     "id": "phone",
+     "type": "phone",
+     "label": "Téléphone",
+     "help": "Pour vous joindre pendant la planification.",
+     "required": true,
+     "fill": "phone"
+    },
+    {
+     "id": "size",
+     "type": "number",
+     "label": "Combien de personnes?",
+     "help": "Une estimation suffit.",
+     "required": true
+    },
+    {
+     "id": "activities",
+     "type": "multi",
+     "label": "Que voudrait faire votre groupe?",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "collect",
+       "l": "Recueillir des dons (une collecte à votre école ou à vos bureaux)"
+      },
+      {
+       "v": "wrap",
+       "l": "Emballer des cadeaux à notre événement de décembre"
+      },
+      {
+       "v": "volunteer",
+       "l": "Faire du bénévolat en groupe"
+      }
+     ]
+    },
+    {
+     "id": "ages",
+     "type": "choice",
+     "label": "L’âge des membres du groupe",
+     "help": "",
+     "required": true,
+     "options": [
+      {
+       "v": "adults",
+       "l": "Tout le monde a 18 ans ou plus"
+      },
+      {
+       "v": "mixed",
+       "l": "Certains ont moins de 18 ans, avec des adultes responsables"
+      },
+      {
+       "v": "youth",
+       "l": "La plupart ont moins de 18 ans, avec des adultes responsables"
+      }
+     ]
+    },
+    {
+     "id": "timing",
+     "type": "text",
+     "label": "Quand cela conviendrait-il à votre groupe?",
+     "help": "Les dons arrivent de la mi-novembre à la fin novembre; l’emballage a lieu en décembre.",
+     "required": false
+    },
+    {
+     "id": "comments",
+     "type": "long_text",
+     "label": "Autre chose à nous dire?",
+     "help": "",
+     "required": false
+    }
+   ],
+   "consent": {
+    "ask": true,
+    "required": false,
+    "label": "Oui, Welfare Avenue peut m’envoyer par courriel des nouvelles, des appels aux bénévoles et des façons d’aider. Je peux me désabonner en tout temps."
+   }
+  },
+  "org": {
+   "name": "Welfare Avenue",
+   "email": "info@welfareavenue.com",
+   "address": "8200 av Bloomfield, Montréal QC H3N 2H9"
+  },
+  "token": "1.x"
+ }
+}

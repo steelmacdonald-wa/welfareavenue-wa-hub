@@ -1,0 +1,968 @@
+/* =====================================================================
+   WA v272 The new Home: what do I do next, for everyone (02/11/26)
+   =====================================================================
+   Steel (01/11/26): "I need like a better UI. Maybe it should look like more of an Apple design. I really want you to
+   consider that the homepage is for everyone, right? And it should be something simple to use."; "ensure you aren't removing
+   any functionality from the old home page"; directors: "Yes, give them Home"; "make it part of onboarding and a pop up on
+   hub to add the hub as an app on their phone and computer without it looking forced only encouraged. Also I want a very
+   easy experience for setting up the notifications. It should maybe be a small section close to the top of home called
+   setting up hub." and how-to animations for iPhone and Android.
+
+   Nothing is rebuilt: every card the older waves draw on Home stays theirs, with its wiring, and this segment only lays them
+   out (CSS order and a grid on #mpBody) and adds:
+   - a plain sentence under the greeting (the chips stay, as the same buttons);
+   - Up next: the one task to do now, with Open task, Mark as done (Undo for 5 seconds) and Do this later;
+   - My tasks shows what is due today or overdue, with the rest behind Later (remembered on this device);
+   - Your apps: the launcher's apps on Home (the launcher stays);
+   - Set up your Hub: add the Hub as an app, turn on notifications. One tap where the browser allows it, a how-to film where
+     it does not. Both optional; Not now hides it and Show everything brings it back. It stands in for wave219's card.
+   - a small corner note, at most twice on a device and 14 days apart, never over another window;
+   - directors get Home: greeting, Set up your Hub (the app only: Hub notifications are staff only, wa219_push_save), their
+     meetings and their Board pages; Home is their landing page and the Board overview stays in their menu.
+   window.w272: paint, state, setupOpen, tryTip, nextTask, todayCount. */
+(function () {
+  'use strict';
+  if (window.__wa272) return; window.__wa272 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', PURPLE = '#6F64AB';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function classic() { return lsGet('wa114classic') === '1'; }
+  function onHome() { var h = String(location.hash || ''); return !h || h === '#' || /^#mypage(\/|$)/.test(h); }
+  function say(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  var WORD = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+  function word(n) { return WORD[n] || String(n); }
+  function isoToday() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+
+  /* ---------- Home's layout: the older cards, placed and dressed ----------
+     One dark surface (Up next), one warm surface (Set up your Hub), everything else a quiet group on the cream. Type from
+     the brand, sizes by role, tracking by size. Motion only on what the person touches: a press, a tick, a change. Nothing
+     animates on arrival: Home opens many times a day. */
+  var OUT = 'cubic-bezier(.23,1,.32,1)', MUTED = 'rgba(31,32,30,.62)', SURF = 'rgba(16,63,57,.05)', SURF2 = 'rgba(16,63,57,.1)', LINE = 'rgba(16,63,57,.11)';
+  var TICK = 'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23FFFAF2%27 stroke-width=%272.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27><path d=%27M5 12.5 10 17.5 19 7%27/></svg>")';
+  var P = '#mypage.w272 ';
+  var B = P + '#mpBody';
+  var homeCss = ''
+    + P + '> .card:has(> #mpBody),' + P + '#mpBody{background:none;border:0;box-shadow:none;}'
+    + P + '> .card:has(> #mpBody){padding:0;display:block;width:auto;}'
+    /* wave262's focus rules set flex and order; these come after and are stronger */
+    + '#mypage.w272 #mpBody,#mypage.w272.w262focus #mpBody{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:16px 24px;align-items:start;width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:15.5px;line-height:1.45;color:' + INK + ';}'
+    + B + ' > *{grid-column:1 / -1;min-width:0;margin-top:0;margin-bottom:0;}'
+    + '#mypage.w272 #mpBody > .mp-head{order:1;}#mypage.w272 #mpBody > .mp-chips{order:2;}#mypage.w272 #mpBody > #w151news{order:3;}'
+    + '#mypage.w272 #mpBody > #w272setup{order:4;}'
+    + '#mypage.w272 #mpBody > #w272next{order:6;grid-column:1;align-self:stretch;}#mypage.w272 #mpBody > #w272apps{order:7;grid-column:2;align-self:stretch;}'
+    + '#mypage.w272 #mpBody:not(:has(> #w272apps)) > #w272next{grid-column:1 / -1;}'
+    + '#mypage.w272 #mpBody > #w112wrap{order:8;}#mypage.w272 #mpBody > #w180card{order:9;}#mypage.w272 #mpBody > #w219card{order:10;}#mypage.w272 #mpBody > #w166lead{order:11;}#mypage.w272 #mpBody > #w170card{order:12;}'
+    + '#mypage.w272 #mpBody > #w116home{order:13;grid-column:1;align-self:stretch;}#mypage.w272 #mpBody > #w171next{order:14;grid-column:2;margin:0;align-self:stretch;}'
+    + '#mypage.w272 #mpBody:not(:has(> #w171next)) > #w116home{grid-column:1 / -1;}#mypage.w272 #mpBody:not(:has(> #w116home)) > #w171next{grid-column:1 / -1;}'
+    + '#mypage.w272 #mpBody > #w74attn{order:15;}#mypage.w272 #mpBody > .mp-grid{order:16;}'
+    + '#mypage.w272 #mpBody > .mp-online{order:20;}#mypage.w272 #mpBody > #w192feed{order:21;}#mypage.w272 #mpBody > #w75card{order:22;}#mypage.w272 #mpBody > #w114switch{order:23;}'
+    /* Set up your Hub stands in for wave219's card and the Policies card: both say the same things */
+    + B + ':has(> #w272setup) > #w219card,' + P + '> #w105sign{display:none;}'
+    /* the overdue list repeats My tasks: Needs your attention keeps what only it says (the mentions) */
+    + P + '#w74attn > .mp-task.w109,' + P + '#w74attn > p.mp-empty,' + P + '#w74attn > .mp-task:has([data-w109cb]){display:none;}'
+    + P + '#w74attn:not(:has(> .mp-task:not(.w109))){display:none;}'
+    /* ---- type ---- */
+    + P + '.mp-head{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;padding-top:2px;}'
+    + P + '.mp-head h2{margin:0;font:500 clamp(38px,4.6vw,56px)/.98 ' + HEAD + ';text-transform:uppercase;letter-spacing:-.01em;color:' + GREEN + ';}'
+    + P + '.mp-head .w115av{width:40px !important;height:40px !important;font-size:15px !important;}'
+    + P + '.w74date{order:-1;flex-basis:100%;font-size:11.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + PURPLE + ';}'
+    + P + '.mp-head .ag-dep{font-size:11px;letter-spacing:.06em;border-radius:6px;padding:3px 7px;}'
+    + P + '#w110mine{flex-basis:100%;order:6;margin:0;font-size:13px;}'
+    + P + '#w110mine .btn{background:none;border:0;padding:0;color:' + GREEN + ';font:500 13px ' + BODY + ';text-decoration:underline;text-underline-offset:3px;min-height:32px;}'
+    + '#w272sum{flex-basis:100%;order:5;margin:2px 0 0;font-size:17px;line-height:1.4;color:' + MUTED + ';}'
+    /* the counts: the same buttons, as a quiet row */
+    + P + '.mp-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0;}'
+    + P + '.mp-chip{border:0;background:' + SURF + ';border-radius:10px;padding:7px 12px;min-height:36px;box-sizing:border-box;box-shadow:none;font-size:14px;font-weight:500;color:' + GREEN + ';display:inline-flex;flex-direction:row;align-items:center;gap:6px;font-variant-numeric:tabular-nums;cursor:pointer;}'
+    + P + '.mp-chip b{font:700 14px/1 ' + BODY + ';margin:0;color:inherit;}'
+    + P + '.mp-chip.warn{background:rgba(220,165,39,.22);}'
+    /* ---- the quiet groups ---- */
+    + P + '.mp-sec,' + P + '#w112card,' + P + '.w105card,' + P + '#w74attn{background:' + SURF + ';border:0;box-shadow:none;border-radius:18px;padding:16px 18px 14px;margin:0;}'
+    + P + '.mp-sec > h3,' + P + '#w74attn h3,' + P + '.w180hd h3,' + P + '.w112top h3,' + P + '.w105card h2{margin:0 0 6px;font:500 22px/1.05 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
+    + P + '.mp-grid{grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:16px 24px;}'
+    + P + '.w74col{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-content:start;min-width:0;}'
+    + P + '.mp-empty,' + P + '.w116note,' + P + '.w192sub,' + P + '.w112intro,' + P + '.w105card p.read{font-size:14px;line-height:1.45;color:' + MUTED + ';}'
+    + P + '.mp-empty{border:0;background:none;padding:4px 0;margin:0 0 4px;}'
+    /* rows: 48px to touch, one hairline between, the tick a round control */
+    + P + '.mp-task{display:flex;align-items:center;gap:10px;min-height:48px;padding:6px 0;margin:0;border-top:1px solid ' + LINE + ';border-radius:0;background:none;box-shadow:none;font-size:15.5px;line-height:1.35;}'
+    + P + '.mp-task:first-of-type,' + P + '.w74grp + .mp-task,' + P + '.w74grp + .w74extra .mp-task{border-top:0;}'
+    + P + '.mp-task .w109t{cursor:pointer;}'
+    + P + '.mp-task.w109done{opacity:.5;}' + P + '.mp-task.w109done .w109t{text-decoration:line-through;}'
+    + P + '.w109undo{margin-left:auto;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:700;cursor:pointer;}'
+    + P + '.mp-due{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 8px;background:' + SURF2 + ';color:' + GREEN + ';flex:none;}'
+    + P + '.mp-due.over,' + P + '.mp-due.soon{background:rgba(220,165,39,.26);color:' + GREEN + ';}'
+    + P + '.w74grp{margin:12px 0 2px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + MUTED + ';}'
+    + P + 'input[type=checkbox][data-w109cb],' + P + '.w112step > input[type=checkbox]{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;flex:none;border-radius:50%;box-shadow:inset 0 0 0 1.75px rgba(31,32,30,.42);background:transparent center/14px no-repeat;cursor:pointer;transition:background-color 120ms ease,box-shadow 120ms ease,transform 120ms ' + OUT + ';}'
+    + P + 'input[type=checkbox][data-w109cb]:checked,' + P + '.w112step > input[type=checkbox]:checked{background-color:' + GREEN + ';background-image:' + TICK + ';box-shadow:none;}'
+    + P + 'input[type=checkbox][data-w109cb]:active,' + P + '.w112step > input[type=checkbox]:active{transform:scale(.88);}'
+    /* mentions */
+    + P + '.w74men{padding:10px 0;border-top:1px solid ' + LINE + ';font-size:15px;line-height:1.4;}' + P + '.w74men:first-of-type{border-top:0;}'
+    + P + '.w74men .cx{color:' + MUTED + ';}' + P + '.w74new{font-size:10px;letter-spacing:.06em;}'
+    + P + '.w65got{display:inline-block;margin-top:4px;background:' + SURF2 + ';color:' + GREEN + ';border-radius:999px;padding:5px 12px;font-size:12.5px !important;font-weight:700;}'
+    /* the getting started card (wave112) */
+    + P + '#w112wrap{margin:0;}' + P + '#w112card{border-left:0;}'
+    + P + '.w112top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;}'
+    + P + '.w112count{font-size:13px;color:' + MUTED + ';}' + P + '.w112links{margin-left:auto;font-size:13px;}' + P + '.w112links a{color:' + GREEN + ';}'
+    + P + '.w112bar{height:5px;border-radius:3px;background:' + SURF2 + ';overflow:hidden;margin:4px 0 10px;}' + P + '.w112bar i{background:' + GOLD + ';border-radius:3px;height:100%;display:block;transition:width 300ms ' + OUT + ';}'
+    + P + '.w112step{display:flex;align-items:center;gap:12px;min-height:54px;padding:8px 0;border-top:1px solid ' + LINE + ';}'
+    + P + '.w112txt{flex:1;min-width:0;font-size:15.5px;line-height:1.3;}' + P + '.w112txt small,' + P + '.w112txt .w112d{display:block;font-size:13px;color:' + MUTED + ';}'
+    + P + '.w112go{flex:none;min-height:36px;border:0;border-radius:999px;background:' + SURF2 + ';color:' + GREEN + ';padding:0 14px;font:600 13px ' + BODY + ';cursor:pointer;}'
+    /* announcements (wave180) */
+    + P + '.w180hd{display:flex;align-items:center;gap:10px;margin-bottom:4px;}' + P + '.w180btn{border-radius:999px;font-weight:600;}'
+    + P + '.w180it{padding:12px 0 10px;margin:0;border:0;border-top:1px solid ' + LINE + ';border-radius:0;background:none;box-shadow:none;}' + P + '.w180it:first-of-type{border-top:0;}' + P + '.w180it.pin{border-left:3px solid ' + GOLD + ';padding-left:12px;}'
+    + P + '.w180it h4{margin:4px 0 2px;font:500 16.5px/1.3 ' + BODY + ';color:' + INK + ';}' + P + '.w180it .body{font-size:15px;color:' + INK + ';}' + P + '.w180it .top{color:' + MUTED + ';}'
+    /* the next serving (wave171): a quiet group, so Up next is the one dark surface */
+    + P + '#w171next{background:' + SURF + ';color:' + INK + ';border-radius:18px;padding:16px 18px 14px;box-sizing:border-box;}' + P + '#w171next:after{display:none;}'
+    + P + '#w171next .k{color:' + PURPLE + ';letter-spacing:.1em;font-size:11.5px;}' + P + '#w171next h3{color:' + GREEN + ';font-size:22px;font-weight:500;letter-spacing:.01em;margin:2px 0 4px;}'
+    + P + '#w171next p{color:' + INK + ';font-size:14.5px;}' + P + '#w171next .bar{background:' + SURF2 + ';}' + P + '#w171next .go{border-radius:999px;font-size:13px;}'
+    /* time off and policies (wave105), when shown */
+    + P + '.w105card .btn.mini{border-radius:999px;font-weight:600;}' + P + '.w105card table{font-size:13.5px;}'
+    /* ---- buttons: instant press feedback, hover only on a mouse ---- */
+    + P + 'button,' + P + '.mp-chip,' + P + '.w65got,' + P + '.w109undo{transition:transform 120ms ' + OUT + ',background-color 120ms ease,opacity 120ms ease;}'
+    + P + 'button:active,' + P + '.mp-chip:active,' + P + '.w65got:active,' + P + '.w109undo:active{transform:scale(.97);}'
+    + P + 'button:focus-visible,' + P + '.mp-chip:focus-visible,' + P + 'input:focus-visible,' + P + 'a:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '@media (hover:hover) and (pointer:fine){' + P + '.mp-chip:hover,' + P + '.w112go:hover,' + P + '.w65got:hover{background:rgba(16,63,57,.15);}' + P + '#w272next button:hover{background:rgba(255,250,242,.22);}' + P + '#w272next button.go:hover,' + P + '#w272setup .go:hover{filter:brightness(1.05);}}'
+    /* ---- My tasks: today first ---- */
+    + '#mypage.w272:not(.w272later) .w272lt{display:none !important;}'
+    + '#w272laterbtn{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:46px;margin-top:4px;padding:0 2px;border:0;border-top:1px solid ' + LINE + ';background:none;font:500 15px ' + BODY + ';color:' + GREEN + ';cursor:pointer;text-align:left;}'
+    + '#w272laterbtn .c{transition:transform 200ms ' + OUT + ';font-size:20px;line-height:1;}' + '#w272laterbtn[aria-expanded="true"] .c{transform:rotate(90deg);}'
+    /* ---- Up next: the one dark surface ---- */
+    + '#w272next{background:' + GREEN + ';color:' + CREAM + ';border-radius:22px;padding:22px 24px 20px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;transition:opacity 140ms ease,filter 140ms ease,transform 140ms ' + OUT + ';}'
+    + '#w272next.w272swap{opacity:0;filter:blur(2px);transform:translateY(3px);}'
+    + '#w272next small{font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:' + GOLD + ';}'
+    + '#w272next h3{margin:0;font:500 clamp(26px,3vw,38px)/1 ' + HEAD + ';letter-spacing:-.005em;text-transform:uppercase;color:' + CREAM + ';text-wrap:balance;overflow-wrap:anywhere;}'
+    + '#w272next p{margin:0;font-size:15px;color:rgba(255,250,242,.82);}'
+    + '#w272next .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:14px;}'
+    + '#w272next button{min-height:44px;padding:0 16px;border:0;border-radius:12px;background:rgba(255,250,242,.14);color:' + CREAM + ';font:500 15px ' + BODY + ';cursor:pointer;}'
+    + '#w272next button.go{background:' + GOLD + ';color:' + GREEN + ';font:600 17px/1 ' + HEAD + ';letter-spacing:.04em;text-transform:uppercase;padding:0 20px;}'
+    + '#w272next button[disabled]{opacity:.6;cursor:default;}' + '#w272next button:focus-visible{outline-color:' + CREAM + ';}'
+    + '#w272next.clear{align-items:center;justify-content:center;text-align:center;padding-block:28px;}'
+    /* ---- Your apps ---- */
+    + '#w272apps{background:' + SURF + ';border-radius:18px;padding:16px 18px 14px;box-sizing:border-box;}'
+    + '#w272apps h3{margin:0 0 12px;font:500 22px/1.05 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w272apps .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:14px 6px;}'
+    + '#w272apps button{display:grid;justify-items:center;align-content:start;gap:6px;border:0;background:none;padding:2px;cursor:pointer;font:400 12.5px/1.2 ' + BODY + ';color:' + INK + ';text-align:center;}'
+    + '#w272apps .ti{width:50px;height:50px;border-radius:14px;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;}' + '#w272apps .ti svg{width:24px;height:24px;}'
+    + '#w272apps .all .ti{background:' + SURF2 + ';color:' + GREEN + ';}'
+    /* ---- the toast with Undo: enters and leaves along the same path ---- */
+    + '#w272toast{position:fixed;z-index:99980;left:50%;bottom:24px;display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;padding:10px 12px 10px 18px;border-radius:14px;background:' + INK + ';color:' + CREAM + ';font:400 15px ' + BODY + ';box-shadow:0 10px 34px rgba(0,0,0,.28);transform:translate(-50%,160%);opacity:0;transition:transform 300ms cubic-bezier(.32,.72,0,1),opacity 200ms ease;pointer-events:none;}'
+    + '#w272toast.on{transform:translate(-50%,0);opacity:1;pointer-events:auto;}'
+    + '#w272toast button{border:0;background:none;color:' + GOLD + ';font:700 15px ' + BODY + ';cursor:pointer;min-height:32px;padding:0 6px;flex:none;}'
+    + '@media (max-width:900px){'
+    + '#mypage.w272 #mpBody,#mypage.w272.w262focus #mpBody{grid-template-columns:minmax(0,1fr);gap:14px;}'
+    + '#mypage.w272 #mpBody > *,#mypage.w272 #mpBody > #w272next,#mypage.w272 #mpBody > #w272apps,#mypage.w272 #mpBody > #w116home,#mypage.w272 #mpBody > #w171next{grid-column:1;}'
+    + P + '.mp-grid{grid-template-columns:minmax(0,1fr);gap:14px;}' + P + '.w74col{gap:14px;}'
+    + P + '.mp-sec,' + P + '#w112card,' + P + '#w272apps,' + P + '#w74attn{padding:14px 16px 12px;}' + '#w272next{padding:20px 20px 18px;}' + P + '.w112step{flex-wrap:wrap;gap:8px 12px;}' + P + '.w112txt{flex:1 1 200px;}' + P + '.w112go{margin-left:34px;font-size:12px;min-height:34px;}' + P + '.mp-head .w115av{display:none;}' + P + '.mp-head h2{font-size:36px;}'
+    + '#w272toast{bottom:84px;}'
+    + '}'
+    + '@media (prefers-reduced-motion:reduce){#w272toast{transform:translate(-50%,0);transition:opacity 160ms ease;}#w272next{transition:opacity 160ms ease;}#w272next.w272swap{filter:none;transform:none;}' + P + 'button,' + P + '.mp-chip,' + P + 'input[type=checkbox]{transition:none;}' + P + 'button:active,' + P + '.mp-chip:active,' + P + 'input[type=checkbox]:active{transform:none;}}';
+
+  /* ---------- the person's work ---------- */
+  var KEY_SKIP = 'wa272.skip', KEY_LATER = 'wa272.later';
+  function myTasks() {
+    try { var me = typeof WA_ME !== 'undefined' ? WA_ME : null; return me && typeof waTasksOf === 'function' ? waTasksOf(me.name) || [] : []; } catch (e) { return []; }
+  }
+  function overdue(t) { return !!t.due_date && t.due_date < isoToday(); }
+  function dueToday(t) { return !!t.due_date && t.due_date <= isoToday(); }
+  function skipped() {
+    var o = null; try { o = JSON.parse(lsGet(KEY_SKIP) || 'null'); } catch (e) { o = null; }
+    return o && o.day === isoToday() ? (o.ids || []) : [];
+  }
+  function ranked() {
+    var skip = skipped().map(String);
+    var rank = function (t) { return overdue(t) ? 0 : dueToday(t) ? 1 : t.due_date ? 2 : 3; };
+    var a = myTasks().filter(function (t) { return t && t.id && !t.done; }).slice();
+    a.sort(function (x, y) {
+      var sx = skip.indexOf(String(x.id)) >= 0 ? 1 : 0, sy = skip.indexOf(String(y.id)) >= 0 ? 1 : 0;
+      if (sx !== sy) return sx - sy;
+      if (rank(x) !== rank(y)) return rank(x) - rank(y);
+      return String(x.due_date || '9').localeCompare(String(y.due_date || '9'));
+    });
+    return a;
+  }
+  function todayCount() { return myTasks().filter(function (t) { return t && !t.done && dueToday(t); }).length; }
+
+  /* ---------- the plain sentence ---------- */
+  function paintSentence() {
+    var head = document.querySelector('#mpBody > .mp-head'); if (!head) return;
+    var el = document.getElementById('w272sum');
+    if (!el || el.parentNode !== head) { el = document.createElement('p'); el.id = 'w272sum'; head.appendChild(el); }
+    var all = myTasks().filter(function (t) { return t && !t.done; }), n = todayCount(), over = all.filter(overdue).length;
+    var txt = n ? word(n) + (n === 1 ? ' thing' : ' things') + ' for today. ' + (over ? word(over) + (over === 1 ? ' is' : ' are') + ' overdue.' : 'Nothing is overdue.')
+      : all.length ? 'Nothing is due today.' : 'You are clear for today.';
+    if (el.textContent !== txt) el.textContent = txt;
+  }
+
+  /* ---------- Up next ---------- */
+  var NX = { title: null, t: null };
+  function nextHtml(list) {
+    var t = list[0];
+    if (!t) return '<h3>You are all caught up</h3><p>Nothing has your name on it right now.</p>';
+    var dep = ''; try { dep = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[t.department]) || ''; } catch (e) { dep = ''; }
+    var when = overdue(t) ? 'Due ' + t.due_date : t.due_date ? (dueToday(t) ? 'Due today' : 'Due ' + t.due_date) : 'No due date';
+    return '<small>Up next' + (overdue(t) ? ', overdue' : '') + '</small><h3>' + E(t.title) + '</h3><p>' + E(when) + (dep ? ', ' + E(dep) : '') + '</p>'
+      + '<div class="acts"><button type="button" class="go" data-w272do="open" data-id="' + E(t.id) + '">Open task</button>'
+      + '<button type="button" data-w272do="done" data-id="' + E(t.id) + '">Mark as done</button>'
+      + (list.length > 1 ? '<button type="button" data-w272do="later" data-id="' + E(t.id) + '">Do this later</button>' : '') + '</div>';
+  }
+  function paintNext() {
+    var body = document.getElementById('mpBody'); if (!body) return;
+    var el = document.getElementById('w272next');
+    if (!el || el.parentNode !== body) { el = document.createElement('section'); el.id = 'w272next'; el.setAttribute('aria-label', 'Up next'); el.setAttribute('aria-live', 'polite'); body.appendChild(el); }
+    var list = ranked(), html = nextHtml(list), key = list[0] ? String(list[0].id) : '';
+    if (el.__h === html) return;
+    var swap = el.__h && el.__k !== key && !el.classList.contains('w272swap');
+    el.__h = html; el.__k = key;
+    var apply = function () { el.classList.toggle('clear', !list.length); el.innerHTML = html; el.classList.remove('w272swap'); };
+    if (!swap) { apply(); return; }
+    /* a change of task: one short blur crossfade, so the eye reads one card changing, not two swapping */
+    el.classList.add('w272swap'); clearTimeout(NX.t); NX.t = setTimeout(apply, 140);
+  }
+  var toastT = null, undoFn = null;
+  function toastUndo(msg, undo) {
+    var el = document.getElementById('w272toast');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w272toast'; el.setAttribute('role', 'status');
+      el.innerHTML = '<span></span><button type="button">Undo</button>'; document.body.appendChild(el);
+      el.querySelector('button').addEventListener('click', function () { var f = undoFn; undoFn = null; el.classList.remove('on'); if (f) f(); });
+    }
+    el.querySelector('span').textContent = msg; undoFn = undo;
+    void el.offsetWidth; el.classList.add('on');
+    clearTimeout(toastT); toastT = setTimeout(function () { el.classList.remove('on'); undoFn = null; }, 5000);
+  }
+  async function rerender() { try { if (typeof renderMyPage === 'function') await renderMyPage(); } catch (e) { /* fine */ } }
+  document.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w272do]'); if (!b) return;
+    var kind = b.getAttribute('data-w272do'), id = b.getAttribute('data-id'), num = Number(id);
+    if (kind === 'open') { try { if (window.w116Board && window.w116Board.open) window.w116Board.open(isNaN(num) ? id : num); } catch (x) { say('Could not open that task'); } return; }
+    if (kind === 'later') {
+      var s = skipped().map(String); if (s.indexOf(String(id)) < 0) s.push(String(id));
+      lsSet(KEY_SKIP, JSON.stringify({ day: isoToday(), ids: s })); paintNext(); return;
+    }
+    if (kind === 'done') {
+      if (typeof toggleTask !== 'function') return;
+      var title = (myTasks().filter(function (t) { return String(t.id) === String(id); })[0] || {}).title || 'Task';
+      b.disabled = true;
+      var ok = false; try { ok = await toggleTask(isNaN(num) ? id : num, true); } catch (x) { ok = false; }
+      b.disabled = false;
+      if (!ok) { say('Could not save that. Try again.'); return; }
+      toastUndo('Done: ' + title, async function () { try { await toggleTask(isNaN(num) ? id : num, false); } catch (x) { say('Could not undo that'); } await rerender(); });
+      await rerender();
+    }
+  });
+
+  /* ---------- My tasks: today first, the rest behind Later ---------- */
+  function foldTasks() {
+    var page = document.getElementById('mypage'), sec = null;
+    document.querySelectorAll('#mpBody .mp-sec').forEach(function (s) { var h = s.querySelector(':scope > h3'); if (!sec && h && /^My tasks/.test(h.textContent || '')) sec = s; });
+    if (!sec || !page) return;
+    var byId = {}; myTasks().forEach(function (t) { byId[String(t.id)] = t; });
+    var rows = Array.prototype.slice.call(sec.querySelectorAll('[data-w109]')), later = 0;
+    rows.forEach(function (r) {
+      var t = byId[r.getAttribute('data-w109')], lt = !t || !dueToday(t), holder = (r.closest && r.closest('.w74extra')) || r;
+      holder.classList.toggle('w272lt', lt); if (lt) later++;
+    });
+    later += Math.max(0, myTasks().filter(function (t) { return t && !t.done && !dueToday(t); }).length - later);
+    sec.querySelectorAll('.w74grp').forEach(function (g) {
+      var any = false, n = g.nextElementSibling;
+      while (n && !n.classList.contains('w74grp')) { if (n.querySelector('[data-w109]') || n.hasAttribute('data-w109')) { if (!n.classList.contains('w272lt')) any = true; } n = n.nextElementSibling; }
+      g.classList.toggle('w272lt', !any);
+    });
+    var open = lsGet(KEY_LATER) === '1'; page.classList.toggle('w272later', open);
+    var note = sec.querySelector('#w272none');
+    if (!rows.length || todayCount()) { if (note) note.remove(); }
+    else if (!note) { note = document.createElement('p'); note.id = 'w272none'; note.className = 'mp-empty'; note.textContent = 'Nothing due today.'; sec.querySelector(':scope > h3').insertAdjacentElement('afterend', note); }
+    var btn = document.getElementById('w272laterbtn');
+    if (!later) { if (btn) btn.remove(); return; }
+    if (!btn || btn.parentNode !== sec) { btn = document.createElement('button'); btn.type = 'button'; btn.id = 'w272laterbtn'; sec.appendChild(btn); }
+    var lab = 'Later, ' + later + (later === 1 ? ' task' : ' tasks');
+    if (btn.getAttribute('data-l') !== lab) { btn.setAttribute('data-l', lab); btn.innerHTML = '<span>' + lab + '</span><span class="c" aria-hidden="true">&#8250;</span>'; }
+    btn.setAttribute('aria-expanded', String(open));
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#w272laterbtn, [data-w74all]'); if (!b) return;
+    var open = b.id === 'w272laterbtn' ? lsGet(KEY_LATER) !== '1' : true;
+    lsSet(KEY_LATER, open ? '1' : '0');
+    var page = document.getElementById('mypage'); if (page) page.classList.toggle('w272later', open);
+    var btn = document.getElementById('w272laterbtn'); if (btn) btn.setAttribute('aria-expanded', String(open));
+  });
+
+  /* ---------- Your apps ---------- */
+  function paintApps() {
+    var body = document.getElementById('mpBody'), el = document.getElementById('w272apps'), A = window.WA_APP, Y = null;
+    try { Y = A && A.yours ? A.yours() : null; } catch (e) { Y = null; }
+    var ids = Y ? (Y.yours || []) : [], any = Y && (ids.length || (Y.more || []).length);
+    if (!body || !A || !any) { if (el) el.remove(); return; }
+    if (!el || el.parentNode !== body) { el = document.createElement('section'); el.id = 'w272apps'; el.setAttribute('aria-label', 'Your apps'); body.appendChild(el); }
+    var tile = function (id) { var a = A.apps[id]; return a ? '<button type="button" data-w272app="' + E(id) + '"><span class="ti">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + E(a.label) + '</button>' : ''; };
+    var html = '<h3>Your apps</h3><div class="tiles">' + ids.slice(0, 7).map(tile).join('')
+      + '<button type="button" class="all" data-w272app="*" aria-haspopup="true"><span class="ti">' + (A.icon ? A.icon('grid') : '') + '</span>All apps</button></div>';
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w272app]'); if (!b) return;
+    var id = b.getAttribute('data-w272app');
+    if (id !== '*') { try { window.WA_APP.open(id); } catch (x) { /* fine */ } return; }
+    e.stopPropagation();
+    var g = document.querySelector('#w153dock .w153grid');
+    if (g && g.offsetParent !== null) { g.click(); return; }
+    var m = document.querySelector('[data-w163slot="menu"]'); if (m) m.click();
+  }, true);
+
+  /* ---------- Set up your Hub: the app, the notifications, the policies ----------
+     Steel (02/11/26): "people should have these up until the action is complete", so the card has no Not now: each row
+     stays until it is done, and the card leaves on its own once every row is. One tap does the work wherever the browser
+     allows it; where it does not, the row says exactly what is in the way and what to do. On an iPhone the two steps
+     have an order (Apple only allows Hub notifications from the Home Screen app), so the second waits for the first.
+     Policies: the required ones a person has not signed, each with Open and Sign; a signed policy never comes back here
+     (the Policies card of wave105 stays hidden on Home; the training page keeps its own). */
+  var KEY_APP = 'wa272.app', KEY_TIP = 'wa272.tip', KEY_OPENED = 'wa272.opened', KEY_AUTO = 'wa272.pushauto';
+  function KEY_OK() { return 'wa272.pushok:' + meEmail().toLowerCase(); }
+  var UA = navigator.userAgent || '';
+  var IPAD = /iPad/.test(UA) || (/Macintosh/.test(UA) && (navigator.maxTouchPoints || 0) > 1);
+  var IOS = IPAD || /iPhone|iPod/.test(UA), ANDROID = /Android/.test(UA);
+  var FIREFOX = /Firefox\//.test(UA) && !IOS && !ANDROID;
+  var BIP = false;
+  window.addEventListener('beforeinstallprompt', function (e) { BIP = true; try { e.preventDefault(); } catch (x) { /* fine */ } paintSetup(); });   /* wave219 keeps the event; data-w219="install" fires it */
+  window.addEventListener('appinstalled', function () { lsSet(KEY_APP, '1'); BIP = false; paintSetup(); closeTip(); });
+  function standalone() { try { return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; } catch (e) { return false; } }
+  function appDone() { return standalone() || lsGet(KEY_APP) === '1'; }
+  function push() { try { return window.__wa219 && window.__wa219.state ? window.__wa219.state() : null; } catch (e) { return null; } }
+  function pushRelevant() { return staff(); }
+  function pushOn() { var s = push(); return !!(s && s.mine); }
+  /* done means confirmed: on for this device, and a test notification that arrived and was tapped (Steel, 02/11/26) */
+  function pushDone() { return pushOn() && lsGet(KEY_OK()) === '1'; }
+  var S = { shown: false, pushBusy: false, pushMsg: '', pushErr: '', pushKind: '', pols: null, polsAt: 0, polBusy: {}, polsPending: 0, test: '', testAt: 0, testTimer: null };
+  function appRelevant() { return !FIREFOX; }
+  function allDone() { return (!appRelevant() || appDone()) && (!pushRelevant() || pushDone()) && !S.polsPending; }
+
+  var setupCss = ''
+    + '#w272setup{background:rgba(220,165,39,.13);border-radius:18px;padding:16px 18px 6px;box-sizing:border-box;font-family:' + BODY + ';color:' + INK + ';display:grid;grid-template-rows:1fr;transition:grid-template-rows 280ms ' + OUT + ',opacity 200ms ease,padding 280ms ' + OUT + ',margin 280ms ' + OUT + ';}'
+    + '#w272setup > div{min-height:0;overflow:hidden;}'
+    + '#w272setup.w272bye{grid-template-rows:0fr;opacity:0;padding-top:0;padding-bottom:0;}'
+    + '#w272setup .hd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;}'
+    + '#w272setup h3{margin:0;font:500 22px/1.05 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w272setup .prog{font-size:13px;color:' + MUTED + ';font-variant-numeric:tabular-nums;}'
+    + '#w272setup .why{margin:2px 0 4px;font-size:14px;color:' + MUTED + ';}'
+    + '#w272setup .rw{display:grid;grid-template-rows:1fr;transition:grid-template-rows 260ms ' + OUT + ',opacity 180ms ease;}'
+    + '#w272setup .rw > div{min-height:0;overflow:hidden;}'
+    + '#w272setup .rw.gone{grid-template-rows:0fr;opacity:0;}'
+    + '#w272setup .in{display:flex;align-items:center;gap:12px;min-height:58px;padding:8px 0;border-top:1px solid rgba(16,63,57,.12);flex-wrap:wrap;}'
+    + '#w272setup .mk{flex:none;width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 1.75px rgba(31,32,30,.45);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:' + GREEN + ';transition:background-color 160ms ease,box-shadow 160ms ease;}'
+    + '#w272setup .mk svg{width:15px;height:15px;fill:none;stroke:' + CREAM + ';stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:22;stroke-dashoffset:22;transition:stroke-dashoffset 220ms ' + OUT + ' 60ms;}'
+    + '#w272setup .mk i{font-style:normal;}'
+    + '#w272setup .rw.ok .mk{background:' + GREEN + ';box-shadow:none;}' + '#w272setup .rw.ok .mk i{display:none;}' + '#w272setup .rw.ok .mk svg{stroke-dashoffset:0;}'
+    + '#w272setup .tt{flex:1 1 220px;min-width:0;}'
+    + '#w272setup .tt b{display:block;font-weight:500;font-size:15.5px;line-height:1.3;}'
+    + '#w272setup .rw.ok .tt b{color:' + MUTED + ';}'
+    + '#w272setup .tt small{display:block;font-size:13px;line-height:1.4;color:' + MUTED + ';margin-top:1px;}'
+    + '#w272setup .tt small.err{color:#7a4a05;}'
+    + '#w272setup .act{display:flex;gap:8px;align-items:center;flex:none;flex-wrap:wrap;}'
+    + '#w272setup .go,#w272tip .go{min-height:40px;padding:0 16px;border:0;border-radius:11px;background:' + GOLD + ';color:' + GREEN + ';font:600 16px/1 ' + HEAD + ';letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:transform 120ms ' + OUT + ',opacity 120ms ease;}'
+    + '#w272setup .go:active,#w272tip .go:active{transform:scale(.97);}'
+    + '#w272setup .go[disabled]{opacity:.55;cursor:default;}'
+    + '#w272setup .lnk{border:0;background:none;color:' + GREEN + ';font:500 14px ' + BODY + ';text-decoration:underline;text-underline-offset:3px;cursor:pointer;min-height:36px;padding:0 4px;}'
+    + '#w272setup a.lnk{display:inline-flex;align-items:center;}'
+    /* the small note in the corner: no scrim, takes no focus, everything behind it keeps working */
+    + '#w272tip{position:fixed;z-index:9000;right:20px;bottom:96px;width:320px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:16px 18px;border-radius:18px;background:' + CREAM + ';color:' + INK + ';font-family:' + BODY + ';box-shadow:0 12px 40px rgba(16,24,22,.24);transform:translateY(calc(100% + 110px));opacity:0;transition:transform 300ms ' + OUT + ',opacity 200ms ease;}'
+    + '#w272tip.on{transform:none;opacity:1;}'
+    + '#w272tip b{display:block;font:500 22px/1.05 ' + HEAD + ';text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w272tip p{margin:5px 0 12px;font-size:14px;line-height:1.4;}'
+    + '#w272tip .acts{display:flex;align-items:center;gap:6px;}'
+    + '#w272tip .no{border:0;background:none;color:' + GREEN + ';font:500 14px ' + BODY + ';cursor:pointer;min-height:40px;padding:0 10px;}'
+    /* the how-to window */
+    + '#w272back{position:fixed;inset:0;z-index:99970;background:rgba(16,24,22,.45);display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;}'
+    + '#w272sheet{width:min(460px,100%);max-height:100%;overflow-y:auto;overscroll-behavior:contain;background:' + CREAM + ';border-radius:22px;padding:16px 18px 20px;box-sizing:border-box;font-family:' + BODY + ';color:' + INK + ';box-shadow:0 18px 50px rgba(0,0,0,.3);}'
+    + '#w272sheet .top{display:flex;align-items:center;justify-content:space-between;gap:10px;}'
+    + '#w272sheet h2{margin:0;font:500 28px/1.05 ' + HEAD + ';text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w272sheet .x{flex:none;width:38px;height:38px;border:0;border-radius:50%;background:rgba(16,63,57,.1);color:' + GREEN + ';font-size:20px;line-height:1;cursor:pointer;}'
+    + '#w272sheet .seg{display:flex;gap:2px;background:rgba(16,63,57,.09);border-radius:12px;padding:3px;margin:12px 0 14px;}'
+    + '#w272sheet .seg button{flex:1;min-height:38px;border:0;border-radius:9px;background:none;font:500 14px ' + BODY + ';color:' + GREEN + ';cursor:pointer;}'
+    + '#w272sheet .seg button[aria-pressed="true"]{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w272sheet button:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w272sheet h3{margin:14px 0 2px;font-size:15px;font-weight:700;color:' + GREEN + ';}'
+    + '#w272sheet p{margin:0 0 6px;font-size:14.5px;line-height:1.45;}'
+    + '#w272sheet .ft{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid rgba(16,63,57,.12);}'
+    + '#w272sheet .addr{font-weight:500;user-select:all;}'
+    + '#w272sheet .dn{min-height:40px;padding:0 16px;border:0;border-radius:11px;background:rgba(16,63,57,.1);color:' + GREEN + ';font:500 14px ' + BODY + ';cursor:pointer;}'
+    + '@media (max-width:900px){#w272tip{left:16px;right:16px;width:auto;bottom:calc(84px + env(safe-area-inset-bottom,0px));}#w272back{padding:0;align-items:flex-end;}#w272sheet{width:100%;max-height:92%;border-radius:22px 22px 0 0;}#w272setup{padding:14px 16px 4px;}}'
+    + '@media (prefers-reduced-motion:reduce){#w272tip{transform:none;transition:opacity 160ms ease;}#w272setup,#w272setup .rw,#w272setup .mk,#w272setup .mk svg{transition:none;}#w272setup .go:active,#w272tip .go:active{transform:none;}}';
+
+  /* ---------- the policies to sign (the same tables as wave105) ---------- */
+  function meEmail() { try { return String((USER && USER.email) || ''); } catch (e) { return ''; } }
+  function meName() { try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) || (USER && USER.name) || ''; } catch (e) { return ''; } }
+  function loadPolicies(force) {
+    if (!staff() || !meEmail() || typeof db === 'undefined') { S.pols = []; S.polsPending = 0; return Promise.resolve([]); }
+    if (!force && S.pols && Date.now() - S.polsAt < 60000) return Promise.resolve(S.pols);
+    return Promise.all([
+      db.from('wa_policies').select('key,title,url,sort').eq('active', true).eq('required', true).order('sort'),
+      db.from('wa_policy_signoffs').select('policy_key').eq('email', meEmail())
+    ]).then(function (r) {
+      var signed = {}; (((r[1] || {}).data) || []).forEach(function (s) { signed[s.policy_key] = true; });
+      S.pols = (((r[0] || {}).data) || []).filter(function (p) { return !signed[p.key]; });
+      S.polsAt = Date.now(); S.polsPending = S.pols.length; return S.pols;
+    }).catch(function () { S.pols = S.pols || []; S.polsPending = S.pols.length; return S.pols; });
+  }
+  function opened(key) { try { return (JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]')).indexOf(key) >= 0; } catch (e) { return false; } }
+  function markOpened(key) { try { var a = JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]'); if (a.indexOf(key) < 0) a.push(key); sessionStorage.setItem(KEY_OPENED, JSON.stringify(a)); } catch (e) { /* fine */ } }
+  async function signPolicy(key, btn) {
+    if (S.polBusy[key]) return; S.polBusy[key] = true; if (btn) btn.disabled = true;
+    try {
+      var ins = await db.from('wa_policy_signoffs').insert({ email: meEmail(), name: meName(), policy_key: key });
+      if (ins && ins.error) throw ins.error;
+      say('Sign-off recorded, thank you');
+      S.pols = (S.pols || []).filter(function (p) { return p.key !== key; }); S.polsPending = S.pols.length;
+    } catch (e) { say('Could not record the sign-off'); }
+    S.polBusy[key] = false; paintSetup();
+  }
+
+  /* ---------- the rows ---------- */
+  function rowApp() {
+    if (!appRelevant()) return null;
+    var done = appDone(), sub, act = '';
+    if (standalone()) sub = 'You are using the Hub app.';
+    else if (done) sub = 'Added. Open it from its icon.';
+    else if (IOS) sub = 'Its own icon on your Home Screen. Under a minute.';
+    else if (ANDROID) sub = 'Its own icon on your phone. Under a minute.';
+    else sub = 'Its own window and icon on this computer, and on your phone too.';
+    if (!done) act = (BIP ? '<button type="button" class="go" data-w219="install" data-w272s="again">Install</button><button type="button" class="lnk" data-w272s="how">On your phone</button>' : '<button type="button" class="go" data-w272s="how">Show me how</button>');
+    return { k: 'app', ok: done, n: '1', t: 'Add the Hub as an app', s: sub, act: act };
+  }
+  function rowPush(n) {
+    if (!pushRelevant()) return null;
+    var s = push(), done = pushDone(), on = pushOn(), sub, act = '', err = false;
+    var waitIos = IOS && !standalone();
+    if (done) sub = 'On and confirmed for this device. Settings, Notifications chooses what reaches you.';
+    else if (on && S.pushBusy) sub = S.pushMsg || 'Sending\u2026';
+    else if (on && S.test === 'arrived') { sub = 'It arrived on this device. Tap the notification to finish.'; act = '<button type="button" class="lnk" data-w272s="saw">I saw it</button>'; }
+    else if (on && S.test === 'sent') { sub = 'Sent. It should pop up in a moment: tap it, and this row ticks.'; act = '<button type="button" class="lnk" data-w272s="saw">I saw it</button>'; }
+    else if (on && S.test === 'late') { sub = 'Nothing arrived in a minute. Check that this computer and the browser allow notifications for the Hub (Focus assist and Do not disturb hide them), then send again.'; err = true; act = '<button type="button" class="go" data-w272s="test">Send again</button><button type="button" class="lnk" data-w272s="saw">It showed up</button>'; }
+    else if (on && S.test === 'failed') { sub = S.pushErr || 'The test did not go through. Try again.'; err = true; act = '<button type="button" class="go" data-w272s="test">Send again</button>'; }
+    else if (on) { sub = 'On. Send yourself a test and tap it, so we know it reaches you.'; act = '<button type="button" class="go" data-w272s="test">Send a test</button>'; }
+    else if (S.pushBusy) sub = S.pushMsg || 'Asking your browser\u2026';
+    else if (waitIos) sub = 'Add the Hub first, then open it from its icon and turn these on there. Apple only allows them in the app.';
+    else if (s && !s.supported) sub = 'This browser cannot show Hub notifications. Chrome, Edge, Firefox and Safari can.';
+    else if (s && s.perm === 'denied') { sub = blockedText(); err = true; act = '<button type="button" class="go" data-w272s="recheck">Check again</button>'; }
+    else if (S.pushErr && S.pushKind === 'reload') { sub = S.pushErr; err = true; act = '<button type="button" class="go" data-w272s="reload">Reload and finish</button>'; }
+    else if (S.pushErr) { sub = S.pushErr; err = true; act = '<button type="button" class="go" data-w272s="push">Try again</button>'; }
+    else { sub = 'When someone mentions you, gives you work or posts an announcement for you.'; act = '<button type="button" class="go" data-w272s="push">Turn on</button>'; }
+    return { k: 'push', ok: done, n: String(n), t: 'Turn on notifications', s: sub, err: err, act: act };
+  }
+  function blockedText() {
+    if (IOS) return 'Notifications are blocked for the Hub app. In the ' + (IPAD ? 'iPad' : 'iPhone') + '\u2019s Settings, open Notifications, then WA Hub, and allow them. Then come back here.';
+    if (standalone()) return 'Notifications are blocked for the Hub app. Open the app\u2019s menu at the top (\u22ee), choose App info or Settings, allow Notifications, then come back here.';
+    return 'Notifications are blocked for the Hub in this browser. Click the icon at the left of the address bar (a lock or two sliders), set Notifications to Allow, then come back here.';
+  }
+  function rowsPolicies(n0) {
+    return (S.pols || []).map(function (p, i) {
+      var canSign = opened(p.key), busy = !!S.polBusy[p.key];
+      return { k: 'pol:' + p.key, ok: false, n: String(n0 + i), t: 'Read and sign: ' + p.title, s: canSign ? 'Read it? Then sign here. HR keeps the date.' : 'Open it, read it, then sign here. HR keeps the date.',
+        act: '<a class="lnk" href="' + E(p.url) + '" target="_blank" rel="noopener" data-w272pol="open" data-key="' + E(p.key) + '">Open</a><button type="button" class="go" data-w272pol="sign" data-key="' + E(p.key) + '"' + (canSign && !busy ? '' : ' disabled') + '>' + (busy ? 'Saving\u2026' : 'Sign') + '</button>' };
+    });
+  }
+  function rowHtml(r) {
+    return '<div><div class="in"><span class="mk" aria-hidden="true"><i>' + r.n + '</i><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7"/></svg></span><div class="tt"><b>' + E(r.t) + '</b><small' + (r.err ? ' class="err"' : '') + '>' + E(r.s) + '</small></div>' + (r.act && !r.ok ? '<div class="act">' + r.act + '</div>' : '') + '</div></div>';
+  }
+  function paintSetup() {
+    var body = document.getElementById('mpBody'), el = document.getElementById('w272setup'), page = document.getElementById('mypage');
+    var ready = staff() ? !!(push() && push().checked) : board();
+    if (appDone()) { try { if (window.w112Api && window.w112Api.loaded && window.w112Api.loaded()) window.w112Api.set('app', true); } catch (e) { /* fine */ } }
+    if (staff() && S.pols === null && !S.polsLoading) { S.polsLoading = true; loadPolicies(false).then(function () { S.polsLoading = false; paintSetup(); }); }
+    var done = allDone();
+    /* after Reload and finish: the permission is already granted, so no tap is needed to carry on */
+    if (ready && staff() && lsGet(KEY_AUTO) === '1') { lsSet(KEY_AUTO, null); var st0 = push() || {}; if (st0.perm === 'granted' && !pushOn() && !S.pushBusy) setTimeout(turnOnPush, 400); }
+    if (!body || !page || !ready || (done && !el)) { if (el && !done) el.remove(); return; }
+    if (done) {
+      /* every row done: the card says so once, then leaves */
+      if (el.classList.contains('w272bye')) return;
+      el.classList.add('w272bye'); el.setAttribute('aria-hidden', 'true');
+      setTimeout(function () { var x = document.getElementById('w272setup'); if (x && x.classList.contains('w272bye')) x.remove(); }, 320);
+      if (S.shown) { S.shown = false; say('Your Hub is set up.'); }
+      return;
+    }
+    if (!el || el.parentNode !== body) { el = document.createElement('section'); el.id = 'w272setup'; el.setAttribute('aria-label', 'Set up your Hub'); el.innerHTML = '<div><div class="hd"><h3>Set up your Hub</h3><span class="prog"></span></div><p class="why"></p><div class="rows"></div></div>'; body.appendChild(el); }
+    el.classList.remove('w272bye'); el.removeAttribute('aria-hidden'); S.shown = true;
+    if (!page.classList.contains('w272')) { var h = body.querySelector(':scope > .mp-online') || body.querySelector(':scope > .mp-head'); if (h && h.nextElementSibling !== el) h.insertAdjacentElement('afterend', el); }
+    var rows = [], a = rowApp(); if (a) rows.push(a);
+    var p = rowPush(rows.length + 1); if (p) rows.push(p);
+    rows = rows.concat(rowsPolicies(rows.length + 1));
+    var doneN = rows.filter(function (r) { return r.ok; }).length;
+    el.querySelector('.prog').textContent = doneN + ' of ' + rows.length + ' done';
+    el.querySelector('.why').textContent = board() ? 'Quick, and it keeps the Hub one tap away.' : 'Quick. It keeps the Hub one tap away, and finishes your onboarding.';
+    /* rows are kept in place, so a tick draws and a finished row closes instead of the card redrawing */
+    var host = el.querySelector('.rows'), keep = {};
+    rows.forEach(function (r, i) {
+      keep[r.k] = 1;
+      var rw = host.querySelector('.rw[data-k="' + r.k + '"]');
+      if (!rw) { rw = document.createElement('div'); rw.className = 'rw'; rw.setAttribute('data-k', r.k); rw.innerHTML = rowHtml(r); host.insertBefore(rw, host.children[i] || null); rw.__h = rw.innerHTML; }
+      else {
+        if (host.children[i] !== rw) host.insertBefore(rw, host.children[i] || null);
+        var html = rowHtml(r);
+        if (rw.__h !== html) {
+          var inner = rw.querySelector('.in'), tt = inner.querySelector('.tt'), act = inner.querySelector('.act');
+          inner.querySelector('.mk i').textContent = r.n; tt.querySelector('b').textContent = r.t;
+          var sm = tt.querySelector('small'); sm.textContent = r.s; sm.className = r.err ? 'err' : '';
+          var want = r.act && !r.ok ? '<div class="act">' + r.act + '</div>' : '';
+          if ((act ? act.outerHTML : '') !== want) { if (act) act.remove(); if (want) inner.insertAdjacentHTML('beforeend', want); }
+          rw.__h = html;
+        }
+      }
+      rw.classList.toggle('ok', !!r.ok); rw.classList.remove('gone');
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('.rw'), function (rw) {
+      if (keep[rw.getAttribute('data-k')]) return;
+      if (rw.classList.contains('gone')) return;
+      rw.classList.add('ok'); setTimeout(function () { rw.classList.add('gone'); }, 420); setTimeout(function () { rw.remove(); }, 720);
+    });
+  }
+
+  /* ---------- notifications: one tap, and the result said in the row ----------
+     Steel (02/11/26) got 'This browser did not start the Hub's notification helper': wave219 waits ten seconds for the
+     service worker and says only that. Here the helper is checked first: the browser's own refusal, or the worker's state,
+     goes in the row, with what to do about it. When the permission still has to be asked, wave219 goes first, straight
+     from the tap (Safari only allows the question there), and the helper is looked at only if that fails. */
+  function waitActive(reg, ms) {
+    return new Promise(function (res) {
+      if (reg.active) return res(reg.active);
+      var done = false, t = setTimeout(function () { if (!done) { done = true; res(null); } }, ms);
+      function check() { if (reg.active && !done) { done = true; clearTimeout(t); res(reg.active); } }
+      var sw = reg.installing || reg.waiting; if (sw) sw.addEventListener('statechange', check);
+      reg.addEventListener('updatefound', function () { var n = reg.installing; if (n) n.addEventListener('statechange', check); });
+    });
+  }
+  async function helper() {
+    if (!('serviceWorker' in navigator)) return { ok: false, why: 'This browser has no notification helper (no service workers), so Hub notifications cannot work here.' };
+    var reg = null, err = '';
+    try { reg = await navigator.serviceWorker.getRegistration('/'); } catch (e) { /* fine */ }
+    if (!reg) { try { reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch (e) { err = String((e && e.message) || e || 'no reason given'); } }
+    if (!reg) {
+      if (/invalid state/i.test(err)) return { ok: false, kind: 'reload', why: 'This Hub window has lost touch with the browser\u2019s background helper (the browser calls it an invalid document state). Reload, and the Hub finishes turning them on by itself.' };
+      var store = /storage|cookie|insecure|security|denied/i.test(err);
+      return { ok: false, why: 'Your browser refused the Hub\u2019s notification helper (' + err.replace(/^Failed to register a ServiceWorker[^:]*:s*/i, '').slice(0, 160) + ').' + (store ? ' Allow cookies and site data for hub.welfareavenue.com in the browser\u2019s site settings, then reload the Hub.' : ' Reload the Hub and try again.') };
+    }
+    var act = await waitActive(reg, 10000);
+    if (!act) { var st = reg.installing ? 'still installing' : reg.waiting ? 'waiting to start' : 'not running'; return { ok: false, why: 'The Hub\u2019s notification helper is ' + st + ' after ten seconds. Close every Hub window, open the Hub again and try once more.' }; }
+    return { ok: true };
+  }
+  async function turnOnPush() {
+    var A = window.__wa219;
+    if (!A || !A.turnOn) { S.pushErr = 'The Hub is still loading. Try again in a moment.'; paintSetup(); return; }
+    if (S.pushBusy) return;
+    S.pushBusy = true; S.pushErr = ''; S.pushMsg = 'Asking your browser\u2026'; paintSetup();
+    var st0 = push() || {};
+    if (st0.perm === 'granted') {
+      S.pushMsg = 'Starting the notification helper\u2026'; paintSetup();
+      var h0 = await helper();
+      if (!h0.ok) { S.pushBusy = false; S.pushMsg = ''; S.pushErr = h0.why; S.pushKind = h0.kind || ''; paintSetup(); return; }
+      S.pushMsg = 'Saving this device\u2026'; paintSetup();
+    }
+    var slow = setTimeout(function () { S.pushMsg = 'Still working. If nothing happens, reload the Hub and try again.'; paintSetup(); }, 12000);
+    /* wave219 says what went wrong in a toast; here it goes in the row instead */
+    var said = '', t0 = window.toast, had = typeof t0 === 'function';
+    if (had) window.toast = function (m) { said = String(m || ''); };
+    var ok = false;
+    try { ok = await A.turnOn(); } catch (e) { ok = false; said = said || String((e && e.message) || e || ''); }
+    if (had) window.toast = t0;
+    clearTimeout(slow); S.pushBusy = false; S.pushMsg = '';
+    if (ok) { S.pushErr = ''; S.pushKind = ''; say('Hub notifications are on for this device. Now send yourself a test.'); }
+    else {
+      var st = push() || {};
+      S.pushErr = st.perm === 'denied' ? '' : (said && !/^Hub notifications are on/.test(said) ? said : 'That did not work. Try again, or reload the Hub and try once more.');
+      /* wave219's one-line answer about the helper: look at the helper and say what is really the matter */
+      S.pushKind = '';
+      if (/notification helper/.test(S.pushErr)) { try { var h1 = await helper(); if (!h1.ok) { S.pushErr = h1.why; S.pushKind = h1.kind || ''; } } catch (e) { /* keep */ } }
+    }
+    paintSetup();
+  }
+  async function sendTest() {
+    var A = window.__wa219; if (!A || !A.test || S.pushBusy) return;
+    S.pushBusy = true; S.pushMsg = 'Sending a test\u2026'; S.test = ''; paintSetup();
+    var said = '', t0 = window.toast, had = typeof t0 === 'function';
+    if (had) window.toast = function (m) { said = String(m || ''); };
+    try { await A.test(); } catch (e) { said = said || String((e && e.message) || e || ''); }
+    if (had) window.toast = t0;
+    S.pushBusy = false; S.pushMsg = '';
+    if (/^Sent/.test(said)) { S.test = 'sent'; S.testAt = Date.now(); clearTimeout(S.testTimer); S.testTimer = setTimeout(function () { if (S.test === 'sent') { S.test = 'late'; paintSetup(); } }, 60000); }
+    else { S.test = 'failed'; S.pushErr = said || 'The test did not go through. Try again.'; }
+    paintSetup();
+  }
+  function confirmPush(how) {
+    if (!meEmail()) return;
+    lsSet(KEY_OK(), '1'); S.test = ''; clearTimeout(S.testTimer);
+    say(how === 'tap' ? 'Notifications confirmed on this device.' : 'Thanks. Notifications are set up on this device.');
+    paintSetup();
+  }
+  /* the test arriving while the Hub is open, and the tap on it, come through wave219's worker messages */
+  window.addEventListener('wa-push', function () { if (S.test === 'sent') { S.test = 'arrived'; paintSetup(); } });
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('message', function (e) {
+      var d = e && e.data; if (!d || d.type !== 'wa-open') return;
+      if ((S.test === 'sent' || S.test === 'arrived') && Date.now() - S.testAt < 15 * 60000) confirmPush('tap');
+    });
+  } catch (e) { /* fine */ }
+  async function recheck() {
+    var A = window.__wa219; if (!A || !A.check) return;
+    S.pushErr = ''; S.pushMsg = 'Checking\u2026'; S.pushBusy = true; paintSetup();
+    try { await A.check(); } catch (e) { /* fine */ }
+    S.pushBusy = false; S.pushMsg = ''; paintSetup();
+  }
+  document.addEventListener('visibilitychange', function () {
+    /* back from the browser's settings or the phone's: look again */
+    if (document.visibilityState === 'visible' && document.getElementById('w272setup') && !S.pushBusy) { var A = window.__wa219; if (A && A.check) { Promise.resolve(A.check()).then(paintSetup, paintSetup); } }
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w272s],[data-w272pol]'); if (!b) return;
+    var k = b.getAttribute('data-w272s'), pk = b.getAttribute('data-w272pol'), key = b.getAttribute('data-key');
+    if (pk === 'open') { markOpened(key); setTimeout(paintSetup, 300); return; }   /* the link opens in a new tab on its own */
+    if (pk === 'sign') { signPolicy(key, b); return; }
+    if (k === 'how') { closeTip(); openHow(b); return; }
+    if (k === 'push') { turnOnPush(); return; }
+    if (k === 'test') { sendTest(); return; }
+    if (k === 'saw') { confirmPush('saw'); return; }
+    if (k === 'reload') { lsSet(KEY_AUTO, '1'); try { location.reload(); } catch (e) { /* fine */ } return; }
+    if (k === 'recheck') { recheck(); return; }
+    if (k === 'again') { [800, 3000, 8000].forEach(function (ms) { setTimeout(paintSetup, ms); }); closeTip(); return; }
+  });
+
+  /* ---------- the how-to window ---------- */
+  var H = { from: null, film: null };
+  function compHtml() {
+    return (BIP ? '<p><button type="button" class="dn" data-w219="install" data-w272s="again">Install the Hub on this computer</button></p>' : '')
+      + '<h3>In Chrome</h3><p>At the top right, choose More (\u22ee), then Cast, save, and share, then Install page as app. You may also see Install at the right of the address bar.</p>'
+      + '<h3>In Edge</h3><p>Choose Settings and more (\u00b7\u00b7\u00b7), then Apps, then Install this site as an app.</p>'
+      + '<h3>In Safari on a Mac</h3><p>From the menu bar, choose File, then Add to Dock.</p>'
+      + '<h3>In Firefox</h3><p>Firefox does not add sites as apps on a computer. Notifications still work there.</p>';
+  }
+  function showTab(k) {
+    var box = document.getElementById('w272how'), seg = document.querySelectorAll('#w272sheet .seg button');
+    if (!box) return;
+    if (H.film) { H.film.stop(); H.film = null; }
+    seg.forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-w272tab') === k)); });
+    box.className = ''; box.innerHTML = '';
+    if (k === 'computer') { box.innerHTML = compHtml(); return; }
+    var host = document.createElement('div'); box.appendChild(host); H.film = window.w272howto(host, k);
+  }
+  function closeHow() {
+    var bk = document.getElementById('w272back'); if (!bk) return;
+    if (H.film) { H.film.stop(); H.film = null; }
+    bk.remove(); document.removeEventListener('keydown', escHow, true);
+    if (H.from && H.from.isConnected && H.from.focus) { try { H.from.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  function escHow(e) { if (e.key === 'Escape') { e.stopPropagation(); closeHow(); } }
+  function openHow(from) {
+    closeHow(); H.from = from || document.activeElement; hwStyle();
+    var bk = document.createElement('div'); bk.id = 'w272back';
+    bk.innerHTML = '<div id="w272sheet" role="dialog" aria-modal="true" aria-labelledby="w272howt"><div class="top"><h2 id="w272howt">Add the Hub as an app</h2><button type="button" class="x" aria-label="Close" data-w272h="close">&times;</button></div>'
+      + '<div class="seg" role="group" aria-label="Your device"><button type="button" data-w272tab="iphone">iPhone</button><button type="button" data-w272tab="android">Android</button><button type="button" data-w272tab="computer">Computer</button></div>'
+      + '<div id="w272how"></div>'
+      + '<div class="ft"><span>On your phone, open <span class="addr">hub.welfareavenue.com</span></span><button type="button" class="dn" data-w272h="added">I added it</button></div></div>';
+    document.body.appendChild(bk);
+    bk.addEventListener('click', function (e) {
+      if (e.target === bk) { closeHow(); return; }
+      var t = e.target.closest && e.target.closest('[data-w272tab],[data-w272h]'); if (!t) return;
+      if (t.hasAttribute('data-w272tab')) { showTab(t.getAttribute('data-w272tab')); return; }
+      if (t.getAttribute('data-w272h') === 'added') { lsSet(KEY_APP, '1'); closeHow(); paintSetup(); say('Thanks. The Hub is on your list of apps.'); return; }
+      closeHow();
+    });
+    document.addEventListener('keydown', escHow, true);
+    showTab(IOS ? 'iphone' : ANDROID ? 'android' : 'computer');
+    var x = bk.querySelector('.x'); if (x) x.focus({ preventScroll: true });
+  }
+
+  /* ---------- the small note ----------
+     Anywhere in the Hub but Home (Home has the card), at most twice on a device and 14 days apart, only when nothing else
+     is open. No scrim and no focus taken. */
+  var TIP = { timer: null, tries: 0 };
+  function tipState() { var o = null; try { o = JSON.parse(lsGet(KEY_TIP) || 'null'); } catch (e) { o = null; } return o || { n: 0, at: 0 }; }
+  function otherOpen() {
+    if (!document.documentElement.classList.contains('wa-ready')) return true;
+    if (document.getElementById('w272back') || document.getElementById('w213pop') || document.getElementById('w262new')) return true;
+    var vis = function (el) { if (!el) return false; var c = getComputedStyle(el); return c.display !== 'none' && c.visibility !== 'hidden' && el.getBoundingClientRect().width > 0; };
+    if (vis(document.getElementById('w238loop')) || vis(document.getElementById('w177pop')) || vis(document.getElementById('w227'))) return true;
+    if (document.querySelector('.w122tp')) return true;
+    return Array.prototype.some.call(document.querySelectorAll('[aria-modal="true"]'), vis);
+  }
+  function closeTip() { var t = document.getElementById('w272tip'); if (t) t.remove(); }
+  function tryTip() {
+    clearTimeout(TIP.timer);
+    if (appDone() || !appRelevant() || !(staff() || board())) return;
+    if (onHome()) { if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 20000); return; }
+    var st = tipState();
+    if (st.n >= 2 || (st.at && Date.now() - st.at < 14 * 86400000) || document.getElementById('w272tip')) return;
+    if (otherOpen()) { if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 5000); return; }
+    var el = document.createElement('div'); el.id = 'w272tip'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Add the Hub as an app');
+    var where = IOS || ANDROID ? 'on this phone' : 'on this computer';
+    el.innerHTML = '<b>Keep the Hub one tap away</b><p>Add it as an app ' + where + ': its own icon, and notifications when someone needs you.</p><div class="acts">'
+      + (BIP ? '<button type="button" class="go" data-w219="install" data-w272s="again">Install</button>' : '<button type="button" class="go" data-w272s="how">Show me how</button>')
+      + '<button type="button" class="no" data-w272tip="no">Not now</button></div>';
+    document.body.appendChild(el);
+    /* never over a button someone could want (another session saw it cover one on the serving page): if anything you can
+       press sits under its corner, wait and look again */
+    if (coversControl(el)) { el.remove(); if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 20000); return; }
+    lsSet(KEY_TIP, JSON.stringify({ n: st.n + 1, at: Date.now() }));
+    void el.offsetWidth; el.classList.add('on'); TIP.at = Date.now();
+    /* it leaves on its own: after the first press anywhere else, or after 20 seconds */
+    clearTimeout(TIP.gone); TIP.gone = setTimeout(hideTip, 20000);
+  }
+  function coversControl(el) {
+    try {
+      var r = el.getBoundingClientRect(), pts = [[r.left + 8, r.top + 8], [r.right - 8, r.top + 8], [r.left + 8, r.bottom - 8], [r.right - 8, r.bottom - 8], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+      return pts.some(function (p) {
+        return document.elementsFromPoint(p[0], p[1]).some(function (x) { return x !== el && !el.contains(x) && x.closest && !x.closest('#w272tip') && x.matches('button, a, input, select, textarea, [role=button], [tabindex]') && getComputedStyle(x).visibility !== 'hidden'; });
+      });
+    } catch (e) { return false; }
+  }
+  function hideTip() { var t = document.getElementById('w272tip'); if (!t) return; t.classList.remove('on'); setTimeout(function () { t.remove(); }, 220); }
+  document.addEventListener('pointerdown', function (e) {
+    var t = document.getElementById('w272tip'); if (!t || t.contains(e.target)) return;
+    if (Date.now() - (TIP.at || 0) > 800) hideTip();
+  }, true);
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w272tip]'); if (!b) return;
+    hideTip();
+  });
+  window.addEventListener('hashchange', function () { if (onHome()) closeTip(); });
+
+  /* ---------- directors get Home (Steel, 01/11/26) ----------
+     Wave74 draws them the greeting; their meetings come from wave116 as for everyone. Their Board pages take the place of the
+     apps, which directors do not open. Read only, as ever; a card the older waves draw for staff stays out of their Home. */
+  var dirCss = ''
+    + '#mypage.w272dir #mpBody > #w272apps{grid-column:1 / -1;}'
+    + '#mypage.w272dir > #w105my,#mypage.w272dir > #w105sign,#mypage.w272dir #w110mine,#mypage.w272dir #w114switch,#mypage.w272dir #w262homebar{display:none !important;}';
+  var BOARD_PAGES = [['governance', 'Board overview', 'shield'], ['committees', 'Committees', 'people'], ['orggoals', 'Organization goals', 'target'], ['calendar', 'Calendar', 'list']];
+  function paintDirector() {
+    var body = document.getElementById('mpBody'), head = body && body.querySelector(':scope > .mp-head'); if (!head) return;
+    var sum = document.getElementById('w272sum');
+    if (!sum || sum.parentNode !== head) { sum = document.createElement('p'); sum.id = 'w272sum'; head.appendChild(sum); }
+    sum.textContent = 'Your meetings and the board\u2019s pages, in one place.';
+    var allowed = []; try { allowed = wa40Allowed() || []; } catch (e) { allowed = []; }
+    var A = window.WA_APP, el = document.getElementById('w272apps');
+    var mine = BOARD_PAGES.filter(function (p) { return allowed.indexOf(p[0]) >= 0; });
+    if (!mine.length) { if (el) el.remove(); return; }
+    if (!el || el.parentNode !== body) { el = document.createElement('section'); el.id = 'w272apps'; el.setAttribute('aria-label', 'Board'); body.appendChild(el); }
+    var html = '<h3>Board</h3><div class="tiles">' + mine.map(function (p) { return '<button type="button" data-w272page="#' + E(p[0]) + '"><span class="ti">' + (A && A.icon ? A.icon(p[2]) : '') + '</span>' + E(p[1]) + '</button>'; }).join('') + '</div>';
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w272page]'); if (b) location.hash = b.getAttribute('data-w272page');
+  });
+  /* Home joins the pages a director may open; wave260's landing and the menu read this same list */
+  function wrapAllowed() {
+    try {
+      if (typeof wa40Allowed !== 'function' || !board() || wa40Allowed().indexOf('mypage') >= 0) return;
+      var __al = wa40Allowed;
+      wa40Allowed = function () { var a = __al.apply(this, arguments) || []; if (board() && a.indexOf('mypage') < 0) a = a.concat(['mypage']); return a; };
+      Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+    } catch (e) { /* fine */ }
+  }
+  /* wave9 adds Home's menu button for staff only */
+  function directorTab() {
+    var bar = document.getElementById('tabBar'); if (!bar) return;
+    var b = bar.querySelector('.tab[data-tab="mypage"]');
+    if (!b) { b = document.createElement('button'); b.className = 'tab'; b.dataset.tab = 'mypage'; b.innerHTML = '<span class="tabdot" style="background:' + GREEN + '"></span>Home'; bar.insertBefore(b, bar.firstChild); }
+    b.style.display = '';
+    try { if (window.WA_NAV && WA_NAV.applyLayout) WA_NAV.applyLayout(); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- the how-to films: adding the Hub to a phone ----------
+     Every frame is a function of time (seek): nothing here carries state between frames, so a film can be paused, stepped
+     or looped from anywhere. Silent on purpose: people watch these on a phone, often in a meeting.
+     Steps: Apple "Turn a website into an app in Safari on iPhone" and "Bookmark a website in Safari on iPhone"; Google Chrome
+     Help "Use web apps" (Android). The phone is an illustration, so the film says a phone may look a little different. */
+  var HW = {
+    iphone: {
+      dur: 18, title: 'Add the Hub to your iPhone', where: 'In Safari, at hub.welfareavenue.com',
+      steps: [[2.4, 'Tap \u00b7\u00b7\u00b7 next to the address'], [5.2, 'Tap Share'], [7, 'Scroll down, tap Add to Home Screen'], [10.4, 'Keep Open as Web App on, tap Add'], [13.8, 'Open the Hub from your new icon']],
+      plain: ['In Safari, open hub.welfareavenue.com.', 'Tap the \u00b7\u00b7\u00b7 next to the address, then Share. If you see the Share button at the bottom or top of Safari, tap it directly.', 'Scroll down and tap Add to Home Screen. If it is not there, tap Edit Actions at the bottom of the list and add it.', 'Keep Open as Web App on, then tap Add.', 'Open the Hub from its new icon, then turn on notifications there.']
+    },
+    android: {
+      dur: 14.5, title: 'Add the Hub to your Android', where: 'In Chrome, at hub.welfareavenue.com',
+      steps: [[2.4, 'Tap \u22ee at the top right'], [5, 'Tap Add to home screen'], [7.6, 'Tap Install'], [10, 'Open the Hub from your new icon']],
+      plain: ['In Chrome, open hub.welfareavenue.com.', 'Tap the \u22ee at the top right.', 'Tap Add to home screen, then Install. If Chrome offers Install on its own, tap that instead.', 'Open the Hub from its new icon, then turn on notifications there.']
+    }
+  };
+  var hwCss = ''
+    + '.w272hw{--g:#103F39;--c:#FFFAF2;--a:#DCA527;--i:#1F201E;width:100%;max-width:330px;margin:0 auto;font-family:' + BODY + ';color:var(--i);}'
+    + '.w272hw .cap{display:flex;align-items:center;gap:10px;min-height:66px;margin-bottom:10px;}'
+    + '.w272hw .n{flex:none;width:30px;height:30px;border-radius:50%;background:var(--g);color:var(--c);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;}'
+    + '.w272hw .n[hidden]{display:none;}'
+    + '.w272hw .tx{font-size:18px;line-height:1.22;font-weight:500;color:var(--g);}'
+    + '.w272hw .tx.hook{font-family:' + HEAD + ';font-weight:500;font-size:30px;line-height:1.02;text-transform:uppercase;}'
+    + '.w272hw .ph{position:relative;width:248px;height:440px;margin:0 auto;border-radius:34px;background:var(--i);padding:7px;box-shadow:0 12px 34px rgba(16,24,22,.22);}'
+    + '.w272hw .sc{position:relative;width:100%;height:100%;border-radius:27px;overflow:hidden;background:var(--c);font-size:13px;}'
+    + '.w272hw .sc>*{position:absolute;}'
+    + '.w272hw .pg{inset:0;}'
+    + '.w272hw .pg .hd{position:absolute;left:0;right:0;height:110px;background:var(--g);color:var(--c);padding:14px;}'
+    + '.w272hw .pg .hd b{display:block;font:500 25px/1 ' + HEAD + ';text-transform:uppercase;margin-top:6px;}'
+    + '.w272hw .pg i{position:absolute;left:14px;right:14px;height:44px;border-radius:12px;background:rgba(16,63,57,.08);}'
+    + '.w272hw .ad{left:8px;right:8px;height:42px;border-radius:21px;background:var(--c);box-shadow:0 2px 12px rgba(16,24,22,.2);display:flex;align-items:center;padding:0 6px 0 14px;font-size:12px;color:var(--i);white-space:nowrap;overflow:hidden;}'
+    + '.w272hw .ad span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}'
+    + '.w272hw .dots{flex:none;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:var(--g);}'
+    + '.w272hw .lst{background:var(--c);border-radius:16px;box-shadow:0 8px 28px rgba(16,24,22,.28);overflow:hidden;}'
+    + '.w272hw .lst div{padding:11px 14px;border-top:1px solid rgba(16,63,57,.1);font-size:13.5px;color:var(--i);white-space:nowrap;}'
+    + '.w272hw .lst div:first-child{border-top:0;}'
+    + '.w272hw .lst .hit{font-weight:700;color:var(--g);}'
+    + '.w272hw .sheet{left:0;right:0;bottom:0;height:300px;background:var(--c);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px rgba(16,24,22,.22);overflow:hidden;}'
+    + '.w272hw .sheet .in{position:absolute;left:10px;right:10px;top:12px;}'
+    + '.w272hw .sheet .lst{box-shadow:none;margin-bottom:8px;}'
+    + '.w272hw .dlg{left:10px;right:10px;background:var(--c);border-radius:18px;box-shadow:0 12px 34px rgba(16,24,22,.32);padding:14px;}'
+    + '.w272hw .dlg .top{display:flex;gap:10px;align-items:center;font-weight:500;font-size:14px;}'
+    + '.w272hw .dlg .row{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid rgba(16,63,57,.1);font-size:13px;}'
+    + '.w272hw .sw{width:34px;height:20px;border-radius:10px;background:var(--g);position:relative;}'
+    + '.w272hw .sw:after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--c);}'
+    + '.w272hw .dlg .btn{margin-top:12px;height:38px;border-radius:12px;background:var(--a);color:var(--g);display:flex;align-items:center;justify-content:center;font:600 16px/1 ' + HEAD + ';letter-spacing:.5px;text-transform:uppercase;}'
+    + '.w272hw .ic{width:42px;height:42px;border-radius:10px;background:var(--g);flex:none;display:grid;gap:4px;align-content:center;justify-items:start;padding-left:12px;box-sizing:border-box;}'
+    + '.w272hw .ic i{display:block;width:17px;height:4px;border-radius:1px;background:var(--c);}'
+    + '.w272hw .ic i:first-child,.w272hw .ic i:last-child{width:20px;}'
+    + '.w272hw .home{inset:0;background:var(--g);}'
+    + '.w272hw .home .bl{position:absolute;width:42px;height:42px;border-radius:10px;background:rgba(255,250,242,.14);}'
+    + '.w272hw .home .app{position:absolute;display:grid;justify-items:center;gap:4px;width:66px;color:var(--c);font-size:11px;font-weight:500;}'
+    + '.w272hw .home .app .ic{background:var(--c);}'
+    + '.w272hw .home .app .ic i{background:var(--g);}'
+    + '.w272hw .tap{width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:3px solid var(--a);background:rgba(220,165,39,.28);pointer-events:none;}'
+    + '.w272hw .foot{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;}'
+    + '.w272hw .foot button{border:0;background:rgba(16,63,57,.1);color:var(--g);border-radius:999px;min-width:34px;height:34px;padding:0 10px;font:600 13px ' + BODY + ';cursor:pointer;}'
+    + '.w272hw .foot button.on{background:var(--g);color:var(--c);}'
+    + '.w272hw .foot button:focus-visible{outline:2px solid var(--a);outline-offset:2px;}'
+    + '.w272hw .note{margin:8px 0 0;font-size:12px;color:rgba(31,32,30,.7);text-align:center;}'
+    + '.w272hw ol{margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.45;}'
+    + '.w272hw ol li{margin:0 0 5px;}';
+  function hwClamp(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function hwOut(x) { x = hwClamp(x); return 1 - Math.pow(1 - x, 3); }
+  function hwIn(x) { x = hwClamp(x); return x * x * x; }
+  /* a surface that arrives at a, leaves at b: 0 hidden, 1 resting */
+  function hwVis(t, a, b, dIn, dOut) { dIn = dIn || 0.3; dOut = dOut || 0.16; return t < a ? 0 : (b != null && t >= b ? 1 - hwIn((t - b) / dOut) : hwOut((t - a) / dIn)); }
+  /* a spring with a little overshoot, once: the icon landing is the film's one hero moment */
+  function hwSpring(x) { if (x <= 0) return 0; return 1 - Math.exp(-7 * x) * Math.cos(9 * x); }
+  function hwBuild(host, kind) {
+    var F = HW[kind], ios = kind === 'iphone';
+    var blanks = ''; for (var r = 0; r < 4; r++) for (var c = 0; c < 4; c++) { if (r === 1 && c === 1) continue; blanks += '<span class="bl" style="left:' + (12 + c * 55) + 'px;top:' + (34 + r * 74) + 'px"></span>'; }
+    var icon = '<span class="ic"><i></i><i></i><i></i></span>';
+    host.classList.add('w272hw');
+    host.innerHTML = '<div class="cap"><span class="n" hidden></span><div class="tx hook"></div></div>'
+      + '<div class="ph" aria-hidden="true"><div class="sc">'
+      + '<div class="pg"><div class="hd" style="top:' + (ios ? 0 : 56) + 'px"><small>Welfare Avenue Hub</small><b>Good morning</b></div>'
+      + [130, 186, 242, 298].map(function (y) { return '<i style="top:' + (y + (ios ? 0 : 56)) + 'px"></i>'; }).join('') + '</div>'
+      + '<div class="ad" style="' + (ios ? 'bottom:10px' : 'top:8px') + '"><span>hub.welfareavenue.com</span><b class="dots">' + (ios ? '\u00b7\u00b7\u00b7' : '\u22ee') + '</b></div>'
+      + '<div class="lst menu" style="right:10px;width:176px;' + (ios ? 'bottom:60px' : 'top:56px') + '">' + (ios
+        ? '<div>Copy</div><div class="hit">Share</div><div>Add Bookmark</div><div>Find on Page</div>'
+        : '<div>New tab</div><div>Bookmarks</div><div>Share</div><div class="hit">Add to home screen</div><div>Settings</div>') + '</div>'
+      + (ios ? '<div class="sheet"><div class="in"><div class="lst"><div>Copy</div><div>Add to Reading List</div><div>Add Bookmark</div><div>Add to Favourites</div></div><div class="lst"><div>Find on Page</div><div class="hit">Add to Home Screen</div><div>Markup</div></div></div></div>' : '')
+      + '<div class="dlg" style="top:' + (ios ? 96 : 130) + 'px"><div class="top">' + icon + '<span>' + (ios ? 'WA Hub' : 'Install app') + '</span></div>'
+      + (ios ? '<div class="row"><span>Open as Web App</span><span class="sw"></span></div>' : '<div class="row"><span>WA Hub<br>hub.welfareavenue.com</span></div>')
+      + '<div class="btn">' + (ios ? 'Add' : 'Install') + '</div></div>'
+      + '<div class="home">' + blanks + '<div class="app" style="left:55px;top:108px">' + icon + '<span>WA Hub</span></div></div>'
+      + '<div class="tap"></div></div></div>'
+      + '<div class="foot"><button type="button" data-hw="play">Pause</button>' + F.steps.map(function (s, i) { return '<button type="button" data-hw="' + i + '" aria-label="Step ' + (i + 1) + '">' + (i + 1) + '</button>'; }).join('') + '</div>'
+      + '<p class="note">An illustration: your phone may look a little different.</p>'
+      + '<ol>' + F.plain.map(function (p) { return '<li>' + E(p) + '</li>'; }).join('') + '</ol>';
+    var q = function (s) { return host.querySelector(s); };
+    var el = { n: q('.n'), tx: q('.tx'), ad: q('.ad'), menu: q('.menu'), sheet: q('.sheet'), inn: q('.sheet .in'), dlg: q('.dlg'), home: q('.home'), app: q('.home .app'), tap: q('.tap'), btns: host.querySelectorAll('.foot [data-hw]') };
+    /* where and when the finger lands: x, y on the 234 by 426 screen */
+    var TAPS = ios
+      ? [[4.2, 205, 395], [6.4, 130, 279], [9.6, 110, 329], [12.9, 117, 226]]
+      : [[4.2, 212, 29], [7, 110, 194], [9, 117, 275]];
+    function seek(t) {
+      /* the caption: the promise first, then one step at a time */
+      var cur = -1; F.steps.forEach(function (s, i) { if (t >= s[0]) cur = i; });
+      var txt = cur < 0 ? F.title : F.steps[cur][1];
+      if (el.tx.textContent !== txt) { el.tx.textContent = txt; el.tx.classList.toggle('hook', cur < 0); }
+      el.n.hidden = cur < 0; if (cur >= 0) el.n.textContent = String(cur + 1);
+      el.btns.forEach(function (b) { var k = b.getAttribute('data-hw'); if (k !== 'play') b.classList.toggle('on', Number(k) === cur); });
+      var menu, sheet = 0, dlg, home, list = 0, iconAt;
+      if (ios) {
+        menu = hwVis(t, 4.35, 6.55); sheet = hwVis(t, 6.55, 9.75, 0.34); list = hwOut((t - 7.7) / 0.9); dlg = hwVis(t, 9.75, 13.05); home = t >= 13.05 ? hwOut((t - 13.05) / 0.26) : 0; iconAt = 13.35;
+      } else {
+        menu = hwVis(t, 4.35, 7.15); dlg = hwVis(t, 7.15, 9.15); home = t >= 9.15 ? hwOut((t - 9.15) / 0.26) : 0; iconAt = 9.45;
+      }
+      el.menu.style.opacity = menu; el.menu.style.transformOrigin = ios ? 'bottom right' : 'top right'; el.menu.style.transform = 'scale(' + (0.92 + 0.08 * menu) + ')';
+      if (el.sheet) { el.sheet.style.transform = 'translateY(' + (100 - 100 * sheet) + '%)'; el.sheet.style.visibility = sheet > 0 ? 'visible' : 'hidden'; el.inn.style.transform = 'translateY(' + (-48 * list) + 'px)'; }
+      el.dlg.style.opacity = dlg; el.dlg.style.transform = 'translateY(' + (10 - 10 * dlg) + 'px) scale(' + (0.97 + 0.03 * dlg) + ')';
+      el.home.style.opacity = home;
+      var sp = hwSpring((t - iconAt) / 0.7); el.app.style.transform = 'scale(' + (t < iconAt ? 0.6 : 0.6 + 0.4 * sp) + ')'; el.app.style.opacity = t < iconAt ? 0 : hwClamp((t - iconAt) / 0.14);
+      /* the finger: arrives, presses, lifts */
+      var tp = null; TAPS.forEach(function (x) { if (t >= x[0] - 0.42 && t < x[0] + 0.24) tp = x; });
+      if (tp) {
+        var u = t - tp[0], s = u < -0.12 ? 1.25 - 0.25 * hwOut((u + 0.42) / 0.3) : u < 0.04 ? 1 - 0.28 * hwOut((u + 0.12) / 0.16) : 0.72 + 0.28 * hwOut((u - 0.04) / 0.2);
+        el.tap.style.left = tp[1] + 'px'; el.tap.style.top = tp[2] + 'px'; el.tap.style.transform = 'scale(' + s + ')';
+        el.tap.style.opacity = u < -0.2 ? hwClamp((u + 0.42) / 0.2) : u > 0.08 ? 1 - hwClamp((u - 0.08) / 0.16) : 1;
+      } else el.tap.style.opacity = 0;
+    }
+    var P = { t: 0, on: false, raf: 0, last: 0, seen: true };
+    function frame(now) {
+      if (!P.on) return;
+      if (host.isConnected === false) { stop(); return; }
+      if (P.seen) { P.t += Math.min(0.1, (now - P.last) / 1000); if (P.t >= F.dur) P.t = 0; seek(P.t); }
+      P.last = now; P.raf = requestAnimationFrame(frame);
+    }
+    function stop() { P.on = false; cancelAnimationFrame(P.raf); var b = host.querySelector('[data-hw="play"]'); if (b) b.textContent = 'Play'; }
+    function play() { if (P.on) return; P.on = true; P.last = performance.now(); var b = host.querySelector('[data-hw="play"]'); if (b) b.textContent = 'Pause'; P.raf = requestAnimationFrame(frame); }
+    host.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-hw]'); if (!b) return;
+      var k = b.getAttribute('data-hw');
+      if (k === 'play') { if (P.on) stop(); else play(); return; }
+      stop(); P.t = F.steps[Number(k)][0] + 0.02; seek(ios && Number(k) === F.steps.length - 1 ? 16 : P.t); if (ios && Number(k) === F.steps.length - 1) P.t = 16; else if (!ios && Number(k) === F.steps.length - 1) { P.t = 12; seek(12); }
+    });
+    try { new IntersectionObserver(function (es) { P.seen = es[0].isIntersecting; }).observe(host); } catch (e) { /* plays anyway */ }
+    seek(0);
+    /* someone who asked their device for less motion gets the steps and starts it themselves */
+    var calm = false; try { calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* fine */ }
+    if (calm) stop(); else play();
+    return { seek: seek, DUR: F.dur, play: play, stop: stop };
+  }
+  function hwStyle() {
+    if (document.getElementById('w272hwcss')) return;
+    var s = document.createElement('style'); s.id = 'w272hwcss'; s.textContent = hwCss; document.head.appendChild(s);
+  }
+  window.w272howto = function (host, kind) { hwStyle(); return hwBuild(host, kind); };
+
+  /* ---------- wiring ---------- */
+  if (!document.getElementById('wa272css')) {
+    var st272 = document.createElement('style'); st272.id = 'wa272css'; st272.textContent = homeCss + setupCss + dirCss; document.head.appendChild(st272);
+  }
+  function paint() {
+    var page = document.getElementById('mypage'); if (!page) return;
+    var dir = board();
+    if (!staff() && !dir) return;
+    if (dir) { wrapAllowed(); directorTab(); }
+    if (classic()) { page.classList.remove('w272', 'w272dir'); paintSetup(); return; }
+    page.classList.add('w272'); page.classList.toggle('w272dir', dir);
+    if (dir) paintDirector();
+    else { paintSentence(); paintNext(); paintApps(); foldTasks(); }
+    paintSetup();
+  }
+  wrapAllowed();
+  if (typeof renderMyPage === 'function') {
+    var __rm272 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm272.apply(this, arguments);
+      try { paint(); } catch (e) { console.warn('wave272 paint', e); }
+      return r;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa272 = startApp;
+    startApp = async function () {
+      var h0 = String(location.hash || '');
+      var r = await __sa272.apply(this, arguments);
+      wrapAllowed();
+      /* a director opening the Hub, or a link to Home, lands on Home; any other link stays where it points */
+      if (board()) { directorTab(); if (!h0 || h0 === '#' || /^#mypage/.test(h0) || h0.indexOf('access_token=') >= 0) location.hash = '#mypage'; }
+      try { paint(); } catch (e) { console.warn('wave272 boot', e); }
+      setTimeout(paintSetup, 2500);
+      TIP.timer = setTimeout(tryTip, 25000);
+      return r;
+    };
+  }
+  /* wave219 settles after the start: the card follows it */
+  window.addEventListener('wa-push', function () { paintSetup(); });
+  /* the small note waits for a page that is not Home */
+  window.addEventListener('hashchange', function () { if (!onHome()) { clearTimeout(TIP.timer); TIP.timer = setTimeout(tryTip, 6000); } });
+
+  /* ---------- test hook ---------- */
+  window.w272 = { paint: paint, paintSetup: paintSetup, setupOpen: openHow, closeHow: closeHow, tryTip: tryTip, closeTip: closeTip, ranked: ranked, todayCount: todayCount, state: function () { return { app: appDone(), push: pushDone(), bip: BIP, standalone: standalone(), done: allDone() }; }, _bip: function (v) { BIP = !!v; paintSetup(); } };
+})();

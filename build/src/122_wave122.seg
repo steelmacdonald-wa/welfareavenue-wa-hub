@@ -1727,6 +1727,9 @@
     ] },
     home: { tab: 'mypage', icon: 'home', hash: '#mypage', steps: [
       S('#mpBody .mp-head', 'Your day at a glance', 'Home greets you with the date and your role. If you only check one page, check this one.'),
+      S('#w272next', 'Up next', 'The one task to do now: open it, mark it done, or leave it for later today. Overdue work comes first.', OPT),
+      S('#w272setup', 'Set up your Hub', 'Optional and quick: add the Hub as an app and turn on notifications. Not now hides it; it waits under Show everything on Home.', OPT),
+      S('#w272apps', 'Your apps', 'The apps you use most, one tap away. All apps opens the rest.', OPT),
       S('#mpBody .mp-chips', 'Quick counts', 'Your open tasks, your team\u2019s tasks, open decisions and new mentions. Click a chip to jump to that list.', OPT),
       S('#w116home', 'Your upcoming meetings', 'Meetings from the shared calendar that include you, with the agenda one click away.', OPT),
       S('#w112wrap', 'Get started with the Hub', 'Five first steps for new people. Each one ticks itself when you do it. They also live in the Onboarding section of the Avenue Academy.', OPT),

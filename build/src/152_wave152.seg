@@ -2051,7 +2051,7 @@
   SOURCES.hub_form = ['Hub forms', 'People who filled in a form on hub.welfareavenue.com/f/.'];
   var FORM_HOST = 'https://hub.welfareavenue.com/f/';
   var CONSENT_DEFAULT = 'Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.';
-  var FM = { fid: null, f: null, sub: '', msg: '', err: '', busy: '', confirm: '', subs: null, subsFor: null, showSpam: false, showTests: false, openSub: null, counts: null };
+  var FM = { group: '', fid: null, f: null, sub: '', msg: '', err: '', busy: '', confirm: '', subs: null, subsFor: null, showSpam: false, showTests: false, openSub: null, counts: null };
   LOADERS.forms = function () { return db.from('crm_forms').select('*').order('created_at', { ascending: true }); };
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
   LOADERS.cfields = function () { return db.from('crm_fields').select('*').order('sort', { ascending: true }).order('id', { ascending: true }); };
@@ -2086,6 +2086,15 @@
     }).join('') + '</div><p class="m">From the Photo library, the photos ready to use. It sits behind the logo and the title at the top of the page.</p></div>';
   }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
+  /* wave261 (16/10/26, Steel: "The forms in the CRM need to be maybe grouped. We can maybe group forms for different
+     purposes, like volunteers."): every form has a group (crm_forms.purpose); the list shows the groups as chips and
+     sections, and the editor lets staff pick one. A group changes nothing about what a form does with an answer. */
+  var FPURPOSE = [['volunteers', 'Volunteers', GREEN, 'Sign-ups and applications to volunteer'], ['gifts', 'Gifts and in-kind donations', GOLD, 'People giving gifts, items and essentials'],
+    ['sponsors', 'Sponsors and partners', PURPLE, 'Companies and partners who want to help'], ['groups', 'Schools and groups', TEAL, 'Classes, clubs, teams and groups'],
+    ['other', 'Other', MUTED, 'Contact, newsletter and team applications']];
+  function purposeOf(f) { var p = String((f && f.purpose) || 'other'); return FPURPOSE.some(function (x) { return x[0] === p; }) ? p : 'other'; }
+  function purposeName(k) { return (FPURPOSE.filter(function (x) { return x[0] === k; })[0] || FPURPOSE[4])[1]; }
+  var CAMPAIGN_NAME = { 'gift-basket-drive': 'Holiday Gift Basket Drive' };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
   var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)'], ['positions', 'The open positions (HR centre)'], ['file', 'A file (their CV)']];
   /* wave216: an application form (kind application) puts each person on the HR centre's Applications board: the open positions
@@ -2154,7 +2163,7 @@
   function formRow(f) {
     var st = fstat(f.id), live = f.status === 'published', addr = 'hub.welfareavenue.com/f/' + f.slug;
     return '<div class="w156row" role="listitem"><div class="w156nm"><button class="w155cn" data-w156open="' + E(f.id) + '"><b>' + E(f.title) + '</b></button>' +
-      '<span class="m">' + E((FKIND[f.kind] || FKIND.general)[0]) + '</span><span class="m w156lk">' + (live || f.status === 'closed' ? '<a href="' + E(FORM_HOST + f.slug) + '" target="_blank" rel="noopener">' + E(addr) + '</a>' : E(addr)) + '</span></div>' +
+      '<span class="m">' + E((FKIND[f.kind] || FKIND.general)[0]) + ' \u00b7 ' + (f.lang === 'fr' ? 'French' : 'English') + (f.settings && f.settings.campaign ? ' \u00b7 ' + E(CAMPAIGN_NAME[f.settings.campaign] || f.settings.campaign) : '') + '</span><span class="m w156lk">' + (live || f.status === 'closed' ? '<a href="' + E(FORM_HOST + f.slug) + '" target="_blank" rel="noopener">' + E(addr) + '</a>' : E(addr)) + '</span></div>' +
       '<div>' + lchip(FSTAT, f.status) + '</div>' +
       '<div class="w156meta">' + plural(Number(st.submissions) || 0, 'answer', 'answers') + (Number(st.last_7_days) ? '<span class="m"> \u00b7 ' + Number(st.last_7_days) + ' this week</span>' : '') + (Number(st.errors) ? '<span class="w156warn"> \u00b7 ' + plural(Number(st.errors), 'needs a look', 'need a look') + '</span>' : '') + '</div>' +
       '<div class="w155ra"><button class="w152btn sm ghost" data-w156open="' + E(f.id) + '">' + I('edit') + ' Open</button><button class="w152btn sm ghost" data-w156answers="' + E(f.id) + '">' + I('list') + ' Answers</button>' +
@@ -2177,7 +2186,22 @@
       '<p class="m">A form at hub.welfareavenue.com/f/ writes straight into the CRM: the person, their volunteer record and the dates they pick, their answers, and their email permission with the words they agreed to. Drafts are only seen here.</p>' +
       (FM.msg ? '<div class="w154msg">' + E(FM.msg) + '</div>' : '') + (FM.err ? '<div class="w152err">' + E(FM.err) + '</div>' : '') +
       '<div class="w154acts"><button class="w152btn" data-w156new="1">' + I('plus') + ' New form</button></div>' +
-      (fs.length ? '<div class="w155rows" role="list">' + fs.map(formRow).join('') + '</div>' : '<p class="m">No form yet.</p>') + '</div>' + fieldsCard() + '</div>';
+      (fs.length ? groupsHtml261(fs) : '<p class="m">No form yet.</p>') + '</div>' + fieldsCard() + '</div>';
+  }
+
+  /* wave261: the groups as chips (All, then each group with its count) and the forms in sections, one a group */
+  function groupsHtml261(fs) {
+    var g = FM.group && FPURPOSE.some(function (x) { return x[0] === FM.group; }) ? FM.group : '';
+    var n = {}; fs.forEach(function (f) { var k = purposeOf(f); n[k] = (n[k] || 0) + 1; });
+    var chips = '<div class="w152chips w261chips" role="group" aria-label="Form groups"><button type="button" class="w152chip' + (!g ? ' on' : '') + '" data-w261grp="" aria-pressed="' + (!g) + '">All <em>' + fs.length + '</em></button>' +
+      FPURPOSE.map(function (x) { return '<button type="button" class="w152chip' + (g === x[0] ? ' on' : '') + '" data-w261grp="' + x[0] + '" aria-pressed="' + (g === x[0]) + '"><i style="background:' + x[2] + '"></i>' + E(x[1]) + ' <em>' + (n[x[0]] || 0) + '</em></button>'; }).join('') + '</div>';
+    var secs = FPURPOSE.filter(function (x) { return !g || g === x[0]; }).map(function (x) {
+      var list = fs.filter(function (f) { return purposeOf(f) === x[0]; });
+      if (!list.length && !g) return '';
+      return '<section class="w261sec" data-w261sec="' + x[0] + '"><h4 class="w156h4 w261h"><i style="background:' + x[2] + '"></i>' + E(x[1]) + ' <span class="w155sub">' + plural(list.length, 'form', 'forms') + '</span></h4>' +
+        (list.length ? '<div class="w155rows" role="list">' + list.map(formRow).join('') + '</div>' : '<p class="m">No form in this group yet. ' + E(x[3]) + ' go here.</p>') + '</section>';
+    }).join('');
+    return chips + secs;
   }
 
   /* ---------- the editor ---------- */
@@ -2216,6 +2240,8 @@
       '<label class="w155lb">Web address<span class="w156url">hub.welfareavenue.com/f/<input class="w152in" data-w156k="slug" value="' + E(f.slug) + '"' + (live ? ' disabled title="Live forms keep their address; close the form to change it"' : '') + ' aria-label="The last part of the web address"></span></label>' +
       '<div class="w155two"><label class="w155lb">Kind<select class="w152sel" data-w156k="kind">' + kinds + '</select></label>' +
       '<label class="w155lb">Language<select class="w152sel" data-w156k="lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></label></div>' +
+      '<div class="w155two"><label class="w155lb">Group (where the CRM lists it)<select class="w152sel" data-w156k="purpose">' + FPURPOSE.map(function (x) { return '<option value="' + x[0] + '"' + (purposeOf(f) === x[0] ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select></label>' +
+      (f.settings && f.settings.campaign ? '<div class="w155lb">Campaign<span class="m w261camp">' + E(CAMPAIGN_NAME[f.settings.campaign] || f.settings.campaign) + (f.settings.request ? ': each answer is a Request for ' + E(f.settings.request.type === 'gift-drive' ? 'Fundraising' : 'the team') : '') + (f.settings.gift_pledge ? ', and a pledge in Gifts collected' : '') + '</span></div>' : '<div></div>') + '</div>' +
       inp('intro', 'What it is for (under the title)', 'A sentence or two', true) + coverPickHtml(f) +
       (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to the Volunteer Manager (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
         '<div class="w155two"><label class="w155lb">City written on new contacts<input class="w152in" data-w156set="city" value="' + E(f.settings.city || '') + '" placeholder="Montreal"></label>' +
@@ -2342,9 +2368,16 @@
       var id = String(q.id || '').trim() || slugify(q.label, '_');
       id = id.replace(/[^a-z0-9_]/gi, '_').toLowerCase().slice(0, 40) || 'q';
       var base = id, n = 2; while (seen[id]) { id = base + '_' + n; n++; } seen[id] = 1;
-      var out = { id: id, type: q.type, label: String(q.label || '').trim(), required: !!q.required, to: q.to || '' };
+      /* wave261: what the editor does not show is kept (a multi's max, an option's description d, lead and u), so saving
+         a form (to give it a group) never drops the volunteer roles' limit of 2 or their descriptions */
+      var keep = {}; Object.keys(q).forEach(function (k) { if (k.charAt(0) !== '_' && ['id', 'type', 'label', 'required', 'to', 'help', 'options', 'source'].indexOf(k) < 0) keep[k] = q[k]; });
+      var out = Object.assign(keep, { id: id, type: q.type, label: String(q.label || '').trim(), required: !!q.required, to: q.to || '' });
       if (String(q.help || '').trim()) out.help = String(q.help).trim();
-      if (q.type === 'choice' || q.type === 'multi') out.options = parseOpts(q._opts);
+      if (q.type === 'choice' || q.type === 'multi') {
+        var old = {}; (Array.isArray(q.options) ? q.options : []).forEach(function (o) { if (o && typeof o === 'object' && o.v != null) old[String(o.v)] = o; });
+        out.options = parseOpts(q._opts).map(function (o) { var was = old[String(o.v)]; return was ? Object.assign({}, was, { v: o.v, l: o.l }) : o; });
+      }
+      if (q.type !== 'multi') delete out.max;
       if (q.type === 'positions') { out.type = 'choice'; out.source = 'positions'; }
       if (!out.to) delete out.to;
       return out;
@@ -2379,7 +2412,7 @@
       var tags = String(f._tags || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
       var row = { slug: f.slug, title: String(f.title).trim(), intro: String(f.intro || '').trim() || null, lang: f.lang === 'fr' ? 'fr' : 'en', kind: FKIND[f.kind] ? f.kind : 'general',
         questions: cleanQuestions(f.questions), consent: f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
-        thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, updated_by: actor() };
+        thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, purpose: purposeOf(f), updated_by: actor() };
       if (row.kind !== 'volunteer') delete row.settings.volunteer_record;
       var q = f.id ? db.from('crm_forms').update(row).eq('id', f.id).select().single() : db.from('crm_forms').insert(Object.assign({ status: 'draft', created_by: actor() }, row)).select().single();
       return Promise.resolve(q).then(function (r) {
@@ -2410,7 +2443,7 @@
     FM.busy = 'Making a draft\u2026'; paint();
     var n = (S.forms || []).length + 1, slug = 'new-form-' + n;
     while ((S.forms || []).some(function (f) { return f.slug === slug; })) { n++; slug = 'new-form-' + n; }
-    var row = { slug: slug, title: 'New form', kind: 'general', lang: 'en', status: 'draft', created_by: actor(), updated_by: actor(),
+    var row = { slug: slug, title: 'New form', kind: 'general', lang: 'en', status: 'draft', purpose: FM.group || 'other', created_by: actor(), updated_by: actor(),
       questions: [{ id: 'first_name', type: 'text', label: 'First name', required: true, to: 'contact.first_name' }, { id: 'last_name', type: 'text', label: 'Last name', required: false, to: 'contact.last_name' }, { id: 'email', type: 'email', label: 'Email', required: true, to: 'contact.email' }],
       consent: { ask: true, required: false, label: CONSENT_DEFAULT }, thank_you: 'Thank you. We have your answers.', settings: { tags: [] } };
     Promise.resolve(db.from('crm_forms').insert(row).select().single()).then(function (r) {
@@ -2461,6 +2494,8 @@
     + '.w156subs{display:flex;flex-direction:column;}.w156sub{border-top:1px solid rgba(16,63,57,.08);}.w156sh{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:10px 4px;font-size:14px;}'
     + '.w156sh:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;border-radius:8px;}.w156who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.w156sd{padding:4px 4px 12px;}'
     + '.w156more .w152kv{grid-template-columns:minmax(110px,42%) minmax(0,1fr);margin-bottom:4px;}.w156more .w152kv>span:first-child{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w261chips{margin:4px 0 6px;}.w261sec{margin-top:6px;}.w261h{display:flex;align-items:center;gap:8px;}.w261h>i{width:10px;height:10px;border-radius:50%;display:inline-block;}.w261h .w155sub{font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-size:12.5px;}'
+    + '.w261camp{display:block;font-size:13.5px;font-weight:500;letter-spacing:0;text-transform:none;margin-top:6px;}'
     + '@media (max-width:700px){.w156sh{grid-template-columns:minmax(0,1fr) auto;}.w156sh>span:first-child{grid-column:1/-1;font-size:12px;color:' + MUTED + ';}}';
   document.head.appendChild(css156);
 
@@ -2470,6 +2505,7 @@
     var t = e.target, el; if (!t || !t.closest || !t.closest('.w152root')) return;
     var f = FM.f;
     if ((el = t.closest('[data-w156new]'))) { e.preventDefault(); newForm(); return; }
+    if ((el = t.closest('[data-w261grp]'))) { e.preventDefault(); FM.group = el.getAttribute('data-w261grp') || ''; paint(); var b = document.querySelector('#crm [data-w261grp="' + FM.group + '"]'); if (b) { try { b.focus({ preventScroll: true }); } catch (x) { /* fine */ } } return; }
     if ((el = t.closest('[data-w156open]'))) { e.preventDefault(); FM.msg = ''; go('#crm/forms/' + el.getAttribute('data-w156open')); return; }
     if ((el = t.closest('[data-w156answers]'))) { e.preventDefault(); FM.msg = ''; go('#crm/forms/' + el.getAttribute('data-w156answers') + '/answers'); return; }
     if ((el = t.closest('[data-w156back]'))) { e.preventDefault(); FM.f = null; FM.confirm = ''; go('#crm/forms'); return; }

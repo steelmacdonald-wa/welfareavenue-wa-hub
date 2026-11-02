@@ -88,6 +88,8 @@
     s.push({ id: 'task', t: 'Tick off a task', d: 'Finish something with your name on it and tick it, here on My page or on your team page. Nothing assigned yet? Tick this one yourself.', go: 'See my tasks' });
     if (document.getElementById('waChatBtn')) s.push({ id: 'brain', t: 'Ask the Hub a question', d: 'The assistant answers from everything in the Hub. Try: what is my team working on this week?', go: 'Ask now' });
     if (w112Allowed('importantinfo')) s.push({ id: 'info', t: 'Read Important info', d: 'Policies, key contacts and what everyone at Welfare Avenue should know.', go: 'Open Important info' });
+    /* wave272: encouraged, and it ticks itself once the Hub is added (or tick it yourself) */
+    if (window.w272) s.push({ id: 'app', t: 'Add the Hub as an app', d: 'Keep the Hub one tap away on your phone and computer, with notifications when someone needs you. Optional, and under a minute.', go: 'Show me how' });
     return s;
   }
   function w112Done(id) { return !!(W112.row && W112.row.steps && W112.row.steps[id]); }
@@ -169,7 +171,7 @@
     if (all) {
       h += '<p class="w112yay">Nice work. You know your way around now: Home is your queue, your team page holds the work, and the assistant is one tap away whenever you need it.</p>';
     } else {
-      h += '<p class="w112intro">Five quick things to find your way around. Each one ticks itself when you do it.</p>';
+      h += '<p class="w112intro">A few quick things to find your way around. Each one ticks itself when you do it.</p>';
       steps.forEach(function (s) {
         var d = w112Done(s.id);
         h += '<div class="w112step' + (d ? ' done' : '') + '">'
@@ -228,6 +230,7 @@
       return;
     }
     if (id === 'info') { location.hash = '#importantinfo'; }
+    if (id === 'app') { try { if (window.w272) window.w272.setupOpen(); } catch (e) { /* fine */ } }
   }
 
   /* card interactions (delegated, survives repaints) */

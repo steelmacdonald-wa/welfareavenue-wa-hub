@@ -1,4 +1,7 @@
 // Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v6 (wave273): who an email comes from and who replies reach. app_config mail_senders routes a template to volunteer@,
+//   operations@ or job@ (send also takes route); reply_to, on our domain, is the person handling that volunteer or organization.
+//   Without a reply_to, replies go to the address it came from. Campaigns that name their own sender keep it.
 // v5 (wave185): receipts by email. receipt {receipt_id, to?} sends the donor one email that thanks them and carries their
 //   official receipt as a PDF (the receipts bucket; receipt-pdf draws it first when it is missing), in English or French
 //   (the donor's language on the receipt), through the permission rule as a transactional message. In test mode the
@@ -250,13 +253,23 @@ async function contactByEmail(email: string) {
 type Sent = { send_id?: number; resend_id?: string; status?: string; to?: string; subject?: string; error?: string };
 type Sender = { name?: string | null; email?: string | null; reply?: string | null };
 type Attachment = { filename: string; content: string };
-type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null };
+type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null; route?: string | null; reply?: string | null };
 function senderLine(cfg: Record<string, string>, s?: Sender | null) {
   const name = String((s && s.name) || cfg.mail_from_name || 'Welfare Avenue').replace(/[<>"\r\n]/g, '').trim() || 'Welfare Avenue';
   const email = String((s && s.email) || cfg.mail_from_email || 'info@welfareavenue.com').trim().toLowerCase();
   const person = !!(s && s.email) && email !== String(cfg.mail_from_email || '').toLowerCase();
   const reply = String((s && s.reply) || (person ? email : (cfg.mail_reply_to || '')) || '').trim();
   return { from: name + ' <' + email + '>', reply: reply || undefined, email };
+}
+/* wave273: the sender for a template; null means the Hub's default address */
+function routed(cfg: Record<string, string>, key: string, route?: string | null, reply?: unknown): Sender | null {
+  let m: { routes?: Record<string, string>; templates?: Record<string, string> } = {};
+  try { m = JSON.parse(cfg.mail_senders || '{}'); } catch (_) { /* the default address */ }
+  const r = String(route || (m.templates || {})[key] || '');
+  const email = String((m.routes || {})[r] || '').toLowerCase();
+  if (!email || !onDomain(email, cfg)) return null;
+  const to = String(reply || '').trim().toLowerCase();
+  return { email, reply: to && onDomain(to, cfg) ? to : null };
 }
 function onDomain(e: string, cfg: Record<string, string>) { return isEmail(e) && e.toLowerCase().endsWith('@' + (cfg.mail_domain || 'welfareavenue.com')); }
 /* sends one row already in crm_email_sends (queued, or claimed by the pump) */
@@ -265,7 +278,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   if (!key) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }; }
   const kind = o.content.kind;
   const tpl = { ...o.content.tpl, kind, subject: o.content.subject || o.content.tpl.subject, preheader: o.content.preheader != null && o.content.preheader !== '' ? o.content.preheader : o.content.tpl.preheader };
-  const sender = senderLine(o.cfg, o.content.sender);
+  const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : (routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply) || o.content.sender));
   if (!onDomain(sender.email, o.cfg)) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }; }
   const unsub = await unsubUrl(o.c ? o.c.id : null, o.sendId);
   const r = await render(tpl, o.c, o.content.vars, o.cfg, unsub);
@@ -423,7 +436,10 @@ async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Call
   const c = row.contact_id ? await contactById(row.contact_id) : null;
   const unsub = await unsubUrl(c ? c.id : null, row.id);
   const e = itineraryEmail(d, { note: m.note, isUpdate: !!m.is_update, lang: m.lang, cfg, unsub });
-  const sender = senderLine(cfg, null);
+  /* wave273: replies reach whoever handles this role */
+  const ro = await svc.from('event_roster').select('role').eq('id', Number(m.roster_id)).maybeSingle();
+  const ow = ro.data ? await svc.rpc('wa258_role_owner', { p_role: ro.data.role }) : null;
+  const sender = senderLine(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data));
   const res = await rs(key, 'POST', '/emails', { from: sender.from, to: [row.to_email], subject: e.subject, html: e.html, text: e.text, reply_to: sender.reply,
     tags: [{ name: 'template', value: 'volunteer_itinerary' }, { name: 'kind', value: 'transactional' }, { name: 'send_id', value: String(row.id) }] }, { 'Idempotency-Key': 'wa-send-' + row.id });
   await svc.from('crm_email_sends').update({ subject: e.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
@@ -699,7 +715,7 @@ Deno.serve(async (req: Request) => {
       if ((cfg.mail_mode || 'test') !== 'live' && !listOf(cfg.mail_test_recipients).includes(to)) {
         return json({ error: 'The Hub is in test mode: email goes only to the test recipients until an admin switches it to live in the Email tab.', status: 'blocked' }, 403);
       }
-      const out = await deliver({ c, to, tpl, vars: cleanVars(body.vars), cfg, kind, isTest: false, basis: p.basis, who });
+      const out = await deliver({ c, to, tpl, vars: cleanVars(body.vars), cfg, kind, isTest: false, basis: p.basis, who, content: { route: body.route ? String(body.route) : null, reply: body.reply_to ? String(body.reply_to) : null } });
       return json({ ...out, basis: p.basis }, out.error && !out.send_id ? 400 : 200);
     }
     if (action === 'campaign_check' || action === 'campaign_queue' || action === 'campaign_test' || action === 'campaign_cancel') {
