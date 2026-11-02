@@ -1,6 +1,7 @@
 /* w276fx.js: the fixture for the wave276 team availability drive (test/w276drive.js). No real person: the three opsmtl members are made up.
    fx276(): test/fixture.json plus three active opsmtl team_members (Ruth Owen, a leader; Sam Lee and Lina Park, members), the app_config
-   avail_* keys, and hub_team_avail rows for two of the three (Ruth and Lina; Sam has not entered a week).
+   avail_* keys, and hub_team_avail rows for two of the three (Ruth and Lina; Sam has not entered a week). The latest ask is 15/09/26:
+   Ruth saved after it (since_ask true), Lina before it (since_ask false), so the status reads "1 of 3 up to date since Tue 15 Sep".
    WHO276: the two identities the drive signs in as, added to boot.js's WHO map (ruth: a leader; sam: a member on the opsmtl profile).
    replies276(o): what the wa_avail_* RPCs answer, keyed by team where the RPC takes one.
    INIT276: an init script that wraps db.rpc as soon as the page creates it (before the Home pop-up's 1.5 s timer), records every
@@ -38,32 +39,32 @@ function fx276() {
     { key: 'avail_grid_start', value: '480' }, { key: 'avail_grid_end', value: '1320' }, { key: 'avail_cell_min', value: '30' }, { key: 'avail_min_hours', value: '10' }
   ]);
   fx.hub_team_avail = [
-    { id: 1, email: RUTH.email, department: 'opsmtl', effective_from: '2026-09-01', slots: RUTH_SLOTS, hours: RUTH_SLOTS.length / 2, snoozed_until: null, updated_at: '2026-09-02T14:00:00Z' },
+    { id: 1, email: RUTH.email, department: 'opsmtl', effective_from: '2026-09-01', slots: RUTH_SLOTS, hours: RUTH_SLOTS.length / 2, snoozed_until: null, updated_at: '2026-09-16T14:00:00Z' },
     { id: 2, email: LINA.email, department: 'opsmtl', effective_from: '2026-09-01', slots: LINA_SLOTS, hours: LINA_SLOTS.length / 2, snoozed_until: null, updated_at: '2026-09-03T14:00:00Z' }
   ];
-  fx.hub_team_avail_ask = [{ id: 1, department: 'opsmtl', ask_date: '2026-09-01', set_by: 'wave276', note: 'term' }];
+  fx.hub_team_avail_ask = [{ id: 1, department: 'opsmtl', ask_date: '2026-09-01', set_by: 'wave276', note: 'term' }, { id: 2, department: 'opsmtl', ask_date: '2026-09-15', set_by: RUTH.email, note: null }];
   return fx;
 }
 
 /* o.manage: wa_avail_team.can_manage; o.due: wa_avail_due answers opsmtl */
 function replies276(o) {
   o = o || {};
-  const cfg = { cell_min: 30, start: 480, end: 1320, min_hours: 10, ask_date: '2026-09-01' };
+  const cfg = { cell_min: 30, start: 480, end: 1320, min_hours: 10, ask_date: '2026-09-15' };
   return {
-    due: o.due ? [{ department: 'opsmtl', ask_date: '2026-09-01', last_saved: null }] : [],
+    due: o.due ? [{ department: 'opsmtl', ask_date: '2026-09-15', last_saved: null }] : [],
     mine: null,
     team: {
-      opsmtl: Object.assign({ can_manage: !!o.manage }, cfg, {
+      opsmtl: Object.assign({ can_manage: !!o.manage, me: o.manage ? RUTH.email : SAM.email }, cfg, {
         members: [
-          { email: RUTH.email, name: RUTH.name, slots: RUTH_SLOTS, hours: RUTH_SLOTS.length / 2, updated_at: '2026-09-02T14:00:00Z' },
-          { email: LINA.email, name: LINA.name, slots: LINA_SLOTS, hours: LINA_SLOTS.length / 2, updated_at: '2026-09-03T14:00:00Z' }
+          { email: RUTH.email, name: RUTH.name, slots: RUTH_SLOTS, hours: RUTH_SLOTS.length / 2, updated_at: '2026-09-16T14:00:00Z', since_ask: true },
+          { email: LINA.email, name: LINA.name, slots: LINA_SLOTS, hours: LINA_SLOTS.length / 2, updated_at: '2026-09-03T14:00:00Z', since_ask: false }
         ],
-        missing: [{ email: SAM.email, name: SAM.name }],
+        missing: [{ email: SAM.email, name: SAM.name, since_ask: false }],
         clashes: []
       }),
-      hr: Object.assign({ can_manage: !!o.manage }, cfg, {
-        members: [{ email: HRP[0].email, name: HRP[0].name, slots: run(4, 13, 15), hours: 2, updated_at: '2026-09-04T14:00:00Z' }],
-        missing: [{ email: HRP[1].email, name: HRP[1].name }],
+      hr: Object.assign({ can_manage: !!o.manage, me: o.manage ? RUTH.email : SAM.email }, cfg, { ask_date: null }, {
+        members: [{ email: HRP[0].email, name: HRP[0].name, slots: run(4, 13, 15), hours: 2, updated_at: '2026-09-04T14:00:00Z', since_ask: true }],
+        missing: [{ email: HRP[1].email, name: HRP[1].name, since_ask: false }],
         clashes: []
       })
     }

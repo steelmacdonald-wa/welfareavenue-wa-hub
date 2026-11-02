@@ -110,18 +110,18 @@
       panel.querySelector('#w276retry').addEventListener('click', function () { paintAgenda(dept); });
       return;
     }
-    var c = cfgFrom(t), members = t.members || [], missing = t.missing || [], can = !!t.can_manage;
-    var k = members.length, n = members.length + missing.length;
+    var c = cfgFrom(t), members = t.members || [], can = !!t.can_manage;
+    var k = members.length;
     var wins = best(members, c.cellMin, t.clashes || []);
-    var status = k + ' of ' + n + ' entered' + (missing.length ? ', ' + missing.length + ' outstanding' : '');
+    var ts = teamStatus(t), status = ts.text;
     panel.innerHTML = '<div class="hd"><h3 id="w276ph"><span class="k">' + E(teamLabel(dept)) + '</span>When can we meet?</h3>'
       + '<div class="acts"><button type="button" class="b2" id="w276mine">My availability</button>'
       + (can ? '<button type="button" class="b1" id="w276ask">Ask the team</button>' : '') + '</div></div>'
-      + (can && missing.length
+      + (can && ts.behind.length
         ? '<p class="st"><button type="button" class="lk" id="w276st" aria-expanded="false" aria-controls="w276miss">' + E(status) + '</button></p>'
-          + '<p id="w276miss" hidden>Not yet entered: ' + E(missing.map(function (m) { return m.name || m.email; }).join(', ')) + '</p>'
+          + '<p id="w276miss" hidden>' + E(ts.label) + ': ' + E(ts.behind.join(', ')) + '</p>'
         : '<p class="st">' + E(status) + '</p>')
-      + '<div class="body"><div class="map"><p class="help">Darker means more of the team is free. Tap or point at a time to see who.</p><div id="w276heat"></div><p id="w276cell" aria-live="polite"></p></div>'
+      + '<div class="body"><div class="map"><p class="help">Darker means more of the team is free. Tap or point at a time to see who. ' + E(tzNote()) + '</p><div id="w276heat"></div><p id="w276cell" aria-live="polite"></p></div>'
       + '<div class="side"><h4>Best slots</h4><ol id="w276best">'
       + wins.map(function (w, i) {
         return '<li><span class="w">' + E(windowLabel(w)) + '</span><span class="n">' + w.n + ' of ' + k + ' can make it' + (w.clash ? ', clashes with ' + (w.clash === 1 ? '1 regular meeting' : w.clash + ' regular meetings') : '') + '</span>'

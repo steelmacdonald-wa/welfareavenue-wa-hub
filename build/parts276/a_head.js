@@ -12,7 +12,8 @@
    - Agenda tab (#team/<code>/agenda): "When can we meet?" above the agenda tool (#w276panel before #w116agHost): the
      heat map (a cell's shade = available / members with a grid; hover or tap lists names), the best slots (top three
      windows of at least 60 minutes by headcount, then fewest calendar clashes) with Propose for managers, "k of n
-     entered", My availability, and Ask the team for managers.
+     entered" (or "k of n up to date since <ask date>"), My availability, and Ask the team for managers. Times are Toronto time, and
+     both say so (tzNote).
    - Slots are weekday * 1440 + minute of the day, weekday 0 = Monday (Toronto wall time). Every read and write goes
      through the wa_avail_* RPCs (build/wa276_avail.sql); notify v18 sends meet_propose and meet_avail_ask.
    window.w276: paintAgenda, openPop, best (the pure ranking), slot, unslot, hours. */
@@ -55,6 +56,35 @@
   function clockHour(min) { var h = Math.floor((Number(min) % 1440) / 60); return (h % 12 || 12) + ' ' + (h < 12 ? 'a.m.' : 'p.m.'); }
   /* {di, start, end} -> "Tuesday 5:00 p.m. to 6:30 p.m." (no full stop: notify ends the sentence) */
   function windowLabel(w) { return DAYS[w.di] + ' ' + clock(w.start) + ' to ' + clock(w.end); }
+  /* "2026-09-01" -> "Tue 1 Sep" */
+  var MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function dayLabel(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); if (!m) return String(iso || '');
+    var y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+    if (mo < 3) y -= 1;   /* the weekday by arithmetic (Sakamoto), so no Date object and no time zone is involved; 0 = Sunday */
+    var wd = (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4][mo - 1] + da) % 7;
+    return DAYS_SHORT[(wd + 6) % 7] + ' ' + da + ' ' + MONTHS_SHORT[mo - 1];
+  }
+  /* The grid is Toronto wall time. zone: the browser's time zone (Intl), passed in so the test can set it. */
+  var EASTERN = ['America/Toronto', 'America/New_York', 'America/Montreal', 'America/Detroit', 'US/Eastern', 'EST5EDT'];
+  function myZone() { try { return String(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); } catch (e) { return ''; } }
+  function tzNote(zone) {
+    zone = zone == null ? myZone() : String(zone);
+    return 'Times are Toronto time.' + (zone && EASTERN.indexOf(zone) < 0 ? ' You seem to be in ' + zone + '; enter the Toronto hours.' : '');
+  }
+  /* The Agenda status line and the names on tap, on the rule Ask the team and the Home pop-up use: with an ask, up to date
+     means saved since it (wa_avail_team's since_ask, on members and missing alike); with none, a saved grid counts.
+     t: the wa_avail_team answer -> {text, behind:[names], label} */
+  function teamStatus(t) {
+    var members = (t && t.members) || [], missing = (t && t.missing) || [], all = members.concat(missing), n = all.length, ask = t && t.ask_date;
+    var nm = function (m) { return m.name || m.email; };
+    if (!ask) {
+      return { text: members.length + ' of ' + n + ' entered' + (missing.length ? ', ' + missing.length + ' outstanding' : ''), behind: missing.map(nm), label: 'Not yet entered' };
+    }
+    var behind = all.filter(function (m) { return m.since_ask === false || (m.since_ask == null && missing.indexOf(m) >= 0); });
+    var k = n - behind.length;
+    return { text: k + ' of ' + n + ' up to date since ' + dayLabel(ask) + (behind.length ? ', ' + behind.length + ' outstanding' : ''), behind: behind.map(nm), label: 'Not up to date since ' + dayLabel(ask) };
+  }
 
   /* The best windows: for each starting cell, grow the window a cell at a time while someone stays available for all
      of it; each time the group shrinks (or the run ends) and the window is at least 60 minutes, it is a candidate with

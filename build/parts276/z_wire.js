@@ -124,5 +124,5 @@
   });
 
   /* ---------- test hook ---------- */
-  window.w276 = { paintAgenda: paintAgenda, openPop: openPop, best: best, slot: slot, unslot: unslot, hours: hours, windowLabel: windowLabel, closePop: closePop, state: function () { return W276; } };
+  window.w276 = { paintAgenda: paintAgenda, openPop: openPop, best: best, slot: slot, unslot: unslot, hours: hours, windowLabel: windowLabel, tzNote: tzNote, teamStatus: teamStatus, closePop: closePop, state: function () { return W276; } };
 })();

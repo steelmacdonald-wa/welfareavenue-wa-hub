@@ -58,3 +58,29 @@ test('best: clashes break a headcount tie', () => {
   assert.equal(r[1].di, 1);
   assert.equal(r[1].clash, 1);
 });
+
+test('tzNote: Toronto time always, the hint only outside Eastern time', () => {
+  assert.equal(w.tzNote('America/Toronto'), 'Times are Toronto time.');
+  assert.equal(w.tzNote('America/New_York'), 'Times are Toronto time.');
+  assert.equal(w.tzNote('EST5EDT'), 'Times are Toronto time.');
+  assert.equal(w.tzNote('Europe/Paris'), 'Times are Toronto time. You seem to be in Europe/Paris; enter the Toronto hours.');
+  assert.ok(!/—/.test(w.tzNote('Asia/Tokyo')), 'no em dash');
+});
+
+test('teamStatus: up to date since the ask, else entered', () => {
+  const t = { ask_date: '2026-09-15', members: [{ name: 'A', since_ask: true }, { name: 'B', since_ask: false }], missing: [{ name: 'C', since_ask: false }, { name: 'D', since_ask: true }] };
+  const s = w.teamStatus(t);
+  assert.equal(s.text, '2 of 4 up to date since Tue 15 Sep, 2 outstanding');
+  assert.deepEqual([...s.behind], ['B', 'C']);
+  const none = w.teamStatus({ ask_date: null, members: [{ name: 'A' }], missing: [{ name: 'C' }] });
+  assert.equal(none.text, '1 of 2 entered, 1 outstanding');
+  assert.deepEqual([...none.behind], ['C']);
+});
+
+test('teamStatus: the ask date in words across months and a leap day', () => {
+  const at = (d) => w.teamStatus({ ask_date: d, members: [], missing: [] }).text;
+  assert.equal(at('2026-11-02'), '0 of 0 up to date since Mon 2 Nov');
+  assert.equal(at('2027-01-04'), '0 of 0 up to date since Mon 4 Jan');
+  assert.equal(at('2028-02-29'), '0 of 0 up to date since Tue 29 Feb');
+  assert.equal(at('2027-09-06'), '0 of 0 up to date since Mon 6 Sep');
+});

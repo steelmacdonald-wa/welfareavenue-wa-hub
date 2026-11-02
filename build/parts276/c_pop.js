@@ -66,6 +66,7 @@
     if (document.getElementById('w276pop')) return false;
     if (due && (otherOpen() || !onHome())) return false;   /* the Home ask never stacks on another window, nor opens off Home */
     P.dept = dept; P.due = due || null; P.from = opener; P.busy = false; P.cfg = cfgFrom(team); P.loadFailed = !!mineErr;
+    if (team && team.me) me = String(team.me).toLowerCase();   /* the roster's address, also when signed in with an alias */
     var clashes = ((team && team.clashes) || []).filter(function (c) { return String(c.email || '').toLowerCase() === me; }).map(function (c) { return Number(c.slot); });
     var slots = (mine && mine.slots) || [];
     var lbl = teamLabel(dept);
@@ -74,7 +75,7 @@
       + '<button type="button" class="x" aria-label="Close" data-w276="later">&times;</button>'
       + '<p class="k">' + E(lbl) + '</p>'
       + '<h2 id="w276title" tabindex="-1">Your availability for ' + E(lbl) + ' meetings</h2>'
-      + '<p class="lead" id="w276lead">Mark the times you are usually free in a typical week. Drag across cells to mark several at once, or tap one at a time.</p>'
+      + '<p class="lead" id="w276lead">Mark the times you are usually free in a typical week. Drag across cells to mark several at once, or tap one at a time. ' + E(tzNote()) + '</p>'
       + '<div class="from"><label for="w276from">Valid from</label><input type="date" id="w276from" value="' + E(isoToday()) + '" aria-describedby="w276fromh"><p id="w276fromh" class="help">Pick the date your week changes, for example the first day of term.</p></div>'
       + (clashes.length ? '<p class="legend"><span class="sw"></span>Usually in a meeting (from your Hub calendar)</p>' : '')
       + '<div id="w276grid"></div>'
