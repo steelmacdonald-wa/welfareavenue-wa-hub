@@ -1,4 +1,4 @@
-// Welfare Avenue: onboard-link (v1, 01/11/26, wave271)
+// Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability)
 // The public side of HR onboarding: the no-login links behind hub.welfareavenue.com/o/<token> (page by Task 4). One signed
 // token per purpose, <id>.<20 characters of HMAC-SHA256>, as in candidate-confirm, but the key is 'onboard-<purpose>:' + the
 // service key, so a link made for one purpose (or for candidate-confirm) opens nothing else:
@@ -18,6 +18,20 @@
 //     A second answer changes nothing and shows the first ({repeated: true}); a closed card (even one accepted first) or a flow that backed out gives
 //     {closed: true} and saves nothing. Someone who declined by link still sees their answer.
 //   A read that fails is a 503 (unavailable), not a bad link: the page offers to try again.
+// wave275 (v2), the mgr link only. GET adds mode: 'propose' (the wave275 path) or 'grid' (a wave271 flow keeps its 1-on-1 grid: created before
+//   app_config onboard_v2_since, or, with no release time set, a flow that is not offered and has nothing proposed). In propose mode GET also gives
+//   {proposal: {call_at, one_on_one_at, by, at} | null, availability (saved, or Monday to Friday 09:00 to 17:00), availabilityAt, availabilityStale (none
+//   saved, or saved more than 30 days ago), busy: [{start, end, title, taken?}] (hub@ meetings the manager is invited to over the next 21 days, then the
+//   booked and proposed times of their other new hires, taken: true, untitled), lengths: {callMin, oneMin}, leadHours, hireAccepted, hireAnswer}; the
+//   page draws its cells from grid. The manager is the flow's manager_member_id, else whoever got the link (manager_link_member_id).
+//   POST {t, a: 'availability', availability}   checked as the database checks it (wa275_availability_ok: weekly mon..sun, blocks ["HH:MM","HH:MM"] on
+//              5-minute marks, 00:00 to 23:55, end after start; except [{date, free}] with real dates, once each; tz America/Toronto), at most 12 blocks a
+//              day and 120 exceptions; saved with the service key on the manager's roster row with availability_at now (wa275_availability_set needs a
+//              sign-in, and this link is the manager's own). {ok, availability, availabilityAt, availabilityStale: false}; refused: 400 bad_availability.
+//   POST {t, a: 'propose', call_at, one_on_one_at}   relays to onboard-run propose with the trigger secret and by 'manager': the rules (lead time,
+//              availability, hub@ meetings, other hires' times, overlap, already booked) are onboard-run's alone, and so is the save. {ok, repeated,
+//              proposal, hireEmailed, practice?}; a refusal keeps onboard-run's status, error and which, with message {en, fr}; onboard-run not answering is 503.
+//   Both need propose mode for propose; a closed link gives {closed: true} as before, and the offer link cannot do either (wrong_link).
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
 // Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell, onboard_grid_min_hours the hire's minimum (app_config). The wall-clock
 // times are turned into instants with Intl for each day, so a clock change (01/11/26, 14/03/27) never shifts a cell by an hour.
@@ -56,6 +70,8 @@ const MSG: Record<string, { en: string; fr: string }> = {
   not_yet: { en: 'This is not ready yet. Please contact HR.', fr: 'Ce n\'est pas encore prêt. Veuillez communiquer avec les RH.' },
   closed: { en: 'This link is no longer active. Please contact HR.', fr: 'Ce lien n\'est plus actif. Veuillez communiquer avec les RH.' },
   unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
+  bad_availability: { en: 'Some of those hours do not work. Use times on 5-minute marks from 00:00 to 23:55, each end after its start, and a date once each. Please check and save again.', fr: 'Certaines de ces heures ne conviennent pas. Utilisez des heures par tranches de 5 minutes de 00:00 à 23:55, chaque fin après son début, et chaque date une seule fois. Vérifiez puis enregistrez de nouveau.' },
+  no_manager: { en: 'This new hire has no onboarding manager yet. Please contact HR.', fr: 'Cette nouvelle recrue n\'a pas encore de gestionnaire d\'accueil. Veuillez communiquer avec les RH.' },
 };
 const fail = (error: string, status: number) => json({ ok: false, error, message: MSG[error] }, status);
 /* built with the number, so the one message that carries a figure sits beside the static table */
@@ -163,9 +179,13 @@ function onCellBoundary(ms: number, g: Grid): boolean {
 /* ---------- the rows behind a link ---------- */
 const OPEN = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // a card in any other stage is closed to this link
 type Cand = { id: number; name: string; role: string; status: string; summary: string; notes: string; owner: string | null; accepted_on: string | null; offer_respond_by: string | null; close_reason: string | null };
-type Flow = { id: number; candidate_id: number; status: string; manager_member_id: number | null; manager_link_member_id: number | null; call_at: string | null; one_on_one_at: string | null; pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null };
+type Flow = {
+  id: number; candidate_id: number; status: string; manager_member_id: number | null; manager_link_member_id: number | null; call_at: string | null; one_on_one_at: string | null;
+  pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null;
+  created_at?: string | null; proposed_call_at?: string | null; proposed_one_on_one_at?: string | null; proposed_by?: string | null; proposed_at?: string | null; hire_answer?: string | null;
+};
 const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason';
-const FLOW_COLS = 'id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at';
+const FLOW_COLS = 'id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer';
 type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null };
 
 /* a read that fails is not a link that fails: it throws, and the handler answers 503 */
@@ -230,11 +250,13 @@ async function view(l: Link) {
   const answered = answerOf(l.cand);
   const closed = shut(l);
   let first = firstName(l.cand.name), hire: string | undefined;
+  let extra: Record<string, unknown> = {};
   if (l.kind === 'manager') {
     hire = first;
-    const person = l.flow?.manager_link_member_id ?? l.flow?.manager_member_id;   // who got this link; a default manager has no manager_member_id before Start
-    const { data: m } = person ? await svc.from('team_members').select('name').eq('id', person).maybeSingle() : { data: null };
-    first = firstName((m as { name?: string } | null)?.name);
+    const m = await managerRow(l);   // the flow's manager; before wave275 a default manager had no manager_member_id before Start, so then whoever got the link
+    first = firstName(m?.name);
+    const mode = await modeOf(l);
+    extra = mode === 'propose' ? { mode, ...(await proposeView(l, m)) } : { mode };
   }
   const grid = l.kind === 'password' ? null : await gridWindow();
   const inWindow = new Set(grid ? grid.slots : []);   // saved slots that have since started, or fell out of the window, are not shown
@@ -242,8 +264,173 @@ async function view(l: Link) {
   return {
     ok: true, kind: l.kind, first, ...(hire !== undefined ? { hire } : {}), role: l.cand.role, lang: l.kind === 'manager' ? 'en' : langOf(l.cand),
     answered, closed, late, booked: booked(l), callBooked: !!l.flow?.call_at, grid, slotsSaved: (await savedSlots(l)).filter((s) => inWindow.has(s)),
+    ...extra,
     ...(closed ? { message: MSG.closed } : {}),
   };
+}
+
+/* ---------- wave275: the manager's availability and the proposal ---------- */
+type Member = { id: number; name: string | null; email: string | null; availability?: unknown; availability_at?: string | null };
+const DEFAULT_AVAILABILITY = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: TZ };
+const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const STALE_DAYS = 30, BUSY_DAYS = 21, MAX_BLOCKS = 12, MAX_EXCEPT = 120;
+const managerIdOf = (f: Flow | null) => (f ? f.manager_member_id ?? f.manager_link_member_id ?? null : null);
+async function managerRow(l: Link): Promise<Member | null> {
+  const id = managerIdOf(l.flow);
+  if (id == null) return null;
+  const { data, error } = await svc.from('team_members').select('id, name, email, availability, availability_at').eq('id', id).maybeSingle();
+  if (error) throw new Error('manager: ' + error.message);
+  return (data as Member | null) || null;
+}
+async function settings(keys: string[]): Promise<Map<string, string>> {
+  const { data, error } = await svc.from('app_config').select('key, value').in('key', keys);
+  if (error) throw new Error('settings: ' + error.message);
+  return new Map(((data || []) as Array<{ key: string; value: string }>).map((r) => [r.key, String(r.value ?? '').trim()]));
+}
+/* a wave271 flow keeps its 1-on-1 grid: created before the release (onboard_v2_since), or, with no release time yet, accepted with nothing proposed */
+async function modeOf(l: Link): Promise<'propose' | 'grid'> {
+  const f = l.flow!;
+  if (f.status === 'offered' || f.proposed_at) return 'propose';
+  const since = Date.parse((await settings(['onboard_v2_since'])).get('onboard_v2_since') || '');
+  if (Number.isNaN(since)) return 'grid';
+  return f.created_at && Date.parse(f.created_at) >= since ? 'propose' : 'grid';
+}
+const positive = (v: string | undefined, def: number) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? n : def; };
+async function proposeView(l: Link, m: Member | null) {
+  const f = l.flow!;
+  const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min', 'onboard_propose_lead_hours']);
+  const callMin = positive(cfg.get('onboard_call_min'), 60), oneMin = positive(cfg.get('onboard_one_on_one_min'), 30);
+  const saved = m && m.availability && typeof m.availability === 'object' ? m.availability : null;
+  const at = m?.availability_at || null;
+  const busy: Array<{ start: string; end: string; title: string; taken?: true }> = [];
+  const now = Date.now(), until = now + BUSY_DAYS * 86400000;
+  const email = String(m?.email || '').trim().toLowerCase();
+  if (email) {
+    const { data, error } = await svc.from('hub_events').select('start_at, end_at, summary').contains('attendee_emails', [email]).neq('status', 'cancelled')
+      .lt('start_at', new Date(until).toISOString()).gt('end_at', new Date(now).toISOString());
+    if (error) throw new Error('events: ' + error.message);
+    for (const e of (data || []) as Array<{ start_at: string; end_at: string; summary: string | null }>) {
+      const s = normal(e.start_at), en = normal(e.end_at);
+      if (s && en) busy.push({ start: s, end: en, title: String(e.summary || '') });
+    }
+  }
+  if (m) {   // the manager's other new hires: shown so the page can grey them; onboard-run refuses them (taken) whatever the page shows
+    const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at')
+      .or('manager_member_id.eq.' + m.id + ',manager_link_member_id.eq.' + m.id);
+    if (error) throw new Error('other flows: ' + error.message);
+    const rows = ((data || []) as Array<Record<string, unknown>>).filter((x) => Number(x.id) !== f.id && x.status !== 'backed_out' && Number(x.manager_member_id ?? x.manager_link_member_id) === m.id);
+    if (rows.length) {
+      const { data: cs, error: cErr } = await svc.from('hub_candidates').select('id, status').in('id', rows.map((x) => x.candidate_id));
+      if (cErr) throw new Error('other cards: ' + cErr.message);
+      const shutCards = new Set(((cs || []) as Array<{ id: number; status: string }>).filter((c) => c.status === 'declined' || c.status === 'withdrawn').map((c) => String(c.id)));
+      for (const x of rows) {
+        if (shutCards.has(String(x.candidate_id))) continue;
+        for (const [col, len] of [['call_at', callMin], ['proposed_call_at', callMin], ['one_on_one_at', oneMin], ['proposed_one_on_one_at', oneMin]] as Array<[string, number]>) {
+          const s = normal(x[col]);
+          if (!s || Date.parse(s) + len * 60000 <= now || Date.parse(s) >= until) continue;
+          busy.push({ start: s, end: stamp(Date.parse(s) + len * 60000), title: '', taken: true });
+        }
+      }
+    }
+  }
+  busy.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+  return {
+    proposal: f.proposed_at ? { call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at), by: f.proposed_by ?? null, at: normal(f.proposed_at) } : null,   // instants as the grid's cells are written
+    availability: saved || DEFAULT_AVAILABILITY, availabilityAt: at,
+    availabilityStale: !saved || !at || Date.parse(at) < now - STALE_DAYS * 86400000,
+    busy, lengths: { callMin, oneMin }, leadHours: positive(cfg.get('onboard_propose_lead_hours'), 48),
+    hireAccepted: !!l.cand.accepted_on, hireAnswer: f.hire_answer ?? null,
+  };
+}
+
+/* the database's own rule (wa275_availability_ok), checked here so a bad value is a plain 400, not a failed save; blocks come back in order and tz is set */
+const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
+function blocksOk(v: unknown): Array<[string, string]> | null {
+  if (!Array.isArray(v) || v.length > MAX_BLOCKS) return null;
+  const out: Array<[string, string]> = [];
+  for (const b of v) {
+    if (!Array.isArray(b) || b.length !== 2 || typeof b[0] !== 'string' || typeof b[1] !== 'string') return null;
+    const a = HM.exec(b[0]), z = HM.exec(b[1]);
+    if (!a || !z || Number(a[2]) % 5 || Number(z[2]) % 5) return null;
+    if (Number(a[1]) * 60 + Number(a[2]) >= Number(z[1]) * 60 + Number(z[2])) return null;
+    out.push([b[0], b[1]]);
+  }
+  return out.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0));
+}
+const realDate = (s: unknown) => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number), t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+};
+export function cleanAvailability(v: unknown): { weekly: Record<string, Array<[string, string]>>; except: Array<{ date: string; free: Array<[string, string]> }>; tz: string } | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  if (Object.keys(o).some((k) => !['weekly', 'except', 'tz'].includes(k))) return null;
+  if ('tz' in o && o.tz !== TZ) return null;
+  const weekly: Record<string, Array<[string, string]>> = {};
+  if ('weekly' in o) {
+    if (!o.weekly || typeof o.weekly !== 'object' || Array.isArray(o.weekly)) return null;
+    for (const [k, b] of Object.entries(o.weekly as Record<string, unknown>)) {
+      if (!WEEKDAYS.includes(k)) return null;
+      const list = blocksOk(b);
+      if (!list) return null;
+      weekly[k] = list;
+    }
+  }
+  const except: Array<{ date: string; free: Array<[string, string]> }> = [];
+  if ('except' in o) {
+    if (!Array.isArray(o.except) || o.except.length > MAX_EXCEPT) return null;
+    const seen = new Set<string>();
+    for (const e of o.except) {
+      if (!e || typeof e !== 'object' || Array.isArray(e)) return null;
+      const r = e as Record<string, unknown>;
+      if (Object.keys(r).some((k) => k !== 'date' && k !== 'free') || !realDate(r.date) || seen.has(String(r.date))) return null;
+      const free = blocksOk(r.free);
+      if (!free) return null;
+      seen.add(String(r.date));
+      except.push({ date: String(r.date), free });
+    }
+    except.sort((a, b) => (a.date < b.date ? -1 : 1));
+  }
+  return { weekly, except, tz: TZ };
+}
+
+async function saveAvailability(l: Link, value: unknown) {
+  if (l.kind !== 'manager') return fail('wrong_link', 400);
+  if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
+  const id = managerIdOf(l.flow);
+  if (id == null) return fail('no_manager', 409);
+  const availability = cleanAvailability(value);
+  if (!availability) return fail('bad_availability', 400);
+  const at = new Date().toISOString();
+  const { data, error } = await svc.from('team_members').update({ availability, availability_at: at }).eq('id', id).select('id');
+  if (error || !(data as unknown[] | null)?.length) return fail('save', 500);
+  return json({ ok: true, availability, availabilityAt: at, availabilityStale: false });
+}
+
+/* the proposal: onboard-run holds the rules and the save; this only checks the link and relays */
+async function relayPropose(l: Link, callAt: unknown, oneAt: unknown) {
+  if (l.kind !== 'manager') return fail('wrong_link', 400);
+  if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
+  if ((await modeOf(l)) !== 'propose') return fail('wrong_link', 400);   // a wave271 flow: its manager marks the 1-on-1 grid instead
+  const { data: sec } = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
+  if (!sec) return fail('unavailable', 503);
+  let res: Response;
+  try {
+    res = await fetch(SUPABASE_URL + '/functions/v1/onboard-run', {
+      method: 'POST', signal: AbortSignal.timeout(25000),
+      headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec), Authorization: 'Bearer ' + ANON_KEY },
+      body: JSON.stringify({ action: 'propose', flow_id: l.flow!.id, call_at: callAt ?? null, one_on_one_at: oneAt ?? null, by: 'manager' }),
+    });
+  } catch (_) { return fail('unavailable', 503); }
+  // deno-lint-ignore no-explicit-any
+  const j: any = await res.json().catch(() => null);
+  if (res.ok && j?.ok) return json({ ok: true, repeated: !!j.repeated, proposal: j.proposal, hireEmailed: !!j.hire_emailed, ...(j.practice ? { practice: true } : {}) });
+  if (j && typeof j.error === 'string' && j.messages?.en && j.messages?.fr) {
+    return json({ ok: false, error: j.error, message: { en: String(j.messages.en), fr: String(j.messages.fr) }, ...(j.which ? { which: j.which } : {}) }, res.status >= 400 ? res.status : 409);
+  }
+  console.error('onboard-link: onboard-run propose said ' + res.status + ' ' + String(j?.error || ''));
+  return fail('unavailable', 503);
 }
 
 const esc = (s: string) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -325,12 +512,13 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   let token = url.searchParams.get('t') || '';
   let a = '';
-  let slots: unknown;
+  // deno-lint-ignore no-explicit-any
+  let body: any = {};
   if (req.method === 'POST') {
-    const body = await req.json().catch(() => ({}));
+    body = await req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object') body = {};
     token = String(body.t || token);
     a = String(body.a || '');
-    slots = body.slots;
   } else if (req.method !== 'GET') {
     return json({ error: 'method' }, 405);
   }
@@ -339,9 +527,11 @@ Deno.serve(async (req: Request) => {
     if (!link) return fail('bad_link', 404);
     if (req.method === 'GET') return json(await view(link));
 
-    if (!['accept', 'decline', 'grid', 'password'].includes(a)) return fail('answer', 400);
+    if (!['accept', 'decline', 'grid', 'password', 'availability', 'propose'].includes(a)) return fail('answer', 400);
     if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
-    if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : await saveGrid(link, slots);
+    if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : await saveGrid(link, body.slots);
+    if (a === 'availability') return await saveAvailability(link, body.availability);
+    if (a === 'propose') return await relayPropose(link, body.call_at, body.one_on_one_at);
     return link.kind === 'offer' ? await answer(link, a as 'accept' | 'decline') : fail('wrong_link', 400);
   } catch (e) {
     console.error('onboard-link: ' + String((e as Error)?.message || e));

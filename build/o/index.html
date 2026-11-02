@@ -16,7 +16,14 @@
      ?a=accept or ?a=decline (the email buttons) only highlight that button (Accept also takes the focus; Decline never does, so a
      stray Enter cannot decline), and the person still presses it, so a mail scanner that opens the link answers nothing. If the
      server cannot be reached the page says so and offers to try again; it only says a link does not work when the function says so. The new hire's grid needs grid.minHours hours (the function's onboard_grid_min_hours, 10 by default) before Save is enabled: the counter reads "N of M hours marked" and one plain sentence says why Save waits; the manager's grid has no minimum. English and French (?l=fr, else the function's lang). Grid times come from the instants
-     the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10. -->
+     the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10.
+     wave275 (Task 2, 02/11/26): a manager link in mode propose shows the manager's own page instead of the 1-on-1 grid: first a notice when their
+     availability is missing or more than 30 days old ("Please confirm your availability: it was last set on <date>"), then their weekly blocks
+     (each weekday: start and end times, Remove, Add a block) and exceptions by date (Add a date, Remove this date; no blocks means not available
+     that day), saved with Save availability; then the two picks, "Onboarding call (60 min)" and "1-on-1 (30 min)", each a click on a cell of the
+     next 14 days. A cell that cannot start the meeting being picked (outside the saved hours, under the lead time, over a hub@ meeting or another
+     new hire's times, or over the other pick) is greyed and disabled, with a legend; onboard-run checks again when "Propose these times" is pressed,
+     and its refusal shows in the page's language. A wave271 flow (mode grid, or no mode) keeps the grid as it was. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
   * { box-sizing: border-box; }
@@ -72,6 +79,41 @@
   .bar .quiet { width: auto; flex: 0 0 auto; }
   .need { flex: 1 1 100%; margin: 0; font-size: 15px; color: var(--muted); }
   .saved { background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin: 10px 0 0; flex: 1 1 100%; }
+  /* wave275: the manager's availability editor and the two picks */
+  .sec { max-width: 680px; }
+  h2 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 27px; line-height: 1.1; margin: 34px 0 8px; color: var(--green); }
+  h3 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 21px; margin: 22px 0 4px; color: var(--green); }
+  .stale { background: #FCEFDD; border: 1px solid #E9C995; border-radius: 12px; padding: 12px 16px; font-size: 16px; font-weight: 500; margin: 4px 0 14px; }
+  .wd { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .wd:last-child { border-bottom: 1px solid var(--line); }
+  .wdn { flex: 0 0 116px; font-weight: 600; padding-top: 8px; }
+  .blocks { flex: 1 1 320px; min-width: 0; }
+  .blk { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 6px; }
+  .blk input, .exd input { font: 500 16px 'Space Grotesk', sans-serif; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; min-width: 0; }
+  .blk input { width: 8.4em; }
+  .link { background: none; border: 0; padding: 6px 4px; color: var(--green); font: 500 15px 'Space Grotesk', sans-serif; text-decoration: underline; cursor: pointer; border-radius: 6px; }
+  .link.rm { color: var(--muted); }
+  .none { display: inline-block; color: var(--muted); font-size: 15px; padding: 7px 10px 7px 0; }
+  .ex { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
+  .exd { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin: 0 0 8px; }
+  .btn.inline { display: inline-block; width: auto; padding: 14px 28px; margin: 18px 0 6px; }
+  #avnote.need, #avnote.saved { margin: 4px 0 0; }
+  .picks { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 8px; }
+  .pick { flex: 1 1 250px; text-align: left; background: #fff; color: var(--ink); border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; font: 500 15px 'Space Grotesk', sans-serif; cursor: pointer; }
+  .pick b { display: block; font-weight: 600; font-size: 16px; }
+  .pick span { color: var(--muted); }
+  .pick[aria-pressed="true"] { border-color: var(--green); background: var(--soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; color: var(--muted); margin: 6px 0 0; }
+  .sw { display: inline-block; width: 16px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; border: 1px solid var(--line); }
+  .sw-free { background: var(--cream); }
+  .sw-call, .cell.pk-call, .cell.pk-call:hover { background: var(--green); border-color: var(--green); color: var(--cream); }
+  .sw-one, .cell.pk-one, .cell.pk-one:hover { background: #3E8C7A; border-color: #3E8C7A; color: #fff; }
+  .sw-busy, .cell.busy, .cell.busy:hover { background: repeating-linear-gradient(45deg, #efd9d2, #efd9d2 4px, #e4c6bc 4px, #e4c6bc 8px); border-color: #dcbcb1; color: #9a6a5e; }
+  .sw-off { background: repeating-linear-gradient(135deg, #f1eee7, #f1eee7 4px, #e8e4da 4px, #e8e4da 8px); }
+  .cell[disabled] { cursor: not-allowed; }
+  .cell .k { font-size: 11px; font-weight: 600; }
+  .pgrid .cell { position: relative; }
+  .pick:focus-visible, .link:focus-visible, .blk input:focus-visible, .exd input:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   @media (max-width: 759px) {
     .card { margin-top: 20px; }
     h1 { font-size: 32px; }
@@ -86,6 +128,11 @@
     .cell { height: 46px; margin: 0; border-radius: 10px; }
     .cell .t { display: inline; }
     .bar .btn { flex: 1 1 auto; }
+    .wdn { flex: 1 1 100%; padding-top: 0; }
+    .blocks { flex: 1 1 100%; }
+    .blk { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 6px; }
+    .blk input { width: 100%; font-size: 15px; padding: 7px 6px; }
+    .pgrid .cell .k { display: block; font-size: 10px; line-height: 1; }
   }
 </style>
 </head>
@@ -429,6 +476,339 @@
     }).catch(function () { again(t().oops); });
   }
 
+  /* ---------- wave275: the manager's page (mode propose): their availability, then the two times ---------- */
+  var P = {
+    en: {
+      title: 'Welfare Avenue: propose times',
+      intro: 'Please propose two times for <strong>{hire}</strong>, who is joining us as <strong>{role}</strong>: the onboarding call ({callMin} minutes, their first day) and your 1-on-1 with them ({oneMin} minutes).',
+      staleAt: 'Please confirm your availability: it was last set on {date}. Check the hours below and press Save availability.',
+      staleNone: 'Please confirm your availability: it has not been set yet, so the Hub is using Monday to Friday, 9 am to 5 pm. Check the hours below and press Save availability.',
+      avH: 'Your availability', avNote: 'Toronto time (Eastern). The hours you are usually free for onboarding calls and 1-on-1s. The times you can pick below come from these hours.',
+      to: 'to', remove: 'Remove', addBlock: 'Add a block', notAvail: 'Not available',
+      exH: 'Exceptions', exNote: 'A date that is not like your usual week: not available at all, or other hours.', exNone: 'No exceptions.', addEx: 'Add a date', removeEx: 'Remove this date', exDate: 'Date', exOff: 'Not available that day',
+      start: '{d}, block {n}, start', end: '{d}, block {n}, end',
+      saveAv: 'Save availability', avSaved: 'Saved. The times below now follow these hours.', avDirty: 'You have changes that are not saved yet. Save them to use them below.',
+      avBadTime: 'Each block needs a start and an end, with the end after the start.', avBadDate: 'Each exception needs a date, and each date only once.',
+      pickH: 'Pick the times', pickNote: 'Choose a meeting, then click a free time. You can pick times at least {lead} hours from now, inside your hours, and clear of your meetings.',
+      call: 'Onboarding call ({n} min)', one: '1-on-1 ({n} min)', notPicked: 'Not picked yet',
+      lgFree: 'Free', lgCall: 'Onboarding call', lgOne: '1-on-1', lgBusy: 'A meeting, or another new hire', lgOff: 'Outside your hours, or too soon',
+      propose: 'Propose these times', needBoth: 'Pick both times first.',
+      proposed: 'Proposed. {hire} will get these times by email once they accept the offer.', proposedSent: 'Proposed. {hire} has been emailed these times to say yes or no.',
+      proposedSame: 'These times were already proposed. Nothing changed.', proposedPractice: 'Proposed. This is a practice card, so nobody is emailed.',
+      current: 'Proposed so far: the onboarding call on {call} and the 1-on-1 on {one}. You can change them until {hire} answers.',
+      yes: '{hire} said yes to these times, so they are booked: the onboarding call on {call} and the 1-on-1 on {one}. To change them, open their card in Onboarding in the Hub.',
+      no: '{hire} said no to the times proposed. You can propose new ones below, or pick from their card in Onboarding.',
+      takenT: 'Another new hire', offT: 'Not available', callT: 'Call', oneT: '1-on-1',
+      days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    },
+    fr: {
+      title: 'Welfare Avenue: proposer des heures',
+      intro: 'Veuillez proposer deux heures pour <strong>{hire}</strong>, qui se joint à nous comme <strong>{role}</strong>: l’appel d’accueil ({callMin} minutes, sa première journée) et votre rencontre individuelle ({oneMin} minutes).',
+      staleAt: 'Veuillez confirmer vos disponibilités: elles ont été indiquées pour la dernière fois le {date}. Vérifiez les heures ci-dessous et appuyez sur Enregistrer mes disponibilités.',
+      staleNone: 'Veuillez confirmer vos disponibilités: elles n’ont pas encore été indiquées, alors le Hub utilise du lundi au vendredi, de 9 h à 17 h. Vérifiez les heures ci-dessous et appuyez sur Enregistrer mes disponibilités.',
+      avH: 'Vos disponibilités', avNote: 'Heure de Toronto (Est). Les heures où vous êtes habituellement libre pour les appels d’accueil et les rencontres individuelles. Les heures à choisir plus bas viennent de ces plages.',
+      to: 'à', remove: 'Retirer', addBlock: 'Ajouter une plage', notAvail: 'Non disponible',
+      exH: 'Exceptions', exNote: 'Une date différente de votre semaine habituelle: pas disponible du tout, ou d’autres heures.', exNone: 'Aucune exception.', addEx: 'Ajouter une date', removeEx: 'Retirer cette date', exDate: 'Date', exOff: 'Non disponible ce jour-là',
+      start: '{d}, plage {n}, début', end: '{d}, plage {n}, fin',
+      saveAv: 'Enregistrer mes disponibilités', avSaved: 'Enregistré. Les heures ci-dessous suivent maintenant ces plages.', avDirty: 'Certaines modifications ne sont pas encore enregistrées. Enregistrez-les pour les utiliser plus bas.',
+      avBadTime: 'Chaque plage doit avoir un début et une fin, et la fin doit suivre le début.', avBadDate: 'Chaque exception doit avoir une date, et chaque date une seule fois.',
+      pickH: 'Choisir les heures', pickNote: 'Choisissez une rencontre, puis cliquez sur une heure libre. Vous pouvez choisir des heures au moins {lead} heures plus tard, dans vos plages et en dehors de vos rencontres.',
+      call: 'Appel d’accueil ({n} min)', one: 'Rencontre individuelle ({n} min)', notPicked: 'Pas encore choisie',
+      lgFree: 'Libre', lgCall: 'Appel d’accueil', lgOne: 'Rencontre individuelle', lgBusy: 'Une rencontre, ou une autre nouvelle recrue', lgOff: 'En dehors de vos heures, ou trop tôt',
+      propose: 'Proposer ces heures', needBoth: 'Choisissez d’abord les deux heures.',
+      proposed: 'C’est proposé. {hire} recevra ces heures par courriel une fois l’offre acceptée.', proposedSent: 'C’est proposé. {hire} a reçu ces heures par courriel pour répondre oui ou non.',
+      proposedSame: 'Ces heures étaient déjà proposées. Rien n’a changé.', proposedPractice: 'C’est proposé. Il s’agit d’une fiche d’essai: personne ne reçoit de courriel.',
+      current: 'Proposé pour l’instant: l’appel d’accueil le {call} et la rencontre individuelle le {one}. Vous pouvez les modifier jusqu’à la réponse de {hire}.',
+      yes: '{hire} a dit oui à ces heures: elles sont fixées. L’appel d’accueil le {call} et la rencontre individuelle le {one}. Pour les modifier, ouvrez sa fiche dans Accueil, dans le Hub.',
+      no: '{hire} a dit non aux heures proposées. Vous pouvez en proposer d’autres ci-dessous, ou choisir depuis sa fiche dans Accueil.',
+      takenT: 'Une autre nouvelle recrue', offT: 'Non disponible', callT: 'Appel', oneT: 'Individuelle',
+      days: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+    }
+  };
+  function p() { return P[lang]; }
+  function say(s, o) {   // every {key} in s, escaped
+    o = o || {};
+    return String(s).replace(/\{(\w+)\}/g, function (_, k) {
+      var v = o[k];
+      if (k === 'role' && lang === 'fr') v = ROLE_FR[v] || v;
+      return esc(v == null ? '' : v);
+    }).replace(/([ap]\.m\.)\./g, '$1');   // a time that ends a sentence ("11:30 a.m.") takes no second full stop
+  }
+  var WD = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  var WALL = new Intl.DateTimeFormat('en-US', { timeZone: TZ, hourCycle: 'h23', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  function wallOf(ms) {   // the Toronto wall clock of an instant: date, weekday, minutes since midnight
+    var q = {};
+    WALL.formatToParts(new Date(ms)).forEach(function (x) { if (x.type !== 'literal') q[x.type] = x.value; });
+    return { date: q.year + '-' + q.month + '-' + q.day, wd: String(q.weekday).toLowerCase().slice(0, 3), min: Number(q.hour) * 60 + Number(q.minute) };
+  }
+  function hmMin(s) { var m = /^(\d{2}):(\d{2})$/.exec(String(s || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : NaN; }
+  /* the same reading of the hours as onboard-run (which decides): an exception for the date replaces the weekday; the whole span inside one block */
+  function insideHours(av, s, e) {
+    var a = wallOf(s), b = wallOf(e);
+    if (a.date !== b.date) return false;
+    var ex = (av.except || []).filter(function (x) { return x.date === a.date; })[0];
+    var list = ex ? ex.free : (av.weekly || {})[a.wd];
+    return (list || []).some(function (blk) { return hmMin(blk[0]) <= a.min && b.min <= hmMin(blk[1]); });
+  }
+  function norm(av) {
+    av = av || {};
+    var w = {};
+    WD.forEach(function (d) { w[d] = (((av.weekly || {})[d]) || []).map(function (b) { return [String(b[0] || ''), String(b[1] || '')]; }); });
+    return { weekly: w, except: (av.except || []).map(function (x) { return { date: String(x.date || ''), free: (x.free || []).map(function (b) { return [String(b[0] || ''), String(b[1] || '')]; }) }; }) };
+  }
+  function dirty() { return JSON.stringify(norm(S.av)) !== JSON.stringify(norm(S.avSaved)); }
+  function whenLong(iso) { return fmt({ weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
+  function whenShort(iso) { return fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
+
+  function blocksHtml(path, list, dayName) {
+    var tx = p(), h = '';
+    if (!list.length) h += '<span class="none">' + esc(path.charAt(0) === 'x' ? tx.exOff : tx.notAvail) + '</span>';
+    list.forEach(function (b, i) {
+      h += '<div class="blk"><input type="time" step="300" value="' + esc(b[0]) + '" data-path="' + path + '" data-i="' + i + '" data-k="0" aria-label="' + esc(say(tx.start, { d: dayName, n: i + 1 })) + '">' +
+        '<span>' + esc(tx.to) + '</span><input type="time" step="300" value="' + esc(b[1]) + '" data-path="' + path + '" data-i="' + i + '" data-k="1" aria-label="' + esc(say(tx.end, { d: dayName, n: i + 1 })) + '">' +
+        '<button type="button" class="link rm" data-act="rm" data-path="' + path + '" data-i="' + i + '">' + esc(tx.remove) + '</button></div>';
+    });
+    return h + '<button type="button" class="link" data-act="add" data-path="' + path + '">' + esc(tx.addBlock) + '</button>';
+  }
+  function listAt(path) { return path.charAt(0) === 'w' ? S.av.weekly[path.slice(2)] : S.av.except[Number(path.slice(2))].free; }
+  function editorHtml() {
+    var tx = p(), h = '<div class="week">';
+    WD.forEach(function (d, i) { h += '<div class="wd"><div class="wdn">' + esc(tx.days[i]) + '</div><div class="blocks">' + blocksHtml('w:' + d, S.av.weekly[d], tx.days[i]) + '</div></div>'; });
+    h += '</div><h3>' + tx.exH + '</h3><p class="note">' + tx.exNote + '</p>';
+    if (!S.av.except.length) h += '<p class="note" id="exnone">' + tx.exNone + '</p>';
+    S.av.except.forEach(function (x, i) {
+      h += '<div class="ex"><label class="exd">' + esc(tx.exDate) + ' <input type="date" value="' + esc(x.date) + '" data-x="' + i + '"></label>' +
+        '<div class="blocks">' + blocksHtml('x:' + i, x.free, x.date || tx.exDate) + '</div><button type="button" class="link rm" data-act="rmx" data-x="' + i + '">' + esc(tx.removeEx) + '</button></div>';
+    });
+    return h + '<button type="button" class="link" data-act="addx">' + esc(tx.addEx) + '</button>';
+  }
+  function paintEditor() {
+    var box = document.getElementById('editor'); if (!box) return;
+    box.innerHTML = editorHtml();
+    paintAvNote();
+  }
+  function paintAvNote() {
+    var n = document.getElementById('avnote'); if (!n) return;
+    if (S.avMsg) { n.textContent = S.avMsg; n.className = 'saved'; }
+    else if (dirty()) { n.textContent = p().avDirty; n.className = 'need'; }
+    else n.className = 'hide';
+  }
+  function avProblem() {
+    var bad = false, seen = {};
+    WD.forEach(function (d) { S.av.weekly[d].forEach(function (b) { if (!(hmMin(b[0]) < hmMin(b[1]))) bad = true; }); });
+    if (bad) return p().avBadTime;
+    for (var i = 0; i < S.av.except.length; i++) {
+      var x = S.av.except[i];
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(x.date) || seen[x.date]) return p().avBadDate;
+      seen[x.date] = true;
+      for (var k = 0; k < x.free.length; k++) if (!(hmMin(x.free[k][0]) < hmMin(x.free[k][1]))) return p().avBadTime;
+    }
+    return '';
+  }
+  function wireEditor() {
+    var box = document.getElementById('editor');
+    box.addEventListener('change', function (e) {
+      var el = e.target;
+      if (el.hasAttribute('data-x')) S.av.except[Number(el.getAttribute('data-x'))].date = el.value;
+      else if (el.hasAttribute('data-path')) listAt(el.getAttribute('data-path'))[Number(el.getAttribute('data-i'))][Number(el.getAttribute('data-k'))] = el.value;
+      S.avMsg = ''; hideErr('averr'); paintAvNote();
+    });
+    box.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('button[data-act]') : null; if (!b) return;
+      var act = b.getAttribute('data-act');
+      if (act === 'add') { var l = listAt(b.getAttribute('data-path')); l.push(l.length ? ['18:00', '21:00'] : ['09:00', '17:00']); }   // a first block is a working day; a second, an evening
+      else if (act === 'rm') listAt(b.getAttribute('data-path')).splice(Number(b.getAttribute('data-i')), 1);
+      else if (act === 'addx') S.av.except.push({ date: '', free: [] });
+      else if (act === 'rmx') S.av.except.splice(Number(b.getAttribute('data-x')), 1);
+      S.avMsg = ''; hideErr('averr'); paintEditor();
+    });
+    document.getElementById('saveav').addEventListener('click', saveAvailability);
+  }
+  function hideErr(id) { var e = document.getElementById(id); if (e) e.className = 'err hide'; }
+  function showErrAt(id, msg) { var e = document.getElementById(id); if (e) { e.textContent = msg; e.className = 'err'; } }
+  function saveAvailability() {
+    if (S.busy) return;
+    var problem = avProblem();
+    if (problem) { showErrAt('averr', problem); return; }
+    S.busy = true;
+    var btn = document.getElementById('saveav'); btn.disabled = true;
+    var body = norm(S.av);
+    post({ t: token, a: 'availability', availability: { weekly: body.weekly, except: body.except, tz: TZ } }).then(function (r) {
+      S.busy = false; btn.disabled = false;
+      var j = r.j;
+      if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.ok) {
+        S.avSaved = norm(j.availability); S.av = norm(j.availability);
+        S.j.availability = j.availability; S.j.availabilityAt = j.availabilityAt; S.j.availabilityStale = false;
+        S.avMsg = p().avSaved;
+        var st = document.getElementById('stale'); if (st) st.className = 'hide';
+        paintEditor(); paintPicks();
+        return;
+      }
+      showErrAt('averr', serverMsg(j) || t().oops);
+    }).catch(function () { S.busy = false; btn.disabled = false; showErrAt('averr', t().oops); });
+  }
+
+  /* the two picks over the window's cells: a cell can start the meeting being picked when its whole span is inside the saved hours, at least
+     leadHours ahead, clear of busy times and of the other pick. onboard-run checks again when the times are proposed. */
+  function spanOf(which, iso) { var s = Date.parse(iso); return [s, s + (which === 'call' ? S.callMin : S.oneMin) * 60000]; }
+  function why(which, iso) {
+    var sp = spanOf(which, iso), j = S.j;
+    if (sp[0] < Date.now() + S.lead * 3600000) return 'off';
+    if (!insideHours(S.avSaved, sp[0], sp[1])) return 'off';
+    if ((j.busy || []).some(function (b) { return sp[0] < Date.parse(b.end) && Date.parse(b.start) < sp[1]; })) return 'busy';
+    var other = which === 'call' ? 'one' : 'call';
+    if (S.picked[other]) { var o = spanOf(other, S.picked[other]); if (sp[0] < o[1] && o[0] < sp[1]) return 'off'; }
+    return '';
+  }
+  function busyTitle(iso) {
+    var s = Date.parse(iso), e = s + S.cellMin * 60000;
+    var hit = (S.j.busy || []).filter(function (b) { return s < Date.parse(b.end) && Date.parse(b.start) < e; })[0];
+    return hit ? (hit.taken ? p().takenT : hit.title || p().lgBusy) : '';
+  }
+  function covered(which, iso) { if (!S.picked[which]) return false; var sp = spanOf(which, S.picked[which]), s = Date.parse(iso); return s >= sp[0] && s < sp[1]; }
+  function locked() { return S.j.hireAnswer === 'yes'; }
+  function paintPicks() {
+    var m = S.model, tx = p(), perDay = {};
+    ['call', 'one'].forEach(function (w) {
+      var b = document.getElementById('pick-' + w); if (!b) return;
+      b.setAttribute('aria-pressed', S.pick === w ? 'true' : 'false');
+      b.querySelector('span').textContent = S.picked[w] ? whenShort(S.picked[w]) : tx.notPicked;
+      if (S.picked[w]) { var d = parts(S.picked[w]).date; perDay[d] = (perDay[d] || 0) + 1; }
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('[data-slot]'), function (c) {
+      var iso = c.getAttribute('data-slot'), k = c.querySelector('.k');
+      var inCall = covered('call', iso), inOne = covered('one', iso), reason = locked() ? 'off' : why(S.pick, iso);
+      var cls = 'cell', label = '', title = '';
+      if (inCall || inOne) { cls += inCall ? ' pk-call' : ' pk-one'; label = inCall ? tx.callT : tx.oneT; }
+      else if (reason === 'busy') { cls += ' busy'; title = busyTitle(iso) || tx.lgBusy; }
+      else if (reason) { cls += ' off'; title = tx.offT; }
+      var off = locked() || (!!reason && !(S.pick === 'call' ? inCall : inOne));
+      if (c.className !== cls) c.className = cls;
+      c.disabled = off;
+      c.setAttribute('aria-pressed', inCall || inOne ? 'true' : 'false');
+      if (title) c.title = title; else c.removeAttribute('title');
+      k.textContent = label;
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.chip'), function (c) {
+      var n = perDay[c.getAttribute('data-day')] || 0, b = c.querySelector('i');
+      b.textContent = n; b.className = n ? '' : 'hide';
+      c.classList.toggle('on', Number(c.getAttribute('data-i')) === S.active);
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.day'), function (d, i) { d.classList.toggle('on', i === S.active); });
+    var go = document.getElementById('propose'); if (go) go.disabled = S.busy || locked() || !S.picked.call || !S.picked.one;
+    var need = document.getElementById('needboth'); if (need) need.className = !locked() && (!S.picked.call || !S.picked.one) ? 'need' : 'need hide';
+    var msg = document.getElementById('pmsg'); if (msg) { if (S.pmsg) { msg.textContent = S.pmsg; msg.className = 'saved'; } else msg.className = 'saved hide'; }
+  }
+  function statusHtml() {
+    var j = S.j, tx = p(), pr = j.proposal;
+    if (!pr) return '';
+    var o = { hire: j.hire, call: whenLong(pr.call_at), one: whenLong(pr.one_on_one_at) };
+    if (j.hireAnswer === 'yes') return '<div class="ok" id="pstatus"><p>' + say(tx.yes, o) + '</p></div>';
+    if (j.hireAnswer === 'no') return '<p class="hint" id="pstatus">' + say(tx.no, o) + '</p>';
+    return '<p class="hint" id="pstatus">' + say(tx.current, o) + '</p>';
+  }
+  function viewPropose() {
+    var j = S.j, tx = p(), m = S.model;
+    document.title = tx.title; document.documentElement.lang = lang;
+    card.className = 'card wide';
+    var h = '<div class="sec"><h1 tabindex="-1">' + fill(t().hi, j) + '</h1><p>' + say(tx.intro, { hire: j.hire, role: j.role, callMin: S.callMin, oneMin: S.oneMin }) + '</p>';
+    if (j.availabilityStale) h += '<p class="stale" id="stale" role="note">' + (j.availabilityAt ? say(tx.staleAt, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : tx.staleNone) + '</p>';   // say escapes the date; the sentence is the page's own
+    h += '<h2>' + tx.avH + '</h2><p class="note">' + tx.avNote + '</p><div id="editor"></div>' +
+      '<button class="btn inline" id="saveav" type="button">' + tx.saveAv + '</button><p id="avnote" class="hide" role="status"></p><p id="averr" class="err hide" role="alert"></p>' +
+      '<h2>' + tx.pickH + '</h2>' + statusHtml() + '<p class="note">' + say(tx.pickNote, { lead: S.lead }) + '</p>' +
+      '<div class="picks" id="picks"><button type="button" class="pick" id="pick-call" data-pick="call" aria-pressed="false"><b><i class="sw sw-call"></i>' + esc(say(tx.call, { n: S.callMin })) + '</b><span></span></button>' +
+      '<button type="button" class="pick" id="pick-one" data-pick="one" aria-pressed="false"><b><i class="sw sw-one"></i>' + esc(say(tx.one, { n: S.oneMin })) + '</b><span></span></button></div>' +
+      '<p class="legend"><span><i class="sw sw-free"></i>' + tx.lgFree + '</span><span><i class="sw sw-call"></i>' + tx.lgCall + '</span><span><i class="sw sw-one"></i>' + tx.lgOne + '</span><span><i class="sw sw-busy"></i>' + tx.lgBusy + '</span><span><i class="sw sw-off"></i>' + tx.lgOff + '</span></p></div>';
+    if (!m.days.length) { h += '<p>' + t().nothing + '</p>'; card.innerHTML = h; paintEditor(); wireEditor(); return; }
+    h += '<div class="pickzone"><div class="chips" id="chips">' + m.days.map(function (d, i) {   // pickzone: the sticky Propose bar stays with the grid, not over the editor
+      return '<button type="button" class="chip' + (i === S.active ? ' on' : '') + '" data-day="' + esc(d.date) + '" data-i="' + i + '" aria-label="' + esc(fill(t().dayOf, { d: dayLong(d.open) })) + '">' +
+        fmt({ weekday: 'short' }).format(new Date(d.open)) + '<b>' + fmt({ day: 'numeric' }).format(new Date(d.open)) + '</b><i class="hide"></i></button>';
+    }).join('') + '</div>';
+    h += '<div class="grid pgrid" id="grid"><div class="tcol" aria-hidden="true"><div class="dh"></div>' + m.keys.map(function (k) { return '<div class="tl">' + esc(clock(m.sample[k])) + '</div>'; }).join('') + '</div>';
+    m.days.forEach(function (d, i) {
+      h += '<div class="day' + (i === S.active ? ' on' : '') + '" data-d="' + esc(d.date) + '"><div class="dh"><b>' + esc(dayLong(d.open)) + '</b><small>' + esc(fill(t().range, { a: clockShort(d.open), b: clockShort(d.close) })) + '</small></div><div class="cells">';
+      m.keys.forEach(function (k, r) {
+        var iso = m.cellIso[i][r], label = clock(iso || m.sample[k]);
+        h += iso
+          ? '<button type="button" class="cell" data-slot="' + iso + '" aria-label="' + esc(whenShort(iso)) + '"><span class="t">' + esc(label) + '</span><span class="k"></span></button>'
+          : '<button type="button" class="cell off" disabled aria-label="' + esc(tx.offT) + '"><span class="t">' + esc(label) + '</span></button>';
+      });
+      h += '</div></div>';
+    });
+    h += '</div><div class="bar"><button class="btn" id="propose" data-act="propose" type="button">' + tx.propose + '</button><p id="needboth" class="need hide">' + tx.needBoth + '</p>' +
+      '<p id="pmsg" class="saved hide" role="status"></p><p id="perr" class="err hide" role="alert" style="flex:1 1 100%"></p></div></div>';
+    card.innerHTML = h;
+    paintEditor(); wireEditor();
+    wirePicks();
+    paintPicks();
+  }
+  function wirePicks() {
+    document.getElementById('picks').addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('[data-pick]') : null; if (!b) return;
+      S.pick = b.getAttribute('data-pick');
+      if (S.picked[S.pick]) { var i = indexOfDay(parts(S.picked[S.pick]).date); if (i >= 0) S.active = i; }
+      paintPicks();
+    });
+    document.getElementById('grid').addEventListener('click', function (e) {
+      var c = e.target.closest ? e.target.closest('[data-slot]') : null; if (!c || c.disabled || locked()) return;
+      var iso = c.getAttribute('data-slot');
+      if (covered(S.pick, iso)) S.picked[S.pick] = null;   // a pick pressed again is cleared
+      else {
+        S.picked[S.pick] = iso;
+        var other = S.pick === 'call' ? 'one' : 'call';
+        if (!S.picked[other]) S.pick = other;
+      }
+      S.pmsg = ''; hideErr('perr');
+      paintPicks();
+    });
+    document.getElementById('chips').addEventListener('click', function (e) {
+      var c = e.target.closest ? e.target.closest('.chip') : null; if (!c) return;
+      S.active = Number(c.getAttribute('data-i')); paintPicks();
+    });
+    document.getElementById('propose').addEventListener('click', proposeTimes);
+  }
+  function indexOfDay(date) { for (var i = 0; i < S.model.days.length; i++) if (S.model.days[i].date === date) return i; return -1; }
+  function proposeTimes() {
+    if (S.busy || locked() || !S.picked.call || !S.picked.one) return;
+    S.busy = true; paintPicks();
+    post({ t: token, a: 'propose', call_at: S.picked.call, one_on_one_at: S.picked.one }).then(function (r) {
+      S.busy = false;
+      var j = r.j, tx = p();
+      if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.ok) {
+        S.j.proposal = j.proposal;
+        S.pmsg = say(j.practice ? tx.proposedPractice : j.repeated ? tx.proposedSame : j.hireEmailed ? tx.proposedSent : tx.proposed, { hire: S.j.hire });
+        var st = document.getElementById('pstatus'), html = statusHtml();
+        if (st) st.outerHTML = html; else document.getElementById('picks').insertAdjacentHTML('beforebegin', html);
+        paintPicks();
+        return;
+      }
+      if (j && (j.which === 'call' || j.which === 'one_on_one')) { S.pick = j.which === 'call' ? 'call' : 'one'; }
+      paintPicks();
+      showErrAt('perr', serverMsg(j) || t().oops);
+    }).catch(function () { S.busy = false; paintPicks(); showErrAt('perr', t().oops); });
+  }
+  function startPropose(j) {
+    S.model = buildModel(j.grid || { slots: [], days: [] });
+    S.cellMin = Number((j.grid || {}).cellMin) > 0 ? Number(j.grid.cellMin) : 30;
+    S.callMin = Number((j.lengths || {}).callMin) > 0 ? Number(j.lengths.callMin) : 60;
+    S.oneMin = Number((j.lengths || {}).oneMin) > 0 ? Number(j.lengths.oneMin) : 30;
+    S.lead = Number(j.leadHours) > 0 ? Number(j.leadHours) : 48;
+    S.avSaved = norm(j.availability); S.av = norm(j.availability); S.avMsg = '';
+    var pr = j.proposal || {};
+    S.picked = { call: pr.call_at || null, one: pr.one_on_one_at || null };
+    S.pick = S.picked.call && !S.picked.one ? 'one' : 'call';
+    S.pmsg = '';
+    var first = S.picked.call ? indexOfDay(parts(S.picked.call).date) : -1;
+    if (first < 0) {   // on a phone, open on the first day with a time the call can start
+      for (var i = 0; i < S.model.days.length && first < 0; i++) {
+        for (var r = 0; r < S.model.keys.length; r++) { var iso = S.model.cellIso[i][r]; if (iso && !why('call', iso)) { first = i; break; } }
+      }
+    }
+    S.active = first >= 0 ? first : 0;
+  }
+
   /* ---------- load and route ---------- */
   function route(j) {
     S.j = j;
@@ -436,7 +816,7 @@
     if (!forced) lang = pickLang(j.lang) || lang;
     if (j.closed) S.view = 'closed';
     else if (j.kind === 'password') S.view = 'password';
-    else if (j.kind === 'manager') S.view = 'grid';
+    else if (j.kind === 'manager') S.view = j.mode === 'propose' ? 'propose' : 'grid';   // wave275: a wave271 flow (mode grid, or none) keeps its grid
     else if (j.answered === 'decline') { S.view = 'declined'; S.repeated = true; }
     else if (j.answered === 'accept') S.view = 'grid';
     else S.view = 'ask';
@@ -448,12 +828,14 @@
       S.sel = new Set((j.slotsSaved || []).filter(function (s) { return S.model.isoDay[s]; }));
       S.active = 0; S.saved = null;
     }
+    if (S.view === 'propose') startPropose(j);
   }
   function render(focusHeading) {
     paintLang();
     var v = S.view;
     if (v === 'ask') viewAsk(focusHeading === 'initial');
     else if (v === 'grid') viewGrid();
+    else if (v === 'propose') viewPropose();
     else if (v === 'declined') viewDeclined();
     else if (v === 'closed') viewClosed();
     else if (v === 'password') viewPassword();

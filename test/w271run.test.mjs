@@ -1951,3 +1951,273 @@ test('M10: task_done marks a step left to HR as done, with who did it, and ticks
   await s.post({ action: 'backed_out', flow_id: 21, reason: '' });
   assert.equal((await s.post({ action: 'task_done', flow_id: 21, step: 'hub' })).body.error, 'backed_out');
 });
+
+/* ---------- wave275 Task 2: propose {flow_id, call_at, one_on_one_at, by} and hire_times {flow_id} ---------- */
+/* NOW is Tuesday 20/10/26, 08:00 in Toronto (UTC-4). Monday 26/10/26: the call at 10:00 (14:00Z), the 1-on-1 at 11:30 (15:30Z). */
+const P_CALL = '2026-10-26T14:00:00.000Z', P_ONE = '2026-10-26T15:30:00.000Z', NOW_ISO = '2026-10-20T12:00:00.000Z';
+const SECRET = { 'x-wa-secret': 'trigger-secret-for-tests' };
+const SAM_AT = (availability) => [TEAM[0], { ...TEAM[1], availability, availability_at: '2026-10-19T12:00:00Z' }];
+const noDash = (s) => !/—/.test(s) && !/\bAI\b/.test(s);
+async function w275({ cand, fl = {}, config = {}, tables, hr = true, admin = false, manager = false, flows = [], notifyReply } = {}) {
+  const s = await setup({ cand, fl: { manager_member_id: 2, ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', ...config }, tables, hr, admin, notifyReply });
+  s.db.onRpc('wa275_manager_of', (a, _d, w) => { assert.ok(w.jwt, 'the manager check runs as the caller'); assert.equal(Number(a.p_flow), 21); return manager; });
+  for (const f of flows) s.db.rows('hub_onboard_flows').push(f);
+  s.propose = (body = {}, headers) => s.post({ action: 'propose', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, ...body }, headers);
+  s.asLink = (body = {}) => s.propose({ by: 'manager', ...body }, SECRET);
+  return s;
+}
+const refused = (r, code, which) => {
+  assert.equal(r.body.error, code, JSON.stringify(r.body));
+  assert.ok(r.status >= 400, 'a refusal is not a 200');
+  assert.ok(r.body.messages && r.body.messages.en && r.body.messages.fr, 'English and French');
+  assert.equal(r.body.message, r.body.messages.en);
+  assert.ok(noDash(r.body.messages.en + r.body.messages.fr));
+  if (which) assert.equal(r.body.which, which);
+};
+
+test('w275 propose (HR): saves the proposal, tells HR with onboard_answer, and emails the hire who accepted their yes-or-no link', async () => {
+  const s = await w275();
+  const r = await s.propose();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.deepEqual(r.body.proposal, { call_at: P_CALL, one_on_one_at: P_ONE, by: 'hr.person@welfareavenue.com', at: NOW_ISO });
+  assert.equal(r.body.hire_emailed, true);
+  assert.equal(r.body.repeated, false);
+  const f = s.flow();
+  assert.deepEqual([f.proposed_call_at, f.proposed_one_on_one_at, f.proposed_by, f.proposed_at], [P_CALL, P_ONE, 'hr.person@welfareavenue.com', NOW_ISO]);
+  assert.equal(f.call_at, null, 'a proposal books nothing');
+  const n = s.notifies();
+  assert.equal(n.length, 1);
+  assert.equal(n[0].body.event, 'onboard_answer');
+  assert.deepEqual(n[0].body.to, ['ruth.owen@welfareavenue.com']);
+  assert.equal(n[0].body.title, 'hr.person@welfareavenue.com proposed times for Alex Tremblay', 'HR proposing: the proposer is named (their roster name when they have one)');
+  assert.match(n[0].body.text, /proposed times for \*Alex Tremblay\* \(Program Coordinator\): the onboarding call on Monday, October 26, 2026 at 10:00 a\.m\. and the 1-on-1 on Monday, October 26, 2026 at 11:30 a\.m\./);
+  assert.equal(n[0].headers['x-wa-secret'], 'trigger-secret-for-tests');
+  const g = s.gmail();
+  assert.equal(g.length, 1, 'the hire is emailed once');
+  const m = mail(g[0]);
+  assert.equal(m.to, 'alex@example.com');
+  assert.ok(m.bodies.every((b) => b.includes('https://hub.welfareavenue.com/o/' + expectedToken(11))), 'the offer link, which now asks yes or no');
+  assert.ok(noDash(m.subject + m.bodies.join('')));
+  assert.equal(f.setup_ticks.hire_times_at, NOW_ISO, 'recorded under setup_ticks.hire_times_at');
+  assert.ok(s.rows('change_log').some((l) => l.entity_type === 'onboard_flow' && l.field === 'proposed_times' && l.changed_by === 'hr.person@welfareavenue.com'));
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('w275 propose: the mgr link relays with the trigger secret (by manager: the manager\'s roster email); a manager JWT gets in; anyone else is refused', async () => {
+  const link = await w275({ hr: false });
+  const r = await link.asLink();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(link.flow().proposed_by, 'sam.lee@welfareavenue.com');
+  assert.equal(r.body.proposal.by, 'sam.lee@welfareavenue.com');
+  assert.equal(link.notifies()[0].body.title, 'Sam Lee proposed times for Alex Tremblay', 'the text the controller set: <manager> proposed times for <hire>');
+  const wrong = await w275({ hr: false });
+  assert.equal((await wrong.propose({ by: 'manager' }, { 'x-wa-secret': 'not-the-secret' })).status, 401, 'a wrong secret is as if there were none');
+  const other = await w275({ hr: false, admin: false, manager: false });
+  const before = other.snapshot();
+  assert.equal((await other.propose()).status, 403);
+  assert.deepEqual(other.snapshot(), before);
+  assert.equal(other.rig.fetchLog.length, 0);
+  const mgr = await w275({ hr: false, manager: true });
+  mgr.db.setCaller({ email: 'Sam.Lee@welfareavenue.com' });
+  const m = await mgr.propose({ by: 'someone.else@welfareavenue.com' });
+  assert.equal(m.status, 200, JSON.stringify(m.body));
+  assert.equal(mgr.flow().proposed_by, 'sam.lee@welfareavenue.com', 'with a JWT, by is the caller, whatever the body says');
+  const admin = await w275({ hr: false, admin: true });
+  assert.equal((await admin.propose()).status, 200);
+});
+
+test('w275 propose before the hire accepted: saved and HR told, but no email to the hire yet', async () => {
+  const s = await w275({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  const r = await s.asLink();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.hire_emailed, false);
+  assert.equal(s.gmail().length, 0);
+  assert.equal(s.notifies().length, 1);
+  assert.equal(s.flow().proposed_call_at, P_CALL);
+  assert.equal(s.flow().setup_ticks, undefined, 'nothing recorded for a mail that was not sent');
+});
+
+test('w275 propose: both times at least onboard_propose_lead_hours (48) ahead, else lead_time; nothing saved, nothing sent', async () => {
+  for (const [body, which] of [[{ call_at: '2026-10-21T14:00:00Z' }, 'call'], [{ one_on_one_at: '2026-10-22T11:30:00Z' }, 'one_on_one']]) {
+    const s = await w275();
+    const before = s.snapshot();
+    const r = await s.propose(body);
+    refused(r, 'lead_time', which);
+    assert.match(r.body.messages.en, /48 hours/);
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+  const ok = await w275();
+  assert.equal((await ok.propose({ one_on_one_at: '2026-10-22T13:00:00Z' })).status, 200, 'Thursday 09:00 is 49 hours ahead');
+  const short = await w275({ config: { onboard_propose_lead_hours: '24' } });
+  assert.equal((await short.propose({ call_at: '2026-10-21T14:00:00Z' })).status, 200, 'the setting decides');
+  const bad = await w275();
+  refused(await bad.propose({ call_at: 'tomorrow' }), 'bad_time');
+  refused(await bad.propose({ one_on_one_at: null }), 'bad_time');
+});
+
+test('w275 propose: each meeting\'s whole span inside one availability block for that Toronto weekday (Monday to Friday 9 to 5 when none is saved)', async () => {
+  const sat = await w275();
+  refused(await sat.propose({ call_at: '2026-10-24T14:00:00Z' }), 'outside_hours', 'call');
+  const late = await w275();
+  refused(await late.propose({ call_at: '2026-10-26T20:30:00Z' }), 'outside_hours', 'call');   // 16:30 to 17:30
+  const early = await w275();
+  refused(await early.propose({ one_on_one_at: '2026-10-26T12:45:00Z' }), 'outside_hours', 'one_on_one');   // 08:45
+  const edges = await w275();
+  assert.equal((await edges.propose({ call_at: '2026-10-26T20:00:00Z', one_on_one_at: '2026-10-26T13:00:00Z' })).status, 200, '16:00 to 17:00 and 09:00 to 09:30 touch the edges of 9 to 5');
+  const split = await w275({ tables: { team_members: SAM_AT({ weekly: { mon: [['09:00', '10:30'], ['10:30', '12:00']] }, except: [], tz: 'America/Toronto' }) } });
+  refused(await split.propose({ call_at: '2026-10-26T14:00:00Z', one_on_one_at: '2026-10-26T15:30:00Z' }), 'outside_hours', 'call');   // 10:00 to 11:00 crosses two blocks: not inside one
+});
+
+test('w275 propose: an except entry for the date replaces the weekday\'s blocks (empty: not available that day)', async () => {
+  const av = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], sat: [['10:00', '11:30']] }, except: [{ date: '2026-10-26', free: [] }, { date: '2026-10-27', free: [['18:00', '21:00']] }], tz: 'America/Toronto' };
+  const off = await w275({ tables: { team_members: SAM_AT(av) } });
+  refused(await off.propose(), 'outside_hours', 'call');
+  const evening = await w275({ tables: { team_members: SAM_AT(av) } });
+  refused(await evening.propose({ call_at: '2026-10-27T14:00:00Z', one_on_one_at: '2026-10-27T23:00:00Z' }), 'outside_hours', 'call');   // 10:00 on a day whose except says 18:00 to 21:00
+  const ok = await w275({ tables: { team_members: SAM_AT(av) } });
+  assert.equal((await ok.propose({ call_at: '2026-10-27T22:00:00Z', one_on_one_at: '2026-10-28T00:00:00Z' })).status, 200, '18:00 and 20:00 on the except day');
+  const satOk = await w275({ tables: { team_members: SAM_AT(av) } });
+  assert.equal((await satOk.propose({ call_at: '2026-10-24T14:00:00Z', one_on_one_at: '2026-10-24T15:00:00Z' })).status, 200, 'a saved Saturday block');
+});
+
+test('w275 propose: no overlap with a hub@ meeting the manager is invited to (cancelled ones and other people\'s do not count)', async () => {
+  const ev = (over) => ({ id: 'e1', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-26T14:30:00Z', end_at: '2026-10-26T15:00:00Z', ...over });
+  const busy = await w275({ tables: { hub_events: [ev()] } });
+  const before = busy.snapshot();
+  refused(await busy.propose(), 'busy', 'call');
+  assert.deepEqual(busy.snapshot(), before);
+  const busyOne = await w275({ tables: { hub_events: [ev({ start_at: '2026-10-26T15:45:00Z', end_at: '2026-10-26T17:00:00Z' })] } });
+  refused(await busyOne.propose(), 'busy', 'one_on_one');
+  for (const e of [ev({ status: 'cancelled' }), ev({ attendee_emails: ['ruth.owen@welfareavenue.com'] }), ev({ start_at: '2026-10-26T15:00:00Z', end_at: '2026-10-26T15:30:00Z' })]) {
+    const s = await w275({ tables: { hub_events: [e] } });
+    assert.equal((await s.propose()).status, 200, JSON.stringify(e));
+  }
+});
+
+test('w275 propose: a slot booked or proposed for another hire of the same manager is refused when proposed (taken)', async () => {
+  const other = (over) => ({ id: 22, candidate_id: 12, practice: false, status: 'waiting', manager_member_id: 2, call_at: null, one_on_one_at: null, proposed_call_at: null, proposed_one_on_one_at: null, ...over });
+  const cand12 = (over = {}) => ({ hub_candidates: [candidate(), candidate({ id: 12, name: 'Bo Chen', email: 'bo@example.com', ...over })] });
+  const cases = [
+    [{ proposed_call_at: '2026-10-26T15:30:00Z' }, 'one_on_one'],    // their proposed call 11:30 to 12:30 against our 1-on-1 at 11:30
+    [{ call_at: '2026-10-26T13:30:00Z' }, 'call'],                   // their booked call 09:30 to 10:30 against our call at 10:00
+    [{ proposed_one_on_one_at: '2026-10-26T14:45:00Z' }, 'call'],
+    [{ one_on_one_at: '2026-10-26T15:45:00Z' }, 'one_on_one'],
+  ];
+  for (const [over, which] of cases) {
+    const s = await w275({ tables: cand12(), flows: [other(over)] });
+    refused(await s.propose(), 'taken', which);
+    assert.equal(s.flow().proposed_at, undefined);
+  }
+  for (const [over, cand] of [[{ status: 'backed_out', proposed_call_at: P_CALL }, {}], [{ manager_member_id: 1, proposed_call_at: P_CALL }, {}], [{ proposed_call_at: P_CALL }, { status: 'declined' }], [{ proposed_call_at: '2026-10-26T15:00:00Z' }, { status: 'withdrawn' }]]) {
+    const s = await w275({ tables: cand12(cand), flows: [other(over)] });
+    assert.equal((await s.propose()).status, 200, JSON.stringify([over, cand]));
+  }
+});
+
+test('w275 propose: the two meetings must not overlap each other (overlap)', async () => {
+  const s = await w275();
+  refused(await s.propose({ one_on_one_at: '2026-10-26T14:30:00Z' }), 'overlap');
+  const touching = await w275();
+  assert.equal((await touching.propose({ one_on_one_at: '2026-10-26T15:00:00Z' })).status, 200, 'the 1-on-1 straight after the call');
+});
+
+test('w275 propose: a flow already answered yes, or with the call booked, is refused (already_booked); a closed card or a backed-out flow too', async () => {
+  for (const fl of [{ hire_answer: 'yes' }, { call_at: '2026-10-28T14:00:00Z' }]) {
+    const s = await w275({ fl });
+    const before = s.snapshot();
+    refused(await s.asLink(), 'already_booked');
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+  refused(await (await w275({ cand: { status: 'declined' } })).propose(), 'closed');
+  refused(await (await w275({ fl: { status: 'backed_out' } })).propose(), 'closed');
+  const gone = await w275();
+  assert.equal((await gone.propose({ flow_id: 99 })).status, 404);
+  const none = await w275({ fl: { manager_member_id: null } });
+  refused(await none.propose(), 'no_manager');
+  const no = await w275({ fl: { hire_answer: 'no' } });
+  assert.equal((await no.propose()).status, 200, 'after a no, new times can still be proposed');
+});
+
+test('w275 propose: a double press saves once, tells HR once and emails the hire once; the same times again are a repeat', async () => {
+  const s = await w275();
+  const both = await Promise.all([s.asLink(), s.asLink()]);
+  assert.deepEqual(both.map((r) => r.status), [200, 200], JSON.stringify(both.map((r) => r.body)));
+  assert.deepEqual(both.map((r) => r.body.repeated).sort(), [false, true]);
+  assert.equal(s.notifies().length, 1);
+  assert.equal(s.gmail().length, 1);
+  assert.equal(s.rows('change_log').filter((l) => l.field === 'proposed_times').length, 1);
+  const again = await s.asLink();
+  assert.equal(again.body.repeated, true);
+  assert.equal(s.gmail().length, 1);
+  /* a change of mind, one press at a time (two requests at once share the rig's fixed clock only until the first one ends) */
+  const c = await w275();
+  assert.equal((await c.asLink()).body.repeated, false);
+  c.rig.setNow('2026-10-20T13:00:00Z');
+  const moved = await c.asLink({ one_on_one_at: '2026-10-26T18:00:00Z' });
+  assert.equal(moved.body.repeated, false, JSON.stringify(moved.body));
+  assert.deepEqual(moved.body.warnings, []);
+  assert.equal(moved.body.hire_emailed, true);
+  assert.equal(c.flow().proposed_one_on_one_at, '2026-10-26T18:00:00.000Z');
+  assert.equal(c.notifies().length, 2, 'a change is told again');
+  assert.equal(c.gmail().length, 2, 'and the hire gets the new times');
+  assert.equal(c.flow().setup_ticks.hire_times_at, '2026-10-20T13:00:00.000Z');
+  assert.equal(c.rows('change_log').filter((l) => l.field === 'proposed_times').length, 2);
+});
+
+test('w275 propose on a practice flow saves the proposal and makes no fetch of any kind', async () => {
+  const s = await w275({ cand: { practice: true } });
+  const r = await s.asLink();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.practice, true);
+  assert.equal(s.flow().proposed_call_at, P_CALL);
+  assert.equal(s.rig.fetchLog.length, 0);
+});
+
+test('w275 propose: HR not reached, or the hire\'s email refused, leaves the proposal saved with a warning', async () => {
+  const s = await w275({ notifyReply: () => ({ status: 500, json: { error: 'down' } }) });
+  const r = await s.propose();
+  assert.equal(r.status, 200);
+  assert.equal(s.flow().proposed_call_at, P_CALL);
+  assert.ok(r.body.warnings.some((w) => /HR was not told/.test(w)), JSON.stringify(r.body.warnings));
+  const nohr = await w275({ config: { hr_notify_emails: '' } });
+  const r2 = await nohr.propose();
+  assert.equal(r2.status, 200);
+  assert.ok(r2.body.warnings.some((w) => /hr_notify_emails/.test(w)), JSON.stringify(r2.body.warnings));
+  const down = await w275({ config: { mail_mode: 'test', mail_test_recipients: '' } });   // test mode with no test inboxes: deliver refuses
+  const r3 = await down.propose();
+  assert.equal(r3.status, 200);
+  assert.equal(r3.body.hire_emailed, false);
+  assert.ok(r3.body.warnings.some((w) => /was not emailed/.test(w) && /test recipients/.test(w)), JSON.stringify(r3.body.warnings));
+  assert.equal(down.flow().setup_ticks, undefined, 'a mail that was not sent is not recorded, so hire_times can try again');
+  assert.equal(down.flow().proposed_call_at, P_CALL);
+});
+
+test('w275 hire_times {flow_id}: the secret only; emails the hire once per proposal; refuses with no proposal; a practice flow sends nothing', async () => {
+  const s = await w275({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  await s.asLink();
+  assert.equal(s.gmail().length, 0);
+  s.cand().accepted_on = '2026-10-20';
+  const r = await s.post({ action: 'hire_times', flow_id: 21 }, SECRET);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.equal(s.gmail().length, 1);
+  assert.equal(mail(s.gmail()[0]).to, 'alex@example.com');
+  assert.equal(s.flow().setup_ticks.hire_times_at, NOW_ISO);
+  const again = await s.post({ action: 'hire_times', flow_id: 21 }, SECRET);
+  assert.equal(again.body.skipped, 'already_sent');
+  assert.equal(s.gmail().length, 1);
+  assert.equal((await s.post({ action: 'hire_times', flow_id: 21 })).status, 403, 'a signed-in person cannot');
+  const none = await w275();
+  const n = await none.post({ action: 'hire_times', flow_id: 21 }, SECRET);
+  assert.equal(n.body.error, 'no_proposal');
+  assert.equal(none.gmail().length, 0);
+  const unaccepted = await w275({ cand: { accepted_on: null }, fl: { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_at: NOW_ISO } });
+  assert.equal((await unaccepted.post({ action: 'hire_times', flow_id: 21 }, SECRET)).body.error, 'not_accepted');
+  const practice = await w275({ cand: { practice: true }, fl: { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_at: NOW_ISO } });
+  const p = await practice.post({ action: 'hire_times', flow_id: 21 }, SECRET);
+  assert.equal(p.body.practice, true);
+  assert.equal(practice.rig.fetchLog.length, 0);
+});

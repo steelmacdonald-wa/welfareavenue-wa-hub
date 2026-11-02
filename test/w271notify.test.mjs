@@ -586,3 +586,27 @@ test('I1: a flow already started keeps its reminders: its own plan is not a reas
   await w.remind();
   assert.ok(w.rig.fetchLog.filter((e) => e.url === NOTIFY).length > 0);
 });
+
+/* ---------- wave275 Task 2: the three new relay kinds ---------- */
+test('w275: notify takes onboard_propose, onboard_answer and onboard_ready like onboard_date: the Slack DM, the Hub notification and the log', async () => {
+  for (const [event, url] of [['onboard_propose', '/o/21.abc'], ['onboard_answer', '#hrcentre/onboarding'], ['onboard_ready', '#hrcentre/onboarding']]) {
+    const n = await notifyWorld();
+    const r = await n.send(dateMsg({ event, url, title: 'Sam Lee proposed times for Alex Tremblay', tag: event + '-21' }));
+    assert.equal(r.status, 200, event);
+    assert.deepEqual(r.body.outcome, { 'sam.lee@welfareavenue.com': 'sent' }, event);
+    assert.equal(n.slack().length, 1, event);
+    assert.equal(n.push().length, 1, event);
+    assert.equal(n.push()[0].body.kind, event);
+    assert.equal(n.push()[0].body.url, url.startsWith('/') ? url : '/' + url);
+    assert.equal(n.db.rows('hub_notifications_sent')[0].kind, event);
+    assert.deepEqual(n.unregistered(), []);
+  }
+  const list = await notifyWorld({ prefs: [{ email: HR[1], disabled: [], prefs: { kinds: { onboard_answer: { slack: false } } } }] });
+  const r = await list.send(dateMsg({ event: 'onboard_answer', to_email: undefined, to: HR, url: undefined, title: undefined }));
+  assert.deepEqual(r.body.outcome, { [HR[0]]: 'sent', [HR[1]]: 'opted_out' }, 'the HR list, each through their own switch');
+  assert.equal(list.push()[0].body.url, '/#hrcentre/onboarding', 'the default page');
+  assert.ok(list.push()[0].body.title, 'a default title');
+  const signedIn = await notifyWorld();
+  signedIn.db.setCaller({ email: 'hr.person@welfareavenue.com' });
+  assert.equal((await signedIn.send(dateMsg({ event: 'onboard_propose' }), { Authorization: 'Bearer user-jwt' })).status, 401, 'the Hub itself only');
+});

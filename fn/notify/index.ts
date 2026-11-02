@@ -1,3 +1,6 @@
+// v18 (wave275, 02/11/26): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
+// shape as v16's: onboard_propose (the manager: propose the call and the 1-on-1 for a new hire), onboard_answer (the manager and HR: times were proposed, or
+// the hire said yes or no) and onboard_ready (the manager: the hire finished their setup rundown). Nothing here is ever sent to the new hire.
 // v17 (wave274, 02/11/26): a request with no owner goes to the team's people (hub_settings.team_inbox.people), before the team's leaders.
 // team-inbox no longer posts those in the channel, so when no DM could be delivered it is asked to (request_channel). A suggestion with
 // nobody to tell no longer counts as covered.
@@ -164,7 +167,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind'];   /* v15: the relayed kinds reach the Hub too */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'onboard_propose', 'onboard_answer', 'onboard_ready'];   /* v15: the relayed kinds reach the Hub too (v18: wave275's three) */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -600,12 +603,12 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
 
   /* v15: a kind another function composes (hr-notify, recruit-actions, checkin-post): the Slack DM through the switch and
      the log here, the Hub notification through hub-push's relay (its own switch) */
-  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind') {
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind' || event === 'onboard_propose' || event === 'onboard_answer' || event === 'onboard_ready') {
     const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 12);
     const text = String(body.text || '').slice(0, 3000);
     if (!to.length || !text) return { error: 'to and text required' };
-    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty' })[event]);
-    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding' })[event]);
+    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty', onboard_propose: 'Propose times for a new hire', onboard_answer: 'A new hire\'s times', onboard_ready: 'A new hire is set up' })[event]);
+    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding', onboard_propose: '#hrcentre/onboarding', onboard_answer: '#hrcentre/onboarding', onboard_ready: '#hrcentre/onboarding' })[event]);
     const plainBody = String(body.body || plainOf(text)).slice(0, 400);
     const outs: Record<string, string> = {};
     for (const e of Array.from(new Set(to))) outs[e] = await deliver(event, null, e, text, { title, url, ref: body.tag ? String(body.tag) : undefined });
