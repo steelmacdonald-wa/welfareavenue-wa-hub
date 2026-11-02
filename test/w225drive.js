@@ -199,6 +199,8 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
     t = await f.ev(HOST);
     const rows = await f.ev(() => Array.from(document.querySelectorAll('#w277conn [data-w277row]')).map(r => r.getAttribute('data-w277row')));
     ok('Connections: the Threads flash and one row per account (Meta, Threads, LinkedIn, TikTok, YouTube)', /Threads is connected/.test(t) && JSON.stringify(rows) === '["meta","threads","linkedin","tiktok","youtube"]', [rows, t.slice(0, 600)]);
+    const ml = await f.ev(() => { const h = document.querySelector('#w225host'); const cards = Array.from(h.querySelectorAll('.card')).filter(c => /Meta, live/.test(c.textContent)); return { n: cards.length, cx: !!h.querySelector('[data-w250cx="meta"]') }; });
+    ok('Connections: the wave250 Meta live card renders under the list (connectExtra250)', ml.n === 1 && ml.cx, ml);
     const hashNow = await f.ev(() => location.hash);
     ok('the flash clears the address', hashNow === '#studio/connections', hashNow);
     await click(p, '#w277conn [data-w277row="linkedin"] .w277nm'); await p.waitForTimeout(400);

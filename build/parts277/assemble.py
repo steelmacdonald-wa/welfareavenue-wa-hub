@@ -13,5 +13,5 @@ for ch in src:
         o -= 0x10000; out.append('\\u%04x\\u%04x' % (0xD800 + (o >> 10), 0xDC00 + (o & 0x3FF)))
 s = ''.join(out)
 if not s.endswith('\n'): s += '\n'
-open(os.path.join(D, '..', 'src', '277_wave277.seg'), 'w').write(s)
+open(os.path.join(D, '..', 'src', '277_wave277.seg'), 'w', newline='').write(s)
 print('277_wave277.seg', len(s), 'bytes')

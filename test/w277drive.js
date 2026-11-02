@@ -19,7 +19,7 @@ function fx() {
 const CAP = { ok: true, token: true, accounts: [{ platform: 'facebook' }, { platform: 'instagram' }], granted: ['pages_manage_posts', 'instagram_content_publish'], missing: [], can: { facebook: true, instagram: true, linkedin: false }, mode: { facebook: 'direct', instagram: 'direct', linkedin: 'reminder' }, settings: {}, studio: {}, connections: {} };
 /* wave277: the registry rows and the limits the composer reads */
 CAP.platforms = ADD.studio_platforms.filter(p => p.active).map(p => ({ key: p.key, label: p.label, short: p.short, colour: p.colour, sort: p.sort, caps: p.caps, modes: p.modes }));
-CAP.caps = { linkedin: { text: true, images: true, max_images: 20, video: true, max_video_s: 0, comments: true, analytics: true, link_in_caption: true }, instagram: { text: true, images: true, max_images: 10, video: true, max_video_s: 900, comments: true, analytics: true, link_in_caption: false }, tiktok: { text: false, images: false, max_images: 0, video: true, max_video_s: 600, comments: false, analytics: false, link_in_caption: false }, youtube: { text: false, images: false, max_images: 0, video: true, max_video_s: 180, comments: false, analytics: false, link_in_caption: false } };
+CAP.caps = { linkedin: { text: true, images: true, max_images: 20, video: true, max_video_s: 600, comments: true, analytics: true, link_in_caption: true }, instagram: { text: true, images: true, max_images: 10, video: true, max_video_s: 900, comments: true, analytics: true, link_in_caption: false }, tiktok: { text: false, images: false, max_images: 0, video: true, max_video_s: 600, comments: false, analytics: false, link_in_caption: false }, youtube: { text: false, images: false, max_images: 0, video: true, max_video_s: 180, comments: false, analytics: false, link_in_caption: false } };
 function status(canChange) {
   return { ok: true, platforms: ADD.studio_platforms.filter(p => p.active), connections: JSON.parse(JSON.stringify(ADD.connections)), redirect_uri: 'https://x/social-connect', can_change: canChange, can_meta: canChange };
 }
@@ -58,6 +58,8 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     ok('the attention strip names LinkedIn, Expires in 5 days, with Reconnect', attn && /LinkedIn/.test(attn.t) && /Expires in 5 days/.test(attn.t) && attn.b.some(x => /^Reconnect\|reconnect\|linkedin$/.test(x)), attn);
     adminPills = await f.ev(PILLS);
     ok('pills: LinkedIn Expires in 5 days, TikTok To TikTok drafts, Threads Not connected, Meta Connected', adminPills.linkedin === 'Expires in 5 days' && adminPills.tiktok === 'To TikTok drafts' && adminPills.threads === 'Not connected' && adminPills.meta === 'Connected', adminPills);
+    const tkRow = await f.ev(() => (document.querySelector('#w277conn [data-w277row="tiktok"]') || {}).textContent || '');
+    ok('the TikTok handle (stored with its @) shows one @', /@welfareavenue/.test(tkRow) && !/@@/.test(tkRow), tkRow);
     const lefts = await f.ev(() => Array.from(document.querySelectorAll('#w277conn [data-w277pill]')).map(p => Math.round(p.getBoundingClientRect().left)));
     ok('the pills line up in one column across the rows', lefts.length === 4 && lefts.every(x => x === lefts[0]), lefts);
     const chipL = await f.ev(() => Array.from(document.querySelectorAll('#w277conn .w277ch')).map(p => Math.round(p.getBoundingClientRect().left)));
@@ -145,6 +147,8 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
   /* 3b. the composer reads the registry limits (Task 7) */
   {
     const CAPM = JSON.parse(JSON.stringify(CAP)); CAPM.mode.linkedin = 'make'; CAPM.can.linkedin = true;
+    /* final review: YouTube active here so the composer offers it (the caps-driven checks) */
+    CAPM.platforms = ADD.studio_platforms.map(p => ({ key: p.key, label: p.label, short: p.short, colour: p.colour, sort: p.sort, caps: p.caps, modes: p.modes }));
     const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#contentcal', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT(status(true), CAPM), wait: 4000 });
     const img = i => ({ url: 'https://x/i' + i + '.jpg', kind: 'image', alt: 'a photo', w: 1080, h: 1350 });
     const vid = i => ({ url: 'https://x/v' + i + '.mp4', kind: 'video', alt: '', w: 1080, h: 1920, dur: 20 });
@@ -155,6 +159,16 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     ok('LinkedIn with three videos: the one video message', v.some(t => /one video/.test(t)), v);
     v = await panel({ platforms: ['instagram'], media: Array.from({ length: 11 }, (_, i) => img(i)) });
     ok('Instagram with eleven photos: up to 10 photos', v.some(t => /up to 10 photos/.test(t)), v);
+    v = await panel({ platforms: ['linkedin'], media: [Object.assign(vid(1), { dur: 700 })] });
+    ok('LinkedIn with a 700 second video: the registry limit, 10 minutes', v.some(t => /LinkedIn videos run up to 10 minutes; this video is 700 seconds/.test(t)), v);
+    v = await panel({ platforms: ['linkedin'], media: [Object.assign(vid(1), { dur: 500 })] });
+    ok('LinkedIn with a 500 second video: no duration message', !v.some(t => /run up to/.test(t)), v);
+    v = await panel({ platforms: ['youtube'], media: [img(1)] });
+    ok('YouTube with a photo (caps images false): does not take photos', v.some(t => /YouTube does not take photos; the photos are left out\./.test(t)), v);
+    v = await panel({ platforms: ['youtube'], media: [Object.assign(vid(1), { dur: 200 })] });
+    ok('YouTube with a 200 second video: one duration message (the bespoke one)', v.filter(t => /run up to/.test(t)).length === 1, v);
+    v = await panel({ platforms: ['tiktok'], media: [img(1)] });
+    ok('TikTok with a photo: its own reminder line, no second photos line', v.some(t => /reminder to post in the app/.test(t)) && !v.some(t => /does not take photos/.test(t)), v);
     ok('no page errors (composer limits)', f.errs.length === 0, f.errs);
     await f.close();
   }

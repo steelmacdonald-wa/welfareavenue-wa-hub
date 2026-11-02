@@ -124,7 +124,7 @@
         rows.push(rowHtml('meta', meta.map(function (m) { return markOf(m, true); }).join(''), meta.map(function (m) { return m.label; }).join(' and '), 'Meta', p.caps));
       } else {
         var c = connOf(p.key);
-        rows.push(rowHtml(p.key, markOf(p), p.label, c.handle ? '@' + c.handle : c.name || '', p.caps));
+        rows.push(rowHtml(p.key, markOf(p), p.label, c.handle ? '@' + String(c.handle).replace(/^@+/, '') : c.name || '', p.caps));
       }
     });
     var fl = S.keys.flash;

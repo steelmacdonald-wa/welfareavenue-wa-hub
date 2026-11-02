@@ -63,5 +63,18 @@ rep("""if (vi.length && dur != null && dur > 600) err(l, 'TikTok videos run up t
 rep("""else if (dur != null && dur > 180) err(l, 'Shorts run up to 3 minutes; this video is ' + Math.round(dur) + ' seconds.');""",
     """else if (dur != null && dur > (capsOf(k).max_video_s || 180)) err(l, 'Shorts run up to ' + Math.round((capsOf(k).max_video_s || 180) / 60) + ' minutes; this video is ' + Math.round(dur) + ' seconds.');""")
 
+# 5. (final review) the registry's caps for every platform, after the bespoke rules: video not taken, too long (when no
+#    bespoke duration rule spoke), photos not taken (unless the bespoke rule already said so). LinkedIn gets its duration
+#    check from here; a new platform needs no rule of its own for these three.
+rep("""      if (md === 'reminder') warn(l, nm + ' is not connected: at the post\\u2019s time the owner gets a reminder to post it by hand.');
+""",
+    """      /* wave277: the registry's caps, only for the keys a platform's caps carry */
+      var cp = capsOf(k), said = function (re) { return l.some(function (x) { return re.test(x.t); }); };
+      if (vi.length && cp.video === false) err(l, nm + ' does not take video.');
+      else if (vi.length && cp.max_video_s && dur != null && dur > cp.max_video_s && !said(/run up to|run from/)) err(l, nm + ' videos run up to ' + Math.round(cp.max_video_s / 60) + ' minutes; this video is ' + Math.round(dur) + ' seconds.');
+      if (im.length && cp.images === false && !said(/reminder to post in the app/)) warn(l, nm + ' does not take photos; the photos are left out.');
+      if (md === 'reminder') warn(l, nm + ' is not connected: at the post\\u2019s time the owner gets a reminder to post it by hand.');
+""")
+
 open(P, 'w', encoding='utf8', newline='').write(s)
 print('patched')

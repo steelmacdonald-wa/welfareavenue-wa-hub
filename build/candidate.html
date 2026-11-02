@@ -38241,6 +38241,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         else { var r = ratioOf(vi[0]); if (r != null && r > 1.01) warn(l, 'Shorts are vertical or square; this video is wide.'); ok(l, 'YouTube: a Short.'); }
         var yt = (e.variants.youtube || {}).title || e.title; if (!String(yt || '').trim()) warn(l, 'Give the Short a title (Customize, YouTube), or the post\u2019s name is used.');
       }
+      /* wave277: the registry's caps, only for the keys a platform's caps carry */
+      var cp = capsOf(k), said = function (re) { return l.some(function (x) { return re.test(x.t); }); };
+      if (vi.length && cp.video === false) err(l, nm + ' does not take video.');
+      else if (vi.length && cp.max_video_s && dur != null && dur > cp.max_video_s && !said(/run up to|run from/)) err(l, nm + ' videos run up to ' + Math.round(cp.max_video_s / 60) + ' minutes; this video is ' + Math.round(dur) + ' seconds.');
+      if (im.length && cp.images === false && !said(/reminder to post in the app/)) warn(l, nm + ' does not take photos; the photos are left out.');
       if (md === 'reminder') warn(l, nm + ' is not connected: at the post\u2019s time the owner gets a reminder to post it by hand.');
     });
     /* the old names some waves read */
@@ -87539,7 +87544,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         rows.push(rowHtml('meta', meta.map(function (m) { return markOf(m, true); }).join(''), meta.map(function (m) { return m.label; }).join(' and '), 'Meta', p.caps));
       } else {
         var c = connOf(p.key);
-        rows.push(rowHtml(p.key, markOf(p), p.label, c.handle ? '@' + c.handle : c.name || '', p.caps));
+        rows.push(rowHtml(p.key, markOf(p), p.label, c.handle ? '@' + String(c.handle).replace(/^@+/, '') : c.name || '', p.caps));
       }
     });
     var fl = S.keys.flash;

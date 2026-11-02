@@ -32,7 +32,7 @@
   ],
   "connections": {
     "linkedin": { "status": "connected", "mode": "direct", "name": "Welfare Avenue (LinkedIn)", "connected_by": "steel.macdonald@welfareavenue.com", "connected_at": "2026-09-20T12:00:00Z", "expires_at": "2026-09-30T12:00:00Z", "scopes_granted": ["w_organization_social"], "health": "expiring", "app_saved": true },
-    "tiktok": { "status": "connected", "mode": "drafts", "handle": "welfareavenue", "health": "ok", "app_saved": true },
+    "tiktok": { "status": "connected", "mode": "drafts", "handle": "@welfareavenue", "health": "ok", "app_saved": true },
     "threads": {},
     "youtube": {},
     "meta": { "token": true, "granted": ["pages_manage_posts"], "missing": [] },
