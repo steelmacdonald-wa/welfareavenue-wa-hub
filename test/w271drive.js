@@ -58,6 +58,7 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     let t = await txt(f);
     ok('card: name, role', /Amina/.test(t) && /Event Coordinator/.test(t), t.slice(0, 500));
     ok('card: name is escaped', await f.ev(() => !document.querySelector('#o271 b b') && /<b>Yusuf<\/b>/.test(document.getElementById('o271').textContent)));
+    ok('NAME: no <b> element comes from the name inside her Ready card', await f.ev(sel => { const e = document.querySelector(sel); return !!e && !Array.from(e.querySelectorAll('b')).some(b => b.textContent === 'Yusuf' || b.querySelector('b')); }, card(FLOW.real)));
     ok('card: grid status', /New hire.s grid: marked/.test(t) && /Manager.s grid: not marked yet/.test(t), t.slice(0, 500));
     ok('card: late flag', /after the reply-by date/.test(t), t.slice(0, 500));
     ok('card: the other-application warning', /1 other application still open/.test(t), t.slice(0, 500));
@@ -237,6 +238,8 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('started: I created it, continue with an address box', await f.page.isVisible(card(FLOW.real) + ' [data-o271a="gmanual"]') && await f.page.inputValue(card(FLOW.real) + ' [data-o271i="gaddr"]') === 'amina.yusuf2@welfareavenue.com');
     for (const name of ['Change time', 'Change manager', 'Book the 1-on-1', 'They backed out']) ok('started: ' + name + ' is on the card', t.indexOf(name) >= 0, t);
     ok('started: it left the Ready list', await f.ev(() => document.querySelectorAll('[data-o271flow="501"]').length === 1));
+    const noTagFromName = sel => f.ev(s2 => { const e = document.querySelector(s2); return !!e && /<b>Yusuf<\/b>/.test(e.textContent) && !Array.from(e.querySelectorAll('b')).some(b => b.textContent === 'Yusuf' || b.querySelector('b')); }, sel);
+    ok('NAME: no <b> element comes from the name inside the started card for Amina', await noTagFromName(card(FLOW.real)));
 
     /* I7: what HR edited, under the welcome to-do */
     ok('I7: the edited subject, the text and the group session show under the welcome task', /Edited subject/.test(t) && /Congratulations/.test(t) && /Group session: ?Group session on Oct 8/.test(t), t);
@@ -330,6 +333,7 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('the remove list and the warnings show after it', /Created for this person\. Deactivate it by hand in Roster/.test(t) && /could not be closed/.test(t), t.slice(0, 800));
     ok('the remove list is escaped', await f.ev(() => /<C1>/.test(document.getElementById('o271').textContent)));
     ok('the card has left the list', !(await f.ev(sel => !!document.querySelector(sel), card(FLOW.real))));
+    ok('NAME: no <b> element comes from the name inside her backed-out card either', await noTagFromName('[data-o271backed="' + FLOW.real + '"]'));
     await shot(f, 'admin_removed_1366');
     /* D3: the list is worked out from the flow, so it is still there after a reload */
     await f.ev(() => { const s = o271.state(); s.note = {}; return o271.load(); });
