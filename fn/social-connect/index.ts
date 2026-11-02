@@ -9,6 +9,9 @@
 //     a login expiring within 7 days tells the publishers (notify, once a week) so posts keep going out.
 // v3 (review fixes): the sign-in return, status and health keep working when the registry cannot be read; TikTok
 //     health refreshes only when its access token is near expiry; a renewal is saved before its check runs.
+// v3 (final review): the expiry warning reaches notify (anon key) and names the platform, the days and a link;
+//     check and warn live in renewal.ts; error text is redacted of tokens and secrets before it is stored or shown;
+//     start works while the registry is down.
 // v2.1: the LinkedIn authorize URL drops r_organization_admin (the app was never granted it).
 // v2: TikTok asks for the analytics scopes too, shows @username and runs the first tiktok-pull right after connecting.
 // The Content Studio's Connections page: it keeps every platform login in the vault and never shows a secret back.
@@ -36,8 +39,9 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { byKey, names, type Platform, platforms } from './platforms.ts';
 import { ADAPTERS } from './adapters/index.ts';
-import { type Any, clientOf, type Conn, type Ctx, type Platform as P } from './adapters/types.ts';
-import { DAY, EXPIRING_DAYS, healthOf, toConn } from './health.ts';
+import { type Any, clientOf, type Ctx, type Platform as P } from './adapters/types.ts';
+import { msg, redact, toConn } from './health.ts';
+import { check, type RenewCtx, warn } from './renewal.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -52,7 +56,6 @@ const CORS: Record<string, string> = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const iso = (t = Date.now()) => new Date(t).toISOString();
-const msg = (e: unknown) => String((e as Error)?.message || e);
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -107,7 +110,7 @@ async function reg(): Promise<Reg> {
 async function regSafe(): Promise<Reg> {
   try { return await reg(); } catch (e) {
     console.log('social-connect: registry unavailable: ' + msg(e));
-    const oauth: P[] = Object.keys(ADAPTERS).map(key => ({ key, label: NAMES[key] || key, auth: 'oauth', active: true, scopes: [] }));
+    const oauth: P[] = Object.keys(ADAPTERS).map(minimal);
     return { list: [], oauth, keys: oauth.map(p => p.key), by: Object.fromEntries(oauth.map(p => [p.key, p])), NAME: NAMES };
   }
 }
@@ -127,41 +130,14 @@ async function finish(p: P, code: string, by: string): Promise<string> {
   if (p.key === 'tiktok') await firstTikTokPull();
   return r.label;
 }
-/* v3: renew (refresh only) and check one platform; a failure marks it in error and never stops the others */
-async function check(p: P, conn: Conn, renew: boolean, by: string): Promise<string> {
-  const a = ADAPTERS[p.key];
-  let r: Partial<Conn> = {};
-  try {
-    // a renewal is saved before the check, so a failed check never loses it (the vault already holds the new token)
-    if (renew && a.refresh) { r = await a.refresh(p, conn, ctx); if (Object.keys(r).length) await setConn(p.key, r, by); }
-    const h = await a.health(p, { ...conn, ...r }, ctx);
-    const patch = { ...r, ...h };
-    await setConn(p.key, { ...patch, health: healthOf({ ...conn, ...patch }, Date.now()) }, by);
-    return p.key + ' ok';
-  } catch (e) {
-    await setConn(p.key, { health: 'error', last_error: msg(e).slice(0, 200), last_checked_at: iso() }, by);
-    return p.key + ' failed';
-  }
+/* v3 fix: renewal and warning live in renewal.ts (tested there); this is what they get */
+async function publishersList(): Promise<string[]> {
+  const { data, error } = await svc.rpc('wa277_publishers'); if (error) throw new Error(error.message);
+  return (data || []) as string[];
 }
-/* v3: tell the publishers about a login that lapses within 7 days (once a week per platform) */
-async function warn(R: Reg): Promise<string[]> {
-  const c = await conns(), now = Date.now(), out: string[] = [];
-  let to: string[] | null = null;
-  for (const p of R.oauth) {
-    const v = c[p.key];
-    if (!v || healthOf(v, now) !== 'expiring') continue;
-    if (v.warned_at && now - new Date(v.warned_at).getTime() < EXPIRING_DAYS * DAY) continue;
-    try {
-      if (!to) { const { data, error } = await svc.rpc('wa277_publishers'); if (error) throw new Error(error.message); to = (data || []) as string[]; }
-      const n = Math.max(1, Math.ceil((new Date(v.expires_at).getTime() - now) / DAY));
-      const r = await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'x-wa-secret': await getSecret('WA_TRIGGER_SECRET'), 'Content-Type': 'application/json' }, body: JSON.stringify({ event: 'connection_expiring', to, title: p.label + ' connection expires in ' + n + (n === 1 ? ' day' : ' days'), text: 'Reconnect it on the Connections page so posts keep going out.', url: '/#studio/connections', tag: 'studio-conn-' + p.key }) });
-      if (!r.ok) throw new Error('notify HTTP ' + r.status);
-      await setConn(p.key, { warned_at: iso(now) }, 'refresh');
-      out.push(p.key + ' warned');
-    } catch (e) { console.log('social-connect warn ' + p.key + ': ' + msg(e)); out.push(p.key + ' warning failed'); }
-  }
-  return out;
-}
+const rc: RenewCtx = { adapters: ADAPTERS, actx: ctx, conns, setConn, publishers: publishersList, getSecret, fetch: (i, init) => fetch(i, init), now: () => Date.now(), supabaseUrl: SUPABASE_URL, anonKey: ANON_KEY };
+/* v3 fix: the minimal platform the sign-in return and start use when the registry cannot be read */
+const minimal = (key: string): P => ({ key, label: NAMES[key] || key, auth: 'oauth', active: true, scopes: [] });
 async function status(me: Me, R: Reg): Promise<Response> {
   const c = await conns(), now = Date.now(), out: Record<string, Any> = {};
   for (const k of Object.keys(c)) { const v = { ...(c[k] || {}) }; delete v.state; out[k] = v; }
@@ -201,10 +177,10 @@ Deno.serve(async (req: Request) => {
       if (!platform) return back('error=' + encodeURIComponent('That sign-in has expired; press Connect again'));
       const st = all[platform].state;
       if (Date.now() > Number(st.exp || 0)) return back('error=' + encodeURIComponent('That sign-in took too long; press Connect again'));
-      if (err || !code) { await setConn(platform, { state: null }, st.by); return back('error=' + encodeURIComponent(NAMES[platform] + ': ' + (err || 'no code came back'))); }
+      if (err || !code) { await setConn(platform, { state: null }, st.by); return back('error=' + encodeURIComponent(NAMES[platform] + ': ' + redact(err || 'no code came back').slice(0, 160))); }
       const R = await regSafe();
       try {
-        const what = await finish(R.by[platform] || { key: platform, label: NAMES[platform], auth: 'oauth', active: true, scopes: [] }, code, st.by);
+        const what = await finish(R.by[platform] || minimal(platform), code, st.by);
         await log(platform, 'connected ' + R.NAME[platform] + ' (' + what + ')', st.by);
         return back('connected=' + platform);
       } catch (e) {
@@ -223,14 +199,14 @@ Deno.serve(async (req: Request) => {
     if (action === 'refresh') {
       if (!me.auto) return json({ error: 'automation only' }, 401);
       const R = await regSafe(); const c = await conns(); const out: string[] = [];
-      for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') out.push(await check(p, c[p.key], true, 'refresh')); }
-      out.push(...await warn(R));
+      for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') out.push(await check(rc, p, c[p.key], true, 'refresh')); }
+      out.push(...await warn(rc, R.oauth));
       return json({ ok: true, done: out });
     }
     if (!me.publisher) return json({ error: 'Only marketing leads and admins change the connections' }, 403);
     if (action === 'health') {
       const R = await regSafe(); const c = await conns();
-      for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') await check(p, c[p.key], false, me.email); }
+      for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') await check(rc, p, c[p.key], false, me.email); }
       return await status(me, R);
     }
     if (action === 'save_app') {
@@ -243,12 +219,13 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true });
     }
     if (action === 'start') {
-      const R = await reg();
-      const p = String(body.platform || ''); if (R.keys.indexOf(p) < 0) return json({ error: 'which platform?' }, 400);
+      // v3 fix: start works while the registry is down (regSafe; a platform missing from the list gets the minimal row)
+      const R = await regSafe();
+      const p = String(body.platform || ''); if (!ADAPTERS[p] || (R.list.length && R.keys.indexOf(p) < 0)) return json({ error: 'which platform?' }, 400);
       const c = await clientOf(ctx, p); if (!c) return json({ error: 'Save the ' + R.NAME[p] + ' app keys first' }, 400);
       const state = rand(18);
       await setConn(p, { state: { value: state, by: me.email, exp: Date.now() + 15 * 60000 } }, me.email);
-      return json({ ok: true, url: ADAPTERS[p].authorizeUrl(R.by[p], c.id, REDIRECT, state) });
+      return json({ ok: true, url: ADAPTERS[p].authorizeUrl(R.by[p] || minimal(p), c.id, REDIRECT, state) });
     }
     if (action === 'disconnect') {
       const p = String(body.platform || '');

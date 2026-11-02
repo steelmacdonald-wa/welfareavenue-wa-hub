@@ -26,3 +26,10 @@ export function toConn(key: string, raw: Record<string, unknown> | undefined, no
   v.health = healthOf(v, now);
   return v;
 }
+
+// wave277 fix: a network error from fetch names the request URL, and Threads calls carry the token and the app secret
+// in the query string; error text is redacted before it is stored, returned or put in a redirect.
+export function redact(s: string): string {
+  return String(s).replace(/(access_token|client_secret|refresh_token|client_key)=[^&\s)]+/g, '$1=redacted');
+}
+export const msg = (e: unknown): string => redact(String((e as Error)?.message || e));

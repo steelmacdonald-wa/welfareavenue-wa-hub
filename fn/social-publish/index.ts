@@ -8,6 +8,8 @@
 //     the reminder with the reason.
 // v6 fix: a slow LinkedIn video goes through the pending pipeline like Instagram and Threads (finishPending posts it later).
 // v6: publishers() adds the approvers the database counts (wa241_approvers), so an approver is a publisher here too.
+// v6 (final review): LinkedIn checks every media download, sends a video over 100 MB to the reminder before uploading,
+//     and the Make fallback with two or more photos goes to the reminder instead of posting one photo.
 // v5 (wave242): the notification centre's switches for the Content Studio kind (wa_notify_prefs.prefs.kinds.content_studio =
 //   {hub, slack}) decide: Slack off means no DM whatever the devices; Hub off means no Hub notification; no entry means the
 //   old rules (the channel, the disabled list).

@@ -218,3 +218,45 @@ Deno.test('linkedin modeOf: direct, make, reminder', async () => {
   assertEquals(await linkedin.modeOf({ mode: 'direct' }, fake(() => ({}), { SOCIAL_MAKE_LINKEDIN_HOOK: 'h' }, {}).ctx), 'make');
   assertEquals(await linkedin.modeOf({}, fake(() => ({}), {}, {}).ctx), 'reminder');
 });
+
+Deno.test('linkedin: a photo that will not download (404) throws with the status and nothing is posted', async () => {
+  const { ctx, calls } = fake((url) => {
+    if (url.startsWith('https://api.linkedin.com/rest/images?action=initializeUpload')) return { json: { value: { uploadUrl: 'https://upload.example/img1', image: 'urn:li:image:1' } } };
+    if (url.startsWith('https://upload.example/')) return { status: 201 };
+    if (url === 'https://api.linkedin.com/rest/posts') return { status: 201, headers: { 'x-restli-id': 'urn:li:share:9' } };
+    return { status: 404 };
+  }, DIRECT, CONN);
+  await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/gone.jpg', mime: 'image/jpeg' }]), CAPS, ctx), Error, 'LinkedIn media download: HTTP 404');
+  assertEquals(calls.filter(c => c.method === 'PUT').length, 0);
+  assertEquals(calls.filter(c => c.url === 'https://api.linkedin.com/rest/posts').length, 0);
+});
+
+Deno.test('linkedin: a video that will not download (404) throws with the status and nothing is uploaded or posted', async () => {
+  const { ctx, calls } = fake(() => ({ status: 404 }), DIRECT, CONN);
+  await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/gone.mp4', mime: 'video/mp4' }]), CAPS, ctx), Error, 'LinkedIn media download: HTTP 404');
+  assertEquals(calls.filter(c => c.url.startsWith('https://api.linkedin.com/')).length, 0);
+});
+
+Deno.test('linkedin: a 150 MB video is a Manual before any upload call', async () => {
+  const big = String(150 * 1024 * 1024);
+  const { ctx, calls } = fake((url, method) => {
+    if (url === 'https://cdn.example/big.mp4' && method === 'HEAD') return { headers: { 'content-length': big } };
+    if (url === 'https://cdn.example/big.mp4') return { bytes: new Uint8Array(4) };
+    return { status: 200, json: { value: { video: 'urn:li:video:x', uploadInstructions: [{ uploadUrl: 'https://up.example/p1', firstByte: 0, lastByte: 3 }] } } };
+  }, DIRECT, CONN);
+  const e = await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/big.mp4', mime: 'video/mp4' }]), CAPS, ctx), Manual);
+  assertEquals(e.message, 'LinkedIn video too large to send from the Hub; post it by hand');
+  assertEquals(calls.filter(c => c.url.startsWith('https://api.linkedin.com/')).length, 0);
+  assertEquals(calls.filter(c => c.url === 'https://cdn.example/big.mp4' && c.method === 'GET').length, 0);
+  // media.size, when the post carries it, is enough on its own (no HEAD)
+  const s = fake(() => ({ status: 200 }), DIRECT, CONN);
+  await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/big.mp4', mime: 'video/mp4', size: 150 * 1024 * 1024 }]), CAPS, s.ctx), Manual);
+  assertEquals(s.calls.length, 0);
+});
+
+Deno.test('linkedin: Make with two or more photos goes to the reminder and nothing is sent to the hook', async () => {
+  const { ctx, calls } = fake(() => ({ json: { urn: 'urn:li:share:77' } }), { SOCIAL_MAKE_LINKEDIN_HOOK: 'https://hook.make.example/abc', SOCIAL_MAKE_LINKEDIN_SECRET: 's3' }, { mode: 'make' });
+  const e = await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/a.jpg', mime: 'image/jpeg' }, { url: 'https://cdn.example/b.jpg', mime: 'image/jpeg' }]), CAPS, ctx), Manual);
+  assertEquals(e.message, 'Make sends one photo; this post has 2; post it by hand');
+  assertEquals(calls.length, 0);
+});

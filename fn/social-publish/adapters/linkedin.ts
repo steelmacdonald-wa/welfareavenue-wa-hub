@@ -1,17 +1,40 @@
 // wave277, 02/11/26: LinkedIn, direct when connected (text, one photo, two to caps.max_images photos as multiImage, or one
 // video), else the Make.com webhook (text or one photo, as in v5), else a reminder. A video still processing after two
 // checks throws Pending (its urn as the container); linkedinFinish posts it on a later run.
+// Final review: every media download checks its status; a video over 100 MB (from media.size, a HEAD, or the download's
+// content-length) goes to the reminder before anything is uploaded; Make with two or more photos goes to the reminder.
 import { type Any, type Conn, type Media, Manual, Pending, type Post, type Publisher, type PubCtx, type Result } from './types.ts';
 
 const API = 'https://api.linkedin.com/rest';
 const PAGE = 'https://www.linkedin.com/company/welfareavenue/';
 const urlOf = (urn: string) => urn ? 'https://www.linkedin.com/feed/update/' + urn : PAGE;
+export const MAX_VIDEO_BYTES = 104857600;
+const tooBig = () => new Manual('LinkedIn video too large to send from the Hub; post it by hand');
+
+async function download(ctx: PubCtx, url: string): Promise<Response> {
+  const r = await ctx.fetch(url);
+  if (!r.ok) throw new Error('LinkedIn media download: HTTP ' + r.status);
+  return r;
+}
+/* the video's bytes, refused before the download when its size is known to be over the limit */
+async function videoBytes(ctx: PubCtx, m: Media): Promise<Uint8Array> {
+  let size = Number(m.size) || 0;
+  if (!size) {
+    try { const h = await ctx.fetch(m.url, { method: 'HEAD' }); if (h.ok) size = Number(h.headers.get('content-length')) || 0; } catch (_) { /* the download decides */ }
+  }
+  if (size > MAX_VIDEO_BYTES) throw tooBig();
+  const r = await download(ctx, m.url);
+  if (!size && Number(r.headers.get('content-length')) > MAX_VIDEO_BYTES) { try { await r.body?.cancel(); } catch (_) { /* gone */ } throw tooBig(); }
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (bytes.length > MAX_VIDEO_BYTES) throw tooBig();
+  return bytes;
+}
 
 async function uploadImage(ctx: PubCtx, H: Record<string, string>, tok: string, owner: string, m: Media): Promise<string> {
   const init = await (await ctx.fetch(API + '/images?action=initializeUpload', { method: 'POST', headers: H, body: JSON.stringify({ initializeUploadRequest: { owner } }) })).json();
   const up = init?.value?.uploadUrl; const urn = init?.value?.image;
   if (!up || !urn) throw new Error('LinkedIn image upload failed');
-  const bytes = new Uint8Array(await (await ctx.fetch(m.url)).arrayBuffer());
+  const bytes = new Uint8Array(await (await download(ctx, m.url)).arrayBuffer());
   const put = await ctx.fetch(up, { method: 'PUT', headers: { Authorization: 'Bearer ' + tok }, body: bytes });
   if (!put.ok) throw new Error('LinkedIn image upload: HTTP ' + put.status);
   return String(urn);
@@ -42,7 +65,7 @@ async function createPost(ctx: PubCtx, H: Record<string, string>, body: Any): Pr
 
 /* one video: initialize with the size, PUT each part's byte range, finalize with the parts' ETags, then check twice for AVAILABLE */
 async function uploadVideo(ctx: PubCtx, H: Record<string, string>, tok: string, owner: string, m: Media): Promise<{ urn: string; ready: boolean }> {
-  const bytes = new Uint8Array(await (await ctx.fetch(m.url)).arrayBuffer());
+  const bytes = await videoBytes(ctx, m);
   const ir = await ctx.fetch(API + '/videos?action=initializeUpload', { method: 'POST', headers: H, body: JSON.stringify({ initializeUploadRequest: { owner, fileSizeBytes: bytes.length, uploadCaptions: false, uploadThumbnail: false } }) });
   if (!ir.ok) throw new Error('LinkedIn video upload: HTTP ' + ir.status + ' ' + (await ir.text()).slice(0, 200));
   const init = await ir.json().catch(() => ({}));
@@ -102,6 +125,8 @@ async function publishLinkedIn(p: Post, caps: { max_images: number }, ctx: PubCt
   }
   const hook = await ctx.secretOrNull('SOCIAL_MAKE_LINKEDIN_HOOK');
   if (hook && !vids.length) {
+    // final review: Make sends one photo, so a post with more goes to the reminder rather than half out
+    if (imgs.length > 1) throw new Manual('Make sends one photo; this post has ' + imgs.length + '; post it by hand');
     const secret = (await ctx.secretOrNull('SOCIAL_MAKE_LINKEDIN_SECRET')) || '';
     const r = await ctx.fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret, text, image_url: imgs[0] ? imgs[0].url : '', post_type: imgs.length ? 'image' : 'text', post_id: p.id }) });
     const raw = await r.text();

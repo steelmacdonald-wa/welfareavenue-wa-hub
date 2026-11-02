@@ -26,7 +26,7 @@ export type Conn = {
   [k: string]: unknown;
 };
 
-export type Media = { path?: string; url: string; mime?: string; kind?: string; w?: number; h?: number; dur?: number; alt?: string; tags?: Array<{ username: string; x: number; y: number }> };
+export type Media = { path?: string; url: string; mime?: string; kind?: string; w?: number; h?: number; dur?: number; size?: number; alt?: string; tags?: Array<{ username: string; x: number; y: number }> };
 export type Post = {
   id: number; title: string | null; platforms: string[]; format: string; caption: string | null; link_url: string | null; media: Media[];
   scheduled_at: string | null; status: string; results: Record<string, Any>; live: Record<string, Any>; error: string | null; owner: string | null;
