@@ -779,7 +779,7 @@ test('a broken Google key fails the step without showing any of it', async () =>
 
 test('the source keeps to the Hub words', () => {
   const src = readFileSync(new URL('../fn/onboard-run/index.ts', import.meta.url), 'utf8');
-  assert.equal(src.includes('—'), false, 'no em dash');
+  assert.equal(src.includes('\u2014'), false, 'no em dash');
   assert.doesNotMatch(src, /\bAI\b/);
   assert.match(src, /^\/\/ Welfare Avenue: onboard-run \(v1, /);
   assert.equal(JSON.parse(readFileSync(new URL('../fn/onboard-run/meta.json', import.meta.url), 'utf8')).verify_jwt, true);
