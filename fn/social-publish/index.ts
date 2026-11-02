@@ -1,4 +1,12 @@
-// Welfare Avenue: social-publish (v5, 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-publish (v6, 02/11/26, wave277 adapters and the registry; v5 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// v6: each platform's publishing lives in adapters/<key>.ts (same requests as v5, now through one ctx); PUBLISHERS is a lookup.
+// v6: the platform names, the platform list and each platform's caps come from the studio_platforms registry (platforms.ts),
+//     active and inactive, so an old post naming an inactive platform still resolves; without the registry, v5's literals.
+// v6: capabilities (capabilities.ts) adds platforms (the active ones) and caps (key to caps); each mode comes from its adapter.
+// v6: LinkedIn posts two to caps.max_images photos as one multiImage post, and one video (initialize, upload the parts,
+//     finalize, wait up to a minute for AVAILABLE; still processing comes back pending). A video with photos, or two videos,
+//     or more photos than the caps allow, goes to the reminder with the reason.
+// v6: publishers() adds the approvers the database counts (wa241_approvers), so an approver is a publisher here too.
 // v5 (wave242): the notification centre's switches for the Content Studio kind (wa_notify_prefs.prefs.kinds.content_studio =
 //   {hub, slack}) decide: Slack off means no DM whatever the devices; Hub off means no Hub notification; no entry means the
 //   old rules (the channel, the disabled list).
@@ -37,13 +45,17 @@
 //   {action:'mark_posted', post_id, platform, url?}  a person posted it by hand                    (staff)
 //   {action:'remind_test', post_id}         what the reminder would say, sending nothing          (staff)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { byKey, names, type Platform, platforms } from './platforms.ts';
+import { ADAPTERS } from './adapters/index.ts';
+import { type Any, type Caps, containerStatus, firstCommentOf, graph, images, kindOf, Manual, Pending, type Post, type PubCtx, rawCaption, type Targets, THREADS, videos } from './adapters/types.ts';
+import { igFinish } from './adapters/instagram.ts';
+import { threadsFinish, threadsTarget } from './adapters/threads.ts';
+import { capabilitiesOf } from './capabilities.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
-const GRAPH = 'https://graph.facebook.com/v23.0';
-const THREADS = 'https://graph.threads.net/v1.0';
 const SITE = 'https://hub.welfareavenue.com';
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -51,20 +63,18 @@ const CORS: Record<string, string> = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
-// deno-lint-ignore no-explicit-any
-type Any = any;
-type Media = { path?: string; url: string; mime?: string; kind?: string; w?: number; h?: number; dur?: number; alt?: string; tags?: Array<{ username: string; x: number; y: number }> };
-type Post = {
-  id: number; title: string | null; platforms: string[]; format: string; caption: string | null; link_url: string | null; media: Media[];
-  scheduled_at: string | null; status: string; results: Record<string, Any>; live: Record<string, Any>; error: string | null; owner: string | null;
-  published_at: string | null; updated_at: string; campaign: string | null; variants: Record<string, Any>; first_comment: string | null; tags: string[];
-  approval_status: string; submitted_by: string | null; approved_by: string | null; approval_note: string | null; repeat_rule: Any; repeat_of: number | null;
-  track_links: boolean; utm: Any; manual: Record<string, Any>; created_by: string | null;
-};
+/* v6: the names, platforms and caps come from the registry (studio_platforms, active and inactive, so an old post naming an
+   inactive platform still resolves); these literals stand when the registry cannot be read, so publishing never stops */
 const PNAME: Record<string, string> = { facebook: 'Facebook', instagram: 'Instagram', threads: 'Threads', linkedin: 'LinkedIn', tiktok: 'TikTok', youtube: 'YouTube' };
-const ALL = ['instagram', 'facebook', 'threads', 'linkedin', 'tiktok', 'youtube'];
-class Pending extends Error { container: string; constructor(c: string) { super('still processing the video'); this.container = c; } }
-class Manual extends Error { constructor(m: string) { super(m); } }
+const FALLBACK_CAPS: Caps = { text: true, images: true, max_images: 20, video: true, max_video_s: 600, comments: true, analytics: true, link_in_caption: true };
+let REG: Platform[] = [];
+let REGBY: Record<string, Platform> = {};
+async function loadReg(): Promise<void> {
+  try {
+    const list = await platforms(svc, { includeInactive: true });
+    if (list.length) { REG = list; REGBY = byKey(list); Object.assign(PNAME, names(list)); }
+  } catch (e) { console.log('social-publish: registry unavailable: ' + String((e as Error)?.message || e)); }
+}
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -200,21 +210,13 @@ async function publishers(): Promise<string[]> {
   const { data: roles } = await svc.from('hub_roles').select('email, role, profile');
   const { data: team } = await svc.from('team_members').select('email, department, active');
   const mkt = new Set(((team || []) as Any[]).filter(t => t.active && t.department === 'marketing').map(t => String(t.email || '').toLowerCase()));
-  return ((roles || []) as Any[]).filter(r => r.role === 'admin' || (r.role === 'leader' && (r.profile === 'marketing' || mkt.has(String(r.email).toLowerCase())))).map(r => String(r.email).toLowerCase()).filter(e => /@welfareavenue\.com$/.test(e));
+  const base = ((roles || []) as Any[]).filter(r => r.role === 'admin' || (r.role === 'leader' && (r.profile === 'marketing' || mkt.has(String(r.email).toLowerCase())))).map(r => String(r.email).toLowerCase()).filter(e => /@welfareavenue\.com$/.test(e));
+  /* v6: plus the approvers the database counts (wa241_approvers), so an approver is a publisher here too */
+  let more: string[] = [];
+  try { const { data } = await svc.rpc('wa241_approvers'); more = ((data || []) as Any[]).map(e => String(e || '').trim().toLowerCase()).filter(e => /@/.test(e)); } catch (_) { /* today's set */ }
+  return Array.from(new Set([...base, ...more]));
 }
 
-/* ---------- Graph ---------- */
-async function graph(method: 'GET' | 'POST' | 'DELETE', path: string, token: string, params: Record<string, string> = {}, base = GRAPH): Promise<Any> {
-  const u = new URL(base + (path.startsWith('/') ? path : '/' + path));
-  const body = new URLSearchParams();
-  for (const k of Object.keys(params)) { if (method === 'POST') body.set(k, params[k]); else u.searchParams.set(k, params[k]); }
-  if (method === 'POST') body.set('access_token', token); else u.searchParams.set('access_token', token);
-  const res = await fetch(u.toString(), method === 'POST' ? { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString() } : { method });
-  const b = await res.json().catch(() => ({}));
-  if (!res.ok || b.error) { const e = b.error || {}; throw new Error((e.error_user_msg || e.message || ('HTTP ' + res.status)) + (e.code ? ' (code ' + e.code + (e.error_subcode ? '/' + e.error_subcode : '') + ')' : '')); }
-  return b;
-}
-type Targets = { token: string; page: { id: string; name: string; token: string } | null; ig: { id: string; username: string } | null };
 let TGT: Targets | null = null;
 async function targets(): Promise<Targets> {
   if (TGT) return TGT;
@@ -225,26 +227,14 @@ async function targets(): Promise<Targets> {
   let page: Targets['page'] = null;
   if (fb) {
     let pt = token;
-    try { const r = await graph('GET', '/' + fb.external_id, token, { fields: 'access_token,name' }); pt = r.access_token || token; } catch (_) { /* a page token already */ }
+    try { const r = await graph(ctx, 'GET', '/' + fb.external_id, token, { fields: 'access_token,name' }); pt = r.access_token || token; } catch (_) { /* a page token already */ }
     page = { id: String(fb.external_id), name: fb.name || 'Page', token: pt };
   }
   TGT = { token, page, ig: ig ? { id: String(ig.external_id), username: ig.handle || '' } : null };
   return TGT;
 }
-async function permissions(token: string): Promise<{ granted: string[]; source: string }> {
-  try { const r = await graph('GET', '/me/permissions', token); return { granted: ((r.data || []) as Any[]).filter(p => p.status === 'granted').map(p => String(p.permission)), source: 'me/permissions' }; }
-  catch (_) { /* a Page token has no permissions edge */ }
-  try { const r = await graph('GET', '/debug_token', token, { input_token: token }); const d = r.data || {}; return { granted: (d.scopes || (d.granular_scopes || []).map((s: Any) => s.scope) || []) as string[], source: 'debug_token' }; }
-  catch (_) { return { granted: [], source: 'unknown' }; }
-}
 
 /* ---------- the words each platform gets ---------- */
-function images(p: Post): Media[] { return (p.media || []).filter(m => m && m.url && String(m.kind || m.mime || '').indexOf('video') < 0); }
-function videos(p: Post): Media[] { return (p.media || []).filter(m => m && m.url && String(m.kind || m.mime || '').indexOf('video') >= 0); }
-function V(p: Post, platform: string): Record<string, Any> { return ((p.variants || {})[platform] || {}) as Record<string, Any>; }
-function kindOf(p: Post, platform: string): string { const k = String(V(p, platform).kind || ''); if (k) return k; if (platform === 'instagram' && videos(p).length) return 'reel'; return 'feed'; }
-function rawCaption(p: Post, platform: string): string { const v = V(p, platform); return String((v.caption != null && String(v.caption).trim() !== '' ? v.caption : p.caption) || '').trim(); }
-function firstCommentOf(p: Post, platform: string): string { const v = V(p, platform); return String((v.first_comment != null && String(v.first_comment).trim() !== '' ? v.first_comment : p.first_comment) || '').trim(); }
 function capHashtags(s: string, max: number): string {
   let n = 0;
   return s.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, (m) => { n++; return n > max ? '' : m; }).replace(/[ \t]+\n/g, '\n').trim();
@@ -296,273 +286,12 @@ async function capFor(p: Post, platform: string): Promise<string> {
   if (platform === 'threads' && c.length > 500) c = c.slice(0, 497) + '\u2026';
   return await trackLinks(c, p, platform);
 }
-
-/* ---------- Facebook ---------- */
-async function rupload(videoId: string, fileUrl: string, token: string): Promise<void> {
-  const r = await fetch('https://rupload.facebook.com/video-upload/v23.0/' + videoId, { method: 'POST', headers: { Authorization: 'OAuth ' + token, file_url: fileUrl } });
-  const b = await r.json().catch(() => ({}));
-  if (!r.ok || b.error || b.success === false) throw new Error('Facebook upload: ' + ((b.error && b.error.message) || ('HTTP ' + r.status)));
-}
-async function publishFacebook(p: Post, t: Targets): Promise<{ id: string; url: string }> {
-  if (!t.page) throw new Error('No Facebook Page connected (Content Studio > Connections)');
-  const pg = t.page; const msg = await capFor(p, 'facebook'); const imgs = images(p); const vids = videos(p); const kind = kindOf(p, 'facebook');
-  let id = ''; let url = '';
-  if (kind === 'reel') {
-    if (!vids.length) throw new Error('A Facebook Reel needs a video');
-    const st = await graph('POST', '/' + pg.id + '/video_reels', pg.token, { upload_phase: 'start' });
-    const vid = String(st.video_id);
-    await rupload(vid, vids[0].url, pg.token);
-    await graph('POST', '/' + pg.id + '/video_reels', pg.token, { upload_phase: 'finish', video_id: vid, video_state: 'PUBLISHED', description: msg });
-    id = vid; url = 'https://www.facebook.com/reel/' + vid;
-  } else if (kind === 'story') {
-    if (vids.length) {
-      const st = await graph('POST', '/' + pg.id + '/video_stories', pg.token, { upload_phase: 'start' });
-      const vid = String(st.video_id);
-      await rupload(vid, vids[0].url, pg.token);
-      const fin = await graph('POST', '/' + pg.id + '/video_stories', pg.token, { upload_phase: 'finish', video_id: vid });
-      id = String(fin.post_id || vid);
-    } else if (imgs.length) {
-      const ph = await graph('POST', '/' + pg.id + '/photos', pg.token, { url: imgs[0].url, published: 'false' });
-      const r = await graph('POST', '/' + pg.id + '/photo_stories', pg.token, { photo_id: String(ph.id) });
-      id = String(r.post_id || ph.id);
-    } else throw new Error('A Facebook story needs a photo or a video');
-    url = 'https://www.facebook.com/stories/' + pg.id;
-  } else if (vids.length) {
-    const r = await graph('POST', '/' + pg.id + '/videos', pg.token, { file_url: vids[0].url, description: msg, title: String(V(p, 'facebook').title || p.title || '').slice(0, 100) });
-    id = String(r.id || r.post_id || ''); url = 'https://www.facebook.com/' + pg.id + '/videos/' + id;
-  } else if (imgs.length === 1) {
-    const params: Record<string, string> = { url: imgs[0].url, message: msg };
-    if (imgs[0].alt) params.alt_text_custom = String(imgs[0].alt).slice(0, 1000);
-    const r = await graph('POST', '/' + pg.id + '/photos', pg.token, params);
-    id = String(r.post_id || r.id || ''); url = 'https://www.facebook.com/' + id;
-  } else if (imgs.length > 1) {
-    const ids: string[] = [];
-    for (const m of imgs.slice(0, 10)) { const pr: Record<string, string> = { url: m.url, published: 'false' }; if (m.alt) pr.alt_text_custom = String(m.alt).slice(0, 1000); const r = await graph('POST', '/' + pg.id + '/photos', pg.token, pr); ids.push(String(r.id)); }
-    const params: Record<string, string> = { message: msg };
-    ids.forEach((mid, i) => { params['attached_media[' + i + ']'] = JSON.stringify({ media_fbid: mid }); });
-    const r = await graph('POST', '/' + pg.id + '/feed', pg.token, params);
-    id = String(r.id || ''); url = 'https://www.facebook.com/' + id;
-  } else {
-    const params: Record<string, string> = { message: msg };
-    if (p.link_url) params.link = p.track_links ? await shortLink(p.link_url, p, 'facebook') : p.link_url;
-    if (!msg && !p.link_url) throw new Error('Nothing to post: add a caption, a link or media');
-    const r = await graph('POST', '/' + pg.id + '/feed', pg.token, params);
-    id = String(r.id || ''); url = 'https://www.facebook.com/' + id;
-  }
-  if (!id) throw new Error('Facebook returned no post id');
-  const fc = firstCommentOf(p, 'facebook');
-  if (fc && kind !== 'story') { try { await graph('POST', '/' + id + '/comments', pg.token, { message: await trackLinks(fc, p, 'facebook') }); } catch (e) { return { id, url, first_comment_error: String((e as Error).message).slice(0, 200) } as Any; } }
-  return { id, url };
-}
-
-/* ---------- Instagram ---------- */
-async function containerStatus(cid: string, token: string, base = GRAPH): Promise<string> {
-  const r = await graph('GET', '/' + cid, token, { fields: base === GRAPH ? 'status_code,status' : 'status,error_message' }, base);
-  const s = String(r.status_code || r.status || '');
-  if (s === 'ERROR' || s === 'EXPIRED') throw new Error('could not process the media (' + s + (r.status && r.status !== s ? ': ' + r.status : '') + (r.error_message ? ': ' + r.error_message : '') + ')');
-  return s;
-}
-async function waitContainer(cid: string, token: string, maxMs: number, base = GRAPH): Promise<boolean> {
-  const started = Date.now();
-  while (Date.now() - started < maxMs) {
-    if ((await containerStatus(cid, token, base)) === 'FINISHED') return true;
-    await new Promise(res => setTimeout(res, 4000));
-  }
-  return false;
-}
-async function igFinish(igId: string, cid: string, tok: string, username: string, p?: Post): Promise<{ id: string; url: string }> {
-  const pub = await graph('POST', '/' + igId + '/media_publish', tok, { creation_id: cid });
-  const id = String(pub.id || '');
-  if (!id) throw new Error('Instagram returned no media id');
-  let url = 'https://www.instagram.com/' + (username ? username + '/' : '');
-  try { const m = await graph('GET', '/' + id, tok, { fields: 'permalink' }); if (m.permalink) url = m.permalink; } catch (_) { /* fine */ }
-  const out: Any = { id, url };
-  if (p) {
-    const fc = firstCommentOf(p, 'instagram');
-    if (fc && kindOf(p, 'instagram') !== 'story') { try { await graph('POST', '/' + id + '/comments', tok, { message: fc }); out.first_comment = true; } catch (e) { out.first_comment_error = String((e as Error).message).slice(0, 200); } }
-  }
-  return out;
-}
-function igTags(m: Media): string | null {
-  const t = (m.tags || []).filter(x => x && x.username).slice(0, 20).map(x => ({ username: String(x.username).replace(/^@/, ''), x: Math.max(0, Math.min(1, Number(x.x) || 0.5)), y: Math.max(0, Math.min(1, Number(x.y) || 0.5)) }));
-  return t.length ? JSON.stringify(t) : null;
-}
-function igCommon(p: Post, params: Record<string, string>, opt: { collab?: boolean; location?: boolean } = {}) {
-  const v = V(p, 'instagram');
-  if (opt.location !== false && v.location && v.location.id) params.location_id = String(v.location.id);
-  const col = (Array.isArray(v.collaborators) ? v.collaborators : []).map((x: string) => String(x).replace(/^@/, '').trim()).filter(Boolean).slice(0, 3);
-  if (opt.collab !== false && col.length) params.collaborators = JSON.stringify(col);
-}
-async function publishInstagram(p: Post, t: Targets): Promise<{ id: string; url: string }> {
-  if (!t.ig) throw new Error('No Instagram account connected (Content Studio > Connections)');
-  const ig = t.ig; const tok = t.page ? t.page.token : t.token; const cap = await capFor(p, 'instagram'); const imgs = images(p); const vids = videos(p); const kind = kindOf(p, 'instagram');
-  const v = V(p, 'instagram');
-  let creation = '';
-  if (kind === 'story') {
-    const params: Record<string, string> = { media_type: 'STORIES' };
-    if (vids.length) params.video_url = vids[0].url; else if (imgs.length) params.image_url = imgs[0].url; else throw new Error('A story needs a photo or a video');
-    const r = await graph('POST', '/' + ig.id + '/media', tok, params);
-    creation = String(r.id);
-    if (vids.length && !(await waitContainer(creation, tok, 45000))) throw new Pending(creation);
-  } else if (vids.length && (kind === 'reel' || !imgs.length)) {
-    const params: Record<string, string> = { media_type: 'REELS', video_url: vids[0].url, caption: cap, share_to_feed: v.share_to_feed === false ? 'false' : 'true' };
-    if (v.cover_url) params.cover_url = String(v.cover_url); else if (v.cover_ms != null) params.thumb_offset = String(Math.max(0, Math.round(Number(v.cover_ms) || 0)));
-    if (v.audio_name) params.audio_name = String(v.audio_name).slice(0, 80);
-    igCommon(p, params);
-    const r = await graph('POST', '/' + ig.id + '/media', tok, params);
-    creation = String(r.id);
-    if (!(await waitContainer(creation, tok, 45000))) throw new Pending(creation);
-  } else if (imgs.length === 1) {
-    const params: Record<string, string> = { image_url: imgs[0].url, caption: cap };
-    if (imgs[0].alt) params.alt_text = String(imgs[0].alt).slice(0, 1000);
-    const tg = igTags(imgs[0]); if (tg) params.user_tags = tg;
-    igCommon(p, params);
-    const r = await graph('POST', '/' + ig.id + '/media', tok, params);
-    creation = String(r.id);
-  } else if (imgs.length > 1) {
-    const kids: string[] = [];
-    for (const m of imgs.slice(0, 10)) {
-      const pr: Record<string, string> = { image_url: m.url, is_carousel_item: 'true' };
-      if (m.alt) pr.alt_text = String(m.alt).slice(0, 1000);
-      const tg = igTags(m); if (tg) pr.user_tags = tg;
-      const r = await graph('POST', '/' + ig.id + '/media', tok, pr); kids.push(String(r.id));
-    }
-    const params: Record<string, string> = { media_type: 'CAROUSEL', children: kids.join(','), caption: cap };
-    igCommon(p, params);
-    const r = await graph('POST', '/' + ig.id + '/media', tok, params);
-    creation = String(r.id);
-    if (!(await waitContainer(creation, tok, 40000))) throw new Pending(creation);
-  } else throw new Error('Instagram needs a photo or a video');
-  return await igFinish(ig.id, creation, tok, ig.username, p);
-}
-
-/* ---------- Threads ---------- */
-async function threadsTarget(): Promise<{ token: string; user: string; username: string } | null> {
-  const tok = await secretOrNull('SOCIAL_THREADS_TOKEN'); if (!tok) return null;
-  const c = (await connections()).threads || {};
-  if (!c.user_id) return null;
-  return { token: tok, user: String(c.user_id), username: String(c.username || '') };
-}
-async function publishThreads(p: Post): Promise<{ id: string; url: string }> {
-  const t = await threadsTarget(); if (!t) throw new Manual('Threads is not connected');
-  const text = await capFor(p, 'threads'); const imgs = images(p); const vids = videos(p);
-  let creation = '';
-  if (vids.length) { const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'VIDEO', video_url: vids[0].url, text }, THREADS); creation = String(r.id); if (!(await waitContainer(creation, t.token, 45000, THREADS))) throw new Pending(creation); }
-  else if (imgs.length > 1) {
-    const kids: string[] = [];
-    for (const m of imgs.slice(0, 20)) { const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'IMAGE', image_url: m.url, is_carousel_item: 'true' }, THREADS); kids.push(String(r.id)); }
-    const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'CAROUSEL', children: kids.join(','), text }, THREADS); creation = String(r.id);
-    await new Promise(res => setTimeout(res, 3000));
-  } else if (imgs.length === 1) { const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'IMAGE', image_url: imgs[0].url, text }, THREADS); creation = String(r.id); await new Promise(res => setTimeout(res, 3000)); }
-  else { if (!text) throw new Error('Threads needs words or media'); const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'TEXT', text }, THREADS); creation = String(r.id); }
-  return await threadsFinish(t, creation, p);
-}
-async function threadsFinish(t: { token: string; user: string; username: string }, creation: string, p?: Post): Promise<{ id: string; url: string }> {
-  const pub = await graph('POST', '/' + t.user + '/threads_publish', t.token, { creation_id: creation }, THREADS);
-  const id = String(pub.id || ''); if (!id) throw new Error('Threads returned no id');
-  let url = 'https://www.threads.net/@' + t.username;
-  try { const m = await graph('GET', '/' + id, t.token, { fields: 'permalink' }, THREADS); if (m.permalink) url = m.permalink; } catch (_) { /* fine */ }
-  const out: Any = { id, url };
-  if (p) {
-    const fc = firstCommentOf(p, 'threads');
-    if (fc) { try { const r = await graph('POST', '/' + t.user + '/threads', t.token, { media_type: 'TEXT', text: await trackLinks(fc, p, 'threads'), reply_to_id: id }, THREADS); await new Promise(res => setTimeout(res, 2000)); await graph('POST', '/' + t.user + '/threads_publish', t.token, { creation_id: String(r.id) }, THREADS); out.first_comment = true; } catch (e) { out.first_comment_error = String((e as Error).message).slice(0, 200); } }
-  }
-  return out;
-}
-
-/* ---------- LinkedIn: direct when approved, else the Make.com webhook, else a reminder ---------- */
-async function publishLinkedIn(p: Post): Promise<{ id: string; url: string }> {
-  const c = (await connections()).linkedin || {};
-  const text = await capFor(p, 'linkedin'); const imgs = images(p); const vids = videos(p);
-  const direct = c.mode === 'direct' ? await secretOrNull('SOCIAL_LINKEDIN_TOKEN') : null;
-  if (direct && c.org_urn && !vids.length && imgs.length <= 1) {
-    const H = { Authorization: 'Bearer ' + direct, 'Linkedin-Version': '202609', 'X-Restli-Protocol-Version': '2.0.0', 'Content-Type': 'application/json' };
-    let imageUrn: string | null = null;
-    if (imgs.length) {
-      const init = await (await fetch('https://api.linkedin.com/rest/images?action=initializeUpload', { method: 'POST', headers: H, body: JSON.stringify({ initializeUploadRequest: { owner: c.org_urn } }) })).json();
-      const up = init?.value?.uploadUrl; imageUrn = init?.value?.image;
-      if (!up || !imageUrn) throw new Error('LinkedIn image upload failed');
-      const bytes = new Uint8Array(await (await fetch(imgs[0].url)).arrayBuffer());
-      const put = await fetch(up, { method: 'PUT', headers: { Authorization: 'Bearer ' + direct }, body: bytes });
-      if (!put.ok) throw new Error('LinkedIn image upload: HTTP ' + put.status);
-    }
-    const body: Any = { author: c.org_urn, commentary: text, visibility: 'PUBLIC', distribution: { feedDistribution: 'MAIN_FEED', targetEntities: [], thirdPartyDistributionChannels: [] }, lifecycleState: 'PUBLISHED', isReshareDisabledByAuthor: false };
-    if (imageUrn) body.content = { media: { id: imageUrn, altText: String(imgs[0].alt || '').slice(0, 300) } };
-    const r = await fetch('https://api.linkedin.com/rest/posts', { method: 'POST', headers: H, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error('LinkedIn: HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
-    const urn = r.headers.get('x-restli-id') || '';
-    return { id: urn, url: urn ? 'https://www.linkedin.com/feed/update/' + urn : 'https://www.linkedin.com/company/welfareavenue/' };
-  }
-  const hook = await secretOrNull('SOCIAL_MAKE_LINKEDIN_HOOK');
-  if (hook && !vids.length) {
-    const secret = (await secretOrNull('SOCIAL_MAKE_LINKEDIN_SECRET')) || '';
-    const r = await fetch(hook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret, text, image_url: imgs[0] ? imgs[0].url : '', post_type: imgs.length ? 'image' : 'text', post_id: p.id }) });
-    const raw = await r.text();
-    if (!r.ok) throw new Error('Make: HTTP ' + r.status + ' ' + raw.slice(0, 120));
-    let b: Any = {}; try { b = JSON.parse(raw); } catch (_) { b = {}; }
-    const urn = String(b.urn || b.id || '');
-    return { id: urn || 'make-' + Date.now(), url: urn ? 'https://www.linkedin.com/feed/update/' + urn : 'https://www.linkedin.com/company/welfareavenue/', via: 'make' } as Any;
-  }
-  throw new Manual(vids.length ? 'LinkedIn videos are posted by hand' : 'LinkedIn is not connected yet');
-}
-
-/* ---------- YouTube Shorts ---------- */
-async function googleToken(): Promise<string | null> {
-  const cl = await secretOrNull('SOCIAL_YOUTUBE_CLIENT'); const rt = await secretOrNull('SOCIAL_YOUTUBE_REFRESH');
-  if (!cl || !rt) return null;
-  const c = JSON.parse(cl);
-  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: c.id, client_secret: c.secret, refresh_token: rt, grant_type: 'refresh_token' }).toString() });
-  const b = await r.json();
-  if (!b.access_token) throw new Error('YouTube sign-in expired: connect YouTube again (' + (b.error || r.status) + ')');
-  return String(b.access_token);
-}
-async function publishYouTube(p: Post): Promise<{ id: string; url: string }> {
-  const vids = videos(p); if (!vids.length) throw new Error('A Short needs a video');
-  const tok = await googleToken(); if (!tok) throw new Manual('YouTube is not connected');
-  const v = V(p, 'youtube');
-  const title = String(v.title || p.title || rawCaption(p, 'youtube').split('\n')[0] || 'Welfare Avenue').slice(0, 100);
-  const desc = (await trackLinks(rawCaption(p, 'youtube'), p, 'youtube')).slice(0, 4900);
-  const privacy = ['public', 'unlisted', 'private'].indexOf(String(v.privacy)) >= 0 ? String(v.privacy) : 'public';
-  const bytes = new Uint8Array(await (await fetch(vids[0].url)).arrayBuffer());
-  const init = await fetch('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status', {
-    method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json; charset=UTF-8', 'X-Upload-Content-Length': String(bytes.length), 'X-Upload-Content-Type': vids[0].mime || 'video/mp4' },
-    body: JSON.stringify({ snippet: { title, description: desc, categoryId: '29', tags: (p.tags || []).slice(0, 10) }, status: { privacyStatus: privacy, selfDeclaredMadeForKids: !!(v.made_for_kids || v.kids) } })
-  });
-  const loc = init.headers.get('location');
-  if (!init.ok || !loc) throw new Error('YouTube: ' + init.status + ' ' + (await init.text()).slice(0, 200));
-  const put = await fetch(loc, { method: 'PUT', headers: { 'Content-Type': vids[0].mime || 'video/mp4' }, body: bytes });
-  const b = await put.json().catch(() => ({}));
-  if (!put.ok || !b.id) throw new Error('YouTube upload: ' + put.status + ' ' + JSON.stringify(b).slice(0, 200));
-  return { id: String(b.id), url: 'https://youtube.com/shorts/' + b.id, privacy: b.status?.privacyStatus || privacy } as Any;
-}
-
-/* ---------- TikTok: the video lands in WA's TikTok inbox as a draft ---------- */
-async function tiktokToken(): Promise<string | null> {
-  const raw = await secretOrNull('SOCIAL_TIKTOK_TOKEN'); const cl = await secretOrNull('SOCIAL_TIKTOK_CLIENT');
-  if (!raw || !cl) return null;
-  const t = JSON.parse(raw); const c = JSON.parse(cl);
-  if (t.access_token && Number(t.expires_at || 0) > Date.now() + 120000) return String(t.access_token);
-  const r = await fetch('https://open.tiktokapis.com/v2/oauth/token/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_key: c.key || c.id, client_secret: c.secret, grant_type: 'refresh_token', refresh_token: t.refresh_token }).toString() });
-  const b = await r.json();
-  if (!b.access_token) throw new Error('TikTok sign-in expired: connect TikTok again');
-  const next = { ...t, access_token: b.access_token, refresh_token: b.refresh_token || t.refresh_token, expires_at: Date.now() + Number(b.expires_in || 86400) * 1000 };
-  await svc.rpc('wa_vault_set', { p_name: 'SOCIAL_TIKTOK_TOKEN', p_value: JSON.stringify(next), p_note: 'wave225: TikTok login for the Content Studio (social-connect)' });
-  return String(b.access_token);
-}
-async function publishTikTok(p: Post): Promise<{ id: string; url: string }> {
-  const vids = videos(p); if (!vids.length) throw new Manual('TikTok photo posts are posted by hand');
-  const tok = await tiktokToken(); if (!tok) throw new Manual('TikTok is not connected');
-  const bytes = new Uint8Array(await (await fetch(vids[0].url)).arrayBuffer());
-  const size = bytes.length; const chunk = size <= 64 * 1024 * 1024 ? size : 10 * 1024 * 1024; const count = Math.ceil(size / chunk);
-  const init = await (await fetch('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json; charset=UTF-8' }, body: JSON.stringify({ source_info: { source: 'FILE_UPLOAD', video_size: size, chunk_size: chunk, total_chunk_count: count } }) })).json();
-  if (!init?.data?.upload_url) throw new Error('TikTok: ' + (init?.error?.message || 'no upload address'));
-  for (let i = 0; i < count; i++) {
-    const a = i * chunk, b = Math.min(size, a + chunk) - 1;
-    const r = await fetch(init.data.upload_url, { method: 'PUT', headers: { 'Content-Type': vids[0].mime || 'video/mp4', 'Content-Range': 'bytes ' + a + '-' + b + '/' + size }, body: bytes.slice(a, b + 1) });
-    if (!r.ok && r.status !== 206) throw new Error('TikTok upload: HTTP ' + r.status);
-  }
-  return { id: String(init.data.publish_id), url: 'https://www.tiktok.com/', draft: true } as Any;
-}
+/* v6: what the adapters get (they never touch the vault, the database or the network except through this) */
+async function vaultSet(name: string, value: string, note: string): Promise<void> { await svc.rpc('wa_vault_set', { p_name: name, p_value: value, p_note: note }); }
+const ctx: PubCtx = {
+  fetch: (i, init) => fetch(i, init), getSecret, secretOrNull, vaultSet, connections, capFor, trackLinks, shortLink, images, videos,
+  sleep: (ms) => new Promise(res => setTimeout(res, ms)), targets: null,
+};
 
 /* ---------- saving ---------- */
 async function save(id: number, patch: Record<string, Any>): Promise<void> { patch.updated_at = new Date().toISOString(); await svc.from('content_posts').update(patch).eq('id', id); }
@@ -575,11 +304,6 @@ function settle(p: Post, results: Record<string, Any>): { status: string; pendin
   return { status: doneAll ? 'published' : 'failed', pending: false };
 }
 function anyLive(results: Record<string, Any>): boolean { return Object.keys(results).some(k => results[k] && results[k].id); }
-const PUBLISHERS: Record<string, (p: Post, t: Targets | null) => Promise<Any>> = {
-  facebook: async (p, t) => { if (!t) throw new Error('Publishing to Meta is off: the Meta token is not in the vault'); return publishFacebook(p, t); },
-  instagram: async (p, t) => { if (!t) throw new Error('Publishing to Meta is off: the Meta token is not in the vault'); return publishInstagram(p, t); },
-  threads: (p) => publishThreads(p), linkedin: (p) => publishLinkedIn(p), youtube: (p) => publishYouTube(p), tiktok: (p) => publishTikTok(p)
-};
 
 /* the reminder for a platform the Hub cannot post to: the owner (else the person who made it) gets a Hub notification and a Slack DM */
 async function remindManual(p: Post, platform: string, why: string, dry = false): Promise<Any> {
@@ -617,11 +341,11 @@ async function publishPost(id: number, by: string, caller: Me | null): Promise<A
   const errors: string[] = []; const lines: string[] = []; const reminded: string[] = [];
   for (const platform of (p.platforms || [])) {
     if (results[platform] && (results[platform].id || results[platform].manual)) continue;
-    const fn = PUBLISHERS[platform];
-    if (!fn) { errors.push(platform + ': not supported'); continue; }
+    const ad = ADAPTERS[platform];
+    if (!ad) { errors.push(platform + ': not supported'); continue; }
     try {
       if ((platform === 'facebook' || platform === 'instagram') && !t) throw new Error(metaErr.indexOf('META_SYSTEM_TOKEN') >= 0 ? 'Publishing to Meta is off: the Meta token is not in the vault' : (metaErr || 'Meta is not connected'));
-      const r = await fn(p, t);
+      const r: Any = await ad.publish(p, (REGBY[platform] && REGBY[platform].caps) || FALLBACK_CAPS, { ...ctx, targets: t });
       results[platform] = { ...r, at: new Date().toISOString() };
       lines.push('\u2022 ' + (r.draft ? 'Sent to the ' + PNAME[platform] + ' drafts (post it in the app)' : 'Published to ' + (PNAME[platform] || platform)) + ': <' + r.url + '|open>');
     } catch (e) {
@@ -672,7 +396,7 @@ async function finishPending(): Promise<Any[]> {
   const { data } = await svc.from('content_posts').select('*').eq('status', 'publishing').limit(20);
   const rows = (data || []) as Post[]; if (!rows.length) return out;
   let t: Targets | null = null; try { t = await targets(); } catch (_) { t = null; }
-  const th = await threadsTarget();
+  const th = await threadsTarget(ctx);
   for (const p of rows) {
     const results: Record<string, Any> = { ...(p.results || {}) };
     const pend = Object.keys(results).filter(k => results[k] && results[k].pending);
@@ -686,12 +410,12 @@ async function finishPending(): Promise<Any[]> {
       try {
         if (pl === 'instagram' && t && t.ig) {
           const tok = t.page ? t.page.token : t.token;
-          const s = await containerStatus(String(r.container), tok);
-          if (s === 'FINISHED') { const fin = await igFinish(t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Instagram: <' + fin.url + '|open>'); }
+          const s = await containerStatus(ctx, String(r.container), tok);
+          if (s === 'FINISHED') { const fin = await igFinish(ctx, t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Instagram: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Instagram: the video was still processing after 30 minutes'); }
         } else if (pl === 'threads' && th) {
-          const s = await containerStatus(String(r.container), th.token, THREADS);
-          if (s === 'FINISHED') { const fin = await threadsFinish(th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Threads: <' + fin.url + '|open>'); }
+          const s = await containerStatus(ctx, String(r.container), th.token, THREADS);
+          if (s === 'FINISHED') { const fin = await threadsFinish(ctx, th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Threads: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Threads: the video was still processing after 30 minutes'); }
         } else { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': cannot finish without its connection'); }
       } catch (e) { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': ' + String((e as Error).message || e).slice(0, 300)); }
@@ -765,39 +489,6 @@ async function confirm(days: number): Promise<Any> {
   return { checked: ((posts || []).length + (due || []).length), updated, auto_posted: autoPosted, matched: out.slice(0, 50) };
 }
 
-/* ---------- what can publish where ---------- */
-async function capabilities(): Promise<Any> {
-  const token = await secretOrNull('META_SYSTEM_TOKEN');
-  const { data: accs } = await svc.from('social_accounts').select('platform,name,handle,status');
-  const conn = await connections();
-  const out: Any = { ok: true, token: !!token, accounts: accs || [], granted: [], can: {}, mode: {}, missing: [], source: null, settings: await settings(), studio: await studio(), connections: {} };
-  for (const k of ALL) out.can[k] = false;
-  if (token) {
-    const perms = await permissions(token);
-    out.granted = perms.granted; out.source = perms.source;
-    const has = (x: string) => perms.granted.indexOf(x) >= 0;
-    const fbAcc = (accs || []).some((a: Any) => a.platform === 'facebook');
-    const igAcc = (accs || []).some((a: Any) => a.platform === 'instagram');
-    out.can.facebook = fbAcc && (perms.source === 'unknown' ? true : has('pages_manage_posts'));
-    out.can.instagram = igAcc && (perms.source === 'unknown' ? true : has('instagram_content_publish'));
-    out.comments = { facebook: perms.source === 'unknown' ? null : has('pages_manage_engagement') && has('pages_read_user_content'), instagram: perms.source === 'unknown' ? null : has('instagram_manage_comments') };
-    const want = ['pages_manage_posts', 'pages_manage_engagement', 'pages_read_user_content', 'pages_read_engagement', 'pages_show_list', 'read_insights', 'business_management', 'instagram_basic', 'instagram_content_publish', 'instagram_manage_comments', 'instagram_manage_insights'];
-    if (perms.source !== 'unknown') out.missing = want.filter(x => !has(x));
-    out.accounts_missing = [!fbAcc ? 'facebook' : null, !igAcc ? 'instagram' : null].filter(Boolean);
-  }
-  out.mode.facebook = out.can.facebook ? 'direct' : 'reminder';
-  out.mode.instagram = out.can.instagram ? 'direct' : 'reminder';
-  out.can.threads = !!((await secretOrNull('SOCIAL_THREADS_TOKEN')) && (conn.threads || {}).user_id); out.mode.threads = out.can.threads ? 'direct' : 'reminder';
-  const li = conn.linkedin || {};
-  if (li.mode === 'direct' && await secretOrNull('SOCIAL_LINKEDIN_TOKEN')) { out.can.linkedin = true; out.mode.linkedin = 'direct'; }
-  else if (await secretOrNull('SOCIAL_MAKE_LINKEDIN_HOOK')) { out.can.linkedin = true; out.mode.linkedin = 'make'; }
-  else out.mode.linkedin = 'reminder';
-  out.can.youtube = !!((await secretOrNull('SOCIAL_YOUTUBE_REFRESH')) && (await secretOrNull('SOCIAL_YOUTUBE_CLIENT'))); out.mode.youtube = out.can.youtube ? 'direct' : 'reminder';
-  out.can.tiktok = !!((await secretOrNull('SOCIAL_TIKTOK_TOKEN')) && (await secretOrNull('SOCIAL_TIKTOK_CLIENT'))); out.mode.tiktok = out.can.tiktok ? 'drafts' : 'reminder';
-  for (const k of Object.keys(conn)) { const c = { ...(conn[k] || {}) }; delete c.state; out.connections[k] = c; }
-  return out;
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -806,8 +497,12 @@ Deno.serve(async (req: Request) => {
   let body: Any = {};
   try { body = await req.json(); } catch (_) { body = {}; }
   const action = String(body.action || 'capabilities');
+  await loadReg();
   try {
-    if (action === 'capabilities') return json(await capabilities());
+    if (action === 'capabilities') {
+      const accounts = async () => { const { data } = await svc.from('social_accounts').select('platform,name,handle,status'); return (data || []) as Any[]; };
+      return json(await capabilitiesOf({ ...ctx, accounts, settings, studio }, REG));
+    }
     if (action === 'settings') {
       if (body.value && typeof body.value === 'object') {
         const cur = await settings();
