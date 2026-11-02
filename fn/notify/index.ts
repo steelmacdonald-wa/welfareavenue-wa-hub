@@ -109,7 +109,7 @@ async function hubRelay(kind: string, to: string[], title: string, body: string,
 const RELAY_TITLE: Record<string, string> = { timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty',
   meet_propose: 'A leader proposed a new meeting time for my team', meet_avail_ask: 'My team needs my availability' };
 const RELAY_URL: Record<string, string> = { timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding',
-  meet_propose: '#team', meet_avail_ask: '#mypage' };
+  meet_avail_ask: '#mypage' };   /* meet_propose builds its own link to the team's Agenda tab */
 /* v15 (shared since v18): a relayed message to each person, the Slack DM through their switch and the log, then the Hub notification through hub-push */
 async function relaySend(event: string, toList: string[], text: string, title: string, plainBody: string, url: string, tag?: string): Promise<{ outcome: Record<string, string>; hub: string }> {
   const to = Array.from(new Set(toList));
