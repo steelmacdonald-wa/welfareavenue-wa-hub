@@ -32,6 +32,7 @@ on conflict (key) do update set grp = excluded.grp, grp_title = excluded.grp_tit
 -- 2. who got the manager's grid link, and when
 alter table public.hub_onboard_flows add column if not exists manager_link_member_id bigint references public.team_members (id) on delete set null;
 alter table public.hub_onboard_flows add column if not exists manager_link_sent_at timestamptz;
+create index if not exists hub_onboard_flows_manager_link_idx on public.hub_onboard_flows (manager_link_member_id) where manager_link_member_id is not null;   -- its foreign key, as the release checklist asks
 comment on column public.hub_onboard_flows.manager_link_member_id is 'wave271b: the manager (team_members.id) who was sent the link to mark their availability grid. If HR confirms a different manager, the link goes to the new one too and the reminder starts again.';
 comment on column public.hub_onboard_flows.manager_link_sent_at is 'wave271b: when that link was sent. Null until then. The manager''s reminder counts onboard_remind_hours from here.';
 grant select (manager_link_member_id, manager_link_sent_at) on public.hub_onboard_flows to authenticated;   -- as every column but pw_nonce (271a); the service key has it all

@@ -49,6 +49,7 @@ async function checkRemind(db, label) {
     ok((await one(db, `select has_column_privilege('authenticated', 'public.hub_onboard_flows', '${c}', 'select') as g`)).g === true, label + ': HR can read ' + c);
   }
   ok((await one(db, `select has_column_privilege('authenticated', 'public.hub_onboard_flows', 'pw_nonce', 'select') as g`)).g === false, label + ': pw_nonce is still hidden from the browser');
+  ok((await one(db, `select count(*)::int as n from pg_indexes where schemaname = 'public' and indexname = 'hub_onboard_flows_manager_link_idx'`)).n === 1, label + ': manager_link_member_id has its index');
   const fn = await one(db, `select obj_description('public.wa271_remind()'::regprocedure, 'pg_proc') as cmt,
       has_function_privilege('anon', 'public.wa271_remind()', 'execute') as anon, has_function_privilege('authenticated', 'public.wa271_remind()', 'execute') as auth,
       has_function_privilege('service_role', 'public.wa271_remind()', 'execute') as svc`);
@@ -114,6 +115,7 @@ try {
   ok(!/starts_on/.test((await one(db, `select pg_get_functiondef('public.wa166_person_card(bigint,text)'::regprocedure) as d`)).d), 'the undo takes starts_on off the lead card');
 
   ok((await one(db, `select to_regclass('public.hub_onboard_flows') as r`)).r === null, 'flows table dropped');
+  ok((await one(db, `select to_regclass('public.hub_onboard_flows_manager_link_idx') as r`)).r === null, 'the manager link index is gone');
   ok((await one(db, `select to_regclass('public.hub_onboard_grids') as r`)).r === null, 'grids table dropped');
   ok((await one(db, `select to_regclass('public.hub_onboard_steps') as r`)).r === null, 'steps table dropped');
   ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa271%'`)).n === 0, 'no wa271 function left (wa271_remind included)');

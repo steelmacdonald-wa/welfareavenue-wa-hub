@@ -112,8 +112,12 @@ begin
     ('onboard_grid_days', '14'), ('onboard_grid_start', '8'), ('onboard_grid_end', '21'), ('onboard_grid_cell_min', '30'), ('onboard_call_min', '60'),
     ('onboard_one_on_one_min', '30'), ('onboard_remind_hours', '48'), ('onboard_password_days', '7'), ('onboard_auto_google', 'off'), ('onboard_auto_slack', 'off'));
   assert n = 10, format('%s of the 10 fixed onboard_ settings have their default', n);
-  select count(*) into n from public.app_config where key in ('onboard_canva_link', 'onboard_slack_join_link', 'onboard_google_video');
-  assert n = 3, 'the three link settings exist';
+  select count(*) into n from public.app_config where key in ('onboard_slack_join_link', 'onboard_google_video');
+  assert n = 2, 'the two link settings exist';
+  assert not exists (select 1 from public.app_config where key = 'onboard_canva_link'), 'no Canva link in settings: HR pastes a fresh one for each hire';
+  assert has_column_privilege('authenticated', 'public.hub_onboard_flows', 'canva_link', 'select'), 'HR can read the link on the flow';
+  assert has_column_privilege('authenticated', 'public.hub_onboard_flows', 'welcome_edited', 'select'), 'HR can read whose welcome text is saved';
+  assert col_description('public.hub_onboard_flows'::regclass, (select attnum from pg_attribute where attrelid = 'public.hub_onboard_flows'::regclass and attname = 'canva_link')) like '%30 days%', 'canva_link says why it is on the flow';
 
   -- the onboarding call is day one
   assert (select count(*) from public.hr_setup_template where phase = 'The onboarding call') > 0, 'the onboarding call phase exists';
@@ -191,6 +195,33 @@ begin
   assert not exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'a backed-out flow leaves the list';
   update public.hub_onboard_flows set status = 'waiting' where candidate_id = v_one;
   assert exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_prac), 'the practice flow is listed too, marked as practice';
+
+  -- a closed card leaves the list, and comes back if the card opens again
+  assert exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'an open card is listed';
+  update public.hub_candidates set status = 'withdrawn' where id = v_one;
+  assert not exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'a withdrawn card leaves the list';
+  update public.hub_candidates set status = 'declined' where id = v_one;
+  assert not exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'a declined card leaves the list';
+  update public.hub_candidates set status = 'offer' where id = v_one;
+
+  -- someone with an open plan (the roster dropdown) leaves the list, found by the card's profile or by the personal email
+  insert into public.team_members (name, email) values ('Test Person One Roster', 'W271.One@example.invalid');
+  insert into public.onboardings (member_id, person_name, started_at) select id, name, current_date from public.team_members where name = 'Test Person One Roster';
+  assert not exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'an open plan found by the personal email takes them off the list';
+  update public.onboardings set completed_at = now() where person_name = 'Test Person One Roster';
+  assert exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'a finished plan does not count';
+  update public.onboardings set completed_at = null where person_name = 'Test Person One Roster';
+  update public.team_members set email = 'w271.other@example.invalid' where name = 'Test Person One Roster';
+  assert exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'someone else''s plan does not count';
+  update public.hub_candidates set member_id = (select id from public.team_members where name = 'Test Person One Roster') where id = v_one;
+  assert not exists (select 1 from jsonb_array_elements(public.wa271_ready_list()) x where (x ->> 'candidate_id')::bigint = v_one), 'an open plan found by the card''s profile takes them off the list';
+  update public.hub_candidates set member_id = null where id = v_one;
+  delete from public.onboardings where person_name = 'Test Person One Roster';
+  delete from public.team_members where name = 'Test Person One Roster';
+
+  -- roster_created: the browser may read it, and it starts empty
+  assert has_column_privilege('authenticated', 'public.hub_onboard_flows', 'roster_created', 'select'), 'HR can read roster_created';
+  assert (select roster_created from public.hub_onboard_flows where candidate_id = v_one) is null, 'nothing is known until the roster step runs';
 end $$;
 
 -- ---------------------------------------------------------------- the default manager

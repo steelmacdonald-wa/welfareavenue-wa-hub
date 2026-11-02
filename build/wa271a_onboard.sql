@@ -39,6 +39,9 @@ create table if not exists public.hub_onboard_flows (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+alter table public.hub_onboard_flows add column if not exists roster_created boolean;
+alter table public.hub_onboard_flows add column if not exists canva_link text;
+alter table public.hub_onboard_flows add column if not exists welcome_edited boolean;
 create index if not exists hub_onboard_flows_manager_idx on public.hub_onboard_flows (manager_member_id) where manager_member_id is not null;
 create index if not exists hub_onboard_flows_onboarding_idx on public.hub_onboard_flows (onboarding_id) where onboarding_id is not null;
 comment on table public.hub_onboard_flows is 'wave271: one onboarding flow per accepted candidate, from Accept to Start onboarding. Created by the trigger wa271_cand_accepted; written by the onboard-link and onboard-run edge functions with the service key. Read by HR and admins only (row security); nothing writes it from the browser.';
@@ -56,8 +59,8 @@ comment on column public.hub_onboard_flows.one_on_one_event_id is 'The Google Ca
 comment on column public.hub_onboard_flows.onboarding_id is 'The onboarding plan Start created (onboardings.id). Null before Start and for practice flows.';
 comment on column public.hub_onboard_flows.slack_channel_id is 'The Slack onboarding channel the Hub added the hire to. Null until the hourly Slack check finds their account.';
 comment on column public.hub_onboard_flows.slack_user_id is 'The hire''s Slack user id, found by their welfareavenue.com address. Null until then.';
-comment on column public.hub_onboard_flows.welcome_subject is 'The welcome email subject HR edited in the preview. Never holds a password.';
-comment on column public.hub_onboard_flows.welcome_text is 'The welcome email body HR edited in the preview. Never holds a password.';
+comment on column public.hub_onboard_flows.welcome_subject is 'The welcome email subject, saved at Start: what HR edited in the preview, or the Hub''s own (welcome_edited says which). Never holds a password.';
+comment on column public.hub_onboard_flows.welcome_text is 'The welcome email body, saved at Start: what HR edited in the preview, or the Hub''s own with the real times (welcome_edited says which). Never holds a password.';
 comment on column public.hub_onboard_flows.pw_nonce is 'Signs the one-time password link. A secret: left out of the browser column grants, read only by edge functions with the service key.';
 comment on column public.hub_onboard_flows.pw_expires_at is 'When the one-time password link stops working (onboard_password_days after it was made).';
 comment on column public.hub_onboard_flows.pw_used_at is 'When the new hire opened the one-time password page. Set once; a second open shows nothing.';
@@ -67,6 +70,9 @@ comment on column public.hub_onboard_flows.started_by is 'Who pressed Start onbo
 comment on column public.hub_onboard_flows.started_at is 'When Start onboarding finished.';
 comment on column public.hub_onboard_flows.created_at is 'When the acceptance created the flow.';
 comment on column public.hub_onboard_flows.updated_at is 'Last change; set by whoever writes the row.';
+comment on column public.hub_onboard_flows.roster_created is 'What the roster step did: true, it created the profile; false, the profile was on the roster before and it only linked it. Null until the step runs. The They backed out list words itself from this.';
+comment on column public.hub_onboard_flows.welcome_edited is 'Whose welcome text is saved: true, HR edited it in the preview and it stays as they left it; false, the Hub''s own, which follows a change of time, manager, address or Canva link. Null until Start.';
+comment on column public.hub_onboard_flows.canva_link is 'a fresh Canva invite link HR pastes for this hire; Canva''s links last 30 days';
 
 -- 3. the times people marked (the new hire's grid, the manager's grid)
 create table if not exists public.hub_onboard_grids (
@@ -108,7 +114,7 @@ alter table public.hub_onboard_grids enable row level security;
 alter table public.hub_onboard_steps enable row level security;
 revoke all on public.hub_onboard_flows, public.hub_onboard_grids, public.hub_onboard_steps from public, anon, authenticated;
 grant select (id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, call_event_id, one_on_one_event_id, onboarding_id,
-              slack_channel_id, slack_user_id, welcome_subject, welcome_text, pw_expires_at, pw_used_at, reminded_hire_at, reminded_manager_at, started_by, started_at, created_at, updated_at)
+              slack_channel_id, slack_user_id, welcome_subject, welcome_text, pw_expires_at, pw_used_at, reminded_hire_at, reminded_manager_at, started_by, started_at, created_at, updated_at, roster_created, canva_link, welcome_edited)
   on public.hub_onboard_flows to authenticated;   -- every column but pw_nonce
 grant select on public.hub_onboard_grids, public.hub_onboard_steps to authenticated;
 grant all on public.hub_onboard_flows, public.hub_onboard_grids, public.hub_onboard_steps to service_role;
@@ -175,7 +181,8 @@ revoke all on function public.wa271_default_manager(bigint) from public, anon;
 grant execute on function public.wa271_default_manager(bigint) to authenticated, service_role;
 comment on function public.wa271_default_manager(bigint) is 'wave271: {member_id, name, how} for a candidate. how is reports_to (the org_positions reporting line for the position), team_lead (exactly one active leader in the position''s department) or none (HR must choose). HR, admins and the service key only.';
 
--- 9. the Ready to onboard list: flows that have not started and have not backed out
+-- 9. the Ready to onboard list: flows that have not started and have not backed out, on a card still open, for someone with no open plan but this flow's own
+--    (the roster dropdown makes a plan; the person is found by the card's profile or the personal email)
 create or replace function public.wa271_ready_list()
 returns jsonb language plpgsql stable security definer set search_path to '' as $function$
 begin
@@ -206,12 +213,16 @@ begin
                                and lower(trim(coalesce(o.email, ''))) = lower(trim(c.email))
                                and o.status not in ('declined', 'withdrawn'))) as j
         from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id
-       where f.status not in ('started', 'backed_out')) x
+       where f.status not in ('started', 'backed_out')
+         and c.status not in ('declined', 'withdrawn')
+         and not exists (select 1 from public.onboardings p join public.team_members m on m.id = p.member_id
+                          where p.completed_at is null and p.id is distinct from f.onboarding_id
+                            and (m.id = c.member_id or (nullif(lower(trim(coalesce(c.email, ''))), '') is not null and lower(trim(coalesce(m.email, ''))) = lower(trim(c.email)))))) x
   ), '[]'::jsonb);
 end $function$;
 revoke all on function public.wa271_ready_list() from public, anon;
 grant execute on function public.wa271_ready_list() to authenticated, service_role;
-comment on function public.wa271_ready_list() is 'wave271: the HR Center Ready to onboard list as jsonb: every flow not started or backed out, with name, role, personal email, offer dates, late (answered after the respond-by date), grid statuses (none or marked), the default manager and other_open_rows (other applications with the same email that are not declined or withdrawn). HR, admins and the service key only; raises for anyone else.';
+comment on function public.wa271_ready_list() is 'wave271: the HR Center Ready to onboard list as jsonb: every flow not started or backed out, on a card not declined or withdrawn, for someone with no other open plan, with name, role, personal email, offer dates, late (answered after the respond-by date), grid statuses (none or marked), the default manager and other_open_rows (other applications with the same email that are not declined or withdrawn). HR, admins and the service key only; raises for anyone else.';
 
 -- 10. onboarding_assign takes a start date (default today, as before); the old two-argument version is dropped so a call by name stays unambiguous
 drop function if exists public.onboarding_assign(bigint, text);
@@ -263,7 +274,7 @@ insert into public.app_config (key, value) values
   ('onboard_grid_days', '14'), ('onboard_grid_start', '8'), ('onboard_grid_end', '21'), ('onboard_grid_cell_min', '30'),
   ('onboard_call_min', '60'), ('onboard_one_on_one_min', '30'), ('onboard_remind_hours', '48'), ('onboard_password_days', '7'),
   ('onboard_auto_google', 'off'), ('onboard_auto_slack', 'off'),
-  ('onboard_canva_link', ''), ('onboard_slack_join_link', ''), ('onboard_google_video', '')
+  ('onboard_slack_join_link', ''), ('onboard_google_video', '')
 on conflict (key) do nothing;
 
 -- the onboarding call is day one, so its checklist steps are due on day 0 (they were day 3)

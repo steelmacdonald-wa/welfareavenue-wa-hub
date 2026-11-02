@@ -11,6 +11,7 @@ begin
 end $undo$;
 drop function if exists public.wa271_remind();
 delete from public.hub_notification_kinds where key in ('onboard_date', 'onboard_grid', 'onboard_remind');
+drop index if exists public.hub_onboard_flows_manager_link_idx;
 alter table if exists public.hub_onboard_flows drop column if exists manager_link_sent_at;
 alter table if exists public.hub_onboard_flows drop column if exists manager_link_member_id;
 
@@ -104,5 +105,5 @@ comment on function public.onboarding_assign(bigint, text) is 'Starts an HR onbo
 alter table public.hub_candidates drop column if exists offer_respond_by;
 alter table public.hub_candidates drop column if exists offer_start;
 delete from public.app_config where key in ('onboard_grid_days', 'onboard_grid_start', 'onboard_grid_end', 'onboard_grid_cell_min', 'onboard_call_min', 'onboard_one_on_one_min',
-  'onboard_remind_hours', 'onboard_password_days', 'onboard_auto_google', 'onboard_auto_slack', 'onboard_canva_link', 'onboard_slack_join_link', 'onboard_google_video');
+  'onboard_remind_hours', 'onboard_password_days', 'onboard_auto_google', 'onboard_auto_slack', 'onboard_slack_join_link', 'onboard_google_video');
 update public.hr_setup_template set due_day = 3 where phase = 'The onboarding call' and due_day = 0;
