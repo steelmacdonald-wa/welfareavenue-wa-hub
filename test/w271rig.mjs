@@ -68,6 +68,7 @@ class Query {
   is(c, v) { return this.f(c, 'is', v); }
   in(c, v) { return this.f(c, 'in', v); }
   ilike(c, v) { return this.f(c, 'ilike', v); }
+  contains(c, v) { this.tests.push((r) => Array.isArray(r[c]) && v.every((x) => r[c].includes(x))); return this; }
   gte(c, v) { return this.f(c, 'gte', v); }
   lte(c, v) { return this.f(c, 'lte', v); }
   gt(c, v) { return this.f(c, 'gt', v); }
@@ -134,13 +135,13 @@ function makeDb({ tables, config, secrets, serial }) {
     },
     on(t, op, fn) { this.hooks.push({ t, op, fn }); },   // a trigger stand-in: fn(newRow, oldRow, db) runs after each insert, update or delete on t
     fire(t, op, n, o) { for (const h of this.hooks) if (h.t === t && h.op === op) h.fn(n, o, this); },
-    onRpc(name, fn) { this.handlers[name] = fn; },   // fn(args, db) returns the data; throw to return an error
+    onRpc(name, fn) { this.handlers[name] = fn; },   // fn(args, db, { jwt }) returns the data; throw to return an error. jwt is null on the service client, as auth.jwt() is live
     setCaller(user) { this.caller = user; },   // what auth.getUser() returns: { email, id, ... } or null (signed out)
     failOn(t, op, message = 'rig: forced failure') { this.failures.push({ table: t, op, message }); },   // the next op on t returns this error
-    async rpc(name, args = {}) {
+    async rpc(name, args = {}, who = { jwt: null }) {
       const fn = this.handlers[name];
       if (!fn) return { data: null, error: { message: 'rig: rpc ' + name + ' is not registered' } };
-      try { return { data: await fn(args, this), error: null }; } catch (e) { return { data: null, error: { message: String(e && e.message || e) } }; }
+      try { return { data: await fn(args, this, who), error: null }; } catch (e) { return { data: null, error: { message: String(e && e.message || e) } }; }
     },
   };
   db.tables.app_config = [...(db.tables.app_config || []), ...Object.entries(config).map(([key, value]) => ({ key, value: String(value) }))];
@@ -190,9 +191,9 @@ export async function loadFn(name, { secrets = {}, config = {}, tables = {}, ser
   const db = makeDb({ tables, config, secrets: values, serial });
   const rig = { env: values, db, fetchLog: [], routes: [], now: null, handler: null, mod: null };
   rig.fetch = makeFetch(rig);
-  rig.createClient = () => ({
+  rig.createClient = (_url, _key, opts) => ({
     from: (t) => new Query(db, t),
-    rpc: (n, a) => db.rpc(n, a),
+    rpc: (n, a) => db.rpc(n, a, { jwt: (opts && opts.global && opts.global.headers && opts.global.headers.Authorization) || null }),
     auth: { getUser: async () => (db.caller ? { data: { user: db.caller }, error: null } : { data: { user: null }, error: { message: 'rig: no caller set', status: 401 } }) },
   });
   const activate = () => { state.current = rig; globalThis.__w271 = { createClient: rig.createClient }; };
