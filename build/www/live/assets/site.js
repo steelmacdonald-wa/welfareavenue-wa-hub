@@ -250,3 +250,115 @@
       }).catch(function () { /* the logo stays */ });
   })();
 })();
+/* wave233 (Steel, 12/10/26): the home hero slideshow. One way to get involved per slide; photos load one slide ahead, the video
+   only when its slide is next (never with reduced motion or Save-Data). Pauses on hover, on focus, in a background tab and with
+   the pause button; starts paused for people who prefer reduced motion. Without JavaScript the first slide simply stays. */
+(function () {
+  var H = document.querySelector('[data-hs]'); if (!H) return;
+  var slides = H.querySelectorAll('.hs-slide'), panes = H.querySelectorAll('.hs-pane'), tabs = H.querySelectorAll('.hs-tab');
+  var nav = H.querySelector('.hs-nav'), count = H.querySelector('.hs-count b'), btn = H.querySelector('.hs-pause'), live = H.querySelector('.hs-panes');
+  var n = slides.length; if (n < 2 || !nav) return;
+  var mm = function (q) { return !!(window.matchMedia && window.matchMedia(q).matches); };
+  var RM = mm('(prefers-reduced-motion: reduce)');
+  var SAVE = !!(navigator.connection && navigator.connection.saveData);
+  var DUR = 7000, cur = 0, t0 = 0, done = 0, raf = 0;
+  var userPaused = RM, hover = false, focus = false;
+
+  function hydrate(k) {
+    var s = slides[k]; if (!s || s.getAttribute('data-h')) return; s.setAttribute('data-h', '1');
+    var im = s.querySelector('img[data-src]');
+    if (im) { if (im.getAttribute('data-srcset')) im.srcset = im.getAttribute('data-srcset'); im.src = im.getAttribute('data-src'); }
+    var v = s.querySelector('video[data-src]');
+    if (v && !RM && !SAVE) {
+      v.src = window.innerWidth <= 760 ? v.getAttribute('data-src-s') : v.getAttribute('data-src');
+      v.addEventListener('playing', function () { v.classList.add('is-playing'); });
+      v.preload = 'auto';
+    }
+  }
+  function video(k, on) {
+    var v = slides[k] && slides[k].querySelector('video'); if (!v || !v.getAttribute('src')) return;
+    if (on && !paused()) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } else v.pause();
+  }
+  function paused() { return userPaused || hover || focus || document.hidden; }
+  function bar(k, f) { var i = tabs[k] && tabs[k].querySelector('.hs-bar i'); if (i) i.style.transform = 'scaleX(' + f + ')'; }
+  function show(k, user) {
+    k = (k + n) % n; if (k === cur && !user) return;
+    video(cur, false);
+    for (var j = 0; j < n; j++) {
+      var on = j === k;
+      slides[j].classList.toggle('is-on', on);
+      if (on) slides[j].removeAttribute('aria-hidden'); else slides[j].setAttribute('aria-hidden', 'true');
+      panes[j].classList.toggle('is-on', on);
+      tabs[j].classList.toggle('is-on', on);
+      tabs[j].classList.remove('is-done');
+      if (on) tabs[j].setAttribute('aria-current', 'true'); else tabs[j].removeAttribute('aria-current');
+      bar(j, 0);
+    }
+    cur = k; done = 0; t0 = performance.now();
+    if (count) count.textContent = (k < 9 ? '0' : '') + (k + 1);
+    live.setAttribute('aria-live', user ? 'polite' : 'off');
+    hydrate(k); hydrate((k + 1) % n);
+    video(k, true);
+  }
+  function tick(now) {
+    raf = window.requestAnimationFrame(tick);
+    if (paused()) { t0 = now - done; return; }
+    done = now - t0;
+    var f = Math.min(1, done / DUR); bar(cur, f);
+    if (f >= 1) show(cur + 1, false);
+  }
+  function setPaused(p) {
+    userPaused = p; H.classList.toggle('is-paused', p);
+    btn.setAttribute('aria-label', btn.getAttribute(p ? 'data-l-play' : 'data-l-pause'));
+    video(cur, !p);
+  }
+  function refresh() { H.classList.toggle('is-paused', userPaused); video(cur, !paused()); }
+
+  for (var j = 0; j < n; j++) (function (k) {
+    tabs[k].addEventListener('click', function () { show(k, true); if (!userPaused) { /* keep playing from here */ } });
+  })(j);
+  H.querySelector('.hs-tabs').addEventListener('keydown', function (e) {
+    var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0; if (!d) return;
+    e.preventDefault(); show(cur + d, true); tabs[cur].focus();
+  });
+  btn.addEventListener('click', function () { setPaused(!userPaused); });
+  H.addEventListener('mouseenter', function () { hover = true; refresh(); });
+  H.addEventListener('mouseleave', function () { hover = false; refresh(); });
+  H.addEventListener('focusin', function () { focus = true; refresh(); });
+  H.addEventListener('focusout', function (e) { if (!H.contains(e.relatedTarget)) { focus = false; refresh(); } });
+  document.addEventListener('visibilitychange', refresh);
+  var x0 = null;
+  H.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  H.addEventListener('touchend', function (e) {
+    if (x0 === null) return; var dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1), true);
+  }, { passive: true });
+
+  nav.hidden = false;
+  setPaused(userPaused);
+  t0 = performance.now();
+  var idle = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
+  if (document.readyState === 'complete') idle(function () { hydrate(1); });
+  else window.addEventListener('load', function () { idle(function () { hydrate(1); }); });
+  raf = window.requestAnimationFrame(tick);
+})();
+/* wave233: the long E reaches forward when it comes into view */
+(function () {
+  var e = document.querySelector('.le'); if (!e || !('IntersectionObserver' in window)) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  e.classList.add('le-wait');
+  var io = new IntersectionObserver(function (es) { es.forEach(function (x) { if (x.isIntersecting) { e.classList.add('is-in'); io.disconnect(); } }); }, { threshold: 0.4 });
+  io.observe(e);
+})();
+/* wave233b: the Volunteer dropdown. Opens on hover (desktop, CSS), on the chevron button and with the keyboard; Escape and a
+   click elsewhere close it. On phones the choices are always listed under Volunteer in the menu. */
+(function () {
+  var dd = document.querySelector('.dd'); if (!dd) return;
+  var btn = dd.querySelector('.dd-btn');
+  function set(o) { dd.classList.toggle('open', o); btn.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+  btn.addEventListener('click', function (e) { e.stopPropagation(); set(!dd.classList.contains('open')); });
+  document.addEventListener('click', function (e) { if (!dd.contains(e.target)) set(false); });
+  dd.addEventListener('keydown', function (e) { if (e.key === 'Escape') { set(false); btn.focus(); } });
+  dd.addEventListener('focusout', function (e) { if (!dd.contains(e.relatedTarget)) set(false); });
+  dd.querySelectorAll('.dd-menu a').forEach(function (a) { a.addEventListener('click', function () { set(false); }); });
+})();

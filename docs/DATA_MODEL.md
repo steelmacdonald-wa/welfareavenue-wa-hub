@@ -1561,8 +1561,9 @@ The CRM's forms (wave156), shown to the public at hub.welfareavenue.com/f/<slug>
 - `kind`: volunteer (a volunteer application or registration), newsletter (a sign-up) or general.
 - `questions`: The questions in order: {"id", "type" (text, long_text, email, phone, choice, multi, yes_no, date, number, serving_dates), "label", "help", "required", "options", "to"}. to says where the answer is saved: contact.first_name, contact.last_name, contact.email, contact.phone, contact.city, contact.province, contact.postal_code, contact.address, contact.language, volunteer.roles, volunteer.dates (serving_dates: a sign-up on each picked event's roster), field:<crm_fields.key>, note (the timeline entry) or nothing (kept on the submission only).
 - `consent`: The email permission question: {"ask": true, "required": false, "label": the words shown next to the box}. A ticked box records express consent with those words (CASL); the box is never ticked in advance.
-- `settings`: volunteer_record (true: an application also creates or updates the MTL volunteering record), serving_location (the events a serving_dates question offers), city (written on new contacts), tags (added to the contact), confirm and confirm_template (a confirmation email through mail-send; off unless Steel turns it on).
+- `settings`: volunteer_record (true: an application also creates or updates the MTL volunteering record), serving_location (the events a serving_dates question offers), city (written on new contacts), tags (added to the contact), confirm and confirm_template (a confirmation email through mail-send; off unless Steel turns it on). wave261: campaign (a slug of app_config donate_campaigns, e.g. gift-basket-drive: the form belongs to that campaign), request ({type, title, who, count, count_word}: each real answer files a Request of that request_types key, titled "<title>: <the who answer or the first name>", details without email or phone), gift_pledge (true: the answers how_many and what become a pledged campaign_gifts row that waits for a staff Confirm), role_text and role_q (what Applicants received says a volunteer applied for: role_text plus the picked choices of question role_q).
 - `cover_photo_id`: wave168: the photo at the top of the form's public page (wa_photos.id); none uses the default for the form's kind (form-submit).
+- `purpose`: wave261 (16/10/26, Steel: "group forms for different purposes, like volunteers"): the group the CRM's Forms tab lists the form under: volunteers (Volunteers), gifts (Gifts and in-kind donations), sponsors (Sponsors and partners), groups (Schools and groups) or other (Other). Staff with the CRM pick it in the form editor. It changes nothing about what the form does with an answer.
 
 ### `crm_form_submissions`
 
@@ -2182,6 +2183,26 @@ wave256: the ops line's calls (438) 808-7754, copied from Quo by the quo-calls e
 - `handled_by`: Who marked the missed call dealt with.
 - `synced_at`: When quo-calls last wrote the row.
 
+### `campaign_gifts`
+
+wave261 (16/10/26, Steel: an editable gift counter for the Holiday Gift Basket Drive): gifts in kind collected for a campaign, one row a batch (616 books from one donor, 40 toys from a school). Written by staff in the Fundraising app (the drive's event, Gifts collected) through wa261_gift_save, and by crm_form_apply for a pledge from a form with settings.gift_pledge (status pledged, unconfirmed). Read by staff who can open the Fundraising app (wa_fund_ok); never by anon: the website sees only the total through www_campaign_totals (gifts_in). Money stays in crm_donations.
+
+- `slug`: The campaign: a key of app_config donate_campaigns (gift-basket-drive).
+- `quantity`: How many gifts or items in the batch (a whole number above 0).
+- `what`: What the batch is, in a few words (Books; Toys, Hygiene essentials).
+- `given_by`: Who gave it, as the team writes it (a company, a school, a person); staff only.
+- `contact_id`: The giver in the CRM when known (a pledge from a form sets it).
+- `received_on`: The day the batch reached us (status received); for a pledge, when it is expected, if known.
+- `status`: pledged (promised, not in our hands yet) or received (in our hands).
+- `confirmed_at`: For a pledge: when a staff member confirmed it with the giver. Counted on the website: every received batch and every confirmed pledge; an unconfirmed pledge (from a website form) is not counted until someone presses Confirm.
+- `confirmed_by`: Who confirmed the pledge (their email).
+- `note`: Anything the team should remember about the batch (where it is, what to check).
+- `source_response_id`: The form answer (crm_form_submissions) a pledge came from; one batch an answer.
+- `logged_by`: Who added the batch (an email, or form:<slug> for a pledge from a form).
+- `logged_at`: When the batch was added.
+- `updated_by`: Who last changed it.
+- `updated_at`: When it last changed.
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
 
@@ -2236,7 +2257,7 @@ Functions:
 - `crm_list_preview_flat(jsonb)`: The CRM page's flat filters (kind, role, act, perm, q, city, tags) evaluated in the database (wave155); crm_list_preview calls it when a filter has no groups.
 - `crm_list_sizes()`: How many live contacts each saved list holds today (wave155b), for the Lists tab.
 - `crm_campaign_audience(bigint)`: Everyone in a campaign's list with the rule's answer for the campaign's kind (wave155b): mail-send campaign_check and campaign_queue read it.
-- `crm_form_apply(bigint)`: Applies one form submission (wave156): the contact, the MTL volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account's own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else's submission only fills gaps and never re-subscribes.
+- `crm_form_apply(bigint)`: Applies one form submission (wave156): the contact, the MTL volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account's own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else's submission only fills gaps and never re-subscribes. wave216: an application form adds a card to the Applications board; wave239: a volunteer form with a volunteering record files the application in Applicants received. wave261 (16/10/26): settings.request files a Request (request_types, assigned to its default assignee) without the email or phone; settings.gift_pledge adds a pledged campaign_gifts row waiting for a Confirm; settings.role_text names what a volunteer applied for; an address at a reserved test domain (example.com/.org/.net, .test, .example, .invalid) is a test (no Request, pledge or applicant; the submission is marked is_test). Called by form-submit with the service role.
 - `crm_forms_stamp()`: Trigger on crm_forms (wave156): updated_at, the go-live checks (an email question; a newsletter asks for permission), published_at/by and closed_at, and a change_log line for every status change.
 - `crm_fill(text, jsonb)`: Fills {{key}} and {{key|fallback}} in a text from a JSON object of values (wave157: automation task titles and notices; mail-send fills the emails the same way).
 - `crm_text_html(text)`: A message typed in the Hub as HTML paragraphs (a blank line starts a paragraph, a line break stays), escaped; the same as the campaign composer (wave157).
@@ -2556,4 +2577,7 @@ Functions:
 - `wa259_text_switch(text, text)`: wave259: Setup > Texts: switch the Monday reminder or the Thursday check-in on or off, or move a round's days (confirmation, reminder, check-in, the cancel notice); leaders, HR, admins and text_staff; change_log keeps the old value.
 - `wa260_gate_set(text, jsonb)`: wave260: Admin, Page tours. Admins set page_gate (on or off), page_gate_exempt (emails let through every page tour lock) and dashboard_people (emails that open the Executive dashboard besides the admins). Checks is_wa_admin() inside; writes app_config and a change_log line. Called by the Hub (authenticated).
 - `wa260_page_tours()`: wave260: for Admin, Page tours: every person on hub_roles who is not an admin or blocked (team_members not inactive) against every page tour that unlocks a page (app_config page_gate_map, active trainings tour:<key>): can_open (from the access profile: all, lead for leaders, undecided pages follow the role; overview and dashboard only for dashboard_people), done (training_progress done, by email or roster name), exempt (page_gate_exempt). Admins only (checked inside); read-only.
+- `wa261_gifts(text)`: wave261: the Fundraising app's Gifts collected box for a campaign: the gift goal (app_config donate_campaigns), counted (received plus confirmed pledges, the website's number), waiting (unconfirmed pledges: quantity and how many) and every batch. Staff who can open the Fundraising app only (wa_fund_ok, checked inside).
+- `wa261_gift_save(jsonb)`: wave261: the only way staff change campaign_gifts. action add {slug, quantity, what, given_by, received_on, status received|pledged, confirmed, note}, edit {id, same fields}, confirm {id} (a pledge now counts), receive {id, received_on} (a pledge arrived), remove {id}. Staff who can open the Fundraising app only (wa_fund_ok, checked inside); every change has a change_log line (campaign_gift).
+- `www_campaign_totals(text)`: 15/10/26 (Holiday Gift Basket Drive page): the public progress of a donation campaign for its page on welfareavenue.com: raised (CAD, gifts of kind donation or sponsorship whose crm_donations.campaign is the campaign's name in app_config donate_campaigns, less refunds; online gifts and gifts recorded by hand with that campaign alike), donors (distinct contacts), gifts (money gifts), the money goal and the gift goal from the settings, the last gift's time. wave261 (16/10/26): gifts_in, the gifts in kind collected (campaign_gifts: received batches and confirmed pledges). Aggregates only, never a name or one gift. Anonymous by design (security definer), like www_upcoming.
 

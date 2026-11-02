@@ -102,12 +102,14 @@
     if (!onFund()) acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
     var html = top('<span class="tag" style="--bg:' + STATUS[f.status][1] + ';--ink:' + STATUS[f.status][2] + '">' + E(STATUS[f.status][0]) + '</span>' + layerTag('fund')) + sheetHero(f) + '<h2>' + E(f.title) + '</h2>'
       + '<div class="kv">' + rows.join('') + '</div>'
+      + (window.w261 ? window.w261.slot(f) : '')   /* wave261: Gifts collected, on an event with a campaign */
       + (f.result_note ? '<div class="note"><b>Result:</b> ' + E(f.result_note) + '</div>' : '')
       + (f.notes ? '<div class="note">' + E(f.notes) + '</div>' : '')
       + (pastDue(f) ? '<p class="err">The date has passed: record how it went, so the year’s total stays right.</p>' : '')
       + sheetMedia(f)
       + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '');
     openSheet(html, 'view');
+    if (window.w261) window.w261.fill(f);
   }
   function monthVal(d) { return d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) : ''; }
   function openFundForm(f, season, doneMode) {

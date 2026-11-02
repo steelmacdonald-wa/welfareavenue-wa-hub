@@ -125,9 +125,9 @@ def main_en():
                 '<div class="drp-card" data-campaign="' + SLUG + '" aria-live="polite"><p class="over">So far this year</p>'
                 '<p class="drp-raised"><b data-dr="raised">$0</b><span>given to the drive</span></p>'
                 '<div class="drp-bar" data-dr="bar" role="progressbar" aria-label="Toward our goal" aria-valuemin="0" aria-valuemax="100" hidden><span data-dr="fill"></span></div>'
-                '<p class="drp-people" data-dr="people">Be one of the first to give to this year’s drive.</p>' +
+                 +
                 donate_btn('Give to the drive') +
-                '<p class="fine">Secure, through Stripe, without leaving this page. The total updates as gifts come in.</p></div></div></section>')
+                '</div></div></section>')
     about = ('<section class="band on-grey" id="about"><div class="wrap split"><div><p class="over">What the drive is</p><h2>A holiday tradition, three years in</h2>'
              '<p>The Holiday Gift Basket Drive is our biggest moment of the year. Donations come in through November, then our volunteers gather in December to wrap everything and hand-deliver it before the holidays.</p>'
              '<p>Cozy socks, warm hats, toys and care packages go to guests at Montreal shelters and to young patients in hospital, a small reminder that someone was thinking of them.</p>'
@@ -178,9 +178,9 @@ def main_fr():
                 '<div class="drp-card" data-campaign="' + SLUG + '" aria-live="polite"><p class="over">Jusqu’ici cette année</p>'
                 '<p class="drp-raised"><b data-dr="raised">0&nbsp;$</b><span>donnés à la collecte</span></p>'
                 '<div class="drp-bar" data-dr="bar" role="progressbar" aria-label="Vers notre objectif" aria-valuemin="0" aria-valuemax="100" hidden><span data-dr="fill"></span></div>'
-                '<p class="drp-people" data-dr="people">Soyez parmi les premiers à donner à la collecte cette année.</p>' +
+                 +
                 donate_btn('Donner à la collecte', lang='fr') +
-                '<p class="fine">Paiement sécurisé par Stripe, sans quitter cette page. Le total se met à jour au fil des dons.</p></div></div></section>')
+                '</div></div></section>')
     about = ('<section class="band on-grey" id="about"><div class="wrap split"><div><p class="over">La collecte en bref</p><h2>Une tradition des Fêtes, déjà trois ans</h2>'
              '<p>La collecte de paniers-cadeaux des Fêtes, c’est notre plus grand moment de l’année. Les dons arrivent en novembre, puis nos bénévoles se réunissent en décembre pour tout emballer et livrer les cadeaux avant les Fêtes.</p>'
              '<p>Bas douillets, tuques chaudes, jouets et trousses de soins vont aux personnes accueillies dans les refuges de Montréal et à de jeunes patients à l’hôpital, un petit rappel que quelqu’un a pensé à eux.</p>'

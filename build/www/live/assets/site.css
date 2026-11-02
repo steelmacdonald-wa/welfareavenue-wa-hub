@@ -562,3 +562,142 @@ dialog.signin::backdrop{background:rgba(16,63,57,.55)}
 .doc li{margin:0 0 8px}
 .doc .upd{color:var(--muted);font-size:14px;margin-bottom:10px}
 .foot .legal a{color:rgba(255,255,255,.82)}
+/* wave233 (Steel, 12/10/26): the home hero as a slideshow of our best photos and a video, one way to get involved per slide,
+   under the same green veil and headline; and the CityNews video band. Brand: green veil, gold accents, chalk doodles. */
+.hero.hs{min-height:clamp(640px,88vh,860px);align-items:flex-start}
+.hero.hs>.wrap{z-index:2;padding-top:clamp(56px,9vh,104px);padding-bottom:132px}
+.hs .hs-slide{position:absolute;inset:0;opacity:0;transition:opacity 1.2s ease;overflow:hidden}
+.hs .hs-slide.is-on{opacity:1}
+.hs .hs-slide img,.hs .hs-slide video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hs .hs-slide img{transform:scale(1.06);transition:transform 9s linear}
+.hs .hs-slide.is-on img{transform:scale(1)}
+.hs .hs-slide video{opacity:0;transition:opacity .6s ease}
+.hs .hs-slide video.is-playing{opacity:1}
+.hs .bg::after{z-index:1}
+.hs .over{display:flex;align-items:center;gap:12px}
+.hs-star{width:36px;height:auto;transform:rotate(-12deg);flex:none}
+.hs-panes{display:grid;margin-top:30px;max-width:37em}
+.hs-pane{grid-area:1/1;opacity:0;visibility:hidden;transform:translateY(8px);transition:opacity .5s ease,transform .5s ease,visibility 0s .5s}
+.hs-pane.is-on{opacity:1;visibility:visible;transform:none;transition:opacity .5s ease .15s,transform .5s ease .15s,visibility 0s}
+.hs-tag{display:inline-flex;align-items:center;gap:10px;margin:0;font-family:var(--hf);font-weight:600;font-size:17px;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold)}
+.hs-ic{width:22px;height:22px;flex:none}
+.hs-line{margin:8px 0 0;font-size:clamp(17px,1.5vw,19px);line-height:1.55;color:rgba(255,255,255,.93);border-left:3px solid var(--gold);padding-left:14px}
+.hs-pane .btns{margin-top:22px}
+.hs-nav{position:absolute;left:0;right:0;bottom:0;z-index:3;background:rgba(13,36,33,.55);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid rgba(255,255,255,.14)}
+.hs-nav[hidden]{display:none}
+.hero .hs-nav .wrap{display:flex;align-items:stretch;gap:16px;padding-top:0;padding-bottom:0}
+.hs-count{margin:0;align-self:center;font-family:var(--hf);font-size:18px;color:rgba(255,255,255,.7);letter-spacing:1px;min-width:52px}
+.hs-count b{color:var(--white);font-size:26px;font-weight:600}
+.hs-tabs{list-style:none;margin:0;padding:0;display:flex;flex:1;min-width:0}
+.hs-tabs li{flex:1;min-width:0}
+.hs-tab{position:relative;width:100%;height:100%;display:flex;align-items:center;gap:10px;padding:22px 12px 24px;background:none;border:0;color:rgba(255,255,255,.72);font-family:var(--hf);font-weight:500;font-size:19px;letter-spacing:.3px;text-align:left;cursor:pointer;transition:color .25s}
+.hs-tab .hs-ic{width:20px;height:20px}
+.hs-tab:hover,.hs-tab.is-on{color:var(--white)}
+.hs-tab.is-on .hs-ic{color:var(--gold)}
+.hs-tab:focus-visible{outline:2px solid var(--gold);outline-offset:-4px}
+.hs-lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hs-bar{position:absolute;left:12px;right:12px;top:0;height:3px;background:rgba(255,255,255,.22)}
+.hs-bar i{display:block;height:100%;background:var(--gold);transform-origin:0 50%;transform:scaleX(0)}
+.hs-tab.is-done .hs-bar i{transform:scaleX(1);background:rgba(255,255,255,.55)}
+.hs-pause{flex:none;align-self:center;width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:transparent;border:1.5px solid rgba(255,255,255,.45);color:var(--white);cursor:pointer;transition:border-color .2s,background .2s}
+.hs-pause:hover{border-color:var(--white);background:rgba(255,255,255,.08)}
+.hs-pause:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.hs-pause svg{width:18px;height:18px}
+.hs-pause .i-play{display:none}
+.hs.is-paused .hs-pause .i-play{display:block}
+.hs.is-paused .hs-pause .i-pause{display:none}
+@media (max-width:899px){
+  .hs-count{display:none}
+  .hs-tab{flex-direction:column;align-items:center;gap:6px;padding:18px 4px 16px;font-size:15px;text-align:center}
+  .hs-bar{left:4px;right:4px}
+}
+@media (max-width:560px){
+  .hero.hs>.wrap{padding-bottom:112px}
+  .hs-lab{font-size:13px;letter-spacing:0}
+  .hs-tab{padding:16px 2px 14px}
+  .hero .hs-nav .wrap{gap:6px;padding-right:10px}
+  .hs-pause{width:40px;height:40px}
+  .hs-star{width:28px}
+}
+@media (max-width:400px){.hs-lab{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}.hs-tab .hs-ic{width:22px;height:22px}}
+@media (prefers-reduced-motion:reduce){.hs .hs-slide img{transform:none}}
+.news-band .split{align-items:center}
+.news-vid{position:relative}
+.news-vid .video{box-shadow:0 24px 48px -24px rgba(16,63,57,.45)}
+.news-heart{position:absolute;width:56px;height:auto;right:-18px;top:-30px;z-index:1;transform:rotate(10deg);pointer-events:none}
+.news-logos{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0}
+.news-logos span{font-family:var(--hf);font-weight:600;font-size:15px;letter-spacing:1.2px;text-transform:uppercase;color:var(--green);border:1.5px solid var(--line);padding:6px 10px}
+@media (max-width:899px){.news-heart{right:-6px;top:-24px;width:44px}}
+/* wave233: the long E band (brand: "a typographic device that turns the E into a pathway") */
+.le-band{overflow:hidden}
+.le{--h:clamp(64px,9vw,124px);position:relative;height:var(--h);width:100%;color:var(--gold)}
+.le .s{position:absolute;left:0;top:0;bottom:0;width:calc(var(--h) * .2);background:currentColor}
+.le .b{position:absolute;left:0;right:0;height:17.4%;background:currentColor;transform-origin:0 50%;transition:transform 1.4s cubic-bezier(.2,.7,.2,1)}
+.le .b1{top:0}.le .b2{top:41.3%;right:6%}.le .b3{bottom:0}
+.le.le-wait .b{transform:scaleX(.16)}
+.le.le-wait.is-in .b{transform:none}
+.le .b2{transition-delay:.12s}.le .b3{transition-delay:.24s}
+.le-desc{margin:20px 0 0;font-family:var(--hf);font-weight:600;font-size:clamp(18px,2vw,24px);letter-spacing:2.4px;text-transform:uppercase;color:var(--cream)}
+.le-desc b{color:var(--gold);font-weight:600}
+.le-split{margin-top:clamp(40px,6vw,72px)}
+.le-band h2{color:var(--cream)}
+.le-band .over{color:var(--gold)}
+.le-band p{color:rgba(255,250,242,.9)}
+.le-list{list-style:none;margin:0;padding:0;display:grid;gap:0}
+.le-list li{padding:22px 0;border-top:1px solid rgba(255,250,242,.2)}
+.le-list li:last-child{border-bottom:1px solid rgba(255,250,242,.2)}
+.le-list h3{margin:0 0 6px;color:var(--gold);font-size:clamp(22px,2.2vw,28px)}
+.le-list p{margin:0}
+.le-split{align-items:start}
+/* wave233b (Steel, 12/10/26): the Volunteer dropdown (Montreal, Toronto, groups, team), the green Donate button at the right of
+   the header, and the volunteer pages by city. */
+.dd{position:relative;display:flex;align-items:stretch}
+.nav .dd .dd-top{padding-right:4px}
+.dd-btn{display:flex;align-items:center;background:none;border:0;padding:0 10px 0 2px;color:var(--green);cursor:pointer}
+.dd-ch{width:12px;height:8px;transition:transform .2s}
+.dd-btn[aria-expanded=true] .dd-ch{transform:rotate(180deg)}
+.dd-btn:focus-visible{outline:2px solid var(--gold);outline-offset:-6px}
+.dd-menu{position:absolute;left:0;top:100%;min-width:300px;background:var(--white);border:1px solid var(--line);border-top:3px solid var(--gold);box-shadow:0 18px 36px -12px rgba(16,63,57,.28);padding:8px;display:none;flex-direction:column;z-index:30}
+.dd.open .dd-menu{display:flex}
+@media (min-width:1140px) and (hover:hover){.dd:hover .dd-menu{display:flex}.dd:hover .dd-ch{transform:rotate(180deg)}}
+.nav .dd-menu a{display:flex;align-items:flex-start;gap:12px;padding:12px 12px;border:0;font-family:var(--bf);font-size:15px;line-height:1.3;color:var(--green)}
+.nav .dd-menu a:hover,.nav .dd-menu a:focus-visible{background:var(--mist);border:0}
+.dd-menu b{display:block;font-family:var(--hf);font-weight:600;font-size:19px;letter-spacing:.2px}
+.dd-menu small{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+.dd-ic{width:20px;height:20px;flex:none;margin-top:2px;color:var(--gold)}
+.top .donate-m::before{content:"";width:16px;height:16px;margin-right:8px;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='2.4' d='M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-width='2.4' d='M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z'/%3E%3C/svg%3E") center/contain no-repeat}
+.top .donate-m{align-items:center}
+@media (min-width:1140px){
+  .top .nav{order:2}
+  .top .donate-m{display:inline-flex;order:3;margin-left:22px;padding:13px 20px;font-size:18px;flex:none}
+  .top .donate-m:hover{background:var(--deep);border-color:var(--deep)}
+  .top .donate-m[aria-current=page]{box-shadow:inset 0 -3px 0 var(--gold)}
+  .nav .side{margin-right:0}
+}
+@media (max-width:1139px){
+  .dd{flex-direction:column;align-items:stretch}
+  .dd-btn{display:none}
+  .dd-menu{position:static;display:flex;min-width:0;border:0;box-shadow:none;padding:0 0 6px 14px;background:none}
+  .nav .dd-menu a{padding:12px 2px;border-bottom:1px solid var(--line)}
+  .dd-menu b{font-size:19px}
+}
+/* the volunteer pages by city */
+.anchor{display:block;position:relative;top:-24px;visibility:hidden}
+.city-lede{margin:-20px 0 36px;max-width:46em}
+.ways{list-style:none;margin:0;padding:0;display:grid;gap:24px}
+@media (min-width:900px){.ways{grid-template-columns:repeat(3,1fr);gap:28px}}
+.way{border:1px solid var(--line);border-top:3px solid var(--gold);background:var(--white);padding:28px 28px 26px;display:flex;flex-direction:column}
+.way h3{margin:6px 0 10px;font-size:30px}
+.way p{margin:0}
+.way .textlink{margin-top:auto;padding-top:20px}
+.way-k{display:flex;align-items:center;gap:8px;font-family:var(--hf);font-weight:600;font-size:15px;letter-spacing:1.4px;text-transform:uppercase;color:var(--green)}
+.way-k .dd-ic{margin:0}
+.over .way-ic{width:20px;height:20px;margin-right:8px;vertical-align:-3px;color:var(--gold)}
+#groups .ticks b,#toronto .ticks b{color:var(--green)}
+.hero .btn.ghost{background:transparent;border-color:rgba(255,255,255,.6);color:var(--white)}
+.hero .btn.ghost:hover{background:rgba(255,255,255,.1);border-color:var(--white)}
+@media (min-width:1140px) and (max-width:1279px){
+  .nav a{padding:0 9px}
+  .nav .side{gap:14px;margin-left:8px;padding-left:14px}
+  .top .donate-m{margin-left:14px;padding:12px 16px;font-size:17px}
+}
