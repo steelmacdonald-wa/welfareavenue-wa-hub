@@ -10,7 +10,7 @@
 -- 4. content_slots.platform and social_comments.platform now reference studio_platforms(key) instead of a CHECK list.
 --    Each is guarded: if a row holds a platform outside the six keys the CHECK stays and a notice is raised.
 --    social_accounts.platform keeps its CHECK (it also allows ga4 for analytics accounts, which is not a publishing platform).
--- Idempotent: safe to run again. No row deleted.
+-- Idempotent: safe to run again; the seed never overwrites admin edits (on conflict do nothing). No row deleted.
 -- =====================================================================
 
 create table if not exists public.studio_platforms (
@@ -54,7 +54,7 @@ insert into public.studio_platforms (key, label, short, colour, sort, auth, cons
   'https://developers.facebook.com/apps/',
   'Meta for Developers: the Welfare Avenue Threads app, Use cases, Access the Threads API, Settings',
   '["Steel adds the Welfare Avenue Threads account as a Threads tester in the app and accepts the invite in Threads (Settings, Account, Website permissions).","Copy the Threads app ID and app secret below and save them.","Press Connect and sign in to Threads as @welfareavenue."]'::jsonb,
-  '{"text":true,"images":true,"max_images":20,"video":true,"comments":true,"analytics":true,"link_in_caption":true}'::jsonb,
+  '{"text":true,"images":true,"max_images":20,"video":true,"max_video_s":300,"comments":true,"analytics":true,"link_in_caption":true}'::jsonb,
   array['threads_basic','threads_content_publish','threads_manage_replies','threads_read_replies','threads_manage_insights','threads_manage_mentions','threads_delete'],
   '{"direct":"Posts directly","reminder":"Reminder to post by hand"}'::jsonb, true, now()),
 ('linkedin', 'LinkedIn', 'in', '#0A66C2', 4, 'oauth',
@@ -68,20 +68,22 @@ insert into public.studio_platforms (key, label, short, colour, sort, auth, cons
   'https://developers.tiktok.com/apps/',
   'TikTok for Developers: Manage apps, the Welfare Avenue app, Basic information',
   '["The TikTok app has Login Kit and Content Posting API with video.upload, and the redirect address below.","Copy the client key and client secret below and save them.","Press Connect and sign in to TikTok as Welfare Avenue. Videos then land in the TikTok drafts to finish in the app."]'::jsonb,
-  '{"text":true,"images":false,"video":true,"max_video_s":600,"comments":false,"analytics":true,"link_in_caption":false}'::jsonb,
+  '{"text":true,"images":false,"max_images":0,"video":true,"max_video_s":600,"comments":false,"analytics":true,"link_in_caption":false}'::jsonb,
   array['user.info.basic','user.info.profile','user.info.stats','video.list','video.upload'],
   '{"drafts":"Lands in TikTok drafts","reminder":"Reminder to post by hand"}'::jsonb, true, now()),
 ('youtube', 'YouTube', chr(9654), '#FF0000', 6, 'oauth',
   'https://console.cloud.google.com/apis/credentials',
   'Google Cloud: APIs and services, Credentials, the Web client',
   '["In Google Cloud, the OAuth client lists the redirect address below and the YouTube Data API v3 is on.","Copy the client ID and client secret below and save them.","Press Connect and pick the Welfare Avenue channel (the brand account)."]'::jsonb,
-  '{"text":true,"images":false,"video":true,"max_video_s":180,"comments":false,"analytics":false,"link_in_caption":true}'::jsonb,
+  '{"text":true,"images":false,"max_images":0,"video":true,"max_video_s":180,"comments":false,"analytics":false,"link_in_caption":true}'::jsonb,
   array['https://www.googleapis.com/auth/youtube.upload','https://www.googleapis.com/auth/youtube.readonly','https://www.googleapis.com/auth/youtube.force-ssl'],
   '{"direct":"Posts directly","reminder":"Reminder to post by hand"}'::jsonb, true, now())
-on conflict (key) do update set
-  label = excluded.label, short = excluded.short, colour = excluded.colour, sort = excluded.sort, auth = excluded.auth,
-  console_url = excluded.console_url, console_note = excluded.console_note, steps = excluded.steps, caps = excluded.caps,
-  scopes = excluded.scopes, modes = excluded.modes, active = excluded.active, updated_at = now();
+on conflict (key) do nothing;
+
+-- wave277 caps fix: every platform carries all eight caps keys (the seed itself never overwrites)
+update public.studio_platforms set caps = '{"text":true,"images":true,"max_images":20,"video":true,"max_video_s":300,"comments":true,"analytics":true,"link_in_caption":true}'::jsonb, updated_at = now() where key = 'threads';
+update public.studio_platforms set caps = '{"text":true,"images":false,"max_images":0,"video":true,"max_video_s":600,"comments":false,"analytics":true,"link_in_caption":false}'::jsonb, updated_at = now() where key = 'tiktok';
+update public.studio_platforms set caps = '{"text":true,"images":false,"max_images":0,"video":true,"max_video_s":180,"comments":false,"analytics":false,"link_in_caption":true}'::jsonb, updated_at = now() where key = 'youtube';
 
 -- the whole registry in one call for the Hub (staff only; the service role too, for the edge functions)
 create or replace function public.wa277_platforms()
