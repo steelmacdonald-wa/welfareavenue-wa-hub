@@ -152,7 +152,7 @@ test('Decline closes the card, logs it and tells the owner through notify', asyn
   for (const k of ['text', 'title', 'body']) assert.ok(n.body[k], k);
   assert.match(n.body.text, /Alex Tremblay/);
   assert.match(n.body.text, /Program Coordinator/);
-  for (const k of ['text', 'title', 'body']) assert.doesNotMatch(n.body[k], /—|\bAI\b/, k + ' uses Hub words');
+  for (const k of ['text', 'title', 'body']) assert.doesNotMatch(n.body[k], /\u2014|\bAI\b/, k + ' uses Hub words');
   // Accept after Decline, and a second Decline, change nothing and say so
   const acc = await s.post({ t: s.offer, a: 'accept' });
   assert.equal(acc.body.repeated, true);
@@ -400,7 +400,7 @@ test('every message is in English and French and uses Hub words', async () => {
   seen.push((await s.post({ t: s.offer, a: 'grid', slots: 'x' })).body);
   for (const b of seen) {
     assert.ok(hasBoth(b.message), JSON.stringify(b));
-    for (const m of [b.message.en, b.message.fr]) assert.doesNotMatch(m, /—|–|\bAI\b|\bIA\b/);
+    for (const m of [b.message.en, b.message.fr]) assert.doesNotMatch(m, /\u2014|\u2013|\bAI\b|\bIA\b/);
   }
   assert.match(seen[1].message.en, /HR/);
   assert.match(seen[1].message.fr, /RH/);
