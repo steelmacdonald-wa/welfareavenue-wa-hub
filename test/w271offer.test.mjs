@@ -22,15 +22,16 @@ const candidate = (over = {}) => ({
   position_id: null, notes: '', practice: false, offer_doc_id: null, offer_doc_url: null, offer_sent_at: null, offer_email_to: null,
   offer_respond_by: null, offer_start: null, ...over,
 });
-const FORM = { lang: 'en', reports_to: 'Ruth Owen', hours: 4, start: '2026-11-16', respond_by: '2026-11-10', signer_email: 'steel.macdonald@welfareavenue.com', note: '' };
+const FORM = { lang: 'en', reports_to: 'Ruth Owen', hours: 4, start: '2026-11-16', respond_by: '2026-11-10', signer_email: 'steel.macdonald@welfareavenue.com', note: '', manager_member_id: 1 };   // wave275: the panel always sends the onboarding manager
 
-async function setup({ cand = {}, config = {} } = {}) {
+async function setup({ cand = {}, config = {}, team, askReply } = {}) {
   const rig = await loadFn('recruit-actions', {
     secrets: { RESEND_API_KEY: 're_stub_key', GOOGLE_SA_KEY: SA },
     config: { mail_mode: 'test', mail_test_recipients: 'qa@welfareavenue.com', offer_signer_email: 'steel.macdonald@welfareavenue.com', ...config },
     tables: {
       hub_candidates: [candidate(cand)], hub_positions: [], volunteer_signers: [], change_log: [],
-      team_members: [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', role: 'HR Lead' }, { id: 2, name: 'Steel MacDonald', email: 'steel.macdonald@welfareavenue.com', role: 'Executive Director' }],
+      team_members: team || [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', role: 'HR Lead', active: true }, { id: 2, name: 'Steel MacDonald', email: 'steel.macdonald@welfareavenue.com', role: 'Executive Director', active: true }],
+      hub_onboard_flows: [],
     },
   });
   rig.setNow(NOW);
@@ -40,6 +41,8 @@ async function setup({ cand = {}, config = {} } = {}) {
   rig.fetchOn('https://fonts.googleapis.com/css2', { status: 404, text: '' });   // the PDF falls back to Helvetica, as it does when the fonts fail
   rig.fetchOn(SB + '/storage/v1/object/public/content-images/brand/logo-lockup-cream-600.png', { status: 404, text: '' });
   rig.fetchOn('https://api.resend.com/emails', { json: { id: 'em1' } });
+  rig.fetchOn(SB + '/functions/v1/onboard-run', (e) => (askReply ? askReply(e) : { json: { ok: true, sent: true, to: 'ruth.owen@welfareavenue.com' } }));   // wave275: ask_manager
+  offerTrigger(rig);
   const link = await loadFn('onboard-link', { tables: { hub_candidates: [candidate(cand)], hub_onboard_flows: [], hub_onboard_grids: [], team_members: [], change_log: [] } });
   link.setNow(NOW);
   const send = async (f, email = true) => {
@@ -51,6 +54,14 @@ async function setup({ cand = {}, config = {} } = {}) {
   return { rig, link, send, mails, cand0 };
 }
 // every <a ...>label</a> in the email, as { label, href } (the href as a browser reads it: &amp; undone)
+/* wave275a's trigger wa275_offer_sent, as the rig has no triggers: offer_sent_at from empty to a time makes the offered flow with the card's onboard_manager_id, once */
+function offerTrigger(rig) {
+  rig.db.on('hub_candidates', 'update', (n, o, db) => {
+    if (o.offer_sent_at != null || n.offer_sent_at == null) return;
+    if (db.rows('hub_onboard_flows').some((f) => String(f.candidate_id) === String(n.id))) return;
+    db.insert('hub_onboard_flows', { candidate_id: n.id, practice: !!n.practice, status: 'offered', manager_member_id: n.onboard_manager_id ?? null, created_at: new Date().toISOString() });
+  });
+}
 const anchors = (html) => [...html.matchAll(/<a\s[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)].map((m) => ({ label: m[2].trim(), href: m[1].replace(/&amp;/g, '&') }));
 const buttons = (html, labels) => Object.fromEntries(labels.map((l) => [l, anchors(html).find((a) => a.label === l)]));
 const tokenOf = (href) => decodeURIComponent(new URL(href).pathname.slice('/o/'.length));
@@ -208,4 +219,200 @@ test('the PDF is exactly what it was before the buttons', async () => {
   const fr = Buffer.from(s.mails()[1].body.attachments[0].content, 'base64').toString('utf8');
   assert.doesNotMatch(fr, /hub\.welfareavenue\.com|\/o\/|Accepter|Refuser/);
   assert.match(fr, /Offre de poste/);
+});
+
+/* ---------- wave275 Task 5: the offer asks for the onboarding manager and the hours (4, 6 or 8); the manager is asked for times ---------- */
+const RUN = SB + '/functions/v1/onboard-run';
+const drive = (s) => s.rig.fetchLog.filter((e) => e.url.startsWith('https://www.googleapis.com/upload/drive/v3/files'));
+const asks = (s) => s.rig.fetchLog.filter((e) => e.url === RUN);
+const hubWords = (x) => !/—/.test(x) && !/\bAI\b/.test(x);
+const updatesOf = (rig) => {   // each update statement on the card, as the keys it changed
+  const seen = [];
+  rig.db.on('hub_candidates', 'update', (n, o) => { seen.push(Object.keys(n).filter((k) => JSON.stringify(n[k]) !== JSON.stringify(o[k]))); });
+  return seen;
+};
+
+test('w275 offer_send refuses without an onboarding manager, or with hours other than 4, 6 or 8, in a plain sentence; nothing is made, sent or saved', async () => {
+  for (const [f, code, words] of [
+    [{ ...FORM, manager_member_id: undefined }, 'no_manager', /Choose the onboarding manager/],
+    [{ ...FORM, manager_member_id: '' }, 'no_manager', /Choose the onboarding manager/],
+    [{ ...FORM, hours: 5 }, 'bad_hours', /4, 6 or 8/],
+    [{ ...FORM, hours: 10 }, 'bad_hours', /4, 6 or 8/],
+    [{ ...FORM, hours: '' }, 'bad_hours', /4, 6 or 8/],
+    [{ ...FORM, hours: 'six' }, 'bad_hours', /4, 6 or 8/],
+  ]) {
+    for (const email of [true, false]) {
+      const s = await setup();
+      const before = structuredClone(s.rig.db.tables);
+      const out = await s.send(f, email);
+      assert.equal(out.status, 400, JSON.stringify([f, email]));
+      assert.equal(out.body.code, code);
+      assert.match(out.body.error, words);
+      assert.ok(hubWords(out.body.error) && /\.$/.test(out.body.error), out.body.error);
+      assert.equal(drive(s).length, 0, 'no letter in Drive');
+      assert.equal(s.mails().length, 0, 'no email');
+      assert.equal(asks(s).length, 0, 'nobody asked');
+      assert.deepEqual(s.rig.db.tables, before, 'nothing saved');
+    }
+  }
+});
+
+test('w275 offer_send refuses a manager who is not on the roster, no longer active, or has no roster email', async () => {
+  const team = [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', active: true }, { id: 3, name: 'Old Hand', email: 'old.hand@welfareavenue.com', active: false }, { id: 4, name: 'No Mail', email: null, active: true }];
+  for (const [id, code, words] of [[99, 'no_manager', /not on the roster/], [3, 'manager_inactive', /Old Hand is no longer active/], [4, 'manager_no_email', /No Mail has no email on the roster/]]) {
+    const s = await setup({ team });
+    const out = await s.send({ ...FORM, manager_member_id: id });
+    assert.equal(out.status, 400, String(id));
+    assert.equal(out.body.code, code);
+    assert.match(out.body.error, words);
+    assert.ok(hubWords(out.body.error));
+    assert.equal(drive(s).length + s.mails().length + asks(s).length, 0);
+    assert.equal(s.cand0().offer_sent_at, null);
+  }
+});
+
+test('w275 offer_send stores offer_hours and onboard_manager_id with offer_sent_at in one update; the trigger makes the offered flow; onboard-run ask_manager is asked for it with the trigger secret', async () => {
+  for (const hours of [4, 6, 8, '6']) {
+    const s = await setup();
+    const updates = updatesOf(s.rig);
+    const out = await s.send({ ...FORM, hours, manager_member_id: '1' });
+    assert.equal(out.status, 200, JSON.stringify(out.body));
+    const c = s.cand0();
+    assert.equal(c.offer_hours, Number(hours));
+    assert.equal(c.onboard_manager_id, 1);
+    assert.equal(c.offer_sent_at, '2026-11-01T15:00:00.000Z');
+    const one = updates.find((keys) => keys.includes('offer_sent_at'));
+    assert.ok(one && one.includes('offer_hours') && one.includes('onboard_manager_id'), 'one statement: ' + JSON.stringify(updates));
+    const flows = s.rig.db.rows('hub_onboard_flows');
+    assert.equal(flows.length, 1);
+    assert.deepEqual([flows[0].status, flows[0].manager_member_id], ['offered', 1]);
+    assert.equal(asks(s).length, 1);
+    const a = asks(s)[0];
+    assert.equal(a.method, 'POST');
+    assert.equal(a.headers['x-wa-secret'], 'trigger-secret-for-tests');
+    assert.deepEqual(a.body, { action: 'ask_manager', flow_id: flows[0].id });
+    assert.equal(out.body.manager.asked, true);
+    assert.equal(out.body.manager.name, 'Ruth Owen');
+    assert.deepEqual(out.body.warnings, []);
+    assert.deepEqual(s.rig.unregistered(), []);
+  }
+});
+
+test('w275 the letter and its preview say the hours chosen; the default 4 leaves the letter exactly as it was', async () => {
+  const s = await setup();
+  s.rig.db.onRpc('wa271_default_manager', () => ({ member_id: 1, name: 'Ruth Owen', how: 'reports_to' }));
+  const prev = async (f) => { const r = await s.rig.call(new Request(SB + '/functions/v1/recruit-actions', { method: 'POST', headers: { Authorization: 'Bearer stub', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'offer_preview', id: 11, f }) })); return r.json(); };
+  assert.match((await prev({ ...FORM, hours: 8 })).html, /A minimum commitment of 8 hours per week/);
+  assert.match((await prev({ ...FORM, hours: 4 })).html, /A minimum commitment of 4 hours per week/);
+  await s.send({ ...FORM, hours: 6 });
+  assert.match(Buffer.from(s.mails()[0].body.attachments[0].content, 'base64').toString('utf8'), /6 hours/);
+});
+
+test('w275 offer_preview gives the panel the position\'s manager (and how it was chosen) and the active roster to choose from', async () => {
+  const team = [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', active: true }, { id: 2, name: 'Ada Bell', email: 'ada.bell@welfareavenue.com', active: true }, { id: 3, name: 'Old Hand', email: 'old.hand@welfareavenue.com', active: false }, { id: 5, name: '', email: 'x@welfareavenue.com', active: true }];
+  const s = await setup({ team });
+  const asked = [];
+  s.rig.db.onRpc('wa271_default_manager', (a, _db, w) => { asked.push([a, w.jwt]); return { member_id: 1, name: 'Ruth Owen', how: 'reports_to' }; });
+  const r = await s.rig.call(new Request(SB + '/functions/v1/recruit-actions', { method: 'POST', headers: { Authorization: 'Bearer stub', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'offer_preview', id: 11, f: FORM }) }));
+  const b = await r.json();
+  assert.equal(r.status, 200, JSON.stringify(b));
+  assert.deepEqual(asked, [[{ p_candidate: 11 }, null]], 'asked once, as the service key');
+  assert.deepEqual(b.manager, { default: { member_id: 1, name: 'Ruth Owen', how: 'reports_to' }, choices: [{ id: 2, name: 'Ada Bell' }, { id: 1, name: 'Ruth Owen' }] });
+  assert.ok(b.html, 'the letter as before');
+  /* the default the Hub cannot tell: none; and a failing lookup still gives the choices */
+  const none = await setup({ team });
+  none.rig.db.onRpc('wa271_default_manager', () => { throw new Error('no such function'); });
+  const r2 = await (await none.rig.call(new Request(SB + '/functions/v1/recruit-actions', { method: 'POST', headers: { Authorization: 'Bearer stub', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'offer_preview', id: 11, f: FORM }) }))).json();
+  assert.deepEqual(r2.manager.default, { member_id: null, name: null, how: 'none' });
+  assert.equal(r2.manager.choices.length, 2);
+});
+
+test('w275 "Create the letter only" stores the hours and the manager but asks nobody: the offer has not gone out', async () => {
+  const s = await setup();
+  const out = await s.send({ ...FORM, hours: 8 }, false);
+  assert.equal(out.status, 200);
+  assert.equal(s.cand0().offer_hours, 8);
+  assert.equal(s.cand0().onboard_manager_id, 1);
+  assert.equal(s.cand0().offer_sent_at, null);
+  assert.equal(s.rig.db.rows('hub_onboard_flows').length, 0);
+  assert.equal(asks(s).length, 0);
+  assert.equal(out.body.manager, null);
+});
+
+test('w275 onboard-run not answering, or refusing, is a warning on an offer that still went out', async () => {
+  const down = await setup({ askReply: () => ({ status: 503, json: { error: 'down' } }) });
+  const a = await down.send(FORM);
+  assert.equal(a.status, 200);
+  assert.equal(a.body.ok, true);
+  assert.equal(a.body.manager.asked, false);
+  assert.ok(a.body.warnings.length === 1 && /Ruth Owen was not asked for times yet/.test(a.body.warnings[0]) && /hourly/.test(a.body.warnings[0]), JSON.stringify(a.body.warnings));
+  assert.equal(down.cand0().offer_sent_at, '2026-11-01T15:00:00.000Z');
+  const refused = await setup({ askReply: () => ({ status: 409, json: { error: 'manager_no_email', message: 'Ruth Owen has no email on the roster, so the Hub cannot ask them for times.' } }) });
+  const b = await refused.send(FORM);
+  assert.equal(b.status, 200);
+  assert.ok(b.body.warnings.some((x) => /has no email on the roster/.test(x)), JSON.stringify(b.body.warnings));
+  for (const w of [...a.body.warnings, ...b.body.warnings]) assert.ok(hubWords(w));
+});
+
+test('w275 offer_send again with another manager: the offered flow takes the new manager and they are asked; with times already proposed the flow keeps its manager and says why', async () => {
+  const s = await setup();
+  await s.send(FORM);
+  const again = await s.send({ ...FORM, manager_member_id: 2 });
+  assert.equal(again.status, 200);
+  assert.equal(s.rig.db.rows('hub_onboard_flows').length, 1, 'no second flow');
+  assert.equal(s.rig.db.rows('hub_onboard_flows')[0].manager_member_id, 2);
+  assert.equal(s.cand0().onboard_manager_id, 2);
+  assert.equal(asks(s).length, 2);
+  assert.equal(again.body.manager.name, 'Steel MacDonald');
+
+  const p = await setup();
+  await p.send(FORM);
+  Object.assign(p.rig.db.rows('hub_onboard_flows')[0], { proposed_at: '2026-11-01T12:00:00Z', proposed_call_at: '2026-11-05T15:00:00Z', proposed_one_on_one_at: '2026-11-05T17:00:00Z' });
+  const r = await p.send({ ...FORM, manager_member_id: 2 });
+  assert.equal(r.status, 200);
+  assert.equal(p.rig.db.rows('hub_onboard_flows')[0].manager_member_id, 1, 'the proposal stays with the manager who made it');
+  assert.ok(r.body.warnings.some((x) => /already proposed times/.test(x) && /Change manager on the card/.test(x)), JSON.stringify(r.body.warnings));
+
+  /* accepted since (waiting, a manager on it): the card keeps its manager; the flow is the card's to change */
+  const w = await setup();
+  await w.send(FORM);
+  w.rig.db.rows('hub_onboard_flows')[0].status = 'waiting';
+  const late = await w.send({ ...FORM, manager_member_id: 2 });
+  assert.equal(late.status, 200);
+  assert.equal(w.rig.db.rows('hub_onboard_flows')[0].manager_member_id, 1);
+  assert.ok(late.body.warnings.some((x) => /keeps its manager now that the offer is accepted/.test(x)), JSON.stringify(late.body.warnings));
+  assert.equal(asks(w).length, 1, 'the new person is not asked for a flow that is not theirs');
+});
+
+test('w275 integration: the offer, the trigger and the real onboard-run on one database: the manager gets their link, and onboard-link opens it as theirs', async () => {
+  let run = null;
+  const s = await setup({ askReply: async (e) => { const r = await run.call(new Request(RUN, { method: 'POST', headers: e.headers, body: JSON.stringify(e.body) })); s.rig.client(); return r; } });
+  const { generateKeyPairSync: kp } = await import('node:crypto');
+  const { privateKey: pk } = kp('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
+  run = await loadFn('onboard-run', { secrets: { GOOGLE_SA_KEY: JSON.stringify({ client_email: 'hub@stub.iam', private_key: pk, token_uri: 'https://oauth2.googleapis.com/token' }) } });
+  run.db.tables = s.rig.db.tables;   // one database
+  run.setNow(NOW);
+  const notified = [];
+  run.fetchOn(SB + '/functions/v1/notify', (e) => { notified.push(e.body); return { json: { outcome: { [e.body.to_email]: 'sent' }, hub: 'off' } }; });
+  run.fetchOn('https://oauth2.googleapis.com/token', { json: { access_token: 'tok', expires_in: 3600 } });
+  run.fetchOn('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { json: { id: 'mail1' } });
+  const out = await s.send(FORM);
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(out.body.manager.asked, true, JSON.stringify(out.body));
+  const f = s.rig.db.rows('hub_onboard_flows')[0];
+  assert.equal(f.manager_link_member_id, 1);
+  assert.ok(f.manager_link_sent_at);
+  assert.equal(notified.length, 1);
+  assert.equal(notified[0].event, 'onboard_propose');
+  assert.equal(notified[0].to_email, 'ruth.owen@welfareavenue.com');
+  const mail = run.fetchLog.filter((e) => e.url.includes('gmail'));
+  assert.equal(mail.length, 1, 'and the email from hub@');
+  const t = decodeURIComponent(notified[0].url.slice('/o/'.length));
+  s.link.db.tables = s.rig.db.tables;
+  const g2 = await s.link.call(new Request(SB + '/functions/v1/onboard-link?t=' + encodeURIComponent(t)));
+  const b = await g2.json();
+  assert.equal(g2.status, 200, JSON.stringify(b));
+  assert.deepEqual([b.kind, b.mode, b.notYours, b.first, b.hire], ['manager', 'propose', undefined, 'Ruth', 'Alex']);
+  assert.deepEqual(s.rig.unregistered(), []);
+  assert.deepEqual(run.unregistered(), []);
 });

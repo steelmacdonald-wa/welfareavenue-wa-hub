@@ -1,3 +1,10 @@
+// wave275, 02/11/26: the offer asks for the onboarding manager and the hours. offer_send refuses, in a plain sentence and before anything is made, an
+// offer with no f.manager_member_id (an active roster member with an email) or with f.hours other than 4, 6 or 8 (400 {error, code}). It stores
+// hub_candidates.offer_hours and onboard_manager_id in the same update as offer_sent_at, so the trigger wa275_offer_sent makes the offered flow with
+// that manager; then (emailed only) it asks onboard-run ask_manager {flow_id} with the trigger secret, which sends the manager their mgr link. An offer
+// sent again with another manager moves the flow to them while nothing is proposed. The manager not being asked is a warning, never a failed offer
+// (the hourly job tries again). offer_preview also gives manager {default: wa271_default_manager, choices: the active roster}. The letter, its PDF,
+// the buttons, the email and the "just reply to this email" line are unchanged.
 // wave271, 01/11/26: the offer email gets Accept and Decline buttons (hub.welfareavenue.com/o/<token>, the page and function of onboard-link; the
 // token is its 'offer' token, copied here as offerToken), and offer_send saves the letter's reply-by and start dates on the card
 // (hub_candidates.offer_respond_by, offer_start). The letter, its PDF and the "just reply to this email" line are unchanged.
@@ -344,7 +351,7 @@ async function trash(id: string) { try { await gfetch(DRIVE + '/files/' + encode
    their name, title and signature come from volunteer_signers (Volunteer Manager > Sign-offs > My signature, bucket signoffs).
    The letter is a PDF drawn here (the green band and lockup of the sign-off letters), kept in Recruitment > Offer Letters; the
    email is the CRM's layout (mail-send) with the signer's sign-off, a blind copy to the signer, and replies going to them. */
-type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; signer_email?: string; note?: string; email?: string };
+type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; signer_email?: string; note?: string; email?: string; manager_member_id?: number | string };
 type Signer = { email: string; name: string; title: string; title_fr: string; sig: Uint8Array | null; has_sig: boolean };
 function esc(s: unknown): string { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)); }
 function dLong(iso: string | undefined, fr: boolean): string {
@@ -586,7 +593,74 @@ async function uploadPdf(name: string, parent: string, bytes: Uint8Array): Promi
   const j = await r.json(); if (!r.ok) throw new Error('Drive upload ' + r.status + ': ' + JSON.stringify(j).slice(0, 200));
   return j;
 }
-async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
+/* ---------- wave275: the onboarding manager and the hours ---------- */
+/* a refusal the panel shows as it is: 400 {error: <the sentence>, code} */
+class Refused extends Error { code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
+const OFFER_HOURS = [4, 6, 8];
+type Mgr = { id: number; name: string; email: string };
+/* checked before anything is made: no letter, no Drive file, no email for an offer that cannot go out */
+async function offerCheck(f: OfferF): Promise<{ hours: number; mgr: Mgr }> {
+  const raw = f.hours, hours = typeof raw === 'number' ? raw : /^\s*\d+\s*$/.test(String(raw ?? '')) ? Number(raw) : NaN;
+  if (!OFFER_HOURS.includes(hours)) throw new Refused('bad_hours', 'Hours a week must be 4, 6 or 8.');
+  const mid = Number(f.manager_member_id);
+  if (f.manager_member_id == null || String(f.manager_member_id).trim() === '' || !Number.isInteger(mid)) throw new Refused('no_manager', 'Choose the onboarding manager first: they are asked for the onboarding call and 1-on-1 times as soon as the offer goes out.');
+  const { data: m } = await svc.from('team_members').select('id, name, email, active').eq('id', mid).maybeSingle();
+  if (!m) throw new Refused('no_manager', 'That onboarding manager is not on the roster. Choose another one.');
+  const name = String((m as any).name || 'That person');
+  if ((m as any).active === false) throw new Refused('manager_inactive', name + ' is no longer active on the roster. Choose another onboarding manager.');
+  const email = String((m as any).email || '').trim().toLowerCase();
+  if (!email) throw new Refused('manager_no_email', name + ' has no email on the roster, so the Hub cannot ask them for times. Add it on their roster profile, or choose another onboarding manager.');
+  return { hours, mgr: { id: mid, name, email } };
+}
+/* the panel's "Onboarding manager": the position's manager as wa271_default_manager tells it (and how), and the active roster to choose from */
+async function managerChoices(id: number) {
+  let def: { member_id: number | null; name: string | null; how: string } = { member_id: null, name: null, how: 'none' };
+  try {
+    const { data, error } = await svc.rpc('wa271_default_manager', { p_candidate: id });
+    if (!error && data) def = { member_id: (data as any).member_id ?? null, name: (data as any).name ?? null, how: String((data as any).how || 'none') };
+  } catch (_) { /* none: HR chooses */ }
+  const { data: tm } = await svc.from('team_members').select('id, name, active');
+  const choices = ((tm || []) as any[]).filter((m) => m.active !== false && String(m.name || '').trim()).map((m) => ({ id: m.id, name: String(m.name).trim() })).sort((a, b) => a.name.localeCompare(b.name));
+  return { default: def, choices };
+}
+/* the manager is asked for times: wa275_offer_sent made the offered flow with the card's manager (a flow already there keeps its row); an offer sent again
+   with another manager moves the flow to them while nothing is proposed. Then onboard-run ask_manager {flow_id}, with the trigger secret. Never fails the offer. */
+const LATER = ' The Hub\'s hourly job tries again, or HR can send the link from the card.';
+const endStop = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : s.trim() + '.');
+async function askManager(id: number, m: Mgr, warnings: string[]): Promise<{ asked: boolean; name: string; skipped?: string }> {
+  const out = { asked: false, name: m.name };
+  const { data: f, error } = await svc.from('hub_onboard_flows').select('id, status, manager_member_id, proposed_at, hire_answer, call_at').eq('candidate_id', id).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (error || !f) { warnings.push('The onboarding card for this offer was not found' + (error ? ' (' + error.message + ')' : '') + ', so ' + m.name + ' was not asked for times yet. Tell Steel.'); return out; }
+  if (String((f as any).manager_member_id ?? '') !== String(m.id)) {
+    /* moved only before anyone acted on it: an offered flow (or a waiting one with no manager yet) with nothing proposed and nothing booked */
+    if ((f as any).proposed_at || (f as any).call_at) {
+      warnings.push('The manager on the onboarding card has already proposed times, or the times are booked, so it stays with them. Use Change manager on the card to move it to ' + m.name + '.');
+      return out;
+    }
+    if (!((f as any).status === 'offered' || ((f as any).status === 'waiting' && (f as any).manager_member_id == null))) {
+      warnings.push('The onboarding card keeps its manager now that the offer is accepted. Use Change manager on the card to move it to ' + m.name + '.');
+      return out;
+    }
+    const { data: moved, error: mErr } = await svc.from('hub_onboard_flows').update({ manager_member_id: m.id, updated_at: new Date().toISOString() }).eq('id', (f as any).id).eq('status', (f as any).status).is('proposed_at', null).is('call_at', null).select('id');
+    if (mErr || !(moved as unknown[] | null)?.length) { warnings.push('The onboarding card could not be moved to ' + m.name + (mErr ? ' (' + mErr.message + ')' : '') + '. Set the manager on the card.'); return out; }
+  }
+  try {
+    const secret = await getSecret('WA_TRIGGER_SECRET');
+    const r = await fetch(SUPABASE_URL + '/functions/v1/onboard-run', { method: 'POST', signal: AbortSignal.timeout(25000), headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ action: 'ask_manager', flow_id: (f as any).id }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { warnings.push(m.name + ' was not asked for times yet: ' + endStop(String(j?.message || j?.error || 'onboard-run said ' + r.status)) + LATER); return out; }
+    for (const w of (Array.isArray(j?.warnings) ? j.warnings : [])) warnings.push(String(w));
+    if (j?.skipped) return { asked: j.skipped === 'already_sent', name: m.name, skipped: String(j.skipped) };
+    return { asked: true, name: m.name };
+  } catch (e) {
+    warnings.push(m.name + ' was not asked for times yet: ' + endStop(String((e as Error).message || e)) + LATER);
+    return out;
+  }
+}
+
+async function offerSend(id: number, f0: OfferF, sendEmail: boolean, who: Who) {
+  const { hours, mgr } = await offerCheck(f0);   // wave275: before anything is made
+  const f: OfferF = { ...f0, hours };
   const { c, role } = await offerFor(id);
   const fr = f.lang === 'fr';
   const s = await signerFor(f);
@@ -630,14 +704,24 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     emailed = { mode: own ? 'practice' : mode, to: rcpt, copy_to: s.email, id: j?.id || null };
   }
   const now = new Date();
-  await svc.from('hub_candidates').update({ offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
+  const warnings: string[] = [];
+  const card = { offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
     notes: (String(c.notes || '') + '\nOffer letter (signed by ' + s.name + ') ' + (emailed ? (emailed.mode === 'live' || emailed.mode === 'practice' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
-    updated_at: now.toISOString(), updated_by: who.name }).eq('id', id);
+    updated_at: now.toISOString(), updated_by: who.name };
+  /* wave275: the hours and the onboarding manager in the same statement as offer_sent_at, so the trigger copies this manager to the offered flow it makes.
+     If that fails (wa275a not applied yet), the bookkeeping is saved without them, as before. */
+  const saved = await svc.from('hub_candidates').update({ ...card, offer_hours: hours, onboard_manager_id: mgr.id }).eq('id', id);
+  if (saved.error) {
+    console.warn('offer hours and manager', saved.error.message);
+    await svc.from('hub_candidates').update(card).eq('id', id);
+    warnings.push('The hours and the onboarding manager could not be saved on the card (' + saved.error.message + '). Tell Steel.');
+  }
   /* wave271: the reply-by and start dates the letter carries, for the Ready to onboard list; its own update, so the bookkeeping above never depends on the columns */
   const dated = await svc.from('hub_candidates').update({ offer_respond_by: isoDay(f.respond_by), offer_start: isoDay(f.start) }).eq('id', id);
   if (dated.error) console.warn('offer dates', dated.error.message);
   await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: 'offer_letter', old_value: null, new_value: (emailed ? 'emailed (' + emailed.mode + ')' : 'created') + ', signed by ' + s.name + ': ' + docUrl, changed_by: who.name });
-  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig };
+  const manager = emailed && !saved.error ? await askManager(id, mgr, warnings) : null;   // wave275: only an offer that went out asks for times
+  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig, manager, warnings };
 }
 /* the offer signer setting: HR (the Time off access) or an admin */
 async function signerSet(email: string, who: Who, auth: string) {
@@ -827,7 +911,7 @@ Deno.serve(async (req) => {
       const { c, role } = await offerFor(Number(b.id));
       const s = await signerFor(b.f || {});
       return json({ ok: true, html: letterHtml(c.name, role, b.f || {}, s, !!c.practice), role, email: c.email, practice: !!c.practice, mail_mode: (await cfg('mail_mode')) || 'test', test_to: await cfg('mail_test_recipients'),
-        signer: s.name, signer_title: s.title, signer_email: s.email, signer_has_sig: s.has_sig, default_signer: ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase(), signers: await signerList() });
+        signer: s.name, signer_title: s.title, signer_email: s.email, signer_has_sig: s.has_sig, default_signer: ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase(), signers: await signerList(), manager: await managerChoices(Number(b.id)) });
     }
     if (action === 'offer_send') return json(await offerSend(Number(b.id), b.f || {}, !!b.email, who));
     if (action === 'offer_signer_set') { if (bySecret) return json({ error: 'staff only' }, 403); return json(await signerSet(String(b.email || ''), who, req.headers.get('Authorization') || '')); }
@@ -841,6 +925,7 @@ Deno.serve(async (req) => {
     if (action === 'jd_publish') return json(await jdPublish(!!b.force));
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
+    if (e instanceof Refused) return json({ error: e.message, code: e.code }, 400);   // wave275: the panel shows the sentence
     return json({ error: String((e as Error).message || e) }, 500);
   }
 });

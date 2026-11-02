@@ -3,7 +3,7 @@
 // and the hourly action remind). Slack, hub-push and every other URL are stubs: nothing is sent anywhere, and an unregistered URL fails the call.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHmac } from 'node:crypto';
+import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { loadFn } from './w271rig.mjs';
 
 const BASE = 'https://stub.supabase.test/functions/v1/';
@@ -113,8 +113,9 @@ test('notify sends to several people in one call (the HR list), each through the
 });
 
 /* ---------- onboard-run ---------- */
-async function runWorld({ cand = {}, fl = {}, config = {}, tables = {}, hr = true, manager = { member_id: 2, name: 'Sam Lee', how: 'reports_to' }, notifyReply, notify = null } = {}) {
+async function runWorld({ cand = {}, fl = {}, config = {}, tables = {}, hr = true, manager = { member_id: 2, name: 'Sam Lee', how: 'reports_to' }, notifyReply, notify = null, secrets = {} } = {}) {
   const rig = await loadFn('onboard-run', {
+    secrets,
     config: { onboard_auto_google: 'off', onboard_auto_slack: 'off', onboard_remind_hours: '48', hr_notify_emails: HR.join(', '), mail_mode: 'live', ...config },
     tables: {
       hub_candidates: [candidate(cand)], hub_onboard_flows: [flow({ practice: !!cand.practice, ...fl })], hub_onboard_grids: [], hub_onboard_steps: [],
@@ -609,4 +610,315 @@ test('w275: notify takes onboard_propose, onboard_answer and onboard_ready like 
   const signedIn = await notifyWorld();
   signedIn.db.setCaller({ email: 'hr.person@welfareavenue.com' });
   assert.equal((await signedIn.send(dateMsg({ event: 'onboard_propose' }), { Authorization: 'Bearer user-jwt' })).status, 401, 'the Hub itself only');
+});
+
+/* ---------- wave275 Task 5: ask_manager {flow_id} (the manager is asked for times as the offer goes out) and remind on the propose path ---------- */
+const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
+const LINK_FN = BASE + 'onboard-link';
+const { privateKey: KEY5 } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
+const SA5 = JSON.stringify({ client_email: 'hub@stub.iam', private_key: KEY5, token_uri: 'https://oauth2.googleapis.com/token' });
+const offered5 = (over = {}) => ({ status: 'offered', manager_member_id: 2, created_at: '2026-10-19T12:00:00Z', proposed_call_at: null, proposed_one_on_one_at: null, proposed_by: null, proposed_at: null, hire_answer: null, setup_ticks: {}, ...over });
+function tickSet5(a, db) {   // wa275_tick_set as wa275a has it: one key merged; p_if_unset writes only while it is empty
+  const f = db.rows('hub_onboard_flows').find((r) => Number(r.id) === Number(a.p_flow));
+  if (!f) return false;
+  const cur = f.setup_ticks && typeof f.setup_ticks === 'object' ? f.setup_ticks : {};
+  if (a.p_if_unset && cur[a.p_key] != null) return false;
+  f.setup_ticks = { ...cur, [a.p_key]: a.p_value ?? null };
+  return true;
+}
+async function askWorld({ cand = {}, fl = {}, config = {}, gmailReply, ...o } = {}) {
+  const w = await runWorld({ cand: { accepted_on: null, ...cand }, fl: offered5(fl), config: { mail_mode: 'live', mail_test_recipients: 'tester@welfareavenue.com', onboard_call_min: '60', onboard_one_on_one_min: '30', onboard_propose_lead_hours: '48', ...config }, secrets: { GOOGLE_SA_KEY: SA5 }, ...o });
+  w.db.onRpc('wa275_tick_set', tickSet5);
+  w.rig.fetchOn('https://oauth2.googleapis.com/token', { json: { access_token: 'tok', expires_in: 3600 } });
+  w.rig.fetchOn(GMAIL, (e) => (gmailReply ? gmailReply(e) : { json: { id: 'mail1' } }));
+  w.gmail = () => w.rig.fetchLog.filter((e) => e.url === GMAIL);
+  w.ask = (headers = { 'x-wa-secret': SECRET, Authorization: 'Bearer anon-key-for-tests' }) => w.post({ action: 'ask_manager', flow_id: 21 }, headers);
+  w.asks = () => w.sent.filter((m) => m.event === 'onboard_propose');
+  return w;
+}
+const mime5 = (entry) => {   // the decoded MIME of a Gmail send: headers and the two bodies
+  const raw = Buffer.from(entry.body.raw, 'base64url').toString();
+  const lines = raw.split('\r\n');
+  const dec = (h) => { const m = /=\?UTF-8\?B\?(.*)\?=/.exec(h); return m ? Buffer.from(m[1], 'base64').toString() : h; };
+  const bodies = [...raw.matchAll(/Content-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=]+)/g)].map((m) => Buffer.from(m[1], 'base64').toString());
+  return { to: lines.find((l) => l.startsWith('To: ')).slice(4), from: lines.find((l) => l.startsWith('From: ')), subject: dec(lines.find((l) => l.startsWith('Subject: ')).slice(9)), text: bodies[0], html: bodies[1] };
+};
+const hubWords = (s) => !/—/.test(s) && !/\bAI\b/.test(s);
+
+test('w275 ask_manager (the trigger secret): a Slack DM through onboard_propose and an email from hub@, each with the manager\'s own link; the flow records who holds it, and onboard-link opens it in propose mode', async () => {
+  const w = await askWorld();
+  const r = await w.ask();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.sent, true);
+  const link = 'https://hub.welfareavenue.com/o/' + mgrLink(21);
+  const dm = w.asks();
+  assert.equal(dm.length, 1, 'one Slack DM');
+  assert.equal(dm[0].to_email, SAM);
+  assert.equal(dm[0].url, '/o/' + mgrLink(21));
+  assert.equal(dm[0].tag, 'onboard-propose-21');
+  assert.equal(dm[0].title, 'Propose the onboarding call and the 1-on-1 for Alex Tremblay');
+  assert.ok(dm[0].text.includes('<' + link + '|'), dm[0].text);
+  assert.equal(w.gmail().length, 1, 'one email');
+  const m = mime5(w.gmail()[0]);
+  assert.equal(m.to, SAM, 'live mode: to the manager');
+  assert.match(m.from, /<hub@welfareavenue\.com>$/);
+  assert.equal(m.subject, 'Propose the onboarding call and the 1-on-1 for Alex Tremblay');
+  assert.ok(m.text.startsWith('Hi Sam,'), m.text);
+  assert.ok(m.text.includes(link), 'the text carries the link');
+  assert.ok(m.html.includes('href="' + link + '"'), 'the button is the link');
+  assert.match(m.text, /60 minutes/);
+  assert.match(m.text, /30 minutes/);
+  assert.match(m.text, /48 hours/);
+  for (const s of [m.text, m.html, dm[0].text, dm[0].body, dm[0].title]) assert.ok(hubWords(s), s);
+  assert.equal(w.flow().manager_link_member_id, 2);
+  assert.equal(w.flow().manager_link_sent_at, '2026-10-20T12:00:00.000Z');
+  assert.equal(w.flow().reminded_manager_at, null);
+  assert.ok(w.rig.fetchLog.every((e) => !JSON.stringify(e.body).includes(HIRE)), 'nothing goes to the new hire');
+  assert.deepEqual(w.rig.unregistered(), []);
+  /* the link the manager got, read by onboard-link itself on the same database */
+  const ol = await loadFn('onboard-link', {});
+  ol.db.tables = w.db.tables;
+  ol.setNow(NOW);
+  const t = decodeURIComponent(new URL(link).pathname.slice(3));
+  assert.equal(t, await ol.mod.wa271Token('mgr', 21), 'onboard-link\'s own token for the flow');
+  const g = await ol.call(new Request(LINK_FN + '?t=' + encodeURIComponent(t)));
+  const gb = await g.json();
+  assert.equal(g.status, 200, JSON.stringify(gb));
+  assert.equal(gb.kind, 'manager');
+  assert.equal(gb.mode, 'propose');
+  assert.equal(gb.notYours, undefined, 'the link is the manager\'s own (manager_link_member_id is set)');
+  assert.equal(gb.first, 'Sam');
+  const bad = await ol.call(new Request(LINK_FN + '?t=' + encodeURIComponent(t.slice(0, -1) + (t.endsWith('A') ? 'B' : 'A'))));
+  assert.equal(bad.status, 404, 'a changed letter is refused');
+  assert.deepEqual(ol.unregistered(), []);
+});
+
+test('w275 ask_manager: sent once for the same manager by the secret; HR or an admin signed in can send it again from the card; anyone else is refused', async () => {
+  const w = await askWorld();
+  await w.ask();
+  const again = await w.ask();
+  assert.equal(again.status, 200);
+  assert.equal(again.body.skipped, 'already_sent');
+  assert.match(again.body.reason, /already/);
+  assert.equal(w.asks().length, 1);
+  assert.equal(w.gmail().length, 1);
+  w.rig.setNow('2026-10-21T12:00:00Z');
+  const hr = await w.post({ action: 'ask_manager', flow_id: 21 });
+  assert.equal(hr.status, 200, JSON.stringify(hr.body));
+  assert.equal(hr.body.sent, true, 'HR re-sends from the card');
+  assert.equal(w.asks().length, 2);
+  assert.equal(w.gmail().length, 2);
+  assert.equal(w.flow().manager_link_sent_at, '2026-10-21T12:00:00.000Z');
+  const plain = await askWorld({ hr: false });
+  const r = await plain.post({ action: 'ask_manager', flow_id: 21 });
+  assert.equal(r.status, 403);
+  assert.ok(r.body.message && hubWords(r.body.message));
+  assert.equal(plain.asks().length, 0);
+  assert.equal(plain.flow().manager_link_sent_at, null);
+});
+
+test('w275 ask_manager: two calls at once send once', async () => {
+  const w = await askWorld();
+  const [a, b] = await Promise.all([w.ask(), w.ask()]);
+  assert.deepEqual([a.status, b.status], [200, 200]);
+  assert.equal(w.asks().length, 1);
+  assert.equal(w.gmail().length, 1);
+});
+
+test('w275 ask_manager: a new manager (changed after the link went out) gets their own link, and their reminder clock starts again', async () => {
+  const w = await askWorld({ fl: { manager_link_member_id: 2, manager_link_sent_at: '2026-10-17T12:00:00Z', reminded_manager_at: '2026-10-19T12:00:00Z', manager_member_id: 1 } });
+  const r = await w.ask();
+  assert.equal(r.body.sent, true, JSON.stringify(r.body));
+  assert.equal(w.asks()[0].to_email, 'ruth.owen@welfareavenue.com');
+  assert.equal(w.flow().manager_link_member_id, 1);
+  assert.equal(w.flow().reminded_manager_at, null);
+});
+
+test('w275 ask_manager in mail test mode emails the test inboxes, marked with the manager\'s address', async () => {
+  const w = await askWorld({ config: { mail_mode: 'test' } });
+  await w.ask();
+  const m = mime5(w.gmail()[0]);
+  assert.equal(m.to, 'tester@welfareavenue.com');
+  assert.ok(m.subject.startsWith('[TEST, for ' + SAM + '] '), m.subject);
+});
+
+test('w275 ask_manager on a practice flow: the link is recorded so the walkthrough link works, and nothing is fetched', async () => {
+  const w = await askWorld({ cand: { practice: true } });
+  const r = await w.ask();
+  assert.equal(r.status, 200);
+  assert.equal(r.body.practice, true);
+  assert.deepEqual(w.rig.fetchLog, [], 'no notify, no Google, no Gmail');
+  assert.equal(w.flow().manager_link_member_id, 2);
+  assert.ok(w.flow().manager_link_sent_at);
+});
+
+test('w275 ask_manager is a quiet no-op with a reason for a flow past the asking, one with live times, or a closed card; nothing is sent', async () => {
+  for (const [fl, cand, skipped] of [
+    [{ status: 'running', call_at: CALL }, {}, 'not_open'],
+    [{ status: 'backed_out' }, {}, 'closed'],
+    [{}, { status: 'declined' }, 'closed'],
+    [{}, { status: 'withdrawn' }, 'closed'],
+    [{ proposed_call_at: '2026-10-26T14:00:00Z', proposed_one_on_one_at: '2026-10-26T16:00:00Z', proposed_at: '2026-10-20T10:00:00Z', proposed_by: SAM }, {}, 'proposed'],
+  ]) {
+    const w = await askWorld({ fl, cand });
+    const before = w.snapshot();
+    const r = await w.ask();
+    assert.equal(r.status, 200, JSON.stringify(fl) + JSON.stringify(cand));
+    assert.equal(r.body.ok, true);
+    assert.equal(r.body.skipped, skipped, JSON.stringify(r.body));
+    assert.ok(r.body.reason && hubWords(r.body.reason) && /\.$/.test(r.body.reason), r.body.reason);
+    assert.deepEqual(w.rig.fetchLog, []);
+    assert.deepEqual(w.snapshot(), before, 'nothing written');
+  }
+  /* times the hire said no to are spent: the manager can be asked again */
+  const no = await askWorld({ fl: { status: 'waiting', proposed_call_at: '2026-10-26T14:00:00Z', proposed_one_on_one_at: '2026-10-26T16:00:00Z', proposed_at: '2026-10-20T10:00:00Z', hire_answer: 'no' }, cand: { accepted_on: '2026-10-19' } });
+  assert.equal((await no.ask()).body.sent, true);
+});
+
+test('w275 ask_manager refuses, in a plain sentence, a flow with no manager, an inactive manager or one with no roster email; nothing is written', async () => {
+  for (const [fl, tables, code, words] of [
+    [{ manager_member_id: null }, {}, 'no_manager', /no onboarding manager/],
+    [{}, { team_members: [TEAM[0], { ...TEAM[1], active: false }, TEAM[2]] }, 'manager_inactive', /Sam Lee is no longer active/],
+    [{ manager_member_id: 3 }, {}, 'manager_no_email', /No Mail has no email on the roster/],
+  ]) {
+    const w = await askWorld({ fl, tables, manager: { member_id: null, name: null, how: 'none' } });
+    const before = w.snapshot();
+    const r = await w.ask();
+    assert.equal(r.status, 409, code);
+    assert.equal(r.body.error, code);
+    assert.match(r.body.message, words);
+    assert.ok(hubWords(r.body.message));
+    assert.deepEqual(w.rig.fetchLog, []);
+    assert.deepEqual(w.snapshot(), before);
+  }
+  const gone = await askWorld();
+  const r = await gone.post({ action: 'ask_manager', flow_id: 99 }, { 'x-wa-secret': SECRET, Authorization: 'Bearer anon-key-for-tests' });
+  assert.equal(r.status, 404);
+});
+
+test('w275 ask_manager: Slack or the email alone is enough (the other is a warning); when neither reaches them the claim is given back and the hourly job tries again', async () => {
+  const slackLost = await askWorld({ notifyReply: answer({ [SAM]: 'no_slack' }) });
+  const a = await slackLost.ask();
+  assert.equal(a.body.sent, true);
+  assert.ok(a.body.warnings.some((x) => /Slack/.test(x)), JSON.stringify(a.body));
+  assert.ok(slackLost.flow().manager_link_sent_at);
+
+  const mailLost = await askWorld({ gmailReply: () => ({ status: 500, json: { error: { message: 'Backend Error' } } }) });
+  const b = await mailLost.ask();
+  assert.equal(b.body.sent, true);
+  assert.ok(b.body.warnings.some((x) => /email/.test(x) && /Backend Error/.test(x)), JSON.stringify(b.body));
+
+  let word = 'failed';
+  const both = await askWorld({ notifyReply: (e) => answer({ [SAM]: word })(e), gmailReply: () => ({ status: 500, json: { error: { message: 'Backend Error' } } }) });
+  const c = await both.ask();
+  assert.equal(c.status, 502);
+  assert.equal(c.body.error, 'not_sent');
+  assert.match(c.body.message, /Sam Lee was not reached/);
+  assert.equal(both.flow().manager_link_sent_at, null, 'given back');
+  assert.equal(both.flow().manager_link_member_id, null);
+  /* the hourly job sends it once something gets through */
+  word = 'sent';
+  const r = await both.remind();
+  assert.equal(r.body.propose_links, 1, JSON.stringify(r.body));
+  assert.equal(both.flow().manager_link_member_id, 2);
+  assert.equal(both.asks().length, 2);
+  assert.equal(both.sent.filter((m) => m.event === 'onboard_grid').length, 0, 'never the wave271 grid link');
+});
+
+test('w275 remind: 48 hours after the link with nothing proposed, the manager is reminded once and HR is told once; nothing before; the wave271 grid reminders never go', async () => {
+  const w = await askWorld({ fl: { manager_link_member_id: 2, manager_link_sent_at: '2026-10-19T12:00:00Z' } });
+  let r = await w.remind();   // 24 hours
+  assert.equal(r.status, 200);
+  assert.deepEqual(w.sent, []);
+  w.rig.setNow('2026-10-21T11:00:00Z');   // 47 hours
+  await w.remind();
+  assert.deepEqual(w.sent, []);
+  w.rig.setNow('2026-10-21T13:00:00Z');   // 49 hours
+  r = await w.remind();
+  const mine = w.sent.filter((m) => m.event === 'onboard_remind' && m.to_email);
+  const hr = w.sent.filter((m) => m.event === 'onboard_remind' && Array.isArray(m.to));
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].to_email, SAM);
+  assert.equal(mine[0].tag, 'onboard-remind-propose-21');
+  assert.equal(mine[0].url, '/o/' + mgrLink(21));
+  assert.ok(mine[0].text.includes('https://hub.welfareavenue.com/o/' + mgrLink(21)));
+  assert.match(mine[0].text, /Alex Tremblay/);
+  assert.equal(hr.length, 1);
+  assert.deepEqual(hr[0].to, HR);
+  assert.equal(hr[0].tag, 'onboard-remind-propose-hr-21');
+  assert.equal(hr[0].url, '#hrcentre/onboarding');
+  assert.match(hr[0].title, /Sam Lee has not proposed times for Alex Tremblay/);
+  for (const m of [...mine, ...hr]) for (const s of [m.text, m.title, m.body]) assert.ok(hubWords(s), s);
+  assert.equal(r.body.reminded_managers, 1);
+  assert.equal(r.body.reminded_hr, 1);
+  assert.equal(w.flow().reminded_manager_at, '2026-10-21T13:00:00.000Z');
+  w.rig.setNow('2026-10-25T13:00:00Z');
+  await w.remind();
+  await w.remind();
+  assert.equal(w.sent.length, 2, 'once each, however many hours pass');
+  assert.equal(w.sent.filter((m) => m.event === 'onboard_grid' || /availability/i.test(m.title)).length, 0, 'none of the wave271 grid messages');
+  assert.ok(w.sent.every((m) => !JSON.stringify(m).includes(HIRE)));
+  assert.deepEqual(w.rig.fetchLog.filter((e) => e.url !== NOTIFY), [], 'reminders go through notify only');
+});
+
+test('w275 remind: the same for a flow whose hire has accepted (waiting) with nothing proposed; times proposed, a booked call, a closed card or a practice flow stop it', async () => {
+  const late = { manager_link_member_id: 2, manager_link_sent_at: '2026-10-17T12:00:00Z' };
+  /* a waiting flow is on the propose path once onboard_v2_since is set (before the release, an accepted flow with nothing proposed counts as wave271, as onboard-link has it) */
+  const waiting = await askWorld({ fl: { ...late, status: 'waiting' }, cand: { accepted_on: '2026-10-18' }, config: { onboard_v2_since: '2026-10-01T00:00:00Z' } });
+  await waiting.remind();
+  assert.deepEqual(waiting.sent.map((m) => m.tag).sort(), ['onboard-remind-propose-21', 'onboard-remind-propose-hr-21']);
+  for (const [fl, cand] of [
+    [{ proposed_call_at: '2026-10-26T14:00:00Z', proposed_one_on_one_at: '2026-10-26T16:00:00Z', proposed_at: '2026-10-20T10:00:00Z' }, {}],
+    [{ status: 'running', call_at: CALL, hire_answer: 'yes', proposed_at: '2026-10-20T10:00:00Z' }, {}],
+    [{}, { status: 'declined' }],
+    [{}, { status: 'withdrawn' }],
+    [{}, { practice: true }],
+  ]) {
+    const w = await askWorld({ fl: { ...late, ...fl }, cand });
+    const before = w.snapshot();
+    await w.remind();
+    assert.deepEqual(w.sent, [], JSON.stringify([fl, cand]));
+    assert.deepEqual(w.snapshot(), before);
+  }
+});
+
+test('w275 remind: a reminder notify could not deliver is given back, and the next hour sends it; the HR one is claimed on its own', async () => {
+  let words = { [SAM]: 'failed', [HR[0]]: 'sent', [HR[1]]: 'sent' };
+  const w = await askWorld({ fl: { manager_link_member_id: 2, manager_link_sent_at: '2026-10-17T12:00:00Z' }, notifyReply: (e) => answer(words)(e) });
+  const r = await w.remind();
+  assert.equal(r.body.reminded_managers, 0);
+  assert.equal(r.body.reminded_hr, 1);
+  assert.equal(w.flow().reminded_manager_at, null);
+  assert.ok(r.body.skipped.some((s) => /manager reminder/.test(s)), JSON.stringify(r.body.skipped));
+  words = { [SAM]: 'sent', [HR[0]]: 'sent', [HR[1]]: 'sent' };
+  const again = await w.remind();
+  assert.equal(again.body.reminded_managers, 1);
+  assert.equal(again.body.reminded_hr, 0, 'HR was told already');
+  assert.equal(w.sent.filter((m) => Array.isArray(m.to)).length, 1);
+});
+
+test('w275 remind: a propose-path flow whose link never went (or went to a manager since replaced) gets the propose link, never the grid link', async () => {
+  const w = await askWorld();
+  const r = await w.remind();
+  assert.equal(r.body.propose_links, 1);
+  assert.equal(r.body.grid_links, 0);
+  assert.equal(w.asks().length, 1);
+  assert.equal(w.gmail().length, 1, 'with its email');
+  assert.equal(w.flow().manager_link_member_id, 2);
+  await w.remind();
+  assert.equal(w.asks().length, 1, 'once');
+  w.flow().manager_member_id = 1;
+  await w.remind();
+  assert.deepEqual(w.asks().map((m) => m.to_email), [SAM, 'ruth.owen@welfareavenue.com']);
+  /* a wave271 flow (created before onboard_v2_since) keeps the grid link */
+  const old = await runWorld({ fl: { created_at: '2026-09-20T12:00:00Z' }, config: { onboard_v2_since: '2026-10-01T00:00:00Z' } });
+  await old.remind();
+  assert.equal(old.sent.filter((m) => m.event === 'onboard_grid').length, 1);
+  assert.equal(old.sent.filter((m) => m.event === 'onboard_propose').length, 0);
+  /* a waiting flow created after the release is on the propose path even with nothing proposed */
+  const fresh = await askWorld({ fl: { status: 'waiting' }, cand: { accepted_on: '2026-10-19' }, config: { onboard_v2_since: '2026-10-01T00:00:00Z' } });
+  await fresh.remind();
+  assert.equal(fresh.asks().length, 1);
+  assert.equal(fresh.sent.filter((m) => m.event === 'onboard_grid' || (m.event === 'onboard_remind' && /availability/.test(m.title))).length, 0);
 });

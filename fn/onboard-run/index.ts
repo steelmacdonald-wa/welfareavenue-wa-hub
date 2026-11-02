@@ -1,5 +1,5 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
-// v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card)
+// v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path)
 // The signed-in function behind HR's Start onboarding button. All actions are POST {action, ...}, for HR or admins only
 // (wa_is_hr or is_wa_admin, run as the caller's JWT):
 //   preview {flow_id, wa_email?}   {address, address_taken, address_owner, address_own, needs_address, manager, department, grids, hub_events, steps, welcome, warnings}. Writes nothing.
@@ -81,6 +81,22 @@
 //               and a digit, no space at either end, else 400 bad_password in a plain sentence. Stored with wa_vault_set (service role); change_log says "set" with no value;
 //               app_config onboard_first_password_at keeps when.
 //   first_password_state {}   {set, set_at}. Admins only. From onboard_first_password_at; the vault is never read here.
+//   wave275 (v5):
+//   ask_manager {flow_id}   {ok, sent, to, manager, warnings[]} | {ok, practice: true} | {ok, skipped, reason}. The trigger secret (recruit-actions, once the
+//               offer has gone out) or HR and admins signed in (the card sends it again). The flow's manager (manager_member_id, else the position's as
+//               wa271_default_manager tells it) gets their mgr link, onboard-link's propose page, by a Slack DM through notify (event onboard_propose,
+//               tag onboard-propose-<flow>) and an email from hub@ (deliver: mail_mode test goes to the test inboxes). The send is claimed first on
+//               manager_link_sent_at, and sets manager_link_member_id (the link holder onboard-link checks) and clears reminded_manager_at; either the DM
+//               or the email reaching them is enough (the other is a warning), neither gives the claim back (502 not_sent) and the hourly job tries again.
+//               The secret sends once per manager (already_sent); a signed-in HR person sends it again. Quiet no-ops with a reason: closed (the card
+//               declined or withdrawn, or the flow backed out), not_open (not offered or waiting, or the call booked), proposed (times proposed and not
+//               yet answered: propose tells the manager itself), wave271 (a flow on the grid path). Refused: no_manager, manager_inactive,
+//               manager_no_email (409), not_found (404). A practice flow records the link holder and fetches nothing.
+//   remind, for a flow on the propose path (offered or a proposal, or created on or after onboard_v2_since, as onboard-link decides): offered or
+//               waiting with nothing proposed and the call not booked: the propose link goes once when it never went or went to a manager since
+//               replaced (propose_links); onboard_remind_hours after it, the manager is reminded once (onboard_remind, onboard-remind-propose-<flow>,
+//               claimed on reminded_manager_at) and HR is told once (onboard_remind to hr_notify_emails, onboard-remind-propose-hr-<flow>, claimed with
+//               wa275_tick_set(flow, 'propose_hr_reminded_at')). None of the wave271 grid messages go to such a flow. wave271 flows keep their path.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -1886,6 +1902,96 @@ async function hireTimesNow(b: Row): Promise<Response> {
   return json(r);
 }
 
+/* ---------- wave275 Task 5: ask_manager {flow_id} ---------- */
+/* The offer has gone out, so the onboarding manager is asked for the call and the 1-on-1: their mgr link by a Slack DM (notify onboard_propose) and an email
+   from hub@. Words for staff, in English. The flow records who holds the link (manager_link_member_id), which onboard-link checks before it lets the link write. */
+const ASK_COLS = PROPOSE_COLS + ', created_at, manager_link_sent_at, reminded_manager_at';
+const ASKABLE = ['offered', 'waiting'];
+const HR_TOLD = 'propose_hr_reminded_at';   // setup_ticks: HR told once that nothing was proposed (not a rundown tick)
+const liveProposal = (f: Row) => !!f.proposed_at && !f.hire_answer;
+/* the propose path, as onboard-link's modeOf: offered or a proposal, or created on or after onboard_v2_since (NaN: unset, so only the first two) */
+const proposeMode = (f: Row, since: number) => f.status === 'offered' || !!f.proposed_at || (!Number.isNaN(since) && !!f.created_at && Date.parse(String(f.created_at)) >= since);
+const v2Since = async () => Date.parse((await cfg('onboard_v2_since')).trim());
+/* the manager: the one chosen, else the one the Hub can tell for the position (as remind always did) */
+async function managerFor(f: Row, c: Row): Promise<Row | null> {
+  let id = f.manager_member_id;
+  if (id == null) { const { data } = await svc.rpc('wa271_default_manager', { p_candidate: c.id }); id = (data as Row | null)?.member_id ?? null; }
+  return id != null ? await getMember(id) : null;
+}
+/* a flow that is not asked, with the reason; null: ask */
+function notAsked(f: Row, c: Row, since: number): { skipped: string; reason: string } | null {
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return { skipped: 'closed', reason: 'This card is closed, so the manager was not asked for times.' };
+  if (f.call_at || ['running', 'started'].includes(f.status)) return { skipped: 'not_open', reason: 'The times for this new hire are already booked, so the manager was not asked again.' };
+  if (!ASKABLE.includes(f.status)) return { skipped: 'not_open', reason: 'This onboarding is past the asking for times, so the manager was not asked.' };
+  if (liveProposal(f)) return { skipped: 'proposed', reason: 'Times are already proposed for this new hire and wait for their answer, so the manager was not asked again.' };
+  if (!proposeMode(f, since)) return { skipped: 'wave271', reason: 'This new hire is on the earlier onboarding path, so their manager gets the availability grid link from the hourly job instead.' };
+  return null;
+}
+function proposeMail(m: Row, c: Row, link: string, n: { callMin: number; oneMin: number; lead: number }) {
+  const hire = String(c.name || 'A new hire'), role = String(c.role || 'new hire');
+  const subject = 'Propose the onboarding call and the 1-on-1 for ' + hire;
+  const who = hire + ' (' + role + ') has been offered a place on the team, and you are their onboarding manager.';
+  const ask = 'Please propose a time for their onboarding call (' + n.callMin + ' minutes, their first day) and for your 1-on-1 with them (' + n.oneMin + ' minutes), at least ' + n.lead + ' hours ahead.';
+  const page = 'Your page shows your availability and the hub@ meetings you are invited to, so it takes a minute. ' + firstName(hire) + ' then says yes or no to the times.';
+  const hi = 'Hi ' + (firstName(m.name) || 'there') + ',';
+  return {
+    subject, body: who + ' ' + ask,
+    slack: ':calendar: *' + slackEsc(hire) + '* (' + slackEsc(role) + ') has been offered a place on the team, and you are their onboarding manager. ' + slackEsc(ask) + ' <' + link + '|Propose the times>',
+    text: hi + '\n\n' + who + ' ' + ask + '\n\n' + page + '\n\nPropose the times: ' + link + '\n\nWelfare Avenue Hub',
+    html: '<!doctype html><html><body style="margin:0;padding:32px 16px;background:#FFFAF2;font-family:Helvetica,Arial,sans-serif;color:#1F201E;"><div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid rgba(16,63,57,.10);padding:28px 32px;font-size:15px;line-height:1.55;">' +
+      '<p style="margin:0 0 14px;">' + esc(hi) + '</p><p style="margin:0 0 14px;">' + esc(who + ' ' + ask) + '</p><p style="margin:0 0 22px;">' + esc(page) + '</p>' +
+      '<p style="margin:0 0 22px;"><a href="' + esc(link) + '" style="display:inline-block;background:#103F39;color:#FFFAF2;text-decoration:none;font-weight:700;padding:13px 26px;border-radius:999px;">Propose the times</a></p>' +
+      '<p style="margin:0;font-size:13px;color:#5c6b66;word-break:break-all;">' + esc(link) + '</p><p style="margin:18px 0 0;">Welfare Avenue Hub</p></div></body></html>',
+  };
+}
+type Asked = { ok: true; sent?: true; practice?: true; skipped?: string; reason?: string; to?: string; manager?: string; warnings?: string[] } | { code: string; error: string; status: number };
+/* the send itself, for ask_manager and the hourly job: m is the flow's active manager with an email. again: send even to the manager who holds the link (HR from the card) */
+async function askManagerFor(f: Row, c: Row, m: Row, again: boolean, by: string): Promise<Asked> {
+  const held = !!f.manager_link_sent_at && String(f.manager_link_member_id ?? '') === String(m.id);
+  if (held && !again) return { ok: true, skipped: 'already_sent', reason: m.name + ' already has their link to propose times.' };
+  /* the claim: only the call that finds manager_link_sent_at as it was read sends, so two calls at once send once */
+  const now = new Date().toISOString();
+  const prev = { manager_link_sent_at: f.manager_link_sent_at ?? null, manager_link_member_id: f.manager_link_member_id ?? null, reminded_manager_at: f.reminded_manager_at ?? null };
+  let claim = svc.from('hub_onboard_flows').update({ manager_link_sent_at: now, manager_link_member_id: m.id, reminded_manager_at: null }).eq('id', f.id).in('status', ASKABLE);
+  claim = f.manager_link_sent_at ? claim.eq('manager_link_sent_at', f.manager_link_sent_at) : claim.is('manager_link_sent_at', null);
+  const { data: won, error } = await claim.select('id');
+  if (error) return { code: 'save', error: 'The link could not be recorded, so nothing was sent (' + error.message + '). Try again.', status: 500 };
+  if (!(won as unknown[] | null)?.length) return { ok: true, skipped: 'already_sent', reason: 'The link to ' + m.name + ' has just gone out.' };
+  if (!held && f.setup_ticks?.[HR_TOLD]) await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: HR_TOLD, p_value: null });   // a new manager: HR may be told about them in turn
+  if (f.practice || c.practice) return { ok: true, practice: true };   // the walkthrough's link works; nothing goes anywhere
+  const email = String(m.email).trim().toLowerCase();
+  const path = '/o/' + await signedToken('mgr', f.id), link = HUB + path;
+  const words = proposeMail(m, c, link, { callMin: await cfgNum('onboard_call_min', 60), oneMin: await cfgNum('onboard_one_on_one_min', 30), lead: await cfgNum('onboard_propose_lead_hours', 48) });
+  const warnings: string[] = [];
+  const dm = await tell({ event: 'onboard_propose', to_email: email, url: path, tag: 'onboard-propose-' + f.id, title: words.subject, body: words.body, text: words.slack });
+  if (!dm.handled) warnings.push('The Slack message to ' + m.name + ' did not reach them: ' + stop(dm.note.replace(/^[^:\s]+@[^:\s]+: /, '') || 'notify gave no answer'));
+  let mailed = false;
+  try { await deliver({ practice: false, to: email, subject: words.subject, text: words.text, html: words.html }); mailed = true; }
+  catch (e) { warnings.push('The email to ' + m.name + ' did not go: ' + stop(errText(e).replace(/^The email was not sent: /, ''))); }
+  if (!dm.handled && !mailed) {
+    await svc.from('hub_onboard_flows').update(prev).eq('id', f.id).eq('manager_link_sent_at', now);   // given back, so the hourly job (or HR) sends it again
+    return { code: 'not_sent', error: m.name + ' was not reached, so the link is not marked as sent. ' + warnings.join(' ') + ' The Hub tries again within the hour.', status: 502 };
+  }
+  await log('onboard_flow', f.id, 'manager_link', null, 'propose link sent to ' + email, by);
+  return { ok: true, sent: true, to: email, manager: m.name, warnings };
+}
+async function askManagerNow(b: Row, by: string, system: boolean): Promise<Response> {
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(ASK_COLS).eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  const quiet = notAsked(f, c, await v2Since());
+  if (quiet) return json({ ok: true, ...quiet });
+  const m = await managerFor(f, c);
+  if (!m) return no('no_manager', 'This new hire has no onboarding manager yet. Choose one on the card, then send the link again.');
+  if (m.active === false) return no('manager_inactive', m.name + ' is no longer active on the roster, so they cannot be asked for times. Change the manager on the card first.');
+  if (!String(m.email || '').trim()) return no('manager_no_email', m.name + ' has no email on the roster, so the Hub cannot send them the link. Add it on their roster profile, then send it again.');
+  const r = await askManagerFor(f, c, m, !system, by);
+  if ('error' in r) return no(r.code, r.error, r.status);
+  return json(r);
+}
+
 /* ---------- wave275 Task 3: accept_setup and book ---------- */
 const AT_ACCEPT_BY = 'hub (offer accepted)';
 const BOOKED_BY = 'hub (the new hire said yes)';
@@ -2035,7 +2141,7 @@ function inBackground(p: Promise<unknown>): Promise<unknown> | void {
   return p;
 }
 /* ---------- remind: the hourly job ---------- */
-const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id';
+const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id, proposed_at, hire_answer, setup_ticks';   // wave275: the last three for the propose path
 const LIVE_FLOW = ['waiting', 'ready', 'running', 'started'];       // a flow that backed out is left alone
 const OPEN_CARD = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // as onboard-link: a card in any other stage is closed
 const slackEsc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -2065,17 +2171,62 @@ async function otherOpenPlan(f: Row, c: Row): Promise<boolean> {
 }
 
 async function remind(): Promise<Response> {
-  const out = { ok: true, grid_links: 0, reminded_hr: 0, reminded_managers: 0, skipped: [] as string[] };
+  const out = { ok: true, grid_links: 0, propose_links: 0, reminded_hr: 0, reminded_managers: 0, skipped: [] as string[] };
   const hours = await cfgNum('onboard_remind_hours', 48);
   const waited = (since: unknown) => !!since && Date.now() - Date.parse(String(since)) >= hours * 3600000;
   const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
-  const { data, error: listErr } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', LIVE_FLOW).eq('practice', false);
+  const since = await v2Since();   // wave275: which flows are on the propose path
+  const { data, error: listErr } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', [...LIVE_FLOW, 'offered']).eq('practice', false);
   if (listErr) return json({ ok: false, error: 'remind_failed', message: 'The flows could not be read, so nothing was reminded: ' + listErr.message + '. If wa271b_remind.sql is not applied yet, apply it first.' }, 500);   // a broken deploy order must show in cron, not pass as an empty hour
   for (const f of (data || []) as Row[]) {
     try {
       const c = await getCand(f.candidate_id);
       if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
       if (await otherOpenPlan(f, c)) continue;
+
+      /* wave275, the propose path: the manager's propose link once, then after onboard_remind_hours with nothing proposed one reminder to them and one word to HR.
+         No grid message of wave271's goes to such a flow. */
+      if (proposeMode(f, since)) {
+        if (notAsked(f, c, since)) continue;   // closed, booked, past the asking, or times waiting for the hire's answer
+        const pm = await managerFor(f, c);
+        if (!pm || pm.active === false) { out.skipped.push('flow ' + f.id + ': no active onboarding manager to ask for times'); continue; }
+        if (!pm.email) { out.skipped.push('flow ' + f.id + ': ' + pm.name + ' has no email on the roster'); continue; }
+        if (!f.manager_link_sent_at || String(f.manager_link_member_id) !== String(pm.id)) {
+          const r = await askManagerFor(f, c, pm, false, 'hub (hourly)');
+          if ('error' in r) out.skipped.push('flow ' + f.id + ': propose link not delivered, will try again (' + r.error + ')');
+          else if (r.sent) { out.propose_links++; for (const w of r.warnings || []) out.skipped.push('flow ' + f.id + ': ' + w); }
+          continue;
+        }
+        if (!waited(f.manager_link_sent_at)) continue;
+        const path = '/o/' + await signedToken('mgr', f.id), link = HUB + path;
+        if (!f.reminded_manager_at) {
+          const { data: won } = await svc.from('hub_onboard_flows').update({ reminded_manager_at: new Date().toISOString() }).eq('id', f.id).is('reminded_manager_at', null).select('id');
+          if ((won as unknown[] | null)?.length) {
+            const sent = await tell({
+              event: 'onboard_remind', to_email: String(pm.email).toLowerCase(), url: path, tag: 'onboard-remind-propose-' + f.id,
+              title: 'Propose times for ' + c.name,
+              body: 'You have not proposed the onboarding call and the 1-on-1 for ' + c.name + ' yet. It takes a minute.',
+              text: ':hourglass_flowing_sand: You have not proposed the onboarding call and the 1-on-1 for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') yet. It takes a minute. <' + link + '|Propose the times>',
+            });
+            if (!sent.handled) { await svc.from('hub_onboard_flows').update({ reminded_manager_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': manager reminder not delivered, will try again (' + sent.note + ')'); }
+            else out.reminded_managers++;
+          }
+        }
+        if (!hr.length) { out.skipped.push('flow ' + f.id + ': no hr_notify_emails'); continue; }
+        if (f.setup_ticks?.[HR_TOLD]) continue;
+        const { data: mine, error: tickErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: HR_TOLD, p_value: new Date().toISOString(), p_if_unset: true });
+        if (tickErr) { out.skipped.push('flow ' + f.id + ': HR reminder not recorded, so not sent (' + tickErr.message + ')'); continue; }
+        if (mine !== true) continue;
+        const hrSent = await tell({
+          event: 'onboard_remind', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-remind-propose-hr-' + f.id,
+          title: pm.name + ' has not proposed times for ' + c.name,
+          body: pm.name + ' was asked more than ' + hours + ' hours ago to propose the onboarding call and the 1-on-1 for ' + c.name + ' (' + (c.role || 'new hire') + '), and has not yet. You can propose them from the card in Onboarding.',
+          text: ':hourglass_flowing_sand: *' + slackEsc(pm.name) + '* was asked more than ' + hours + ' hours ago to propose the onboarding call and the 1-on-1 for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + '), and has not yet. <' + HUB + '/#hrcentre/onboarding|Open Onboarding> to propose them from the card.',
+        });
+        if (!hrSent.handled) { await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: HR_TOLD, p_value: null }); out.skipped.push('flow ' + f.id + ': HR reminder not delivered, will try again (' + hrSent.note + ')'); }
+        else out.reminded_hr++;
+        continue;
+      }
       const { data: g } = await svc.from('hub_onboard_grids').select('who, slots').eq('flow_id', f.id);
       const grids = (g || []) as Row[];
       const hireBooked = !!f.call_at && !!f.one_on_one_at;
@@ -2156,7 +2307,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return no('method', 'This function only takes POST.', 405);
   try {
-    /* the Hub itself (cron through call_edge, and onboard-link): the trigger secret opens remind, propose, hire_times, accept_setup and book, and nothing else. For any other action, or a wrong secret, it is as if
+    /* the Hub itself (cron through call_edge, onboard-link and recruit-actions): the trigger secret opens remind, propose, hire_times, accept_setup, book and ask_manager, and nothing else. For any other action, or a wrong secret, it is as if
        the header were not there: the sign-in check below decides. */
     const given = req.headers.get('x-wa-secret');
     if (given) {
@@ -2169,6 +2320,7 @@ Deno.serve(async (req: Request) => {
         if (sb.action === 'hire_times') return await hireTimesNow(sb);
         if (sb.action === 'accept_setup') return await acceptSetup(sb);   // wave275 Task 3: onboard-link, after the hire's Accept
         if (sb.action === 'book') return await book(sb);                  // wave275 Task 3: onboard-link, the hire's Yes
+        if (sb.action === 'ask_manager') return await askManagerNow(sb, 'hub (offer sent)', true);   // wave275 Task 5: recruit-actions, once the offer is out
       }
     }
     const authHeader = req.headers.get('Authorization') || '';
@@ -2189,6 +2341,7 @@ Deno.serve(async (req: Request) => {
     }
     if (hr.data !== true && admin.data !== true) return no('not_allowed', 'Only HR and admins can do this.', 403);
     if (b.action === 'preview') return await preview(b, by);
+    if (b.action === 'ask_manager') return await askManagerNow(b, by, false);   // wave275 Task 5: HR sends the manager their link again from the card
     if (b.action === 'set_manager') return await setManager(b);
     if (b.action === 'start') return await start(b, by, asUser);
     if (b.action === 'task_done') return await taskDone(b, by, asUser);

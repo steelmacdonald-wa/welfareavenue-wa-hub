@@ -1,4 +1,4 @@
-// v18 (wave275, 02/11/26): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
+// v19 (wave275, 02/11/26; on top of wave276's v18, merged at release: wave276 released its own v18 live, kinds meet_propose and meet_avail_ask): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
 // shape as v16's: onboard_propose (the manager: propose the call and the 1-on-1 for a new hire), onboard_answer (the manager and HR: times were proposed, or
 // the hire said yes or no) and onboard_ready (the manager: the hire finished their setup rundown). Nothing here is ever sent to the new hire.
 // v17 (wave274, 02/11/26): a request with no owner goes to the team's people (hub_settings.team_inbox.people), before the team's leaders.

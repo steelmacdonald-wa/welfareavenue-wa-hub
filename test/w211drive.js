@@ -36,7 +36,11 @@ const INIT = `window.__INV = []; window.__WA_INVOKE = function (name, opts) { va
     { id: 'AC1', at: '2026-09-24T14:00:00Z', direction: 'outgoing', status: 'completed', duration: 420, line: 'Ops', answered: true, summary: 'Talked about the role; free on Tuesdays.', logged: false },
     { id: 'AC2', at: '2026-09-23T14:00:00Z', direction: 'outgoing', status: 'no-answer', duration: 0, line: 'Ops', answered: false, logged: false } ] }, error: null };
   if (b.action === 'quo_log') return { data: { ok: true, call: { id: 77, candidate_id: b.id, outcome: 'reached', quo_call_id: b.call_id, summary: 'Talked about the role', transcript: 'Us: hi', called_at: '2026-09-24T14:00:00Z' } }, error: null };
-  if (b.action === 'offer_preview') return { data: { ok: true, html: '<p>Letter</p>', role: 'Operations Manager', mail_mode: 'test', test_to: 'test@x', signer: 'Steel', signer_title: 'Chair' }, error: null };
+  if (b.action === 'offer_preview') return { data: { ok: true, html: '<p>Letter</p>', role: 'Operations Manager', mail_mode: 'test', test_to: 'test@x', signer: 'Steel', signer_title: 'Chair',
+    manager: { default: { member_id: 5, name: 'Ada Bell', how: 'reports_to' }, choices: [{ id: 5, name: 'Ada Bell' }, { id: 3, name: 'Old Hand' }, { id: 7, name: 'Ruth Owen' }] } }, error: null };
+  /* wave275: the server's refusal, as functions.invoke gives it (a non-2xx status, the body in error.context) */
+  if (b.action === 'offer_send' && String(b.f && b.f.manager_member_id) === '3') return { data: null, error: { message: 'Edge Function returned a non-2xx status code', context: { json: function () { return Promise.resolve({ error: 'Old Hand is no longer active on the roster. Choose another onboarding manager.', code: 'manager_inactive' }); } } } };
+  if (b.action === 'offer_send') return { data: { ok: true, emailed: { mode: 'test' }, signer: 'Steel', manager: { asked: true, name: 'Ada Bell' }, warnings: [] }, error: null };
   return { data: { ok: true }, error: null }; };`;
 const cand = (id) => `w197.state().cands.filter(function (c) { return c.id === ${id}; })[0]`;
 
@@ -89,6 +93,17 @@ const cand = (id) => `w197.state().cands.filter(function (c) { return c.id === $
   ok('Offer: it moves with the email, impressions and the corrected time', await f.ev((s) => { var c = eval(s); return c.status === 'offer' && c.email === 'fay@example.com' && /good fit/.test(c.impressions) && /^2026-09-24T14:00/.test(c.interview_at); }, cand(9405)));
   ok('Offer: the offer letter opens next', await f.ev(() => { var m = document.getElementById('w211m'); return m && m.classList.contains('open') && /Send the offer letter to Fay Future/.test(m.textContent); }));
   await shot(f, 'offer_letter');
+  /* wave275: the onboarding manager (required, from the position) and the hours (4, 6 or 8) */
+  await f.page.waitForTimeout(300);
+  ok('Offer w275: Hours a week is a choice of 4, 6 or 8, 4 by default', await f.ev(() => { var h = document.getElementById('w211o_hours'); return h && h.tagName === 'SELECT' && Array.from(h.options).map(o => o.value).join() === '4,6,8' && h.value === '4'; }), await f.ev(() => (document.getElementById('w211o_hours') || {}).outerHTML));
+  ok('Offer w275: Onboarding manager is required and defaults to the manager of the position', await f.ev(() => { var m = document.getElementById('w211o_manager'); var l = document.querySelector('label[for="w211o_manager"]'); return m && m.tagName === 'SELECT' && m.required && m.value === '5' && l && /Onboarding manager/.test(l.textContent) && Array.from(m.options).map(o => o.textContent).join('|') === 'Choose the onboarding manager...|Ada Bell|Old Hand|Ruth Owen'; }), await f.ev(() => (document.getElementById('w211o_manager') || {}).outerHTML));
+  ok('Offer w275: the panel says how the manager was chosen and that they are asked for times', await f.ev(() => /Ada Bell is who the position reports to/.test(document.getElementById('w211m').textContent) && /asked to propose the onboarding call and the 1-on-1/.test(document.getElementById('w211m').textContent)));
+  await f.page.selectOption('#w211o_manager', ''); await f.page.click('#w211m [data-w211a="osend"][data-mail="1"]'); await f.page.waitForTimeout(300);
+  ok('Offer w275: without a manager it will not send, and says why', await f.ev(() => /Choose the onboarding manager/.test((document.querySelector('#w211m .w211err') || {}).textContent || '') && !window.__INV.some(x => x.body.action === 'offer_send')));
+  await f.page.selectOption('#w211o_manager', '3'); await f.page.click('#w211m [data-w211a="osend"][data-mail="1"]'); await f.page.waitForTimeout(400);
+  ok('Offer w275: the refusal from the server shows in the panel, which stays open', await f.ev(() => { var m = document.getElementById('w211m'); return m.classList.contains('open') && /Old Hand is no longer active on the roster/.test((m.querySelector('.w211err') || {}).textContent || ''); }), await f.ev(() => document.getElementById('w211m').textContent.slice(0, 600)));
+  await shot(f, 'offer_refused');
+  ok('Offer w275: the choices stay as picked after the refusal', await f.ev(() => document.getElementById('w211o_manager').value === '3'));
   await f.ev(() => { var m = document.getElementById('w211m'); if (m) m.classList.remove('open'); });
 
   /* Offer -> Hired */
@@ -133,12 +148,25 @@ const cand = (id) => `w197.state().cands.filter(function (c) { return c.id === $
   ok('No page errors', f.errs.length === 0, f.errs);
   await f.close();
 
+  /* wave275: a sent offer carries the hours and the manager chosen (its own page: a sent offer reloads the board) */
+  f = await fresh(browser, { who: 'admin', width: 1440, hash: '#hrcentre/applications', fixture: JSON.parse(JSON.stringify(FX)), init: INIT, wait: 5000 });
+  await f.page.waitForTimeout(1800);
+  await f.ev(() => w211.askOffer(9404)); await f.page.waitForTimeout(600);
+  ok('Offer w275: the panel opens with the position\'s manager chosen', await f.ev(() => (document.getElementById('w211o_manager') || {}).value === '5'));
+  await f.page.selectOption('#w211o_manager', '7'); await f.page.selectOption('#w211o_hours', '6'); await f.page.click('#w211m [data-w211a="osend"][data-mail="1"]'); await f.page.waitForTimeout(600);
+  ok('Offer w275: it sends the hours and the manager chosen', await f.ev(() => { var s = window.__INV.filter(x => x.body.action === 'offer_send').pop(); return s && String(s.body.f.hours) === '6' && String(s.body.f.manager_member_id) === '7' && s.body.email === true && !document.getElementById('w211m').classList.contains('open'); }), await f.ev(() => window.__INV.filter(x => x.body.action === 'offer_send').map(x => x.body.f)));
+  ok('Offer w275: no page errors', f.errs.length === 0, f.errs);
+  await f.close();
+
   /* phone width: the gate fits */
   f = await fresh(browser, { who: 'admin', width: 390, height: 844, hash: '#hrcentre/applications', fixture: JSON.parse(JSON.stringify(FX)), init: INIT, wait: 5000 });
   await f.page.waitForTimeout(1800);
   f.ev(() => { w197.moveTo(9402, 'interview'); }); await f.page.waitForTimeout(400);
   ok('Phone: the gate fits the screen', await f.ev(() => { var p = document.querySelector('#w211g .pn'); return p && p.getBoundingClientRect().width <= 390 && document.documentElement.scrollWidth <= 392; }));
   await shot(f, 'phone_gate');
+  await f.ev(() => { var g = document.getElementById('w211g'); if (g) g.classList.remove('open'); w211.askOffer(9404); }); await f.page.waitForTimeout(600);
+  ok('Phone w275: the offer panel with the manager and the hours fits the screen', await f.ev(() => { var p = document.querySelector('#w211m .pn'), m = document.getElementById('w211o_manager'), h = document.getElementById('w211o_hours'); return p && m && h && p.getBoundingClientRect().width <= 390 && m.getBoundingClientRect().right <= 390 && h.getBoundingClientRect().right <= 390 && document.documentElement.scrollWidth <= 392; }));
+  await shot(f, 'phone_offer');
   ok('Phone: no page errors', f.errs.length === 0, f.errs);
   await f.close();
 
