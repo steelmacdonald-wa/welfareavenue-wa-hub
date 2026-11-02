@@ -161,6 +161,10 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     ok('Instagram with eleven photos: up to 10 photos', v.some(t => /up to 10 photos/.test(t)), v);
     v = await panel({ platforms: ['linkedin'], media: [Object.assign(vid(1), { dur: 700 })] });
     ok('LinkedIn with a 700 second video: the registry limit, 10 minutes', v.some(t => /LinkedIn videos run up to 10 minutes; this video is 700 seconds/.test(t)), v);
+    v = await panel({ platforms: ['facebook'], media: [Object.assign(vid(1), { dur: 120 })] });
+    ok('Facebook feed with a 120 second video: no duration message (the 90 second limit is for Reels)', !v.some(t => /run up to/.test(t)), v);
+    v = await panel({ platforms: ['linkedin'], media: [Object.assign(vid(1), { dur: 700 })] });
+    ok('LinkedIn with a 700 second video: still 10 minutes', v.some(t => /10 minutes/.test(t)), v);
     v = await panel({ platforms: ['linkedin'], media: [Object.assign(vid(1), { dur: 500 })] });
     ok('LinkedIn with a 500 second video: no duration message', !v.some(t => /run up to/.test(t)), v);
     v = await panel({ platforms: ['youtube'], media: [img(1)] });

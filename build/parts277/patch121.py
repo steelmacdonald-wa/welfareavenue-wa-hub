@@ -71,7 +71,7 @@ rep("""      if (md === 'reminder') warn(l, nm + ' is not connected: at the post
     """      /* wave277: the registry's caps, only for the keys a platform's caps carry */
       var cp = capsOf(k), said = function (re) { return l.some(function (x) { return re.test(x.t); }); };
       if (vi.length && cp.video === false) err(l, nm + ' does not take video.');
-      else if (vi.length && cp.max_video_s && dur != null && dur > cp.max_video_s && !said(/run up to|run from/)) err(l, nm + ' videos run up to ' + Math.round(cp.max_video_s / 60) + ' minutes; this video is ' + Math.round(dur) + ' seconds.');
+      else if (vi.length && cp.max_video_s && !(k === 'facebook' && kind !== 'reel') && dur != null && dur > cp.max_video_s && !said(/run up to|run from/)) err(l, nm + ' videos run up to ' + (cp.max_video_s % 60 === 0 ? Math.round(cp.max_video_s / 60) + ' minutes' : cp.max_video_s + ' seconds') + '; this video is ' + Math.round(dur) + ' seconds.');
       if (im.length && cp.images === false && !said(/reminder to post in the app/)) warn(l, nm + ' does not take photos; the photos are left out.');
       if (md === 'reminder') warn(l, nm + ' is not connected: at the post\\u2019s time the owner gets a reminder to post it by hand.');
 """)
