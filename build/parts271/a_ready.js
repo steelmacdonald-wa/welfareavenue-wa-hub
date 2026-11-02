@@ -13,7 +13,7 @@
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at';   /* named: pw_nonce is withheld from the browser */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: the last five, for the rundown ticks on a started card */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
   var CAND_COLS = 'id, name, role, email, member_id';
   var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
@@ -36,6 +36,9 @@
     pw: null,   /* wave275: the first password's state, {set, set_at}, for admins only; never the password */
     busy: {}
   };
+  /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
+     data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; } };
 
   /* ---------- style ---------- */
   var st = document.createElement('style'); st.id = 'o271css';
@@ -180,7 +183,7 @@
   }
   async function readPeople() {
     if (S.people.length) return;
-    var r = await db.from('team_members').select('id, name, active');
+    var r = await db.from('team_members').select('id, name, active, email');   /* wave275: the email names who proposed */
     if (!r.error) S.people = (r.data || []).filter(function (p) { return p.name; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
   }
   async function readCfg() {
@@ -188,18 +191,19 @@
     var map = { onboard_grid_days: 'days', onboard_grid_start: 'start', onboard_grid_end: 'end', onboard_grid_cell_min: 'cell' };
     ((r && r.data) || []).forEach(function (x) { var n = Number(x.value); if (map[x.key] && isFinite(n) && n >= 0 && (n > 0 || x.key === 'onboard_grid_start')) S.cfg[map[x.key]] = n; });
   }
-  function load() {
+  function load() { return R.load(); }
+  function loadHr() {
     if (S.loading) return S.loading;
     S.loading = (async function () {
       try {
         var r = await db.rpc('wa271_ready_list');
         if (r && r.error) throw r.error;
         S.denied = false; S.err = '';
-        S.ready = ((r && r.data) || []).filter(function (x) { return x.status === 'waiting' || x.status === 'ready'; });
+        S.ready = ((r && r.data) || []).filter(function (x) { return R.readyStatuses.indexOf(x.status) >= 0; });   /* wave275 adds offered */
         var begun = await readStarted();
         S.started = begun.filter(function (x) { return x.status !== 'backed_out'; });
         S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
-        S.offers = await readOffers();
+        S.offers = (await readOffers()).filter(function (c) { return !S.ready.some(function (x) { return String(x.candidate_id) === String(c.id); }); });   /* wave275: an offered flow has its own card */
         await readWelcomes(S.started);
         await Promise.all([readPeople(), readCfg(), readPw()]);
       } catch (e) {
@@ -215,6 +219,7 @@
     })();
     return S.loading;
   }
+  R.load = loadHr;
 
   /* ---------- Ready to onboard: one card ---------- */
   function warnBox(w) { return '<div class="o271warn' + (/practice applicant/i.test(w) ? ' pr' : '') + '">' + E(w) + '</div>'; }
@@ -244,10 +249,11 @@
       + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
       + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
-      + (S.act[id] ? panelHtml(flowOf(id), S.act[id]) : '')
+      + (S.act[id] ? R.panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')
       + '</div>';
   }
+  R.readyCard = readyCard;
   /* an offer still out: an answer by email has its own button, and asks first */
   function offerCard(c) {
     var id = c.id, asking = S.yes[id], busy = S.busy['y' + id];

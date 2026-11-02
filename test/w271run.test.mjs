@@ -2028,7 +2028,10 @@ test('w275 propose (HR): saves the proposal, tells HR with onboard_answer, and e
   assert.deepEqual([f.proposed_call_at, f.proposed_one_on_one_at, f.proposed_by, f.proposed_at], [P_CALL, P_ONE, 'hr.person@welfareavenue.com', NOW_ISO]);
   assert.equal(f.call_at, null, 'a proposal books nothing');
   const n = s.notifies();
-  assert.equal(n.length, 1);
+  assert.equal(n.length, 2, 'HR, and (Task 6) the manager');
+  assert.deepEqual([n[1].body.event, n[1].body.to_email, n[1].body.title], ['onboard_propose', 'sam.lee@welfareavenue.com', 'HR proposed times for Alex Tremblay'], 'Task 6: HR proposed, so the manager hears it through their own kind');
+  assert.match(n[1].body.body, /^hr\.person@welfareavenue\.com proposed times for Alex Tremblay \(Program Coordinator\): the onboarding call on Monday, October 26/);
+  assert.ok(noDash(n[1].body.title + n[1].body.body + n[1].body.text));
   assert.equal(n[0].body.event, 'onboard_answer');
   assert.deepEqual(n[0].body.to, ['ruth.owen@welfareavenue.com']);
   assert.equal(n[0].body.title, 'hr.person@welfareavenue.com proposed times for Alex Tremblay', 'HR proposing: the proposer is named (their roster name when they have one)');
@@ -2357,8 +2360,8 @@ const FIRST_PW = 'Lantern-Harbour-62';   // made up for these tests; it must nev
 const USERS = 'https://admin.googleapis.com/admin/directory/v1/users';
 const HUB_INVITE = 'https://stub.supabase.test/functions/v1/hub-invite';
 const PROPOSED = { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_by: 'sam.lee@welfareavenue.com', proposed_at: '2026-10-19T12:00:00.000Z' };
-async function t3({ cand = {}, fl = {}, config = {}, tables, flows, pw = FIRST_PW, google, invite, notifyReply } = {}) {
-  const s = await w275({ cand, fl: { status: 'waiting', created_at: '2026-10-15T12:00:00Z', ...fl }, config: { onboard_v2_since: SINCE, onboard_auto_google: 'on', onboard_auto_hub: 'on', onboard_yes_lead_hours: '24', ...config }, tables, flows, notifyReply });
+async function t3({ cand = {}, fl = {}, config = {}, tables, flows, pw = FIRST_PW, google, invite, notifyReply, hr = true, admin = false, manager = false } = {}) {
+  const s = await w275({ cand, fl: { status: 'waiting', created_at: '2026-10-15T12:00:00Z', ...fl }, config: { onboard_v2_since: SINCE, onboard_auto_google: 'on', onboard_auto_hub: 'on', onboard_yes_lead_hours: '24', ...config }, tables, flows, notifyReply, hr, admin, manager });
   if (pw != null) s.rig.env.ONBOARD_FIRST_PASSWORD = pw;
   s.users = () => s.rig.fetchLog.filter((e) => e.url.startsWith(USERS));
   s.inserts = () => s.users().filter((e) => e.method === 'POST');
@@ -2622,7 +2625,8 @@ test('w275 book: two presses book once; a repeat is a repeat; times that are not
   assert.equal(s.planned.length, 1);
   assert.equal((await s.book()).body.repeated, true);
   assert.equal(s.calWrites().filter((e) => e.method === 'POST').length, 2);
-  assert.equal((await s.post({ action: 'book', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, by: 'hire' })).status, 403);
+  const signed = await s.post({ action: 'book', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, by: 'hire' });
+  assert.deepEqual([signed.status, signed.body.repeated], [200, true], 'Task 6: signed in, book is the card\'s own path (HR here); the same times again are a repeat');
   const other = await t3({ fl: PROPOSED });
   refused(await other.book({ call_at: '2026-10-26T18:00:00Z' }), 'changed');
   assert.equal(other.flow().call_at, null);
@@ -3127,4 +3131,201 @@ test('w275 fix: the login sentence takes the place of the login lines only; othe
   assert.equal(r({ ...f, welcome_text: onNumber }, c, facts).text, '2. HR will send your login details separately.\n   Keep it safe.\n3. Next.');
   const both = '2. Your login:\n   Email: [new address], password: [first password]\n3. Next.';
   assert.equal(r({ ...f, welcome_text: both }, c, facts).text, '2. Your login:\n   HR will send your login details separately.\n3. Next.', 'a line with the placeholder becomes the sentence, even with the address on it');
+});
+
+/* ---------- wave275 Task 6: the card for HR and the manager ---------- */
+/* NOW is Tuesday 20/10/26, 08:00 in Toronto. Tuesday 27/10: the call at 10:00 (14:00Z), the 1-on-1 at 11:30 (15:30Z), inside Monday to Friday 9 to 5. */
+const C_CALL = '2026-10-27T14:00:00.000Z', C_ONE = '2026-10-27T15:30:00.000Z';
+const SAID_NO = { ...PROPOSED, hire_answer: 'no', hire_answered_at: '2026-10-19T15:00:00.000Z' };
+async function t6(opts = {}) {
+  const s = await t3(opts);
+  s.card = (action, body = {}) => s.post({ action, flow_id: 21, ...body });
+  s.bookCard = (body = {}) => s.card('book', { call_at: C_CALL, one_on_one_at: C_ONE, ...body });
+  return s;
+}
+function refused2(r, code, re) { assert.equal(r.body.error, code, JSON.stringify(r.body)); assert.ok(r.status >= 400); if (re) assert.match(r.body.message, re); assert.ok(noDash(r.body.message)); }
+
+test('w275 Task 6 book from the card (HR): after the hire said no, HR picks both times; both are booked with the manager, the hire\'s own no stays theirs, and HR is told who booked', async () => {
+  const s = await t6({ fl: SAID_NO });
+  await s.acceptSetup();
+  const r = await s.bookCard();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([r.body.booked, r.body.repeated, r.body.call_at, r.body.one_on_one_at], [true, false, C_CALL, C_ONE]);
+  const f = s.flow();
+  assert.deepEqual([f.call_at, f.one_on_one_at, f.started_by], [C_CALL, C_ONE, 'sam.lee@welfareavenue.com'], 'the manager runs the call, so both invites go to them');
+  assert.deepEqual([f.hire_answer, f.hire_answered_at], ['no', '2026-10-19T15:00:00.000Z'], 'the hire\'s answer is theirs: the card booking does not write a yes for them');
+  assert.deepEqual(s.statuses(), { roster: 'done', google: 'done', plan: 'done', invites: 'done', manager: 'done', hub: 'done', slack: 'hr_task', welcome: 'done' });
+  const ev = s.calWrites().filter((e) => e.method === 'POST');
+  assert.equal(ev.length, 2, 'both invites');
+  for (const e of ev) assert.ok(e.body.attendees.map((a) => a.email).includes('sam.lee@welfareavenue.com'));
+  const hr = s.notifies().filter((x) => x.body.event === 'onboard_answer');
+  assert.equal(hr.length, 1);
+  assert.equal(hr[0].body.title, 'hr.person@welfareavenue.com booked the times for Alex Tremblay');
+  assert.ok(noDash(hr[0].body.title + hr[0].body.body));
+  assert.ok(s.rows('change_log').some((l) => l.entity_type === 'onboard_flow' && l.field === 'call_at' && l.new_value === C_CALL && l.changed_by === 'hr.person@welfareavenue.com'), 'by is the caller');
+  assert.equal((await s.bookCard()).body.repeated, true, 'the same times again are a repeat');
+  refused(await s.bookCard({ call_at: '2026-10-28T14:00:00.000Z' }), 'already_booked');
+  s.noPw();
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('w275 Task 6 book from the card: the manager may (wa275_manager_of, as the caller); someone else is refused and nothing changes', async () => {
+  const m = await t6({ fl: SAID_NO, hr: false, manager: true });
+  m.db.setCaller({ email: 'sam.lee@welfareavenue.com' });
+  await m.acceptSetup();
+  const r = await m.bookCard();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.ok(m.rows('change_log').some((l) => l.field === 'call_at' && l.changed_by === 'sam.lee@welfareavenue.com'));
+  assert.equal(m.notifies().find((x) => x.body.event === 'onboard_answer').body.title, 'Sam Lee booked the times for Alex Tremblay', 'their roster name');
+  const x = await t6({ fl: SAID_NO, hr: false, manager: false });
+  const before = x.snapshot();
+  const no = await x.bookCard();
+  assert.equal(no.status, 403);
+  assert.match(no.body.message, /this new hire's manager/);
+  assert.deepEqual(x.snapshot(), before);
+  assert.equal(x.rig.fetchLog.length, 0);
+});
+
+test('w275 Task 6 book from the card: the hire\'s Yes rules (24 hours ahead, inside the manager\'s hours, no overlap, zoned times); not before Accept; a live proposal waits for the hire; already communicated books without one', async () => {
+  for (const [opts, body, code, which] of [
+    [{ cand: { accepted_on: null }, fl: { status: 'offered' } }, {}, 'not_accepted'],
+    [{ fl: PROPOSED }, {}, 'proposal_open'],
+    [{ fl: SAID_NO }, { call_at: '2026-10-27T22:00:00.000Z' }, 'outside_hours', 'call'],
+    [{ fl: SAID_NO }, { call_at: '2026-10-20T18:00:00.000Z' }, 'lead_time', 'call'],
+    [{ fl: SAID_NO }, { one_on_one_at: '2026-10-27T14:30:00.000Z' }, 'overlap'],
+    [{ fl: SAID_NO }, { call_at: '2026-10-27T10:00' }, 'bad_time'],
+    [{ fl: SAID_NO, cand: { status: 'withdrawn' } }, {}, 'closed'],
+  ]) {
+    const s = await t6(opts);
+    const before = s.snapshot();
+    refused(await s.bookCard(body), code, which);
+    assert.deepEqual(s.snapshot(), before, code + ': nothing written');
+    assert.equal(s.calWrites().length, 0);
+  }
+  const said = await t6({ fl: { ask_availability: false } });
+  await said.acceptSetup();
+  const r = await said.bookCard();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(said.flow().call_at, C_CALL, 'availability already communicated and nothing proposed: HR books what the hire said');
+});
+
+test('w275 Task 6 set_ask_availability {flow_id, on}: the switch, logged; HR or the manager; a repeat changes nothing; anyone else is refused', async () => {
+  const s = await t6();
+  const r = await s.card('set_ask_availability', { on: false });
+  assert.deepEqual([r.status, r.body.ask_availability], [200, false], JSON.stringify(r.body));
+  assert.equal(s.flow().ask_availability, false);
+  assert.ok(s.rows('change_log').some((l) => l.field === 'ask_availability' && l.old_value === 'ask the hire' && l.new_value === 'already communicated' && l.changed_by === 'hr.person@welfareavenue.com'));
+  assert.equal((await s.card('set_ask_availability', { on: false })).body.repeated, true);
+  assert.equal((await s.card('set_ask_availability', { on: 'yes' })).status, 400);
+  const m = await t6({ hr: false, manager: true });
+  assert.equal((await m.card('set_ask_availability', { on: false })).status, 200);
+  const x = await t6({ hr: false, manager: false });
+  assert.equal((await x.card('set_ask_availability', { on: false })).status, 403);
+  assert.equal(x.flow().ask_availability, undefined);
+});
+
+test('w275 Task 6 grid_for {flow_id, who: hire, slots}: HR or the manager enters the hire\'s times; no 10-hour minimum for them; past cells dropped; anything off the grid refused', async () => {
+  const s = await t6({ fl: { ask_availability: false } });
+  const r = await s.card('grid_for', { who: 'hire', slots: ['2026-10-27T15:00:00Z', '2026-10-27T14:30:00.000Z', '2026-10-19T14:00:00Z', '2026-10-27T15:00:00Z'] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.slots, ['2026-10-27T14:30:00Z', '2026-10-27T15:00:00Z'], 'sorted, once each, as onboard-link writes them; the past cell dropped');
+  const g = s.rows('hub_onboard_grids').find((x) => x.flow_id === 21 && x.who === 'hire');
+  assert.deepEqual(g.slots, r.body.slots);
+  assert.ok(s.rows('change_log').some((l) => l.field === 'hire_grid' && l.changed_by === 'hr.person@welfareavenue.com'));
+  for (const [body, code] of [[{ who: 'manager', slots: [] }, 'bad_who'], [{ who: 'hire', slots: ['2026-10-27T15:10:00Z'] }, 'bad_slots'], [{ who: 'hire', slots: ['2026-12-27T15:00:00Z'] }, 'bad_slots'], [{ who: 'hire', slots: ['2026-10-27T15:00'] }, 'bad_slots'], [{ who: 'hire', slots: 'x' }, 'bad_slots']]) {
+    const x = await s.card('grid_for', body);
+    assert.equal(x.status, 400, JSON.stringify(body));
+    assert.equal(x.body.error, code);
+  }
+  const m = await t6({ hr: false, manager: true });
+  assert.equal((await m.card('grid_for', { who: 'hire', slots: ['2026-10-27T15:00:00Z'] })).status, 200, 'the manager may');
+  const booked = await t6({ fl: { status: 'running', call_at: C_CALL } });
+  assert.equal((await booked.card('grid_for', { who: 'hire', slots: [] })).body.error, 'already_booked');
+});
+
+test('w275 Task 6 availability_for {member_id, except}: HR sets a manager\'s one-off dates; the week is theirs to set on Home; the manager themselves cannot use it', async () => {
+  const s = await t6();
+  const r = await s.post({ action: 'availability_for', member_id: 2, except: [{ date: '2026-10-28', free: [['13:00', '15:00'], ['09:00', '10:00']] }, { date: '2026-10-27', free: [] }] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const want = [{ date: '2026-10-27', free: [] }, { date: '2026-10-28', free: [['09:00', '10:00'], ['13:00', '15:00']] }];
+  assert.deepEqual(s.rows('team_members').find((m) => m.id === 2).availability, { except: want, tz: 'America/Toronto' });
+  assert.deepEqual(r.body.availability.except, want);
+  assert.equal(r.body.no_week, true, 'the answer is the whole of it, read again: no week saved on Home yet');
+  assert.ok(s.rows('change_log').some((l) => l.entity_type === 'team_member' && l.field === 'availability' && l.changed_by === 'hr.person@welfareavenue.com'));
+  refused2(await s.post({ action: 'availability_for', member_id: 2, weekly: { mon: [['09:00', '17:00']] }, except: [] }), 'weekly_moved', /Sam Lee sets their usual week on the Hub's Home page/);
+  for (const except of [[{ date: '2026-02-30', free: [] }], [{ date: '2026-10-28', free: [['10:00', '09:00']] }], [{ date: '2026-10-28', free: [] }, { date: '2026-10-28', free: [] }], [{ date: '2026-10-28', free: [['09:07', '10:00']] }], 'x']) {
+    assert.equal((await s.post({ action: 'availability_for', member_id: 2, except })).body.error, 'bad_availability', JSON.stringify(except));
+  }
+  assert.equal((await s.post({ action: 'availability_for', member_id: 99, except: [] })).status, 404);
+  const m = await t6({ hr: false, manager: true });
+  m.db.setCaller({ email: 'sam.lee@welfareavenue.com' });
+  assert.equal((await m.post({ action: 'availability_for', member_id: 2, except: [] })).status, 403, 'HR and admins only');
+});
+
+test('w275 Task 6 set_welcome {flow_id, subject, text}: edits before booking are kept as typed, brackets and all, and only where they differ; refused once it went or once booked', async () => {
+  const s = await t6();
+  const w = await s.card('welcome');
+  assert.equal(w.status, 200, JSON.stringify(w.body));
+  assert.match(w.body.text, /\[first password\]/, 'before booking the template keeps its brackets');
+  const mine = w.body.text.replace('Congratulations and welcome', 'A warm welcome');
+  const r = await s.card('set_welcome', { subject: w.body.subject, text: mine });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const f = s.flow();
+  assert.deepEqual([f.welcome_subject, f.welcome_text, f.welcome_edited], [null, mine, true], 'the subject is the Hub\'s own; the text as typed');
+  assert.equal(r.body.text, mine);
+  assert.equal(r.body.edited, true);
+  assert.ok(s.rows('change_log').some((l) => l.field === 'welcome' && l.new_value === 'edited'));
+  const back = await s.card('set_welcome', { subject: w.body.subject, text: w.body.text });
+  assert.deepEqual([back.body.edited, s.flow().welcome_text, s.flow().welcome_edited], [false, null, false], 'the Hub\'s own again');
+  assert.equal((await s.card('set_welcome', { subject: 'x', text: 5 })).status, 400);
+  const sent = await t6({ fl: { welcome_sent_at: '2026-10-19T12:00:00Z' } });
+  assert.equal((await sent.card('set_welcome', { subject: 'a', text: 'b' })).body.error, 'already_sent');
+  const booked = await t6({ fl: { status: 'running', call_at: C_CALL } });
+  assert.equal((await booked.card('set_welcome', { subject: 'a', text: 'b' })).body.error, 'too_late');
+  const m = await t6({ hr: false, manager: true });
+  assert.equal((await m.card('set_welcome', { subject: 'a', text: 'b [first password]' })).status, 200, 'the manager may');
+  assert.equal(m.flow().welcome_text, 'b [first password]');
+  s.noPw();
+});
+
+test('w275 Task 6 times {flow_id}: the picker\'s data, the manager\'s hours read through wa275_availability_of, their hub@ meetings with titles, other hires\' times, the hire\'s grid', async () => {
+  const ev = { id: 'e1', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-26T14:30:00Z', end_at: '2026-10-26T15:00:00Z' };
+  const other = flow({ id: 22, candidate_id: 12, manager_member_id: 2, call_at: '2026-10-28T14:00:00Z' });
+  const s = await t6({ fl: SAID_NO, tables: { hub_events: [ev], hub_onboard_grids: [{ flow_id: 21, who: 'hire', slots: ['2026-10-27T14:00:00Z'] }], hub_candidates: [candidate(), candidate({ id: 12, name: 'Bo Chen' })] }, flows: [other] });
+  const r = await s.card('times');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const b = r.body;
+  assert.deepEqual(b.manager, { member_id: 2, name: 'Sam Lee' });
+  assert.deepEqual(b.availability.weekly.mon, [['09:00', '17:00']]);
+  assert.equal(b.no_week, true);
+  assert.deepEqual(b.busy, [{ start: '2026-10-26T14:30:00.000Z', end: '2026-10-26T15:00:00.000Z', summary: 'Board' }]);
+  assert.deepEqual(b.taken, [{ start: '2026-10-28T14:00:00.000Z', end: '2026-10-28T15:00:00.000Z' }]);
+  assert.deepEqual(b.hire_slots, ['2026-10-27T14:00:00Z']);
+  assert.deepEqual([b.lengths, b.lead_hours, b.yes_lead_hours, b.hire_answer, b.ask_availability, b.accepted], [{ callMin: 60, oneMin: 30 }, 48, 24, 'no', true, true]);
+  assert.equal(b.proposal.call_at, P_CALL);
+  const m = await t6({ hr: false, manager: true });
+  assert.equal((await m.card('times')).status, 200, 'the manager may');
+  const x = await t6({ hr: false, manager: false });
+  assert.equal((await x.card('times')).status, 403);
+});
+
+test('w275 Task 6: a plain member who manages the hire gets the card actions only; HR\'s own actions stay HR\'s (Review Focus 4)', async () => {
+  const m = await t6({ hr: false, manager: true });
+  m.db.setCaller({ email: 'sam.lee@welfareavenue.com' });
+  const before = m.snapshot();
+  for (const body of [{ action: 'preview', flow_id: 21 }, { action: 'start', flow_id: 21 }, { action: 'set_manager', flow_id: 21, member_id: 1 }, { action: 'ask_manager', flow_id: 21 }, { action: 'google_manual', flow_id: 21, wa_email: 'a@welfareavenue.com' }, { action: 'send_grid_link', candidate_id: 11 }, { action: 'availability_for', member_id: 2, except: [] }, { action: 'set_first_password', password: 'Abcdefgh1' }]) {
+    const r = await m.post(body);
+    assert.equal(r.status, 403, body.action);
+  }
+  assert.deepEqual(m.snapshot(), before);
+  assert.equal(m.rig.fetchLog.length, 0);
+  assert.equal((await m.post({ action: 'welcome', flow_id: 21 })).status, 200, 'the welcome copy');
+});
+
+test('w275 Task 6 set_manager on an offered flow: allowed now; the old manager\'s propose link stops being theirs (manager_link_* cleared)', async () => {
+  const s = await t6({ cand: { accepted_on: null }, fl: { status: 'offered', manager_link_member_id: 2, manager_link_sent_at: NOW_ISO } });
+  const r = await s.post({ action: 'set_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const f = s.flow();
+  assert.deepEqual([f.manager_member_id, f.manager_link_member_id, f.manager_link_sent_at], [1, null, null]);
 });

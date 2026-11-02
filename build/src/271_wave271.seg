@@ -13,7 +13,7 @@
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at';   /* named: pw_nonce is withheld from the browser */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: the last five, for the rundown ticks on a started card */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
   var CAND_COLS = 'id, name, role, email, member_id';
   var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
@@ -36,6 +36,9 @@
     pw: null,   /* wave275: the first password's state, {set, set_at}, for admins only; never the password */
     busy: {}
   };
+  /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
+     data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; } };
 
   /* ---------- style ---------- */
   var st = document.createElement('style'); st.id = 'o271css';
@@ -180,7 +183,7 @@
   }
   async function readPeople() {
     if (S.people.length) return;
-    var r = await db.from('team_members').select('id, name, active');
+    var r = await db.from('team_members').select('id, name, active, email');   /* wave275: the email names who proposed */
     if (!r.error) S.people = (r.data || []).filter(function (p) { return p.name; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
   }
   async function readCfg() {
@@ -188,18 +191,19 @@
     var map = { onboard_grid_days: 'days', onboard_grid_start: 'start', onboard_grid_end: 'end', onboard_grid_cell_min: 'cell' };
     ((r && r.data) || []).forEach(function (x) { var n = Number(x.value); if (map[x.key] && isFinite(n) && n >= 0 && (n > 0 || x.key === 'onboard_grid_start')) S.cfg[map[x.key]] = n; });
   }
-  function load() {
+  function load() { return R.load(); }
+  function loadHr() {
     if (S.loading) return S.loading;
     S.loading = (async function () {
       try {
         var r = await db.rpc('wa271_ready_list');
         if (r && r.error) throw r.error;
         S.denied = false; S.err = '';
-        S.ready = ((r && r.data) || []).filter(function (x) { return x.status === 'waiting' || x.status === 'ready'; });
+        S.ready = ((r && r.data) || []).filter(function (x) { return R.readyStatuses.indexOf(x.status) >= 0; });   /* wave275 adds offered */
         var begun = await readStarted();
         S.started = begun.filter(function (x) { return x.status !== 'backed_out'; });
         S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
-        S.offers = await readOffers();
+        S.offers = (await readOffers()).filter(function (c) { return !S.ready.some(function (x) { return String(x.candidate_id) === String(c.id); }); });   /* wave275: an offered flow has its own card */
         await readWelcomes(S.started);
         await Promise.all([readPeople(), readCfg(), readPw()]);
       } catch (e) {
@@ -215,6 +219,7 @@
     })();
     return S.loading;
   }
+  R.load = loadHr;
 
   /* ---------- Ready to onboard: one card ---------- */
   function warnBox(w) { return '<div class="o271warn' + (/practice applicant/i.test(w) ? ' pr' : '') + '">' + E(w) + '</div>'; }
@@ -244,10 +249,11 @@
       + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
       + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
-      + (S.act[id] ? panelHtml(flowOf(id), S.act[id]) : '')
+      + (S.act[id] ? R.panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')
       + '</div>';
   }
+  R.readyCard = readyCard;
   /* an offer still out: an answer by email has its own button, and asks first */
   function offerCard(c) {
     var id = c.id, asking = S.yes[id], busy = S.busy['y' + id];
@@ -303,9 +309,10 @@
         if (t == null) { h += '<td></td>'; return; }
         var cl = ['o271c'], bits = [whenText(t)];
         if (g.hire[t]) { cl.push('h'); bits.push('the new hire marked this'); }
-        if (g.mode === 'one' && !g.hideManager && g.manager[t]) { cl.push('m'); bits.push('the manager marked this'); }
+        if ((g.mode === 'one' || g.both) && !g.hideManager && g.manager[t]) { cl.push('m'); bits.push(g.words ? g.words.mTip : 'the manager marked this'); }   /* wave275: both, the manager's hours under both picks */
         var busy = clashes(g, t, g.mode);
         if (busy.length) { cl.push('busy'); bits.push('in a meeting: ' + busy.map(function (e) { return e.summary; }).join(', ')); }
+        var mk = g.mark && g.mark(t, g.mode); if (mk && !busy.length) { cl.push('busy'); bits.push(mk); }   /* wave275: too soon, or another new hire's time */
         var label = '';
         if (t === call) { cl.push('scall'); label = 'Call'; } else if (t === one) { cl.push('sone'); label = '1-1'; }
         h += '<td><button type="button" class="' + cl.join(' ') + '" data-o271cell="' + E(new Date(t).toISOString()) + '" data-g="' + E(g.key) + '" title="' + E(bits.join('; ')) + '" aria-label="' + E(bits.join('; ')) + '">' + label + '</button></td>';
@@ -315,9 +322,10 @@
     return h + '</tbody></table>';
   }
   function legendHtml(g) {
-    return '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>New hire marked</span>'
-      + (g.mode === 'one' && !g.hideManager ? '<span><i style="background:rgba(111,100,171,.34)"></i>Manager marked</span><span><i style="background:' + GREEN + '"></i>Both</span>' : '')
-      + '<span><i style="background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px)"></i>In a meeting</span><span>Toronto time</span></div>';
+    var w = g.words || { h: 'New hire marked', m: 'Manager marked', busy: 'In a meeting' };   /* wave275 names its own marks */
+    return '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>' + E(w.h) + '</span>'
+      + ((g.mode === 'one' || g.both) && !g.hideManager ? '<span><i style="background:rgba(111,100,171,.34)"></i>' + E(w.m) + '</span><span><i style="background:' + GREEN + '"></i>Both</span>' : '')
+      + '<span><i style="background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px)"></i>' + E(w.busy) + '</span><span>Toronto time</span></div>';
   }
   function gridHtml(g) {
     if (!g.days.length) return '';
@@ -617,6 +625,7 @@
       + '<div class="o271ln">Onboarding call: ' + E(f.call_at ? whenText(f.call_at) : 'not set') + '</div>'
       + '<div class="o271ln">1-on-1: ' + E(f.one_on_one_at ? whenText(f.one_on_one_at) : 'not booked yet') + '</div>'
       + '<div class="o271ln">Manager: ' + E(nameOf(f.manager_member_id)) + (f.wa_email ? ' &middot; Address: ' + E(f.wa_email) : '') + '</div>'
+      + R.startedMore(f)   /* wave275: the setup rundown ticks */
       + noteHtml(id)
       + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
       + '<div class="o271btns">'
@@ -625,9 +634,11 @@
       + (f.one_on_one_at ? '' : '<button type="button" class="o271b" data-o271a="act" data-kind="book" data-f="' + E(id) + '"' + (acting === 'book' ? ' disabled' : '') + '>Book the 1-on-1</button>')
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (acting === 'back' ? ' disabled' : '') + '>They backed out</button>'
       + '</div>'
-      + (A ? panelHtml(f, A) : '')
+      + (A ? R.panelHtml(f, A) : '')
       + '</div>';
   }
+  R.startedCard = startedCard; R.panelHtml = panelHtml;
+  R.preview = function (id) { return run('preview', { flow_id: Number(id) }); };   /* the picker's marks and meetings; wave275 reads them another way for a manager */
   function flowOf(id) {
     var f = S.started.filter(function (x) { return String(x.id) === String(id); })[0]; if (f) return f;
     var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
@@ -643,7 +654,7 @@
     if (kind !== 'book' && kind !== 'time') return;
     /* the marks and meetings for the picker. Typing a time works without them */
     try {
-      var pv = await run('preview', { flow_id: Number(id) });
+      var pv = await R.preview(Number(id));
       if (S.act[id] !== A) return;
       A.g = newGrid('a' + id, pv, kind === 'book' ? 'one' : 'call');
       paint();
@@ -733,7 +744,8 @@
       + noteHtml(f.id)
       + '</div>';
   }
-  function paint() {
+  function paint() { return R.paint(); }
+  function paintHr() {
     var el = document.getElementById('o271'); if (!el) return;
     var panel = document.getElementById('hrcentre');
     if (S.denied) {
@@ -746,9 +758,9 @@
     if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
     if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
     else if (!S.ready.length && !S.started.length && !S.offers.length && !S.backed.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
-    html += S.ready.map(readyCard).join('');
+    html += S.ready.map(function (x) { return R.readyCard(x); }).join('');
     if (S.offers.length) html += '<h3 class="o271h">Offers waiting for an answer</h3>' + S.offers.map(offerCard).join('');
-    if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(startedCard).join('');
+    if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(function (f) { return R.startedCard(f); }).join('');
     if (S.backed.length) html += '<h3 class="o271h">Backed out</h3>' + S.backed.map(backedHtml).join('');
     /* each grid keeps its scroll through a repaint */
     var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
@@ -763,6 +775,7 @@
     }
     if (panel && panel.getAttribute('data-w197') === 'onboarding') el.classList.add('w197on');
   }
+  R.paint = paintHr;
   function onbSection() { var a = document.querySelector('#w46body > .w46sec [data-w46assign]'); return a ? a.closest('.w46sec') : null; }
   function onPage() { var p = document.getElementById('hrcentre'); return (p && p.getAttribute('data-w197') === 'onboarding') || /^#hrcentre\/onboarding(\?|$)/.test(String(location.hash || '')); }
   function install() {
@@ -878,5 +891,9 @@
   window.addEventListener('hashchange', function () { if (onPage()) setTimeout(arrive, 120); });
 
   /* ---------- test hook ---------- */
-  window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; } };
+  window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; },
+    /* wave275 Task 6: what wave275's card reuses (the same words, grid, steps and calls as this wave's) */
+    E: E, run: run, whenText: whenText, dayText: dayText, dayLong: dayLong, isoOf: isoOf, pad2: pad2, newGrid: newGrid, gridHtml: gridHtml, refreshGrid: refreshGrid,
+    noteHtml: noteHtml, warnBox: warnBox, nameOf: nameOf, flowOf: flowOf, stepHtml: stepHtml, memberOptions: memberOptions, STEPS: STEPS, STALE_MS: STALE_MS, KEEP_DAYS: KEEP_DAYS,
+    isAdmin: isAdmin, surelyHr: surelyHr, hrPage: hrPage, readPeople: readPeople, readCfg: readCfg, readPw: readPw, readWelcomes: readWelcomes, pwHtml: pwHtml, paint: paint };
 })();

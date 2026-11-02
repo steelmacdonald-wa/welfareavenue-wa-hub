@@ -1,5 +1,20 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
-// v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path)
+// v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
+// v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below)
+// wave275 (v6): a hire's own manager (wa275_manager_of, as the caller) may use the card's actions on that hire's card: times, book, set_ask_availability, grid_for,
+//   set_welcome, welcome, retry, task_done, set_canva_link, book_one_on_one, change_time, change_manager, backed_out (and propose, as before); every other
+//   action stays HR's and admins'. New:
+//   times {flow_id}   the picker's data: {manager, availability (wa275_availability_of), availability_at, stale, no_week, busy [{start, end, summary}] (the manager's
+//               hub@ meetings over the grid window), taken [{start, end}] (their other hires' times), hire_slots, lengths, lead_hours, yes_lead_hours, proposal,
+//               hire_answer, ask_availability, accepted}. Reads only.
+//   book {flow_id, call_at, one_on_one_at} signed in: HR or the manager books both times from the card once the hire accepted, after a no or with
+//               availability already communicated (a live proposal waits for the hire: proposal_open). The hire's Yes rules (onboard_yes_lead_hours, the
+//               manager's hours, hub@ meetings, other hires, overlap) and the same booking steps; the hire's own answer is left as it was; by = the caller.
+//   set_ask_availability {flow_id, on}   the card's switch "Availability: ask the hire / already communicated". Logged.
+//   grid_for {flow_id, who: 'hire', slots}   HR or the manager enters the hire's times (cell starts in the window; past ones dropped; no hire minimum).
+//   availability_for {member_id, except, tz?}   HR and admins: a manager's one-off dates (a weekly key is refused: the week is set on Home, wave276).
+//   set_welcome {flow_id, subject, text}   the welcome edited before booking, as Start's preview keeps it (only what differs, brackets as typed, welcome_edited).
+//   set_manager now also takes an offered flow (the old manager's propose link is cleared); propose by HR or an admin tells the manager (onboard_propose).
 // The signed-in function behind HR's Start onboarding button. All actions are POST {action, ...}, for HR or admins only
 // (wa_is_hr or is_wa_admin, run as the caller's JWT):
 //   preview {flow_id, wa_email?}   {address, address_taken, address_owner, address_own, needs_address, manager, department, grids, hub_events, steps, welcome, warnings}. Writes nothing.
@@ -1171,7 +1186,8 @@ async function setManager(b: Row): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
-  if (!BEFORE_START.includes(f.status)) return no('already_started', 'Onboarding has already been started for this person. Use Change manager on their card.');
+  const before = ['offered', ...BEFORE_START];   // wave275 Task 6: an offered flow's manager can change too (the card then asks the new one with ask_manager)
+  if (!before.includes(f.status)) return no('already_started', 'Onboarding has already been started for this person. Use Change manager on their card.');
   const id = Number(b.member_id);
   const m = b.member_id != null && b.member_id !== '' && Number.isInteger(id) ? await getMember(id) : null;
   if (!m) return no('no_manager', 'Choose a manager who is on the roster first.', 400);
@@ -1181,7 +1197,9 @@ async function setManager(b: Row): Promise<Response> {
   const differs = String(link.id ?? '') !== String(m.id);
   const patch: Record<string, unknown> = { manager_member_id: m.id, updated_at: new Date().toISOString() };
   if (differs) patch.reminded_manager_at = null;
-  const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', BEFORE_START).select('id');
+  /* wave275: the old manager's propose link stops being theirs (onboard-link's heldByManager), so ask_manager or the hourly job sends the new one theirs */
+  if (differs && f.status === 'offered') { patch.manager_link_member_id = null; patch.manager_link_sent_at = null; }   // a waiting flow keeps the record: the hourly job sees the difference (wave271)
+  const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', before).select('id');
   if (error) return no('save', 'The manager could not be saved: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('already_started', 'Onboarding has just been started for this person. Reload the page.');
   if (f.practice) return json({ ok: true, practice: true, cleared: false });
@@ -1730,6 +1748,7 @@ function proposeWords(code: string, which?: Which, n?: number, name = ''): { en:
     case 'answered': return { en: 'These times were already answered, so they cannot be booked this way. A person from Welfare Avenue will be in touch.', fr: 'Ces heures ont déjà reçu une réponse: elles ne peuvent pas être fixées ainsi. Une personne de Welfare Avenue communiquera avec vous.' };
     case 'not_accepted': return { en: 'The offer has not been accepted yet, so nothing can be booked.', fr: 'L’offre n’a pas encore été acceptée: rien ne peut être fixé.' };
     case 'bad_by': return { en: 'The Hub does not know who is booking these times. Reload the page.', fr: 'Le Hub ne sait pas qui fixe ces heures. Rechargez la page.' };
+    case 'proposal_open': return { en: 'Times are proposed and waiting for the new hire\'s answer. Wait for it, or propose new times instead.', fr: 'Des heures sont proposées et attendent la réponse de la nouvelle recrue. Attendez-la, ou proposez plutôt de nouvelles heures.' };
     default: return { en: 'The times could not be saved. Try again.', fr: 'Les heures n’ont pas pu être enregistrées. Réessayez.' };
   }
 }
@@ -1856,6 +1875,16 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
       text: ':calendar: ' + slackEsc(proposer) + ' proposed times for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + '): ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>',
     });
     if (!told.handled) warnings.push('HR was not told: ' + (told.note || 'notify gave no answer') + '.');
+  }
+  /* wave275 Task 6: HR (or an admin) proposed from the card, so the manager hears it too, through their own kind */
+  if (by !== mEmail) {
+    const mt = 'HR proposed times for ' + c.name;
+    const toldM = await tell({
+      event: 'onboard_propose', to_email: mEmail, url: '#hrcentre/onboarding', tag: 'onboard-propose-hr-' + f.id,
+      title: mt, body: proposer + ' proposed times for ' + c.name + ' (' + (c.role || 'new hire') + '): ' + said,
+      text: ':calendar: ' + slackEsc(proposer) + ' proposed times for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + '), your new hire: ' + slackEsc(said) + ' <' + HUB + '/#mypage|Open the Hub>',
+    });
+    if (!toldM.handled) warnings.push(String(m.name || 'The manager') + ' was not told: ' + (toldM.note || 'notify gave no answer') + '.');
   }
   /* always asked, after the claim: hireTimes reads the card again, so a hire who accepts while this runs is still emailed; not yet accepted is a quiet no */
   let emailed = false;
@@ -2120,25 +2149,31 @@ async function book(b: Row): Promise<Response> {
     if (again && again.call_at && sameInstant(again.call_at, callAt) && sameInstant(again.one_on_one_at, oneAt)) return booked(again);
     return refuse('changed');
   }
+  return await afterBooking(f, c, m, flow, callAt, oneAt, BOOKED_BY, {
+    tag: 'onboard-yes-' + f.id, title: c.name + ' said yes to the times',
+    said: c.name + ' (' + (c.role || 'new hire') + ') said yes: the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '. Both are booked.',
+  });
+}
+/* once the times are claimed (the hire's Yes, or HR or the manager booking from the card): seed the rows not made yet, log, and run the booking steps after
+   the answer. A seed that fails gives the claim back, the flow as it was read. */
+async function afterBooking(f: Row, c: Row, m: Row, flow: Row, callAt: string, oneAt: string, by: string, hr: { tag: string; title: string; said: string }): Promise<Response> {
   const practice = !!(f.practice || c.practice);
-  const seedErr = await seedMissing(flow, STEPS.map((s) => s.key), BOOKED_BY, practice);   // the booking group, and the at-Accept rows if accept_setup never ran
+  const seedErr = await seedMissing(flow, STEPS.map((s) => s.key), by, practice);   // the booking group, and the at-Accept rows if accept_setup never ran
   if (seedErr) {
-    await svc.from('hub_onboard_flows').update({ status: f.status, call_at: null, one_on_one_at: null, started_by: f.started_by ?? null, hire_answer: null, hire_answered_at: f.hire_answered_at ?? null, updated_at: new Date().toISOString() }).eq('id', f.id).eq('status', 'running');
+    await svc.from('hub_onboard_flows').update({ status: f.status, call_at: null, one_on_one_at: null, started_by: f.started_by ?? null, hire_answer: f.hire_answer ?? null, hire_answered_at: f.hire_answered_at ?? null, updated_at: new Date().toISOString() }).eq('id', f.id).eq('status', 'running');
     return no('save', 'The times could not be booked: ' + seedErr + '. Try again.', 500);
   }
-  await log('onboard_flow', f.id, 'call_at', null, callAt, BOOKED_BY);
-  await log('onboard_flow', f.id, 'one_on_one_at', null, oneAt, BOOKED_BY);
+  await log('onboard_flow', f.id, 'call_at', null, callAt, by);
+  await log('onboard_flow', f.id, 'one_on_one_at', null, oneAt, by);
   /* the booking steps (plan, invites, manager, welcome and the rest) talk to Calendar and notify, which can take longer than the hire's page waits: they run
      after the answer, handed to the runtime (EdgeRuntime.waitUntil), as accept_setup does after Accept. A step that fails shows on the card with Retry. */
   const steps = (async () => {
     try {
-      await advance(await makeCtx(flow, BOOKED_BY, null));
+      await advance(await makeCtx(flow, by, null));
       if (practice) return;
-      const hr = await hrList();   // HR hears it here; the manager hears it from the manager step, with the date
-      const title = c.name + ' said yes to the times';
-      const said = c.name + ' (' + (c.role || 'new hire') + ') said yes: the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '. Both are booked.';
-      if (!hr.length) { console.error('onboard-run book: HR was not told for flow ' + f.id + ': hr_notify_emails is empty.'); return; }
-      const told = await tell({ event: 'onboard_answer', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-yes-' + f.id, title, body: said, text: ':white_check_mark: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
+      const list = await hrList();   // HR hears it here; the manager hears it from the manager step, with the date
+      if (!list.length) { console.error('onboard-run book: HR was not told for flow ' + f.id + ': hr_notify_emails is empty.'); return; }
+      const told = await tell({ event: 'onboard_answer', to: list, url: '#hrcentre/onboarding', tag: hr.tag, title: hr.title, body: hr.said, text: ':white_check_mark: ' + slackEsc(hr.said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
       if (!told.handled) console.error('onboard-run book: HR was not told for flow ' + f.id + ': ' + (told.note || 'notify gave no answer'));
     } catch (e) { console.error('onboard-run book: the booking steps stopped for flow ' + f.id + ': ' + errText(e)); }
   })();
@@ -2152,6 +2187,201 @@ function inBackground(p: Promise<unknown>): Promise<unknown> | void {
   if (rt && typeof rt.waitUntil === 'function') { rt.waitUntil(p); return; }
   return p;
 }
+/* ---------- wave275 Task 6: the card for HR and the manager ---------- */
+/* All signed in. HR and admins act on every card; the hire's manager (wa275_manager_of, as the caller, in the serve handler) on their own hires' cards, with
+   these actions only (Review Focus 4). The rules for times stay propose's and book's (timesProblem, read through wa275_availability_of). */
+const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 'set_welcome', 'welcome', 'retry', 'task_done', 'set_canva_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out'];
+const nameFor = async (email: string) => (await membersByEmail(email).catch(() => []))[0]?.name || email;
+
+/* times {flow_id}: what the card's picker draws. The manager's availability (wa275_availability_of), the hub@ meetings they are invited to over the grid's
+   window (with titles: the card is signed in), the other new hires' booked and proposed times, the hire's own grid, the lengths and lead times. Reads only. */
+async function timesView(b: Row): Promise<Response> {
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  const managerId = f.manager_member_id ?? f.manager_link_member_id;
+  const m = managerId != null ? await getMember(managerId) : null;
+  const [callMin, oneMin, lead, yesLead, days] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_propose_lead_hours', 48), await cfgNum('onboard_yes_lead_hours', 24), await cfgNum('onboard_grid_days', 14)];
+  let hours: Row = null;
+  const busy: Row[] = [], taken: Row[] = [];
+  try {
+    if (m) {
+      hours = await availabilityOf(Number(m.id));
+      const email = String(m.email || '').trim().toLowerCase(), from = Date.now(), to = from + (days + 1) * 86400000;
+      if (email) {
+        const { data, error } = await svc.from('hub_events').select('id, summary, start_at, end_at').contains('attendee_emails', [email]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
+        if (error) throw new Error('The manager\'s hub@ meetings could not be read.');
+        for (const e of (data || []) as Row[]) busy.push({ start: instant(e.start_at), end: instant(e.end_at), summary: e.summary || 'A meeting' });
+      }
+      for (const [s, e] of await takenTimes(Number(f.id), Number(m.id), callMin, oneMin)) if (e > from && s < to) taken.push({ start: new Date(s).toISOString(), end: new Date(e).toISOString() });
+    }
+  } catch (e) { return no('failed', errText(e) + ' Try again.', 503); }
+  const { data: g } = await svc.from('hub_onboard_grids').select('slots').eq('flow_id', f.id).eq('who', 'hire').maybeSingle();
+  return json({
+    manager: m ? { member_id: m.id, name: m.name } : null,
+    availability: hours?.availability ?? null, availability_at: hours?.availability_at ?? null, stale: hours ? hours.stale !== false : true, no_week: hours ? hours.no_week === true : true,
+    busy, taken, hire_slots: ((g as Row | null)?.slots || []) as string[], lengths: { callMin, oneMin }, lead_hours: lead, yes_lead_hours: yesLead,
+    proposal: f.proposed_at ? { call_at: instant(f.proposed_call_at), one_on_one_at: instant(f.proposed_one_on_one_at), by: f.proposed_by, at: instant(f.proposed_at) } : null,
+    hire_answer: f.hire_answer ?? null, ask_availability: f.ask_availability !== false, accepted: !!c.accepted_on,
+  });
+}
+
+/* book {flow_id, call_at, one_on_one_at} signed in: HR or the manager picks both times on the card, from the hire's grid over the manager's hours, once the
+   hire has accepted: after the hire said no, or with availability already communicated. The same rules as the hire's Yes (at least onboard_yes_lead_hours
+   ahead, inside the manager's availability, clear of hub@ meetings and of the manager's other new hires) and then the same booking steps. Times proposed and
+   still waiting for the hire's answer are theirs to answer first (proposal_open). The manager runs the call, so both invites go to them. */
+async function bookFromCard(b: Row, by: string): Promise<Response> {
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return refuse('closed');
+  if (!c.accepted_on) return refuse('not_accepted');
+  const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
+  const booked = (row: Row) => json({ ok: true, booked: true, repeated: true, call_at: instant(row.call_at), one_on_one_at: instant(row.one_on_one_at), status: row.status });
+  if (f.call_at || f.hire_answer === 'yes') return sameInstant(f.call_at, callAt) && sameInstant(f.one_on_one_at, oneAt) ? booked(f) : refuse('already_booked');
+  if (!callAt || !oneAt || !zoned(b.call_at) || !zoned(b.one_on_one_at)) return refuse('bad_time', 400);
+  if (f.proposed_at && !f.hire_answer) return refuse('proposal_open');
+  const managerId = f.manager_member_id ?? f.manager_link_member_id;
+  const m = managerId != null ? await getMember(managerId) : null;
+  if (!m) return refuse('no_manager');
+  if (m.active === false) return refuse('manager_inactive', 409, undefined, undefined, String(m.name || 'The manager'));
+  const mEmail = String(m.email || '').trim().toLowerCase();
+  if (!mEmail) return refuse('manager_no_email', 409, undefined, undefined, String(m.name || 'The manager'));
+  const [callMin, oneMin, lead] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_yes_lead_hours', 24)];
+  const spans = spansOf(callAt, oneAt, callMin, oneMin);
+  if (clash(spans[0][1], spans[0][2], spans[1][1], spans[1][2])) return refuse('overlap');
+  let problem: { code: string; which: Which } | null;
+  try { problem = await timesProblem(Number(f.id), m, spans, lead, callMin, oneMin); } catch (e) { return no('failed', errText(e) + ' Nothing was booked. Try again.', 503); }
+  if (problem) return refuse(problem.code, 409, problem.which, lead);
+  /* the claim: the flow as it was read (not started, nothing booked, the same answer and proposal), so two presses book once */
+  const now = new Date().toISOString();
+  let claim = svc.from('hub_onboard_flows').update({ status: 'running', call_at: callAt, one_on_one_at: oneAt, manager_member_id: m.id, started_by: mEmail, updated_at: now })
+    .eq('id', f.id).in('status', BEFORE_START).is('call_at', null);
+  claim = f.hire_answer ? claim.eq('hire_answer', f.hire_answer) : claim.is('hire_answer', null);
+  claim = f.proposed_at ? claim.eq('proposed_at', f.proposed_at) : claim.is('proposed_at', null);
+  const { data: won, error } = await claim.select(FLOW_COLS);
+  if (error) return no('save', 'The times could not be booked: ' + error.message + '. Try again.', 500);
+  const flow = (won as Row[] | null)?.[0];
+  if (!flow) {
+    const { data: again } = await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', f.id).maybeSingle();
+    if (again && again.call_at && sameInstant(again.call_at, callAt) && sameInstant(again.one_on_one_at, oneAt)) return booked(again);
+    return refuse('changed');
+  }
+  const who = await nameFor(by);
+  return await afterBooking(f, c, m, flow, callAt, oneAt, by, {
+    tag: 'onboard-booked-' + f.id, title: who + ' booked the times for ' + c.name,
+    said: who + ' booked the times for ' + c.name + ' (' + (c.role || 'new hire') + '): the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '.',
+  });
+}
+
+/* set_ask_availability {flow_id, on}: the card's switch, "Availability: ask the hire" (on, the default) or "already communicated" (off: a no shows "the manager
+   will be in touch", and HR or the manager enters the hire's times on the card) */
+async function setAskAvailability(b: Row, by: string): Promise<Response> {
+  if (typeof b.on !== 'boolean') return no('bad_value', 'Say whether to ask the new hire for their availability: on or off.', 400);
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select('id, status, ask_availability').eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  if ((f.ask_availability !== false) === b.on) return json({ ok: true, ask_availability: b.on, repeated: true });
+  const { error } = await svc.from('hub_onboard_flows').update({ ask_availability: b.on, updated_at: new Date().toISOString() }).eq('id', f.id);
+  if (error) return no('save', 'The switch could not be saved: ' + error.message + '. Try again.', 500);
+  await log('onboard_flow', f.id, 'ask_availability', f.ask_availability !== false ? 'ask the hire' : 'already communicated', b.on ? 'ask the hire' : 'already communicated', by);
+  return json({ ok: true, ask_availability: b.on });
+}
+
+/* grid_for {flow_id, who: 'hire', slots}: HR or the manager enters the hire's known times on their behalf ("Enter their availability"). Each slot a cell start
+   (onboard_grid_cell_min) within onboard_grid_days; past cells are dropped. The hire's own 10-hour minimum is theirs, not HR's: it does not apply here. */
+async function gridFor(b: Row, by: string): Promise<Response> {
+  if (b.who !== 'hire') return no('bad_who', 'Only the new hire\'s times can be entered here.', 400);
+  if (!Array.isArray(b.slots) || b.slots.length > 2000) return no('bad_slots', 'Mark the times on the grid, then save them.', 400);
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', 'This card is closed, so no times can be entered.');
+  if (f.call_at) return no('already_booked', 'The onboarding call is booked, so the new hire\'s times are no longer needed.');
+  const cell = await cfgNum('onboard_grid_cell_min', 30), days = await cfgNum('onboard_grid_days', 14), now = Date.now();
+  const picked = new Set<string>();
+  for (const s of b.slots) {
+    const ms = zoned(s) ? Date.parse(String(s)) : NaN;
+    if (Number.isNaN(ms) || ms % (cell * 60000) !== 0 || ms > now + (days + 1) * 86400000) return no('bad_slots', 'Some of those times are not on the grid. Reload the card and mark them again.', 400);
+    if (ms <= now) continue;   // a cell that has started: not an error
+    picked.add(new Date(ms).toISOString().replace('.000Z', 'Z'));   // written as onboard-link writes the hire's own
+  }
+  const list = Array.from(picked).sort();
+  const { error } = await svc.from('hub_onboard_grids').upsert({ flow_id: f.id, who: 'hire', slots: list, updated_at: new Date().toISOString() }, { onConflict: 'flow_id,who' });
+  if (error) return no('save', 'The times could not be saved: ' + error.message + '. Try again.', 500);
+  await log('onboard_flow', f.id, 'hire_grid', null, list.length + ' times entered for the new hire', by);
+  return json({ ok: true, saved: list.length, slots: list });
+}
+
+/* the one-off dates as the database checks them (wa275_availability_ok): [{date, free: [["HH:MM","HH:MM"]]}], real dates once each, 5-minute marks, each end
+   after its start, at most 12 blocks a day and 120 dates. null: not valid. */
+function cleanExcept(v: unknown): Array<{ date: string; free: Array<[string, string]> }> | null {
+  if (v == null) return [];
+  if (!Array.isArray(v) || v.length > 120) return null;
+  const HM = /^([01]\d|2[0-3]):([0-5]\d)$/, seen = new Set<string>(), out: Array<{ date: string; free: Array<[string, string]> }> = [];
+  for (const e of v) {
+    if (!e || typeof e !== 'object' || Array.isArray(e) || Object.keys(e).some((k) => k !== 'date' && k !== 'free')) return null;
+    const d = String((e as Row).date || '');
+    const [y, mo, da] = d.split('-').map(Number), t = new Date(Date.UTC(y, mo - 1, da));
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || t.getUTCFullYear() !== y || t.getUTCMonth() !== mo - 1 || t.getUTCDate() !== da || seen.has(d)) return null;
+    const free = (e as Row).free;
+    if (!Array.isArray(free) || free.length > 12) return null;
+    const blocks: Array<[string, string]> = [];
+    for (const blk of free) {
+      if (!Array.isArray(blk) || blk.length !== 2 || typeof blk[0] !== 'string' || typeof blk[1] !== 'string') return null;
+      const a = HM.exec(blk[0]), z = HM.exec(blk[1]);
+      if (!a || !z || Number(a[2]) % 5 || Number(z[2]) % 5 || Number(a[1]) * 60 + Number(a[2]) >= Number(z[1]) * 60 + Number(z[2])) return null;
+      blocks.push([blk[0], blk[1]]);
+    }
+    seen.add(d);
+    out.push({ date: d, free: blocks.sort((x, w) => (x[0] < w[0] ? -1 : 1)) });
+  }
+  return out.sort((x, w) => (x.date < w.date ? -1 : 1));
+}
+/* availability_for {member_id, except, tz?}: HR or an admin sets a manager's one-off dates when they already know them ("Set <manager>'s exceptions"). The
+   usual week is the person's own, on the Hub's Home page (wave276), so a weekly key is refused. Answers with the whole of it, read again. */
+async function availabilityFor(b: Row, by: string): Promise<Response> {
+  const id = Number(b.member_id);
+  const m = Number.isInteger(id) ? await getMember(id) : null;
+  if (!m) return no('not_found', 'That person is not on the roster. Reload the page.', 404);
+  if ('weekly' in b || 'availability' in b) return no('weekly_moved', String(m.name || 'This person') + ' sets their usual week on the Hub\'s Home page. Here you can only add or remove one-off dates.', 400);
+  if (b.tz != null && b.tz !== TZ) return no('bad_availability', 'The times are in Toronto time (America/Toronto).', 400);
+  const except = cleanExcept(b.except);
+  if (!except) return no('bad_availability', 'Some of those dates do not work: use real dates, each once, and times on 5-minute marks from 00:00 to 23:55, each end after its start.', 400);
+  const { data, error } = await svc.from('team_members').update({ availability: { except, tz: TZ }, availability_at: new Date().toISOString() }).eq('id', id).select('id');
+  if (error || !(data as unknown[] | null)?.length) return no('save', 'The dates could not be saved' + (error ? ': ' + error.message : '') + '. Try again.', 500);
+  await log('team_member', id, 'availability', null, except.length + ' one-off date' + (except.length === 1 ? '' : 's'), by);
+  try { return json({ ok: true, ...(await availabilityOf(id)) }); } catch (e) { return json({ ok: true, warnings: [errText(e)] }); }
+}
+
+/* set_welcome {flow_id, subject, text}: HR (or the manager) edits the welcome email before the times are booked, on the card. The same rule as Start's
+   preview: kept as typed, brackets and all, and only the part that differs from the Hub's own; welcome_edited says so. Refused once it has gone. */
+async function setWelcome(b: Row, by: string): Promise<Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', 'This card is closed, so the welcome email is not going out.');
+  if (f.welcome_sent_at) return no('already_sent', 'The welcome email has already gone, so it cannot be changed.');
+  if (!['offered', ...BEFORE_START].includes(f.status)) return no('too_late', 'The times are booked, so the welcome email is going out now and cannot be changed here.');
+  if (typeof b.subject !== 'string' || typeof b.text !== 'string' || b.subject.length > 300 || b.text.length > 20000) return no('bad_welcome', 'Give the subject (up to 300 characters) and the text (up to 20,000).', 400);
+  const own = welcomeTemplate(c, await welcomeFacts(f, c, by, true));
+  const mine = (v: string, base: string) => (v.trim() && v !== base ? v : null);
+  const patch = { welcome_subject: mine(b.subject, own.subject), welcome_text: mine(b.text, own.text), welcome_edited: false, updated_at: new Date().toISOString() };
+  patch.welcome_edited = !!(patch.welcome_subject || patch.welcome_text);
+  const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).is('welcome_sent_at', null).select('id');
+  if (error) return no('save', 'The welcome email could not be saved: ' + error.message + '. Try again.', 500);
+  if (!(won as unknown[] | null)?.length) return no('already_sent', 'The welcome email has just gone, so it cannot be changed.');
+  await log('onboard_flow', f.id, 'welcome', f.welcome_edited ? 'edited' : 'the Hub\'s own', patch.welcome_edited ? 'edited' : 'the Hub\'s own', by);
+  return json({ ok: true, edited: patch.welcome_edited, ...(await welcomeFor({ ...f, ...patch }, c, by)) });
+}
+
 /* ---------- remind: the hourly job ---------- */
 const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id, proposed_at, hire_answer, setup_ticks';   // wave275: the last three for the propose path
 const LIVE_FLOW = ['waiting', 'ready', 'running', 'started'];       // a flow that backed out is left alone
@@ -2367,7 +2597,17 @@ Deno.serve(async (req: Request) => {
       if (hr.data !== true && admin.data !== true && (await asUser.rpc('wa275_manager_of', { p_flow: Number(b.flow_id) })).data !== true) return no('not_allowed', 'Only HR, admins and this new hire\'s manager can propose times.', 403);
       return await propose(b, by, false);
     }
-    if (hr.data !== true && admin.data !== true) return no('not_allowed', 'Only HR and admins can do this.', 403);
+    /* wave275 Task 6: a hire's own manager (wa275_manager_of, as the caller) acts on that hire's card with the card's actions; everything else is HR's */
+    if (hr.data !== true && admin.data !== true) {
+      if (!CARD_BY_MANAGER.includes(String(b.action))) return no('not_allowed', 'Only HR and admins can do this.', 403);
+      if ((await asUser.rpc('wa275_manager_of', { p_flow: Number(b.flow_id) })).data !== true) return no('not_allowed', 'Only HR, admins and this new hire\'s manager can do this.', 403);
+    }
+    if (b.action === 'times') return await timesView(b);
+    if (b.action === 'book') return await bookFromCard(b, by);
+    if (b.action === 'set_ask_availability') return await setAskAvailability(b, by);
+    if (b.action === 'grid_for') return await gridFor(b, by);
+    if (b.action === 'set_welcome') return await setWelcome(b, by);
+    if (b.action === 'availability_for') return await availabilityFor(b, by);   // HR and admins only (not a card action of the manager's)
     if (b.action === 'preview') return await preview(b, by);
     if (b.action === 'ask_manager') return await askManagerNow(b, by, false);   // wave275 Task 5: HR sends the manager their link again from the card
     if (b.action === 'set_manager') return await setManager(b);
@@ -2384,7 +2624,7 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'backed_out') return await backedOut(b, by, asUser);
     if (b.action === 'remind') return no('not_allowed', 'remind is the Hub\'s own hourly job.', 403);
     if (b.action === 'hire_times') return no('not_allowed', 'hire_times is the Hub\'s own step: it runs when times are proposed or the offer is accepted.', 403);
-    if (b.action === 'accept_setup' || b.action === 'book') return no('not_allowed', b.action + ' is the Hub\'s own step: it runs from the new hire\'s link.', 403);
+    if (b.action === 'accept_setup') return no('not_allowed', b.action + ' is the Hub\'s own step: it runs from the new hire\'s link.', 403);
     return no('unknown_action', 'The Hub does not know that action. Reload the page.', 400);
   } catch (e) {
     return no('failed', errText(e), 500);

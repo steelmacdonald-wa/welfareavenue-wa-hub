@@ -298,6 +298,19 @@ begin
   assert row_k ->> 'role' = 'Test Role Alpha' and row_k ->> 'name' = 'Test Person Alpha', 'the card carries the hire';
   assert jsonb_typeof(row_k -> 'manager_availability_at') = 'null', 'no availability saved: manager_availability_at is null';
   assert (row_k -> 'hours_confirmed_at') <> 'null'::jsonb, 'the card shows when the hours were confirmed';
+  -- Task 6: what the card needs that a manager cannot read from the tables: the steps, the path, the offer date and the flow's own fields
+  assert row_k -> 'steps' = '[]'::jsonb and (row_k -> 'propose_path') = 'true'::jsonb, 'no steps yet; a flow with a proposal is on the propose path';
+  foreach k in array array['offer_sent_at', 'created_at', 'member_id', 'wa_email', 'canva_link', 'roster_created', 'slack_channel_id', 'onboarding_id', 'group_session', 'started_at', 'updated_at'] loop
+    assert row_k ? k, 'the card has ' || k;
+  end loop;
+  assert (row_k ->> 'offer_sent_at') is not null, 'the card says when the offer went';
+  insert into public.hub_onboard_steps (flow_id, step, status, detail, practice) values (i.alpha, 'roster', 'done', 'Test detail: made the roster profile.', false);
+  select e into row_k from jsonb_array_elements(public.wa275_my_cards()) e where (e ->> 'flow_id')::bigint = i.alpha;
+  assert jsonb_array_length(row_k -> 'steps') = 1 and row_k -> 'steps' -> 0 ->> 'step' = 'roster' and row_k -> 'steps' -> 0 ->> 'status' = 'done'
+     and row_k -> 'steps' -> 0 ->> 'detail' = 'Test detail: made the roster profile.' and row_k -> 'steps' -> 0 ? 'at', 'a step shows on the card with its result and reason';
+  delete from public.hub_onboard_steps where flow_id = i.alpha;
+  select e into row_k from jsonb_array_elements(cards) e where (e ->> 'flow_id')::bigint = i.gamma;
+  assert (row_k -> 'propose_path') = 'true'::jsonb, 'an offered flow is on the propose path';
 end $$;
 -- the second manager sees their own, the member with no hires sees none, nobody signed in sees none
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w275.mgr2@example.invalid"}', true);

@@ -133,6 +133,7 @@
       + '<div class="o271ln">Onboarding call: ' + E(f.call_at ? whenText(f.call_at) : 'not set') + '</div>'
       + '<div class="o271ln">1-on-1: ' + E(f.one_on_one_at ? whenText(f.one_on_one_at) : 'not booked yet') + '</div>'
       + '<div class="o271ln">Manager: ' + E(nameOf(f.manager_member_id)) + (f.wa_email ? ' &middot; Address: ' + E(f.wa_email) : '') + '</div>'
+      + R.startedMore(f)   /* wave275: the setup rundown ticks */
       + noteHtml(id)
       + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
       + '<div class="o271btns">'
@@ -141,9 +142,11 @@
       + (f.one_on_one_at ? '' : '<button type="button" class="o271b" data-o271a="act" data-kind="book" data-f="' + E(id) + '"' + (acting === 'book' ? ' disabled' : '') + '>Book the 1-on-1</button>')
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (acting === 'back' ? ' disabled' : '') + '>They backed out</button>'
       + '</div>'
-      + (A ? panelHtml(f, A) : '')
+      + (A ? R.panelHtml(f, A) : '')
       + '</div>';
   }
+  R.startedCard = startedCard; R.panelHtml = panelHtml;
+  R.preview = function (id) { return run('preview', { flow_id: Number(id) }); };   /* the picker's marks and meetings; wave275 reads them another way for a manager */
   function flowOf(id) {
     var f = S.started.filter(function (x) { return String(x.id) === String(id); })[0]; if (f) return f;
     var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
@@ -159,7 +162,7 @@
     if (kind !== 'book' && kind !== 'time') return;
     /* the marks and meetings for the picker. Typing a time works without them */
     try {
-      var pv = await run('preview', { flow_id: Number(id) });
+      var pv = await R.preview(Number(id));
       if (S.act[id] !== A) return;
       A.g = newGrid('a' + id, pv, kind === 'book' ? 'one' : 'call');
       paint();
@@ -249,7 +252,8 @@
       + noteHtml(f.id)
       + '</div>';
   }
-  function paint() {
+  function paint() { return R.paint(); }
+  function paintHr() {
     var el = document.getElementById('o271'); if (!el) return;
     var panel = document.getElementById('hrcentre');
     if (S.denied) {
@@ -262,9 +266,9 @@
     if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
     if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
     else if (!S.ready.length && !S.started.length && !S.offers.length && !S.backed.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
-    html += S.ready.map(readyCard).join('');
+    html += S.ready.map(function (x) { return R.readyCard(x); }).join('');
     if (S.offers.length) html += '<h3 class="o271h">Offers waiting for an answer</h3>' + S.offers.map(offerCard).join('');
-    if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(startedCard).join('');
+    if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(function (f) { return R.startedCard(f); }).join('');
     if (S.backed.length) html += '<h3 class="o271h">Backed out</h3>' + S.backed.map(backedHtml).join('');
     /* each grid keeps its scroll through a repaint */
     var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
@@ -279,6 +283,7 @@
     }
     if (panel && panel.getAttribute('data-w197') === 'onboarding') el.classList.add('w197on');
   }
+  R.paint = paintHr;
   function onbSection() { var a = document.querySelector('#w46body > .w46sec [data-w46assign]'); return a ? a.closest('.w46sec') : null; }
   function onPage() { var p = document.getElementById('hrcentre'); return (p && p.getAttribute('data-w197') === 'onboarding') || /^#hrcentre\/onboarding(\?|$)/.test(String(location.hash || '')); }
   function install() {
@@ -394,5 +399,9 @@
   window.addEventListener('hashchange', function () { if (onPage()) setTimeout(arrive, 120); });
 
   /* ---------- test hook ---------- */
-  window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; } };
+  window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; },
+    /* wave275 Task 6: what wave275's card reuses (the same words, grid, steps and calls as this wave's) */
+    E: E, run: run, whenText: whenText, dayText: dayText, dayLong: dayLong, isoOf: isoOf, pad2: pad2, newGrid: newGrid, gridHtml: gridHtml, refreshGrid: refreshGrid,
+    noteHtml: noteHtml, warnBox: warnBox, nameOf: nameOf, flowOf: flowOf, stepHtml: stepHtml, memberOptions: memberOptions, STEPS: STEPS, STALE_MS: STALE_MS, KEEP_DAYS: KEEP_DAYS,
+    isAdmin: isAdmin, surelyHr: surelyHr, hrPage: hrPage, readPeople: readPeople, readCfg: readCfg, readPw: readPw, readWelcomes: readWelcomes, pwHtml: pwHtml, paint: paint };
 })();

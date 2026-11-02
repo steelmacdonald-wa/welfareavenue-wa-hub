@@ -252,6 +252,22 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
     'manager_availability_at', w.week -> 'availability_at',
     'manager_no_week', coalesce(w.week -> 'no_week', 'true'::jsonb),
     'manager_week_stale', coalesce(w.week -> 'stale', 'true'::jsonb))
+  || jsonb_build_object(   -- Task 6: what the card shows for a manager, who cannot read the flow and step tables themselves
+    'offer_sent_at', c.offer_sent_at,
+    'created_at', f.created_at,
+    'propose_path', (f.status = 'offered' or f.proposed_at is not null
+                     or coalesce(f.created_at >= (select case when trim(k.value) ~ '^\d{4}-\d{2}-\d{2}' then trim(k.value)::timestamptz end from public.app_config k where k.key = 'onboard_v2_since'), false)),
+    'member_id', c.member_id,
+    'wa_email', f.wa_email,
+    'canva_link', f.canva_link,
+    'roster_created', f.roster_created,
+    'slack_channel_id', f.slack_channel_id,
+    'onboarding_id', f.onboarding_id,
+    'group_session', f.group_session,
+    'started_at', f.started_at,
+    'updated_at', f.updated_at,
+    'steps', coalesce((select jsonb_agg(jsonb_build_object('step', s.step, 'status', s.status, 'detail', s.detail, 'practice', s.practice, 'at', s.at) order by s.step)
+                         from public.hub_onboard_steps s where s.flow_id = f.id), '[]'::jsonb))
   from public.hub_onboard_flows f
   left join lateral (select public.wa275_week_of(f.manager_member_id) as week) w on f.manager_member_id is not null
   join public.hub_candidates c on c.id = f.candidate_id

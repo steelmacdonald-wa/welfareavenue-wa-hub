@@ -40,9 +40,10 @@
         if (t == null) { h += '<td></td>'; return; }
         var cl = ['o271c'], bits = [whenText(t)];
         if (g.hire[t]) { cl.push('h'); bits.push('the new hire marked this'); }
-        if (g.mode === 'one' && !g.hideManager && g.manager[t]) { cl.push('m'); bits.push('the manager marked this'); }
+        if ((g.mode === 'one' || g.both) && !g.hideManager && g.manager[t]) { cl.push('m'); bits.push(g.words ? g.words.mTip : 'the manager marked this'); }   /* wave275: both, the manager's hours under both picks */
         var busy = clashes(g, t, g.mode);
         if (busy.length) { cl.push('busy'); bits.push('in a meeting: ' + busy.map(function (e) { return e.summary; }).join(', ')); }
+        var mk = g.mark && g.mark(t, g.mode); if (mk && !busy.length) { cl.push('busy'); bits.push(mk); }   /* wave275: too soon, or another new hire's time */
         var label = '';
         if (t === call) { cl.push('scall'); label = 'Call'; } else if (t === one) { cl.push('sone'); label = '1-1'; }
         h += '<td><button type="button" class="' + cl.join(' ') + '" data-o271cell="' + E(new Date(t).toISOString()) + '" data-g="' + E(g.key) + '" title="' + E(bits.join('; ')) + '" aria-label="' + E(bits.join('; ')) + '">' + label + '</button></td>';
@@ -52,9 +53,10 @@
     return h + '</tbody></table>';
   }
   function legendHtml(g) {
-    return '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>New hire marked</span>'
-      + (g.mode === 'one' && !g.hideManager ? '<span><i style="background:rgba(111,100,171,.34)"></i>Manager marked</span><span><i style="background:' + GREEN + '"></i>Both</span>' : '')
-      + '<span><i style="background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px)"></i>In a meeting</span><span>Toronto time</span></div>';
+    var w = g.words || { h: 'New hire marked', m: 'Manager marked', busy: 'In a meeting' };   /* wave275 names its own marks */
+    return '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>' + E(w.h) + '</span>'
+      + ((g.mode === 'one' || g.both) && !g.hideManager ? '<span><i style="background:rgba(111,100,171,.34)"></i>' + E(w.m) + '</span><span><i style="background:' + GREEN + '"></i>Both</span>' : '')
+      + '<span><i style="background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px)"></i>' + E(w.busy) + '</span><span>Toronto time</span></div>';
   }
   function gridHtml(g) {
     if (!g.days.length) return '';
