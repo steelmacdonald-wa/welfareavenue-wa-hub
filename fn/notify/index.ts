@@ -1,3 +1,4 @@
+// v19 (wave277, 02/11/26): connection_expiring relay kind from social-connect (trigger secret): a platform token lapses within 7 days; to the publishers named in the body. The RELAY_URL map matches the live v29 source.
 // v18 (wave276, 02/11/26): two relay kinds a team's manager sends from the Agenda tab (staff JWT, wa_avail_manager_of or 403): meet_propose
 // (a new meeting time, to the rest of the active team) and meet_avail_ask (to members with no week saved since the latest ask). Recipients are found here, never taken from the body.
 // v17 (wave274, 02/11/26): a request with no owner goes to the team's people (hub_settings.team_inbox.people), before the team's leaders.
@@ -107,9 +108,9 @@ async function hubRelay(kind: string, to: string[], title: string, body: string,
 }
 /* v15 relay kinds: the default title (the kinds registry's) and link of each */
 const RELAY_TITLE: Record<string, string> = { timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty',
-  meet_propose: 'A leader proposed a new meeting time for my team', meet_avail_ask: 'My team needs my availability' };
+  meet_propose: 'A leader proposed a new meeting time for my team', meet_avail_ask: 'My team needs my availability', connection_expiring: 'A social connection is about to expire' };
 const RELAY_URL: Record<string, string> = { timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding',
-  meet_avail_ask: '#mypage' };   /* meet_propose builds its own link to the team's Agenda tab */
+  meet_avail_ask: '#mypage', connection_expiring: '#studio/connections' };   /* meet_propose builds its own link to the team's Agenda tab */
 /* v15 (shared since v18): a relayed message to each person, the Slack DM through their switch and the log, then the Hub notification through hub-push */
 async function relaySend(event: string, toList: string[], text: string, title: string, plainBody: string, url: string, tag?: string): Promise<{ outcome: Record<string, string>; hub: string }> {
   const to = Array.from(new Set(toList));
@@ -180,7 +181,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'meet_propose', 'meet_avail_ask'];   /* v15: the relayed kinds reach the Hub too */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'meet_propose', 'meet_avail_ask', 'connection_expiring'];   /* v15: the relayed kinds reach the Hub too */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -665,8 +666,10 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     return { event, outcome: out.outcome, hub: out.hub, sent: to.length };
   }
 
-  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind') {
-    const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 12);
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind' || event === 'connection_expiring') {
+    /* v19: connection_expiring goes to welfareavenue.com staff only (or Steel's own address, as staffEmail allows) */
+    const staffOnly = (x: string) => event !== 'connection_expiring' || x.endsWith('@welfareavenue.com') || x === 'steelmacdonald@gmail.com';
+    const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x) && staffOnly(x)).slice(0, 12);
     const text = String(body.text || '').slice(0, 3000);
     if (!to.length || !text) return { error: 'to and text required' };
     const title = String(body.title || RELAY_TITLE[event]);
