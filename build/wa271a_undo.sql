@@ -107,3 +107,4 @@ alter table public.hub_candidates drop column if exists offer_start;
 delete from public.app_config where key in ('onboard_grid_days', 'onboard_grid_start', 'onboard_grid_end', 'onboard_grid_cell_min', 'onboard_call_min', 'onboard_one_on_one_min',
   'onboard_remind_hours', 'onboard_password_days', 'onboard_auto_google', 'onboard_auto_slack', 'onboard_slack_join_link', 'onboard_google_video');
 update public.hr_setup_template set due_day = 3 where phase = 'The onboarding call' and due_day = 0;
+delete from public.app_config where key = 'onboard_grid_min_hours';   -- wave271d (build/wa271d_min_hours.sql)

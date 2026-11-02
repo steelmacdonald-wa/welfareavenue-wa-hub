@@ -15,7 +15,7 @@
      asks the onboard-link function who the token is for (first name and role only) and what to show. Nothing is saved on open:
      ?a=accept or ?a=decline (the email buttons) only highlight that button (Accept also takes the focus; Decline never does, so a
      stray Enter cannot decline), and the person still presses it, so a mail scanner that opens the link answers nothing. If the
-     server cannot be reached the page says so and offers to try again; it only says a link does not work when the function says so. English and French (?l=fr, else the function's lang). Grid times come from the instants
+     server cannot be reached the page says so and offers to try again; it only says a link does not work when the function says so. The new hire's grid needs grid.minHours hours (the function's onboard_grid_min_hours, 10 by default) before Save is enabled: the counter reads "N of M hours marked" and one plain sentence says why Save waits; the manager's grid has no minimum. English and French (?l=fr, else the function's lang). Grid times come from the instants
      the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
@@ -70,6 +70,7 @@
   .bar .count { flex: 1 1 160px; font-weight: 500; font-size: 16px; }
   .bar .btn { width: auto; flex: 0 0 auto; margin: 0; padding: 14px 28px; }
   .bar .quiet { width: auto; flex: 0 0 auto; }
+  .need { flex: 1 1 100%; margin: 0; font-size: 15px; color: var(--muted); }
   .saved { background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin: 10px 0 0; flex: 1 1 100%; }
   @media (max-width: 759px) {
     .card { margin-top: 20px; }
@@ -120,6 +121,7 @@
       late: 'Your answer came in after the reply-by date. It is on file.',
       how: 'All times are Toronto time (Eastern). Click and drag, or tap, to mark the times that work. Mark a time again to clear it. You can come back to this link and change your times until the meetings are booked.',
       range: '{a} to {b}', none: 'No times marked yet.', one: '1 time marked.', many: '{n} times marked.',
+      hours: '{h} of {m} hours marked', hours1: '{h} of {m} hour marked', need: 'Please mark at least {m} hours in total, so your manager has a few times to choose from.', need1: 'Please mark at least {m} hour in total, so your manager has a few times to choose from.',
       save: 'Save my times', clear: 'Clear all',
       saved: 'Saved. We have {n} from you. You can change them any time until the meetings are booked.', savedNone: 'Saved. You have no times marked.', savedN1: '1 time', savedN: '{n} times', dropped: '{n} of your times had already passed and were left out.',
       nothing: 'There are no open times right now. Please contact HR.',
@@ -144,6 +146,7 @@
       late: 'Votre réponse est arrivée après la date limite. Elle est bien enregistrée.',
       how: 'Toutes les heures sont à l’heure de Toronto (Est). Cliquez et glissez, ou touchez, pour indiquer les plages qui conviennent. Touchez une plage de nouveau pour l’effacer. Vous pouvez revenir à ce lien et modifier vos plages tant que les rencontres ne sont pas fixées.',
       range: '{a} à {b}', none: 'Aucune plage choisie.', one: '1 plage choisie.', many: '{n} plages choisies.',
+      hours: '{h} heures sur {m} indiquées', hours1: '{h} heure sur {m} indiquées', need: 'Veuillez indiquer au moins {m} heures en tout, pour que votre gestionnaire ait quelques plages au choix.', need1: 'Veuillez indiquer au moins {m} heure en tout, pour que votre gestionnaire ait quelques plages au choix.',
       save: 'Enregistrer mes plages', clear: 'Tout effacer',
       saved: 'Enregistré. Nous avons {n} de votre part. Vous pouvez les modifier jusqu’à ce que les rencontres soient fixées.', savedNone: 'Enregistré. Aucune plage n’est choisie.', savedN1: '1 plage', savedN: '{n} plages', dropped: '{n} de vos plages étaient déjà passées et ont été retirées.',
       nothing: 'Aucune plage n’est ouverte pour le moment. Veuillez communiquer avec les RH.',
@@ -159,7 +162,7 @@
     o = o || {};
     return s.replace('{first}', esc(o.first || '')).replace('{role}', esc(lang === 'fr' ? (ROLE_FR[o.role] || o.role || '') : (o.role || '')))
       .replace('{hire}', esc(o.hire || '')).replace('{n}', esc(o.n)).replace('{choice}', esc(o.choice || '')).replace('{d}', esc(o.d || ''))
-      .replace('{a}', esc(o.a || '')).replace('{b}', esc(o.b || ''));
+      .replace('{a}', esc(o.a || '')).replace('{b}', esc(o.b || '')).replace('{h}', esc(o.h)).replace('{m}', esc(o.m));
   }
 
   /* ---------- Toronto time, always through Intl ---------- */
@@ -179,7 +182,7 @@
   function dayLong(iso) { return fmt({ weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(iso)); }
 
   /* ---------- state ---------- */
-  var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null };
+  var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null, minHours: 0, cellMin: 30 };
   var card = document.getElementById('card');
   var langBox = document.getElementById('lang');
 
@@ -263,9 +266,17 @@
     var cellIso = days.map(function (d) { return keys.map(function (k) { return byKey[d.date + '|' + k] || ''; }); });
     return { byKey: byKey, sample: sample, isoDay: isoDay, keys: keys, days: days, cellIso: cellIso };
   }
+  /* the hire's minimum: hours marked = cells x the cell length; the manager's grid has none (S.minHours is 0 for it) */
+  function hoursMarked() { return Math.round(S.sel.size * S.cellMin / 6) / 10; }
+  function below() { return S.minHours > 0 && S.sel.size * S.cellMin < S.minHours * 60; }
+  function hoursText(x) { return new Intl.NumberFormat(lang === 'fr' ? 'fr-CA' : 'en-CA', { maximumFractionDigits: 1 }).format(x); }
   function count() {
-    var n = S.sel.size;
-    return n === 0 ? t().none : n === 1 ? t().one : fill(t().many, { n: n });
+    var n = S.sel.size, tx = t();
+    if (S.minHours > 0) { var h = hoursMarked(); return fill(lang === 'fr' ? (h < 2 ? tx.hours1 : tx.hours) : (S.minHours === 1 ? tx.hours1 : tx.hours), { h: hoursText(h), m: S.minHours }); }
+    return n === 0 ? tx.none : n === 1 ? tx.one : fill(tx.many, { n: n });
+  }
+  function syncSave() {   // Save waits while busy, and for the hire while the marked hours are under the minimum
+    var b = document.getElementById('save'); if (b) b.disabled = S.busy || below();
   }
   function viewGrid() {
     setTitle('titleGrid');
@@ -293,7 +304,8 @@
       h += '</div></div>';
     });
     h += '</div><div class="bar"><span class="count" id="count" aria-live="polite"></span><button class="quiet" id="clear" type="button">' + tx.clear + '</button>' +
-      '<button class="btn" id="save" data-act="save" type="button">' + tx.save + '</button>' +
+      '<button class="btn" id="save" data-act="save" type="button"' + (S.minHours > 0 ? ' aria-describedby="minmsg"' : '') + '>' + tx.save + '</button>' +
+      (S.minHours > 0 ? '<p id="minmsg" class="need hide">' + fill(S.minHours === 1 ? tx.need1 : tx.need, { m: S.minHours }) + '</p>' : '') +
       '<p id="saved" class="saved hide" role="status"></p><p id="err" class="err hide" role="alert" style="flex:1 1 100%"></p></div>';
     card.innerHTML = h;
     wireGrid();
@@ -314,6 +326,8 @@
     });
     Array.prototype.forEach.call(card.querySelectorAll('.day'), function (d, i) { d.classList.toggle('on', i === S.active); });
     document.getElementById('count').textContent = count();
+    var need = document.getElementById('minmsg'); if (need) need.className = below() ? 'need' : 'need hide';
+    syncSave();
     var sv = document.getElementById('saved');
     if (S.saved) {
       var n = S.saved.n, tx = t();
@@ -378,11 +392,11 @@
   function showErr(msg) { var e = document.getElementById('err'); if (e) { e.textContent = msg; e.className = 'err'; } }
 
   function saveGrid() {
-    if (S.busy) return;
+    if (S.busy || below()) return;
     S.busy = true;
-    var b = document.getElementById('save'); b.disabled = true;
+    document.getElementById('save').disabled = true;
     post({ t: token, a: 'grid', slots: Array.from(S.sel).sort() }).then(function (r) {
-      S.busy = false; b.disabled = false;
+      S.busy = false; syncSave();
       var j = r.j;
       if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
       if (j && j.ok) {
@@ -392,7 +406,7 @@
         return;
       }
       showErr(serverMsg(j) || t().oops);
-    }).catch(function () { S.busy = false; b.disabled = false; showErr(t().oops); });
+    }).catch(function () { S.busy = false; syncSave(); showErr(t().oops); });
   }
 
   /* Accept or Decline: only a press gets here. The first press locks both buttons, so a double click or a second tab answers once. */
@@ -428,6 +442,9 @@
     else S.view = 'ask';
     if (S.view === 'grid') {
       S.model = buildModel(j.grid || { slots: [], days: [] });
+      var gm = Number((j.grid || {}).minHours), gc = Number((j.grid || {}).cellMin);
+      S.minHours = j.kind === 'manager' || !(gm > 0) ? 0 : gm;   // the manager's grid has no minimum
+      S.cellMin = gc > 0 ? gc : 30;
       S.sel = new Set((j.slotsSaved || []).filter(function (s) { return S.model.isoDay[s]; }));
       S.active = 0; S.saved = null;
     }

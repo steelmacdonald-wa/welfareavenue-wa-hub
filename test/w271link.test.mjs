@@ -22,7 +22,10 @@ function standInForTrigger(rig) {
     if (o.accepted_on == null && n.accepted_on != null) db.insert('hub_onboard_flows', { candidate_id: n.id, practice: !!n.practice, status: 'waiting', manager_member_id: null, call_at: null, one_on_one_at: null });
   });
 }
-async function setup({ cand = {}, flows = [], config = {}, now = NOW, notify = true } = {}) {
+// wave271d: the hire's grid needs onboard_grid_min_hours (default 10) hours before it saves. The older tests are about the grid itself and save a few cells,
+// so setup lifts the rule (0) for them; the tests of the rule itself pass rule: true and meet the default, or set the key.
+async function setup({ cand = {}, flows = [], config = {}, now = NOW, notify = true, rule = false } = {}) {
+  if (!rule && !('onboard_grid_min_hours' in config)) config = { onboard_grid_min_hours: '0', ...config };
   const rig = await loadFn('onboard-link', { config, tables: { hub_candidates: [candidate(cand)], hub_onboard_flows: flows, hub_onboard_grids: [], team_members: team, change_log: [] } });
   standInForTrigger(rig);
   rig.setNow(now);
@@ -331,6 +334,90 @@ test('a valid grid POST replaces the set and can be repeated; the manager has th
   assert.deepEqual(rows().map((r) => r.who).sort(), ['hire', 'manager']);
   assert.deepEqual((await s.get(s.mgr)).body.slotsSaved, [slots[30]]);
   assert.deepEqual((await s.get(s.offer)).body.slotsSaved, [], 'each person sees only their own');
+});
+
+const EN10 = 'Please mark at least 10 hours in total, so your manager has a few times to choose from.';
+const FR10 = 'Veuillez indiquer au moins 10 heures en tout, pour que votre gestionnaire ait quelques plages au choix.';
+
+test('wave271d: the hire\'s grid needs 10 hours (20 cells) to save: 19 cells are refused in both languages, 20 are saved', async () => {
+  const s = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()] });
+  const g = (await s.get(s.offer)).body.grid;
+  assert.equal(g.minHours, 10, 'GET tells the page the minimum');
+  assert.equal(g.cellMin, 30);
+  const few = await s.post({ t: s.offer, a: 'grid', slots: g.slots.slice(0, 19) });
+  assert.equal(few.status, 400);
+  assert.equal(few.body.ok, false);
+  assert.equal(few.body.error, 'too_few_slots');
+  assert.equal(few.body.message.en, EN10);
+  assert.equal(few.body.message.fr, FR10);
+  for (const m of [EN10, FR10]) assert.doesNotMatch(m, /—|–|AI|IA/);
+  assert.equal(s.db.rows('hub_onboard_grids').length, 0, 'a refused save writes nothing');
+  const enough = await s.post({ t: s.offer, a: 'grid', slots: g.slots.slice(0, 20) });
+  assert.equal(enough.status, 200);
+  assert.deepEqual([enough.body.ok, enough.body.saved, enough.body.dropped], [true, 20, 0]);
+  assert.equal(s.db.rows('hub_onboard_grids')[0].slots.length, 20);
+  // repeats collapse before the count: 40 entries that are 19 different cells are still 19 cells
+  const dup = await s.post({ t: s.offer, a: 'grid', slots: [...g.slots.slice(20, 39), ...g.slots.slice(20, 39)] });
+  assert.equal(dup.body.error, 'too_few_slots');
+  assert.equal(s.db.rows('hub_onboard_grids')[0].slots.length, 20, 'a refused save leaves what was there');
+  // clearing the grid is a save of nothing, so it is refused too
+  assert.equal((await s.post({ t: s.offer, a: 'grid', slots: [] })).body.error, 'too_few_slots');
+});
+
+test('wave271d: the manager\'s grid has no minimum', async () => {
+  const s = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()] });
+  const { slots } = (await s.get(s.mgr)).body.grid;
+  const m = await s.post({ t: s.mgr, a: 'grid', slots: [slots[3], slots[9]] });
+  assert.equal(m.status, 200);
+  assert.deepEqual([m.body.ok, m.body.saved], [true, 2]);
+  assert.equal((await s.post({ t: s.mgr, a: 'grid', slots: [] })).body.saved, 0);
+  assert.deepEqual(s.db.rows('hub_onboard_grids').map((r) => r.who), ['manager']);
+});
+
+test('wave271d: onboard_grid_min_hours sets the minimum; 0 lifts it; nonsense falls back to 10; the cell length counts', async () => {
+  const lifted = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], config: { onboard_grid_min_hours: '0' } });
+  const lg = (await lifted.get(lifted.offer)).body.grid;
+  assert.equal(lg.minHours, 0);
+  assert.equal((await lifted.post({ t: lifted.offer, a: 'grid', slots: [lg.slots[0]] })).body.saved, 1, '0 means no minimum');
+  assert.equal((await lifted.post({ t: lifted.offer, a: 'grid', slots: [] })).body.saved, 0);
+
+  const four = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], config: { onboard_grid_min_hours: '4', onboard_grid_cell_min: '60' } });
+  const fg = (await four.get(four.offer)).body.grid;
+  assert.deepEqual([fg.minHours, fg.cellMin], [4, 60]);
+  const short = await four.post({ t: four.offer, a: 'grid', slots: fg.slots.slice(0, 3) });
+  assert.equal(short.body.error, 'too_few_slots');
+  assert.equal(short.body.message.en, 'Please mark at least 4 hours in total, so your manager has a few times to choose from.');
+  assert.equal(short.body.message.fr, 'Veuillez indiquer au moins 4 heures en tout, pour que votre gestionnaire ait quelques plages au choix.');
+  assert.equal((await four.post({ t: four.offer, a: 'grid', slots: fg.slots.slice(0, 4) })).body.saved, 4, 'four one-hour cells are four hours');
+
+  const one = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], config: { onboard_grid_min_hours: '1' } });
+  const og = (await one.get(one.offer)).body.grid;
+  const none = await one.post({ t: one.offer, a: 'grid', slots: [og.slots[0]] });
+  assert.equal(none.body.message.en, 'Please mark at least 1 hour in total, so your manager has a few times to choose from.');
+  assert.equal(none.body.message.fr, 'Veuillez indiquer au moins 1 heure en tout, pour que votre gestionnaire ait quelques plages au choix.');
+  assert.equal((await one.post({ t: one.offer, a: 'grid', slots: og.slots.slice(0, 2) })).body.saved, 2);
+
+  for (const bad of ['lots', '-1', '41', '2.5', '', ' ']) {
+    const b = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], config: { onboard_grid_min_hours: bad } });
+    assert.equal((await b.get(b.offer)).body.grid.minHours, 10, JSON.stringify(bad) + ' falls back to 10');
+  }
+  const top = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], config: { onboard_grid_min_hours: '40' } });
+  assert.equal((await top.get(top.offer)).body.grid.minHours, 40, '40 is the largest allowed');
+});
+
+test('wave271d: cells that have started since are dropped before the count', async () => {
+  const s = await setup({ rule: true, cand: { accepted_on: '2026-11-01' }, flows: [flow()], now: '2026-11-01T15:00:00Z' });   // 10:00 on 01/11/26
+  const g = (await s.get(s.offer)).body.grid;
+  const stale = '2026-11-01T13:00:00Z';   // 08:00 today: started
+  const refused = await s.post({ t: s.offer, a: 'grid', slots: [stale, ...g.slots.slice(0, 19)] });   // 20 entries, 19 still ahead
+  assert.equal(refused.status, 400);
+  assert.equal(refused.body.error, 'too_few_slots');
+  assert.equal(s.db.rows('hub_onboard_grids').length, 0);
+  const saved = await s.post({ t: s.offer, a: 'grid', slots: [stale, ...g.slots.slice(0, 20)] });
+  assert.deepEqual([saved.status, saved.body.saved, saved.body.dropped], [200, 20, 1]);
+  assert.equal(saved.body.slotsSaved.includes(stale), false);
+  // a bad slot is still bad_slots, before the count
+  assert.equal((await s.post({ t: s.offer, a: 'grid', slots: ['2026-11-01T15:40:00Z'] })).body.error, 'bad_slots');
 });
 
 test('the grid closes once both meetings are booked (the manager\'s once the 1-on-1 is), and before Accept it is refused', async () => {

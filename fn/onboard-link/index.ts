@@ -6,18 +6,20 @@
 //   mgr    id = the flow       the manager's availability grid for the 1-on-1
 //   pw     id = the flow       the one-time first-password page; it signs '<id>.<pw_nonce>' (Task 10 fills in the action)
 //   GET  ?t=<token>            {ok, kind: 'offer'|'manager'|'password', first, role, lang, answered, closed, late, booked, callBooked,
-//                              grid: {start, end, cellMin, days: [{date, open, close}], slots}, slotsSaved}      nothing is saved
+//                              grid: {start, end, cellMin, minHours, days: [{date, open, close}], slots}, slotsSaved}      nothing is saved
 //   POST {t, a: 'accept'|'decline'|'grid'|'password', slots?}
 //     accept   sets hub_candidates.accepted_on to today in Toronto; the database trigger wa271_cand_accepted makes the flow.
 //              It does not touch status: HR moves the card.
 //     decline  status declined, close_reason 'Declined by link', change_log. The stage-move trigger (wa210_stage_moved) tells the owner; a card with no owner
 //              tells the offer signer through notify (event applicant).
 //     grid     replaces the person's marked slots (hire for an offer link, manager for a mgr link) until the meetings are booked.
+//              The hire's grid needs onboard_grid_min_hours hours in all (default 10; 0 for none) so the manager has times to choose from:
+//              fewer is a 400 too_few_slots, counted after stale slots are dropped. The manager's grid has no minimum.
 //     A second answer changes nothing and shows the first ({repeated: true}); a closed card (even one accepted first) or a flow that backed out gives
 //     {closed: true} and saves nothing. Someone who declined by link still sees their answer.
 //   A read that fails is a 503 (unavailable), not a bad link: the page offers to try again.
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
-// Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell (app_config). The wall-clock
+// Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell, onboard_grid_min_hours the hire's minimum (app_config). The wall-clock
 // times are turned into instants with Intl for each day, so a clock change (01/11/26, 14/03/27) never shifts a cell by an hour.
 // A cell that has already started is not offered (the first day opens at the next cell; a day with none left drops out), GET shows only
 // saved slots still ahead, and a save silently drops any slot that has started since (stale, not an error; {dropped} counts them). A slot
@@ -56,6 +58,14 @@ const MSG: Record<string, { en: string; fr: string }> = {
   unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
 };
 const fail = (error: string, status: number) => json({ ok: false, error, message: MSG[error] }, status);
+/* built with the number, so the one message that carries a figure sits beside the static table */
+const tooFew = (hours: number) => json({
+  ok: false, error: 'too_few_slots',
+  message: {
+    en: 'Please mark at least ' + hours + (hours === 1 ? ' hour' : ' hours') + ' in total, so your manager has a few times to choose from.',
+    fr: 'Veuillez indiquer au moins ' + hours + (hours === 1 ? ' heure' : ' heures') + ' en tout, pour que votre gestionnaire ait quelques plages au choix.',
+  },
+}, 400);
 const closedReply = (booked: boolean) => json({ ok: true, closed: true, booked, message: MSG.closed });
 
 /* ---------- tokens ---------- */
@@ -110,22 +120,22 @@ const normal = (v: unknown): string | null => {
   return Number.isNaN(ms) ? null : stamp(ms);
 };
 
-type Grid = { start: number; end: number; cellMin: number; days: Array<{ date: string; open: string; close: string }>; slots: string[] };
-const GRID_DEFAULTS: Record<string, [number, number, number]> = { onboard_grid_days: [14, 1, 60], onboard_grid_start: [8, 0, 23], onboard_grid_end: [21, 1, 24], onboard_grid_cell_min: [30, 5, 240] };
+type Grid = { start: number; end: number; cellMin: number; minHours: number; days: Array<{ date: string; open: string; close: string }>; slots: string[] };
+const GRID_DEFAULTS: Record<string, [number, number, number]> = { onboard_grid_days: [14, 1, 60], onboard_grid_start: [8, 0, 23], onboard_grid_end: [21, 1, 24], onboard_grid_cell_min: [30, 5, 240], onboard_grid_min_hours: [10, 0, 40] };
 async function gridWindow(): Promise<Grid> {
   const { data, error } = await svc.from('app_config').select('key, value').in('key', Object.keys(GRID_DEFAULTS));
   if (error) throw new Error('grid settings: ' + error.message);   // the defaults may not be today's window: never guess
   const have = new Map(((data || []) as Array<{ key: string; value: string }>).map((r) => [r.key, r.value]));
   const num = (k: string) => {
     const [def, lo, hi] = GRID_DEFAULTS[k];
-    const n = Number(String(have.get(k) ?? '').trim());
-    return have.get(k) && Number.isInteger(n) && n >= lo && n <= hi ? n : def;
+    const raw = String(have.get(k) ?? '').trim(), n = Number(raw);
+    return raw && Number.isInteger(n) && n >= lo && n <= hi ? n : def;
   };
-  const days = num('onboard_grid_days'), cellMin = num('onboard_grid_cell_min');
+  const days = num('onboard_grid_days'), cellMin = num('onboard_grid_cell_min'), minHours = num('onboard_grid_min_hours');
   let start = num('onboard_grid_start'), end = num('onboard_grid_end');
   if (end <= start) { start = GRID_DEFAULTS.onboard_grid_start[0]; end = GRID_DEFAULTS.onboard_grid_end[0]; }
   const [y0, m0, d0] = torontoToday().split('-').map(Number);
-  const out: Grid = { start, end, cellMin, days: [], slots: [] };
+  const out: Grid = { start, end, cellMin, minHours, days: [], slots: [] };
   const now = Date.now();
   for (let i = 0; i < days; i++) {
     const t = new Date(Date.UTC(y0, m0 - 1, d0 + i));
@@ -303,6 +313,7 @@ async function saveGrid(l: Link, slots: unknown) {
     if (!valid.has(n)) return fail('bad_slots', 400);   // beyond the last day of the window
     picked.add(n);
   }
+  if (who(l) === 'hire' && grid.minHours > 0 && picked.size * grid.cellMin < grid.minHours * 60) return tooFew(grid.minHours);   // counted after the stale ones are dropped; the manager has no minimum
   const list = Array.from(picked).sort();
   const { error } = await svc.from('hub_onboard_grids').upsert({ flow_id: l.flow.id, who: who(l), slots: list, updated_at: new Date().toISOString() }, { onConflict: 'flow_id,who' });
   if (error) return fail('save', 500);

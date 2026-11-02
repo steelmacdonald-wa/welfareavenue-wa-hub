@@ -15,6 +15,7 @@ const schema = read('w271schema.sql');
 const migration = read('../build/wa271a_onboard.sql');
 const remind = read('../build/wa271b_remind.sql');
 const card = read('../build/wa271c_card.sql');
+const minHours = read('../build/wa271d_min_hours.sql');
 const undo = read('../build/wa271a_undo.sql');
 const assertions = read('w271sql.sql');
 
@@ -104,6 +105,15 @@ try {
   ok((await one(db, `select has_function_privilege('authenticated', 'public.wa166_person_card(bigint,text)', 'execute') as x`)).x === false, 'the card stays out of reach of the browser');
   ok(/starts_on/.test((await one(db, `select obj_description('public.wa166_person_card(bigint,text)'::regprocedure, 'pg_proc') as c`)).c), 'the card comment says starts_on');
 
+  // ---- wave271d: the hire's minimum hours setting
+  await db.exec(minHours);
+  await db.exec(minHours);   // safe to run twice
+  console.log('wa271d_min_hours: applied twice with no error');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key = 'onboard_grid_min_hours' and value = '10'`)).n === 1, 'wa271d: onboard_grid_min_hours is 10, once');
+  await db.exec(`update public.app_config set value = '6' where key = 'onboard_grid_min_hours'`);
+  await db.exec(minHours);
+  ok((await one(db, `select value from public.app_config where key = 'onboard_grid_min_hours'`)).value === '6', 'wa271d: running it again keeps the value HR set');
+
   // ---- the undo. Put real-looking work in first: an accepted candidate (kept) and its flow (dropped with the tables).
   await db.exec(`
     insert into public.hub_candidates (name, email, status) values ('Test Person Undo', 'w271.undo@example.invalid', 'offer');
@@ -124,7 +134,7 @@ try {
   ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key = 'timeoff_request'`)).n === 1, 'the other notification kinds are untouched by the undo');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa271_cand_accepted'`)).n === 0, 'accept trigger dropped');
   ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = 'hub_candidates' and column_name in ('offer_respond_by', 'offer_start')`)).n === 0, 'offer columns dropped');
-  ok((await one(db, `select count(*)::int as n from public.app_config where key like 'onboard\\_%'`)).n === 0, 'onboard_ settings removed');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key like 'onboard\\_%'`)).n === 0, 'onboard_ settings removed (the minimum hours setting included)');
   ok((await one(db, `select count(*)::int as n from public.hr_setup_template where phase = 'The onboarding call' and due_day = 3`)).n === 2, 'due_day is 3 again');
   ok((await one(db, `select count(*)::int as n from public.hr_setup_template where phase = 'The onboarding call' and due_day is distinct from 3`)).n === 0, 'no call step left on another day');
   ok((await one(db, `select count(*)::int as n from public.hr_setup_template where phase = 'Before day one' and due_day = 0`)).n === 1, 'other phases untouched');
