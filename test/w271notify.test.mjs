@@ -561,3 +561,28 @@ test('remind: when the manager row was deleted (member id null) the link goes to
   await w.remind();
   assert.equal(linksSent(w), 1, 'once');
 });
+
+/* ---------- whole-branch review (final-findings.md): I1 ---------- */
+test('I1: remind leaves alone a closed card, and anyone before Start who already has an open plan', async () => {
+  const old = '2026-10-10T12:00:00Z';
+  const told = (w) => w.rig.fetchLog.filter((e) => e.url === NOTIFY).length;
+  for (const status of ['withdrawn', 'declined']) {
+    const w = await runWorld({ cand: { status }, fl: { created_at: old } });
+    await w.remind();
+    assert.equal(told(w), 0, status);
+  }
+  for (const cand of [{ member_id: 1 }, { email: 'Ruth.Owen@welfareavenue.com' }]) {
+    const w = await runWorld({ cand, fl: { created_at: old }, tables: { onboardings: [{ id: 7, member_id: 1, completed_at: null }] } });
+    await w.remind();
+    assert.equal(told(w), 0, JSON.stringify(cand));
+  }
+  const done = await runWorld({ cand: { member_id: 1 }, fl: { created_at: old }, tables: { onboardings: [{ id: 7, member_id: 1, completed_at: '2026-01-01T00:00:00Z' }] } });
+  await done.remind();
+  assert.ok(told(done) > 0, 'a finished plan does not count');
+});
+
+test('I1: a flow already started keeps its reminders: its own plan is not a reason to stop', async () => {
+  const w = await runWorld({ cand: { member_id: 1 }, fl: { status: 'started', onboarding_id: 7, manager_member_id: 2, call_at: CALL, created_at: '2026-10-10T12:00:00Z' }, tables: { onboardings: [{ id: 7, member_id: 1, completed_at: null }] } });
+  await w.remind();
+  assert.ok(w.rig.fetchLog.filter((e) => e.url === NOTIFY).length > 0);
+});

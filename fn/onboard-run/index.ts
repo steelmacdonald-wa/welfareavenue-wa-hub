@@ -1,10 +1,16 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271)
 // The signed-in function behind HR's Start onboarding button. All actions are POST {action, ...}, for HR or admins only
 // (wa_is_hr or is_wa_admin, run as the caller's JWT):
-//   preview {flow_id, wa_email?}   {address, address_taken, needs_address, manager, grids, hub_events, steps, welcome, warnings}. Writes nothing.
-//   start {flow_id, wa_email, manager_member_id, call_at, one_on_one_at?, group_session?, skip[], welcome?}   {steps}
+//   preview {flow_id, wa_email?}   {address, address_taken, address_owner, address_own, needs_address, manager, department, grids, hub_events, steps, welcome, warnings}. Writes nothing.
+//   set_manager {flow_id, member_id}   {ok, cleared}. Before Start: HR confirms the manager, and the hourly job sends them the link. A manager other than the one who got the link
+//               starts with a clean grid and no reminder sent (cleared: true). A practice flow writes its flow row only.
+//   start {flow_id, wa_email, manager_member_id, call_at, one_on_one_at?, group_session?, skip[], welcome?}   {steps}. A closed card is refused. With the Google step skipped, an
+//               address on someone else's roster profile is refused, and one only Workspace knows is not stored: nothing may attach this person to another mailbox.
 //   retry {flow_id, step}          {steps}. Reruns that step and what was waiting on it. A done step is refused.
 //   google_manual {flow_id, wa_email}   {steps}. HR made the account by hand: records the address and finishes what waited on it.
+//   task_done {flow_id, step}      {steps}. HR did a step left to them. Not for google, which has google_manual.
+//   set_canva_link {flow_id, link}   {ok, canva_link}. The fresh Canva invite link HR pastes for this hire (Canva's links last 30 days, so none is kept in settings). Empty clears it;
+//               otherwise it must start with https://www.canva.com/. Any flow that has not backed out; it writes the flow row only. start takes canva_link with the same check.
 //   book_one_on_one {flow_id, at}   {ok, one_on_one_at, invited}. Books the 1-on-1 after Start and sends the invite then. Refused if it is already booked.
 //   change_time {flow_id, which: 'call'|'one_on_one', at}   {ok, warnings}. Moves the same Calendar event (Google tells the guests), re-notifies the manager
 //               (notify event onboard_date) and, for the call, moves the plan's dates (wa271_move_start). A time that has passed is refused.
@@ -12,14 +18,15 @@
 //               reminded_manager_at so the new manager gets a grid link if the 1-on-1 is not booked.
 //   backed_out {flow_id, reason}   {ok, remove, warnings}. Cancels both events (status cancelled, guests told), closes the plan (status completed, completed_at,
 //               as the Hub does), sets the flow backed_out and the card withdrawn. It removes nothing from Google, Slack or the Hub: remove lists, as plain
-//               sentences, what HR takes out by hand, naming only what this flow made.
-//               All four need a flow that is running or started; waiting, ready and backed_out are refused. A practice flow changes its own row only.
+//               sentences, what HR takes out by hand, naming only what this flow made. It also closes a waiting or ready flow, which has no events yet.
+//               The other three need a flow that is running or started; waiting, ready and backed_out are refused. A practice flow changes its own row only.
 //   send_grid_link {candidate_id, accepted?}   {ok}. For offers already out: mails the /o/ link; accepted: true sets accepted_on if it is empty.
 //   remind {}   {ok, grid_links, reminded_hr, reminded_managers, skipped}. The Hub's hourly job (cron wa-onboard-remind, wa271_remind()), and the ONLY action the
 //               trigger secret (x-wa-secret) may run here; a signed-in person cannot. Tells each manager their availability-grid link (event onboard_grid) once,
 //               then reminds HR (hr_notify_emails) about a hire's empty grid and the manager about theirs (event onboard_remind), each once, after
-//               onboard_remind_hours. Everything goes through notify to staff; nothing is ever sent to the new hire. Practice flows are left alone.
-// Exports: STEPS, suggestAddress(name), nextSteps(steps).
+//               onboard_remind_hours. Everything goes through notify to staff; nothing is ever sent to the new hire. Practice flows, closed cards and anyone
+//               with an open plan other than this flow's own (the roster dropdown) are left alone.
+// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
 // sentence for detail; a throw is a failed step, and the message is what HR reads.
@@ -135,7 +142,7 @@ function langOf(c: Row): 'fr' | 'en' {   // the same test recruit-actions and on
 }
 
 /* ---------- rows ---------- */
-const FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, call_event_id, one_on_one_event_id, onboarding_id, slack_channel_id, welcome_subject, welcome_text, started_by, started_at';
+const FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, call_event_id, one_on_one_event_id, onboarding_id, slack_channel_id, welcome_subject, welcome_text, started_by, started_at, roster_created, canva_link, welcome_edited';
 const CAND_COLS = 'id, name, role, status, email, summary, notes, position_id, accepted_on, offer_sent_at, member_id, start_date, practice';
 async function getFlow(id: unknown): Promise<Row | null> {
   const n = Number(id);
@@ -200,6 +207,7 @@ async function execute(ctx: Ctx, s: Step): Promise<void> {
   if (!(won as unknown[] | null)?.length) return;   // someone else has it
   const fresh = await getFlow(ctx.flow.id);
   if (fresh) ctx.flow = fresh;
+  if (ctx.flow.status === 'backed_out') return setStep(ctx, s.key, 'skipped', 'Not run: this person backed out while the steps were running.');
   if (ctx.flow.practice) return setStep(ctx, s.key, 'done', 'Practice: nothing real was changed by this step (' + s.label + ').');
   const status = new Map((await readSteps(ctx.flow.id)).map((r) => [r.step, r.status]));
   if (!s.run || heldBack(s, ctx.settings, status)) return setStep(ctx, s.key, 'hr_task', s.task || 'This step is left to HR.');
@@ -263,6 +271,7 @@ async function runRoster(ctx: Ctx): Promise<string> {
     const { error } = await svc.from('team_members').update(patch).eq('id', member.id);
     if (error) throw new Error('The roster profile could not be updated: ' + error.message + '. Press Retry.');
     said = 'Linked the existing roster profile of ' + member.name + ', with ' + start + ' as the start date.';
+    if (!f.roster_created) await svc.from('hub_onboard_flows').update({ roster_created: false }).eq('id', f.id);   // true stays true: a retry finds the profile an earlier try made
   } else {
     let pos: Row = null;
     if (c.position_id) ({ data: pos } = await svc.from('hub_positions').select('title, dept').eq('id', c.position_id).maybeSingle());
@@ -273,6 +282,7 @@ async function runRoster(ctx: Ctx): Promise<string> {
     if (error || !data) throw new Error('The roster profile could not be created: ' + (error?.message || 'no row came back') + '. Press Retry.');
     member = data;
     said = 'Created the roster profile, with ' + start + ' as the start date.';
+    await svc.from('hub_onboard_flows').update({ roster_created: true }).eq('id', f.id);   // if this write fails, the back-out list only asks HR to check the profile
   }
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { status: 'hired', member_id: member.id, start_date: start, updated_at: now, updated_by: ctx.by };
@@ -344,6 +354,15 @@ async function addressState(addr: string | null, memberId: unknown, practice: bo
     return { taken: false, unknown: r.status !== 404 };
   } catch (_) { return { taken: false, unknown: true }; }
 }
+/* whose address is this on the roster? owner: someone else's name. own: it sits on the profile this card already matches, by member_id or by personal email. */
+async function rosterClaim(addr: string | null, c: Row): Promise<{ owner: string | null; own: boolean }> {
+  const holders = addr ? await membersByEmail(addr) : [];
+  if (!holders.length) return { owner: null, own: false };
+  const mine = new Set([c.member_id, ...(await membersByEmail(c.email)).map((m) => m.id)].filter((x) => x != null).map(String));
+  const other = holders.find((m) => !mine.has(String(m.id)));
+  return other ? { owner: other.name, own: false } : { owner: null, own: true };
+}
+const onProfileOf = (addr: string, owner: string) => addr + ' is on the roster profile of ' + owner + '. Change the address, or clear it.';
 
 /* ---------- mail: who it really goes to, and the Gmail send from hub@ (Task 11 uses this for the welcome email) ---------- */
 /* mail_mode test (or unset): the test inboxes instead of the real people, with the real address named. No inboxes: a refusal. */
@@ -518,7 +537,7 @@ async function runManager(ctx: Ctx): Promise<string> {
       body: JSON.stringify({
         event: 'onboard_date', to_email: String(m.email).toLowerCase(), url: '#hrcentre/onboarding', tag: 'onboard-date-' + f.id,
         title: c.name + ' starts ' + torontoDate(f.call_at), body: c.name + ' (' + (c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day.',
-        text: '*' + esc(c.name) + '* (' + esc(c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day. <' + HUB + '/#hrcentre/onboarding|Open Onboarding>',
+        text: '*' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day. <' + HUB + '/#hrcentre/onboarding|Open Onboarding>',
       }),
     });
   } catch (e) {
@@ -535,7 +554,7 @@ async function runManager(ctx: Ctx): Promise<string> {
 }
 
 /* ---------- actions ---------- */
-async function preview(b: Row): Promise<Response> {
+async function preview(b: Row, by: string): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   const c = await getCand(f.candidate_id);
@@ -544,8 +563,11 @@ async function preview(b: Row): Promise<Response> {
   const suggested = suggestAddress(c.name);
   const address = cleanAddress(b.wa_email) || f.wa_email || (suggested ? suggested + '@' + DOMAIN : null);
   const state = await addressState(address, c.member_id, !!f.practice);
+  const claim = await rosterClaim(address, c);
   if (!address) warnings.push('This name does not fit first.last, so HR must type the address.');
-  if (state.taken) warnings.push(address + ' is already in use. Change the address, or skip the Google account step.');
+  if (claim.owner) warnings.push(onProfileOf(address!, claim.owner));
+  else if (state.taken && claim.own) warnings.push(address + ' is already this person\'s address on the roster. Turn off the Google account step to keep it.');
+  else if (state.taken) warnings.push(address + ' is already in use in Google. Change the address, or skip the Google account step: the Hub then stores no address for this person.');
   if (state.unknown) warnings.push('The Hub could not check ' + address + ' with Google. Check it in Google before you start.');
 
   let manager: Row = { member_id: null, name: null, how: 'none' };
@@ -581,8 +603,9 @@ async function preview(b: Row): Promise<Response> {
   });
 
   let pos: Row = null;
-  if (c.position_id) ({ data: pos } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
+  if (c.position_id) ({ data: pos } = await svc.from('hub_positions').select('jd_url, dept').eq('id', c.position_id).maybeSingle());
   if (!pos?.jd_url) warnings.push('The position has no job description link, so the welcome email leaves that line out.');
+  if (!pos?.dept) warnings.push('The position has no department, so a new roster profile will have none. Set it on the position first.');
   if (c.email) {
     const { data: others } = await svc.from('hub_candidates').select('id, email').ilike('email', String(c.email).trim()).neq('id', c.id).not('status', 'in', '(declined,withdrawn)');
     const n = ((others || []) as Row[]).filter((o) => String(o.email || '').trim().toLowerCase() === String(c.email).trim().toLowerCase()).length;
@@ -591,20 +614,147 @@ async function preview(b: Row): Promise<Response> {
   if (((await cfg('mail_mode')) || 'test') !== 'live') warnings.push('Email is in test mode: invites and emails go to the test inboxes, not to this person.');
   if (f.practice) warnings.push('This is a practice applicant: the run is a simulation and nothing real changes.');
 
-  return json({ address, address_taken: state.taken, needs_address: !address, manager, grids, hub_events: Array.from(seen.values()), steps, welcome: defaultWelcome(f, c), warnings });
+  return json({ address, address_taken: state.taken, address_owner: claim.owner, address_own: claim.own, needs_address: !address, manager, department: pos?.dept || null, canva_link: f.canva_link || null, grids, hub_events: Array.from(seen.values()), steps, welcome: await welcomeFor(f, c, by), warnings });
 }
-/* Task 11 replaces this with renderWelcome */
-function defaultWelcome(f: Row, c: Row): { subject: string; text: string } {
-  if (f.welcome_subject || f.welcome_text) return { subject: f.welcome_subject || '', text: f.welcome_text || '' };
-  return langOf(c) === 'fr'
-    ? { subject: 'Bienvenue chez Welfare Avenue! Vos prochaines étapes', text: 'Bonjour ' + firstName(c.name) + ',\n\nFélicitations et bienvenue chez Welfare Avenue! Votre rôle : ' + (c.role || '') + '.\n\nAu plaisir,\nWelfare Avenue' }
-    : { subject: 'Welcome to Welfare Avenue! Your Next Steps', text: 'Hi ' + firstName(c.name) + ',\n\nCongratulations and welcome to Welfare Avenue! Your role: ' + (c.role || '') + '.\n\nWarmly,\nWelfare Avenue' };
+/* ---------- the welcome email, as in the SOP's Onboarding Email ---------- */
+/* renderWelcome(flow, candidate, facts) -> {subject, text}, and Task 11 reuses it for the sent email. No password ever goes in this text. Before Start (facts.draft) what is not
+   known yet shows as a marked place in [square brackets], which fillWelcome fills in at Start, in the Hub's text and in what HR edited alike. A line whose value is empty goes,
+   and the steps renumber. */
+const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
+  en: {
+    day: '[first day: fills in at Start]', call: '[call date and time: fills in at Start]', one: '[1-on-1 date and time: fills in at Start]', manager: '[manager: fills in at Start]',
+    group: '[group session date: fills in at Start, or this line is left out]', address: '[Welfare Avenue address: fills in at Start]', canva: '[Canva link: fills in at Start, or this line is left out]',
+  },
+  fr: {
+    day: '[premier jour : rempli au démarrage]', call: '[date et heure de l\'appel : remplies au démarrage]', one: '[date et heure de la rencontre : remplies au démarrage]', manager: '[gestionnaire : rempli au démarrage]',
+    group: '[date de la séance de groupe : remplie au démarrage, ou cette ligne est retirée]', address: '[adresse Welfare Avenue : remplie au démarrage]', canva: '[lien Canva : rempli au démarrage, ou cette ligne est retirée]',
+  },
+};
+export type WelcomeFacts = { draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string };
+const dayWords = (at: string, lang: 'en' | 'fr') => new Date(at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ });
+/* puts the flow's values in the marked places. Empty group session or Canva link: that line goes, and the numbered steps count again. */
+function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string {
+  const lang = langOf(c), fr = lang === 'fr', slots = WELCOME_SLOTS[lang];
+  const values: Record<string, string | null> = {
+    day: f.call_at ? dayWords(f.call_at, lang) : null,
+    call: f.call_at ? whenText(f.call_at, lang) : null,
+    one: f.one_on_one_at ? whenText(f.one_on_one_at, lang) : (fr ? 'nous vous confirmerons l\'heure bientôt' : 'we\'ll confirm the time soon'),
+    manager: facts.manager || (fr ? 'votre gestionnaire' : 'your manager'),
+    group: String(f.group_session ?? '').trim() || null,
+    address: f.wa_email || (fr ? 'nous vous le confirmerons bientôt' : 'we\'ll confirm it soon'),
+    canva: f.canva_link || null,
+  };
+  let removed = false;
+  const lines: string[] = [];
+  for (const line of text.split('\n')) {
+    if (['group', 'canva'].some((k) => !values[k] && line.includes(slots[k]))) { removed = true; continue; }
+    lines.push(Object.keys(slots).reduce((l, k) => (values[k] == null ? l : l.split(slots[k]).join(values[k]!)), line));
+  }
+  if (!removed) return lines.join('\n');
+  let n = 0;
+  return lines.map((l) => (/^\d+\. /.test(l) ? String(++n) + l.slice(l.indexOf('.')) : l)).join('\n');
+}
+export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: string; text: string } {
+  const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name), role = c.role || (fr ? 'proposé' : 'offered');
+  const steps: string[] = fr ? [
+    '1. Vos rencontres :\n   - Votre appel d\'accueil : ' + s.call + '. L\'invitation est dans votre calendrier.\n   - Une rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '.\n   - Votre séance d\'accueil de groupe en personne avec ' + s.manager + ', le ' + s.group + '. Si vous ne pouvez pas y être, dites-le-nous. Cette étape est essentielle.',
+    '2. Activez votre compte Google Welfare Avenue. Courriel : ' + s.address + '. Nous vous transmettrons votre premier mot de passe individuellement. Vous le changerez à votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
+    '3. Joignez-vous à notre espace Slack avec votre nouveau courriel Welfare Avenue : ' + facts.slack,
+    '4. Joignez-vous à notre équipe Canva : ' + s.canva,
+    '5. Signez le contrat. Il vous est envoyé par DocuSign à votre courriel personnel.',
+    '6. Lisez votre description de poste et préparez les questions que vous voulez aborder avec votre direction' + (facts.jdUrl ? ' : ' + facts.jdUrl : '.'),
+  ] : [
+    '1. Your meetings:\n   - Your onboarding call: ' + s.call + '. The invite is in your calendar.\n   - A 1-on-1 introductory meeting with your manager, ' + s.manager + ': ' + s.one + '.\n   - Your in-person group onboarding session with ' + s.manager + ' on ' + s.group + '. If you can\'t make it, let us know. This step is crucial.',
+    '2. Activate your Welfare Avenue Google account. Email: ' + s.address + '. We\'ll share your first password with you one to one. You\'ll change it the first time you sign in.' + (facts.video ? '\n   This video shows you how: ' + facts.video : ''),
+    '3. Join your Slack workspace with your new Welfare Avenue email: ' + facts.slack,
+    '4. Join our Canva team: ' + s.canva,
+    '5. Sign the Contract. Sent via DocuSign to your personal email.',
+    '6. Review your job description and prepare questions to ask about it with your director' + (facts.jdUrl ? ': ' + facts.jdUrl : '.'),
+  ];
+  const text = (fr ? [
+    'Bonjour ' + first + ',', '', 'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!', 'Nous sommes ravis que vous ayez accepté le poste de ' + role + ' au sein de notre organisme.',
+    'Votre premier jour est le ' + s.day + ', et nous avons hâte de vous accueillir. Pour bien commencer, voici les prochaines étapes :', '', 'Prochaines étapes :', ...steps, '',
+    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre accueil se passe en douceur et chaleureusement.',
+    'Au plaisir de voir tout le beau travail que vous accomplirez avec nous!', facts.hrName,
+  ] : [
+    'Dear ' + first + ',', '', 'Congratulations and welcome to the team at Welfare Avenue!', 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.',
+    'Your first day is ' + s.day + ', and we can\'t wait to have you on board. To get started, please take the following steps:', '', 'Next Steps:', ...steps, '',
+    'If you run into any technical issues or have any questions, don\'t hesitate to reach out. We\'re here to help make your onboarding experience smooth and welcoming.',
+    'Looking forward to seeing all the great work you\'ll do with us!', facts.hrName,
+  ]).join('\n');
+  return { subject: fr ? 'Bienvenue chez Welfare Avenue! Vos prochaines étapes' : 'Welcome to Welfare Avenue! Your Next Steps', text: facts.draft ? text : fillWelcome(text, f, c, facts) };
+}
+/* what renderWelcome needs from the database. who: the HR person, by email; not on the roster, the team signs it */
+async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean): Promise<WelcomeFacts> {
+  const m = await getMember(f.manager_member_id);
+  let jd: Row = null;
+  if (c.position_id) ({ data: jd } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
+  const hr = (await membersByEmail(who))[0];
+  return {
+    draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null,
+    slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com',
+    hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
+  };
+}
+/* the text for the preview: what HR saved wins; otherwise the Hub's own, with marked places until Start */
+async function welcomeFor(f: Row, c: Row, by: string): Promise<{ subject: string; text: string }> {
+  if ((f.welcome_subject || f.welcome_text) && f.welcome_edited !== false) return { subject: f.welcome_subject || '', text: f.welcome_text || '' };
+  return renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, !AFTER_START.includes(f.status)));
+}
+/* a time, the manager, the address or the Canva link changed after Start: the Hub's own saved text follows. What HR edited stays theirs. It only touches the flow row, and it cannot fail the change. */
+async function refreshWelcome(flowId: number, by: string): Promise<void> {
+  try {
+    const f = await getFlow(flowId);
+    if (!f || f.welcome_edited !== false || !AFTER_START.includes(f.status)) return;
+    const c = await getCand(f.candidate_id);
+    if (!c) return;
+    const w = renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, false));
+    await svc.from('hub_onboard_flows').update({ welcome_subject: w.subject, welcome_text: w.text }).eq('id', f.id).eq('welcome_edited', false);
+  } catch (_) { /* the saved text is a convenience for HR; the change itself stands */ }
+}
+
+/* before Start: is this manager someone other than the one who got the grid link? Their marks are not this manager's, and any reminder was not for them */
+async function linkHolder(flowId: number): Promise<{ id: unknown } | { error: string }> {
+  const { data, error } = await svc.from('hub_onboard_flows').select('manager_link_member_id').eq('id', flowId).maybeSingle();
+  if (error) return { error: error.message };
+  return { id: (data as Row | null)?.manager_link_member_id ?? null };
+}
+const clearManagerGrid = (flowId: number) => svc.from('hub_onboard_grids').update({ slots: [], updated_at: new Date().toISOString() }).eq('flow_id', flowId).eq('who', 'manager');
+
+async function setManager(b: Row): Promise<Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  if (!BEFORE_START.includes(f.status)) return no('already_started', 'Onboarding has already been started for this person. Use Change manager on their card.');
+  const id = Number(b.member_id);
+  const m = b.member_id != null && b.member_id !== '' && Number.isInteger(id) ? await getMember(id) : null;
+  if (!m) return no('no_manager', 'Choose a manager who is on the roster first.', 400);
+  if (m.active === false) return no('no_manager', m.name + ' is not active on the roster. Choose someone else.', 400);
+  const link = await linkHolder(f.id);
+  if ('error' in link) return no('save', 'The Hub could not read this flow: ' + link.error + '. Try again.', 500);
+  const differs = String(link.id ?? '') !== String(m.id);
+  const patch: Record<string, unknown> = { manager_member_id: m.id, updated_at: new Date().toISOString() };
+  if (differs) patch.reminded_manager_at = null;
+  const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', BEFORE_START).select('id');
+  if (error) return no('save', 'The manager could not be saved: ' + error.message + '. Try again.', 500);
+  if (!(won as unknown[] | null)?.length) return no('already_started', 'Onboarding has just been started for this person. Reload the page.');
+  if (f.practice) return json({ ok: true, practice: true, cleared: false });
+  if (differs) {
+    const { error: gridError } = await clearManagerGrid(f.id);
+    if (gridError) return no('save', 'The manager is saved, but the other manager\'s marks could not be cleared: ' + gridError.message + '. Choose the manager again.', 500);
+  }
+  return json({ ok: true, cleared: differs });
 }
 
 async function start(b: Row, by: string, asUser: Row): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
-  if (!['waiting', 'ready'].includes(f.status)) return no('already_started', f.status === 'backed_out' ? 'This person backed out, so onboarding cannot start.' : 'Onboarding has already been started for this person.');
+  if (!BEFORE_START.includes(f.status)) return no('already_started', f.status === 'backed_out' ? 'This person backed out, so onboarding cannot start.' : 'Onboarding has already been started for this person.');
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  if (['declined', 'withdrawn'].includes(c.status)) return no('card_closed', 'This card is closed (' + c.status + '), so onboarding cannot start. Open the card again first if they are still joining.');
+  if (!!f.practice !== !!c.practice) return no('practice_mismatch', 'The card and its onboarding flow disagree about whether this is a practice applicant, so nothing was started. Tell Steel.');
+  const practice = !!(f.practice || c.practice);
   const skip: string[] = Array.isArray(b.skip) ? b.skip.map(String) : [];
   if (skip.includes('roster')) return no('roster_required', 'The roster profile step cannot be skipped: every other step needs it.', 400);
   const unknown = skip.find((k) => !stepOf(k));
@@ -623,25 +773,38 @@ async function start(b: Row, by: string, asUser: Row): Promise<Response> {
   const addr = raw ? cleanAddress(raw) : null;
   if (raw && !addr) return no('bad_address', 'The new address must be a plain address ending in @' + DOMAIN + '. Change it and try again.', 400);
   if (!addr && googleOn) return no('no_address', 'Type the new address, or skip the Google account step.', 400);
-  const c = await getCand(f.candidate_id);
-  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
-  if (googleOn && (await addressState(addr, c.member_id, !!f.practice)).taken) return no('address_taken', addr + ' is already in use. Change the address, or skip the Google account step.');
+  const canva = canvaLink(b.canva_link);
+  if (canva instanceof Response) return canva;
+  const claim = await rosterClaim(addr, c);
+  if (claim.owner) return no('address_taken', onProfileOf(addr!, claim.owner));
+  const taken = (await addressState(addr, c.member_id, practice)).taken;
+  if (googleOn && taken) return no('address_taken', addr + ' is already in use. Change the address, or skip the Google account step.');
+  /* Google skipped and Workspace has the address, on nobody's roster profile: it is someone's mailbox, so it is not stored and gets no invites */
+  const keep = !googleOn && taken && !claim.own ? null : addr;
+  const link = await linkHolder(f.id);
+  if ('error' in link) return no('save', 'The Hub could not start this: ' + link.error + '. Try again.', 500);
+  const otherManager = String(link.id ?? '') !== String(manager.id);
 
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = {
-    status: 'running', manager_member_id: manager.id, wa_email: addr, call_at: callAt, one_on_one_at: oneAt,
+    status: 'running', manager_member_id: manager.id, wa_email: keep, call_at: callAt, one_on_one_at: oneAt, canva_link: canva.link,
     group_session: String(b.group_session ?? '').trim() || null, started_by: by, updated_at: now,
   };
-  if (b.welcome && typeof b.welcome === 'object') {
-    if (typeof b.welcome.subject === 'string') patch.welcome_subject = b.welcome.subject;
-    if (typeof b.welcome.text === 'string') patch.welcome_text = b.welcome.text;
-  }
+  if (otherManager) patch.reminded_manager_at = null;
+  /* the card's saved text: the Hub's own with the real times, or what HR edited, with any marked place they kept filled in */
+  const facts = await welcomeFacts({ ...f, ...patch }, c, by, false);
+  const own = renderWelcome({ ...f, ...patch }, c, facts);
+  const edited = b.welcome && typeof b.welcome === 'object' ? b.welcome : null;
+  patch.welcome_subject = typeof edited?.subject === 'string' ? edited.subject : own.subject;
+  patch.welcome_text = typeof edited?.text === 'string' ? fillWelcome(edited.text, { ...f, ...patch }, c, facts) : own.text;
+  patch.welcome_edited = !!edited;
   /* the claim: of two presses, only one finds the flow still waiting or ready */
   const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', ['waiting', 'ready']).select(FLOW_COLS);
   if (error) return no('save', 'The Hub could not start this: ' + error.message + '. Try again.', 500);
   const flow = (won as Row[] | null)?.[0];
   if (!flow) return no('already_started', 'Onboarding has already been started for this person.');
-  const seed = STEPS.map((s) => ({ flow_id: f.id, step: s.key, status: skip.includes(s.key) ? 'skipped' : 'pending', detail: skip.includes(s.key) ? 'Skipped by HR in the preview.' : null, practice: !!f.practice, at: now, by }));
+  if (otherManager && !practice) await clearManagerGrid(f.id);   // best effort: Book the 1-on-1 still shows who marked what
+  const seed = STEPS.map((s) => ({ flow_id: f.id, step: s.key, status: skip.includes(s.key) ? 'skipped' : 'pending', detail: skip.includes(s.key) ? 'Skipped by HR in the preview.' : null, practice, at: now, by }));
   const { error: seedError } = await svc.from('hub_onboard_steps').upsert(seed, { onConflict: 'flow_id,step' });
   if (seedError) {
     await svc.from('hub_onboard_flows').update({ status: f.status, updated_at: now }).eq('id', f.id);
@@ -687,7 +850,8 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   const now = new Date().toISOString();
   const { error } = await svc.from('hub_onboard_flows').update({ wa_email: addr, updated_at: now }).eq('id', f.id);
   if (error) return no('save', 'The address could not be saved: ' + error.message + '. Try again.', 500);
-  if (c?.member_id) {
+  const practice = !!(f.practice || c?.practice);   // a simulation: its own rows only, no roster write and no Google token
+  if (c?.member_id && !practice) {
     const { error: e2 } = await svc.from('team_members').update({ email: addr }).eq('id', c.member_id);
     if (e2) return no('save', 'The address could not be saved on the roster profile: ' + e2.message + '. Try again.', 500);
   }
@@ -695,24 +859,67 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   const { data: won } = await svc.from('hub_onboard_steps').update({ status: 'running', at: now, by }).eq('flow_id', f.id).eq('step', 'google').in('status', open).select('step');
   if (!(won as unknown[] | null)?.length) return no('already_done', 'The Google account step is already done.');
   const ctx = await makeCtx({ ...f, wa_email: addr }, by, asUser);
-  await completed(ctx, stepOf('google')!, 'HR created ' + addr + ' in Google.');
+  if (practice) await setStep(ctx, 'google', 'done', 'Practice: nothing real was changed by this step (Google account).');
+  else await completed(ctx, stepOf('google')!, 'HR created ' + addr + ' in Google.');
   /* what was left to HR only because the account was missing can now run; an entry with no run stays with HR */
   const held = (await readSteps(f.id)).filter((r) => r.status === 'hr_task' && stepOf(r.step)?.needs.includes('google') && stepOf(r.step)?.run);
   for (const r of held) await svc.from('hub_onboard_steps').update({ status: 'waiting', at: now, by }).eq('flow_id', f.id).eq('step', r.step).eq('status', 'hr_task');
   await advance(ctx);
+  await refreshWelcome(f.id, by);
   return reply(f.id);
 }
 
-/* ---------- changes after Start ---------- */
-/* All four need a flow that Start has begun (running, or started once nothing is left for HR). Each claims its change with a conditional update, so a double
-   press changes it once, and gives the claim back if Google refuses. A practice flow changes its own row and nothing else: no Calendar, no notify. */
-const AFTER_START = ['running', 'started'];
-const BACKED_OUT_NOW = 'This person backed out, so their onboarding cannot be changed.';
-async function openFlow(b: Row): Promise<{ f: Row; c: Row } | Response> {
+/* HR did a step that was left to them. google has its own button, which also records the address. */
+async function taskDone(b: Row, by: string, asUser: Row): Promise<Response> {
+  const s = stepOf(String(b.step));
+  if (!s) return no('bad_step', 'The Hub does not know that step. Reload the page.', 400);
+  if (s.key === 'google') return no('use_google_manual', 'Use "I created it, continue" for the Google account: it also records the address.', 400);
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
-  if (!AFTER_START.includes(f.status)) return no('not_started', 'Onboarding has not been started for this person yet. Press Start onboarding first.');
+  if (!AFTER_START.includes(f.status)) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to mark done.');
+  /* the claim: of two presses, only one finds the step still with HR */
+  const now = new Date().toISOString();
+  const { data: won, error } = await svc.from('hub_onboard_steps').update({ status: 'done', detail: 'Done by ' + by + '.', at: now, by }).eq('flow_id', f.id).eq('step', s.key).eq('status', 'hr_task').select('step');
+  if (error) return no('save', 'The Hub could not save this: ' + error.message + '. Try again.', 500);
+  if (!(won as unknown[] | null)?.length) return no('not_hr_task', 'That step is not waiting on HR. Reload the page.');
+  const ctx = await makeCtx(f, by, asUser);
+  await tickSetup(ctx);
+  await finish(ctx);
+  return reply(f.id);
+}
+
+/* a Canva link HR pasted: empty is allowed, anything else must be a plain www.canva.com address */
+function canvaLink(v: unknown): { link: string | null } | Response {
+  const link = String(v ?? '').trim();
+  if (!link) return { link: null };
+  if (!/^https:\/\/www\.canva\.com\/\S*$/.test(link)) return no('bad_canva_link', 'The Canva link must start with https://www.canva.com/. Copy it from Invite people in Canva, or leave it empty.', 400);
+  return { link };
+}
+async function setCanvaLink(b: Row, by: string): Promise<Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  const c = canvaLink(b.link);
+  if (c instanceof Response) return c;
+  const { data: won, error } = await svc.from('hub_onboard_flows').update({ canva_link: c.link, updated_at: new Date().toISOString() }).eq('id', f.id).neq('status', 'backed_out').select('id');
+  if (error) return no('save', 'The Canva link could not be saved: ' + error.message + '. Try again.', 500);
+  if (!(won as unknown[] | null)?.length) return no('backed_out', BACKED_OUT_NOW);
+  await refreshWelcome(f.id, by);
+  return json({ ok: true, canva_link: c.link });
+}
+
+/* ---------- changes after Start ---------- */
+/* These need a flow that Start has begun (running, or started once nothing is left for HR), except backed_out, which also takes one that has not. Each claims its change
+   with a conditional update, so a double press changes it once, and gives the claim back if Google refuses. A practice flow changes its own row and nothing else: no Calendar, no notify. */
+const AFTER_START = ['running', 'started'];
+const BEFORE_START = ['waiting', 'ready'];
+const BACKED_OUT_NOW = 'This person backed out, so their onboarding cannot be changed.';
+async function openFlow(b: Row, allowed: string[] = AFTER_START): Promise<{ f: Row; c: Row } | Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  if (!allowed.includes(f.status)) return no('not_started', 'Onboarding has not been started for this person yet. Press Start onboarding first.');
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
   return { f, c };
@@ -755,7 +962,7 @@ async function bookOneOnOne(b: Row, by: string, asUser: Row): Promise<Response> 
   if (error) return no('save', 'The Hub could not book this: ' + error.message + '. Try again.', 500);
   const flow = (won as Row[] | null)?.[0];
   if (!flow) return no('already_booked', 'The 1-on-1 was just booked, or this onboarding just changed. Reload the page.');
-  if (f.practice) return json({ ok: true, practice: true, one_on_one_at: when.at });
+  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, one_on_one_at: when.at }); }
   const ctx = await makeCtx(flow, by, asUser);
   let invite: Invite;
   try {
@@ -770,6 +977,7 @@ async function bookOneOnOne(b: Row, by: string, asUser: Row): Promise<Response> 
     at: new Date().toISOString(), by,
   }).eq('flow_id', f.id).eq('step', 'invites').eq('status', 'done');
   await log('onboard_flow', f.id, 'one_on_one_at', null, when.at, by);
+  await refreshWelcome(f.id, by);
   return json({ ok: true, one_on_one_at: when.at, invited: invite.to, mode: invite.live ? 'live' : 'test' });
 }
 
@@ -799,7 +1007,7 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
   const { data: won, error } = await svc.from('hub_onboard_flows').update({ [col]: when.at, updated_at: new Date().toISOString() }).eq('id', f.id).in('status', AFTER_START).eq(col, old).select('id');
   if (error) return no('save', 'The Hub could not change this: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('changed', 'Someone has just changed this onboarding. Reload the page to see the new time.');
-  if (f.practice) return json({ ok: true, practice: true, which, at: when.at, warnings: [] });
+  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, which, at: when.at, warnings: [] }); }
 
   const back = () => svc.from('hub_onboard_flows').update({ [col]: old, updated_at: new Date().toISOString() }).eq('id', f.id).eq(col, when.at);
   const movePlan = kind === 'call' && !!f.onboarding_id;
@@ -830,7 +1038,7 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
   if (eventId) {
     const minutes = kind === 'call' ? await cfgNum('onboard_call_min', 60) : await cfgNum('onboard_one_on_one_min', 30);
     const out = await patchEvent(t, eventId, {
-      start: { dateTime: new Date(when.at).toISOString(), timeZone: TZ }, end: { dateTime: new Date(Date.parse(when.at) + minutes * 60000).toISOString(), timeZone: TZ }, attendees: invite.to.map((email) => ({ email })),
+      status: 'confirmed', start: { dateTime: new Date(when.at).toISOString(), timeZone: TZ }, end: { dateTime: new Date(Date.parse(when.at) + minutes * 60000).toISOString(), timeZone: TZ }, attendees: invite.to.map((email) => ({ email })),
     });
     if (!out.ok && (out.status === 404 || out.status === 410)) {   // the event was deleted in Calendar: HR can still set the time, so book it again at the new one
       try {
@@ -846,6 +1054,7 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
     }
   } else warnings.push('There is no ' + word + ' invite yet, so Google was not asked. The new time is used when the invites are sent.');
   await log('onboard_flow', f.id, col, old, when.at, by);
+  await refreshWelcome(f.id, by);
 
   const first = c.name + ' (' + (c.role || 'new hire') + ')';
   const told = await tellManager(
@@ -853,7 +1062,7 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
     which === 'call' ? c.name + ' now starts ' + torontoDate(when.at) : 'The 1-on-1 with ' + c.name + ' moved',
     which === 'call'
       ? first + ' now has their onboarding call on ' + whenText(when.at) + ' (it was ' + whenText(old) + '). That is their first day.'
-      : 'Your 1-on-1 with ' + c.name + ' moved to ' + whenText(when.at) + ' (it was ' + whenText(old) + '). The invite is updated.',
+      : 'Your 1-on-1 with ' + c.name + ' moved to ' + whenText(when.at) + ' (it was ' + whenText(old) + '). ' + (eventId ? 'The invite is updated.' : 'The invite has not gone out yet.'),
     'onboard-move-' + f.id + '-' + kind + '-' + Date.now(),
   );
   if (told) warnings.push(told);
@@ -893,7 +1102,7 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
   const { data: won, error } = await (f.manager_member_id == null ? claim.is('manager_member_id', null) : claim.eq('manager_member_id', f.manager_member_id)).select('id');
   if (error) return no('save', 'The Hub could not change this: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('changed', 'Someone has just changed this onboarding. Reload the page.');
-  if (f.practice) return json({ ok: true, practice: true, manager: { member_id: m.id, name: m.name }, warnings: [] });
+  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, manager: { member_id: m.id, name: m.name }, warnings: [] }); }
 
   const warnings: string[] = [];
   if (booked) {
@@ -910,13 +1119,14 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
     if (gridError) warnings.push('The old manager\'s marks on the availability grid could not be cleared: ' + gridError.message + '. They may still show.');
   }
   await log('onboard_flow', f.id, 'manager_member_id', f.manager_member_id, m.id, by);
+  await refreshWelcome(f.id, by);
 
   const first = c.name + ' (' + (c.role || 'new hire') + ')';
   const stamp = f.id + '-' + Date.now();
   const toNew = await tellManager(
     m, 'You are ' + c.name + '\'s manager',
     first + ' starts ' + torontoDate(f.call_at) + ', with an onboarding call on ' + whenText(f.call_at) + '. You are now their manager.'
-      + (f.one_on_one_at ? ' Your 1-on-1 is ' + whenText(f.one_on_one_at) + '. The invite is in your calendar.' : ' You will get a link to mark when you are free for the 1-on-1.'),
+      + (f.one_on_one_at ? ' Your 1-on-1 is ' + whenText(f.one_on_one_at) + '. ' + (booked ? 'The invite is in your calendar.' : 'The invite has not gone out yet.') : ' You will get a link to mark when you are free for the 1-on-1.'),
     'onboard-manager-new-' + stamp,
   );
   if (toNew) warnings.push(toNew);
@@ -924,7 +1134,7 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
   if (old) {
     const toOld = await tellManager(
       old, c.name + ' has a different manager',
-      first + ' now has ' + m.name + ' as their manager for onboarding.' + (f.one_on_one_at ? ' Your 1-on-1 with them is cancelled.' : ''),
+      first + ' now has ' + m.name + ' as their manager for onboarding.' + (booked ? ' Your 1-on-1 with them is cancelled.' : ''),
       'onboard-manager-old-' + stamp,
     );
     if (toOld) warnings.push(toOld);
@@ -932,8 +1142,9 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
   return json({ ok: true, manager: { member_id: m.id, name: m.name }, warnings });
 }
 
-async function backedOut(b: Row, by: string, asUser: Row): Promise<Response> {
-  const o = await openFlow(b);
+async function backedOut(b: Row, by: string, _asUser: Row): Promise<Response> {
+  const open = [...BEFORE_START, ...AFTER_START];
+  const o = await openFlow(b, open);
   if (o instanceof Response) return o;
   const { f, c } = o;
   const said = String(b.reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
@@ -943,9 +1154,9 @@ async function backedOut(b: Row, by: string, asUser: Row): Promise<Response> {
   if (!f.practice && events.length) {
     try { t = await calToken(); } catch (e) { return no('google', errText(e) + ' The onboarding is still open.', 502); }
   }
-  /* the claim: of two presses, only one finds the flow still running or started */
+  /* the claim: of two presses, only one finds the flow still open */
   const now = new Date().toISOString();
-  const { data: won, error } = await svc.from('hub_onboard_flows').update({ status: 'backed_out', updated_at: now }).eq('id', f.id).in('status', AFTER_START).select('id');
+  const { data: won, error } = await svc.from('hub_onboard_flows').update({ status: 'backed_out', updated_at: now }).eq('id', f.id).in('status', open).select('id');
   if (error) return no('save', 'The Hub could not record this: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('changed', 'Someone has just changed this onboarding. Reload the page.');
   if (f.practice) return json({ ok: true, practice: true, remove: [], warnings: [] });
@@ -974,7 +1185,7 @@ async function backedOut(b: Row, by: string, asUser: Row): Promise<Response> {
   const status = new Map((await readSteps(f.id)).map((r) => [r.step, r.status]));
   const remove: string[] = [];
   if (status.get('google') === 'done' && f.wa_email) remove.push('Google account ' + f.wa_email + ': suspend or delete it in Google Admin.');
-  if (status.get('roster') === 'done' && c.member_id) remove.push('Roster profile' + (f.wa_email ? ' (' + f.wa_email + ')' : '') + ': the Hub leaves it as it is. Deactivate it by hand in Roster.');
+  if (status.get('roster') === 'done' && c.member_id) remove.push('Roster profile' + (f.wa_email ? ' (' + f.wa_email + ')' : '') + (f.roster_created ? ': Created for this person. Deactivate it by hand in Roster.' : ': Already on the roster before. Check whether it should stay.'));
   if (f.slack_channel_id) remove.push('Slack onboarding channel ' + f.slack_channel_id + ': archive it.');
   if (status.get('hub') === 'done') remove.push('Hub access' + (f.wa_email ? ' for ' + f.wa_email : '') + ': remove it from Roster.');
   return json({ ok: true, remove, warnings });
@@ -1045,6 +1256,14 @@ async function tell(body: Record<string, unknown>): Promise<{ handled: boolean; 
   } catch (e) { return { handled: false, note: errText(e) }; }
 }
 const marked = (grids: Row[], who: string) => grids.some((g) => g.who === who && Array.isArray(g.slots) && g.slots.length > 0);
+/* an open plan for this person that is not this flow's own: HR has already onboarded them another way (the roster dropdown). Found by the card's profile or the personal email. */
+async function otherOpenPlan(f: Row, c: Row): Promise<boolean> {
+  const ids = Array.from(new Set([c.member_id, ...(await membersByEmail(c.email)).map((m) => m.id)].filter((x) => x != null)));
+  if (!ids.length) return false;
+  const { data, error } = await svc.from('onboardings').select('id').in('member_id', ids).is('completed_at', null);
+  if (error) throw new Error('the open plans could not be read: ' + error.message);
+  return ((data || []) as Row[]).some((o) => String(o.id) !== String(f.onboarding_id));
+}
 
 async function remind(): Promise<Response> {
   const out = { ok: true, grid_links: 0, reminded_hr: 0, reminded_managers: 0, skipped: [] as string[] };
@@ -1057,6 +1276,7 @@ async function remind(): Promise<Response> {
     try {
       const c = await getCand(f.candidate_id);
       if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
+      if (await otherOpenPlan(f, c)) continue;
       const { data: g } = await svc.from('hub_onboard_grids').select('who, slots').eq('flow_id', f.id);
       const grids = (g || []) as Row[];
       const hireBooked = !!f.call_at && !!f.one_on_one_at;
@@ -1154,8 +1374,11 @@ Deno.serve(async (req: Request) => {
     const [hr, admin] = await Promise.all([asUser.rpc('wa_is_hr'), asUser.rpc('is_wa_admin')]);
     if (hr.data !== true && admin.data !== true) return no('not_allowed', 'Only HR and admins can do this.', 403);
     const b = await req.json().catch(() => ({}));
-    if (b.action === 'preview') return await preview(b);
+    if (b.action === 'preview') return await preview(b, by);
+    if (b.action === 'set_manager') return await setManager(b);
     if (b.action === 'start') return await start(b, by, asUser);
+    if (b.action === 'task_done') return await taskDone(b, by, asUser);
+    if (b.action === 'set_canva_link') return await setCanvaLink(b, by);
     if (b.action === 'retry') return await retry(b, by, asUser);
     if (b.action === 'google_manual') return await googleManual(b, by, asUser);
     if (b.action === 'send_grid_link') return await sendGridLink(b, by);

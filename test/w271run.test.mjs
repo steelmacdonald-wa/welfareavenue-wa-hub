@@ -1221,11 +1221,12 @@ test('after backed_out, Retry and the manual Google step refuse, and nothing can
   assert.match((await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' })).body.message, /backed out/);
 });
 
-test('the four changes refuse a flow that has not been started, with nothing written', async () => {
+test('the changes that need Start refuse a flow that has not been started, with nothing written', async () => {
   for (const status of ['waiting', 'ready']) {
     const s = await setup({ fl: { status, call_at: CALL, call_event_id: 'onboard21call' } });
     const before = s.snapshot();
-    for (const go of Object.values(changeActions(s))) {
+    for (const [name, go] of Object.entries(changeActions(s))) {
+      if (name === 'backed_out') continue;   // it also closes a flow that has not started
       const r = await go();
       assert.equal(r.status, 409, status);
       assert.match(r.body.message, /Start onboarding/);
@@ -1397,4 +1398,476 @@ test('change_time: if booking again also fails, the time, the plan and the dates
   assert.equal(s.flow().call_at, before.hub_onboard_flows[0].call_at);
   assert.equal(s.moved.at(-1).p_new, '2026-11-01');
   assert.equal(s.notifies().length, 0);
+});
+
+/* ---------- whole-branch review (final-findings.md) ---------- */
+test('C1: Google skipped, an address on another person\'s roster profile is refused by name, and nothing changes', async () => {
+  const s = await setup();
+  const before = s.snapshot();
+  const r = await s.start({ wa_email: 'sam.lee@welfareavenue.com', skip: ['google'] });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'address_taken');
+  assert.match(r.body.message, /Sam Lee/);
+  assert.deepEqual(s.snapshot(), before, 'no start date, no link, no plan on Sam');
+  assert.equal(s.calWrites().length, 0);
+});
+
+test('C1: Google skipped, the address of the profile this card already matches is kept', async () => {
+  const byId = await setup({ cand: { member_id: 2 } });
+  assert.equal((await byId.start({ wa_email: 'sam.lee@welfareavenue.com', skip: ['google'] })).status, 200);
+  assert.equal(byId.flow().wa_email, 'sam.lee@welfareavenue.com');
+  const byMail = await setup({ cand: { email: 'Sam.Lee@welfareavenue.com' } });
+  assert.equal((await byMail.start({ wa_email: 'sam.lee@welfareavenue.com', skip: ['google'] })).status, 200);
+  assert.equal(byMail.flow().wa_email, 'sam.lee@welfareavenue.com');
+  assert.equal(byMail.cand().member_id, 2);
+});
+
+test('C1: Google skipped, a Workspace-only clash stores no address: the new profile and the invites keep to the personal one', async () => {
+  const s = await setup();
+  s.taken.add('alex.tremblay@welfareavenue.com');
+  const r = await s.start({ skip: ['google'] });
+  assert.equal(r.status, 200);
+  assert.equal(s.flow().wa_email, null);
+  const made = s.rows('team_members').find((m) => m.name === 'Alex Tremblay');
+  assert.equal(made.email, 'alex@example.com');
+  const invited = s.calWrites().flatMap((e) => (e.body.attendees || []).map((a) => a.email));
+  assert.ok(invited.length && !invited.includes('alex.tremblay@welfareavenue.com'), 'that mailbox gets no invite');
+});
+
+test('C1: the preview names the person on the roster and does not offer skipping as the way out', async () => {
+  const s = await setup();
+  const p = (await s.post({ action: 'preview', flow_id: 21, wa_email: 'sam.lee@welfareavenue.com' })).body;
+  assert.equal(p.address_taken, true);
+  assert.equal(p.address_owner, 'Sam Lee');
+  assert.equal(p.address_own, false);
+  const w = p.warnings.find((x) => /sam\.lee@/.test(x));
+  assert.match(w, /Sam Lee/);
+  assert.doesNotMatch(w, /skip/i);
+  s.taken.add('alex.tremblay@welfareavenue.com');
+  const q = (await s.post({ action: 'preview', flow_id: 21 })).body;
+  assert.equal(q.address_owner, null);
+  assert.match(q.warnings.find((x) => /already in use/.test(x)), /stores no address/);
+  const own = await setup({ cand: { member_id: 2 } });
+  assert.equal((await own.post({ action: 'preview', flow_id: 21, wa_email: 'sam.lee@welfareavenue.com' })).body.address_own, true);
+});
+
+test('I1: Start refuses a closed card, in a plain sentence, and writes nothing', async () => {
+  for (const status of ['withdrawn', 'declined']) {
+    const s = await setup({ cand: { status } });
+    const before = s.snapshot();
+    const r = await s.start();
+    assert.equal(r.status, 409, status);
+    assert.equal(r.body.error, 'card_closed');
+    assert.match(r.body.message, /closed/);
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.calWrites().length, 0);
+  }
+});
+
+test('I1: They backed out works on waiting and ready flows: no events, the card is withdrawn, nothing to take out', async () => {
+  for (const status of ['waiting', 'ready']) {
+    const s = await setup({ fl: { status } });
+    const r = await s.post({ action: 'backed_out', flow_id: 21, reason: 'Took another job' });
+    assert.equal(r.status, 200, status);
+    assert.deepEqual(r.body.remove, []);
+    assert.equal(s.flow().status, 'backed_out');
+    assert.equal(s.cand().status, 'withdrawn');
+    assert.equal(s.cand().close_reason, 'Backed out after accepting: Took another job');
+    assert.equal(s.rig.fetchLog.length, 0, 'nothing to cancel, so Google is not asked');
+  }
+});
+
+test('I4: set_manager saves the manager on a waiting or ready flow, and refuses an inactive one or a flow already started', async () => {
+  for (const status of ['waiting', 'ready']) {
+    const s = await setup({ fl: { status } });
+    const r = await s.post({ action: 'set_manager', flow_id: 21, member_id: 1 });
+    assert.equal(r.status, 200, status);
+    assert.equal(r.body.ok, true);
+    assert.equal(s.flow().manager_member_id, 1);
+    assert.equal(s.rig.fetchLog.length, 0, 'the hourly job tells them, not this');
+  }
+  const off = await setup({ tables: { team_members: [...TEAM, { id: 3, name: 'Gone Person', email: 'gone@welfareavenue.com', active: false }] } });
+  const r = await off.post({ action: 'set_manager', flow_id: 21, member_id: 3 });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /Gone Person/);
+  assert.equal(off.flow().manager_member_id, null);
+  const none = await setup();
+  assert.equal((await none.post({ action: 'set_manager', flow_id: 21, member_id: 99 })).status, 400);
+  for (const status of ['running', 'started', 'backed_out']) {
+    const late = await setup({ fl: { status } });
+    assert.equal((await late.post({ action: 'set_manager', flow_id: 21, member_id: 1 })).status, 409, status);
+    assert.equal(late.flow().manager_member_id, null);
+  }
+});
+
+const GRIDS = () => ({ hub_onboard_grids: [{ flow_id: 21, who: 'hire', slots: ['2026-10-25T14:00:00Z'] }, { flow_id: 21, who: 'manager', slots: ['2026-10-26T14:00:00Z'] }] });
+const gridOf = (s, who) => s.rows('hub_onboard_grids').find((g) => g.who === who).slots;
+test('I5: at set_manager, a manager other than the one who got the link starts with a clean grid and a fresh reminder', async () => {
+  const s = await setup({ fl: { manager_link_member_id: 2, manager_link_sent_at: NOW, reminded_manager_at: NOW }, tables: GRIDS() });
+  assert.equal((await s.post({ action: 'set_manager', flow_id: 21, member_id: 2 })).body.cleared, false);
+  assert.equal(gridOf(s, 'manager').length, 1, 'the same manager keeps their marks');
+  assert.equal(s.flow().reminded_manager_at, NOW);
+  const r = await s.post({ action: 'set_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.body.cleared, true);
+  assert.deepEqual(gridOf(s, 'manager'), []);
+  assert.equal(gridOf(s, 'hire').length, 1, 'the hire keeps theirs');
+  assert.equal(s.flow().reminded_manager_at, null);
+  assert.equal(s.flow().manager_link_member_id, 2, 'the hourly job sees the difference and sends the new link');
+});
+
+test('I5: at Start too, and the same manager keeps their marks', async () => {
+  const s = await setup({ fl: { manager_link_member_id: 2, manager_link_sent_at: NOW, reminded_manager_at: NOW }, tables: GRIDS() });
+  assert.equal((await s.start({ manager_member_id: 1 })).status, 200);
+  assert.deepEqual(gridOf(s, 'manager'), []);
+  assert.equal(s.flow().reminded_manager_at, null);
+  const same = await setup({ fl: { manager_link_member_id: 2, manager_link_sent_at: NOW, reminded_manager_at: NOW }, tables: GRIDS() });
+  assert.equal((await same.start({ manager_member_id: 2 })).status, 200);
+  assert.equal(gridOf(same, 'manager').length, 1);
+  assert.equal(same.flow().reminded_manager_at, NOW);
+});
+
+test('I4: a practice flow writes only its flow row at set_manager', async () => {
+  const s = await setup({ cand: { practice: true }, fl: { manager_link_member_id: 2 }, tables: GRIDS() });
+  const before = s.snapshot();
+  const r = await s.post({ action: 'set_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.practice, true);
+  assert.equal(s.flow().manager_member_id, 1);
+  const after = s.snapshot();
+  delete before.hub_onboard_flows; delete after.hub_onboard_flows;
+  assert.deepEqual(after, before);
+});
+
+test('D4: a person who backs out during a run stops it: the steps not begun end skipped, with a sentence', async () => {
+  const s = await setup();
+  s.db.on('hub_onboard_steps', 'update', (n, _o, db) => { if (n.step === 'roster' && n.status === 'done') db.rows('hub_onboard_flows')[0].status = 'backed_out'; });
+  assert.equal((await s.start()).status, 200);
+  assert.equal(s.step('roster').status, 'done');
+  for (const k of KEYS.slice(1)) { assert.equal(s.step(k).status, 'skipped', k); assert.match(s.step(k).detail, /backed out/); }
+  assert.equal(s.calWrites().length + s.notifies().length, 0);
+  assert.equal(s.assigned.length, 0);
+  assert.equal(s.flow().status, 'backed_out');
+});
+
+test('D5: the new manager hears about the invite only if it exists', async () => {
+  const s = await started();
+  await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.match(s.notifies().find((e) => e.body.tag.startsWith('onboard-manager-new')).body.body, /The invite is in your calendar\./);
+  assert.match(s.notifies().find((e) => e.body.tag.startsWith('onboard-manager-old')).body.body, /cancelled/);
+  const f = await started();
+  Object.assign(f.flow(), { one_on_one_event_id: null });
+  f.calReset();
+  await f.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  const body = f.notifies().find((e) => e.body.tag.startsWith('onboard-manager-new')).body.body;
+  assert.doesNotMatch(body, /in your calendar/);
+  assert.match(body, /has not gone out yet/);
+  assert.doesNotMatch(f.notifies().find((e) => e.body.tag.startsWith('onboard-manager-old')).body.body, /cancelled/);
+  const t = await started();
+  Object.assign(t.flow(), { one_on_one_event_id: null });
+  t.calReset();
+  await t.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE });
+  assert.doesNotMatch(t.notifies()[0].body.body, /The invite is updated/);
+});
+
+test('M2: the back-out list says created or already on the roster', async () => {
+  const made = await started();
+  assert.equal(made.flow().roster_created, true);
+  const a = await made.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.match(a.body.remove[0], /Created for this person/);
+  assert.match(a.body.remove[0], /Deactivate it by hand in Roster\./);
+  const linked = await started({ cand: { member_id: 2 } });
+  assert.equal(linked.flow().roster_created, false);
+  const b = await linked.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.match(b.body.remove[0], /Already on the roster before/);
+  assert.match(b.body.remove[0], /check whether it should stay/i);
+  assert.doesNotMatch(b.body.remove[0], /Deactivate/);
+});
+
+test('M2: a retry that finds the profile an earlier try made still counts it as created', async () => {
+  const s = await setup();
+  s.db.failOn('hub_candidates', 'update', 'the database said no');
+  await s.start();
+  assert.equal(s.step('roster').status, 'failed');
+  assert.equal(s.flow().roster_created, true);
+  await s.post({ action: 'retry', flow_id: 21, step: 'roster' });
+  assert.equal(s.step('roster').status, 'done');
+  assert.equal(s.flow().roster_created, true);
+});
+
+test('M3: change_time sets the moved event back to confirmed', async () => {
+  const s = await started();
+  s.calReset();
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(s.calWrites()[0].body.status, 'confirmed');
+});
+
+test('M4: the preview gives the department, and warns when it is blank', async () => {
+  const s = await setup();
+  const p = (await s.post({ action: 'preview', flow_id: 21 })).body;
+  assert.equal(p.department, 'progdev');
+  assert.ok(!p.warnings.some((w) => /department/i.test(w)));
+  const none = await setup({ tables: { hub_positions: [{ id: 5, title: 'Program Coordinator', dept: null, jd_url: 'https://docs.example.com/jd' }] } });
+  const q = (await none.post({ action: 'preview', flow_id: 21 })).body;
+  assert.equal(q.department, null);
+  assert.ok(q.warnings.some((w) => /no department/i.test(w)));
+});
+
+test('M6: google_manual on a practice flow simulates: no Google token, no roster write', async () => {
+  const s = await setup({ cand: { practice: true } });
+  await s.start({ skip: ['google'] });
+  assert.equal(s.step('google').status, 'skipped');
+  const team = structuredClone(s.rows('team_members'));
+  s.rig.fetchLog.length = 0;
+  const r = await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  assert.equal(r.status, 200);
+  assert.equal(s.step('google').status, 'done');
+  assert.match(s.step('google').detail, /Practice/);
+  assert.deepEqual(s.rows('team_members'), team);
+  assert.equal(s.rig.fetchLog.length, 0, 'no fetch at all');
+  assert.equal(s.flow().wa_email, 'alex.tremblay@welfareavenue.com');
+});
+
+test('M7: a flow and a card that disagree about practice are refused', async () => {
+  const a = await setup({ cand: { practice: true }, fl: { practice: false } });
+  const before = a.snapshot();
+  const r = await a.start();
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'practice_mismatch');
+  assert.match(r.body.message, /practice/);
+  assert.deepEqual(a.snapshot(), before);
+  const b = await setup({ cand: { practice: false }, fl: { practice: true } });
+  assert.equal((await b.start()).body.error, 'practice_mismatch');
+});
+
+test('M9: a quote in a name reaches Slack as a quote', async () => {
+  const s = await setup({ cand: { name: 'Alex "Lex" Tremblay & Co' } });
+  await s.start({ wa_email: 'alex.co@welfareavenue.com' });
+  const text = s.notifies().find((e) => e.body.event === 'onboard_date').body.text;
+  assert.match(text, /Alex "Lex" Tremblay &amp; Co/);
+  assert.doesNotMatch(text, /&quot;/);
+});
+
+/* TEMPLATE: the SOP's Onboarding Email */
+const HR_ROW = { id: 7, name: 'Hana Rossi', email: 'hr.person@welfareavenue.com', active: true };
+const numbers = (text) => text.split('\n').filter((l) => /^\d+\. /.test(l)).map((l) => l.split('.')[0]).join('');
+test('TEMPLATE: at Start the Hub saves its own text with the real values, in the SOP\'s order', async () => {
+  const s = await setup({ config: { onboard_slack_join_link: 'https://join.slack.example/x', onboard_google_video: 'https://video.example/g' }, tables: { team_members: [...TEAM, HR_ROW] } });
+  assert.equal((await s.start({ group_session: 'November 12', canva_link: 'https://www.canva.com/brand/join?token=a' })).status, 200);
+  const f = s.flow(), t = f.welcome_text;
+  assert.equal(f.welcome_edited, false);
+  assert.equal(f.welcome_subject, 'Welcome to Welfare Avenue! Your Next Steps');
+  assert.ok(t.startsWith('Dear Alex,\n\nCongratulations and welcome to the team at Welfare Avenue!\nWe\'re excited you\'ve accepted the Program Coordinator role within our organization.'), t);
+  assert.match(t, /Your first day is Sunday, November 1, 2026, and we can't wait/, 'the Toronto date of the call, in words');
+  assert.match(t, /Your onboarding call: Sunday, November 1, 2026.*10:30.*\. The invite is in your calendar\./);
+  assert.match(t, /with your manager, Sam Lee: Tuesday, November 3, 2026/);
+  assert.match(t, /group onboarding session with Sam Lee on November 12\. If you can't make it, let us know\. This step is crucial\./);
+  assert.match(t, /Email: alex\.tremblay@welfareavenue\.com\. We'll share your first password with you one to one\./);
+  assert.match(t, /This video shows you how: https:\/\/video\.example\/g/);
+  assert.match(t, /3\. Join your Slack workspace with your new Welfare Avenue email: https:\/\/join\.slack\.example\/x/);
+  assert.match(t, /4\. Join our Canva team: https:\/\/www\.canva\.com\/brand\/join\?token=a/);
+  assert.match(t, /5\. Sign the Contract\. Sent via DocuSign to your personal email\./);
+  assert.match(t, /6\. Review your job description.*: https:\/\/docs\.example\.com\/jd/);
+  assert.ok(t.endsWith('Looking forward to seeing all the great work you\'ll do with us!\nHana Rossi'), t);
+  assert.equal(numbers(t), '123456');
+  assert.doesNotMatch(t, /\[|—|\bAI\b/, 'no marked place left, Hub words only');
+});
+
+test('TEMPLATE: optional lines are left out and the steps renumber', async () => {
+  const s = await setup({ tables: { hub_positions: [{ id: 5, title: 'Program Coordinator', dept: 'progdev', jd_url: null }] } });
+  await s.start({ one_on_one_at: null });
+  const t = s.flow().welcome_text;
+  assert.equal(numbers(t), '12345', 'no Canva link: one step fewer');
+  assert.doesNotMatch(t, /Canva/);
+  assert.doesNotMatch(t, /group onboarding session/);
+  assert.doesNotMatch(t, /video/i);
+  assert.match(t, /Sam Lee: we'll confirm the time soon\./);
+  assert.match(t, /https:\/\/welfareavenue\.slack\.com/, 'the Slack default');
+  assert.match(t, /4\. Sign the Contract/);
+  assert.match(t, /5\. Review your job description and prepare questions to ask about it with your director\./, 'no link, and the line stays');
+  assert.match(t, /\nThe Welfare Avenue team$/, 'an HR person not on the roster: the team signs');
+});
+
+test('TEMPLATE: French, in the same order', async () => {
+  const s = await setup({ cand: { role: 'Gestionnaire des opérations' }, tables: { team_members: [...TEAM, HR_ROW] } });
+  await s.start({ group_session: '12 novembre', canva_link: 'https://www.canva.com/x' });
+  const t = s.flow().welcome_text;
+  assert.equal(s.flow().welcome_subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
+  assert.ok(t.startsWith('Bonjour Alex,\n\nFélicitations et bienvenue dans l\'équipe de Welfare Avenue!'), t);
+  assert.match(t, /accepté le poste de Gestionnaire des opérations/);
+  assert.match(t, /Votre premier jour est le dimanche 1er novembre 2026|Votre premier jour est le dimanche 1 novembre 2026/);
+  assert.match(t, /Votre appel d'accueil : /);
+  assert.match(t, /avec votre gestionnaire, Sam Lee : /);
+  assert.match(t, /le 12 novembre\. Si vous ne pouvez pas y être, dites-le-nous\./);
+  assert.match(t, /Courriel : alex\.tremblay@welfareavenue\.com\./);
+  assert.match(t, /4\. Joignez-vous à notre équipe Canva : https:\/\/www\.canva\.com\/x/);
+  assert.match(t, /5\. Signez le contrat\./);
+  assert.equal(numbers(t), '123456');
+  assert.doesNotMatch(t, /\[|—/);
+  const n = await setup({ cand: { role: 'Gestionnaire des opérations' } });
+  await n.start({ one_on_one_at: null });
+  assert.equal(numbers(n.flow().welcome_text), '12345');
+  assert.match(n.flow().welcome_text, /nous vous confirmerons l'heure bientôt/);
+  assert.match(n.flow().welcome_text, /L'équipe de Welfare Avenue$/);
+});
+
+test('TEMPLATE: the preview says what fills in at Start, and writes nothing', async () => {
+  const s = await setup();
+  const before = s.snapshot();
+  const { welcome: w } = (await s.post({ action: 'preview', flow_id: 21 })).body;
+  assert.match(w.text, /Your first day is \[first day: fills in at Start\]/);
+  assert.match(w.text, /\[Canva link: fills in at Start, or this line is left out\]/);
+  assert.equal(numbers(w.text), '123456');
+  assert.deepEqual(s.snapshot(), before);
+  const fr = await setup({ cand: { role: 'Gestionnaire des opérations' } });
+  assert.match((await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text, /\[premier jour : rempli au démarrage\]/);
+});
+
+test('TEMPLATE: no password goes in the text, even with a password nonce on the flow', async () => {
+  const s = await setup({ fl: { pw_nonce: 'SECRETNONCE', pw_expires_at: '2026-12-01T00:00:00Z' } });
+  await s.start();
+  const t = s.flow().welcome_text;
+  assert.doesNotMatch(t, /SECRETNONCE|\/o\//);
+  assert.equal(t.split('\n').filter((l) => /password/i.test(l)).length, 1, 'only the sentence saying HR shares it');
+  assert.match(t, /We'll share your first password with you one to one\. You'll change it the first time you sign in\./);
+});
+
+test('TEMPLATE: HR\'s edits win, and any marked place they kept fills in', async () => {
+  const s = await setup();
+  const p = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome;
+  const text = 'My own opening.\n' + p.text;
+  await s.start({ one_on_one_at: null, welcome: { subject: 'My subject', text } });
+  const f = s.flow();
+  assert.equal(f.welcome_edited, true);
+  assert.equal(f.welcome_subject, 'My subject');
+  assert.ok(f.welcome_text.startsWith('My own opening.\nDear Alex,'));
+  assert.match(f.welcome_text, /Your first day is Sunday, November 1, 2026/);
+  assert.doesNotMatch(f.welcome_text, /\[/, 'nothing left to fill in');
+  assert.doesNotMatch(f.welcome_text, /Canva|group onboarding/, 'empty lines go from an edited text too');
+  assert.equal(numbers(f.welcome_text), '12345');
+  const kept = f.welcome_text;
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(s.flow().welcome_text, kept, 'a later change leaves HR\'s text alone');
+  assert.equal((await s.post({ action: 'preview', flow_id: 21 })).body.welcome.subject, 'My subject', 'the preview shows what they saved');
+});
+
+test('TEMPLATE: the Hub\'s own saved text follows a change of time, 1-on-1, manager and Canva link', async () => {
+  const s = await started({}, { one_on_one_at: null });
+  assert.match(s.flow().welcome_text, /we'll confirm the time soon/);
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.match(s.flow().welcome_text, /Your first day is Wednesday, November 4, 2026/);
+  await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.match(s.flow().welcome_text, /Sam Lee: Thursday, November 5, 2026/);
+  await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.match(s.flow().welcome_text, /with your manager, Ruth Owen: /);
+  await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
+  assert.match(s.flow().welcome_text, /Join our Canva team: https:\/\/www\.canva\.com\/new/);
+  assert.equal(numbers(s.flow().welcome_text), '123456');
+  await s.post({ action: 'set_canva_link', flow_id: 21, link: '' });
+  assert.doesNotMatch(s.flow().welcome_text, /Canva/);
+});
+
+test('TEMPLATE: a practice flow saves the text on its own row and nothing else', async () => {
+  const s = await setup({ cand: { practice: true } });
+  await s.start();
+  assert.match(s.flow().welcome_text, /Your first day is Sunday, November 1, 2026/);
+  const before = s.snapshot();
+  s.rig.fetchLog.length = 0;
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.match(s.flow().welcome_text, /Wednesday, November 4, 2026/);
+  const after = s.snapshot();
+  delete before.hub_onboard_flows; delete after.hub_onboard_flows;
+  assert.deepEqual(after, before);
+  assert.equal(s.rig.fetchLog.length, 0);
+});
+
+const CANVA = 'https://www.canva.com/brand/join?token=abc123';
+test('CANVA: Start saves a good link, allows none, and refuses anything else with nothing written', async () => {
+  const good = await setup();
+  assert.equal((await good.start({ canva_link: '  ' + CANVA + ' ' })).status, 200);
+  assert.equal(good.flow().canva_link, CANVA);
+  const none = await setup();
+  assert.equal((await none.start({ canva_link: '' })).status, 200);
+  assert.equal(none.flow().canva_link, null);
+  const left = await setup();
+  assert.equal((await left.start()).status, 200, 'the field left out is empty too');
+  assert.equal(left.flow().canva_link, null);
+  for (const bad of ['http://www.canva.com/x', 'https://www.canva.com.evil.example/x', 'https://evil.example/https://www.canva.com/', 'canva.com/x', 'https://www.canva.com/a b']) {
+    const s = await setup();
+    const before = s.snapshot();
+    const r = await s.start({ canva_link: bad });
+    assert.equal(r.status, 400, bad);
+    assert.equal(r.body.error, 'bad_canva_link');
+    assert.match(r.body.message, /https:\/\/www\.canva\.com\//);
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+});
+
+test('CANVA: the preview gives the saved link', async () => {
+  const s = await setup({ fl: { canva_link: CANVA } });
+  assert.equal((await s.post({ action: 'preview', flow_id: 21 })).body.canva_link, CANVA);
+  const n = await setup();
+  assert.equal((await n.post({ action: 'preview', flow_id: 21 })).body.canva_link, null);
+});
+
+test('CANVA: set_canva_link saves, replaces and clears on any flow that has not backed out, with the same check', async () => {
+  for (const status of ['waiting', 'ready', 'running', 'started']) {
+    const s = await setup({ fl: { status } });
+    const r = await s.post({ action: 'set_canva_link', flow_id: 21, link: CANVA });
+    assert.equal(r.status, 200, status);
+    assert.equal(r.body.canva_link, CANVA);
+    assert.equal(s.flow().canva_link, CANVA);
+    assert.equal((await s.post({ action: 'set_canva_link', flow_id: 21, link: CANVA + 'new' })).status, 200);
+    assert.equal(s.flow().canva_link, CANVA + 'new');
+    const bad = await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://evil.example/' });
+    assert.equal(bad.status, 400);
+    assert.equal(bad.body.error, 'bad_canva_link');
+    assert.equal(s.flow().canva_link, CANVA + 'new', 'a refusal keeps the saved link');
+    assert.equal((await s.post({ action: 'set_canva_link', flow_id: 21, link: '' })).status, 200);
+    assert.equal(s.flow().canva_link, null);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+  const out = await setup({ fl: { status: 'backed_out' } });
+  const r = await out.post({ action: 'set_canva_link', flow_id: 21, link: CANVA });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'backed_out');
+  assert.equal(out.flow().canva_link, undefined);
+  assert.equal((await out.post({ action: 'set_canva_link', flow_id: 999, link: CANVA })).status, 404);
+});
+
+test('CANVA: a practice flow writes only its own flow row, and nothing goes outside', async () => {
+  const s = await setup({ cand: { practice: true } });
+  await s.start({ canva_link: CANVA });
+  assert.equal(s.flow().canva_link, CANVA);
+  const before = s.snapshot();
+  s.rig.fetchLog.length = 0;
+  assert.equal((await s.post({ action: 'set_canva_link', flow_id: 21, link: CANVA + '2' })).status, 200);
+  assert.equal(s.flow().canva_link, CANVA + '2');
+  const after = s.snapshot();
+  delete before.hub_onboard_flows; delete after.hub_onboard_flows;
+  assert.deepEqual(after, before);
+  assert.equal(s.rig.fetchLog.length, 0);
+});
+
+test('M10: task_done marks a step left to HR as done, with who did it, and ticks its checklist', async () => {
+  const s = await started();
+  assert.equal(s.step('welcome').status, 'hr_task');
+  const r = await s.post({ action: 'task_done', flow_id: 21, step: 'welcome' });
+  assert.equal(r.status, 200);
+  assert.equal(s.step('welcome').status, 'done');
+  assert.equal(s.step('welcome').by, 'hr.person@welfareavenue.com');
+  assert.match(s.step('welcome').detail, /hr\.person@welfareavenue\.com/);
+  assert.equal(s.rows('hr_setup_steps').find((x) => x.template_id === 'hrb1').done, true);
+  assert.ok(r.body.steps.some((x) => x.step === 'welcome' && x.status === 'done'));
+  const again = await s.post({ action: 'task_done', flow_id: 21, step: 'welcome' });
+  assert.equal(again.status, 409);
+  const g = await s.post({ action: 'task_done', flow_id: 21, step: 'google' });
+  assert.equal(g.status, 400);
+  assert.match(g.body.message, /I created it, continue/);
+  assert.equal(s.step('google').status, 'hr_task');
+  assert.equal((await s.post({ action: 'task_done', flow_id: 21, step: 'nope' })).status, 400);
+  const fresh = await setup();
+  assert.equal((await fresh.post({ action: 'task_done', flow_id: 21, step: 'hub' })).status, 409);
+  await s.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.equal((await s.post({ action: 'task_done', flow_id: 21, step: 'hub' })).body.error, 'backed_out');
 });
