@@ -595,5 +595,29 @@ begin
   exception when raise_exception then null; end;
 end $$;
 
+-- wa275_plan_assign (Task 3): the plan the hire's Yes makes, with no sign-in; the service key only, and the same plan as onboarding_assign
+do $$
+begin
+  assert has_function_privilege('service_role', 'public.wa275_plan_assign(bigint, text, date)', 'execute'), 'the service key may make the plan';
+  assert not has_function_privilege('authenticated', 'public.wa275_plan_assign(bigint, text, date)', 'execute') and not has_function_privilege('anon', 'public.wa275_plan_assign(bigint, text, date)', 'execute'), 'the browser may not: it has no staff check';
+  assert obj_description('public.wa275_plan_assign(bigint, text, date)'::regprocedure, 'pg_proc') is not null, 'plan_assign is commented';
+end $$;
+do $$
+declare m bigint; o bigint;
+begin
+  select id into m from public.team_members where email = 'w275.other@example.invalid';
+  o := public.wa275_plan_assign(m, 'hub (the new hire said yes)', date '2026-11-09');
+  assert (select started_at from public.onboardings where id = o) = date '2026-11-09', 'day one is the date given';
+  assert (select person_name from public.onboardings where id = o) = 'Test Other Member', 'named from the roster';
+  assert (select assigned_by from public.onboardings where id = o) = 'hub (the new hire said yes)', 'by is stored as given';
+  assert (select count(*) from public.onboarding_steps where onboarding_id = o) = (select count(*) from public.onboarding_template where active), 'every active onboarding step';
+  assert (select count(*) from public.hr_setup_steps where onboarding_id = o) = (select count(*) from public.hr_setup_template where active), 'every active HR setup step';
+  assert not exists (select 1 from public.onboarding_steps s join public.onboarding_template t on t.id = s.template_id where s.onboarding_id = o and s.due_date is distinct from public.onb_due(t.section, date '2026-11-09')), 'due dates count from day one';
+  begin perform public.wa275_plan_assign(m, 'x', null); assert false, 'no day one is refused';
+  exception when raise_exception then null; end;
+  begin perform public.wa275_plan_assign(-1, 'x', date '2026-11-09'); assert false, 'someone not on the roster is refused';
+  exception when raise_exception then null; end;
+end $$;
+
 select 'w275sql: all assertions passed' as result;
 rollback;

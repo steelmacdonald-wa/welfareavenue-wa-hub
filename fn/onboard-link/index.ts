@@ -1,4 +1,5 @@
-// Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability)
+// Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability;
+// v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown)
 // The public side of HR onboarding: the no-login links behind hub.welfareavenue.com/o/<token> (page by Task 4). One signed
 // token per purpose, <id>.<20 characters of HMAC-SHA256>, as in candidate-confirm, but the key is 'onboard-<purpose>:' + the
 // service key, so a link made for one purpose (or for candidate-confirm) opens nothing else:
@@ -35,6 +36,25 @@
 //              proposal, hireEmailed, practice?}; a refusal keeps onboard-run's status, error and which, with message {en, fr}; onboard-run not answering is 503.
 //   Both need propose mode (a wave271 grid link is wrong_link) and a link the manager holds (not_yours); a closed link gives {closed: true} as before,
 //   and the offer link cannot do either (wrong_link).
+// wave275 (v3), the offer link. The mode rule above applies to it too (an offered flow, a proposal, or a flow created on or after onboard_v2_since).
+//   GET adds {offerHours (hub_candidates.offer_hours, null for an offer from before wave275), hoursConfirmed, mode, proposal: {call_at, one_on_one_at} | null,
+//   bookedTimes: {call_at, one_on_one_at} | null, answer (hire_answer: yes, no or null), askAvailability, manager (their name), lengths: {callMin, oneMin}
+//   (propose mode only), setup: {steps: [{key, title:
+//   {en, fr}, body: {en, fr}}], ticks: {key: boolean}} | null (once accepted)}; GET ?setup is the same answer, for the rundown page. In propose mode the
+//   link stays open after booking (the closing page and the rundown), and only the grid shuts.
+//   POST accept   with offerHours set, needs hours_ok: true (else 400 hours_required, in both languages, naming the hours) and sets hours_confirmed_at.
+//              In propose mode the winning Accept then asks onboard-run accept_setup {flow_id} with the trigger secret, handed to EdgeRuntime.waitUntil, so
+//              the answer returns at once and the accounts are made in the background.
+//   POST yes   relays to onboard-run book {flow_id, call_at, one_on_one_at, by: 'hire'} with the proposed times: onboard-run checks both again (lead time
+//              onboard_yes_lead_hours, the manager's hours, hub@ meetings, other hires) and books. {ok, answer: 'yes', repeated, bookedTimes}; a time that has
+//              moved is 409 {ok: false, stale: true, error: 'stale', message, askAvailability, which}, and the page shows the grid (or the closing view).
+//   POST no    records hire_answer no (one per proposal: a double press records once) and tells the manager and HR (notify onboard_answer). {ok, answer:
+//              'no', repeated, askAvailability}: on, the page shows the hire's grid (onboard_grid_min_hours applies); off (already communicated), the
+//              closing view. A no after a new proposal, once the hire has said no before, is refused (409 answered: a person will be in touch), and the
+//              manager and HR are told once (setup_ticks.no_again_at).
+//   POST setup_tick {key, done}   one rundown tick, kept in setup_ticks as rd_<key> (the time it was ticked; a second tick keeps the first time; done
+//              false clears it), merged through wa275_tick_set. {ok, ticks}. Refused: bad_tick, not_accepted.
+//   yes, no and setup_tick need the offer link (wrong_link otherwise) after Accept (not_accepted); yes and no need propose mode and a proposal (no_proposal).
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
 // Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell, onboard_grid_min_hours the hire's minimum (app_config). The wall-clock
 // times are turned into instants with Intl for each day, so a clock change (01/11/26, 14/03/27) never shifts a cell by an hour.
@@ -76,7 +96,18 @@ const MSG: Record<string, { en: string; fr: string }> = {
   bad_availability: { en: 'Some of those hours do not work. Use times on 5-minute marks from 00:00 to 23:55, each end after its start, and a date once each. Please check and save again.', fr: 'Certaines de ces heures ne conviennent pas. Utilisez des heures par tranches de 5 minutes de 00:00 à 23:55, chaque fin après son début, et chaque date une seule fois. Vérifiez puis enregistrez de nouveau.' },
   no_manager: { en: 'This new hire has no onboarding manager yet. Please contact HR.', fr: 'Cette nouvelle recrue n\'a pas encore de gestionnaire d\'accueil. Veuillez communiquer avec les RH.' },
   not_yours: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' },
+  no_proposal: { en: 'We are still choosing your times. You will get an email within two days.', fr: 'Nous choisissons encore vos heures. Vous recevrez un courriel d\'ici deux jours.' },
+  answered: { en: 'Thank you. A person from Welfare Avenue will be in touch with you about the times.', fr: 'Merci. Une personne de Welfare Avenue communiquera avec vous au sujet des heures.' },
+  bad_tick: { en: 'That step is not one we know. Please reload the page and try again.', fr: 'Cette étape est inconnue. Veuillez recharger la page et réessayer.' },
 };
+/* built with the number of hours the offer asks for */
+const hoursRequired = (hours: number) => json({
+  ok: false, error: 'hours_required',
+  message: {
+    en: 'Please tick the box to confirm you can give at least ' + hours + ' hours a week to Welfare Avenue, then press Accept.',
+    fr: 'Veuillez cocher la case pour confirmer que vous pouvez consacrer au moins ' + hours + ' heures par semaine à Welfare Avenue, puis appuyer sur Accepter.',
+  },
+}, 400);
 const fail = (error: string, status: number) => json({ ok: false, error, message: MSG[error] }, status);
 /* built with the number, so the one message that carries a figure sits beside the static table */
 const tooFew = (hours: number) => json({
@@ -182,15 +213,19 @@ function onCellBoundary(ms: number, g: Grid): boolean {
 
 /* ---------- the rows behind a link ---------- */
 const OPEN = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // a card in any other stage is closed to this link
-type Cand = { id: number; name: string; role: string; status: string; summary: string; notes: string; owner: string | null; accepted_on: string | null; offer_respond_by: string | null; close_reason: string | null };
+type Cand = {
+  id: number; name: string; role: string; status: string; summary: string; notes: string; owner: string | null; accepted_on: string | null; offer_respond_by: string | null; close_reason: string | null;
+  offer_hours?: number | null; hours_confirmed_at?: string | null; practice?: boolean | null;
+};
 type Flow = {
   id: number; candidate_id: number; status: string; manager_member_id: number | null; manager_link_member_id: number | null; call_at: string | null; one_on_one_at: string | null;
   pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null;
   created_at?: string | null; proposed_call_at?: string | null; proposed_one_on_one_at?: string | null; proposed_by?: string | null; proposed_at?: string | null; hire_answer?: string | null;
+  hire_answered_at?: string | null; setup_ticks?: Record<string, unknown> | null; ask_availability?: boolean | null; practice?: boolean | null;
 };
-const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason';
-const FLOW_COLS = 'id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer';
-type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null };
+const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason, offer_hours, hours_confirmed_at, practice';
+const FLOW_COLS = 'id, candidate_id, status, practice, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, hire_answered_at, setup_ticks, ask_availability';
+type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null; mode?: 'propose' | 'grid' };
 
 /* a read that fails is not a link that fails: it throws, and the handler answers 503 */
 async function candidate(id: number): Promise<Cand | null> {
@@ -210,7 +245,9 @@ async function openLink(t: string): Promise<Link | null> {
   if (same(await mac('offer', m[1]), m[2])) {
     const cand = await candidate(id);
     if (!cand) return null;
-    return { kind: 'offer', cand, flow: await flowWhere('candidate_id', id) };
+    const l: Link = { kind: 'offer', cand, flow: await flowWhere('candidate_id', id) };
+    l.mode = l.flow ? await modeOf(l) : 'grid';   // wave275: the offer link follows the same rule as the mgr link
+    return l;
   }
   const mgr = same(await mac('mgr', m[1]), m[2]);
   const flow = await flowWhere('id', id);
@@ -237,7 +274,7 @@ const booked = (l: Link) => !!l.flow && (l.kind === 'manager' ? !!l.flow.one_on_
 function shut(l: Link): boolean {
   if (l.flow?.status === 'backed_out') return true;
   if (l.kind === 'password') return !!l.flow && (!!l.flow.pw_used_at || (!!l.flow.pw_expires_at && Date.parse(l.flow.pw_expires_at) < Date.now()));
-  if (booked(l)) return true;
+  if (booked(l) && !(l.kind === 'offer' && l.mode === 'propose')) return true;   // wave275: the hire's closing page and rundown stay open; saveGrid shuts the grid itself
   if (OPEN.includes(l.cand.status)) return false;   // hired is still open: the grid stays open until the meetings are booked
   return !(l.kind === 'offer' && answerOf(l.cand) === 'decline');   // closed, even if they accepted first; only someone who declined by link still sees their answer
 }
@@ -262,6 +299,20 @@ async function view(l: Link) {
     const mode = await modeOf(l);
     if (mode === 'propose' && !heldByManager(l.flow)) extra = { mode, notYours: true, message: MSG.not_yours };   // nothing of the manager's hours or calendar for a link that is not theirs
     else extra = mode === 'propose' ? { mode, ...(await proposeView(l, m)) } : { mode };
+  } else if (l.kind === 'offer') {   // wave275: the hire's side
+    const f = l.flow;
+    const m = f ? await managerRow(l) : null;
+    extra = {
+      offerHours: l.cand.offer_hours ?? null, hoursConfirmed: !!l.cand.hours_confirmed_at, mode: l.mode || 'grid',
+      proposal: f?.proposed_at && f.proposed_call_at && f.proposed_one_on_one_at ? { call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at) } : null,
+      bookedTimes: f?.call_at ? { call_at: normal(f.call_at), one_on_one_at: normal(f.one_on_one_at) } : null,
+      answer: f?.hire_answer ?? null, askAvailability: f ? f.ask_availability !== false : true, manager: m?.name || null,
+      setup: l.cand.accepted_on && f ? setupOf(f) : null,
+    };
+    if (l.mode === 'propose') {   // the page shows each meeting as a span ("10 to 11 am")
+      const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min']);
+      extra.lengths = { callMin: positive(cfg.get('onboard_call_min'), 60), oneMin: positive(cfg.get('onboard_one_on_one_min'), 30) };
+    }
   }
   const grid = l.kind === 'password' ? null : await gridWindow();
   const inWindow = new Set(grid ? grid.slots : []);   // saved slots that have since started, or fell out of the window, are not shown
@@ -467,7 +518,7 @@ async function tellSigner(c: Cand, when: string): Promise<void> {
   } catch (_) { /* the answer is already saved; the card shows it */ }
 }
 
-async function answer(l: Link, a: 'accept' | 'decline') {
+async function answer(l: Link, a: 'accept' | 'decline', hoursOk?: unknown) {
   const c = l.cand, now = new Date(), today = torontoToday(), when = whenEn(now);
   const reply = (given: string, repeated: boolean, late: boolean) => json({ ok: true, first: firstName(c.name), role: c.role, lang: langOf(c), answer: given, answered: given, repeated, late });
   const lateNow = lateAt(c, today);
@@ -475,8 +526,11 @@ async function answer(l: Link, a: 'accept' | 'decline') {
   if (prior === 'accept' && !OPEN.includes(c.status)) return closedReply(false);   // they accepted, then the card closed: no "Thank you", contact HR
   if (prior) return reply(prior, true, prior === 'accept' && lateAt(c, String(c.accepted_on).slice(0, 10)));
   if (shut(l)) return closedReply(false);
+  /* wave275: an offer with hours a week is accepted only with the box ticked ("I confirm I can give at least N hours a week"); an older offer has none */
+  const hours = Number(c.offer_hours) > 0 ? Number(c.offer_hours) : 0;
+  if (a === 'accept' && hours && hoursOk !== true) return hoursRequired(hours);
   const patch = a === 'accept'
-    ? { accepted_on: today, notes: (String(c.notes || '') + '\nAccepted the offer, ' + when + ' (offer link).').trim() }
+    ? { accepted_on: today, ...(hours ? { hours_confirmed_at: now.toISOString() } : {}), notes: (String(c.notes || '') + '\nAccepted the offer, ' + when + ' (offer link)' + (hours ? ', confirming at least ' + hours + ' hours a week' : '') + '.').trim() }
     : { status: 'declined', close_reason: 'Declined by link', stage_at: now.toISOString(), notes: (String(c.notes || '') + '\nDeclined the offer, ' + when + ' (offer link).').trim() };
   // the claim: only the answer that finds the card still unanswered and open changes it, so a double click or a second tab cannot answer twice
   const { data: won, error } = await svc.from('hub_candidates')
@@ -492,11 +546,170 @@ async function answer(l: Link, a: 'accept' | 'decline') {
     ? { entity_type: 'candidate', entity_id: String(c.id), field: 'accepted_on', old_value: null, new_value: today, changed_by: 'candidate (offer link)' }
     : { entity_type: 'candidate', entity_id: String(c.id), field: 'status', old_value: String(c.status), new_value: 'declined (Declined by link)', changed_by: 'candidate (offer link)' });
   if (a === 'decline' && !c.owner) await tellSigner(c, when);
+  if (a === 'accept') await startSetup(c);
   return reply(a, false, a === 'accept' && lateNow);
 }
 
-async function saveGrid(l: Link, slots: unknown) {
+/* ---------- wave275: the setup at Accept, in the background ---------- */
+/* the Accept is saved: onboard-run makes the profile, the Google account and the Hub access (accept_setup). The hire does not wait for Google: the call is
+   handed to the runtime (EdgeRuntime.waitUntil), which keeps it alive after the answer is sent. Only a flow on the wave275 path asks; onboard-run checks the
+   release time itself. Nothing here can undo or hold up the acceptance: a failure is a log line, and HR sees the steps on the card. */
+function inBackground(p: Promise<unknown>): void {
+  // deno-lint-ignore no-explicit-any
+  const rt = (globalThis as any).EdgeRuntime;
+  if (rt && typeof rt.waitUntil === 'function') rt.waitUntil(p);
+  else p.catch(() => {});
+}
+async function runAsk(body: Record<string, unknown>, ms: number): Promise<Response | null> {   // onboard-run with the trigger secret; null when it cannot be asked
+  const { data: sec } = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
+  if (!sec) return null;
+  return await fetch(SUPABASE_URL + '/functions/v1/onboard-run', {
+    method: 'POST', signal: AbortSignal.timeout(ms),
+    headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec), Authorization: 'Bearer ' + ANON_KEY },
+    body: JSON.stringify(body),
+  });
+}
+async function startSetup(c: Cand): Promise<void> {
+  try {
+    const flow = await flowWhere('candidate_id', c.id);   // the trigger has just moved it to waiting (or made it)
+    if (!flow || (await modeOf({ kind: 'offer', cand: c, flow })) !== 'propose') return;
+    inBackground((async () => {
+      try {
+        const res = await runAsk({ action: 'accept_setup', flow_id: flow.id }, 140000);
+        if (!res) console.error('onboard-link: the trigger secret could not be read, so the setup at Accept did not start for flow ' + flow.id);
+        else if (!res.ok) console.error('onboard-link: onboard-run accept_setup said ' + res.status + ' for flow ' + flow.id);
+      } catch (e) { console.error('onboard-link: onboard-run accept_setup did not answer for flow ' + flow.id + ': ' + String((e as Error)?.message || e)); }
+    })());
+  } catch (e) { console.error('onboard-link: the setup at Accept did not start for candidate ' + c.id + ': ' + String((e as Error)?.message || e)); }
+}
+
+/* ---------- wave275: Yes or No to the proposed times ---------- */
+/* the hire's link after Accept, on the wave275 path: null when it may answer */
+function answerGuard(l: Link): Response | null {
+  if (l.kind !== 'offer') return fail('wrong_link', 400);
   if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
+  if (!l.cand.accepted_on || !l.flow) return fail('not_accepted', 409);
+  return null;
+}
+const times = (a: unknown, b: unknown) => ({ call_at: normal(a), one_on_one_at: normal(b) });
+const whenAt = (iso: unknown) => new Date(String(iso)).toLocaleString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: TZ });
+/* the manager and HR, through notify's onboard_answer (the trigger secret). The answer is already saved, so this waits at most 8 seconds and never fails it. */
+async function tellAnswer(l: Link, tag: string, title: string, body: string): Promise<void> {
+  if (l.cand.practice || l.flow?.practice) return;   // a practice applicant tells nobody
+  try {
+    const m = await managerRow(l);
+    const hr = String((await settings(['hr_notify_emails'])).get('hr_notify_emails') || '').split(/[,\s]+/);
+    const to = Array.from(new Set([String(m?.email || ''), ...hr].map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x))));
+    if (!to.length) return;
+    const { data: sec } = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
+    if (!sec) return;
+    await fetch(SUPABASE_URL + '/functions/v1/notify', {
+      method: 'POST', signal: AbortSignal.timeout(8000),
+      headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec), Authorization: 'Bearer ' + ANON_KEY },
+      body: JSON.stringify({ event: 'onboard_answer', to, title, body, url: '#hrcentre/onboarding', tag, text: esc(body) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' }),
+    });
+  } catch (_) { /* the answer is saved; the card shows it */ }
+}
+
+async function sayNo(l: Link) {
+  const stop = answerGuard(l);
+  if (stop) return stop;
+  if (l.mode !== 'propose') return fail('wrong_link', 400);
+  const f = l.flow!, c = l.cand, ask = f.ask_availability !== false;
+  if (f.call_at || f.hire_answer === 'yes') return json({ ok: true, answer: 'yes', repeated: true, bookedTimes: times(f.call_at, f.one_on_one_at) });
+  if (f.hire_answer === 'no') return json({ ok: true, answer: 'no', repeated: true, askAvailability: ask });
+  if (!f.proposed_at || !f.proposed_call_at || !f.proposed_one_on_one_at) return fail('no_proposal', 409);
+  const role = c.role || 'new hire';
+  if (f.hire_answered_at) {   // they said no before, and these are the new times: the second disagreement goes to a person, told once
+    const { data: won } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'no_again_at', p_value: new Date().toISOString(), p_if_unset: true });
+    if (won === true) {
+      await svc.from('change_log').insert({ entity_type: 'onboard_flow', entity_id: String(f.id), field: 'hire_answer', old_value: null, new_value: 'no again (to a person)', changed_by: 'candidate (offer link)' });
+      await tellAnswer(l, 'onboard-no-again-' + f.id, c.name + ' said no again to the times',
+        c.name + ' (' + role + ') said no again, to the onboarding call on ' + whenAt(f.proposed_call_at) + ' and the 1-on-1 on ' + whenAt(f.proposed_one_on_one_at) + '. Please get in touch with them to agree the times.');
+    }
+    return fail('answered', 409);
+  }
+  /* the claim: one no per proposal, so a double press records and tells once */
+  const at = new Date().toISOString();
+  const { data: won, error } = await svc.from('hub_onboard_flows').update({ hire_answer: 'no', hire_answered_at: at, updated_at: at })
+    .eq('id', f.id).is('hire_answer', null).is('hire_answered_at', null).is('call_at', null).eq('proposed_at', f.proposed_at).select('id');
+  if (error) return fail('save', 500);
+  if (!(won as unknown[] | null)?.length) {
+    const again = await flowWhere('id', f.id);
+    if (again?.hire_answer === 'no') return json({ ok: true, answer: 'no', repeated: true, askAvailability: again.ask_availability !== false });
+    if (again?.call_at || again?.hire_answer === 'yes') return json({ ok: true, answer: 'yes', repeated: true, bookedTimes: times(again.call_at, again.one_on_one_at) });
+    return fail('save', 409);
+  }
+  await svc.from('change_log').insert({ entity_type: 'onboard_flow', entity_id: String(f.id), field: 'hire_answer', old_value: null, new_value: 'no', changed_by: 'candidate (offer link)' });
+  await tellAnswer(l, 'onboard-no-' + f.id, c.name + ' said no to the times',
+    c.name + ' (' + role + ') said no to the onboarding call on ' + whenAt(f.proposed_call_at) + ' and the 1-on-1 on ' + whenAt(f.proposed_one_on_one_at) + '. '
+      + (ask ? firstName(c.name) + ' is marking their availability; pick new times from their card in Onboarding.' : 'Their availability was already communicated: get in touch with them with other times.'));
+  return json({ ok: true, answer: 'no', repeated: false, askAvailability: ask });
+}
+
+/* Yes: onboard-run checks both times again and books them (book, by 'hire'); this only checks the link and relays */
+async function sayYes(l: Link) {
+  const stop = answerGuard(l);
+  if (stop) return stop;
+  if (l.mode !== 'propose') return fail('wrong_link', 400);
+  const f = l.flow!;
+  if (f.call_at || f.hire_answer === 'yes') return json({ ok: true, answer: 'yes', repeated: true, bookedTimes: times(f.call_at, f.one_on_one_at) });
+  if (f.hire_answer === 'no') return json({ ok: true, answer: 'no', repeated: true, askAvailability: f.ask_availability !== false });
+  if (!f.proposed_at || !f.proposed_call_at || !f.proposed_one_on_one_at) return fail('no_proposal', 409);
+  let res: Response | null;
+  try {
+    res = await runAsk({ action: 'book', flow_id: f.id, call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at), by: 'hire' }, 60000);
+  } catch (_) { return fail('unavailable', 503); }
+  if (!res) return fail('unavailable', 503);
+  // deno-lint-ignore no-explicit-any
+  const j: any = await res.json().catch(() => null);
+  if (res.ok && j?.ok) return json({ ok: true, answer: 'yes', repeated: !!j.repeated, bookedTimes: times(j.call_at, j.one_on_one_at) });
+  if (j?.error === 'stale' && j.messages?.en && j.messages?.fr) {
+    return json({ ok: false, stale: true, error: 'stale', message: { en: String(j.messages.en), fr: String(j.messages.fr) }, askAvailability: j.ask_availability !== false, ...(j.which ? { which: j.which } : {}) }, 409);
+  }
+  if (j && typeof j.error === 'string' && j.messages?.en && j.messages?.fr) return json({ ok: false, error: j.error, message: { en: String(j.messages.en), fr: String(j.messages.fr) } }, res.status >= 400 ? res.status : 409);
+  console.error('onboard-link: onboard-run book said ' + res.status + ' ' + String(j?.error || ''));
+  return fail('unavailable', 503);
+}
+
+/* ---------- wave275: the setup rundown (/o/<token>?setup), from the SOP's onboarding-call checklist, for the hire to do alone ---------- */
+/* Ticks live in setup_ticks as rd_<key>, so they never mix with the Hub's own keys there (hire_times_at, accept_setup_at, no_again_at). The welcome email
+   (wave275 Task 4) lists the same steps; functions are single files, so it keeps its own copy of these words. */
+export const SETUP: Array<{ key: string; title: { en: string; fr: string }; body: { en: string; fr: string } }> = [
+  { key: 'profile', title: { en: 'Add your Welfare Avenue account to Chrome', fr: 'Ajoutez votre compte Welfare Avenue à Chrome' },
+    body: { en: 'In Chrome, add a new profile, sign in with your Welfare Avenue address and turn on sync. Keep your Welfare Avenue work in that profile from now on.', fr: 'Dans Chrome, ajoutez un nouveau profil, connectez-vous avec votre adresse Welfare Avenue et activez la synchronisation. Gardez votre travail pour Welfare Avenue dans ce profil à partir de maintenant.' } },
+  { key: 'bookmarks', title: { en: 'Bookmark Gmail and Calendar', fr: 'Ajoutez Gmail et Agenda à vos favoris' },
+    body: { en: 'In that profile, open Gmail (mail.google.com) and Google Calendar (calendar.google.com), and bookmark both.', fr: 'Dans ce profil, ouvrez Gmail (mail.google.com) et Google Agenda (calendar.google.com), puis ajoutez-les tous les deux à vos favoris.' } },
+  { key: 'hub', title: { en: 'Sign in to the Hub', fr: 'Connectez-vous au Hub' },
+    body: { en: 'Go to hub.welfareavenue.com and press Sign in with Google, with your Welfare Avenue account.', fr: 'Allez sur hub.welfareavenue.com et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.' } },
+  { key: 'slack', title: { en: 'Join Slack', fr: 'Joignez-vous à Slack' },
+    body: { en: 'Join the Welfare Avenue Slack with your Welfare Avenue address (the link is in your welcome email), then accept the invitation to your onboarding channel.', fr: 'Joignez-vous au Slack de Welfare Avenue avec votre adresse Welfare Avenue (le lien est dans votre courriel de bienvenue), puis acceptez l\'invitation à votre canal d\'accueil.' } },
+  { key: 'academy', title: { en: 'Open the Avenue Academy and your plan', fr: 'Ouvrez l\'Avenue Academy et votre plan' },
+    body: { en: 'In the Hub, open the Avenue Academy and look through your onboarding plan, so you know what your first weeks hold.', fr: 'Dans le Hub, ouvrez l\'Avenue Academy et parcourez votre plan d\'accueil, pour savoir ce qui vous attend les premières semaines.' } },
+  { key: 'loom', title: { en: 'Accept the Loom invitation', fr: 'Acceptez l\'invitation Loom' },
+    body: { en: 'When the Loom invitation reaches your Welfare Avenue inbox, accept it.', fr: 'Quand l\'invitation Loom arrive dans votre boîte Welfare Avenue, acceptez-la.' } },
+  { key: 'canva', title: { en: 'Join Canva', fr: 'Joignez-vous à Canva' },
+    body: { en: 'If your welcome email has a Canva link, use it to join the Welfare Avenue team on Canva.', fr: 'Si votre courriel de bienvenue contient un lien Canva, utilisez-le pour vous joindre à l\'équipe Welfare Avenue sur Canva.' } },
+  { key: 'drives', title: { en: 'Find your Drives and Google Groups', fr: 'Repérez vos Drives et vos groupes Google' },
+    body: { en: 'In Google Drive, look under Shared drives for the team drives you have been added to, and check which Google Groups you are in. Nothing to do with them yet.', fr: 'Dans Google Drive, regardez sous Drives partagés les dossiers d\'équipe auxquels vous avez été ajouté, et vérifiez de quels groupes Google vous faites partie. Rien à faire pour l\'instant.' } },
+  { key: 'weekly', title: { en: 'Find your weekly meeting', fr: 'Repérez votre rencontre hebdomadaire' },
+    body: { en: 'Look in your Calendar for your team\'s weekly meeting and accept the invitation.', fr: 'Cherchez dans votre Agenda la rencontre hebdomadaire de votre équipe et acceptez l\'invitation.' } },
+];
+const SETUP_KEYS = SETUP.map((s) => s.key);
+const ticksOf = (f: Flow | null) => Object.fromEntries(SETUP_KEYS.map((k) => [k, !!f?.setup_ticks && f.setup_ticks['rd_' + k] != null && f.setup_ticks['rd_' + k] !== false]));
+const setupOf = (f: Flow) => ({ steps: SETUP, ticks: ticksOf(f) });
+async function setupTick(l: Link, key: unknown, done: unknown) {
+  const stop = answerGuard(l);
+  if (stop) return stop;
+  if (typeof key !== 'string' || !SETUP_KEYS.includes(key) || typeof done !== 'boolean') return fail('bad_tick', 400);
+  /* merged into setup_ticks, one key: a tick keeps the first time it was ticked (claimed while empty); undone clears it */
+  const { error } = await svc.rpc('wa275_tick_set', { p_flow: l.flow!.id, p_key: 'rd_' + key, p_value: done ? new Date().toISOString() : null, p_if_unset: done });
+  if (error) return fail('save', 500);
+  return json({ ok: true, ticks: ticksOf(await flowWhere('id', l.flow!.id)) });
+}
+
+async function saveGrid(l: Link, slots: unknown) {
+  if (shut(l) || !OPEN.includes(l.cand.status) || booked(l)) return closedReply(booked(l));   // booked: a wave275 hire's link stays open, but not its grid
   if (!l.flow) return fail('not_accepted', 409);
   if (!Array.isArray(slots)) return fail('bad_slots', 400);
   if (slots.length > MAX_SLOTS) return fail('too_many_slots', 400);
@@ -539,12 +752,15 @@ Deno.serve(async (req: Request) => {
     if (!link) return fail('bad_link', 404);
     if (req.method === 'GET') return json(await view(link));
 
-    if (!['accept', 'decline', 'grid', 'password', 'availability', 'propose'].includes(a)) return fail('answer', 400);
+    if (!['accept', 'decline', 'grid', 'password', 'availability', 'propose', 'yes', 'no', 'setup_tick'].includes(a)) return fail('answer', 400);
     if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
     if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : await saveGrid(link, body.slots);
     if (a === 'availability') return await saveAvailability(link, body.availability);
     if (a === 'propose') return await relayPropose(link, body.call_at, body.one_on_one_at);
-    return link.kind === 'offer' ? await answer(link, a as 'accept' | 'decline') : fail('wrong_link', 400);
+    if (a === 'yes') return await sayYes(link);
+    if (a === 'no') return await sayNo(link);
+    if (a === 'setup_tick') return await setupTick(link, body.key, body.done);
+    return link.kind === 'offer' ? await answer(link, a as 'accept' | 'decline', body.hours_ok) : fail('wrong_link', 400);
   } catch (e) {
     console.error('onboard-link: ' + String((e as Error)?.message || e));
     return fail('unavailable', 503);

@@ -295,6 +295,28 @@ revoke all on function public.wa275_tick_set(bigint, text, jsonb, boolean) from 
 grant execute on function public.wa275_tick_set(bigint, text, jsonb, boolean) to service_role;
 comment on function public.wa275_tick_set(bigint, text, jsonb, boolean) is 'wave275: sets one key of hub_onboard_flows.setup_ticks to p_value (a json null clears it), merged into the object that is there, and returns true when the row was written. With p_if_unset true it writes only while that key is absent or null: onboard-run claims the hire_times email with it (key hire_times_at) and clears the key when new times are proposed. Keys are 1 to 40 of a to z and _. The service key only (onboard-run and onboard-link); never the browser.';
 
+-- 7b. (Task 3) the onboarding plan when the hire's Yes books the times. onboarding_assign (wa271a 10) checks is_wa_staff(), which is false for the service
+--     key, and the hire has no sign-in; this is the same plan, made for onboard-run with the service key only. Keep the two in step.
+create or replace function public.wa275_plan_assign(p_member_id bigint, p_by text, p_start date)
+returns bigint language plpgsql security definer set search_path to '' as $function$
+declare v_id bigint; v_name text;
+begin
+  if p_start is null then raise exception 'wa275_plan_assign: day one (p_start) is needed'; end if;
+  select name into v_name from public.team_members where id = p_member_id;
+  if v_name is null then raise exception 'member not found'; end if;
+  insert into public.onboardings (member_id, person_name, assigned_by, started_at)
+  values (p_member_id, v_name, p_by, p_start) returning id into v_id;
+  insert into public.onboarding_steps (onboarding_id, template_id, due_date)
+  select v_id, t.id, public.onb_due(t.section, p_start) from public.onboarding_template t where t.active on conflict do nothing;
+  insert into public.hr_setup_steps (onboarding_id, template_id)
+  select v_id, t.id from public.hr_setup_template t where t.active on conflict do nothing;
+  perform public.wa166_onb_sync(v_id);
+  return v_id;
+end $function$;
+revoke all on function public.wa275_plan_assign(bigint, text, date) from public, anon, authenticated;
+grant execute on function public.wa275_plan_assign(bigint, text, date) to service_role;
+comment on function public.wa275_plan_assign(bigint, text, date) is 'wave275: starts the HR onboarding plan for a roster member when the new hire''s Yes books their times (onboard-run book, with the service key). The same plan as onboarding_assign: the onboardings row with day one p_start, the onboarding_template steps with due dates counted from it, the hr_setup_template steps, and wa166_onb_sync. onboarding_assign stays the one the page and HR''s Start use (it checks staff); this one has no sign-in to check, so only the service key may call it.';
+
 -- 8. settings (HR can change them) ; onboard_v2_since is deliberately absent: it is set at release
 insert into public.app_config (key, value) values
   ('onboard_auto_hub', 'on'), ('onboard_propose_lead_hours', '48'), ('onboard_yes_lead_hours', '24')

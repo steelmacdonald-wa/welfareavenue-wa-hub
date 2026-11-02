@@ -104,6 +104,7 @@ drop function if exists public.wa275_manager_of(bigint);
 drop function if exists public.wa275_availability_set(jsonb);
 drop function if exists public.wa275_availability_of(bigint);
 drop function if exists public.wa275_tick_set(bigint, text, jsonb, boolean);
+drop function if exists public.wa275_plan_assign(bigint, text, date);
 drop function if exists public.wa275_availability_ok(jsonb);
 drop function if exists public.wa275_blocks_ok(jsonb);
 

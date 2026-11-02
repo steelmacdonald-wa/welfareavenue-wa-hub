@@ -11,7 +11,7 @@ const NOTIFY = 'https://stub.supabase.test/functions/v1/notify';
 const NOW = '2026-10-20T12:00:00Z';
 const CALL = '2026-11-02T03:30:00.000Z';      // 22:30 on 01/11/26 in Toronto: the UTC date is the wrong one
 const ONE = '2026-11-03T15:00:00.000Z';
-const KEYS = ['roster', 'google', 'plan', 'invites', 'manager', 'hub', 'slack', 'welcome'];
+const KEYS = ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'slack', 'welcome'];   // wave275: the plan's order (at Accept, then at booking)
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
 const SA = JSON.stringify({ client_email: 'hub@stub.iam', private_key: privateKey, token_uri: 'https://oauth2.googleapis.com/token' });
 
@@ -311,7 +311,7 @@ test('nextSteps follows the dependency table', async () => {
   assert.deepEqual(s.rig.mod.nextSteps([]), ['roster']);
   assert.deepEqual(next({ roster: 'failed', google: 'waiting' }), []);
   assert.deepEqual(next({ roster: 'done' }), ['google', 'plan', 'invites', 'manager', 'slack']);
-  assert.deepEqual(next({ roster: 'done', google: 'done' }), ['plan', 'invites', 'manager', 'hub', 'slack', 'welcome']);
+  assert.deepEqual(next({ roster: 'done', google: 'done' }), ['hub', 'plan', 'invites', 'manager', 'slack', 'welcome']);
   assert.deepEqual(next({ roster: 'done', google: 'skipped', plan: 'done', invites: 'done', manager: 'done', slack: 'skipped', hub: 'waiting', welcome: 'done' }), ['hub']);
   assert.deepEqual(next({ roster: 'done', google: 'failed', plan: 'done', invites: 'done', manager: 'done', slack: 'done', hub: 'waiting', welcome: 'waiting' }), []);
   assert.deepEqual(next({ roster: 'done', google: 'hr_task', plan: 'done', invites: 'done', manager: 'done', slack: 'hr_task', hub: 'waiting', welcome: 'waiting' }), []);
@@ -622,7 +622,9 @@ test('google_manual refuses an address another roster profile holds, and a flow 
 test('with the settings on, an entry with no run is still an HR task', async () => {
   const s = await setup({ config: { onboard_auto_google: 'on', onboard_auto_slack: 'on' } });
   await s.start();
-  assert.deepEqual(s.statuses(), { roster: 'done', google: 'hr_task', plan: 'done', invites: 'done', manager: 'done', hub: 'hr_task', slack: 'hr_task', welcome: 'hr_task' });
+  /* wave275: google and hub have runs now. With no first password in the vault google is HR's (with its reason), and hub waits on it; slack and welcome have no run */
+  assert.deepEqual(s.statuses(), { roster: 'done', google: 'hr_task', plan: 'done', invites: 'done', manager: 'done', hub: 'waiting', slack: 'hr_task', welcome: 'hr_task' });
+  assert.match(s.step('google').detail, /^The first password is not set in admin settings/);
 });
 
 test('a step given a run is held back by its setting when it is off, and runs when it is on', async () => {
@@ -2299,4 +2301,352 @@ test('w275 fix: a time without its zone (Z or +hh:mm) is bad_time; the same inst
   const r = await ok.propose({ call_at: '2026-10-26T10:00:00-04:00', one_on_one_at: '2026-10-26T11:30:00.000-04:00' });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(ok.flow().proposed_call_at, P_CALL);
+});
+
+/* ---------- wave275 Task 3: accept_setup {flow_id}, book {flow_id, call_at, one_on_one_at, by}, the google and hub steps, and hub-invite's secret path ---------- */
+/* NOW is Tuesday 20/10/26, 08:00 in Toronto. The flow was created after onboard_v2_since, so it is on the wave275 path. */
+const SINCE = '2026-10-01T00:00:00Z';
+const FIRST_PW = 'Lantern-Harbour-62';   // made up for these tests; it must never reach a table, a step detail or the console
+const USERS = 'https://admin.googleapis.com/admin/directory/v1/users';
+const HUB_INVITE = 'https://stub.supabase.test/functions/v1/hub-invite';
+const PROPOSED = { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_by: 'sam.lee@welfareavenue.com', proposed_at: '2026-10-19T12:00:00.000Z' };
+async function t3({ cand = {}, fl = {}, config = {}, tables, flows, pw = FIRST_PW, google, invite, notifyReply } = {}) {
+  const s = await w275({ cand, fl: { status: 'waiting', created_at: '2026-10-15T12:00:00Z', ...fl }, config: { onboard_v2_since: SINCE, onboard_auto_google: 'on', onboard_auto_hub: 'on', onboard_yes_lead_hours: '24', ...config }, tables, flows, notifyReply });
+  if (pw != null) s.rig.env.ONBOARD_FIRST_PASSWORD = pw;
+  s.users = () => s.rig.fetchLog.filter((e) => e.url.startsWith(USERS));
+  s.inserts = () => s.users().filter((e) => e.method === 'POST');
+  s.invites = () => s.rig.fetchLog.filter((e) => e.url === HUB_INVITE);
+  s.rig.fetchOn(USERS, (e) => {   // users.insert; the read-back GET goes to the setup's /users/<address> route
+    const out = google ? google(e) : null;
+    if (out) return out;
+    s.taken.add(e.body.primaryEmail);
+    return { json: { id: 'g1', primaryEmail: e.body.primaryEmail } };
+  });
+  s.rig.fetchOn(HUB_INVITE, (e) => (invite ? invite(e) : { json: { ok: true, email: e.body.email, member_id: 3, email_sent: true, hub_role: 'member' } }));
+  s.planned = [];
+  s.db.onRpc('wa275_plan_assign', (a, db, w) => {
+    assert.equal(w.jwt, null, 'the hire\'s Yes has no sign-in: the plan is made with the service key');
+    s.planned.push(a);
+    const on = db.insert('onboardings', { member_id: a.p_member_id, person_name: 'x', assigned_by: a.p_by, started_at: a.p_start, completed_at: null });
+    for (const t of SETUP) db.insert('hr_setup_steps', { onboarding_id: on.id, template_id: t, done: false });
+    return on.id;
+  });
+  s.acceptSetup = () => s.post({ action: 'accept_setup', flow_id: 21 }, SECRET);
+  s.book = (body = {}) => s.post({ action: 'book', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, by: 'hire', ...body }, SECRET);
+  s.noPw = () => assert.ok(!JSON.stringify(s.db.tables).includes(FIRST_PW), 'the first password is in no table');
+  return s;
+}
+async function quietly(fn) {   // what the function said on the console while fn ran
+  const said = [], keep = {};
+  for (const k of ['log', 'info', 'warn', 'error', 'debug']) { keep[k] = console[k]; console[k] = (...a) => said.push(a.map(String).join(' ')); }
+  try { await fn(); } finally { Object.assign(console, keep); }
+  return said.join('\n');
+}
+
+test('w275 accept_setup: roster, google and hub run at Accept; the profile is active with no start date, the card stays at offer, the account is made and read back', async () => {
+  const s = await t3();
+  const r = await s.acceptSetup();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(s.statuses(), { roster: 'done', google: 'done', plan: undefined, invites: undefined, manager: undefined, hub: 'done', slack: undefined, welcome: undefined });
+  const m = s.rows('team_members').at(-1);
+  assert.deepEqual([m.name, m.active, m.start_source, m.start_date ?? null], ['Alex Tremblay', true, 'manual', null], 'directory-sync leaves a manual start date alone, and there is none yet');
+  assert.equal(m.email, 'alex.tremblay@welfareavenue.com', 'the new address goes on the profile once the account exists');
+  const c = s.cand();
+  assert.deepEqual([c.status, c.member_id, c.start_date], ['offer', m.id, null], 'the card moves to Hired at booking, when day one is known');
+  const f = s.flow();
+  assert.equal(f.status, 'waiting');
+  assert.equal(f.wa_email, 'alex.tremblay@welfareavenue.com');
+  assert.equal(f.accounts_at, NOW_ISO);
+  const ins = s.inserts();
+  assert.equal(ins.length, 1);
+  assert.equal(ins[0].url, USERS);
+  assert.equal(ins[0].headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/admin.directory.user:steel.macdonald@welfareavenue.com', 'acting as Steel, with the user scope');
+  assert.deepEqual(ins[0].body, { primaryEmail: 'alex.tremblay@welfareavenue.com', name: { givenName: 'Alex', familyName: 'Tremblay' }, password: FIRST_PW, changePasswordAtNextLogin: true, orgUnitPath: '/' });
+  const back = s.users().filter((e) => e.method === 'GET');
+  assert.equal(back.length, 1, 'read back before done');
+  assert.ok(back[0].url.startsWith(USERS + '/alex.tremblay%40welfareavenue.com'));
+  assert.ok(s.rig.fetchLog.indexOf(back[0]) > s.rig.fetchLog.indexOf(ins[0]));
+  assert.match(s.step('google').detail, /^Created alex\.tremblay@welfareavenue\.com in Google/);
+  assert.match(s.step('google').detail, /change/);
+  const inv = s.invites();
+  assert.equal(inv.length, 1);
+  assert.equal(inv[0].headers['x-wa-secret'], 'trigger-secret-for-tests');
+  assert.deepEqual([inv[0].body.action, inv[0].body.email, inv[0].body.name], ['invite', 'alex.tremblay@welfareavenue.com', 'Alex Tremblay']);
+  assert.equal(inv[0].body.hub_role, undefined, 'the level is hub-invite\'s to force');
+  assert.match(s.step('hub').detail, /member level/);
+  assert.equal(s.calWrites().length, 0, 'nothing is booked at Accept');
+  assert.equal(s.gmail().length, 0, 'no proposal yet: no email to the hire');
+  for (const k of ['roster', 'google', 'hub']) assert.ok(noDash(s.step(k).detail), k);
+  s.noPw();
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('w275 accept_setup does nothing for a wave271 flow: created before onboard_v2_since, or while it is unset (James MacDonald\'s card keeps its path)', async () => {
+  for (const [fl, config] of [[{ created_at: '2026-09-20T12:00:00Z' }, {}], [{}, { onboard_v2_since: '' }]]) {
+    const s = await t3({ fl, config });
+    const before = s.snapshot();
+    const r = await s.acceptSetup();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.skipped, 'wave271');
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+  const jwt = await t3();
+  assert.equal((await jwt.post({ action: 'accept_setup', flow_id: 21 })).status, 403, 'a signed-in person cannot');
+  assert.equal(jwt.rows('hub_onboard_steps').length, 0);
+});
+
+test('w275 accept_setup: two calls at once run each step once; times proposed before Accept are emailed to the hire once', async () => {
+  const s = await t3({ fl: PROPOSED });
+  const both = await Promise.all([s.acceptSetup(), s.acceptSetup()]);
+  assert.deepEqual(both.map((r) => r.status), [200, 200], JSON.stringify(both.map((r) => r.body)));
+  assert.equal(s.inserts().length, 1);
+  assert.equal(s.invites().length, 1);
+  assert.equal(s.rows('team_members').length, 3, 'one profile');
+  assert.equal(s.rows('hub_onboard_steps').length, 3);
+  assert.deepEqual([s.step('roster').status, s.step('google').status, s.step('hub').status], ['done', 'done', 'done']);
+  assert.equal(s.gmail().length, 1, 'the yes-or-no link');
+  assert.equal(mail(s.gmail()[0]).to, 'alex@example.com');
+  assert.equal(s.flow().setup_ticks.hire_times_at, NOW_ISO);
+  const again = await s.acceptSetup();
+  assert.equal(again.status, 200);
+  assert.equal(s.inserts().length + s.gmail().length, 2, 'a later call changes nothing');
+});
+
+test('w275 google: with the first password unset or under 8 characters it is an HR task with a plain reason; Google is never asked and the rest carries on', async () => {
+  for (const pw of [null, 'short7!']) {
+    const s = await t3({ pw });
+    const r = await s.acceptSetup();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(s.step('google').status, 'hr_task');
+    assert.match(s.step('google').detail, /^The first password is not set in admin settings/);
+    assert.ok(noDash(s.step('google').detail));
+    assert.equal(s.step('roster').status, 'done');
+    assert.equal(s.step('hub').status, 'waiting', 'Hub access waits on the account');
+    assert.match(s.step('hub').detail, /step 2, Google account/);
+    assert.equal(s.users().length, 0);
+    assert.equal(s.flow().wa_email, null);
+    assert.equal(s.flow().accounts_at ?? null, null);
+    assert.ok(!JSON.stringify(s.db.tables).includes('short7!'));
+  }
+});
+
+test('w275 google: Workspace refusing (409 already exists, or no licence) is an HR task with Google\'s reason; nothing is attached to that address', async () => {
+  const s = await t3({ google: () => ({ status: 409, json: { error: { code: 409, message: 'Entity already exists.' } } }) });
+  const r = await s.acceptSetup();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.step('google').status, 'hr_task');
+  assert.match(s.step('google').detail, /^alex\.tremblay@welfareavenue\.com already exists in Google \(Google said: Entity already exists\.\)/);
+  assert.equal(s.flow().wa_email, null, 'an address that may be someone else\'s mailbox is not stored');
+  assert.equal(s.rows('team_members').at(-1).email, 'alex@example.com');
+  assert.equal(s.step('hub').status, 'waiting');
+  assert.equal(s.invites().length, 0);
+  const lic = await t3({ google: () => ({ status: 412, json: { error: { code: 412, message: 'Domain user limit reached. Add licences first.' } } }) });
+  await lic.acceptSetup();
+  assert.equal(lic.step('google').status, 'hr_task');
+  assert.match(lic.step('google').detail, /^Google did not create alex\.tremblay@welfareavenue\.com: Domain user limit reached\. Add licences first\./);
+  const clash = await t3({ tables: { team_members: [...TEAM, { id: 9, name: 'Alex Tremblay Senior', email: 'alex.tremblay@welfareavenue.com', active: true }] } });
+  await clash.acceptSetup();
+  assert.equal(clash.step('google').status, 'hr_task');
+  assert.match(clash.step('google').detail, /alex\.tremblay@welfareavenue\.com is on the roster profile of Alex Tremblay Senior/);
+  assert.equal(clash.users().length, 0, 'a roster clash never reaches Google');
+  const single = await t3({ cand: { name: 'Madonna' } });
+  await single.acceptSetup();
+  assert.equal(single.step('google').status, 'hr_task');
+  assert.match(single.step('google').detail, /first\.last/);
+});
+
+test('w275 the first password never reaches a table, a step detail or the console, even when Google repeats it back', async () => {
+  const s = await t3({ google: (e) => ({ status: 400, json: { error: { code: 400, message: 'Invalid password: ' + e.body.password } } }) });
+  const said = await quietly(() => s.acceptSetup());
+  assert.equal(s.step('google').status, 'hr_task');
+  assert.ok(!s.step('google').detail.includes(FIRST_PW), s.step('google').detail);
+  assert.match(s.step('google').detail, /\[first password\]/);
+  s.noPw();
+  assert.ok(!said.includes(FIRST_PW));
+  const ok = await t3({ fl: PROPOSED });
+  const said2 = await quietly(async () => { await ok.acceptSetup(); await ok.book(); });
+  assert.equal(ok.step('google').status, 'done');
+  ok.noPw();
+  assert.ok(!said2.includes(FIRST_PW));
+});
+
+test('w275 Retry on the account step before booking: once the password is set it creates the account, and Hub access follows', async () => {
+  const s = await t3({ pw: null });
+  await s.acceptSetup();
+  assert.equal(s.step('google').status, 'hr_task');
+  s.rig.env.ONBOARD_FIRST_PASSWORD = FIRST_PW;
+  const r = await s.post({ action: 'retry', flow_id: 21, step: 'google' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([s.step('google').status, s.step('hub').status], ['done', 'done']);
+  assert.equal(s.step('plan'), undefined, 'the steps at booking still wait for the times');
+  assert.equal(s.flow().status, 'waiting');
+  assert.equal(s.flow().accounts_at, NOW_ISO);
+  s.noPw();
+});
+
+test('w275 James MacDonald\'s path: a wave271 card started before the release gets its real account from Retry on the Google step', async () => {
+  const s = await t3({ fl: { created_at: '2026-09-20T12:00:00Z' }, pw: null });
+  assert.equal((await s.acceptSetup()).body.skipped, 'wave271');
+  assert.equal((await s.start()).status, 200);
+  assert.equal(s.step('google').status, 'hr_task');
+  assert.equal(s.flow().status, 'running');
+  s.rig.env.ONBOARD_FIRST_PASSWORD = FIRST_PW;
+  const r = await s.post({ action: 'retry', flow_id: 21, step: 'google' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.step('google').status, 'done');
+  assert.equal(s.inserts()[0].body.primaryEmail, 'alex.tremblay@welfareavenue.com', 'the address HR typed at Start');
+  assert.equal(s.inserts()[0].body.changePasswordAtNextLogin, true);
+  assert.equal(s.step('hub').status, 'done');
+  assert.equal(s.flow().status, 'started');
+  s.noPw();
+});
+
+test('w275 book (the hire\'s Yes): both meetings booked with the manager, the plan fills the start date and moves the card to Hired, and the flow is started', async () => {
+  const s = await t3({ fl: PROPOSED });
+  await s.acceptSetup();
+  const r = await s.book();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.repeated, false);
+  const f = s.flow();
+  assert.deepEqual([f.call_at, f.one_on_one_at, f.hire_answer, f.hire_answered_at, f.status], [P_CALL, P_ONE, 'yes', NOW_ISO, 'started']);
+  assert.deepEqual(s.statuses(), { roster: 'done', google: 'done', plan: 'done', invites: 'done', manager: 'done', hub: 'done', slack: 'hr_task', welcome: 'hr_task' });
+  assert.equal(s.planned.length, 1);
+  assert.equal(s.planned[0].p_start, '2026-10-26');
+  const m = s.rows('team_members').at(-1);
+  assert.deepEqual([m.start_date, m.start_source], ['2026-10-26', 'manual']);
+  assert.deepEqual([s.cand().status, s.cand().start_date], ['hired', '2026-10-26']);
+  assert.ok(s.rows('change_log').some((l) => l.entity_type === 'candidate' && l.field === 'status' && /^hired/.test(l.new_value)));
+  const ev = s.calWrites().filter((e) => e.method === 'POST');
+  assert.equal(ev.length, 2, 'both events');
+  for (const e of ev) {
+    const to = e.body.attendees.map((a) => a.email);
+    assert.ok(['alex@example.com', 'alex.tremblay@welfareavenue.com', 'sam.lee@welfareavenue.com'].every((x) => to.includes(x)), JSON.stringify(to));
+    assert.ok(e.body.conferenceData, 'a Meet link');
+  }
+  const n = s.notifies();
+  assert.ok(n.some((x) => x.body.event === 'onboard_date' && x.body.to_email === 'sam.lee@welfareavenue.com'), 'the manager step');
+  const hr = n.filter((x) => x.body.event === 'onboard_answer');
+  assert.equal(hr.length, 1);
+  assert.deepEqual(hr[0].body.to, ['ruth.owen@welfareavenue.com']);
+  assert.equal(hr[0].body.title, 'Alex Tremblay said yes to the times');
+  assert.match(s.step('welcome').detail, /welcome email/, 'left to HR here: the welcome email has its own task');
+  assert.ok(s.rows('change_log').some((l) => l.entity_type === 'onboard_flow' && l.field === 'call_at' && l.new_value === P_CALL));
+  s.noPw();
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('w275 book re-checks both times: under 24 hours away, outside the manager\'s hours now, or on a hub@ meeting is stale; nothing is booked, the answer is no, the manager and HR are told', async () => {
+  const sam = SAM_AT({ weekly: { mon: [['13:00', '17:00']] }, except: [], tz: 'America/Toronto' });
+  const meeting = { id: 'e9', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-26T15:45:00Z', end_at: '2026-10-26T16:15:00Z' };
+  for (const [opts, at, which] of [[{}, '2026-10-25T15:00:00Z', 'call'], [{ tables: { team_members: sam } }, null, 'call'], [{ tables: { hub_events: [meeting] } }, null, 'one_on_one']]) {
+    const s = await t3({ fl: PROPOSED, ...opts });
+    await s.acceptSetup();
+    if (at) s.rig.setNow(at);
+    const r = await s.book();
+    refused(r, 'stale', which);
+    assert.equal(r.status, 409);
+    assert.equal(r.body.ask_availability, true);
+    const f = s.flow();
+    assert.deepEqual([f.call_at, f.one_on_one_at, f.hire_answer, f.status], [null, null, 'no', 'waiting']);
+    assert.equal(s.calWrites().length, 0);
+    assert.equal(s.planned.length, 0);
+    assert.equal(s.step('plan'), undefined);
+    const told = s.notifies().filter((x) => x.body.event === 'onboard_answer');
+    assert.equal(told.length, 1, JSON.stringify(opts));
+    assert.deepEqual(told[0].body.to.slice().sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+    assert.match(told[0].body.title, /no longer work/);
+  }
+  const off = await t3({ fl: { ...PROPOSED, ask_availability: false }, tables: { hub_events: [meeting] } });
+  const o = await off.book();
+  refused(o, 'stale', 'one_on_one');
+  assert.equal(o.body.ask_availability, false);
+});
+
+test('w275 book: two presses book once; a repeat is a repeat; times that are not the proposal, no proposal or a closed card are refused; a signed-in person cannot', async () => {
+  const s = await t3({ fl: PROPOSED });
+  await s.acceptSetup();
+  const both = await Promise.all([s.book(), s.book()]);
+  assert.deepEqual(both.map((r) => r.status), [200, 200], JSON.stringify(both.map((r) => r.body)));
+  assert.deepEqual(both.map((r) => !!r.body.repeated).sort(), [false, true]);
+  assert.equal(s.calWrites().filter((e) => e.method === 'POST').length, 2);
+  assert.equal(s.planned.length, 1);
+  assert.equal((await s.book()).body.repeated, true);
+  assert.equal(s.calWrites().filter((e) => e.method === 'POST').length, 2);
+  assert.equal((await s.post({ action: 'book', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, by: 'hire' })).status, 403);
+  const other = await t3({ fl: PROPOSED });
+  refused(await other.book({ call_at: '2026-10-26T18:00:00Z' }), 'changed');
+  assert.equal(other.flow().call_at, null);
+  refused(await (await t3()).book(), 'no_proposal');
+  refused(await (await t3({ fl: PROPOSED, cand: { status: 'withdrawn' } })).book(), 'closed');
+  refused(await (await t3({ fl: { ...PROPOSED, hire_answer: 'no' } })).book(), 'answered');
+});
+
+test('w275 practice: accept_setup and book simulate every step and fetch nothing', async () => {
+  const s = await t3({ cand: { practice: true }, fl: PROPOSED });
+  assert.equal((await s.acceptSetup()).status, 200);
+  const r = await s.book();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  for (const k of KEYS) {
+    assert.equal(s.step(k).status, 'done', k);
+    assert.match(s.step(k).detail, /practice/i, k);
+  }
+  assert.equal(s.rig.fetchLog.length, 0);
+  assert.deepEqual(s.rows('team_members').map((m) => m.id), [1, 2], 'no profile');
+  assert.equal(s.cand().status, 'offer');
+  assert.deepEqual([s.flow().call_at, s.flow().status], [P_CALL, 'started']);
+  assert.equal(s.planned.length, 0);
+});
+
+test('w275 propose after the hire said no: the answer is cleared and the hire is emailed the new times', async () => {
+  const s = await t3({ fl: { ...PROPOSED, hire_answer: 'no', hire_answered_at: '2026-10-19T13:00:00Z', setup_ticks: { hire_times_at: '2026-10-19T12:00:00Z' } } });
+  const r = await s.propose({ one_on_one_at: '2026-10-26T18:00:00Z' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.flow().hire_answer, null);
+  assert.equal(s.flow().hire_answered_at, '2026-10-19T13:00:00Z', 'kept: a second no then goes to a person');
+  assert.equal(r.body.hire_emailed, true);
+  assert.equal(s.gmail().length, 1);
+});
+
+test('w275 Start on a flow that ran its at-Accept steps keeps them: the account is not made twice', async () => {
+  const s = await t3();
+  await s.acceptSetup();
+  const r = await s.start({ wa_email: 'alex.tremblay@welfareavenue.com', skip: [] });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.inserts().length, 1);
+  assert.equal(s.invites().length, 1);
+  assert.deepEqual([s.step('google').status, s.step('hub').status, s.step('plan').status], ['done', 'done', 'done']);
+});
+
+/* hub-invite's secret path: the onboarding runner invites a new hire at member level, and the secret opens nothing else */
+async function hubInvite(roles = []) {
+  const rig = await loadFn('hub-invite', { tables: { team_members: [{ id: 3, name: 'Alex Tremblay', email: 'alex.tremblay@welfareavenue.com', active: true, department: null }], hub_roles: roles, change_log: [], app_config: [] } });
+  rig.fetchOn(NOTIFY, { json: { outcome: 'no_slack' } });
+  const post = async (body, headers = {}) => {
+    const r = await rig.call(new Request(HUB_INVITE, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) }));
+    return { status: r.status, body: await r.json() };
+  };
+  return { rig, post, rows: (t) => rig.db.rows(t) };
+}
+test('w275 hub-invite: the trigger secret opens invite alone, at member level whatever is asked; a blocked person is refused and nobody is downgraded', async () => {
+  const h = await hubInvite();
+  const r = await h.post({ action: 'invite', email: 'alex.tremblay@welfareavenue.com', name: 'Alex Tremblay', hub_role: 'admin', send_email: false, inviter: 'hr.person@welfareavenue.com' }, SECRET);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.hub_role, 'member');
+  assert.deepEqual(h.rows('hub_roles').map((x) => [x.email, x.role, x.updated_by]), [['alex.tremblay@welfareavenue.com', 'member', 'hr.person@welfareavenue.com']]);
+  assert.equal(h.rows('team_members').length, 1, 'the profile the roster step made is used');
+  assert.ok(h.rows('change_log').some((l) => l.field === 'invited' && /^member/.test(l.new_value) && /onboarding/.test(l.new_value)));
+  for (const body of [{ action: 'remove', email: 'x.y@welfareavenue.com' }, { action: 'link', email: 'x.y@welfareavenue.com' }, { action: 'bulk_invite', people: [{ email: 'y.z@welfareavenue.com', name: 'Y Z' }] }, { action: 'set_email', member_id: 3, email: 'q.r@welfareavenue.com' }]) {
+    assert.equal((await h.post(body, SECRET)).status, 403, body.action);
+  }
+  assert.equal((await h.post({ action: 'invite', email: 'b.c@welfareavenue.com', name: 'B C', send_email: false }, { 'x-wa-secret': 'not-the-secret' })).status, 403);
+  assert.equal((await h.post({ action: 'invite', email: 'b.c@welfareavenue.com', name: 'B C', send_email: false })).status, 403);
+  assert.equal(h.rows('hub_roles').length, 1);
+  const blocked = await hubInvite([{ email: 'alex.tremblay@welfareavenue.com', role: 'blocked' }]);
+  const b = await blocked.post({ action: 'invite', email: 'alex.tremblay@welfareavenue.com', name: 'Alex Tremblay', send_email: false }, SECRET);
+  assert.equal(b.status, 400);
+  assert.equal(blocked.rows('hub_roles')[0].role, 'blocked');
+  const leader = await hubInvite([{ email: 'alex.tremblay@welfareavenue.com', role: 'leader' }]);
+  assert.equal((await leader.post({ action: 'invite', email: 'alex.tremblay@welfareavenue.com', name: 'Alex Tremblay', send_email: false }, SECRET)).body.hub_role, 'leader', 'never downgraded');
 });

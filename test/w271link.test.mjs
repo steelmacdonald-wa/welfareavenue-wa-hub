@@ -16,10 +16,13 @@ const candidate = (over = {}) => ({
 const flow = (over = {}) => ({ id: 11, candidate_id: 11, practice: false, status: 'waiting', manager_member_id: 2, call_at: null, one_on_one_at: null, ...over });
 const team = [{ id: 1, name: 'Ruth Owen', email: 'Ruth.Owen@welfareavenue.com' }, { id: 2, name: 'Sam Lee', email: 'sam.lee@welfareavenue.com' }];
 
-// Without triggers the rig does not make the flow; this stands in for wa271_cand_accepted
+// Without triggers the rig does not make the flow; this stands in for wa271_cand_accepted as wa275a has it: an offered flow moves to waiting, else one is made
 function standInForTrigger(rig) {
   rig.db.on('hub_candidates', 'update', (n, o, db) => {
-    if (o.accepted_on == null && n.accepted_on != null) db.insert('hub_onboard_flows', { candidate_id: n.id, practice: !!n.practice, status: 'waiting', manager_member_id: null, call_at: null, one_on_one_at: null });
+    if (o.accepted_on != null || n.accepted_on == null) return;
+    const had = db.rows('hub_onboard_flows').find((f) => String(f.candidate_id) === String(n.id));
+    if (had) { if (had.status === 'offered') had.status = 'waiting'; return; }
+    db.insert('hub_onboard_flows', { candidate_id: n.id, practice: !!n.practice, status: 'waiting', manager_member_id: null, call_at: null, one_on_one_at: null });
   });
 }
 // wave271d: the hire's grid needs onboard_grid_min_hours (default 10) hours before it saves. The older tests are about the grid itself and save a few cells,
@@ -51,7 +54,10 @@ test('a GET saves nothing and gives the page what it needs', async () => {
   assert.deepEqual(s.snapshot(), before, 'scanner safety: no row changed');
   assert.equal(s.rig.fetchLog.length, 0);
   assert.equal(a.status, 200);
-  assert.deepEqual({ ...a.body, grid: undefined }, { ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [] });
+  assert.deepEqual({ ...a.body, grid: undefined }, {
+    ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [],
+    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', setup: null,   // wave275: an offer from before it has no hours and keeps the grid
+  });
   assert.equal(m.body.kind, 'manager');
   assert.equal(m.body.first, 'Sam');
   assert.equal(m.body.hire, 'Alex');
@@ -221,7 +227,7 @@ test('a closed card gives closed:true and saves nothing; a late Accept still wor
 test('a bad action is refused and the password action waits for Task 10', async () => {
   const s = await setup({ flows: [flow()] });
   const before = s.snapshot();
-  for (const a of ['', 'yes', undefined]) {
+  for (const a of ['', 'maybe', undefined]) {   // wave275 made 'yes' an action of its own
     const r = await s.post({ t: s.offer, a });
     assert.equal(r.status, 400);
     assert.equal(r.body.error, 'answer');
@@ -893,4 +899,261 @@ test('w275 fix: GET leaves out another hire\'s proposal once that hire has answe
   const other = offered({ id: 22, candidate_id: 12, hire_answer: 'no', proposed_call_at: '2026-11-05T15:00:00Z', proposed_one_on_one_at: '2026-11-05T17:00:00Z', one_on_one_at: '2026-11-06T15:00:00Z' });
   const s = await setup({ flows: [offered(), other], tables: { hub_candidates: [candidate({ accepted_on: null }), candidate({ id: 12, name: 'Bo Chen' })] } });
   assert.deepEqual((await s.get(s.mgr)).body.busy, [{ start: '2026-11-06T15:00:00Z', end: '2026-11-06T15:30:00Z', taken: true }]);
+});
+
+/* ---------- wave275 Task 3: the hire's side of the offer link (Accept with hours, Yes or No, the setup rundown) ---------- */
+/* The flow below was created after onboard_v2_since, so the offer link is on the wave275 path (mode propose). */
+const V2CFG = { onboard_v2_since: '2026-10-01T00:00:00Z' };
+const withProposal = { proposed_call_at: W_CALL, proposed_one_on_one_at: W_ONE, proposed_by: 'sam.lee@welfareavenue.com', proposed_at: '2026-10-31T12:00:00Z' };
+async function hire({ cand = {}, fl = {}, config = {}, tables = {}, run } = {}) {
+  const s = await setup({ cand: { accepted_on: '2026-10-31', offer_hours: 6, ...cand }, flows: [offered({ status: 'waiting', ...fl })], config: { ...V2CFG, hr_notify_emails: 'ruth.owen@welfareavenue.com', ...config }, notify: false, tables: { team_members: [team[0], SAM()], ...tables } });
+  s.tells = [];
+  s.rig.fetchOn(NOTIFY, (e) => { s.tells.push(e.body); return { json: { outcome: {}, hub: 'off' } }; });
+  s.relays = [];
+  s.rig.fetchOn(RUN, (e) => { s.relays.push(e); return run ? run(e) : { json: { ok: true } }; });
+  s.db.onRpc('wa275_tick_set', tickSet);
+  s.flow = () => s.db.rows('hub_onboard_flows')[0];
+  return s;
+}
+/* onboard-link hands the at-Accept setup to the runtime (EdgeRuntime.waitUntil) so the hire's answer returns at once; the tests hold the promises */
+async function withBackground(fn) {
+  const pending = [];
+  globalThis.EdgeRuntime = { waitUntil: (p) => { pending.push(p); } };
+  try { return await fn(pending); } finally { delete globalThis.EdgeRuntime; }
+}
+
+test('w275 GET (offer link): the hours, the proposal with the manager, the answer and the setup rundown with its ticks; nothing saved, no fetch', async () => {
+  const s = await hire({ fl: { ...withProposal, setup_ticks: { hire_times_at: '2026-10-31T12:00:00Z', rd_profile: '2026-10-31T13:00:00Z' } } });
+  const before = s.snapshot();
+  const g = (await s.get(s.offer)).body;
+  assert.deepEqual(s.snapshot(), before, 'scanner safety');
+  assert.equal(s.rig.fetchLog.length, 0);
+  assert.equal(g.mode, 'propose');
+  assert.deepEqual([g.offerHours, g.hoursConfirmed, g.answer, g.askAvailability, g.manager, g.bookedTimes, g.closed], [6, false, null, true, 'Sam Lee', null, false]);
+  assert.deepEqual(g.proposal, { call_at: '2026-11-04T15:00:00Z', one_on_one_at: '2026-11-04T16:30:00Z' });
+  assert.ok(Array.isArray(g.setup.steps) && g.setup.steps.length >= 8, 'the rundown from the SOP');
+  for (const st of g.setup.steps) {
+    assert.ok(/^[a-z_]+$/.test(st.key) && hasBoth(st.title) && hasBoth(st.body), JSON.stringify(st));
+    assert.ok(!/—|\bAI\b/.test(JSON.stringify(st)), st.key);
+  }
+  assert.deepEqual(Object.keys(g.setup.ticks).sort(), g.setup.steps.map((x) => x.key).sort());
+  assert.equal(g.setup.ticks.profile, true);
+  assert.equal(Object.values(g.setup.ticks).filter(Boolean).length, 1, 'hire_times_at is not a rundown tick');
+  const q = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.offer) + '&setup=1'));
+  const qs = await q.json();
+  assert.deepEqual(qs.setup, g.setup, 'GET ?setup gives the rundown');
+  const none = await hire();
+  assert.equal((await none.get(none.offer)).body.proposal, null, 'no proposal yet: the page says we are choosing the times');
+  const unaccepted = await hire({ cand: { accepted_on: null }, fl: { status: 'offered', ...withProposal } });
+  const u = (await unaccepted.get(unaccepted.offer)).body;
+  assert.equal(u.setup, null, 'no rundown before Accept');
+  assert.equal(u.answered, '');
+  assert.equal(u.offerHours, 6);
+});
+
+test('w275 GET after the Yes: the closing page and the rundown stay open, with the booked times; the grid is shut', async () => {
+  const s = await hire({ cand: { status: 'hired' }, fl: { ...withProposal, hire_answer: 'yes', call_at: W_CALL, one_on_one_at: W_ONE, status: 'started' } });
+  const g = (await s.get(s.offer)).body;
+  assert.equal(g.closed, false);
+  assert.equal(g.answer, 'yes');
+  assert.deepEqual(g.bookedTimes, { call_at: '2026-11-04T15:00:00Z', one_on_one_at: '2026-11-04T16:30:00Z' });
+  assert.ok(g.setup);
+  const grid = await s.post({ t: s.offer, a: 'grid', slots: [] });
+  assert.equal(grid.body.closed, true);
+  assert.equal(grid.body.booked, true);
+  const v1 = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow({ call_at: W_CALL, one_on_one_at: W_ONE })] });
+  assert.equal((await v1.get(v1.offer)).body.closed, true, 'a wave271 link still closes once both are booked');
+});
+
+test('w275 Accept with hours: refused without hours_ok (hours_required, both languages, nothing saved); with it, hours_confirmed_at is set and accept_setup is asked once, without waiting for it', async () => {
+  await withBackground(async (pending) => {
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    const s = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' }, run: async () => { await gate; return { json: { ok: true } }; } });
+    const before = s.snapshot();
+    for (const extra of [{}, { hours_ok: 'yes' }, { hours_ok: 1 }]) {
+      const no = await s.post({ t: s.offer, a: 'accept', ...extra });
+      assert.equal(no.status, 400, JSON.stringify(extra));
+      assert.equal(no.body.error, 'hours_required');
+      assert.ok(hasBoth(no.body.message));
+      assert.match(no.body.message.en, /6 hours a week/);
+      assert.match(no.body.message.fr, /6 heures par semaine/);
+    }
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+    const both = await Promise.all([s.post({ t: s.offer, a: 'accept', hours_ok: true }), s.post({ t: s.offer, a: 'accept', hours_ok: true })]);
+    assert.deepEqual(both.map((r) => r.status), [200, 200], 'the answer came back while onboard-run had not answered yet');
+    assert.deepEqual(both.map((r) => r.body.repeated).sort(), [false, true]);
+    const c = s.cand();
+    assert.equal(c.accepted_on, '2026-11-01');
+    assert.equal(c.hours_confirmed_at, '2026-11-01T12:00:00.000Z');
+    assert.equal(s.flow().status, 'waiting');
+    release();
+    await Promise.all(pending);
+    assert.equal(s.relays.length, 1, 'accept_setup is asked once');
+    assert.deepEqual(s.relays[0].body, { action: 'accept_setup', flow_id: 11 });
+    assert.equal(s.relays[0].headers['x-wa-secret'], 'trigger-secret-for-tests');
+    assert.equal(s.relays[0].headers.authorization, 'Bearer anon-key-for-tests');
+    const decline = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+    assert.equal((await decline.post({ t: decline.offer, a: 'decline' })).body.answer, 'decline', 'Decline needs no hours');
+  });
+});
+
+test('w275 an offer from before wave275 (no offer_hours) accepts without hours_ok, and a wave271 flow asks onboard-run nothing', async () => {
+  await withBackground(async (pending) => {
+    const s = await setup({ flows: [] });
+    const r = await s.post({ t: s.offer, a: 'accept' });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.answer, 'accept');
+    assert.equal(s.cand().hours_confirmed_at, undefined);
+    await Promise.all(pending);
+    assert.equal(s.rig.fetchLog.length, 0);
+    const g = (await s.get(s.offer)).body;
+    assert.deepEqual([g.offerHours, g.hoursConfirmed, g.mode], [null, false, 'grid']);
+  });
+});
+
+test('w275 Yes relays book with the proposed times and by hire; stale comes back as stale (the page shows the grid); a repeat or a wave271 link books nothing', async () => {
+  const s = await hire({ fl: withProposal, run: () => ({ json: { ok: true, repeated: false, call_at: '2026-11-04T15:00:00.000Z', one_on_one_at: '2026-11-04T16:30:00.000Z', steps: [] } }) });
+  const r = await s.post({ t: s.offer, a: 'yes' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body, { ok: true, answer: 'yes', repeated: false, bookedTimes: { call_at: '2026-11-04T15:00:00Z', one_on_one_at: '2026-11-04T16:30:00Z' } });
+  assert.equal(s.relays.length, 1);
+  assert.deepEqual(s.relays[0].body, { action: 'book', flow_id: 11, call_at: '2026-11-04T15:00:00Z', one_on_one_at: '2026-11-04T16:30:00Z', by: 'hire' });
+  assert.equal(s.relays[0].headers['x-wa-secret'], 'trigger-secret-for-tests');
+  assert.ok(s.relays[0].signal instanceof AbortSignal, 'a time limit');
+  assert.equal(s.flow().hire_answer, null, 'onboard-link writes nothing itself: the re-check and the booking are onboard-run\'s');
+  const stale = await hire({ fl: withProposal, run: () => ({ status: 409, json: { error: 'stale', which: 'call', message: 'Those times no longer work.', messages: { en: 'Those times no longer work.', fr: 'Ces heures ne conviennent plus.' }, ask_availability: true } }) });
+  const st = await stale.post({ t: stale.offer, a: 'yes' });
+  assert.equal(st.status, 409);
+  assert.deepEqual(st.body, { ok: false, stale: true, error: 'stale', message: { en: 'Those times no longer work.', fr: 'Ces heures ne conviennent plus.' }, askAvailability: true, which: 'call' });
+  const down = await hire({ fl: withProposal, run: () => { throw new Error('connection refused'); } });
+  const d = await down.post({ t: down.offer, a: 'yes' });
+  assert.equal(d.status, 503);
+  assert.ok(hasBoth(d.body.message));
+  const done = await hire({ fl: { ...withProposal, hire_answer: 'yes', call_at: W_CALL, one_on_one_at: W_ONE } });
+  const again = await done.post({ t: done.offer, a: 'yes' });
+  assert.deepEqual([again.status, again.body.repeated, again.body.answer], [200, true, 'yes']);
+  assert.equal(done.relays.length, 0);
+  const none = await hire();
+  const n = await none.post({ t: none.offer, a: 'yes' });
+  assert.deepEqual([n.status, n.body.error], [409, 'no_proposal']);
+  assert.ok(hasBoth(n.body.message));
+  assert.equal(none.relays.length, 0);
+  const v1 = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow({ created_at: '2026-10-20T12:00:00Z' })] });
+  assert.equal((await v1.post({ t: v1.offer, a: 'yes' })).body.error, 'wrong_link');
+  assert.equal((await s.post({ t: s.mgr, a: 'yes' })).body.error, 'wrong_link');
+  const early = await hire({ cand: { accepted_on: null }, fl: { status: 'offered', ...withProposal } });
+  assert.equal((await early.post({ t: early.offer, a: 'yes' })).body.error, 'not_accepted');
+});
+
+test('w275 No records the answer once, tells the manager and HR (onboard_answer), and says whether the hire is asked for their times', async () => {
+  const s = await hire({ fl: withProposal });
+  const both = await Promise.all([s.post({ t: s.offer, a: 'no' }), s.post({ t: s.offer, a: 'no' })]);
+  assert.deepEqual(both.map((r) => r.status), [200, 200], JSON.stringify(both.map((r) => r.body)));
+  assert.deepEqual(both.map((r) => r.body.repeated).sort(), [false, true]);
+  assert.ok(both.every((r) => r.body.answer === 'no' && r.body.askAvailability === true));
+  const f = s.flow();
+  assert.deepEqual([f.hire_answer, f.hire_answered_at, f.call_at], ['no', '2026-11-01T12:00:00.000Z', null]);
+  assert.equal(s.tells.length, 1);
+  assert.equal(s.tells[0].event, 'onboard_answer');
+  assert.deepEqual(s.tells[0].to.slice().sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  assert.equal(s.tells[0].title, 'Alex Tremblay said no to the times');
+  assert.ok(!/—|\bAI\b/.test(JSON.stringify(s.tells[0])));
+  assert.equal(s.relays.length, 0);
+  assert.ok(s.db.rows('change_log').some((l) => l.entity_type === 'onboard_flow' && l.field === 'hire_answer' && l.new_value === 'no'));
+  const quiet = await hire({ fl: { ...withProposal, ask_availability: false } });
+  const q = await quiet.post({ t: quiet.offer, a: 'no' });
+  assert.equal(q.body.askAvailability, false, 'already communicated: the page shows the closing view, no grid');
+  assert.match(quiet.tells[0].body, /in touch/);
+  const practice = await hire({ cand: { practice: true }, fl: { ...withProposal, practice: true } });
+  assert.equal((await practice.post({ t: practice.offer, a: 'no' })).body.answer, 'no');
+  assert.equal(practice.rig.fetchLog.length, 0, 'practice tells nobody');
+  const none = await hire();
+  assert.equal((await none.post({ t: none.offer, a: 'no' })).body.error, 'no_proposal');
+});
+
+test('w275 a second No (after new times) is refused as answered: a person will be in touch, and the manager is told once', async () => {
+  const s = await hire({ fl: { ...withProposal, hire_answered_at: '2026-10-31T15:00:00Z' } });
+  const r = await s.post({ t: s.offer, a: 'no' });
+  assert.equal(r.status, 409);
+  assert.equal(r.body.error, 'answered');
+  assert.ok(hasBoth(r.body.message));
+  assert.match(r.body.message.en, /will be in touch/);
+  assert.equal(s.flow().hire_answer, null, 'nothing recorded as a no');
+  assert.equal(s.tells.length, 1);
+  assert.ok(s.tells[0].to.includes('sam.lee@welfareavenue.com'));
+  assert.match(s.tells[0].title, /again/);
+  await s.post({ t: s.offer, a: 'no' });
+  assert.equal(s.tells.length, 1, 'told once');
+  assert.ok(s.flow().setup_ticks.no_again_at, 'the card can show it');
+});
+
+test('w275 after a No the hire\'s grid keeps the 10-hour minimum', async () => {
+  const s = await hire({ fl: { ...withProposal, hire_answer: 'no', hire_answered_at: '2026-11-01T11:00:00Z' }, config: { onboard_grid_min_hours: '10' } });
+  const g = (await s.get(s.offer)).body;
+  assert.equal(g.answer, 'no');
+  assert.equal(g.grid.minHours, 10);
+  const r19 = await s.post({ t: s.offer, a: 'grid', slots: g.grid.slots.slice(0, 19) });
+  assert.equal(r19.status, 400);
+  assert.equal(r19.body.error, 'too_few_slots');
+  const r20 = await s.post({ t: s.offer, a: 'grid', slots: g.grid.slots.slice(0, 20) });
+  assert.equal(r20.status, 200, JSON.stringify(r20.body));
+  assert.equal(r20.body.saved, 20);
+});
+
+test('w275 setup_tick saves a rundown tick under its own key, is idempotent, can be undone, and refuses unknown keys and other links', async () => {
+  const s = await hire({ fl: { setup_ticks: { hire_times_at: '2026-10-31T12:00:00Z' } } });
+  const r = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.ticks.profile, true);
+  assert.equal(Object.values(r.body.ticks).filter(Boolean).length, 1);
+  assert.equal(s.flow().setup_ticks.rd_profile, '2026-11-01T12:00:00.000Z');
+  assert.equal(s.flow().setup_ticks.hire_times_at, '2026-10-31T12:00:00Z', 'merged, never rewritten');
+  s.rig.setNow('2026-11-01T13:00:00Z');
+  const again = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: true });
+  assert.equal(again.body.ticks.profile, true);
+  assert.equal(s.flow().setup_ticks.rd_profile, '2026-11-01T12:00:00.000Z', 'a second tick keeps the first time');
+  const off = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: false });
+  assert.equal(off.body.ticks.profile, false);
+  assert.equal(s.flow().setup_ticks.rd_profile, null);
+  for (const body of [{ key: 'nope', done: true }, { key: 'profile', done: 'yes' }, { key: 'hire_times_at', done: true }, { done: true }]) {
+    const b = await s.post({ t: s.offer, a: 'setup_tick', ...body });
+    assert.equal(b.status, 400, JSON.stringify(body));
+    assert.ok(hasBoth(b.body.message));
+  }
+  assert.equal((await s.post({ t: s.mgr, a: 'setup_tick', key: 'profile', done: true })).body.error, 'wrong_link');
+  const before = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  assert.equal((await before.post({ t: before.offer, a: 'setup_tick', key: 'profile', done: true })).body.error, 'not_accepted');
+  const gone = await hire({ fl: { status: 'backed_out' } });
+  assert.equal((await gone.post({ t: gone.offer, a: 'setup_tick', key: 'profile', done: true })).body.closed, true);
+  assert.equal(s.rig.fetchLog.length, 0);
+});
+
+test('w275 integration (practice): Accept with hours runs accept_setup, Yes runs book, on one database; onboard-run fetches nothing', async () => {
+  await withBackground(async (pending) => {
+    let run;
+    const s = await hire({ cand: { accepted_on: null, practice: true }, fl: { status: 'offered', practice: true, ...withProposal }, run: (e) => run.call(new Request(RUN, { method: 'POST', headers: e.headers, body: JSON.stringify(e.body) })) });
+    run = await loadFn('onboard-run', {});
+    run.db.tables = s.db.tables;
+    run.db.onRpc('wa275_tick_set', tickSet);
+    run.setNow(NOW);
+    const a = await s.post({ t: s.offer, a: 'accept', hours_ok: true });
+    assert.equal(a.status, 200, JSON.stringify(a.body));
+    await Promise.all(pending);
+    const steps = () => Object.fromEntries(s.db.rows('hub_onboard_steps').map((r) => [r.step, r.status]));
+    assert.deepEqual(steps(), { roster: 'done', google: 'done', hub: 'done' });
+    const y = await s.post({ t: s.offer, a: 'yes' });
+    assert.equal(y.status, 200, JSON.stringify(y.body));
+    assert.equal(y.body.answer, 'yes');
+    const f = s.flow();
+    assert.deepEqual([f.call_at, f.hire_answer, f.status], [W_CALL, 'yes', 'started']);
+    assert.equal(Object.values(steps()).filter((x) => x === 'done').length, 8);
+    assert.equal(run.fetchLog.length, 0);
+    assert.deepEqual(s.rig.fetchLog.map((e) => e.body.action), ['accept_setup', 'book'], 'the two relays, and nothing else');
+    const g = (await s.get(s.offer)).body;
+    assert.equal(g.closed, false);
+    assert.equal(g.answer, 'yes');
+  });
 });

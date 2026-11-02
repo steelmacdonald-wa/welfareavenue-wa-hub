@@ -1,4 +1,4 @@
-// Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times)
+// Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps)
 // The signed-in function behind HR's Start onboarding button. All actions are POST {action, ...}, for HR or admins only
 // (wa_is_hr or is_wa_admin, run as the caller's JWT):
 //   preview {flow_id, wa_email?}   {address, address_taken, address_owner, address_own, needs_address, manager, department, grids, hub_events, steps, welcome, warnings}. Writes nothing.
@@ -45,6 +45,26 @@
 //               yes or no about the proposed times (Task 3 writes the email's words), once per proposal: the send is claimed with wa275_tick_set(flow,
 //               'hire_times_at', now, p_if_unset), so two calls at once send once, and the claim is given back if Gmail refuses. Refused: no_proposal,
 //               not_accepted, closed, no_email; not_sent (502) when Gmail or the mail mode refuses; tick_failed (500) when the claim cannot be written.
+//   wave275 (v3), both for the trigger secret only (a signed-in person gets 403):
+//   accept_setup {flow_id}   {ok, steps, warnings} | {ok, skipped: 'wave271' | 'already'}. onboard-link calls it once the hire's Accept is saved, and does not wait for
+//               it. Times proposed before Accept are emailed to the hire (hire_times). Then, only for a flow created on or after app_config onboard_v2_since (unset:
+//               no flow qualifies, so James MacDonald's wave271 card keeps its path), the steps timed 'accept' run: roster (the profile active, with no start date
+//               and start_source manual; the card stays at offer), google, hub. Claimed with wa275_tick_set(flow, 'accept_setup_at'), so two calls run them once.
+//               accounts_at is set once all three are done or skipped.
+//   book {flow_id, call_at, one_on_one_at, by: 'hire'}   {ok, repeated, call_at, one_on_one_at, status, steps}. The hire's Yes (onboard-link relays it). The two
+//               times must be the proposal. Both are checked again: at least onboard_yes_lead_hours (24) ahead, inside the manager's availability, clear of hub@
+//               meetings they are invited to and of their other new hires' times. A time that has moved is stale (409 {error: 'stale', which, reason,
+//               messages, ask_availability}): hire_answer becomes no and the manager and HR are told (onboard_answer); nothing is booked. Otherwise the flow
+//               is claimed (waiting or ready to running, hire_answer yes, the manager as started_by, so both invites go to them), the rows not yet made are
+//               seeded, and every step that can run does: plan (fills team_members.start_date and hub_candidates.start_date from the call and moves the card
+//               to Hired, then makes the plan), invites, manager, and the rest; welcome stays as wave271 has it. HR is told (onboard_answer). The flow is
+//               started once nothing is left for HR. Refused: changed, no_proposal, answered (the hire said no), not_accepted, closed, already_booked.
+//   The step google (setting onboard_auto_google): users.insert as steel.macdonald@welfareavenue.com into the root unit, first.last from the name when
+//               the flow has no address (a roster clash stops here), with the vault secret ONBOARD_FIRST_PASSWORD read at that moment and nowhere else
+//               (unset or under 8 characters: an HR task, "The first password is not set in admin settings") and changePasswordAtNextLogin; read back
+//               before done. Google refusing (409 already exists, licences) is an HR task with Google's reason, the password scrubbed out. The step hub
+//               (also off with onboard_auto_hub): hub-invite through its trigger-secret path, at member level. A run may end a step as an HR task with
+//               its own sentence (HrTask). retry, google_manual and task_done also work on a flow that has not been started once it has that step's row.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -68,6 +88,8 @@ const GCAL = 'https://www.googleapis.com/calendar/v3';
 const SCOPE_CAL = 'https://www.googleapis.com/auth/calendar.events';
 const SCOPE_GMAIL = 'https://www.googleapis.com/auth/gmail.send';
 const SCOPE_DIR = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
+const SCOPE_USER = 'https://www.googleapis.com/auth/admin.directory.user';   // wave275: users.insert and its read-back
+const USERS_URL = 'https://admin.googleapis.com/admin/directory/v1/users';
 const TZ = 'America/Toronto';
 const STALE_MS = 10 * 60 * 1000;   // a step left pending or running this long was cut off (the function died), so Retry may take it
 
@@ -86,6 +108,7 @@ type Ctx = { flow: Row; by: string; asUser: Row; settings: Record<string, boolea
 type StepRow = { step: string; status: string; detail?: string | null; practice?: boolean; at?: string; by?: string | null };
 export type Step = {
   key: string; label: string; needs: string[];
+  at?: 'accept' | 'booking';                         // wave275: when the step's row is made (accept_setup, or book); Start makes every row still missing
   setting?: string;                                  // the app_config switch that must be on for run to be used
   ticks?: string[];                                  // hr_setup_template ids this step finishes
   task?: string;                                     // what HR does when this step is left to them
@@ -94,20 +117,24 @@ export type Step = {
 };
 
 /* ---------- the step table ---------- */
+/* wave275: in the plan's order. At Accept: roster, google, hub; at booking: plan, invites, manager, slack (still an HR task) and welcome. invites and
+   manager keep needing roster only, as in wave271, so a plan that fails never holds the invites back. */
+const GOOGLE_TASK = 'Create the account in Google, then press "I created it, continue" on this card.';
+const HUB_TASK = 'Invite them to the Hub at member level, from Roster.';
 export const STEPS: Step[] = [
-  { key: 'roster', label: 'Roster profile', needs: [], run: runRoster },
-  { key: 'google', label: 'Google account', needs: ['roster'], setting: 'onboard_auto_google', ticks: ['hrb2'], after: addAddressToInvites,
-    task: 'Create the account in Google, then press "I created it, continue" on this card.' },   // Task 10 adds run
-  { key: 'plan', label: 'Onboarding plan', needs: ['roster'], ticks: ['hrb6'], run: runPlan },
-  { key: 'invites', label: 'Calendar invites', needs: ['roster'], run: runInvites },
-  { key: 'manager', label: 'Tell the manager', needs: ['roster'], run: runManager },
-  { key: 'hub', label: 'Hub access', needs: ['google'], setting: 'onboard_auto_google',
-    task: 'Invite them to the Hub at member level, from Roster.' },   // Task 11 adds run
-  { key: 'slack', label: 'Slack channel', needs: ['roster'], setting: 'onboard_auto_slack', ticks: ['hrb4', 'hrb5'],
-    task: 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.' },   // Task 13 adds run
-  { key: 'welcome', label: 'Welcome email', needs: ['google'], setting: 'onboard_auto_google', ticks: ['hrb1'],
-    task: 'Send the welcome email to their personal address.' },   // Task 11 adds run
+  { key: 'roster', label: 'Roster profile', needs: [], at: 'accept', run: runRoster },
+  { key: 'google', label: 'Google account', needs: ['roster'], at: 'accept', setting: 'onboard_auto_google', ticks: ['hrb2'], run: runGoogle, after: addAddressToInvites, task: GOOGLE_TASK },
+  { key: 'hub', label: 'Hub access', needs: ['google'], at: 'accept', setting: 'onboard_auto_google', run: runHub, task: HUB_TASK },   // also off with onboard_auto_hub (inside runHub)
+  { key: 'plan', label: 'Onboarding plan', needs: ['roster'], at: 'booking', ticks: ['hrb6'], run: runPlan },
+  { key: 'invites', label: 'Calendar invites', needs: ['roster'], at: 'booking', run: runInvites },
+  { key: 'manager', label: 'Tell the manager', needs: ['roster'], at: 'booking', run: runManager },
+  { key: 'slack', label: 'Slack channel', needs: ['roster'], at: 'booking', setting: 'onboard_auto_slack', ticks: ['hrb4', 'hrb5'],
+    task: 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.' },   // Build 3 adds run
+  { key: 'welcome', label: 'Welcome email', needs: ['google'], at: 'booking', setting: 'onboard_auto_google', ticks: ['hrb1'],
+    task: 'Send the welcome email to their personal address.' },   // wave275 Task 4 adds run
 ];
+/* a run that finds the step is HR's to do ends it as hr_task with this sentence, not as failed */
+class HrTask extends Error {}
 const stepOf = (key: string) => STEPS.find((s) => s.key === key);
 const numberOf = (key: string) => STEPS.findIndex((s) => s.key === key) + 1;
 const met = (status: string | undefined) => status === 'done' || status === 'skipped';
@@ -199,7 +226,7 @@ async function setStep(ctx: Ctx, key: string, status: string, detail: string): P
 }
 async function makeCtx(flow: Row, by: string, asUser: Row): Promise<Ctx> {
   const settings: Record<string, boolean> = {};
-  for (const k of ['onboard_auto_google', 'onboard_auto_slack']) settings[k] = (await cfg(k)).trim().toLowerCase() === 'on';
+  for (const k of ['onboard_auto_google', 'onboard_auto_slack', 'onboard_auto_hub']) settings[k] = (await cfg(k)).trim().toLowerCase() === 'on';
   return { flow, by, asUser, settings };
 }
 
@@ -236,15 +263,17 @@ async function execute(ctx: Ctx, s: Step): Promise<void> {
   try {
     detail = await s.run(ctx);
   } catch (e) {
-    return setStep(ctx, s.key, 'failed', errText(e));
+    return setStep(ctx, s.key, e instanceof HrTask ? 'hr_task' : 'failed', errText(e));
   }
   await completed(ctx, s, detail);
 }
-/* runs everything that can run, in table order, then says why the rest cannot. A step only moves here from pending or waiting. */
+/* runs everything that can run, in table order, then says why the rest cannot. A step only moves here from pending or waiting, and only a step
+   that has its row: wave275 makes the rows at Accept and at booking, so the steps of the other group wait for theirs. */
 async function advance(ctx: Ctx): Promise<void> {
   const tried = new Set<string>();
   for (;;) {
-    const key = nextSteps(await readSteps(ctx.flow.id)).find((k) => !tried.has(k));
+    const rows = await readSteps(ctx.flow.id), have = new Set(rows.map((r) => r.step));
+    const key = nextSteps(rows).find((k) => have.has(k) && !tried.has(k));
     if (!key) break;
     tried.add(key);
     await execute(ctx, stepOf(key)!);
@@ -264,10 +293,23 @@ async function advance(ctx: Ctx): Promise<void> {
 }
 async function finish(ctx: Ctx): Promise<void> {
   const rows = await readSteps(ctx.flow.id);
+  await accountsDone(ctx.flow.id, rows);
   const settled = rows.every((r) => ['done', 'skipped', 'hr_task'].includes(r.status)) && !rows.some((r) => r.step === 'google' && r.status === 'hr_task');
   if (!settled) return;
   const now = new Date().toISOString();
   await svc.from('hub_onboard_flows').update({ status: 'started', started_at: now, updated_at: now }).eq('id', ctx.flow.id).eq('status', 'running');
+}
+/* wave275: accounts_at, once, when the at-Accept steps of a flow that accept_setup ran are all done or skipped (however they got there: the run, a
+   Retry or HR). A wave271 flow keeps it empty. Best effort: the card shows the steps themselves. */
+const ACCEPT_KEYS = STEPS.filter((s) => s.at === 'accept').map((s) => s.key);
+async function accountsDone(flowId: number, rows: StepRow[]): Promise<void> {
+  if (!ACCEPT_KEYS.every((k) => met(rows.find((r) => r.step === k)?.status))) return;
+  try {
+    const { data } = await svc.from('hub_onboard_flows').select('setup_ticks, accounts_at').eq('id', flowId).maybeSingle();
+    if (!(data as Row)?.setup_ticks?.accept_setup_at || (data as Row)?.accounts_at) return;
+    const now = new Date().toISOString();
+    await svc.from('hub_onboard_flows').update({ accounts_at: now, updated_at: now }).eq('id', flowId).is('accounts_at', null);
+  } catch (_) { /* see above */ }
 }
 const reply = async (flowId: number) => json({ steps: await readSteps(flowId) });
 
@@ -278,7 +320,7 @@ async function log(entity_type: string, entity_id: unknown, field: string, old_v
 async function runRoster(ctx: Ctx): Promise<string> {
   const f = ctx.flow, c = await getCand(f.candidate_id);
   if (!c) throw new Error('The candidate card is gone, so there is nothing to put on the roster.');
-  const start = torontoDate(f.call_at);
+  const start = f.call_at ? torontoDate(f.call_at) : null;   // wave275: at Accept there is no day one yet; the plan step fills it in at booking
   let member: Row = c.member_id ? await getMember(c.member_id) : null;
   if (!member) {
     const found = [...await membersByEmail(c.email), ...await membersByEmail(f.wa_email)];
@@ -286,12 +328,13 @@ async function runRoster(ctx: Ctx): Promise<string> {
   }
   let said: string;
   if (member) {   // directory-sync overwrites a start date unless start_source is manual
-    const patch: Record<string, unknown> = { start_date: start, start_source: 'manual' };
+    const patch: Record<string, unknown> = { start_source: 'manual' };
+    if (start) patch.start_date = start;
     if (member.active === false) patch.active = true;
     if (f.wa_email && !/@welfareavenue\.com$/i.test(String(member.email || ''))) patch.email = f.wa_email;
     const { error } = await svc.from('team_members').update(patch).eq('id', member.id);
     if (error) throw new Error('The roster profile could not be updated: ' + error.message + '. Press Retry.');
-    said = 'Linked the existing roster profile of ' + member.name + ', with ' + start + ' as the start date.';
+    said = 'Linked the existing roster profile of ' + member.name + (start ? ', with ' + start + ' as the start date.' : '. The start date is set when the times are booked.');
     if (!f.roster_created) await svc.from('hub_onboard_flows').update({ roster_created: false }).eq('id', f.id);   // true stays true: a retry finds the profile an earlier try made
   } else {
     let pos: Row = null;
@@ -302,10 +345,15 @@ async function runRoster(ctx: Ctx): Promise<string> {
     }).select('id, name').single();
     if (error || !data) throw new Error('The roster profile could not be created: ' + (error?.message || 'no row came back') + '. Press Retry.');
     member = data;
-    said = 'Created the roster profile, with ' + start + ' as the start date.';
+    said = start ? 'Created the roster profile, with ' + start + ' as the start date.' : 'Created the roster profile, active, with no start date yet: it is set when the times are booked.';
     await svc.from('hub_onboard_flows').update({ roster_created: true }).eq('id', f.id);   // if this write fails, the back-out list only asks HR to check the profile
   }
   const now = new Date().toISOString();
+  if (!start) {   // wave275 at Accept: the card is linked to the profile and stays where it is; it moves to Hired at booking, when day one is known
+    const { error } = await svc.from('hub_candidates').update({ member_id: member.id, updated_at: now, updated_by: ctx.by }).eq('id', c.id);
+    if (error) throw new Error('The profile is on the roster, but the card could not be linked to it: ' + error.message + '. Press Retry.');
+    return said;
+  }
   const patch: Record<string, unknown> = { status: 'hired', member_id: member.id, start_date: start, updated_at: now, updated_by: ctx.by };
   if (c.status !== 'hired') patch.stage_at = now;
   const { error } = await svc.from('hub_candidates').update(patch).eq('id', c.id);
@@ -315,11 +363,28 @@ async function runRoster(ctx: Ctx): Promise<string> {
 }
 
 /* ---------- step: plan ---------- */
+/* wave275: a profile made at Accept has no start date and its card is still at offer. Day one is the Toronto date of the call: the profile (manual, so
+   directory-sync keeps it) and the card take it, and the card moves to Hired. A wave271 Start did this in the roster step, so then nothing changes. */
+async function dayOne(ctx: Ctx, c: Row, start: string): Promise<void> {
+  if (c.status === 'hired' && String(c.start_date || '').slice(0, 10) === start) return;
+  const { error: mErr } = await svc.from('team_members').update({ start_date: start, start_source: 'manual' }).eq('id', c.member_id);
+  if (mErr) throw new Error('The start date could not be saved on the roster profile: ' + mErr.message + '. Press Retry.');
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: 'hired', start_date: start, updated_at: now, updated_by: ctx.by };
+  if (c.status !== 'hired') patch.stage_at = now;
+  const { error } = await svc.from('hub_candidates').update(patch).eq('id', c.id);
+  if (error) throw new Error('The start date is on the roster profile, but the card could not move to Hired: ' + error.message + '. Press Retry.');
+  if (c.status !== 'hired') await log('candidate', c.id, 'status', c.status, 'hired (times booked)', ctx.by);
+}
 async function runPlan(ctx: Ctx): Promise<string> {
   const f = ctx.flow, c = await getCand(f.candidate_id);
-  if (f.onboarding_id) return 'The onboarding plan was already made.';
-  if (!c?.member_id) throw new Error('The card has no roster profile yet. Retry step 1 first.');
+  if (!c?.member_id) {
+    if (f.onboarding_id) return 'The onboarding plan was already made.';
+    throw new Error('The card has no roster profile yet. Retry step 1 first.');
+  }
   const start = torontoDate(f.call_at);
+  await dayOne(ctx, c, start);
+  if (f.onboarding_id) return 'The onboarding plan was already made.';
   const save = async (id: unknown) => {
     const { error } = await svc.from('hub_onboard_flows').update({ onboarding_id: id, updated_at: new Date().toISOString() }).eq('id', f.id);
     if (error) throw new Error('The plan exists, but could not be saved on the flow: ' + error.message + '. Press Retry.');
@@ -334,7 +399,10 @@ async function runPlan(ctx: Ctx): Promise<string> {
     if (error) throw new Error('They already have an open plan, but its dates could not move: ' + error.message + '. Press Retry.');
     return 'They already had an open plan, so it was kept and day one moved to ' + start + '.';
   }
-  const { data, error } = await ctx.asUser.rpc('onboarding_assign', { p_member_id: c.member_id, p_by: ctx.by, p_start: start });
+  /* HR's Start runs onboarding_assign as HR (its staff check needs a sign-in); the hire's Yes has none, so the service key's own copy (wa275a 7b) */
+  const { data, error } = ctx.asUser
+    ? await ctx.asUser.rpc('onboarding_assign', { p_member_id: c.member_id, p_by: ctx.by, p_start: start })
+    : await svc.rpc('wa275_plan_assign', { p_member_id: c.member_id, p_by: ctx.by, p_start: start });
   if (error || !data) throw new Error('The onboarding plan could not be made: ' + (error?.message || 'no plan came back') + '. Press Retry.');
   await save(data);
   return 'Made the onboarding plan, with day one on ' + start + '.';
@@ -384,6 +452,90 @@ async function rosterClaim(addr: string | null, c: Row): Promise<{ owner: string
   return other ? { owner: other.name, own: false } : { owner: null, own: true };
 }
 const onProfileOf = (addr: string, owner: string) => addr + ' is on the roster profile of ' + owner + '. Change the address, or clear it.';
+
+/* ---------- step: google (wave275) ---------- */
+/* The account, as Steel (directory-sync's actor), in the root unit, with the fixed first password and a forced change at the first sign-in. The password
+   is read from the vault at this moment and goes nowhere but the request body: never a detail, a row, a log line or the console. Whatever Google says
+   back is scrubbed of it before it becomes HR's sentence. */
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+const stop = (s: string) => (/[.!?]$/.test(s) ? s : s + '.');
+const scrub = (text: string, secret: string) => (secret ? String(text).split(secret).join('[first password]') : String(text));
+async function runGoogle(ctx: Ctx): Promise<string> {
+  const f = ctx.flow, c = await getCand(f.candidate_id);
+  if (!c) throw new Error('The candidate card is gone, so there is nobody to make an account for.');
+  let addr: string | null = cleanAddress(f.wa_email);
+  if (!addr) {   // at Accept nobody has typed an address: first.last, unless the roster has it already
+    const s = suggestAddress(c.name);
+    if (!s) throw new HrTask('The name ' + noBreaks(c.name) + ' does not fit first.last, so HR chooses the address. ' + GOOGLE_TASK);
+    addr = s + '@' + DOMAIN;
+    const claim = await rosterClaim(addr, c);
+    if (claim.owner) throw new HrTask(addr + ' is on the roster profile of ' + claim.owner + ', so the Hub did not make the account. Choose another address: ' + lower(GOOGLE_TASK));
+  }
+  const { data: pw, error: pwErr } = await svc.rpc('get_secret', { secret_name: 'ONBOARD_FIRST_PASSWORD' });
+  if (pwErr) throw new HrTask('The Hub could not read the first password from admin settings, so it did not create the account. Press Retry, or ' + lower(GOOGLE_TASK));
+  let password = typeof pw === 'string' ? pw : '';
+  if (password.length < 8) throw new HrTask('The first password is not set in admin settings, so the Hub did not create the account. Set it there (8 characters or more), then press Retry, or ' + lower(GOOGLE_TASK));
+  const t = await token(ADMIN_ACTOR, SCOPE_USER);
+  if (!t) { password = ''; throw new HrTask('Google refused the Hub permission to create accounts as ' + ADMIN_ACTOR + ', so the account was not made. Tell Steel, or ' + lower(GOOGLE_TASK)); }
+  const words = String(c.name || '').trim().split(/\s+/);
+  let res: Response;
+  try {
+    res = await fetch(USERS_URL, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ primaryEmail: addr, name: { givenName: words[0], familyName: words.slice(1).join(' ') || words[0] }, password, changePasswordAtNextLogin: true, orgUnitPath: '/' }),
+    });
+  } catch (e) {
+    const why = scrub(errText(e), password);
+    password = '';
+    throw new Error('The Hub could not reach Google to create ' + addr + ' (' + why + '). Press Retry.');
+  }
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    const said = scrub(String(j?.error?.message || 'status ' + res.status), password).replace(/\s+/g, ' ').trim().slice(0, 200);
+    password = '';
+    if (res.status === 409) throw new HrTask(addr + ' already exists in Google (Google said: ' + stop(said) + '), so the Hub did not make a second account. Check whose it is, then ' + lower(GOOGLE_TASK));
+    throw new HrTask('Google did not create ' + addr + ': ' + stop(said) + ' ' + GOOGLE_TASK);
+  }
+  password = '';
+  /* read back before done: the account is there under that address */
+  const back = await fetch(USERS_URL + '/' + encodeURIComponent(addr) + '?fields=primaryEmail,orgUnitPath,changePasswordAtNextLogin', { headers: { Authorization: 'Bearer ' + t } });
+  const bj = await back.json().catch(() => ({}));
+  if (!back.ok || String(bj?.primaryEmail || '').toLowerCase() !== addr) {
+    throw new Error('Google said it created ' + addr + ', but the Hub could not read the account back (' + back.status + '). Check it in Google Admin, then press "I created it, continue" on this card.');
+  }
+  const { error } = await svc.from('hub_onboard_flows').update({ wa_email: addr, updated_at: new Date().toISOString() }).eq('id', f.id);
+  if (error) throw new Error('The account ' + addr + ' is in Google, but the Hub could not save the address: ' + error.message + '. Press "I created it, continue" with ' + addr + '.');
+  ctx.flow.wa_email = addr;
+  if (c.member_id) {   // the profile made at Accept has the personal address until the account exists
+    const m = await getMember(c.member_id);
+    if (m && !/@welfareavenue\.com$/i.test(String(m.email || ''))) await svc.from('team_members').update({ email: addr }).eq('id', m.id);
+  }
+  return 'Created ' + addr + ' in Google (the root organisational unit) with the first password from admin settings; Google will ask them to change it the first time they sign in.';
+}
+
+/* ---------- step: hub (wave275) ---------- */
+/* hub-invite's own logic, through its trigger-secret path, which forces member level (never lowering a level someone already has) */
+async function runHub(ctx: Ctx): Promise<string> {
+  if (!ctx.settings.onboard_auto_hub) throw new HrTask(HUB_TASK);   // its own off switch
+  const f = ctx.flow, c = await getCand(f.candidate_id);
+  if (!c) throw new Error('The candidate card is gone, so there is nobody to invite.');
+  if (!f.wa_email) throw new HrTask('There is no Welfare Avenue address on this card yet, so the Hub invite waits. ' + HUB_TASK);
+  let pos: Row = null;
+  if (c.position_id) ({ data: pos } = await svc.from('hub_positions').select('dept').eq('id', c.position_id).maybeSingle());
+  const secret = await getSecret('WA_TRIGGER_SECRET');
+  let res: Response;
+  try {
+    res = await fetch(SUPABASE_URL + '/functions/v1/hub-invite', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY },
+      body: JSON.stringify({ action: 'invite', email: f.wa_email, name: c.name, department: pos?.dept || null, role_title: c.role || null, inviter: /@welfareavenue\.com$/i.test(ctx.by) ? ctx.by : undefined }),
+    });
+  } catch (e) {
+    throw new Error('The Hub invite did not go out: the Hub could not reach hub-invite (' + errText(e) + '). Press Retry.');
+  }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j?.ok) throw new Error('The Hub invite did not go through: ' + stop(String(j?.error || 'status ' + res.status).slice(0, 160)) + ' Press Retry, or invite them from Roster.');
+  return 'Invited ' + f.wa_email + ' to the Hub at ' + (j.hub_role || 'member') + ' level' + (j.email_sent ? ', and the invitation went to that address.' : '.');
+}
 
 /* ---------- mail: who it really goes to, and the Gmail send from hub@ (Task 11 uses this for the welcome email) ---------- */
 /* mail_mode test (or unset): the test inboxes instead of the real people, with the real address named. No inboxes: a refusal. */
@@ -822,7 +974,10 @@ async function start(b: Row, by: string, asUser: Row): Promise<Response> {
     taken = (await addressState(addr, c.member_id, practice)).taken;
   } catch (_) { return no('roster_check', ROSTER_CHECK, 503); }   // fails closed: an unreadable roster never lets an address through
   if (claim.owner) return no('address_taken', onProfileOf(addr!, claim.owner));
-  if (googleOn && taken) return no('address_taken', addr + ' is already in use. Change the address, or skip the Google account step.');
+  /* wave275: rows made at Accept are kept as they are (Start seeds only the missing ones), so an account the google step made there is this person's own */
+  const had = await readSteps(f.id);
+  const googleDone = had.some((r) => r.step === 'google' && met(r.status)) && !!f.wa_email && f.wa_email === addr;
+  if (googleOn && taken && !googleDone) return no('address_taken', addr + ' is already in use. Change the address, or skip the Google account step.');
   /* Google skipped and Workspace has the address, on nobody's roster profile: it is someone's mailbox, so it is not stored and gets no invites */
   const keep = !googleOn && taken && !claim.own ? null : addr;
   const link = await linkHolder(f.id);
@@ -849,8 +1004,9 @@ async function start(b: Row, by: string, asUser: Row): Promise<Response> {
   const flow = (won as Row[] | null)?.[0];
   if (!flow) return no('already_started', 'Onboarding has already been started for this person.');
   if (otherManager && !practice) await clearManagerGrid(f.id);   // best effort: Book the 1-on-1 still shows who marked what
-  const seed = STEPS.map((s) => ({ flow_id: f.id, step: s.key, status: skip.includes(s.key) ? 'skipped' : 'pending', detail: skip.includes(s.key) ? 'Skipped by HR in the preview.' : null, practice, at: now, by }));
-  const { error: seedError } = await svc.from('hub_onboard_steps').upsert(seed, { onConflict: 'flow_id,step' });
+  const have = new Set(had.map((r) => r.step));
+  const seed = STEPS.filter((s) => !have.has(s.key)).map((s) => ({ flow_id: f.id, step: s.key, status: skip.includes(s.key) ? 'skipped' : 'pending', detail: skip.includes(s.key) ? 'Skipped by HR in the preview.' : null, practice, at: now, by }));
+  const { error: seedError } = seed.length ? await svc.from('hub_onboard_steps').upsert(seed, { onConflict: 'flow_id,step' }) : { error: null };
   if (seedError) {
     await svc.from('hub_onboard_flows').update({ status: f.status, updated_at: now }).eq('id', f.id);
     return no('save', 'The Hub could not start this: ' + seedError.message + '. Try again.', 500);
@@ -865,9 +1021,8 @@ async function retry(b: Row, by: string, asUser: Row): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', 'This person backed out, so nothing can be retried.');
-  if (!['running', 'started'].includes(f.status)) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to retry.');
-  const row = (await readSteps(f.id)).find((r) => r.step === s.key);
-  if (!row) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to retry.');
+  const row = (await readSteps(f.id)).find((r) => r.step === s.key);   // wave275: a step made at Accept can be retried before the times are booked
+  if (!row || ![...AFTER_START, ...BEFORE_START].includes(f.status)) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to retry.');
   if (row.status === 'done') return no('already_done', 'That step is already done, so it will not run again.');
   if (row.status === 'waiting') return no('still_waiting', String(row.detail || 'That step is waiting on an earlier one.') + ' Retry that one first.');
   const stuck = ['pending', 'running'].includes(row.status);
@@ -885,8 +1040,8 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
-  if (!['running', 'started'].includes(f.status)) return no('not_started', 'Press Start onboarding first.');
-  const row = (await readSteps(f.id)).find((r) => r.step === 'google');
+  const row = (await readSteps(f.id)).find((r) => r.step === 'google');   // wave275: the account step made at Accept is HR's before the times are booked too
+  if (!AFTER_START.includes(f.status) && !(BEFORE_START.includes(f.status) && row)) return no('not_started', 'Press Start onboarding first.');
   if (row?.status === 'done') return no('already_done', 'The Google account step is already done.');
   const open = ['hr_task', 'failed', 'skipped'];
   if (!row || !open.includes(row.status)) return no('still_waiting', String(row?.detail || 'That step is not ready yet.') + ' Retry that one first.');
@@ -921,8 +1076,8 @@ async function taskDone(b: Row, by: string, asUser: Row): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
-  if (!AFTER_START.includes(f.status)) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to mark done.');
-  /* the claim: of two presses, only one finds the step still with HR */
+  if (![...AFTER_START, ...BEFORE_START].includes(f.status)) return no('not_started', 'Onboarding has not been started for this person, so there is nothing to mark done.');   // wave275: before booking, a step made at Accept
+  /* the claim: of two presses, only one finds the step still with HR (no row: not_hr_task) */
   const now = new Date().toISOString();
   const { data: won, error } = await svc.from('hub_onboard_steps').update({ status: 'done', detail: 'Done by ' + by + '.', at: now, by }).eq('flow_id', f.id).eq('step', s.key).eq('status', 'hr_task').select('step');
   if (error) return no('save', 'The Hub could not save this: ' + error.message + '. Try again.', 500);
@@ -1318,6 +1473,10 @@ function proposeWords(code: string, which?: Which, n?: number, name = ''): { en:
     case 'closed': return { en: 'This card is closed, so no times can be proposed.', fr: 'Cette fiche est fermée: aucune heure ne peut être proposée.' };
     case 'no_manager': return { en: 'This new hire has no onboarding manager yet. Set the manager on the card first.', fr: 'Cette nouvelle recrue n’a pas encore de gestionnaire d’accueil. Indiquez d’abord le gestionnaire sur la fiche.' };
     case 'changed': return { en: 'Someone else just proposed other times. Reload the page to see them.', fr: 'Quelqu’un vient de proposer d’autres heures. Rechargez la page pour les voir.' };
+    case 'no_proposal': return { en: 'No times have been proposed yet, so there is nothing to book.', fr: 'Aucune heure n’a encore été proposée: il n’y a rien à fixer.' };
+    case 'answered': return { en: 'These times were already answered, so they cannot be booked this way. A person from Welfare Avenue will be in touch.', fr: 'Ces heures ont déjà reçu une réponse: elles ne peuvent pas être fixées ainsi. Une personne de Welfare Avenue communiquera avec vous.' };
+    case 'not_accepted': return { en: 'The offer has not been accepted yet, so nothing can be booked.', fr: 'L’offre n’a pas encore été acceptée: rien ne peut être fixé.' };
+    case 'bad_by': return { en: 'The Hub does not know who is booking these times. Reload the page.', fr: 'Le Hub ne sait pas qui fixe ces heures. Rechargez la page.' };
     default: return { en: 'The times could not be saved. Try again.', fr: 'Les heures n’ont pas pu être enregistrées. Réessayez.' };
   }
 }
@@ -1335,11 +1494,11 @@ const CLOSED_CARD = ['declined', 'withdrawn'];
 async function takenTimes(flowId: number, managerId: number, callMin: number, oneMin: number): Promise<Array<[number, number]>> {
   const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at, hire_answer')
     .or('manager_member_id.eq.' + managerId + ',manager_link_member_id.eq.' + managerId);
-  if (error) throw new Error('The other new hires\' times could not be read. Try again.');
+  if (error) throw new Error('The other new hires\' times could not be read.');
   const rows = ((data || []) as Row[]).filter((f) => Number(f.id) !== flowId && f.status !== 'backed_out' && Number(f.manager_member_id ?? f.manager_link_member_id) === managerId);
   if (!rows.length) return [];
   const { data: cs, error: cErr } = await svc.from('hub_candidates').select('id, status').in('id', rows.map((f) => f.candidate_id));
-  if (cErr) throw new Error('The other new hires\' times could not be read. Try again.');
+  if (cErr) throw new Error('The other new hires\' times could not be read.');
   const closed = new Set(((cs || []) as Row[]).filter((c) => CLOSED_CARD.includes(c.status)).map((c) => String(c.id)));
   const out: Array<[number, number]> = [];
   for (const f of rows) {
@@ -1351,6 +1510,24 @@ async function takenTimes(flowId: number, managerId: number, callMin: number, on
     }
   }
   return out;
+}
+
+const spansOf = (callAt: string, oneAt: string, callMin: number, oneMin: number): Array<[Which, number, number]> =>
+  [['call', Date.parse(callAt), Date.parse(callAt) + callMin * 60000], ['one_on_one', Date.parse(oneAt), Date.parse(oneAt) + oneMin * 60000]];
+/* the rules both times must meet, kept once for propose and for the hire's Yes (book), in this order: at least lead hours ahead; each whole meeting inside
+   one block of the manager's availability for that Toronto date; clear of hub@ meetings they are invited to; clear of their other new hires' times.
+   null: both fine. A read that fails throws, so nothing is saved or booked on a guess. */
+async function timesProblem(flowId: number, m: Row, spans: Array<[Which, number, number]>, lead: number, callMin: number, oneMin: number): Promise<{ code: string; which: Which } | null> {
+  for (const [which, s] of spans) if (s < Date.now() + lead * 3600000) return { code: 'lead_time', which };
+  const av = m.availability && typeof m.availability === 'object' ? m.availability : DEFAULT_AVAILABILITY;
+  for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return { code: 'outside_hours', which };
+  const from = Math.min(spans[0][1], spans[1][1]), to = Math.max(spans[0][2], spans[1][2]);
+  const { data: evs, error } = await svc.from('hub_events').select('id, start_at, end_at').contains('attendee_emails', [String(m.email || '').trim().toLowerCase()]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
+  if (error) throw new Error('The manager\'s hub@ meetings could not be read.');
+  for (const [which, s, e] of spans) if (((evs || []) as Row[]).some((ev) => clash(s, e, Date.parse(ev.start_at), Date.parse(ev.end_at)))) return { code: 'busy', which };
+  const taken = await takenTimes(flowId, Number(m.id), callMin, oneMin);
+  for (const [which, s, e] of spans) if (taken.some(([ts, te]) => clash(s, e, ts, te))) return { code: 'taken', which };
+  return null;
 }
 
 /* propose {flow_id, call_at, one_on_one_at, by}: link is true for the trigger secret (by 'manager'), when the proposer is the manager themselves */
@@ -1372,26 +1549,19 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   if (!mEmail) return refuse('manager_no_email', 409, undefined, undefined, String(m.name || 'The manager'));   // never skip the hub@ check in silence
   const by = link ? (mEmail || 'manager (mgr link)') : caller;
   const [callMin, oneMin, lead] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_propose_lead_hours', 48)];
-  const spans: Array<[Which, number, number]> = [['call', Date.parse(callAt), Date.parse(callAt) + callMin * 60000], ['one_on_one', Date.parse(oneAt), Date.parse(oneAt) + oneMin * 60000]];
-  for (const [which, s] of spans) if (s < Date.now() + lead * 3600000) return refuse('lead_time', 409, which, lead);
+  const spans = spansOf(callAt, oneAt, callMin, oneMin);
   if (clash(spans[0][1], spans[0][2], spans[1][1], spans[1][2])) return refuse('overlap');
-  const av = m.availability && typeof m.availability === 'object' ? m.availability : DEFAULT_AVAILABILITY;
-  for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return refuse('outside_hours', 409, which);
-  {
-    const from = Math.min(spans[0][1], spans[1][1]), to = Math.max(spans[0][2], spans[1][2]);
-    const { data: evs, error } = await svc.from('hub_events').select('id, start_at, end_at').contains('attendee_emails', [mEmail]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
-    if (error) return no('failed', 'The manager\'s hub@ meetings could not be read, so nothing was saved. Try again.', 503);
-    for (const [which, s, e] of spans) if (((evs || []) as Row[]).some((ev) => clash(s, e, Date.parse(ev.start_at), Date.parse(ev.end_at)))) return refuse('busy', 409, which);
-  }
-  const taken = await takenTimes(Number(f.id), Number(m.id), callMin, oneMin);
-  for (const [which, s, e] of spans) if (taken.some(([ts, te]) => clash(s, e, ts, te))) return refuse('taken', 409, which);
+  let problem: { code: string; which: Which } | null;
+  try { problem = await timesProblem(Number(f.id), m, spans, lead, callMin, oneMin); } catch (e) { return no('failed', errText(e) + ' Nothing was saved. Try again.', 503); }
+  if (problem) return refuse(problem.code, 409, problem.which, lead);
 
   const proposal = (row: Row) => ({ call_at: instant(row.proposed_call_at), one_on_one_at: instant(row.proposed_one_on_one_at), by: row.proposed_by, at: instant(row.proposed_at) });
   const sameAsSaved = (row: Row) => !!row.proposed_at && sameInstant(row.proposed_call_at, callAt) && sameInstant(row.proposed_one_on_one_at, oneAt) && String(row.proposed_by || '') === by;
   if (sameAsSaved(f)) return json({ ok: true, repeated: true, proposal: proposal(f), hire_emailed: !!f.setup_ticks?.hire_times_at && Date.parse(f.setup_ticks.hire_times_at) >= Date.parse(f.proposed_at), warnings: [] });
   /* the claim: only the press that finds the proposal as it was read writes it, so a double press or a second tab saves (and tells) once */
   const at = new Date().toISOString();
-  let claim = svc.from('hub_onboard_flows').update({ proposed_call_at: callAt, proposed_one_on_one_at: oneAt, proposed_by: by, proposed_at: at, updated_at: at }).eq('id', f.id).is('call_at', null).or('hire_answer.is.null,hire_answer.eq.no');
+  /* new times after a no: the answer is cleared (hire_answered_at stays, so a second no goes to a person), and hire_times emails the hire again below */
+  let claim = svc.from('hub_onboard_flows').update({ proposed_call_at: callAt, proposed_one_on_one_at: oneAt, proposed_by: by, proposed_at: at, hire_answer: null, updated_at: at }).eq('id', f.id).is('call_at', null).or('hire_answer.is.null,hire_answer.eq.no');
   claim = f.proposed_at ? claim.eq('proposed_at', f.proposed_at) : claim.is('proposed_at', null);
   const { data: won, error: wErr } = await claim.select('id');
   if (wErr) return no('save', 'The times could not be saved: ' + wErr.message + '. Try again.', 500);
@@ -1477,6 +1647,144 @@ async function hireTimesNow(b: Row): Promise<Response> {
   const r = await hireTimes(b.flow_id);
   if ('error' in r) return no(r.code, r.error, r.code === 'not_found' ? 404 : r.code === 'not_sent' ? 502 : r.code === 'tick_failed' ? 500 : 409);
   return json(r);
+}
+
+/* ---------- wave275 Task 3: accept_setup and book ---------- */
+const AT_ACCEPT_BY = 'hub (offer accepted)';
+const BOOKED_BY = 'hub (the new hire said yes)';
+const BOOK_COLS = PROPOSE_COLS + ', created_at, ask_availability, hire_answered_at';
+const hrList = async () => (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
+/* the wave275 path: a flow created on or after the release time. Unset (until the release) means no flow qualifies. */
+async function isV2(f: Row): Promise<boolean> {
+  const since = Date.parse((await cfg('onboard_v2_since')).trim());
+  return !Number.isNaN(since) && !!f.created_at && Date.parse(String(f.created_at)) >= since;
+}
+/* the rows of the steps not made yet, pending (seeded once: the claim before each call decides who seeds) */
+async function seedMissing(f: Row, keys: string[], by: string, practice: boolean): Promise<string | null> {
+  const have = new Set((await readSteps(f.id)).map((r) => r.step));
+  const now = new Date().toISOString();
+  const seed = keys.filter((k) => !have.has(k)).map((k) => ({ flow_id: f.id, step: k, status: 'pending', detail: null, practice, at: now, by }));
+  if (!seed.length) return null;
+  const { error } = await svc.from('hub_onboard_steps').upsert(seed, { onConflict: 'flow_id,step' });
+  return error ? error.message : null;
+}
+
+/* accept_setup {flow_id}: onboard-link asks once the hire's Accept is saved, and does not wait for the answer */
+async function acceptSetup(b: Row): Promise<Response> {
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', 'The card is closed, so nothing was set up.');
+  if (!c.accepted_on) return no('not_accepted', 'The offer has not been accepted yet, so nothing was set up.');
+  const warnings: string[] = [];
+  /* times proposed before Accept: the hire is emailed their yes-or-no link now (a proposal landing at this moment emails them itself; hire_times sends once) */
+  const sent = await hireTimes(f.id);
+  if ('error' in sent && !['no_proposal', 'not_accepted'].includes(sent.code)) warnings.push(firstName(c.name) + ' was not emailed the times: ' + sent.error);
+  if (!(await isV2(f))) return json({ ok: true, skipped: 'wave271', warnings });   // a wave271 card keeps its path: HR's Start makes the account
+  /* the claim: of two calls at once, one seeds and runs the steps */
+  const { data: won, error: claimErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'accept_setup_at', p_value: new Date().toISOString(), p_if_unset: true });
+  if (claimErr) return no('tick_failed', 'The setup could not be recorded, so it did not run (' + claimErr.message + '). Try again.', 500);
+  if (won !== true) return json({ ok: true, skipped: 'already', steps: await readSteps(f.id), warnings });
+  const seedErr = await seedMissing(f, ACCEPT_KEYS, AT_ACCEPT_BY, !!(f.practice || c.practice));
+  if (seedErr) {
+    await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'accept_setup_at', p_value: null });   // give the claim back so a retry can seed
+    return no('save', 'The setup steps could not be made: ' + seedErr + '. Try again.', 500);
+  }
+  await advance(await makeCtx(await getFlow(f.id), AT_ACCEPT_BY, null));
+  return json({ ok: true, steps: await readSteps(f.id), warnings });
+}
+
+/* the hire's Yes found a time that has moved: their answer is a no (the proposal is spent), the manager and HR hear why, and the page shows the grid
+   (or, availability already communicated, says the manager will be in touch). Nothing is booked. */
+const STALE_WHY: Record<string, (manager: string, n: number) => string> = {
+  lead_time: (_m, n) => 'it is now less than ' + n + ' hours away',
+  outside_hours: (m) => 'it is outside ' + m + '\'s availability for that day',
+  busy: (m) => 'it clashes with a hub@ meeting ' + m + ' is invited to',
+  taken: () => 'it clashes with times booked or proposed for another new hire',
+};
+async function staleTimes(f: Row, c: Row, m: Row, code: string, which: Which, lead: number): Promise<Response> {
+  const now = new Date().toISOString(), ask = f.ask_availability !== false, practice = !!(f.practice || c.practice);
+  const { data: won } = await svc.from('hub_onboard_flows').update({ hire_answer: 'no', hire_answered_at: now, updated_at: now })
+    .eq('id', f.id).is('hire_answer', null).is('call_at', null).eq('proposed_at', f.proposed_at).select('id');
+  if ((won as unknown[] | null)?.length) {
+    await log('onboard_flow', f.id, 'hire_answer', null, 'no (the times had moved: ' + code + ')', BOOKED_BY);
+    const to = Array.from(new Set([String(m.email || '').trim().toLowerCase(), ...await hrList()].filter((x) => /@/.test(x))));
+    if (!practice && to.length) {
+      const meeting = which === 'call' ? 'the onboarding call' : 'the 1-on-1';
+      const said = c.name + ' (' + (c.role || 'new hire') + ') pressed Yes, but ' + meeting + ' no longer works: ' + (STALE_WHY[code] || STALE_WHY.taken)(String(m.name || 'the manager'), lead) + '. '
+        + (ask ? firstName(c.name) + ' is marking their availability now; pick new times from their card in Onboarding.' : 'Their availability was already communicated: get in touch with them about other times.');
+      await tell({ event: 'onboard_answer', to, url: '#hrcentre/onboarding', tag: 'onboard-stale-' + f.id, title: 'The times for ' + c.name + ' no longer work', body: said, text: ':warning: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
+    }
+  }
+  const messages = ask
+    ? { en: 'Sorry, those times no longer work for your manager. Please mark when you are free below, and they will pick from your times.', fr: 'Désolés, ces heures ne conviennent plus à votre gestionnaire. Indiquez ci-dessous quand vous êtes disponible, et votre gestionnaire choisira parmi vos plages.' }
+    : { en: 'Sorry, those times no longer work for your manager. They will be in touch with other times.', fr: 'Désolés, ces heures ne conviennent plus à votre gestionnaire. Votre gestionnaire communiquera avec vous pour d’autres heures.' };
+  return json({ error: 'stale', message: messages.en, messages, which, reason: code, ask_availability: ask }, 409);
+}
+
+/* book {flow_id, call_at, one_on_one_at, by: 'hire'}: the hire's Yes, through onboard-link */
+async function book(b: Row): Promise<Response> {
+  if (b.by !== 'hire') return refuse('bad_by', 400);
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return refuse('closed');
+  if (!c.accepted_on) return refuse('not_accepted');
+  const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
+  const booked = (row: Row) => json({ ok: true, repeated: true, call_at: instant(row.call_at), one_on_one_at: instant(row.one_on_one_at), status: row.status, steps: [] });
+  if (f.call_at || f.hire_answer === 'yes') return sameInstant(f.call_at, callAt) && sameInstant(f.one_on_one_at, oneAt) ? booked(f) : refuse('already_booked');
+  if (f.hire_answer === 'no') return refuse('answered');
+  if (!f.proposed_at || !f.proposed_call_at || !f.proposed_one_on_one_at) return refuse('no_proposal');
+  if (!callAt || !oneAt || !sameInstant(callAt, f.proposed_call_at) || !sameInstant(oneAt, f.proposed_one_on_one_at)) return refuse('changed');
+  const managerId = f.manager_member_id ?? f.manager_link_member_id;
+  const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active, availability').eq('id', Number(managerId)).maybeSingle() : { data: null };
+  if (!m) return refuse('no_manager');
+  if (m.active === false) return refuse('manager_inactive', 409, undefined, undefined, String(m.name || 'The manager'));
+  const mEmail = String(m.email || '').trim().toLowerCase();
+  if (!mEmail) return refuse('manager_no_email', 409, undefined, undefined, String(m.name || 'The manager'));
+  /* Review Focus 1: the manager's calendar may have changed since the proposal. Both times again, with the Yes lead time. */
+  const [callMin, oneMin, lead] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_yes_lead_hours', 24)];
+  let problem: { code: string; which: Which } | null;
+  try { problem = await timesProblem(Number(f.id), m, spansOf(callAt, oneAt, callMin, oneMin), lead, callMin, oneMin); } catch (e) { return no('failed', errText(e) + ' Nothing was booked. Try again.', 503); }
+  if (problem) return await staleTimes(f, c, m, problem.code, problem.which, lead);
+  /* the claim: of two presses, only one finds the proposal still unanswered and the flow not started. The manager runs the call with them, so both invites go to them. */
+  const now = new Date().toISOString();
+  const { data: won, error } = await svc.from('hub_onboard_flows')
+    .update({ status: 'running', call_at: callAt, one_on_one_at: oneAt, manager_member_id: m.id, started_by: mEmail, hire_answer: 'yes', hire_answered_at: now, updated_at: now })
+    .eq('id', f.id).in('status', BEFORE_START).is('call_at', null).is('hire_answer', null).eq('proposed_at', f.proposed_at).select(FLOW_COLS);
+  if (error) return no('save', 'The times could not be booked: ' + error.message + '. Try again.', 500);
+  const flow = (won as Row[] | null)?.[0];
+  if (!flow) {
+    const { data: again } = await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', f.id).maybeSingle();
+    if (again && again.call_at && sameInstant(again.call_at, callAt) && sameInstant(again.one_on_one_at, oneAt)) return booked(again);
+    return refuse('changed');
+  }
+  const practice = !!(f.practice || c.practice);
+  const seedErr = await seedMissing(flow, STEPS.map((s) => s.key), BOOKED_BY, practice);   // the booking group, and the at-Accept rows if accept_setup never ran
+  if (seedErr) {
+    await svc.from('hub_onboard_flows').update({ status: f.status, call_at: null, one_on_one_at: null, started_by: f.started_by ?? null, hire_answer: null, hire_answered_at: f.hire_answered_at ?? null, updated_at: new Date().toISOString() }).eq('id', f.id).eq('status', 'running');
+    return no('save', 'The times could not be booked: ' + seedErr + '. Try again.', 500);
+  }
+  await log('onboard_flow', f.id, 'call_at', null, callAt, BOOKED_BY);
+  await log('onboard_flow', f.id, 'one_on_one_at', null, oneAt, BOOKED_BY);
+  await advance(await makeCtx(flow, BOOKED_BY, null));
+  const warnings: string[] = [];
+  if (!practice) {   // HR hears it here; the manager hears it from the manager step, with the date
+    const hr = await hrList();
+    const title = c.name + ' said yes to the times';
+    const said = c.name + ' (' + (c.role || 'new hire') + ') said yes: the onboarding call on ' + whenText(callAt) + ' and the 1-on-1 with ' + String(m.name || 'their manager') + ' on ' + whenText(oneAt) + '. Both are booked.';
+    if (!hr.length) warnings.push('HR was not told: hr_notify_emails is empty.');
+    else {
+      const told = await tell({ event: 'onboard_answer', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-yes-' + f.id, title, body: said, text: ':white_check_mark: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
+      if (!told.handled) warnings.push('HR was not told: ' + (told.note || 'notify gave no answer') + '.');
+    }
+  }
+  const fresh = await getFlow(f.id);
+  return json({ ok: true, repeated: false, call_at: callAt, one_on_one_at: oneAt, status: fresh?.status || 'running', steps: await readSteps(f.id), warnings });
 }
 /* ---------- remind: the hourly job ---------- */
 const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id';
@@ -1600,7 +1908,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return no('method', 'This function only takes POST.', 405);
   try {
-    /* the Hub itself (cron, through call_edge): the trigger secret opens remind and nothing else. For any other action, or a wrong secret, it is as if
+    /* the Hub itself (cron through call_edge, and onboard-link): the trigger secret opens remind, propose, hire_times, accept_setup and book, and nothing else. For any other action, or a wrong secret, it is as if
        the header were not there: the sign-in check below decides. */
     const given = req.headers.get('x-wa-secret');
     if (given) {
@@ -1611,6 +1919,8 @@ Deno.serve(async (req: Request) => {
         if (sb.action === 'remind') return await remind();
         if (sb.action === 'propose') return await propose(sb, 'manager', true);   // wave275: the mgr link relays here (by 'manager')
         if (sb.action === 'hire_times') return await hireTimesNow(sb);
+        if (sb.action === 'accept_setup') return await acceptSetup(sb);   // wave275 Task 3: onboard-link, after the hire's Accept
+        if (sb.action === 'book') return await book(sb);                  // wave275 Task 3: onboard-link, the hire's Yes
       }
     }
     const authHeader = req.headers.get('Authorization') || '';
@@ -1641,6 +1951,7 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'backed_out') return await backedOut(b, by, asUser);
     if (b.action === 'remind') return no('not_allowed', 'remind is the Hub\'s own hourly job.', 403);
     if (b.action === 'hire_times') return no('not_allowed', 'hire_times is the Hub\'s own step: it runs when times are proposed or the offer is accepted.', 403);
+    if (b.action === 'accept_setup' || b.action === 'book') return no('not_allowed', b.action + ' is the Hub\'s own step: it runs from the new hire\'s link.', 403);
     return no('unknown_action', 'The Hub does not know that action. Reload the page.', 400);
   } catch (e) {
     return no('failed', errText(e), 500);

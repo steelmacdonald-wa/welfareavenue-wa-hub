@@ -23,7 +23,16 @@
      that day), saved with Save availability; then the two picks, "Onboarding call (60 min)" and "1-on-1 (30 min)", each a click on a cell of the
      next 14 days. A cell that cannot start the meeting being picked (outside the saved hours, under the lead time, over a hub@ meeting or another
      new hire's times, or over the other pick) is greyed and disabled, with a legend; onboard-run checks again when "Propose these times" is pressed,
-     and its refusal shows in the page's language. A wave271 flow (mode grid, or no mode) keeps the grid as it was. -->
+     and its refusal shows in the page's language. A wave271 flow (mode grid, or no mode) keeps the grid as it was.
+     wave275 (Task 3, 02/11/26), the hire's link. An offer with hours a week shows "I confirm I can give at least N hours a week to Welfare Avenue",
+     which must be ticked before Accept (sent as hours_ok); an offer from before wave275 has no hours line. After Accept, in mode propose: the two
+     proposed times with the manager (each as a span, Toronto time through Intl), "Yes, both work" and "No, suggest other times", each one POST
+     behind a button. Yes: the closing page ("Thank you, <name>. Your invites are on their way; <manager> will see you on <date>.") with the link
+     to the setup rundown. Yes on times that have moved (stale): the function's sentence, then the grid. No: with availability asked, the grid
+     with the hire's minimum hours, whose Save shows the closing page ("<manager> will pick from your times"), with Change my times; with it
+     already communicated, the closing page at once ("<manager> will be in touch with other times"). A second No: a person will be in touch.
+     No proposal yet: "We are choosing your times now; you will get an email within two days." ?setup is the rundown: each step with a Done
+     button that posts setup_tick. A wave271 hire (mode grid) keeps the grid after Accept. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
   * { box-sizing: border-box; }
@@ -114,6 +123,27 @@
   .cell .k { font-size: 11px; font-weight: 600; }
   .pgrid .cell { position: relative; }
   .pick:focus-visible, .link:focus-visible, .blk input:focus-visible, .exd input:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  /* wave275 Task 3: the hours line, the two times, the closing page and the setup rundown */
+  .hours { display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 18px 0 0; font-size: 17px; line-height: 1.4; cursor: pointer; }
+  .hours input { width: 22px; height: 22px; margin: 1px 0 0; flex: 0 0 auto; accent-color: var(--green); cursor: pointer; }
+  .hours.on { border-color: var(--green); background: var(--soft); }
+  #hoursneed { margin: 8px 0 0; }
+  .times p { margin: 0 0 8px; }
+  .times p:last-child { margin: 0; }
+  a.btn { text-decoration: none; }
+  .rundown { list-style: none; counter-reset: step; padding: 0; margin: 14px 0 18px; }
+  .rstep { counter-increment: step; display: flex; gap: 14px; align-items: flex-start; border-top: 1px solid var(--line); padding: 14px 0; }
+  .rstep:last-child { border-bottom: 1px solid var(--line); }
+  .rtext { flex: 1 1 auto; min-width: 0; }
+  .rstep h3 { margin: 0 0 4px; }
+  .rstep h3::before { content: counter(step) '. '; }
+  .rstep p { margin: 0; font-size: 16px; }
+  .tick { flex: 0 0 auto; background: #fff; color: var(--green); border: 2px solid var(--green); border-radius: 999px; padding: 8px 16px; font: 600 15px 'Space Grotesk', sans-serif; cursor: pointer; }
+  .tick[aria-pressed="true"] { background: var(--green); color: var(--cream); }
+  .tick[aria-pressed="true"]::before { content: '\2713\00a0'; }
+  .tick[disabled] { opacity: .6; cursor: default; }
+  .tick:focus-visible, .hours input:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  p.count { font-weight: 500; margin: 0; }
   @media (max-width: 759px) {
     .card { margin-top: 20px; }
     h1 { font-size: 32px; }
@@ -133,6 +163,8 @@
     .blk { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; gap: 6px; }
     .blk input { width: 100%; font-size: 15px; padding: 7px 6px; }
     .pgrid .cell .k { display: block; font-size: 10px; line-height: 1; }
+    .rstep { flex-wrap: wrap; }
+    .tick { margin-left: auto; }
   }
 </style>
 </head>
@@ -175,7 +207,8 @@
       closed: 'This link is closed', booked: 'The meetings are booked, so this grid is closed. Look for the calendar invites in your email.',
       bad: 'This link does not work', badText: 'It may be incomplete. Please contact HR.',
       pwH: 'Not ready yet', pwText: 'This page is not ready yet. Please contact HR and they will help you.',
-      oops: 'We could not reach the server. Please try again in a minute, or contact HR.', oopsH: 'We could not load this page', savedH: 'Your answer is saved', savedAccept: 'You have accepted the offer, and we have it on file. We could not load the next step. Please try again in a minute, or contact HR.', retry: 'Try again', other: 'Français', dayOf: 'Times on {d}', off: 'Not available'
+      oops: 'We could not reach the server. Please try again in a minute, or contact HR.', oopsH: 'We could not load this page', savedH: 'Your answer is saved', savedAccept: 'You have accepted the offer, and we have it on file. We could not load the next step. Please try again in a minute, or contact HR.', retry: 'Try again', other: 'Français', dayOf: 'Times on {d}', off: 'Not available',
+      hoursLine: 'I confirm I can give at least {m} hours a week to Welfare Avenue', hoursNeed: 'Tick the box above to accept.'
     },
     fr: {
       titleOffer: 'Welfare Avenue: votre offre', titleGrid: 'Welfare Avenue: vos disponibilités', titleBad: 'Welfare Avenue: ce lien',
@@ -200,7 +233,8 @@
       closed: 'Ce lien est fermé', booked: 'Les rencontres sont fixées, la grille est donc fermée. Surveillez les invitations dans votre courriel.',
       bad: 'Ce lien ne fonctionne pas', badText: 'Il est peut-être incomplet. Veuillez communiquer avec les RH.',
       pwH: 'Pas encore prêt', pwText: 'Cette page n’est pas encore prête. Veuillez communiquer avec les RH.',
-      oops: 'Nous n’avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.', oopsH: 'Nous n’avons pas pu charger cette page', savedH: 'Votre réponse est enregistrée', savedAccept: 'Vous avez accepté l’offre, et c’est bien noté. Nous n’avons pas pu charger l’étape suivante. Réessayez dans une minute, ou communiquez avec les RH.', retry: 'Réessayer', other: 'English', dayOf: 'Plages du {d}', off: 'Non disponible'
+      oops: 'Nous n’avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.', oopsH: 'Nous n’avons pas pu charger cette page', savedH: 'Votre réponse est enregistrée', savedAccept: 'Vous avez accepté l’offre, et c’est bien noté. Nous n’avons pas pu charger l’étape suivante. Réessayez dans une minute, ou communiquez avec les RH.', retry: 'Réessayer', other: 'English', dayOf: 'Plages du {d}', off: 'Non disponible',
+      hoursLine: 'Je confirme pouvoir consacrer au moins {m} heures par semaine à Welfare Avenue', hoursNeed: 'Cochez la case ci-dessus pour accepter.'
     }
   };
   function t() { return T[lang]; }
@@ -229,7 +263,8 @@
   function dayLong(iso) { return fmt({ weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(iso)); }
 
   /* ---------- state ---------- */
-  var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null, minHours: 0, cellMin: 30 };
+  var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null, minHours: 0, cellMin: 30,
+    close: '', closeMsg: '', notice: '', regrid: false, ticking: {} };   // wave275 Task 3: which closing sentence, the stale notice, Change my times, ticks in flight
   var card = document.getElementById('card');
   var langBox = document.getElementById('lang');
 
@@ -289,14 +324,26 @@
     card.className = 'card';
     var j = S.j, h = '<h1 tabindex="-1">' + fill(t().hi, j) + '</h1><p>' + fill(t().offer, j) + '</p>';
     if (pre) h += '<p class="hint" id="hint">' + fill(t().hint, { choice: pre === 'accept' ? t().hintAccept : t().hintDecline }) + '</p>';
+    var hrs = hoursAsked();   // wave275: the offer's hours a week, which the hire confirms before Accept
     h += '<p>' + t().ask + '</p>' +
-      '<button class="btn' + (pre === 'accept' ? ' pre' : '') + '" id="accept" data-act="accept" type="button">' + t().accept + '</button>' +
+      (hrs ? '<label class="hours" id="hoursbox" for="hours"><input type="checkbox" id="hours"><span>' + fill(t().hoursLine, { m: hrs }) + '</span></label>' : '') +
+      '<button class="btn' + (pre === 'accept' ? ' pre' : '') + '" id="accept" data-act="accept" type="button"' + (hrs ? ' disabled aria-describedby="hoursneed"' : '') + '>' + t().accept + '</button>' +
+      (hrs ? '<p class="need" id="hoursneed">' + t().hoursNeed + '</p>' : '') +
       '<button class="quiet' + (pre === 'decline' ? ' pre' : '') + '" id="decline" data-act="decline" type="button">' + t().decline + '</button>' +
       '<p id="err" class="err hide" role="alert"></p><p class="note">' + t().reply + '</p>';
     card.innerHTML = h;
+    if (hrs) document.getElementById('hours').addEventListener('change', syncHours);
     document.getElementById('accept').addEventListener('click', function () { send('accept'); });
     document.getElementById('decline').addEventListener('click', function () { send('decline'); });
-    if (initial && pre === 'accept') { try { document.getElementById('accept').focus({ preventScroll: true }); } catch (e) { /* fine */ } }   // Decline is highlighted only: a stray Enter must not decline
+    if (initial && pre === 'accept') { try { document.getElementById(hrs ? 'hours' : 'accept').focus({ preventScroll: true }); } catch (e) { /* fine */ } }   // Decline is highlighted only: a stray Enter must not decline
+  }
+  function hoursAsked() { var n = Number(S.j && S.j.offerHours); return n > 0 ? n : 0; }
+  function hoursTicked() { var b = document.getElementById('hours'); return !hoursAsked() || !!(b && b.checked); }
+  function syncHours() {   // Accept waits for the box; the sentence under it says why
+    var a = document.getElementById('accept'), n = document.getElementById('hoursneed'), box = document.getElementById('hoursbox');
+    if (a) a.disabled = S.busy || !hoursTicked();
+    if (n) n.className = hoursTicked() ? 'need hide' : 'need';
+    if (box) box.classList.toggle('on', hoursTicked());
   }
 
   /* the grid: a model of the instants the function sent, laid out by Toronto wall clock */
@@ -328,9 +375,10 @@
   function viewGrid() {
     setTitle('titleGrid');
     card.className = 'card wide';
-    var j = S.j, m = S.model, tx = t();
-    var h = '<h1 tabindex="-1">' + fill(j.kind === 'manager' ? tx.hi : tx.thanksYes, j) + '</h1>' +
-      '<p>' + fill(j.kind === 'manager' ? tx.gridMgr : j.callBooked ? tx.gridHireOne : tx.gridHire, j) + '</p>';
+    var j = S.j, m = S.model, tx = t(), v2 = isHire275(j);
+    var h = '<h1 tabindex="-1">' + fill(j.kind === 'manager' ? tx.hi : tx.thanksYes, j) + '</h1>';
+    if (v2 && S.notice) h += '<p class="stale" id="notice" role="status">' + esc(S.notice) + '</p>';   // wave275: the times had moved
+    h += '<p>' + (v2 ? say(hx().gridNo, mgrWords()) : fill(j.kind === 'manager' ? tx.gridMgr : j.callBooked ? tx.gridHireOne : tx.gridHire, j)) + '</p>';
     if (j.late && j.kind === 'offer') h += '<p class="hint">' + tx.late + '</p>';
     h += '<p class="note">' + tx.how + '</p>';
     if (!m.days.length) { h += '<p>' + tx.nothing + '</p>'; card.innerHTML = h; return; }
@@ -449,6 +497,11 @@
       if (j && j.ok) {
         if (Array.isArray(j.slotsSaved)) S.sel = new Set(j.slotsSaved.filter(function (s) { return S.model.isoDay[s]; }));
         S.saved = { n: S.sel.size, dropped: j.dropped || 0 };
+        if (isHire275(S.j)) {   // wave275: the hire's times are in; the closing page says what happens next
+          S.j.slotsSaved = Array.from(S.sel).sort(); S.regrid = false; S.notice = ''; S.close = 'picked'; S.view = 'closing';
+          render(true);
+          return;
+        }
         paint();
         return;
       }
@@ -461,9 +514,10 @@
     if (S.busy) return;
     S.busy = true;
     var b1 = document.getElementById('accept'), b2 = document.getElementById('decline');
+    if (a === 'accept' && !hoursTicked()) { S.busy = false; return; }
     b1.disabled = true; b2.disabled = true;
-    function again(msg) { S.busy = false; b1.disabled = false; b2.disabled = false; var e = document.getElementById('err'); e.textContent = msg; e.className = 'err'; }
-    post({ t: token, a: a }).then(function (r) {
+    function again(msg) { S.busy = false; b1.disabled = !hoursTicked(); b2.disabled = false; var e = document.getElementById('err'); e.textContent = msg; e.className = 'err'; }
+    post(Object.assign({ t: token, a: a }, a === 'accept' && hoursAsked() ? { hours_ok: true } : {})).then(function (r) {
       var j = r.j;
       if (j && j.ok && j.closed) { S.busy = false; S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
       if (j && j.ok) {
@@ -809,7 +863,165 @@
     S.active = first >= 0 ? first : 0;
   }
 
+  /* ---------- wave275 Task 3: the hire's side after Accept (mode propose): the times, Yes or No, the closing page, the setup rundown ---------- */
+  var HX = {
+    en: {
+      titleTimes: 'Welfare Avenue: your times', titleSetup: 'Welfare Avenue: your setup',
+      accepted: 'You have accepted the <strong>{role}</strong> offer.', timesIntro: 'You have accepted the <strong>{role}</strong> offer. Here are the times for your first two meetings:',
+      callLine: 'Your onboarding call:', oneLine: 'Your 1-on-1 with {manager}:', tz: 'Toronto time (Eastern).', span: '{day}, {a} to {b}',
+      ask: 'Do both times work for you?', yes: 'Yes, both work', no: 'No, suggest other times', note: 'Nothing is saved until you press a button.',
+      waiting: 'We are choosing your times now; you will get an email within two days.',
+      closeH: 'Thank you, {first}.', booked: 'Your invites are on their way; {manager} will see you on {date}.',
+      picked: '{Manager} will pick from your times, and you will get calendar invites.', touch: '{Manager} will be in touch with other times.',
+      yourManager: 'your manager', regrid: 'Change my times',
+      gridNo: 'Please mark every time that works for your onboarding call and a 1-on-1 with {manager}. They will pick from your times and send you calendar invites.',
+      setupLink: 'Open your setup steps', setupNote: 'A few things to do on your own computer before your first day. You can keep that page open.',
+      setupH: 'Your setup', setupIntro: 'Do these on your own computer before your onboarding call, in this order, and press Done as you go: {manager} and HR can see who is ready. Your sign-in details are in your welcome email.',
+      done: 'Done', markDone: 'Mark as done', count: '{n} of {m} done', back: 'Back to your times'
+    },
+    fr: {
+      titleTimes: 'Welfare Avenue: vos heures', titleSetup: 'Welfare Avenue: votre installation',
+      accepted: 'Vous avez accepté l’offre de <strong>{role}</strong>.', timesIntro: 'Vous avez accepté l’offre de <strong>{role}</strong>. Voici les heures de vos deux premières rencontres:',
+      callLine: 'Votre appel d’accueil:', oneLine: 'Votre rencontre individuelle avec {manager}:', tz: 'Heure de Toronto (Est).', span: '{day}, {a} à {b}',
+      ask: 'Les deux heures vous conviennent-elles?', yes: 'Oui, les deux me conviennent', no: 'Non, proposer d’autres heures', note: 'Rien n’est enregistré tant que vous n’appuyez pas sur un bouton.',
+      waiting: 'Nous choisissons vos heures en ce moment; vous recevrez un courriel d’ici deux jours.',
+      closeH: 'Merci, {first}.', booked: 'Vos invitations sont en route; {manager} vous verra le {date}.',
+      picked: '{Manager} choisira parmi vos plages, et vous recevrez des invitations.', touch: '{Manager} communiquera avec vous pour d’autres heures.',
+      yourManager: 'votre gestionnaire', regrid: 'Modifier mes plages',
+      gridNo: 'Indiquez toutes les plages qui vous conviennent pour votre appel d’accueil et une rencontre individuelle avec {manager}. Votre gestionnaire choisira parmi vos plages et vous enverra des invitations.',
+      setupLink: 'Ouvrir vos étapes d’installation', setupNote: 'Quelques étapes à faire sur votre ordinateur avant votre premier jour. Vous pouvez garder cette page ouverte.',
+      setupH: 'Votre installation', setupIntro: 'Faites ces étapes sur votre ordinateur avant votre appel d’accueil, dans cet ordre, et appuyez sur Terminé au fur et à mesure: {manager} et les RH voient qui est prêt. Vos informations de connexion sont dans votre courriel de bienvenue.',
+      done: 'Terminé', markDone: 'Marquer comme terminé', count: '{n} sur {m} terminées', back: 'Retour à vos heures'
+    }
+  };
+  function hx() { return HX[lang]; }
+  function isHire275(j) { return !!j && j.kind === 'offer' && j.mode === 'propose'; }
+  function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function mgrWords() { var m = (S.j && S.j.manager) || hx().yourManager; return { manager: m, Manager: cap(m) }; }
+  function lengthOf(which) { var L = (S.j && S.j.lengths) || {}, n = Number(which === 'call' ? L.callMin : L.oneMin); return n > 0 ? n : which === 'call' ? 60 : 30; }
+  function keep(s) { return String(s).replace(/ /g, ' '); }   // "12 p.m." never breaks across two lines
+  function spanText(iso, min) { return say(hx().span, { day: dayLong(iso), a: keep(clockShort(iso)), b: keep(clockShort(new Date(Date.parse(iso) + min * 60000).toISOString())) }); }
+  function dayWords(iso) {   // "Monday, November 2", "lundi 2 novembre" (1er for the first of the month, which Intl does not write)
+    if (lang !== 'fr') return fmt({ weekday: 'long', month: 'long', day: 'numeric' }).format(new Date(iso));
+    var q2 = {};
+    fmt({ weekday: 'long', month: 'long', day: 'numeric' }).formatToParts(new Date(iso)).forEach(function (x) { q2[x.type] = x.value; });
+    return q2.weekday + ' ' + (q2.day === '1' ? '1er' : q2.day) + ' ' + q2.month;
+  }
+  function linkWith(extra) { var u = new URLSearchParams(); if (extra) u.set(extra, ''); if (forced) u.set('l', lang); var s = u.toString().replace(/=(&|$)/, '$1'); return location.pathname + (s ? '?' + s : ''); }
+  function setupLinkHtml() { return '<a class="btn" id="setuplink" href="' + esc(linkWith('setup')) + '">' + hx().setupLink + '</a><p class="note">' + hx().setupNote + '</p>'; }
+  function timesHtml(tm) {
+    return '<div class="ok times" id="times"><p><b>' + hx().callLine + '</b> ' + spanText(tm.call_at, lengthOf('call')) + '</p>' +
+      (tm.one_on_one_at ? '<p><b>' + say(hx().oneLine, mgrWords()) + '</b> ' + spanText(tm.one_on_one_at, lengthOf('one')) + '</p>' : '') + '<p class="small">' + hx().tz + '</p></div>';
+  }
+  function titled(k) { document.title = hx()[k]; document.documentElement.lang = lang; card.className = 'card'; }
+  /* which view the hire's link shows after Accept */
+  function hireView(j) {
+    if (q.has('setup') && j.setup) return 'setup';
+    if (j.bookedTimes) { S.close = 'booked'; return 'closing'; }
+    if (j.answer === 'no') {
+      if (j.askAvailability === false) { S.close = 'touch'; return 'closing'; }
+      if (S.regrid || !(j.slotsSaved || []).length) return 'grid';
+      S.close = 'picked'; return 'closing';
+    }
+    return j.proposal ? 'times' : 'waiting';
+  }
+  function viewTimes() {
+    titled('titleTimes');
+    var j = S.j, x = hx();
+    var hh = '<h1 tabindex="-1">' + fill(t().thanksYes, j) + '</h1><p>' + say(x.timesIntro, { role: j.role }) + '</p>' + timesHtml(j.proposal);
+    if (j.late) hh += '<p class="hint">' + t().late + '</p>';
+    hh += '<p>' + x.ask + '</p><button class="btn" id="yes" data-act="yes" type="button">' + x.yes + '</button>' +
+      '<button class="quiet" id="no" data-act="no" type="button">' + x.no + '</button><p id="err" class="err hide" role="alert"></p><p class="note">' + x.note + '</p>';   // the rundown link waits for the closing page
+    card.innerHTML = hh;
+    document.getElementById('yes').addEventListener('click', function () { answerTimes('yes'); });
+    document.getElementById('no').addEventListener('click', function () { answerTimes('no'); });
+  }
+  function viewWaiting() {
+    titled('titleTimes');
+    var j = S.j, x = hx();
+    card.innerHTML = '<h1 tabindex="-1">' + fill(t().thanksYes, j) + '</h1><p>' + say(x.accepted, { role: j.role }) + '</p><div class="ok" id="waiting"><p>' + x.waiting + '</p></div>' +
+      (j.late ? '<p class="hint">' + t().late + '</p>' : '');
+  }
+  function viewClosing() {
+    titled('titleTimes');
+    var j = S.j, x = hx(), mw = mgrWords(), line;
+    if (S.close === 'booked') line = say(x.booked, Object.assign({ date: dayWords(j.bookedTimes.call_at) }, mw));
+    else if (S.close === 'picked') line = say(x.picked, mw);
+    else if (S.close === 'touch') line = say(x.touch, mw);
+    else line = esc(S.closeMsg || '');   // a second No: the function's sentence (a person will be in touch)
+    var hh = '<h1 id="closing" tabindex="-1">' + say(x.closeH, { first: j.first }) + '</h1>';
+    if (S.notice && S.close === 'touch') hh += '<p class="stale" id="notice" role="status">' + esc(S.notice) + '</p>';
+    hh += '<div class="ok"><p>' + line + '</p></div>';
+    if (S.close === 'booked') hh += timesHtml(j.bookedTimes);
+    if (S.close === 'picked') hh += '<button class="quiet" id="regrid" type="button">' + x.regrid + '</button>';
+    card.innerHTML = hh + setupLinkHtml();
+    var rg = document.getElementById('regrid');
+    if (rg) rg.addEventListener('click', function () { S.regrid = true; S.view = 'grid'; setupGrid(S.j); render(true); });
+  }
+  /* Yes or No: only a press gets here, and the first press locks both buttons, so a double click answers once */
+  function answerTimes(a) {
+    if (S.busy) return;
+    S.busy = true;
+    var b1 = document.getElementById('yes'), b2 = document.getElementById('no');
+    b1.disabled = true; b2.disabled = true;
+    function again(msg) { S.busy = false; b1.disabled = false; b2.disabled = false; showErr(msg); }
+    post({ t: token, a: a }).then(function (r) {
+      var j = r.j;
+      if (j && j.ok && j.closed) { S.busy = false; S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.stale) {   // Review Focus 1: the times moved since they were proposed; the hire's times instead, or the manager will be in touch
+        S.busy = false; S.notice = serverMsg(j); S.j.answer = 'no'; S.j.askAvailability = j.askAvailability !== false;
+        S.view = hireView(S.j); if (S.view === 'grid') setupGrid(S.j);
+        render(true); return;
+      }
+      if (j && j.error === 'answered') { S.busy = false; S.close = 'person'; S.closeMsg = serverMsg(j); S.view = 'closing'; render(true); return; }
+      if (j && (j.ok || j.error === 'no_proposal')) return load(true);   // saved (or nothing to answer yet): ask again what to show
+      again(serverMsg(j) || t().oops);
+    }).catch(function () { again(t().oops); });
+  }
+  /* the rundown (?setup): each step with Done; a press posts setup_tick, the page shows what the function saved */
+  function setupCount(st) { return say(hx().count, { n: st.steps.filter(function (s) { return st.ticks[s.key]; }).length, m: st.steps.length }); }
+  function viewSetup() {
+    titled('titleSetup');
+    var st = S.j.setup, x = hx();
+    var hh = '<h1 tabindex="-1">' + x.setupH + '</h1><p>' + say(x.setupIntro, mgrWords()) + '</p><p class="count" id="setupcount" aria-live="polite">' + setupCount(st) + '</p><ol class="rundown" id="rundown">';
+    st.steps.forEach(function (s) {
+      var on = !!st.ticks[s.key];
+      hh += '<li class="rstep"><div class="rtext"><h3>' + esc((s.title || {})[lang] || '') + '</h3><p>' + esc((s.body || {})[lang] || '') + '</p></div>' +
+        '<button type="button" class="tick" data-tick="' + esc(s.key) + '" aria-pressed="' + on + '">' + (on ? x.done : x.markDone) + '</button></li>';
+    });
+    hh += '</ol><p id="err" class="err hide" role="alert"></p><p><a class="link" id="back" href="' + esc(linkWith('')) + '">' + x.back + '</a></p>';
+    card.innerHTML = hh;
+    document.getElementById('rundown').addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('[data-tick]') : null; if (b) tick(b); });
+  }
+  function tick(b) {
+    var key = b.getAttribute('data-tick'), st = S.j.setup;
+    if (S.ticking[key]) return;
+    S.ticking[key] = true; b.disabled = true;
+    function again(msg) { S.ticking[key] = false; b.disabled = false; showErr(msg); }
+    post({ t: token, a: 'setup_tick', key: key, done: !st.ticks[key] }).then(function (r) {
+      var j = r.j;
+      if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (!(j && j.ok && j.ticks)) return again(serverMsg(j) || t().oops);
+      S.ticking[key] = false; st.ticks = j.ticks;
+      Array.prototype.forEach.call(card.querySelectorAll('[data-tick]'), function (x) {   // painted in place, so the focus stays on the button pressed
+        var on = !!st.ticks[x.getAttribute('data-tick')];
+        x.setAttribute('aria-pressed', String(on)); x.textContent = on ? hx().done : hx().markDone;
+      });
+      b.disabled = false;
+      document.getElementById('setupcount').innerHTML = setupCount(st);
+      var e = document.getElementById('err'); if (e) e.className = 'err hide';
+    }).catch(function () { again(t().oops); });
+  }
+
   /* ---------- load and route ---------- */
+  function setupGrid(j) {
+    S.model = buildModel(j.grid || { slots: [], days: [] });
+    var gm = Number((j.grid || {}).minHours), gc = Number((j.grid || {}).cellMin);
+    S.minHours = j.kind === 'manager' || !(gm > 0) ? 0 : gm;   // the manager's grid has no minimum
+    S.cellMin = gc > 0 ? gc : 30;
+    S.sel = new Set((j.slotsSaved || []).filter(function (s) { return S.model.isoDay[s]; }));
+    S.active = 0; S.saved = null;
+  }
   function route(j) {
     S.j = j;
     if (!j || !j.ok) { S.view = 'bad'; return; }
@@ -819,16 +1031,10 @@
     else if (j.kind === 'manager' && j.notYours) S.view = 'closed';   // wave275: the link was sent to someone else since: the function's sentence, nothing to edit
     else if (j.kind === 'manager') S.view = j.mode === 'propose' ? 'propose' : 'grid';   // wave275: a wave271 flow (mode grid, or none) keeps its grid
     else if (j.answered === 'decline') { S.view = 'declined'; S.repeated = true; }
+    else if (j.answered === 'accept' && isHire275(j)) S.view = hireView(j);   // wave275 Task 3: the times, the closing page or the rundown
     else if (j.answered === 'accept') S.view = 'grid';
     else S.view = 'ask';
-    if (S.view === 'grid') {
-      S.model = buildModel(j.grid || { slots: [], days: [] });
-      var gm = Number((j.grid || {}).minHours), gc = Number((j.grid || {}).cellMin);
-      S.minHours = j.kind === 'manager' || !(gm > 0) ? 0 : gm;   // the manager's grid has no minimum
-      S.cellMin = gc > 0 ? gc : 30;
-      S.sel = new Set((j.slotsSaved || []).filter(function (s) { return S.model.isoDay[s]; }));
-      S.active = 0; S.saved = null;
-    }
+    if (S.view === 'grid') setupGrid(j);
     if (S.view === 'propose') startPropose(j);
   }
   function render(focusHeading) {
@@ -836,6 +1042,10 @@
     var v = S.view;
     if (v === 'ask') viewAsk(focusHeading === 'initial');
     else if (v === 'grid') viewGrid();
+    else if (v === 'times') viewTimes();
+    else if (v === 'waiting') viewWaiting();
+    else if (v === 'closing') viewClosing();
+    else if (v === 'setup') viewSetup();
     else if (v === 'propose') viewPropose();
     else if (v === 'declined') viewDeclined();
     else if (v === 'closed') viewClosed();
