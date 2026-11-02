@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Welfare Avenue: your offer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the onboarding link page (01/11/26, wave271). Served for every /o/<token> by a Netlify rewrite (_redirects),
+     deployed by host-sync from site_files path o/index.html. A new hire opens their personal link from the offer email, answers
+     Accept or Decline, then marks the times they can meet in a grid; the new manager gets the same grid for the 1-on-1. The page
+     asks the onboard-link function who the token is for (first name and role only) and what to show. Nothing is saved on open:
+     ?a=accept or ?a=decline (the email buttons) only highlight that button, and the person still presses it, so a mail scanner
+     that opens the link answers nothing. English and French (?l=fr, else the function's lang). Grid times come from the instants
+     the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10. -->
+<style>
+  :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--cream); color: var(--ink); font-family: 'Space Grotesk', system-ui, sans-serif; line-height: 1.5; }
+  .top { background: var(--green); color: var(--cream); padding: 22px 20px; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: .02em; }
+  .card { max-width: 560px; margin: 28px auto; padding: 0 20px 48px; }
+  .card.wide { max-width: 1240px; }
+  h1 { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 36px; line-height: 1.08; margin: 0 0 14px; color: var(--green); overflow-wrap: anywhere; }
+  h1:focus { outline: none; }
+  p { margin: 0 0 14px; font-size: 17px; overflow-wrap: anywhere; }
+  .btn { display: block; width: 100%; text-align: center; background: var(--green); color: var(--cream); border: 0; border-radius: 999px; padding: 17px 20px; font: 600 18px 'Space Grotesk', sans-serif; cursor: pointer; margin: 24px 0 14px; }
+  .btn:hover, .btn:focus-visible { background: #0b2f2b; }
+  .btn[disabled] { opacity: .6; cursor: default; }
+  .btn.pre { box-shadow: 0 0 0 4px var(--cream), 0 0 0 7px var(--green); }
+  .quiet { display: block; width: 100%; text-align: center; background: none; border: 0; color: var(--muted); font: 15px 'Space Grotesk', sans-serif; text-decoration: underline; cursor: pointer; padding: 10px 8px; border-radius: 999px; }
+  .quiet[disabled] { opacity: .6; cursor: default; }
+  .quiet.pre { background: var(--soft); color: var(--ink); box-shadow: 0 0 0 3px var(--green); }
+  .ok { background: var(--soft); border-radius: 16px; padding: 18px 20px; margin: 10px 0 14px; }
+  .ok p:last-child { margin-bottom: 0; }
+  .hint { background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin: 0 0 6px; }
+  .lang { float: right; font-size: 14px; font-family: 'Space Grotesk', sans-serif; font-weight: 500; }
+  .lang a { color: var(--cream); text-decoration: none; opacity: .85; }
+  .lang a:hover { opacity: 1; text-decoration: underline; }
+  small, .small { color: var(--muted); font-size: 14px; }
+  .hide { display: none !important; }
+  .err { color: var(--flag); font-weight: 500; font-size: 15px; margin: 8px 0 0; }
+  .note { font-size: 15px; color: var(--muted); }
+
+  /* the availability grid: a column for every day on a computer, one day at a time (with day chips) on a phone */
+  .chips { display: none; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+  .chip { position: relative; flex: 0 0 auto; min-width: 58px; padding: 6px 8px 5px; text-align: center; background: var(--cream); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; font: 500 13px/1.2 'Space Grotesk', sans-serif; cursor: pointer; }
+  .chip b { display: block; font-size: 17px; font-weight: 600; }
+  .chip i { position: absolute; top: -7px; right: -5px; min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--green); color: var(--cream); font: 600 12px/20px 'Space Grotesk', sans-serif; font-style: normal; }
+  .chip.on { background: var(--green); color: var(--cream); border-color: var(--green); }
+  .chip.on i { background: var(--cream); color: var(--green); }
+  .grid { display: flex; gap: 3px; margin: 10px 0 0; user-select: none; -webkit-user-select: none; }
+  .tcol { flex: 0 0 66px; }
+  .day { flex: 1 1 0; min-width: 0; }
+  .dh { height: 48px; display: flex; flex-direction: column; justify-content: center; text-align: center; font-size: 12px; line-height: 1.15; }
+  .dh b { font-weight: 600; }
+  .dh small { font-size: 10.5px; }
+  .tl { height: 30px; line-height: 28px; font-size: 11px; color: var(--muted); text-align: right; padding-right: 6px; white-space: nowrap; }
+  .cell { display: block; width: 100%; height: 28px; margin: 0 0 2px; padding: 0; background: var(--cream); border: 1px solid var(--line); border-radius: 5px; color: var(--ink); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; font: 500 15px 'Space Grotesk', sans-serif; }
+  .cell .t { display: none; }
+  .cell:hover { background: var(--soft); }
+  .cell[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: var(--cream); }
+  .cell.off, .cell.off:hover { background: repeating-linear-gradient(135deg, #f1eee7, #f1eee7 4px, #e8e4da 4px, #e8e4da 8px); border-color: #e3dfd3; color: #a9a69d; cursor: not-allowed; }
+  .cell:focus-visible, .chip:focus-visible, .btn:focus-visible, .quiet:focus-visible, .lang a:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+  .bar { position: sticky; bottom: 0; z-index: 2; background: var(--cream); border-top: 1px solid var(--line); margin: 14px -20px 0; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .bar .count { flex: 1 1 160px; font-weight: 500; font-size: 16px; }
+  .bar .btn { width: auto; flex: 0 0 auto; margin: 0; padding: 14px 28px; }
+  .bar .quiet { width: auto; flex: 0 0 auto; }
+  .saved { background: var(--soft); border-radius: 12px; padding: 10px 14px; font-size: 15px; margin: 10px 0 0; flex: 1 1 100%; }
+  @media (max-width: 759px) {
+    .card { margin-top: 20px; }
+    h1 { font-size: 32px; }
+    .chips { display: flex; }
+    .tcol { display: none; }
+    .grid { display: block; }
+    .day { display: none; }
+    .day.on { display: block; }
+    .dh { height: auto; padding: 4px 0 10px; text-align: left; font-size: 16px; }
+    .dh small { font-size: 14px; }
+    .cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .cell { height: 46px; margin: 0; border-radius: 10px; }
+    .cell .t { display: inline; }
+    .bar .btn { flex: 1 1 auto; }
+  }
+</style>
+</head>
+<body>
+<div class="top">Welfare Avenue <span class="lang" id="lang"></span></div>
+<div class="card" id="card"><p id="loading">…</p></div>
+<script>
+(function () {
+  var FN = 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/onboard-link';
+  var TZ = 'America/Toronto';
+  var token = decodeURIComponent((location.pathname.split('/o/')[1] || '').split('/')[0] || '');
+  var q = new URLSearchParams(location.search);
+  function pickLang(x) { x = String(x || '').toLowerCase(); return x.indexOf('fr') === 0 ? 'fr' : x.indexOf('en') === 0 ? 'en' : ''; }
+  var forced = pickLang(q.get('l'));          // ?l= wins; else the function's lang; else the browser's
+  var lang = forced || pickLang(navigator.language) || 'en';
+  var pre = q.get('a') === 'accept' || q.get('a') === 'decline' ? q.get('a') : '';   // only highlights a button; never saves
+  var ROLE_FR = { 'Operations Manager': 'Gestionnaire des opérations', 'HR Technician': 'Technicien·ne RH', 'Event Coordinator': "Coordonnateur·rice d'événements" };
+
+  var T = {
+    en: {
+      titleOffer: 'Welfare Avenue: your offer', titleGrid: 'Welfare Avenue: your times', titleBad: 'Welfare Avenue: this link',
+      hi: 'Hi {first},',
+      offer: 'Welfare Avenue would like you to join us as <strong>{role}</strong>. Your offer letter is in your email.',
+      ask: 'Will you accept the offer?', accept: 'Accept the offer', decline: 'Decline the offer',
+      reply: 'If you would rather talk first, just reply to the offer email. Nothing is saved until you press a button.',
+      hint: 'You came here from the {choice} button in your email. Nothing is saved until you press it below.', hintAccept: 'Accept', hintDecline: 'Decline',
+      thanksNo: 'Thank you, {first}.', okNo: 'We have noted that you are declining the <strong>{role}</strong> offer. Thank you for your time, and we wish you all the best.',
+      again: 'Your first answer was already on file.',
+      thanksYes: 'Thank you, {first}!',
+      gridHire: 'You have accepted the <strong>{role}</strong> offer. Next, mark every time that works for two meetings: your onboarding call and a 1-on-1 with your manager. We will choose from your times and send you calendar invites.',
+      gridMgr: 'Please mark every time you could meet <strong>{hire}</strong>, who is joining us as <strong>{role}</strong>, for a 1-on-1. We will pick a time that suits you both and send the invite.',
+      late: 'Your answer came in after the reply-by date. It is on file.',
+      how: 'All times are Toronto time (Eastern). Click and drag, or tap, to mark the times that work. Mark a time again to clear it. You can come back to this link and change your times until the meetings are booked.',
+      range: '{a} to {b}', none: 'No times marked yet.', one: '1 time marked.', many: '{n} times marked.',
+      save: 'Save my times', clear: 'Clear all',
+      saved: 'Saved. We have {n} from you. You can change them any time until the meetings are booked.', savedNone: 'Saved. You have no times marked.', savedN1: '1 time', savedN: '{n} times', dropped: '{n} of your times had already passed and were left out.',
+      nothing: 'There are no open times right now. Please contact HR.',
+      closed: 'This link is closed', booked: 'The meetings are booked, so this grid is closed. Look for the calendar invites in your email.',
+      bad: 'This link does not work', badText: 'It may be incomplete. Please contact HR.',
+      pwH: 'Not ready yet', pwText: 'This page is not ready yet. Please contact HR and they will help you.',
+      oops: 'We could not reach the server. Please try again in a minute, or contact HR.', other: 'Français', dayOf: 'Times on {d}', off: 'Not available'
+    },
+    fr: {
+      titleOffer: 'Welfare Avenue: votre offre', titleGrid: 'Welfare Avenue: vos disponibilités', titleBad: 'Welfare Avenue: ce lien',
+      hi: 'Bonjour {first},',
+      offer: 'Welfare Avenue aimerait vous accueillir comme <strong>{role}</strong>. Votre lettre d’offre est dans votre courriel.',
+      ask: 'Acceptez-vous l’offre?', accept: 'Accepter l’offre', decline: 'Refuser l’offre',
+      reply: 'Si vous préférez en parler d’abord, répondez simplement au courriel de l’offre. Rien n’est enregistré tant que vous n’appuyez pas sur un bouton.',
+      hint: 'Vous arrivez ici par le bouton « {choice} » de votre courriel. Rien n’est enregistré tant que vous n’appuyez pas dessous.', hintAccept: 'Accepter', hintDecline: 'Refuser',
+      thanksNo: 'Merci, {first}.', okNo: 'C’est noté: vous refusez l’offre de <strong>{role}</strong>. Merci du temps accordé, et nous vous souhaitons le meilleur.',
+      again: 'Votre première réponse était déjà enregistrée.',
+      thanksYes: 'Merci, {first}!',
+      gridHire: 'Vous avez accepté l’offre de <strong>{role}</strong>. Indiquez maintenant toutes les plages qui vous conviennent pour deux rencontres: votre appel d’accueil et une rencontre individuelle avec votre gestionnaire. Nous choisirons parmi vos plages et vous enverrons des invitations.',
+      gridMgr: 'Indiquez toutes les plages où vous pourriez rencontrer <strong>{hire}</strong>, qui se joint à nous comme <strong>{role}</strong>, pour une rencontre individuelle. Nous choisirons une heure qui convient aux deux et enverrons l’invitation.',
+      late: 'Votre réponse est arrivée après la date limite. Elle est bien enregistrée.',
+      how: 'Toutes les heures sont à l’heure de Toronto (Est). Cliquez et glissez, ou touchez, pour indiquer les plages qui conviennent. Touchez une plage de nouveau pour l’effacer. Vous pouvez revenir à ce lien et modifier vos plages tant que les rencontres ne sont pas fixées.',
+      range: '{a} à {b}', none: 'Aucune plage choisie.', one: '1 plage choisie.', many: '{n} plages choisies.',
+      save: 'Enregistrer mes plages', clear: 'Tout effacer',
+      saved: 'Enregistré. Nous avons {n} de votre part. Vous pouvez les modifier jusqu’à ce que les rencontres soient fixées.', savedNone: 'Enregistré. Aucune plage n’est choisie.', savedN1: '1 plage', savedN: '{n} plages', dropped: '{n} de vos plages étaient déjà passées et ont été retirées.',
+      nothing: 'Aucune plage n’est ouverte pour le moment. Veuillez communiquer avec les RH.',
+      closed: 'Ce lien est fermé', booked: 'Les rencontres sont fixées, la grille est donc fermée. Surveillez les invitations dans votre courriel.',
+      bad: 'Ce lien ne fonctionne pas', badText: 'Il est peut-être incomplet. Veuillez communiquer avec les RH.',
+      pwH: 'Pas encore prêt', pwText: 'Cette page n’est pas encore prête. Veuillez communiquer avec les RH.',
+      oops: 'Nous n’avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.', other: 'English', dayOf: 'Plages du {d}', off: 'Non disponible'
+    }
+  };
+  function t() { return T[lang]; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function fill(s, o) {
+    o = o || {};
+    return s.replace('{first}', esc(o.first || '')).replace('{role}', esc(lang === 'fr' ? (ROLE_FR[o.role] || o.role || '') : (o.role || '')))
+      .replace('{hire}', esc(o.hire || '')).replace('{n}', esc(o.n)).replace('{choice}', esc(o.choice || '')).replace('{d}', esc(o.d || ''))
+      .replace('{a}', esc(o.a || '')).replace('{b}', esc(o.b || ''));
+  }
+
+  /* ---------- Toronto time, always through Intl ---------- */
+  var fmtCache = {};
+  function fmt(opts) {
+    var loc = lang === 'fr' ? 'fr-CA' : 'en-CA', key = loc + JSON.stringify(opts);
+    return fmtCache[key] || (fmtCache[key] = new Intl.DateTimeFormat(loc, Object.assign({ timeZone: TZ }, opts)));
+  }
+  var PARTS = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  function parts(iso) {   // the Toronto wall clock of an instant, as text
+    var p = {};
+    PARTS.formatToParts(new Date(iso)).forEach(function (x) { if (x.type !== 'literal') p[x.type] = x.value; });
+    return { date: p.year + '-' + p.month + '-' + p.day, hm: p.hour + ':' + p.minute, min: Number(p.minute) };
+  }
+  function clock(iso) { return fmt({ hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
+  function clockShort(iso) { return fmt(parts(iso).min ? { hour: 'numeric', minute: '2-digit' } : { hour: 'numeric' }).format(new Date(iso)); }
+  function dayLong(iso) { return fmt({ weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(iso)); }
+
+  /* ---------- state ---------- */
+  var S = { j: null, view: 'loading', repeated: false, busy: false, model: null, sel: new Set(), active: 0, saved: null };
+  var card = document.getElementById('card');
+  var langBox = document.getElementById('lang');
+
+  function post(body) {
+    return fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); });
+  }
+  function serverMsg(j) { return j && j.message && j.message[lang] ? j.message[lang] : ''; }
+
+  function setTitle(k) { document.title = t()[k]; document.documentElement.lang = lang; }
+  function paintLang() {
+    langBox.innerHTML = '<a href="' + esc(location.pathname + '?l=' + (lang === 'fr' ? 'en' : 'fr')) + '" id="swap">' + t().other + '</a>';
+    document.getElementById('swap').addEventListener('click', function (e) {
+      e.preventDefault();
+      forced = lang = lang === 'fr' ? 'en' : 'fr';
+      var u = new URLSearchParams(location.search); u.set('l', lang);
+      try { history.replaceState(null, '', location.pathname + '?' + u.toString()); } catch (x) { /* fine */ }
+      render(false);
+    });
+  }
+
+  /* ---------- views ---------- */
+  function viewBad(msg) {
+    setTitle('titleBad');
+    card.className = 'card';
+    card.innerHTML = '<h1>' + t().bad + '</h1><p>' + (msg ? esc(msg) : t().badText) + '</p>';
+  }
+  function viewClosed() {
+    setTitle('titleBad');
+    card.className = 'card';
+    var j = S.j || {};
+    card.innerHTML = '<h1>' + t().closed + '</h1><p>' + esc(serverMsg(j) || t().badText) + '</p>' + (j.booked ? '<div class="ok"><p>' + t().booked + '</p></div>' : '');
+  }
+  function viewPassword() {
+    setTitle('titleBad');
+    card.className = 'card';
+    card.innerHTML = '<h1>' + t().pwH + '</h1><p>' + t().pwText + '</p>';
+  }
+  function viewDeclined() {
+    setTitle('titleOffer');
+    card.className = 'card';
+    var j = S.j || {};
+    card.innerHTML = '<h1 id="declined" tabindex="-1">' + fill(t().thanksNo, j) + '</h1><div class="ok"><p>' + fill(t().okNo, j) + '</p></div>' + (S.repeated ? '<p><small>' + t().again + '</small></p>' : '');
+  }
+  function viewAsk(initial) {
+    setTitle('titleOffer');
+    card.className = 'card';
+    var j = S.j, h = '<h1 tabindex="-1">' + fill(t().hi, j) + '</h1><p>' + fill(t().offer, j) + '</p>';
+    if (pre) h += '<p class="hint" id="hint">' + fill(t().hint, { choice: pre === 'accept' ? t().hintAccept : t().hintDecline }) + '</p>';
+    h += '<p>' + t().ask + '</p>' +
+      '<button class="btn' + (pre === 'accept' ? ' pre' : '') + '" id="accept" data-act="accept" type="button">' + t().accept + '</button>' +
+      '<button class="quiet' + (pre === 'decline' ? ' pre' : '') + '" id="decline" data-act="decline" type="button">' + t().decline + '</button>' +
+      '<p id="err" class="err hide" role="alert"></p><p class="note">' + t().reply + '</p>';
+    card.innerHTML = h;
+    document.getElementById('accept').addEventListener('click', function () { send('accept'); });
+    document.getElementById('decline').addEventListener('click', function () { send('decline'); });
+    if (initial && pre) { try { document.getElementById(pre).focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+
+  /* the grid: a model of the instants the function sent, laid out by Toronto wall clock */
+  function buildModel(grid) {
+    var byKey = {}, sample = {}, isoDay = {};
+    (grid.slots || []).forEach(function (iso) {
+      var p = parts(iso);
+      byKey[p.date + '|' + p.hm] = iso;
+      if (!sample[p.hm]) sample[p.hm] = iso;
+      isoDay[iso] = p.date;
+    });
+    var keys = Object.keys(sample).sort();
+    var days = (grid.days || []).filter(function (d) { return keys.some(function (k) { return byKey[d.date + '|' + k]; }); });
+    var cellIso = days.map(function (d) { return keys.map(function (k) { return byKey[d.date + '|' + k] || ''; }); });
+    return { byKey: byKey, sample: sample, isoDay: isoDay, keys: keys, days: days, cellIso: cellIso };
+  }
+  function count() {
+    var n = S.sel.size;
+    return n === 0 ? t().none : n === 1 ? t().one : fill(t().many, { n: n });
+  }
+  function viewGrid() {
+    setTitle('titleGrid');
+    card.className = 'card wide';
+    var j = S.j, m = S.model, tx = t();
+    var h = '<h1 tabindex="-1">' + fill(j.kind === 'manager' ? tx.hi : tx.thanksYes, j) + '</h1>' +
+      '<p>' + fill(j.kind === 'manager' ? tx.gridMgr : tx.gridHire, j) + '</p>';
+    if (j.late && j.kind === 'offer') h += '<p class="hint">' + tx.late + '</p>';
+    h += '<p class="note">' + tx.how + '</p>';
+    if (!m.days.length) { h += '<p>' + tx.nothing + '</p>'; card.innerHTML = h; return; }
+    h += '<div class="chips" id="chips">' + m.days.map(function (d, i) {
+      return '<button type="button" class="chip' + (i === S.active ? ' on' : '') + '" data-day="' + esc(d.date) + '" data-i="' + i + '" aria-label="' + esc(fill(tx.dayOf, { d: dayLong(d.open) })) + '">' +
+        fmt({ weekday: 'short' }).format(new Date(d.open)) + '<b>' + fmt({ day: 'numeric' }).format(new Date(d.open)) + '</b><i class="hide"></i></button>';
+    }).join('') + '</div>';
+    h += '<div class="grid" id="grid"><div class="tcol" aria-hidden="true"><div class="dh"></div>' + m.keys.map(function (k) { return '<div class="tl">' + esc(clock(m.sample[k])) + '</div>'; }).join('') + '</div>';
+    m.days.forEach(function (d, i) {
+      h += '<div class="day' + (i === S.active ? ' on' : '') + '" data-d="' + esc(d.date) + '"><div class="dh" data-day-head="' + esc(d.date) + '"><b>' + esc(dayLong(d.open)) + '</b><small>' +
+        esc(fill(tx.range, { a: clockShort(d.open), b: clockShort(d.close) })) + '</small></div><div class="cells">';
+      m.keys.forEach(function (k, r) {
+        var iso = m.cellIso[i][r], label = clock(iso || m.sample[k]);
+        h += iso
+          ? '<button type="button" class="cell" data-slot="' + iso + '" data-di="' + i + '" data-r="' + r + '" aria-pressed="false" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))) + '"><span class="t">' + esc(label) + '</span></button>'
+          : '<button type="button" class="cell off" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(tx.off) + '"><span class="t">' + esc(label) + '</span></button>';
+      });
+      h += '</div></div>';
+    });
+    h += '</div><div class="bar"><span class="count" id="count" aria-live="polite"></span><button class="quiet" id="clear" type="button">' + tx.clear + '</button>' +
+      '<button class="btn" id="save" data-act="save" type="button">' + tx.save + '</button>' +
+      '<p id="saved" class="saved hide" role="status"></p><p id="err" class="err hide" role="alert" style="flex:1 1 100%"></p></div>';
+    card.innerHTML = h;
+    wireGrid();
+    paint();
+  }
+
+  function paint() {
+    var m = S.model, perDay = {};
+    S.sel.forEach(function (iso) { perDay[m.isoDay[iso]] = (perDay[m.isoDay[iso]] || 0) + 1; });
+    Array.prototype.forEach.call(card.querySelectorAll('[data-slot]'), function (c) {
+      var on = S.sel.has(c.getAttribute('data-slot')) ? 'true' : 'false';
+      if (c.getAttribute('aria-pressed') !== on) c.setAttribute('aria-pressed', on);
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.chip'), function (c) {
+      var n = perDay[c.getAttribute('data-day')] || 0, b = c.querySelector('i');
+      b.textContent = n; b.className = n ? '' : 'hide';
+      c.classList.toggle('on', Number(c.getAttribute('data-i')) === S.active);
+    });
+    Array.prototype.forEach.call(card.querySelectorAll('.day'), function (d, i) { d.classList.toggle('on', i === S.active); });
+    document.getElementById('count').textContent = count();
+    var sv = document.getElementById('saved');
+    if (S.saved) {
+      var n = S.saved.n, tx = t();
+      sv.textContent = (n === 0 ? tx.savedNone : fill(tx.saved, { n: n === 1 ? tx.savedN1 : fill(tx.savedN, { n: n }) })) + (S.saved.dropped ? ' ' + fill(tx.dropped, { n: S.saved.dropped }) : '');
+      sv.className = 'saved';
+    } else sv.className = 'saved hide';
+  }
+  function touched() {   // any change by the person: the saved note and any error no longer describe the grid
+    S.saved = null;
+    var e = document.getElementById('err'); if (e) e.className = 'err hide';
+    paint();
+  }
+
+  function wireGrid() {
+    if (S.unwire) S.unwire();   // a re-render (the language toggle) must not leave the old page-level listeners behind
+    var grid = document.getElementById('grid'), m = S.model, drag = null, swallow = false;
+    function applyRect(c) {
+      var a = drag.a, d0 = Math.min(a.di, c.di), d1 = Math.max(a.di, c.di), r0 = Math.min(a.r, c.r), r1 = Math.max(a.r, c.r);
+      var next = new Set(drag.base);
+      for (var di = d0; di <= d1; di++) for (var r = r0; r <= r1; r++) {
+        var iso = m.cellIso[di][r];
+        if (iso) { if (drag.add) next.add(iso); else next.delete(iso); }
+      }
+      S.sel = next; touched();
+    }
+    function at(el) { var c = el && el.closest ? el.closest('.cell[data-di]') : null; return c ? { el: c, di: Number(c.getAttribute('data-di')), r: Number(c.getAttribute('data-r')) } : null; }
+    /* a mouse drags a block of cells; touch and keyboard use click, so a finger can still scroll the page */
+    grid.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      var c = at(e.target); if (!c) return;
+      swallow = true;
+      var iso = c.el.getAttribute('data-slot'); if (!iso) return;
+      drag = { a: c, base: new Set(S.sel), add: !S.sel.has(iso) };
+      applyRect(c);
+      e.preventDefault();
+    });
+    function move(e) {
+      if (!drag) return;
+      var c = at(document.elementFromPoint(e.clientX, e.clientY));
+      if (c) applyRect(c);
+    }
+    function end() { if (drag) drag = null; setTimeout(function () { swallow = false; }, 0); }
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    S.unwire = function () { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end); };
+    grid.addEventListener('click', function (e) {
+      if (swallow) return;
+      var c = at(e.target); if (!c) return;
+      var iso = c.el.getAttribute('data-slot'); if (!iso) return;
+      if (S.sel.has(iso)) S.sel.delete(iso); else S.sel.add(iso);
+      touched();
+    });
+    document.getElementById('chips').addEventListener('click', function (e) {
+      var c = e.target.closest ? e.target.closest('.chip') : null; if (!c) return;
+      S.active = Number(c.getAttribute('data-i')); paint();
+    });
+    document.getElementById('clear').addEventListener('click', function () { S.sel = new Set(); touched(); });
+    document.getElementById('save').addEventListener('click', saveGrid);
+  }
+
+  function showErr(msg) { var e = document.getElementById('err'); if (e) { e.textContent = msg; e.className = 'err'; } }
+
+  function saveGrid() {
+    if (S.busy) return;
+    S.busy = true;
+    var b = document.getElementById('save'); b.disabled = true;
+    post({ t: token, a: 'grid', slots: Array.from(S.sel).sort() }).then(function (r) {
+      S.busy = false; b.disabled = false;
+      var j = r.j;
+      if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.ok) {
+        if (Array.isArray(j.slotsSaved)) S.sel = new Set(j.slotsSaved.filter(function (s) { return S.model.isoDay[s]; }));
+        S.saved = { n: S.sel.size, dropped: j.dropped || 0 };
+        paint();
+        return;
+      }
+      showErr(serverMsg(j) || t().oops);
+    }).catch(function () { S.busy = false; b.disabled = false; showErr(t().oops); });
+  }
+
+  /* Accept or Decline: only a press gets here. The first press locks both buttons, so a double click or a second tab answers once. */
+  function send(a) {
+    if (S.busy) return;
+    S.busy = true;
+    var b1 = document.getElementById('accept'), b2 = document.getElementById('decline');
+    b1.disabled = true; b2.disabled = true;
+    function again(msg) { S.busy = false; b1.disabled = false; b2.disabled = false; var e = document.getElementById('err'); e.textContent = msg; e.className = 'err'; }
+    post({ t: token, a: a }).then(function (r) {
+      var j = r.j;
+      if (j && j.ok && j.closed) { S.busy = false; S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.ok) {
+        S.repeated = !!j.repeated;
+        if ((j.answer || j.answered) === 'decline') { S.busy = false; S.view = 'declined'; render(true); return; }
+        return load(true);   // accepted: ask again for the window and the saved times
+      }
+      again(serverMsg(j) || t().oops);
+    }).catch(function () { again(t().oops); });
+  }
+
+  /* ---------- load and route ---------- */
+  function route(j) {
+    S.j = j;
+    if (!j || !j.ok) { S.view = 'bad'; return; }
+    if (!forced) lang = pickLang(j.lang) || lang;
+    if (j.closed) S.view = 'closed';
+    else if (j.kind === 'password') S.view = 'password';
+    else if (j.kind === 'manager') S.view = 'grid';
+    else if (j.answered === 'decline') { S.view = 'declined'; S.repeated = true; }
+    else if (j.answered === 'accept') S.view = 'grid';
+    else S.view = 'ask';
+    if (S.view === 'grid') {
+      S.model = buildModel(j.grid || { slots: [], days: [] });
+      S.sel = new Set((j.slotsSaved || []).filter(function (s) { return S.model.isoDay[s]; }));
+      S.active = 0; S.saved = null;
+    }
+  }
+  function render(focusHeading) {
+    paintLang();
+    var v = S.view;
+    if (v === 'ask') viewAsk(focusHeading === 'initial');
+    else if (v === 'grid') viewGrid();
+    else if (v === 'declined') viewDeclined();
+    else if (v === 'closed') viewClosed();
+    else if (v === 'password') viewPassword();
+    else viewBad(S.j && !S.j.ok ? serverMsg(S.j) : '');
+    if (focusHeading === true) { var h = card.querySelector('h1'); if (h) { try { h.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  function load(focusHeading) {
+    return fetch(FN + '?t=' + encodeURIComponent(token))
+      .then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (j) { route(j); }, function () { route(null); S.view = 'bad'; })
+      .then(function () { S.busy = false; render(focusHeading); });
+  }
+
+  paintLang();
+  if (!token) { S.view = 'bad'; render(false); return; }
+  load('initial');
+})();
+</script>
+</body>
+</html>
