@@ -6,7 +6,7 @@ const html = `<!doctype html><meta charset=utf-8><link href="https://fonts.googl
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.WA_CHROME });
   const out = process.env.WA_SHOTS;
-  const TIMES = { iphone: [0.5, 3.9, 4.6, 6.3, 8.4, 11, 13.2, 13.7, 15], android: [0.5, 4, 4.7, 7.2, 8.8, 9.4, 9.8, 11] };
+  const TIMES = { iphone: [0.5, 4.2, 4.6, 6.4, 9.6, 11, 12.9, 13.7, 15], android: [0.5, 4.2, 4.7, 7, 9, 9.4, 9.8, 11] };
   for (const k of Object.keys(TIMES)) {
     const p = await b.newPage({ viewport: { width: 350, height: 640 } });
     await p.goto('data:text/html;base64,' + Buffer.from(html).toString('base64') + '#' + k);

@@ -602,8 +602,8 @@
     var el = { n: q('.n'), tx: q('.tx'), ad: q('.ad'), menu: q('.menu'), sheet: q('.sheet'), inn: q('.sheet .in'), dlg: q('.dlg'), home: q('.home'), app: q('.home .app'), tap: q('.tap'), btns: host.querySelectorAll('.foot [data-hw]') };
     /* where and when the finger lands: x, y on the 234 by 426 screen */
     var TAPS = ios
-      ? [[4.2, 205, 395], [6.4, 150, 236], [9.6, 90, 279], [12.9, 117, 191]]
-      : [[4.2, 212, 29], [7, 140, 164], [9, 117, 231]];
+      ? [[4.2, 205, 395], [6.4, 130, 279], [9.6, 110, 329], [12.9, 117, 226]]
+      : [[4.2, 212, 29], [7, 110, 194], [9, 117, 275]];
     function seek(t) {
       /* the caption: the promise first, then one step at a time */
       var cur = -1; F.steps.forEach(function (s, i) { if (t >= s[0]) cur = i; });

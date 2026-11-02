@@ -8,7 +8,7 @@ function ok(c, m) { if (c) passes++; else { fails++; console.log('FAIL ' + m); }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 (async () => {
   const browser = await launch();
-  for (const who of ['admin', 'leader', 'plain', 'member']) {
+  for (const who of (process.env.WA_WHO || 'admin,leader,plain,member').split(',')) {
     for (const width of [1366, 390]) {
       const f = await fresh(browser, { who, width, hash: '#mypage' });
       const tag = who + '@' + width;
@@ -62,6 +62,30 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       });
       if (lt) ok(lt.after >= lt.before, tag + ' later opens ' + JSON.stringify(lt));
       if (SHOTS) await f.page.screenshot({ path: path.join(SHOTS, tag.replace('@', '_') + '.png') });
+      /* Up next: Do this later moves on, Mark as done offers Undo, Undo puts it back */
+      const un = await f.ev(async () => {
+        const w = ms => new Promise(r => setTimeout(r, ms)), title = () => (document.querySelector('#w272next h3') || {}).textContent;
+        if (!document.querySelector('[data-w272do="done"]')) return null;
+        const first = title(), out = { first };
+        const later = document.querySelector('[data-w272do="later"]');
+        if (later) { later.click(); await w(50); out.movedOn = title() !== first; }
+        const t2 = title(); document.querySelector('[data-w272do="done"]').click(); await w(1200);
+        const toastEl = document.getElementById('w272toast'); out.toast = !!toastEl && toastEl.classList.contains('on'); out.gone = title() !== t2;
+        if (toastEl) toastEl.querySelector('button').click(); await w(1200); out.back = title() === t2 || [...document.querySelectorAll('#mpBody [data-w109]')].some(r => r.textContent.indexOf(t2) >= 0);
+        try { localStorage.removeItem('wa272.skip'); } catch (e) { /* fine */ }
+        return out;
+      });
+      if (un) ok(un.toast && un.gone && un.back && (un.movedOn !== false), tag + ' up next, done, undo ' + JSON.stringify(un));
+      /* the small note: never over another window, Not now closes it, and it does not come back within 14 days */
+      const tip = await f.ev(async () => {
+        const w = ms => new Promise(r => setTimeout(r, ms)); localStorage.removeItem('wa272.tip'); window.w272.closeTip();
+        window.w272.setupOpen(); window.w272.tryTip(); const blocked = !document.getElementById('w272tip'); window.w272.closeHow();
+        window.w272.tryTip(); const shown = !!document.getElementById('w272tip');
+        const modal = shown && document.getElementById('w272tip').getAttribute('aria-modal');
+        if (shown) document.querySelector('[data-w272tip]').click(); await w(300);
+        const closed = !document.getElementById('w272tip'); window.w272.tryTip(); return { blocked, shown, modal, closed, again: !!document.getElementById('w272tip') };
+      });
+      ok(tip.blocked && tip.shown && !tip.modal && tip.closed && !tip.again, tag + ' the small note ' + JSON.stringify(tip));
       /* the how-to window, each tab */
       const how = await f.ev(async () => {
         window.w272.setupOpen(); await new Promise(r => setTimeout(r, 200));
