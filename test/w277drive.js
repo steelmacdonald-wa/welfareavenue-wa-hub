@@ -17,17 +17,20 @@ function fx() {
   return f;
 }
 const CAP = { ok: true, token: true, accounts: [{ platform: 'facebook' }, { platform: 'instagram' }], granted: ['pages_manage_posts', 'instagram_content_publish'], missing: [], can: { facebook: true, instagram: true, linkedin: false }, mode: { facebook: 'direct', instagram: 'direct', linkedin: 'reminder' }, settings: {}, studio: {}, connections: {} };
+/* wave277: the registry rows and the limits the composer reads */
+CAP.platforms = ADD.studio_platforms.filter(p => p.active).map(p => ({ key: p.key, label: p.label, short: p.short, colour: p.colour, sort: p.sort, caps: p.caps, modes: p.modes }));
+CAP.caps = { linkedin: { text: true, images: true, max_images: 20, video: true, max_video_s: 0, comments: true, analytics: true, link_in_caption: true }, instagram: { text: true, images: true, max_images: 10, video: true, max_video_s: 900, comments: true, analytics: true, link_in_caption: false }, tiktok: { text: false, images: false, max_images: 0, video: true, max_video_s: 600, comments: false, analytics: false, link_in_caption: false }, youtube: { text: false, images: false, max_images: 0, video: true, max_video_s: 180, comments: false, analytics: false, link_in_caption: false } };
 function status(canChange) {
   return { ok: true, platforms: ADD.studio_platforms.filter(p => p.active), connections: JSON.parse(JSON.stringify(ADD.connections)), redirect_uri: 'https://x/social-connect', can_change: canChange, can_meta: canChange };
 }
-const INIT = st => `
+const INIT = (st, cap) => `
   window.__CONFIRMS = 0;
   window.confirm = function () { window.__CONFIRMS++; throw new Error('confirm used'); };
   window.prompt = function () { window.__CONFIRMS++; throw new Error('prompt used'); };
   try { localStorage.setItem('wa84tour', '1'); localStorage.setItem('wa262.seen', '1'); } catch (e) {}
   window.__CALLS = [];
   window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__CALLS.push([name, b]);
-    if (name === 'social-publish' && b.action === 'capabilities') return { data: ${JSON.stringify(CAP)}, error: null };
+    if (name === 'social-publish' && b.action === 'capabilities') return { data: ${JSON.stringify(cap || CAP)}, error: null };
     if (name === 'social-connect' && b.action === 'status') return { data: ${JSON.stringify(st)}, error: null };
     return { data: { ok: true }, error: null }; };`;
 const RP = { wa225_publisher: true, wa225_marketing: true, wa_org_editor: true };
@@ -136,6 +139,23 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     await f.page.waitForTimeout(600);
     ok('no registry: Save keys still sends save_app', (await calls(f, 'save_app')).some(c => c[1].platform === 'youtube'));
     ok('no page errors (no registry)', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+
+  /* 3b. the composer reads the registry limits (Task 7) */
+  {
+    const CAPM = JSON.parse(JSON.stringify(CAP)); CAPM.mode.linkedin = 'make'; CAPM.can.linkedin = true;
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#contentcal', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT(status(true), CAPM), wait: 4000 });
+    const img = i => ({ url: 'https://x/i' + i + '.jpg', kind: 'image', alt: 'a photo', w: 1080, h: 1350 });
+    const vid = i => ({ url: 'https://x/v' + i + '.mp4', kind: 'video', alt: '', w: 1080, h: 1920, dur: 20 });
+    const panel = pre => f.ev(pre => { window.w121.compose(pre); return new Promise(r => setTimeout(() => r(Array.from(document.querySelectorAll('#w121dr .val div')).map(d => d.textContent)), 600)); }, pre);
+    let v = await panel({ platforms: ['linkedin'], media: [img(1), img(2)] });
+    ok('LinkedIn with two photos: no first photo only warning', v.length > 0 && !v.some(t => /first photo only/.test(t)), v);
+    v = await panel({ platforms: ['linkedin'], media: [vid(1), vid(2), vid(3)] });
+    ok('LinkedIn with three videos: the one video message', v.some(t => /one video/.test(t)), v);
+    v = await panel({ platforms: ['instagram'], media: Array.from({ length: 11 }, (_, i) => img(i)) });
+    ok('Instagram with eleven photos: up to 10 photos', v.some(t => /up to 10 photos/.test(t)), v);
+    ok('no page errors (composer limits)', f.errs.length === 0, f.errs);
     await f.close();
   }
 

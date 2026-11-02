@@ -39,6 +39,21 @@
   var PORDER = ['instagram', 'facebook', 'threads', 'linkedin', 'tiktok', 'youtube'];
   var KINDS = { instagram: [['feed', 'Post'], ['reel', 'Reel'], ['story', 'Story']], facebook: [['feed', 'Post'], ['reel', 'Reel'], ['story', 'Story']] };
   var MODE_L = { direct: 'Posts directly', make: 'Posts through Make', drafts: 'Lands in TikTok drafts', reminder: 'Reminder to post by hand' };
+  /* wave277: the platform registry (capabilities.platforms) replaces the literals above once loaded; the literals stay the fallback */
+  function capsOf(k) { return (C.cap && C.cap.caps && C.cap.caps[k]) || {}; }
+  function applyRegistry() {
+    var list = C.cap && C.cap.platforms;
+    if (!list || !list.length) return;
+    var rows = list.slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+    PORDER.length = 0;
+    rows.forEach(function (r) {
+      if (!r || !r.key) return;
+      var old = PL[r.key] || {};
+      PL[r.key] = { label: r.label || old.label || r.key, short: r.short || old.short || r.key, color: r.colour || old.color || '#1F201E' };
+      PORDER.push(r.key);
+      if (r.modes) Object.keys(r.modes).forEach(function (m) { MODE_L[m] = r.modes[m]; });
+    });
+  }
   var ST = {
     draft: { label: 'Draft', cls: 'draft' }, scheduled: { label: 'Scheduled', cls: 'sched' }, publishing: { label: 'Publishing', cls: 'pub' },
     published: { label: 'Published', cls: 'live' }, posted: { label: 'Posted', cls: 'live' }, failed: { label: 'Failed', cls: 'bad' }, cancelled: { label: 'Cancelled', cls: 'draft' }
@@ -448,7 +463,7 @@
   window.w121Stale = function () { C.at = 0; };
   async function loadCap() {
     C.capBusy = true;
-    try { C.cap = await fn('social-publish', { action: 'capabilities' }); } catch (e) { C.cap = { token: false, error: e.message || String(e), can: {}, accounts: [] }; }
+    try { C.cap = await fn('social-publish', { action: 'capabilities' }); applyRegistry(); } catch (e) { C.cap = { token: false, error: e.message || String(e), can: {}, accounts: [] }; }
     C.capBusy = false; paint(); if (C.edit) paintDrawer();
   }
   /* the analytics (90 days) for the best slot and the handle */
@@ -671,6 +686,7 @@
     if (prefill) { if (prefill.title) C.edit.title = prefill.title; if (prefill.notes) C.edit.notes = prefill.notes; if (prefill.campaign) C.edit.campaign = prefill.campaign; if (prefill.slot) { var ns = nextSlotDate(prefill.slot); C.edit.date = ns.date; C.edit.time = ns.time; }
       /* wave225d: the Content Studio's templates, queue and approvals open the composer with more */
       if (prefill.platforms) C.edit.platforms = prefill.platforms.slice(); if (prefill.caption != null) C.edit.caption = prefill.caption; if (prefill.first_comment != null) C.edit.first_comment = prefill.first_comment; if (prefill.tags) C.edit.tags = prefill.tags.slice(); if (prefill.variants) C.edit.variants = JSON.parse(JSON.stringify(prefill.variants)); if (prefill.date) { C.edit.date = prefill.date; C.edit.time = prefill.time || C.edit.time || '18:00'; }
+      if (prefill.media) C.edit.media = JSON.parse(JSON.stringify(prefill.media)); /* wave277 */
       C.edit.dirty = true; }
     paintDrawer();
     if (!C.cap && staff() && !C.capBusy) loadCap();
@@ -705,7 +721,7 @@
         else if (kind === 'reel' || (vi.length && !im.length)) { if (!vi.length) err(l, 'An Instagram reel needs a video.'); else if (dur != null && (dur < 3 || dur > 900)) err(l, 'Reels run from 3 seconds to 15 minutes; this video is ' + Math.round(dur) + ' seconds.'); else ok(l, 'Instagram: a reel' + (dur ? ' (' + Math.round(dur) + ' s)' : '') + '.'); if (im.length) warn(l, 'A reel uses the video only; the photos stay off Instagram.'); }
         else if (!im.length && !vi.length) err(l, 'Instagram needs a photo or a video.');
         else {
-          if (im.length > 10) err(l, 'Instagram takes up to 10 photos in a carousel.');
+          var igMax = capsOf(k).max_images || 10; if (im.length > igMax) err(l, 'Instagram takes up to ' + igMax + ' photos in a carousel.');
           var r0 = ratioOf(im[0]);
           if (r0 != null && !igRatioOk(r0)) err(l, 'The first photo is ' + ratioLabel(r0) + '; Instagram takes 4:5 to 1.91:1. Crop it below.');
           else if (im.length > 1 && im.some(function (m) { var r = ratioOf(m); return r != null && Math.abs(r - r0) > 0.03; })) warn(l, 'Instagram crops every photo in a carousel to the first one\u2019s shape (' + ratioLabel(r0) + ').');
@@ -728,22 +744,22 @@
       } else if (k === 'threads') {
         if (c.length > 500) err(l, 'Threads posts stop at 500 characters (' + c.length + ' now). Write a shorter one under Customize.');
         if (!c.trim() && !im.length && !vi.length) err(l, 'Threads needs words or media.');
-        if (im.length > 20) err(l, 'Threads takes up to 20 photos.');
+        var thMax = capsOf(k).max_images || 20; if (im.length > thMax) err(l, 'Threads takes up to ' + thMax + ' photos.');
         if (!out.p[k].length) ok(l, 'Threads: ' + (vi.length ? 'a video' : im.length > 1 ? 'a carousel of ' + im.length : im.length ? 'a photo' : 'a text post') + '.');
       } else if (k === 'linkedin') {
         if (c.length > 3000) err(l, 'LinkedIn posts stop at 3,000 characters.');
         if (!c.trim() && !im.length && !vi.length) err(l, 'LinkedIn needs words or media.');
-        if (md === 'make' && vi.length) warn(l, 'Make sends text and photos; a LinkedIn video comes to you as a reminder to post by hand.');
-        if (md === 'make' && im.length > 1) warn(l, 'Make sends the first photo only.');
+        if (im.length > (capsOf(k).max_images || 20)) err(l, 'LinkedIn takes up to ' + (capsOf(k).max_images || 20) + ' photos.');
+        if (vi.length > 1 || (vi.length && im.length)) err(l, 'LinkedIn takes one video, or photos, not both.');
         if (!out.p[k].some(function (x) { return x.k !== 'k'; })) ok(l, 'LinkedIn: ' + (vi.length ? 'a video' : im.length ? 'a photo' : 'a text post') + '.');
       } else if (k === 'tiktok') {
         if (!vi.length) warn(l, im.length ? 'TikTok photo posts come to you as a reminder to post in the app.' : 'TikTok needs a video.');
-        if (vi.length && dur != null && dur > 600) err(l, 'TikTok videos run up to 10 minutes.');
+        var ttMax = capsOf(k).max_video_s || 600; if (vi.length && dur != null && dur > ttMax) err(l, 'TikTok videos run up to ' + Math.round(ttMax / 60) + ' minutes.');
         if (vi.length) ok(l, md === 'drafts' ? 'TikTok: the video lands in WA\u2019s TikTok drafts; add sound and post it in the app.' : 'TikTok: a video.');
         if (tagsOf(c).length > 5) warn(l, 'TikTok works best with 3 to 5 hashtags.');
       } else if (k === 'youtube') {
         if (!vi.length) err(l, 'A YouTube Short needs a video.');
-        else if (dur != null && dur > 180) err(l, 'Shorts run up to 3 minutes; this video is ' + Math.round(dur) + ' seconds.');
+        else if (dur != null && dur > (capsOf(k).max_video_s || 180)) err(l, 'Shorts run up to ' + Math.round((capsOf(k).max_video_s || 180) / 60) + ' minutes; this video is ' + Math.round(dur) + ' seconds.');
         else { var r = ratioOf(vi[0]); if (r != null && r > 1.01) warn(l, 'Shorts are vertical or square; this video is wide.'); ok(l, 'YouTube: a Short.'); }
         var yt = (e.variants.youtube || {}).title || e.title; if (!String(yt || '').trim()) warn(l, 'Give the Short a title (Customize, YouTube), or the post\u2019s name is used.');
       }
