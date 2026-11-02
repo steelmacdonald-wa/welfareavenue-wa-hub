@@ -128,3 +128,7 @@ $do$;
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
 select 'wave', 'wave277', 'release', null, 'studio_platforms registry', 'wave277'
 where not exists (select 1 from public.change_log where entity_type = 'wave' and entity_id = 'wave277' and field = 'release');
+
+-- release copy (applied at release)
+update public.trainings set body = replace(body::text, 'the named approvers (Ian and KK)', 'the approvers set on the Approvals page')::jsonb where key = 'lesson:studio';
+update public.trainings set body = replace(body::text, 'how it goes to Ian and KK for approval', 'how it goes to the approvers')::jsonb where key = 'lesson:studio';

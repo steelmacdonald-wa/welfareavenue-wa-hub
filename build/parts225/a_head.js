@@ -6,6 +6,7 @@
    (the calendar and the analytics move in and leave the Hub menu); marketing leads and admins publish, everyone else sends
    a post for approval; the marketing team and admins answer comments (deleting is leads and admins); LinkedIn, TikTok and
    YouTube by the reminder flow until their connections are approved.
+   Since wave277 (02/11/26) the Connections page and the approvers picker come from wave277 (build/parts277, e_approvals.js).
 
    - The app (parts153 APPS.studio): Overview, Calendar (wave121, its composer rebuilt by the patches in parts225), Queue and
      schedule, Approvals, Comments, Library, Link pages (wave230), Short links, Analytics (wave120), Report, Connections.
