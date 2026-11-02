@@ -42,6 +42,10 @@ begin
   assert not has_table_privilege('anon', 'public.hub_team_avail_ask', 'select'), 'anon cannot read asks';
   assert not has_table_privilege('authenticated', 'public.hub_team_avail_ask', 'insert'), 'asks are written only through the RPC';
   assert not has_table_privilege('authenticated', 'public.hub_team_avail', 'delete'), 'grids are never deleted from the browser';
+  assert not has_table_privilege('authenticated', 'public.hub_team_avail', 'insert'), 'grids are not inserted from the browser';
+  assert not has_table_privilege('authenticated', 'public.hub_team_avail', 'update'), 'grids are not updated from the browser';
+  assert has_table_privilege('authenticated', 'public.hub_team_avail', 'select'), 'grids are read from the browser';
+  assert not exists (select 1 from pg_policy where polrelid = 'public.hub_team_avail'::regclass and polcmd <> 'r'), 'only read policies on grids';
   foreach f in array array['wa_avail_can_see(text)', 'wa_avail_can_manage(text)', 'wa_avail_due()', 'wa_avail_mine(text)',
       'wa_avail_save(text,date,smallint[])', 'wa_avail_snooze(text)', 'wa_avail_team(text)', 'wa_avail_ask_set(text,date,text)'] loop
     assert obj_description(('public.' || f)::regprocedure, 'pg_proc') is not null, f || ' has a comment';
@@ -166,6 +170,7 @@ begin
   perform public.wa_avail_snooze('opsmtl');
   assert not exists (select 1 from public.wa_avail_due()), 'snoozed with no grid: not due';
   assert (select count(*) from public.hub_team_avail where email = 'w276.other@example.invalid' and slots = '{}' and updated_at is null) = 1, 'an empty row that is not a save';
+  assert public.wa_avail_mine('opsmtl') is null, 'mine never returns a row that only holds Ask me later (' || coalesce(public.wa_avail_mine('opsmtl')::text, 'null') || ')';
   update public.hub_team_avail set snoozed_until = now() - interval '1 minute' where email = 'w276.other@example.invalid';
   assert (select array_agg(department) from public.wa_avail_due()) = array['opsmtl'], 'snooze over, never saved: due again';
   begin
@@ -246,9 +251,15 @@ do $$
 declare j jsonb;
 begin
   assert (public.wa_avail_team('opsmtl')->>'can_manage')::boolean, 'Ruth can manage in the team view';
+  -- an ask today: Sam saved today, so only the member who never saved is missing
+  j := public.wa_avail_ask_set('opsmtl', current_date, null);
+  assert (j->>'ask_date')::date = current_date, 'the ask date comes back (today)';
+  assert j->'missing' = '["w276.other@example.invalid"]'::jsonb, 'missing lists the member with no grid (' || (j->'missing')::text || ')';
+  -- Sam's grid goes stale (saved 10 days ago), and an ask for tomorrow: the ask just set counts, so Sam is missing too
+  update public.hub_team_avail set updated_at = now() - interval '10 days' where email = 'sam.lee@welfareavenue.com';
   j := public.wa_avail_ask_set('opsmtl', current_date + 1, 'term');
   assert (j->>'ask_date')::date = current_date + 1, 'the ask date comes back';
-  assert j->'missing' = '["w276.other@example.invalid"]'::jsonb, 'missing lists the member with no grid (' || (j->'missing')::text || ')';
+  assert j->'missing' = '["sam.lee@welfareavenue.com", "w276.other@example.invalid"]'::jsonb, 'missing has the stale grid and the member with none (' || (j->'missing')::text || ')';
   assert (select count(*) from public.hub_team_avail_ask where department = 'opsmtl' and ask_date = current_date + 1 and note = 'term' and set_by = 'ruth.owen@welfareavenue.com') = 1, 'the ask is stored with who set it';
 end $$;
 
@@ -271,6 +282,29 @@ begin
   exception when others then
     if sqlerrm like 'Sam wrote an ask%' then raise; end if;
   end;
+  -- no direct writes even on his own grid: hours, dates and the save time come only from wa_avail_save
+  begin
+    insert into public.hub_team_avail (email, department, effective_from, slots, hours) values ('sam.lee@welfareavenue.com', 'opsmtl', current_date + 60, '{1020}', 99);
+    raise exception 'Sam inserted his own row directly';
+  exception when others then
+    if sqlerrm like 'Sam inserted%' then raise; end if;
+  end;
+  begin
+    update public.hub_team_avail set hours = 99 where email = 'sam.lee@welfareavenue.com';
+    raise exception 'Sam updated his hours directly';
+  exception when others then
+    if sqlerrm like 'Sam updated%' then raise; end if;
+  end;
+  begin
+    update public.hub_team_avail set updated_at = now() + interval '1 year', snoozed_until = now() + interval '1 year' where email = 'sam.lee@welfareavenue.com';
+    raise exception 'Sam updated his save time directly';
+  exception when others then
+    if sqlerrm like 'Sam updated%' then raise; end if;
+  end;
+  assert not exists (select 1 from public.hub_team_avail where hours = 99 or updated_at > now() + interval '1 day'), 'nothing written directly';
+  -- and saving through the function still works for the browser role
+  assert (public.wa_avail_save('opsmtl', current_date, array[1020, 1050]::smallint[])->>'hours')::numeric = 1, 'wa_avail_save works as authenticated';
+  assert public.wa_avail_mine('opsmtl')->>'hours' = '1', 'and the saved grid is the current one';
 end $$;
 reset role;
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w276.out@example.invalid"}', true);

@@ -29,7 +29,7 @@ create table if not exists public.hub_team_avail (
   unique (email, department, effective_from)
 );
 create index if not exists hub_team_avail_dept_idx on public.hub_team_avail (department, effective_from);
-comment on table public.hub_team_avail is 'wave276: when each team member is usually free to meet, one row per person, team and start date. Written only through wa_avail_save and wa_avail_snooze. The current grid is the newest row whose effective_from is today or earlier; a row with a later date waits for its day. A person reads their own rows and the rows of a team they are on or manage.';
+comment on table public.hub_team_avail is 'wave276: when each team member is usually free to meet, one row per person, team and start date. Written only through wa_avail_save and wa_avail_snooze (the browser has no insert or update on the table, so it cannot set hours, dates or someone else''s row). The current grid is the newest row whose effective_from is today or earlier; a row with a later date waits for its day. A person reads their own rows and the rows of a team they are on or manage.';
 comment on column public.hub_team_avail.id is 'Row id.';
 comment on column public.hub_team_avail.email is 'Whose week this is: their sign-in email in lower case (wa_email() at save time).';
 comment on column public.hub_team_avail.department is 'Team code (dept_meta.department). A person on two teams keeps one grid for each.';
@@ -136,13 +136,13 @@ language sql stable security definer set search_path to '' as $$
   select jsonb_build_object('id', h.id, 'effective_from', h.effective_from, 'slots', to_jsonb(h.slots), 'hours', h.hours,
                             'updated_at', h.updated_at, 'snoozed_until', h.snoozed_until)
     from public.hub_team_avail h
-   where h.department = p_dept and lower(h.email) = any (public.my_emails()) and h.effective_from <= current_date
-   order by (h.updated_at is not null) desc, h.effective_from desc, h.id desc
+   where h.department = p_dept and lower(h.email) = any (public.my_emails()) and h.effective_from <= current_date and h.updated_at is not null
+   order by h.effective_from desc, h.id desc
    limit 1
 $$;
 revoke all on function public.wa_avail_mine(text) from public, anon;
 grant execute on function public.wa_avail_mine(text) to authenticated, service_role;
-comment on function public.wa_avail_mine(text) is 'wave276: the signed-in person''s current grid for a team as {id, effective_from, slots, hours, updated_at, snoozed_until}: the newest saved row dated today or earlier (a row dated later waits for its day). Null when there is none.';
+comment on function public.wa_avail_mine(text) is 'wave276: the signed-in person''s current grid for a team as {id, effective_from, slots, hours, updated_at, snoozed_until}: the newest saved row dated today or earlier (a row dated later waits for its day). A row that only holds an Ask me later is never returned. Null when there is none.';
 
 create or replace function public.wa_avail_save(p_dept text, p_from date, p_slots smallint[]) returns jsonb
 language plpgsql security definer set search_path to '' as $$
@@ -268,6 +268,7 @@ create or replace function public.wa_avail_ask_set(p_dept text, p_date date, p_n
 language plpgsql security definer set search_path to '' as $$
 declare
   v_date date := coalesce(p_date, current_date);
+  v_latest date;
   v_missing jsonb;
 begin
   if not public.wa_avail_can_manage(p_dept) then
@@ -275,25 +276,26 @@ begin
   end if;
   insert into public.hub_team_avail_ask (department, ask_date, set_by, note)
   values (p_dept, v_date, nullif(public.wa_email(), ''), nullif(trim(coalesce(p_note, '')), ''));
+  -- the latest ask: the one just set counts even when it is dated after today
+  select greatest(v_date, max(k.ask_date)) into v_latest
+    from public.hub_team_avail_ask k where k.department = p_dept and k.ask_date <= current_date;
   select coalesce(jsonb_agg(m.email order by m.email), '[]'::jsonb) into v_missing
     from (select distinct lower(t.email) as email from public.team_members t
            where t.department = p_dept and t.active is not false and coalesce(t.email, '') <> ''
-             and not exists (select 1 from public.hub_team_avail h
-                              where h.department = p_dept and lower(h.email) = lower(t.email)
-                                and h.effective_from <= current_date and h.updated_at is not null)) m;
+             and coalesce((select max(h.updated_at) from public.hub_team_avail h
+                            where h.department = p_dept and lower(h.email) = lower(t.email) and h.updated_at is not null) < v_latest, true)) m;
   return jsonb_build_object('ask_date', v_date, 'missing', v_missing);
 end $$;
 revoke all on function public.wa_avail_ask_set(text, date, text) from public, anon;
 grant execute on function public.wa_avail_ask_set(text, date, text) to authenticated, service_role;
-comment on function public.wa_avail_ask_set(text, date, text) is 'wave276: a manager asks the team for its typical week again from a date (today when empty), with an optional note. From that date, everyone whose grid was saved before it sees the Home pop-up. Returns {ask_date, missing}: the emails of active members with no current saved grid, for the message the page sends next. Refuses anyone who does not manage the team.';
+comment on function public.wa_avail_ask_set(text, date, text) is 'wave276: a manager asks the team for its typical week again from a date (today when empty), with an optional note. From that date, everyone whose grid was saved before it sees the Home pop-up. Returns {ask_date, missing}: the emails of active members with an email who have not saved their week since the latest ask (this one included, even if dated later): never saved, or last saved before that ask date. The notify function uses the same rule for meet_avail_ask. For the message the page sends next. Refuses anyone who does not manage the team.';
 
--- 8. access: own rows, the team's rows, and the asks for staff; writes from the browser only on your own grid
+-- 8. access: own rows, the team's rows, and the asks for staff, read only; every write goes through the security definer functions above
 alter table public.hub_team_avail enable row level security;
 alter table public.hub_team_avail_ask enable row level security;
 revoke all on public.hub_team_avail, public.hub_team_avail_ask from public, anon, authenticated;
 revoke all on sequence public.hub_team_avail_id_seq, public.hub_team_avail_ask_id_seq from public, anon, authenticated;
-grant select, insert, update on public.hub_team_avail to authenticated;
-grant usage on sequence public.hub_team_avail_id_seq to authenticated;
+grant select on public.hub_team_avail to authenticated;   -- no insert or update: grids are written only by wa_avail_save and wa_avail_snooze
 grant select on public.hub_team_avail_ask to authenticated;
 grant all on public.hub_team_avail, public.hub_team_avail_ask to service_role;
 grant usage, select on sequence public.hub_team_avail_id_seq, public.hub_team_avail_ask_id_seq to service_role;
@@ -304,13 +306,9 @@ comment on policy hub_team_avail_own_read on public.hub_team_avail is 'wave276: 
 drop policy if exists hub_team_avail_team_read on public.hub_team_avail;
 create policy hub_team_avail_team_read on public.hub_team_avail for select to authenticated using (public.wa_avail_can_see(department));
 comment on policy hub_team_avail_team_read on public.hub_team_avail is 'wave276: the team and the people who manage it read the team''s grids.';
+-- no insert or update policy: the browser cannot write grids directly (dropped here too, in case an earlier draft of this file ran)
 drop policy if exists hub_team_avail_own_insert on public.hub_team_avail;
-create policy hub_team_avail_own_insert on public.hub_team_avail for insert to authenticated with check (lower(email) = any (public.my_emails()));
-comment on policy hub_team_avail_own_insert on public.hub_team_avail is 'wave276: a person may add only their own grid (the page uses wa_avail_save).';
 drop policy if exists hub_team_avail_own_update on public.hub_team_avail;
-create policy hub_team_avail_own_update on public.hub_team_avail for update to authenticated
-  using (lower(email) = any (public.my_emails())) with check (lower(email) = any (public.my_emails()));
-comment on policy hub_team_avail_own_update on public.hub_team_avail is 'wave276: a person may change only their own grid (the page uses wa_avail_save).';
 drop policy if exists hub_team_avail_ask_read on public.hub_team_avail_ask;
 create policy hub_team_avail_ask_read on public.hub_team_avail_ask for select to authenticated using (public.is_wa_staff());
 comment on policy hub_team_avail_ask_read on public.hub_team_avail_ask is 'wave276: staff read the ask dates. New asks go through wa_avail_ask_set only.';
