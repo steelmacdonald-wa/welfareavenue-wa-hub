@@ -320,7 +320,8 @@
      have an order (Apple only allows Hub notifications from the Home Screen app), so the second waits for the first.
      Policies: the required ones a person has not signed, each with Open and Sign; a signed policy never comes back here
      (the Policies card of wave105 stays hidden on Home; the training page keeps its own). */
-  var KEY_APP = 'wa272.app', KEY_TIP = 'wa272.tip', KEY_OPENED = 'wa272.opened';
+  var KEY_APP = 'wa272.app', KEY_TIP = 'wa272.tip', KEY_OPENED = 'wa272.opened', KEY_AUTO = 'wa272.pushauto';
+  function KEY_OK() { return 'wa272.pushok:' + meEmail().toLowerCase(); }
   var UA = navigator.userAgent || '';
   var IPAD = /iPad/.test(UA) || (/Macintosh/.test(UA) && (navigator.maxTouchPoints || 0) > 1);
   var IOS = IPAD || /iPhone|iPod/.test(UA), ANDROID = /Android/.test(UA);
@@ -332,8 +333,10 @@
   function appDone() { return standalone() || lsGet(KEY_APP) === '1'; }
   function push() { try { return window.__wa219 && window.__wa219.state ? window.__wa219.state() : null; } catch (e) { return null; } }
   function pushRelevant() { return staff(); }
-  function pushDone() { var s = push(); return !!(s && s.mine); }
-  var S = { shown: false, pushBusy: false, pushMsg: '', pushErr: '', pols: null, polsAt: 0, polBusy: {}, polsPending: 0 };
+  function pushOn() { var s = push(); return !!(s && s.mine); }
+  /* done means confirmed: on for this device, and a test notification that arrived and was tapped (Steel, 02/11/26) */
+  function pushDone() { return pushOn() && lsGet(KEY_OK()) === '1'; }
+  var S = { shown: false, pushBusy: false, pushMsg: '', pushErr: '', pushKind: '', pols: null, polsAt: 0, polBusy: {}, polsPending: 0, test: '', testAt: 0, testTimer: null };
   function appRelevant() { return !FIREFOX; }
   function allDone() { return (!appRelevant() || appDone()) && (!pushRelevant() || pushDone()) && !S.polsPending; }
 
@@ -431,13 +434,20 @@
   }
   function rowPush(n) {
     if (!pushRelevant()) return null;
-    var s = push(), done = !!(s && s.mine), sub, act = '', err = false;
+    var s = push(), done = pushDone(), on = pushOn(), sub, act = '', err = false;
     var waitIos = IOS && !standalone();
-    if (done) sub = 'On for this device. Settings, Notifications chooses what reaches you.';
+    if (done) sub = 'On and confirmed for this device. Settings, Notifications chooses what reaches you.';
+    else if (on && S.pushBusy) sub = S.pushMsg || 'Sending\u2026';
+    else if (on && S.test === 'arrived') { sub = 'It arrived on this device. Tap the notification to finish.'; act = '<button type="button" class="lnk" data-w272s="saw">I saw it</button>'; }
+    else if (on && S.test === 'sent') { sub = 'Sent. It should pop up in a moment: tap it, and this row ticks.'; act = '<button type="button" class="lnk" data-w272s="saw">I saw it</button>'; }
+    else if (on && S.test === 'late') { sub = 'Nothing arrived in a minute. Check that this computer and the browser allow notifications for the Hub (Focus assist and Do not disturb hide them), then send again.'; err = true; act = '<button type="button" class="go" data-w272s="test">Send again</button><button type="button" class="lnk" data-w272s="saw">It showed up</button>'; }
+    else if (on && S.test === 'failed') { sub = S.pushErr || 'The test did not go through. Try again.'; err = true; act = '<button type="button" class="go" data-w272s="test">Send again</button>'; }
+    else if (on) { sub = 'On. Send yourself a test and tap it, so we know it reaches you.'; act = '<button type="button" class="go" data-w272s="test">Send a test</button>'; }
     else if (S.pushBusy) sub = S.pushMsg || 'Asking your browser\u2026';
     else if (waitIos) sub = 'Add the Hub first, then open it from its icon and turn these on there. Apple only allows them in the app.';
     else if (s && !s.supported) sub = 'This browser cannot show Hub notifications. Chrome, Edge, Firefox and Safari can.';
     else if (s && s.perm === 'denied') { sub = blockedText(); err = true; act = '<button type="button" class="go" data-w272s="recheck">Check again</button>'; }
+    else if (S.pushErr && S.pushKind === 'reload') { sub = S.pushErr; err = true; act = '<button type="button" class="go" data-w272s="reload">Reload and finish</button>'; }
     else if (S.pushErr) { sub = S.pushErr; err = true; act = '<button type="button" class="go" data-w272s="push">Try again</button>'; }
     else { sub = 'When someone mentions you, gives you work or posts an announcement for you.'; act = '<button type="button" class="go" data-w272s="push">Turn on</button>'; }
     return { k: 'push', ok: done, n: String(n), t: 'Turn on notifications', s: sub, err: err, act: act };
@@ -463,6 +473,8 @@
     if (appDone()) { try { if (window.w112Api && window.w112Api.loaded && window.w112Api.loaded()) window.w112Api.set('app', true); } catch (e) { /* fine */ } }
     if (staff() && S.pols === null && !S.polsLoading) { S.polsLoading = true; loadPolicies(false).then(function () { S.polsLoading = false; paintSetup(); }); }
     var done = allDone();
+    /* after Reload and finish: the permission is already granted, so no tap is needed to carry on */
+    if (ready && staff() && lsGet(KEY_AUTO) === '1') { lsSet(KEY_AUTO, null); var st0 = push() || {}; if (st0.perm === 'granted' && !pushOn() && !S.pushBusy) setTimeout(turnOnPush, 400); }
     if (!body || !page || !ready || (done && !el)) { if (el && !done) el.remove(); return; }
     if (done) {
       /* every row done: the card says so once, then leaves */
@@ -528,7 +540,8 @@
     try { reg = await navigator.serviceWorker.getRegistration('/'); } catch (e) { /* fine */ }
     if (!reg) { try { reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch (e) { err = String((e && e.message) || e || 'no reason given'); } }
     if (!reg) {
-      var store = /storage|cookie|insecure|invalid state|security|denied/i.test(err);
+      if (/invalid state/i.test(err)) return { ok: false, kind: 'reload', why: 'This Hub window has lost touch with the browser\u2019s background helper (the browser calls it an invalid document state). Reload, and the Hub finishes turning them on by itself.' };
+      var store = /storage|cookie|insecure|security|denied/i.test(err);
       return { ok: false, why: 'Your browser refused the Hub\u2019s notification helper (' + err.replace(/^Failed to register a ServiceWorker[^:]*:s*/i, '').slice(0, 160) + ').' + (store ? ' Allow cookies and site data for hub.welfareavenue.com in the browser\u2019s site settings, then reload the Hub.' : ' Reload the Hub and try again.') };
     }
     var act = await waitActive(reg, 10000);
@@ -544,7 +557,7 @@
     if (st0.perm === 'granted') {
       S.pushMsg = 'Starting the notification helper\u2026'; paintSetup();
       var h0 = await helper();
-      if (!h0.ok) { S.pushBusy = false; S.pushMsg = ''; S.pushErr = h0.why; paintSetup(); return; }
+      if (!h0.ok) { S.pushBusy = false; S.pushMsg = ''; S.pushErr = h0.why; S.pushKind = h0.kind || ''; paintSetup(); return; }
       S.pushMsg = 'Saving this device\u2026'; paintSetup();
     }
     var slow = setTimeout(function () { S.pushMsg = 'Still working. If nothing happens, reload the Hub and try again.'; paintSetup(); }, 12000);
@@ -555,15 +568,42 @@
     try { ok = await A.turnOn(); } catch (e) { ok = false; said = said || String((e && e.message) || e || ''); }
     if (had) window.toast = t0;
     clearTimeout(slow); S.pushBusy = false; S.pushMsg = '';
-    if (ok) { S.pushErr = ''; say('Hub notifications are on for this device.'); }
+    if (ok) { S.pushErr = ''; S.pushKind = ''; say('Hub notifications are on for this device. Now send yourself a test.'); }
     else {
       var st = push() || {};
       S.pushErr = st.perm === 'denied' ? '' : (said && !/^Hub notifications are on/.test(said) ? said : 'That did not work. Try again, or reload the Hub and try once more.');
       /* wave219's one-line answer about the helper: look at the helper and say what is really the matter */
-      if (/notification helper/.test(S.pushErr)) { try { var h1 = await helper(); if (!h1.ok) S.pushErr = h1.why; } catch (e) { /* keep */ } }
+      S.pushKind = '';
+      if (/notification helper/.test(S.pushErr)) { try { var h1 = await helper(); if (!h1.ok) { S.pushErr = h1.why; S.pushKind = h1.kind || ''; } } catch (e) { /* keep */ } }
     }
     paintSetup();
   }
+  async function sendTest() {
+    var A = window.__wa219; if (!A || !A.test || S.pushBusy) return;
+    S.pushBusy = true; S.pushMsg = 'Sending a test\u2026'; S.test = ''; paintSetup();
+    var said = '', t0 = window.toast, had = typeof t0 === 'function';
+    if (had) window.toast = function (m) { said = String(m || ''); };
+    try { await A.test(); } catch (e) { said = said || String((e && e.message) || e || ''); }
+    if (had) window.toast = t0;
+    S.pushBusy = false; S.pushMsg = '';
+    if (/^Sent/.test(said)) { S.test = 'sent'; S.testAt = Date.now(); clearTimeout(S.testTimer); S.testTimer = setTimeout(function () { if (S.test === 'sent') { S.test = 'late'; paintSetup(); } }, 60000); }
+    else { S.test = 'failed'; S.pushErr = said || 'The test did not go through. Try again.'; }
+    paintSetup();
+  }
+  function confirmPush(how) {
+    if (!meEmail()) return;
+    lsSet(KEY_OK(), '1'); S.test = ''; clearTimeout(S.testTimer);
+    say(how === 'tap' ? 'Notifications confirmed on this device.' : 'Thanks. Notifications are set up on this device.');
+    paintSetup();
+  }
+  /* the test arriving while the Hub is open, and the tap on it, come through wave219's worker messages */
+  window.addEventListener('wa-push', function () { if (S.test === 'sent') { S.test = 'arrived'; paintSetup(); } });
+  try {
+    if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('message', function (e) {
+      var d = e && e.data; if (!d || d.type !== 'wa-open') return;
+      if ((S.test === 'sent' || S.test === 'arrived') && Date.now() - S.testAt < 15 * 60000) confirmPush('tap');
+    });
+  } catch (e) { /* fine */ }
   async function recheck() {
     var A = window.__wa219; if (!A || !A.check) return;
     S.pushErr = ''; S.pushMsg = 'Checking\u2026'; S.pushBusy = true; paintSetup();
@@ -581,6 +621,9 @@
     if (pk === 'sign') { signPolicy(key, b); return; }
     if (k === 'how') { closeTip(); openHow(b); return; }
     if (k === 'push') { turnOnPush(); return; }
+    if (k === 'test') { sendTest(); return; }
+    if (k === 'saw') { confirmPush('saw'); return; }
+    if (k === 'reload') { lsSet(KEY_AUTO, '1'); try { location.reload(); } catch (e) { /* fine */ } return; }
     if (k === 'recheck') { recheck(); return; }
     if (k === 'again') { [800, 3000, 8000].forEach(function (ms) { setTimeout(paintSetup, ms); }); closeTip(); return; }
   });
@@ -651,18 +694,36 @@
     var st = tipState();
     if (st.n >= 2 || (st.at && Date.now() - st.at < 14 * 86400000) || document.getElementById('w272tip')) return;
     if (otherOpen()) { if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 5000); return; }
-    lsSet(KEY_TIP, JSON.stringify({ n: st.n + 1, at: Date.now() }));
     var el = document.createElement('div'); el.id = 'w272tip'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Add the Hub as an app');
     var where = IOS || ANDROID ? 'on this phone' : 'on this computer';
     el.innerHTML = '<b>Keep the Hub one tap away</b><p>Add it as an app ' + where + ': its own icon, and notifications when someone needs you.</p><div class="acts">'
       + (BIP ? '<button type="button" class="go" data-w219="install" data-w272s="again">Install</button>' : '<button type="button" class="go" data-w272s="how">Show me how</button>')
       + '<button type="button" class="no" data-w272tip="no">Not now</button></div>';
-    document.body.appendChild(el); void el.offsetWidth; el.classList.add('on');
+    document.body.appendChild(el);
+    /* never over a button someone could want (another session saw it cover one on the serving page): if anything you can
+       press sits under its corner, wait and look again */
+    if (coversControl(el)) { el.remove(); if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 20000); return; }
+    lsSet(KEY_TIP, JSON.stringify({ n: st.n + 1, at: Date.now() }));
+    void el.offsetWidth; el.classList.add('on'); TIP.at = Date.now();
+    /* it leaves on its own: after the first press anywhere else, or after 20 seconds */
+    clearTimeout(TIP.gone); TIP.gone = setTimeout(hideTip, 20000);
   }
+  function coversControl(el) {
+    try {
+      var r = el.getBoundingClientRect(), pts = [[r.left + 8, r.top + 8], [r.right - 8, r.top + 8], [r.left + 8, r.bottom - 8], [r.right - 8, r.bottom - 8], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+      return pts.some(function (p) {
+        return document.elementsFromPoint(p[0], p[1]).some(function (x) { return x !== el && !el.contains(x) && x.closest && !x.closest('#w272tip') && x.matches('button, a, input, select, textarea, [role=button], [tabindex]') && getComputedStyle(x).visibility !== 'hidden'; });
+      });
+    } catch (e) { return false; }
+  }
+  function hideTip() { var t = document.getElementById('w272tip'); if (!t) return; t.classList.remove('on'); setTimeout(function () { t.remove(); }, 220); }
+  document.addEventListener('pointerdown', function (e) {
+    var t = document.getElementById('w272tip'); if (!t || t.contains(e.target)) return;
+    if (Date.now() - (TIP.at || 0) > 800) hideTip();
+  }, true);
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest && e.target.closest('[data-w272tip]'); if (!b) return;
-    var t = document.getElementById('w272tip'); if (!t) return;
-    t.classList.remove('on'); setTimeout(function () { t.remove(); }, 220);
+    hideTip();
   });
   window.addEventListener('hashchange', function () { if (onHome()) closeTip(); });
 
