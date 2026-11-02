@@ -330,6 +330,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       food: 'How does your food reach us?', fPick: 'Pick it up from my home', fPickS: 'If you live in one of our pickup areas', fDrop: 'I will drop it off at {p} by {t}', fDropS: 'Anyone can drop off, wherever they live',
       area: 'Your neighbourhood', areaPick: 'Choose your neighbourhood…', areaOther: 'My area is not listed', areaNo: 'We can only pick up in these areas. You are welcome to drop your food off at {p} by {t} instead.',
       addr: 'Street address for the pickup', addrPh: 'For example: 2067 Rue Sanguinet, apt 3', postal: 'Postal code', postalPh: 'H2X 3G6',
+      ingr: 'Ingredients', ingrNeed: 'Please send me the ingredients', ingrOwn: 'I will use my own', win: 'When can you receive the delivery?', winS: 'Choose every day that works.', winDays: { wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sun: 'Sunday' }, errIngr: 'Please tell us whether you need ingredients.', errWin: 'Please choose at least one day for the delivery.',
       stay: 'Would you like to stay and serve with the team?', stayY: 'Yes, I will stay and serve', stayN: 'No, just dropping off',
       errAddr: 'Please enter the street address for the pickup.', errArea: 'Please choose a neighbourhood in our pickup areas, or drop off instead.', errPostal: 'Please check the postal code (for example H2X 3G6).', errPick: 'Please tell us whether we pick up or you drop off.',
       share: 'How will you share your photos with us?', shareOpts: [['album', 'The shared Google Photos album'], ['drive', 'The Drive folder'], ['email', 'By email to marketing@welfareavenue.com']],
@@ -415,6 +416,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
       food: 'Comment votre plat nous parvient-il?', fPick: 'Venez le chercher chez moi', fPickS: 'Si vous habitez un de nos secteurs de collecte', fDrop: 'Je le dépose au {p} avant {t}', fDropS: 'Tout le monde peut déposer, peu importe le quartier',
       area: 'Votre quartier', areaPick: 'Choisir votre quartier…', areaOther: 'Mon quartier n’est pas dans la liste', areaNo: 'Nous passons seulement dans ces secteurs. Vous pouvez plutôt déposer votre plat au {p} avant {t}.',
       addr: 'Adresse pour la collecte', addrPh: 'Par exemple : 2067, rue Sanguinet, app. 3', postal: 'Code postal', postalPh: 'H2X 3G6',
+      ingr: 'Ingrédients', ingrNeed: 'Merci de m’envoyer les ingrédients', ingrOwn: 'J’utiliserai les miens', win: 'Quand pouvez-vous recevoir la livraison?', winS: 'Choisissez tous les jours qui vous conviennent.', winDays: { wed: 'Mercredi', thu: 'Jeudi', fri: 'Vendredi', sun: 'Dimanche' }, errIngr: 'Dites-nous si vous avez besoin d’ingrédients.', errWin: 'Choisissez au moins un jour pour la livraison.',
       stay: 'Voulez-vous rester pour servir avec l’équipe?', stayY: 'Oui, je reste pour servir', stayN: 'Non, je dépose seulement',
       errAddr: 'Veuillez entrer l’adresse pour la collecte.', errArea: 'Veuillez choisir un quartier de nos secteurs de collecte, ou déposer votre plat.', errPostal: 'Veuillez vérifier le code postal (par exemple H2X 3G6).', errPick: 'Dites-nous si nous passons le chercher ou si vous le déposez.',
       share: 'Comment allez-vous nous transmettre vos photos?', shareOpts: [['album', 'L’album Google Photos partagé'], ['drive', 'Le dossier Drive'], ['email', 'Par courriel à marketing@welfareavenue.com']],
@@ -613,6 +615,17 @@ a.rbig svg{width:20px;height:20px;flex:none}
     return (hh % 12 || 12) + ':' + mm + (hh < 12 ? ' am' : ' pm');
   }
   function fill(k) { var cp = (S.d || {}).cook_pickup || {}; return t(k).replace('{p}', cp.dropoff_place || '1500 Rue Berri').replace('{t}', dropTime()); }
+  /* wave273: the cook's ingredients and, if we send them, the days a delivery works */
+  function ingrHtml(val) {
+    var ig = val('ingredients'), w = val('delivery_windows'), days = t('winDays');
+    w = Array.isArray(w) ? w : [];
+    var h = '<div class="q"><label class="l">' + E(t('ingr')) + '</label>'
+      + '<label class="opt"><input type="radio" name="ingr" value="need"' + (ig === 'need' ? ' checked' : '') + '><span>' + E(t('ingrNeed')) + '</span></label>'
+      + '<label class="opt"><input type="radio" name="ingr" value="own"' + (ig === 'own' ? ' checked' : '') + '><span>' + E(t('ingrOwn')) + '</span></label></div>';
+    if (ig === 'need') h += '<div class="q"><label class="l">' + E(t('win')) + '</label><p style="margin:0 0 8px;font-size:14px">' + E(t('winS')) + '</p>'
+      + ['wed', 'thu', 'fri', 'sun'].map(function (k) { return '<label class="opt"><input type="checkbox" name="win" value="' + k + '"' + (w.indexOf(k) >= 0 ? ' checked' : '') + '><span>' + E(days[k]) + '</span></label>'; }).join('') + '</div>';
+    return h;
+  }
   function foodHtml(val) {
     var cp = S.d.cook_pickup; if (!cp) return '';
     var mode = val('pickup'), area = val('neighbourhood'), areas = cp.areas || [];
@@ -633,7 +646,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
         + '<label class="opt"><input type="radio" name="stay" value="yes"' + (st === true || st === 'yes' ? ' checked' : '') + '><span>' + E(t('stayY')) + '</span></label>'
         + '<label class="opt"><input type="radio" name="stay" value="no"' + (st === false || st === 'no' ? ' checked' : '') + '><span>' + E(t('stayN')) + '</span></label></div>';
     }
-    return h;
+    return h + ingrHtml(val);
   }
   function readForm() {
     var d = S.d, role = String(d.role || '').toLowerCase(), p = {};
@@ -645,6 +658,8 @@ a.rbig svg{width:20px;height:20px;flex:none}
       if (fm) p.pickup = fm;
       if (fm === 'pickup') { var ar = v('area'); if (ar !== undefined) p.neighbourhood = ar; if (v('addr') !== undefined) p.address = v('addr'); if (v('postal') !== undefined) p.postal_code = v('postal'); }
       if (fm === 'dropoff') { var sy = r('stay'); if (sy) p.stay_to_serve = sy === 'yes'; }
+      var ig = r('ingr');
+      if (ig) { p.ingredients = ig; p.delivery_windows = ig === 'need' ? Array.prototype.map.call(document.querySelectorAll('input[name="win"]:checked'), function (el) { return el.value; }) : []; }
     }
     if (role === 'server') p.donations = v('don') || '';
     if (role === 'driver') { p.vehicle = v('vehicle') || ''; p.model = v('model') || ''; }
@@ -678,6 +693,10 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if (String(S.d.role || '').toLowerCase() === 'cook' && S.d.cook_pickup) {
       var pk = S.form.pickup || (S.d.details || {}).pickup;
       if (!pk) return t('errPick');
+      var dx = S.d.details || {}, ig = S.form.ingredients !== undefined ? S.form.ingredients : dx.ingredients, wn = S.form.delivery_windows !== undefined ? S.form.delivery_windows : dx.delivery_windows;
+      if (!ig) return t('errIngr');
+      if (ig === 'need' && !(Array.isArray(wn) && wn.length)) return t('errWin');
+      if ('ingredients' in S.form) { p.ingredients = ig; p.delivery_windows = wn || []; }
       if (pk === 'pickup') {
         if (!S.form.neighbourhood || S.form.neighbourhood === '__other') return t('errArea');
         if (!String(S.form.address || '').trim()) return t('errAddr');
@@ -693,6 +712,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     if ('donations' in p) x.donations = p.donations;
     if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
     if ('photos_share' in p) x.photos_share = p.photos_share;
+    if ('ingredients' in p) { x.ingredients = p.ingredients; x.delivery_windows = p.delivery_windows; }
     if ('briefed' in p) x.briefed_at = p.briefed ? new Date().toISOString() : null;
     if ('pickup' in p) { x.pickup = p.pickup; if (p.pickup === 'pickup') { x.neighbourhood = p.neighbourhood; x.address = p.address; x.postal_code = p.postal_code; } if ('stay_to_serve' in p) x.stay_to_serve = p.stay_to_serve; }
     S.form = {}; S.saved = true;
@@ -1325,7 +1345,7 @@ a.rbig svg{width:20px;height:20px;flex:none}
     var el = e.target; if (!el) return;
     if (el.id === 'rule4' || el.id === 'guide4') { S[el.id] = el.checked; if (S.cerr) { S.cerr = ''; var ce = document.getElementById('cerr'); if (ce) ce.remove(); } return; }   /* wave258 */
     if (el.name === 'invin') { S.invIn = el.value === 'yes'; if (S.invErr === 'place') { S.invErr = ''; var q = el.closest('.svq'); if (q) q.classList.remove('err'); } return; }
-    if (el.name === 'dish' || el.name === 'food' || el.name === 'stay' || el.id === 'area') { S.form = Object.assign({}, S.form, readForm()); if (el.name === 'food') S.form.pickup = el.value; if (el.id === 'area') S.form.neighbourhood = el.value; S.saved = false; paint(); }
+    if (el.name === 'dish' || el.name === 'food' || el.name === 'stay' || el.name === 'ingr' || el.name === 'win' || el.id === 'area') { S.form = Object.assign({}, S.form, readForm()); if (el.name === 'food') S.form.pickup = el.value; if (el.id === 'area') S.form.neighbourhood = el.value; S.saved = false; paint(); }
   });
   document.getElementById('langs').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;

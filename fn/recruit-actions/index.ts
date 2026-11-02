@@ -582,7 +582,7 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     const low = rcpt.map(x => x.toLowerCase());
     const bcc = low.includes(s.email) ? [] : [s.email];
     const replyTo = Array.from(new Set([s.email, who.email].filter(e => e && e !== 'hub@welfareavenue.com')));
-    const fromName = (await cfg('mail_from_name')) || 'Welfare Avenue', fromEmail = (await cfg('mail_from_email')) || 'info@welfareavenue.com';
+    const fromName = (await cfg('mail_from_name')) || 'Welfare Avenue', fromEmail = (await cfg('mail_from_hr')) || 'job@welfareavenue.com';   /* wave273 */
     const subject = (own ? '[PRACTICE] ' : mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
     const note = String(f.note || '').trim();
     const t = fr ? s.title_fr : s.title;
@@ -621,7 +621,7 @@ async function signerSet(email: string, who: Who, auth: string) {
 }
 
 /* ---------- wave216c: the open positions' job descriptions, public as PDFs ---------- */
-function slugOf(s: string): string { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'role'; }
+function slugOf(s: string): string { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'role'; }
 async function jdPublish(force: boolean) {
   const { data: open } = await svc.rpc('wa216_open_positions');
   const ids = ((open || []) as Array<{ id: number }>).map(p => Number(p.id));

@@ -14,7 +14,7 @@ function get(o) {
     events: [], photo: null, times: { start: '11:45', end: '12:00' } }, o || {});
 }
 (async () => {
-  const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const browser = await chromium.launch({ executablePath: process.env.WA_CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
   const res = {}; let fails = 0;
   const ok = (n, c, g) => { res[n] = c ? 'ok' : 'FAIL ' + JSON.stringify(g); if (!c) fails++; };
   async function open(over, lang, submitReply) {
@@ -55,6 +55,12 @@ function get(o) {
   t = await txt(o.page);
   ok('needs pick-up or drop-off', /pick-up or drop-off first/i.test(t) && o.submits.length === 0, t.slice(-600));
   await o.page.check('input[name="food"][value="dropoff"]'); await o.page.waitForTimeout(200);
+  await o.page.click('#yes'); await o.page.waitForTimeout(200);
+  ok('w273: a cook must say about ingredients', /whether you need ingredients/.test(await txt(o.page)), null);
+  await o.page.check('input[name="ingr"][value="need"]'); await o.page.waitForTimeout(200);
+  await o.page.click('#yes'); await o.page.waitForTimeout(200);
+  ok('w273: ingredients need a delivery day', /at least one day/.test(await txt(o.page)), null);
+  await o.page.check('input[name="win"][value="wed"]'); await o.page.waitForTimeout(200); await o.page.check('input[name="win"][value="fri"]'); await o.page.waitForTimeout(200);
   await o.page.click('#yes'); await o.page.waitForTimeout(300);
   t = await txt(o.page);
   ok('needs the guide box', /read what your role involves/i.test(t) && o.submits.length === 0, t.slice(-600));
@@ -65,7 +71,7 @@ function get(o) {
   ok('dish kept after the errors', await o.page.evaluate(() => { const r = document.querySelector('input[name="dish"][value="2"]'); return !!(r && r.checked); }), null);
   await o.page.check('#rule4');
   await o.page.click('#yes'); await o.page.waitForTimeout(900);
-  ok('details saved first', o.details.length === 1 && o.details[0].p.recipe_id === 2 && o.details[0].p.pickup === 'dropoff', o.details);
+  ok('details saved first', o.details.length === 1 && o.details[0].p.recipe_id === 2 && o.details[0].p.pickup === 'dropoff' && o.details[0].p.ingredients === 'need' && o.details[0].p.delivery_windows.join() === 'wed,fri', o.details);
   ok('submit carries the rule', o.submits.length === 1 && o.submits[0].p.attending === 'yes' && o.submits[0].p.cancel_rule_ok === true && o.submits[0].p.guide_read === true && o.submits[0].p.via === 'link', o.submits);
   t = await txt(o.page);
   ok('confirmed: the rule shown', /confirmed/i.test(t) && /You agreed to tell us at least 4 days before/.test(t), t.slice(0, 600));
