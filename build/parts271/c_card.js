@@ -40,19 +40,25 @@
     catch (e) { delete S.busy['v' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
   }
   /* what HR edited in the preview, under the welcome to-do, to send by hand */
+  /* the email as it reads now, from onboard-run (welcome): HR's wording kept, today's times, manager, address and links filled in */
   function welcomeHtml(f) {
-    var edited = f.welcome_subject || f.welcome_text;
+    var w = S.welcome[f.id];
+    if (!w) return '<div class="dt"><div class="o271ln">Loading the email...</div></div>';
+    if (w.err) return '<div class="dt"><div class="o271err">' + E(w.err) + '</div></div>';
     return '<div class="dt">'
-      + (edited
-        ? '<div class="o271ln"><b>Subject:</b> ' + E(f.welcome_subject || '') + '</div><div class="o271pre">' + E(f.welcome_text || '') + '</div>'
-        : '<div class="o271ln">No text was saved for this email.</div>')
-      + (f.group_session ? '<div class="o271ln"><b>Group session:</b> ' + E(f.group_session) + '</div>' : '')
-      + (edited || f.group_session ? '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>' : '')
+      + '<div class="o271ln"><b>Subject:</b> ' + E(w.subject || '') + (w.edited ? ' <small>(your edit)</small>' : '') + '</div><div class="o271pre">' + E(w.text || '') + '</div>'
+      + '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>'
       + '</div>';
   }
+  async function readWelcomes(flows) {
+    S.welcome = {};
+    await Promise.all(flows.filter(function (f) { return (f.steps || []).some(function (r) { return r.step === 'welcome' && r.status === 'hr_task'; }); }).map(async function (f) {
+      try { S.welcome[f.id] = await run('welcome', { flow_id: Number(f.id) }); } catch (e) { S.welcome[f.id] = { err: e.message }; }
+    }));
+  }
   async function copyWelcome(id) {
-    var f = flowOf(id); if (!f) return;
-    var text = [f.welcome_subject, f.welcome_text, f.group_session ? 'Group session: ' + f.group_session : ''].filter(Boolean).join('\n\n');
+    var w = S.welcome[id]; if (!w || w.err) return;
+    var text = [w.subject, w.text].filter(Boolean).join('\n\n');   /* the group session is already a line of the text */
     try { await navigator.clipboard.writeText(text); toast('Copied'); }
     catch (e) { toast('The browser would not copy it. Select the text and copy it yourself.'); }
   }

@@ -119,7 +119,7 @@
       + '<label class="o271f">Group session (leave blank to leave the line out)</label><input type="text" data-o271i="group" data-f="' + E(id) + '" value="' + E(P.group) + '">'
       + '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o271i="subj" data-f="' + E(id) + '" value="' + E(P.subject) + '">'
       + '<label class="o271f">Welcome email: text</label><textarea data-o271i="text" data-f="' + E(id) + '">' + E(P.text) + '</textarea>'
-      + '<div class="o271ln">Anything in [square brackets] fills in at Start, from the times, manager, address and links you choose here. Leave the brackets in place, even if you change the rest.</div>'
+      + '<div class="o271ln">Anything in [square brackets] fills in from the times, manager, address and links, and changes with them after Start. Leave the brackets in place, even if you change the rest.</div>'
       + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>' : '')
       + canvaHowHtml()
       + '<label class="o271f">Fresh Canva invite link</label><input type="text" style="max-width:none" autocomplete="off" data-o271i="canva" data-f="' + E(id) + '" value="' + E(P.canva) + '">'

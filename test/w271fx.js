@@ -116,6 +116,12 @@ const INIT = `(function(){
         return { data: who && who.practice ? { ok: true, practice: true } : window.__O271_MODE === 'live' ? { ok: true, mode: 'live', to: ['x@example.invalid'] } : { ok: true, mode: 'test', to: ['tester@example.invalid'] }, error: null };
       }
       case 'set_manager': return { data: String(b.flow_id) === '502' ? { ok: true, practice: true, cleared: false } : { ok: true, cleared: true }, error: null };
+      case 'welcome': {   // as onboard-run reads it: what HR saved, or the Hub's own, with the bracketed places filled from the flow
+        var fw = flow(b.flow_id) || {};
+        var text = (fw.welcome_text || 'Dear Sam,\\n\\nCongratulations and welcome. Your first day is [first day: fills in at Start].')
+          + (fw.group_session ? '\\nYour in-person group onboarding session on ' + fw.group_session + '.' : '');
+        return { data: { subject: fw.welcome_subject || 'Welcome to Welfare Avenue! Your Next Steps', text: text.split('[first day: fills in at Start]').join('Wednesday, September 30, 2026'), edited: !!(fw.welcome_subject || fw.welcome_text) }, error: null };
+      }
       case 'set_canva_link': flow(b.flow_id).canva_link = b.link || null; return { data: { ok: true, canva_link: b.link || null }, error: null };
       case 'task_done': setStep(b.flow_id, b.step, 'done', 'Done by hr@example.invalid.'); return { data: { steps: steps(b.flow_id) }, error: null };
       case 'start': {

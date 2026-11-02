@@ -114,7 +114,7 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('preview: both times', /Onboarding call/.test(t) && /1-on-1/.test(t));
     ok('preview: the email is editable', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="text"]') && await f.page.isEditable(card(FLOW.real) + ' [data-o271i="subj"]'));
     ok('preview: Build 1 says who sends the email', /HR sends this one for now/.test(t), t.slice(0, 1500));
-    ok('TEMPLATE: the preview says the bracketed places fill in at Start', /square brackets\] fills in at Start/.test(t), t.slice(0, 1500));
+    ok('TEMPLATE: the preview says the bracketed places fill in at Start', /square brackets\] fills in from the times/.test(t), t.slice(0, 1500));
     ok('preview: the group session field', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="group"]'));
     s = await f.ev(sel => Array.from(document.querySelectorAll(sel + ' [data-o271skip]')).map(x => ({ k: x.getAttribute('data-o271skip'), on: x.checked, off: x.disabled })), card(FLOW.real));
     ok('preview: a switch for every step, roster locked', s.length === 8 && s.every(x => x.on) && s.filter(x => x.off).map(x => x.k).join() === 'roster', s);
@@ -242,11 +242,14 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('NAME: no <b> element comes from the name inside the started card for Amina', await noTagFromName(card(FLOW.real)));
 
     /* I7: what HR edited, under the welcome to-do */
-    ok('I7: the edited subject, the text and the group session show under the welcome task', /Edited subject/.test(t) && /Congratulations/.test(t) && /Group session: ?Group session on Oct 8/.test(t), t);
+    ok('I7: the edited subject, the text and the group session show under the welcome task', /Edited subject/.test(t) && /Congratulations/.test(t) && /group onboarding session on Group session on Oct 8/.test(t), t);
+    c = await calls(f, 'welcome');
+    ok('TEMPLATE: the card reads the email through onboard-run, filled in: no bracket left', c.some(x => x.body.flow_id === FLOW.real) && /Your first day is Wednesday, September 30, 2026/.test(t) && !/\[first day/.test(t), t);
     await f.ev(() => { window.__COPIED = null; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: x => { window.__COPIED = x; return Promise.resolve(); } } }); });
     await click(f, card(FLOW.real) + ' [data-o271a="copywelcome"]');
     s = await f.ev(() => window.__COPIED);
     ok('I7: Copy the text copies the subject and the text', /Edited subject/.test(s) && /Congratulations/.test(s) && /Group session on Oct 8/.test(s), s);
+    ok('I7: the group session is in the copy once, not added again after the text', (s.match(/Group session on Oct 8/g) || []).length === 1 && !/\nGroup session: /.test(s), s);
 
     /* CANVA: under the welcome task: the reminder, the saved link with a copy button, and the box to replace it */
     const cv = card(FLOW.real) + ' [data-o271canva]';

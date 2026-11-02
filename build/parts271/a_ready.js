@@ -32,6 +32,7 @@
     note: {},   /* flow id, or 'c' and a candidate id: { ok, err, warnings } on a card */
     yes: {},    /* candidate id: asking whether they really said yes by email */
     canva: {},  /* flow id: the Canva link being typed on a card */
+    welcome: {}, /* flow id: the welcome email as it reads now, {subject, text, edited} or {err} */
     busy: {}
   };
 
@@ -198,6 +199,7 @@
         S.started = begun.filter(function (x) { return x.status !== 'backed_out'; });
         S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
         S.offers = await readOffers();
+        await readWelcomes(S.started);
         await Promise.all([readPeople(), readCfg()]);
       } catch (e) {
         var msg = String((e && e.message) || e);
