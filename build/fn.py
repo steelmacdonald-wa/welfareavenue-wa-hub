@@ -114,6 +114,8 @@ def deploy(name, verify=None):
         if os.path.exists(mp):
             verify = json.load(open(mp)).get('verify_jwt')
     payload = {'action': 'deploy', 'name': name, 'source': src}
+    if "'./platforms.ts'" in src:
+        payload['files'] = [{'name': 'platforms.ts', 'content': open(os.path.join(ROOT, 'fn', '_shared', 'platforms.ts')).read()}]
     if verify is not None:
         payload['verify_jwt'] = bool(verify)
     out = call(payload)
