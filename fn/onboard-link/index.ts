@@ -5,15 +5,17 @@
 //   offer  id = the candidate  the offer's Accept and Decline, then the new hire's availability grid
 //   mgr    id = the flow       the manager's availability grid for the 1-on-1
 //   pw     id = the flow       the one-time first-password page; it signs '<id>.<pw_nonce>' (Task 10 fills in the action)
-//   GET  ?t=<token>            {ok, kind: 'offer'|'manager'|'password', first, role, lang, answered, closed, late, booked,
+//   GET  ?t=<token>            {ok, kind: 'offer'|'manager'|'password', first, role, lang, answered, closed, late, booked, callBooked,
 //                              grid: {start, end, cellMin, days: [{date, open, close}], slots}, slotsSaved}      nothing is saved
 //   POST {t, a: 'accept'|'decline'|'grid'|'password', slots?}
 //     accept   sets hub_candidates.accepted_on to today in Toronto; the database trigger wa271_cand_accepted makes the flow.
 //              It does not touch status: HR moves the card.
-//     decline  status declined, close_reason 'Declined by link', change_log, and the owner hears through notify (event applicant).
+//     decline  status declined, close_reason 'Declined by link', change_log. The stage-move trigger (wa210_stage_moved) tells the owner; a card with no owner
+//              tells the offer signer through notify (event applicant).
 //     grid     replaces the person's marked slots (hire for an offer link, manager for a mgr link) until the meetings are booked.
-//     A second answer changes nothing and shows the first ({repeated: true}); a closed card or a flow that backed out gives
-//     {closed: true} and saves nothing.
+//     A second answer changes nothing and shows the first ({repeated: true}); a closed card (even one accepted first) or a flow that backed out gives
+//     {closed: true} and saves nothing. Someone who declined by link still sees their answer.
+//   A read that fails is a 503 (unavailable), not a bad link: the page offers to try again.
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
 // Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell (app_config). The wall-clock
 // times are turned into instants with Intl for each day, so a clock change (01/11/26, 14/03/27) never shifts a cell by an hour.
@@ -51,6 +53,7 @@ const MSG: Record<string, { en: string; fr: string }> = {
   save: { en: 'We could not save that. Please try again, or contact HR.', fr: 'Nous n\'avons pas pu enregistrer. Veuillez réessayer, ou communiquer avec les RH.' },
   not_yet: { en: 'This is not ready yet. Please contact HR.', fr: 'Ce n\'est pas encore prêt. Veuillez communiquer avec les RH.' },
   closed: { en: 'This link is no longer active. Please contact HR.', fr: 'Ce lien n\'est plus actif. Veuillez communiquer avec les RH.' },
+  unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
 };
 const fail = (error: string, status: number) => json({ ok: false, error, message: MSG[error] }, status);
 const closedReply = (booked: boolean) => json({ ok: true, closed: true, booked, message: MSG.closed });
@@ -110,7 +113,8 @@ const normal = (v: unknown): string | null => {
 type Grid = { start: number; end: number; cellMin: number; days: Array<{ date: string; open: string; close: string }>; slots: string[] };
 const GRID_DEFAULTS: Record<string, [number, number, number]> = { onboard_grid_days: [14, 1, 60], onboard_grid_start: [8, 0, 23], onboard_grid_end: [21, 1, 24], onboard_grid_cell_min: [30, 5, 240] };
 async function gridWindow(): Promise<Grid> {
-  const { data } = await svc.from('app_config').select('key, value').in('key', Object.keys(GRID_DEFAULTS));
+  const { data, error } = await svc.from('app_config').select('key, value').in('key', Object.keys(GRID_DEFAULTS));
+  if (error) throw new Error('grid settings: ' + error.message);   // the defaults may not be today's window: never guess
   const have = new Map(((data || []) as Array<{ key: string; value: string }>).map((r) => [r.key, r.value]));
   const num = (k: string) => {
     const [def, lo, hi] = GRID_DEFAULTS[k];
@@ -149,14 +153,21 @@ function onCellBoundary(ms: number, g: Grid): boolean {
 /* ---------- the rows behind a link ---------- */
 const OPEN = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // a card in any other stage is closed to this link
 type Cand = { id: number; name: string; role: string; status: string; summary: string; notes: string; owner: string | null; accepted_on: string | null; offer_respond_by: string | null; close_reason: string | null };
-type Flow = { id: number; candidate_id: number; status: string; manager_member_id: number | null; call_at: string | null; one_on_one_at: string | null; pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null };
+type Flow = { id: number; candidate_id: number; status: string; manager_member_id: number | null; manager_link_member_id: number | null; call_at: string | null; one_on_one_at: string | null; pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null };
 const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason';
-const FLOW_COLS = 'id, candidate_id, status, manager_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at';
+const FLOW_COLS = 'id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at';
 type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null };
 
+/* a read that fails is not a link that fails: it throws, and the handler answers 503 */
 async function candidate(id: number): Promise<Cand | null> {
-  const { data } = await svc.from('hub_candidates').select(CAND_COLS).eq('id', id).maybeSingle();
+  const { data, error } = await svc.from('hub_candidates').select(CAND_COLS).eq('id', id).maybeSingle();
+  if (error) throw new Error('candidate: ' + error.message);
   return (data as Cand | null) || null;
+}
+async function flowWhere(col: 'id' | 'candidate_id', id: number): Promise<Flow | null> {
+  const { data, error } = await svc.from('hub_onboard_flows').select(FLOW_COLS).eq(col, id).maybeSingle();
+  if (error) throw new Error('flow: ' + error.message);
+  return (data as Flow | null) || null;
 }
 async function openLink(t: string): Promise<Link | null> {
   const m = /^(\d{1,12})\.([A-Za-z0-9_-]{20})$/.exec(String(t || '').trim());
@@ -165,12 +176,10 @@ async function openLink(t: string): Promise<Link | null> {
   if (same(await mac('offer', m[1]), m[2])) {
     const cand = await candidate(id);
     if (!cand) return null;
-    const { data } = await svc.from('hub_onboard_flows').select(FLOW_COLS).eq('candidate_id', id).maybeSingle();
-    return { kind: 'offer', cand, flow: (data as Flow | null) || null };
+    return { kind: 'offer', cand, flow: await flowWhere('candidate_id', id) };
   }
   const mgr = same(await mac('mgr', m[1]), m[2]);
-  const { data } = await svc.from('hub_onboard_flows').select(FLOW_COLS).eq('id', id).maybeSingle();
-  const flow = (data as Flow | null) || null;
+  const flow = await flowWhere('id', id);
   if (!flow) return null;
   if (!mgr && !(flow.pw_nonce && same(await mac('pw', m[1] + '.' + flow.pw_nonce), m[2]))) return null;
   const cand = await candidate(flow.candidate_id);
@@ -194,13 +203,16 @@ const booked = (l: Link) => !!l.flow && (l.kind === 'manager' ? !!l.flow.one_on_
 function shut(l: Link): boolean {
   if (l.flow?.status === 'backed_out') return true;
   if (l.kind === 'password') return !!l.flow && (!!l.flow.pw_used_at || (!!l.flow.pw_expires_at && Date.parse(l.flow.pw_expires_at) < Date.now()));
-  return booked(l) || (!answerOf(l.cand) && !OPEN.includes(l.cand.status));
+  if (booked(l)) return true;
+  if (OPEN.includes(l.cand.status)) return false;   // hired is still open: the grid stays open until the meetings are booked
+  return !(l.kind === 'offer' && answerOf(l.cand) === 'decline');   // closed, even if they accepted first; only someone who declined by link still sees their answer
 }
 const who = (l: Link) => (l.kind === 'manager' ? 'manager' : 'hire');
 
 async function savedSlots(l: Link): Promise<string[]> {
   if (!l.flow || l.kind === 'password') return [];
-  const { data } = await svc.from('hub_onboard_grids').select('slots').eq('flow_id', l.flow.id).eq('who', who(l)).maybeSingle();
+  const { data, error } = await svc.from('hub_onboard_grids').select('slots').eq('flow_id', l.flow.id).eq('who', who(l)).maybeSingle();
+  if (error) throw new Error('grid: ' + error.message);
   return (((data as { slots?: string[] } | null)?.slots) || []).map((s) => normal(s)).filter((s): s is string => !!s).sort();
 }
 
@@ -210,7 +222,8 @@ async function view(l: Link) {
   let first = firstName(l.cand.name), hire: string | undefined;
   if (l.kind === 'manager') {
     hire = first;
-    const { data: m } = l.flow?.manager_member_id ? await svc.from('team_members').select('name').eq('id', l.flow.manager_member_id).maybeSingle() : { data: null };
+    const person = l.flow?.manager_link_member_id ?? l.flow?.manager_member_id;   // who got this link; a default manager has no manager_member_id before Start
+    const { data: m } = person ? await svc.from('team_members').select('name').eq('id', person).maybeSingle() : { data: null };
     first = firstName((m as { name?: string } | null)?.name);
   }
   const grid = l.kind === 'password' ? null : await gridWindow();
@@ -218,30 +231,23 @@ async function view(l: Link) {
   const late = l.kind === 'offer' && answered !== 'decline' && lateAt(l.cand, answered === 'accept' ? String(l.cand.accepted_on).slice(0, 10) : torontoToday());
   return {
     ok: true, kind: l.kind, first, ...(hire !== undefined ? { hire } : {}), role: l.cand.role, lang: l.kind === 'manager' ? 'en' : langOf(l.cand),
-    answered, closed, late, booked: booked(l), grid, slotsSaved: (await savedSlots(l)).filter((s) => inWindow.has(s)),
+    answered, closed, late, booked: booked(l), callBooked: !!l.flow?.call_at, grid, slotsSaved: (await savedSlots(l)).filter((s) => inWindow.has(s)),
     ...(closed ? { message: MSG.closed } : {}),
   };
 }
 
 const esc = (s: string) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-/* tell the person who handles the card (else the offer signer) through notify's existing applicant event; the answer never waits on it */
-async function tellOwner(c: Cand, when: string): Promise<void> {
+/* a card with no owner: tell the offer signer through notify's existing applicant event (a card with an owner hears from wa210_stage_moved). The answer waits at most 8 seconds on it. */
+async function tellSigner(c: Cand, when: string): Promise<void> {
   try {
-    let email = '';
-    if (c.owner) {
-      const { data } = await svc.from('team_members').select('email').eq('name', c.owner).maybeSingle();
-      email = String((data as { email?: string } | null)?.email || '').toLowerCase();
-    }
-    if (!email) {
-      const { data } = await svc.from('app_config').select('value').eq('key', 'offer_signer_email').maybeSingle();
-      email = String((data as { value?: string } | null)?.value || '').trim().toLowerCase();
-    }
+    const { data } = await svc.from('app_config').select('value').eq('key', 'offer_signer_email').maybeSingle();
+    const email = String((data as { value?: string } | null)?.value || '').trim().toLowerCase();
     if (!/@/.test(email)) return;
     const { data: sec } = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
     if (!sec) return;
     const label = esc(c.name) + (c.role ? ' (' + esc(c.role) + ')' : '');
     await fetch(SUPABASE_URL + '/functions/v1/notify', {
-      method: 'POST',
+      method: 'POST', signal: AbortSignal.timeout(8000),
       headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec), Authorization: 'Bearer ' + ANON_KEY },
       body: JSON.stringify({
         event: 'applicant', to_email: email, title: c.name + ' declined the offer', url: '#hrcentre/applications', tag: 'offer-declined-' + c.id,
@@ -257,6 +263,7 @@ async function answer(l: Link, a: 'accept' | 'decline') {
   const reply = (given: string, repeated: boolean, late: boolean) => json({ ok: true, first: firstName(c.name), role: c.role, lang: langOf(c), answer: given, answered: given, repeated, late });
   const lateNow = lateAt(c, today);
   const prior = answerOf(c);
+  if (prior === 'accept' && !OPEN.includes(c.status)) return closedReply(false);   // they accepted, then the card closed: no "Thank you", contact HR
   if (prior) return reply(prior, true, prior === 'accept' && lateAt(c, String(c.accepted_on).slice(0, 10)));
   if (shut(l)) return closedReply(false);
   const patch = a === 'accept'
@@ -275,12 +282,12 @@ async function answer(l: Link, a: 'accept' | 'decline') {
   await svc.from('change_log').insert(a === 'accept'
     ? { entity_type: 'candidate', entity_id: String(c.id), field: 'accepted_on', old_value: null, new_value: today, changed_by: 'candidate (offer link)' }
     : { entity_type: 'candidate', entity_id: String(c.id), field: 'status', old_value: String(c.status), new_value: 'declined (Declined by link)', changed_by: 'candidate (offer link)' });
-  if (a === 'decline') await tellOwner(c, when);
+  if (a === 'decline' && !c.owner) await tellSigner(c, when);
   return reply(a, false, a === 'accept' && lateNow);
 }
 
 async function saveGrid(l: Link, slots: unknown) {
-  if (shut(l)) return closedReply(booked(l));
+  if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
   if (!l.flow) return fail('not_accepted', 409);
   if (!Array.isArray(slots)) return fail('bad_slots', 400);
   if (slots.length > MAX_SLOTS) return fail('too_many_slots', 400);
@@ -316,12 +323,17 @@ Deno.serve(async (req: Request) => {
   } else if (req.method !== 'GET') {
     return json({ error: 'method' }, 405);
   }
-  const link = await openLink(token);
-  if (!link) return fail('bad_link', 404);
-  if (req.method === 'GET') return json(await view(link));
+  try {
+    const link = await openLink(token);
+    if (!link) return fail('bad_link', 404);
+    if (req.method === 'GET') return json(await view(link));
 
-  if (!['accept', 'decline', 'grid', 'password'].includes(a)) return fail('answer', 400);
-  if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
-  if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : saveGrid(link, slots);
-  return link.kind === 'offer' ? answer(link, a as 'accept' | 'decline') : fail('wrong_link', 400);
+    if (!['accept', 'decline', 'grid', 'password'].includes(a)) return fail('answer', 400);
+    if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
+    if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : await saveGrid(link, slots);
+    return link.kind === 'offer' ? await answer(link, a as 'accept' | 'decline') : fail('wrong_link', 400);
+  } catch (e) {
+    console.error('onboard-link: ' + String((e as Error)?.message || e));
+    return fail('unavailable', 503);
+  }
 });

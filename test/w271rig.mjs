@@ -173,7 +173,7 @@ function makeFetch(rig) {
     const method = String(init.method || (input && input.method) || 'GET').toUpperCase();
     let body = init.body ?? null;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch (_) { /* keep the text */ } }
-    const entry = { url, method, headers: Object.fromEntries(new Headers(init.headers || {})), body, matched: false };
+    const entry = { url, method, headers: Object.fromEntries(new Headers(init.headers || {})), body, signal: init.signal ?? null, matched: false };
     rig.fetchLog.push(entry);
     const route = rig.routes.find((r) => r.match(url, method));
     if (!route) throw new Error('rig: fetch to an unregistered URL: ' + method + ' ' + url);

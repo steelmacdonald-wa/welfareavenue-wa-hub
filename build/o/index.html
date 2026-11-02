@@ -13,8 +13,9 @@
      deployed by host-sync from site_files path o/index.html. A new hire opens their personal link from the offer email, answers
      Accept or Decline, then marks the times they can meet in a grid; the new manager gets the same grid for the 1-on-1. The page
      asks the onboard-link function who the token is for (first name and role only) and what to show. Nothing is saved on open:
-     ?a=accept or ?a=decline (the email buttons) only highlight that button, and the person still presses it, so a mail scanner
-     that opens the link answers nothing. English and French (?l=fr, else the function's lang). Grid times come from the instants
+     ?a=accept or ?a=decline (the email buttons) only highlight that button (Accept also takes the focus; Decline never does, so a
+     stray Enter cannot decline), and the person still presses it, so a mail scanner that opens the link answers nothing. If the
+     server cannot be reached the page says so and offers to try again; it only says a link does not work when the function says so. English and French (?l=fr, else the function's lang). Grid times come from the instants
      the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
@@ -114,6 +115,7 @@
       again: 'Your first answer was already on file.',
       thanksYes: 'Thank you, {first}!',
       gridHire: 'You have accepted the <strong>{role}</strong> offer. Next, mark every time that works for two meetings: your onboarding call and a 1-on-1 with your manager. We will choose from your times and send you calendar invites.',
+      gridHireOne: 'You have accepted the <strong>{role}</strong> offer, and your onboarding call is booked. Next, mark every time that works for a 1-on-1 with your manager. We will choose from your times and send you a calendar invite.',
       gridMgr: 'Please mark every time you could meet <strong>{hire}</strong>, who is joining us as <strong>{role}</strong>, for a 1-on-1. We will pick a time that suits you both and send the invite.',
       late: 'Your answer came in after the reply-by date. It is on file.',
       how: 'All times are Toronto time (Eastern). Click and drag, or tap, to mark the times that work. Mark a time again to clear it. You can come back to this link and change your times until the meetings are booked.',
@@ -124,7 +126,7 @@
       closed: 'This link is closed', booked: 'The meetings are booked, so this grid is closed. Look for the calendar invites in your email.',
       bad: 'This link does not work', badText: 'It may be incomplete. Please contact HR.',
       pwH: 'Not ready yet', pwText: 'This page is not ready yet. Please contact HR and they will help you.',
-      oops: 'We could not reach the server. Please try again in a minute, or contact HR.', other: 'Français', dayOf: 'Times on {d}', off: 'Not available'
+      oops: 'We could not reach the server. Please try again in a minute, or contact HR.', oopsH: 'We could not load this page', savedH: 'Your answer is saved', savedAccept: 'You have accepted the offer, and we have it on file. We could not load the next step. Please try again in a minute, or contact HR.', retry: 'Try again', other: 'Français', dayOf: 'Times on {d}', off: 'Not available'
     },
     fr: {
       titleOffer: 'Welfare Avenue: votre offre', titleGrid: 'Welfare Avenue: vos disponibilités', titleBad: 'Welfare Avenue: ce lien',
@@ -137,6 +139,7 @@
       again: 'Votre première réponse était déjà enregistrée.',
       thanksYes: 'Merci, {first}!',
       gridHire: 'Vous avez accepté l’offre de <strong>{role}</strong>. Indiquez maintenant toutes les plages qui vous conviennent pour deux rencontres: votre appel d’accueil et une rencontre individuelle avec votre gestionnaire. Nous choisirons parmi vos plages et vous enverrons des invitations.',
+      gridHireOne: 'Vous avez accepté l’offre de <strong>{role}</strong>, et votre appel d’accueil est fixé. Indiquez maintenant toutes les plages qui vous conviennent pour une rencontre individuelle avec votre gestionnaire. Nous choisirons parmi vos plages et vous enverrons une invitation.',
       gridMgr: 'Indiquez toutes les plages où vous pourriez rencontrer <strong>{hire}</strong>, qui se joint à nous comme <strong>{role}</strong>, pour une rencontre individuelle. Nous choisirons une heure qui convient aux deux et enverrons l’invitation.',
       late: 'Votre réponse est arrivée après la date limite. Elle est bien enregistrée.',
       how: 'Toutes les heures sont à l’heure de Toronto (Est). Cliquez et glissez, ou touchez, pour indiquer les plages qui conviennent. Touchez une plage de nouveau pour l’effacer. Vous pouvez revenir à ce lien et modifier vos plages tant que les rencontres ne sont pas fixées.',
@@ -147,7 +150,7 @@
       closed: 'Ce lien est fermé', booked: 'Les rencontres sont fixées, la grille est donc fermée. Surveillez les invitations dans votre courriel.',
       bad: 'Ce lien ne fonctionne pas', badText: 'Il est peut-être incomplet. Veuillez communiquer avec les RH.',
       pwH: 'Pas encore prêt', pwText: 'Cette page n’est pas encore prête. Veuillez communiquer avec les RH.',
-      oops: 'Nous n’avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.', other: 'English', dayOf: 'Plages du {d}', off: 'Non disponible'
+      oops: 'Nous n’avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.', oopsH: 'Nous n’avons pas pu charger cette page', savedH: 'Votre réponse est enregistrée', savedAccept: 'Vous avez accepté l’offre, et c’est bien noté. Nous n’avons pas pu charger l’étape suivante. Réessayez dans une minute, ou communiquez avec les RH.', retry: 'Réessayer', other: 'English', dayOf: 'Plages du {d}', off: 'Non disponible'
     }
   };
   function t() { return T[lang]; }
@@ -204,6 +207,16 @@
     card.className = 'card';
     card.innerHTML = '<h1>' + t().bad + '</h1><p>' + (msg ? esc(msg) : t().badText) + '</p>';
   }
+  function viewOops() {   // the server could not answer: not a bad link. After a saved Accept, say it was saved.
+    setTitle('titleBad');
+    card.className = 'card';
+    var tx = t();
+    card.innerHTML = '<h1 tabindex="-1">' + (S.acceptedNow ? tx.savedH : tx.oopsH) + '</h1><p>' + (S.acceptedNow ? tx.savedAccept : tx.oops) + '</p><button class="btn" id="retry" type="button">' + tx.retry + '</button>';
+    document.getElementById('retry').addEventListener('click', function () {
+      this.disabled = true;
+      load(true);
+    });
+  }
   function viewClosed() {
     setTitle('titleBad');
     card.className = 'card';
@@ -233,7 +246,7 @@
     card.innerHTML = h;
     document.getElementById('accept').addEventListener('click', function () { send('accept'); });
     document.getElementById('decline').addEventListener('click', function () { send('decline'); });
-    if (initial && pre) { try { document.getElementById(pre).focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    if (initial && pre === 'accept') { try { document.getElementById('accept').focus({ preventScroll: true }); } catch (e) { /* fine */ } }   // Decline is highlighted only: a stray Enter must not decline
   }
 
   /* the grid: a model of the instants the function sent, laid out by Toronto wall clock */
@@ -259,7 +272,7 @@
     card.className = 'card wide';
     var j = S.j, m = S.model, tx = t();
     var h = '<h1 tabindex="-1">' + fill(j.kind === 'manager' ? tx.hi : tx.thanksYes, j) + '</h1>' +
-      '<p>' + fill(j.kind === 'manager' ? tx.gridMgr : tx.gridHire, j) + '</p>';
+      '<p>' + fill(j.kind === 'manager' ? tx.gridMgr : j.callBooked ? tx.gridHireOne : tx.gridHire, j) + '</p>';
     if (j.late && j.kind === 'offer') h += '<p class="hint">' + tx.late + '</p>';
     h += '<p class="note">' + tx.how + '</p>';
     if (!m.days.length) { h += '<p>' + tx.nothing + '</p>'; card.innerHTML = h; return; }
@@ -395,6 +408,7 @@
       if (j && j.ok) {
         S.repeated = !!j.repeated;
         if ((j.answer || j.answered) === 'decline') { S.busy = false; S.view = 'declined'; render(true); return; }
+        S.acceptedNow = true;
         return load(true);   // accepted: ask again for the window and the saved times
       }
       again(serverMsg(j) || t().oops);
@@ -426,13 +440,18 @@
     else if (v === 'declined') viewDeclined();
     else if (v === 'closed') viewClosed();
     else if (v === 'password') viewPassword();
+    else if (v === 'oops') viewOops();
     else viewBad(S.j && !S.j.ok ? serverMsg(S.j) : '');
     if (focusHeading === true) { var h = card.querySelector('h1'); if (h) { try { h.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
   }
   function load(focusHeading) {
     return fetch(FN + '?t=' + encodeURIComponent(token))
-      .then(function (r) { return r.json().catch(function () { return null; }); })
-      .then(function (j) { route(j); }, function () { route(null); S.view = 'bad'; })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
+      .then(function (x) {
+        // only the function saying so makes a link bad; no answer, or a server that could not read, is a try again
+        if (x.j && (x.j.ok || x.status < 500)) route(x.j);
+        else S.view = 'oops';
+      }, function () { S.view = 'oops'; })
       .then(function () { S.busy = false; render(focusHeading); });
   }
 

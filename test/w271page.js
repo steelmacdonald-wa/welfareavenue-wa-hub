@@ -47,7 +47,7 @@ const MSG = {
   save: { en: 'We could not save that. Please try again, or contact HR.', fr: "Nous n'avons pas pu enregistrer. Veuillez réessayer, ou communiquer avec les RH." }
 };
 function makeFn(over) {
-  const S = Object.assign({ kind: 'offer', first: 'Amina', role: 'Event Coordinator', lang: 'en', answered: '', closed: false, booked: false, late: false, hire: undefined, slotsSaved: [], acceptDelay: 250, postGrid: null, bad: false }, over || {});
+  const S = Object.assign({ kind: 'offer', first: 'Amina', role: 'Event Coordinator', lang: 'en', answered: '', closed: false, booked: false, late: false, hire: undefined, slotsSaved: [], acceptDelay: 250, postGrid: null, bad: false, callBooked: false, getFail: null }, over || {});
   const calls = [];
   const handler = async route => {
     const req = route.request();
@@ -58,8 +58,10 @@ function makeFn(over) {
     calls.push(call);
     if (S.bad) return send(404, { ok: false, error: 'bad_link', message: MSG.bad_link });
     if (req.method() === 'GET') {
+      if (S.getFail === 'abort') return route.abort();
+      if (S.getFail === '503') return send(503, { ok: false, error: 'unavailable', message: { en: 'We could not reach the server.', fr: 'Nous n\'avons pas pu joindre le serveur.' } });
       const closed = S.closed;
-      return send(200, Object.assign({ ok: true, kind: S.kind, first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed, late: S.late, booked: S.booked, grid: S.kind === 'password' ? null : gridWindow(), slotsSaved: S.slotsSaved }, S.hire !== undefined ? { hire: S.hire } : {}, closed ? { message: MSG.closed } : {}));
+      return send(200, Object.assign({ ok: true, kind: S.kind, first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed, late: S.late, booked: S.booked, callBooked: S.callBooked, grid: S.kind === 'password' ? null : gridWindow(), slotsSaved: S.slotsSaved }, S.hire !== undefined ? { hire: S.hire } : {}, closed ? { message: MSG.closed } : {}));
     }
     const b = call.body || {};
     if (b.a === 'accept' || b.a === 'decline') {
@@ -162,6 +164,10 @@ async function dragFrom(p, a, b) {
     await f.ctx.close();
     f = await open(browser, { qs: '?a=decline' });
     ok('?a=decline on open: no POST, Decline is the marked one', f.posts().length === 0 && await f.page.evaluate(() => document.querySelector('[data-act="decline"]').classList.contains('pre') && !document.querySelector('[data-act="accept"]').classList.contains('pre')));
+    ok('?a=decline: highlighted only, it does not take the focus', await f.page.evaluate(() => document.activeElement !== document.querySelector('[data-act="decline"]')));
+    await f.page.keyboard.press('Enter');
+    await f.page.waitForTimeout(200);
+    ok('?a=decline: a stray Enter declines nothing', f.posts().length === 0);
     await f.ctx.close();
 
     /* 2. Accept under a double click, then the grid (desktop) */
@@ -341,6 +347,51 @@ async function dragFrom(p, a, b) {
     ok('keyboard: Space toggles a cell', JSON.stringify(await marked(f.page)) === JSON.stringify(['2026-10-29T15:00:00Z']));
     await f.page.keyboard.press('Enter');
     ok('keyboard: Enter toggles it back', (await marked(f.page)).length === 0);
+    await f.ctx.close();
+
+    /* the server cannot answer: not a bad link, and a retry works */
+    for (const [how, label] of [['abort', 'network failure'], ['503', 'a 503']]) {
+      const fn = makeFn({ getFail: how });
+      f = await open(browser, { fn });
+      t = await text(f.page);
+      ok(label + ': says it could not reach the server, not that the link is bad', /could not reach the server/i.test(t) && !/does not work/i.test(t), t.slice(0, 300));
+      fn.S.getFail = null;
+      await f.page.locator('#retry').click();
+      await f.page.waitForSelector('[data-act="accept"]', { timeout: 4000 });
+      ok(label + ': Try again loads the page', /Hi Amina/.test(await text(f.page)));
+      await f.ctx.close();
+    }
+    f = await open(browser, { fn: makeFn({ getFail: 'abort' }), qs: '?l=fr' });
+    t = await text(f.page);
+    ok('network failure, in French', /joindre le serveur/.test(t) && /Réessayer/.test(t), t.slice(0, 300));
+    await f.ctx.close();
+    {
+      const fn = makeFn();
+      f = await open(browser, { fn });
+      fn.S.getFail = 'abort';
+      await f.page.locator('[data-act="accept"]').click();
+      await f.page.waitForSelector('#retry', { timeout: 4000 });
+      t = await text(f.page);
+      ok('a failed read after a saved Accept says it was saved', /answer is saved/i.test(t) && /accepted the offer/i.test(t) && !/does not work/i.test(t), t.slice(0, 300));
+      ok('and the answer went once', f.posts().filter(c => c.body.a === 'accept').length === 1);
+      fn.S.getFail = null;
+      await f.page.locator('#retry').click();
+      await f.page.waitForSelector('[data-slot]', { state: 'attached', timeout: 4000 });
+      ok('Try again goes on to the grid', (await f.page.locator('[data-slot]').count()) > 0);
+      await f.ctx.close();
+    }
+
+    /* the call is booked and the 1-on-1 is not: the words say what remains */
+    f = await open(browser, { fn: makeFn({ answered: 'accept' }) });
+    ok('nothing booked: two meetings', /two meetings/.test(await text(f.page)));
+    await f.ctx.close();
+    f = await open(browser, { fn: makeFn({ answered: 'accept', callBooked: true }) });
+    t = await text(f.page);
+    ok('call booked: only the 1-on-1 remains', !/two meetings/.test(t) && /onboarding call is booked/.test(t) && /1-on-1 with your manager/.test(t), t.slice(0, 400));
+    await f.ctx.close();
+    f = await open(browser, { fn: makeFn({ answered: 'accept', callBooked: true }), qs: '?l=fr' });
+    t = await text(f.page);
+    ok('call booked, in French', !/deux rencontres/.test(t) && /appel d.accueil est fixé/.test(t), t.slice(0, 400));
     await f.ctx.close();
   } catch (e) { fail++; console.log('FAIL exception ' + (e && e.stack || e)); }
   await browser.close();

@@ -48,7 +48,7 @@ test('a GET saves nothing and gives the page what it needs', async () => {
   assert.deepEqual(s.snapshot(), before, 'scanner safety: no row changed');
   assert.equal(s.rig.fetchLog.length, 0);
   assert.equal(a.status, 200);
-  assert.deepEqual({ ...a.body, grid: undefined }, { ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, grid: undefined, slotsSaved: [] });
+  assert.deepEqual({ ...a.body, grid: undefined }, { ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [] });
   assert.equal(m.body.kind, 'manager');
   assert.equal(m.body.first, 'Sam');
   assert.equal(m.body.hire, 'Alex');
@@ -130,8 +130,8 @@ test('a double click or a second tab makes one acceptance, one flow and one log 
   assert.ok(both.filter((r) => r.body.repeated).every((r) => r.body.answer === fresh[0].body.answer), 'the others show the first answer');
 });
 
-test('Decline closes the card, logs it and tells the owner through notify', async () => {
-  const s = await setup();
+test('Decline closes the card, logs it and, with no owner on the card, tells the offer signer through notify', async () => {
+  const s = await setup({ cand: { owner: null }, config: { offer_signer_email: 'ruth.owen@welfareavenue.com' } });
   const d = await s.post({ t: s.offer, a: 'decline' });
   assert.equal(d.status, 200);
   assert.deepEqual(d.body, { ok: true, first: 'Alex', role: 'Program Coordinator', lang: 'en', answer: 'decline', answered: 'decline', repeated: false, late: false });
@@ -167,12 +167,13 @@ test('Decline closes the card, logs it and tells the owner through notify', asyn
 });
 
 test('Decline still lands when notify is down, and reaches the offer signer when nobody owns the card', async () => {
-  const down = await setup({ notify: false });
+  const signerCard = { cand: { owner: null }, config: { offer_signer_email: 'valex@welfareavenue.com' } };
+  const down = await setup({ notify: false, ...signerCard });
   down.rig.fetchOn(NOTIFY, { status: 500, text: 'down' });
   assert.equal((await down.post({ t: down.offer, a: 'decline' })).body.answer, 'decline');
   assert.equal(down.cand().status, 'declined');
 
-  const unreachable = await setup({ notify: false });   // nothing registered: the recorder throws
+  const unreachable = await setup({ notify: false, ...signerCard });   // nothing registered: the recorder throws
   assert.equal((await unreachable.post({ t: unreachable.offer, a: 'decline' })).body.answer, 'decline');
   assert.equal(unreachable.cand().status, 'declined');
   assert.equal(unreachable.rig.unregistered().length, 1, 'the attempt was made and logged');
@@ -457,4 +458,85 @@ test('a return visit on a later day: old slots are not shown, and echoing them b
     assert.equal(r.body.error, 'bad_slots', off);
   }
   assert.equal((await s.post({ t: s.offer, a: 'grid', slots: [wednesday, '2026-12-30T14:00:00Z'] })).body.error, 'bad_slots', 'beyond the end of the window');
+});
+
+/* ---------- whole-branch review (final-findings.md) ---------- */
+test('I2: an accepted card later closed shuts both links: contact HR, and nothing saved', async () => {
+  for (const cand of [{ status: 'withdrawn', accepted_on: '2026-10-20' }, { status: 'declined', accepted_on: '2026-10-20', close_reason: 'Changed their mind' }]) {
+    const s = await setup({ cand, flows: [flow()] });
+    const before = s.snapshot();
+    for (const t of [s.offer, s.mgr]) {
+      const g = await s.get(t);
+      assert.equal(g.body.closed, true, cand.status);
+      assert.match(g.body.message.en, /contact HR/);
+      const p = await s.post({ t, a: 'grid', slots: [] });
+      assert.equal(p.body.closed, true);
+      assert.equal(p.body.saved, undefined);
+    }
+    const a = await s.post({ t: s.offer, a: 'accept' });
+    assert.equal(a.body.closed, true, 'no "Thank you" on a closed card');
+    assert.deepEqual(s.snapshot(), before);
+  }
+});
+
+test('I2: a hired card stays open for grids until booked, and someone who declined by link still sees their answer', async () => {
+  const hired = await setup({ cand: { status: 'hired', accepted_on: '2026-10-20' }, flows: [flow()] });
+  assert.equal((await hired.get(hired.offer)).body.closed, false);
+  assert.equal((await hired.get(hired.mgr)).body.closed, false);
+  const no = await setup({ cand: { status: 'declined', close_reason: 'Declined by link' }, flows: [flow()] });
+  const g = await no.get(no.offer);
+  assert.equal(g.body.closed, false);
+  assert.equal(g.body.answered, 'decline');
+  assert.equal((await no.get(no.mgr)).body.closed, true, 'the manager has nothing to do on that card');
+  assert.equal((await no.post({ t: no.offer, a: 'grid', slots: [] })).body.closed, true);
+});
+
+test('D1: a read that fails is a 503 in both languages, never a bad link', async () => {
+  const cases = [
+    ['hub_candidates', (s) => s.offer], ['hub_onboard_flows', (s) => s.offer], ['hub_onboard_flows', (s) => s.mgr],
+    ['app_config', (s) => s.offer], ['hub_onboard_grids', (s) => s.offer],
+  ];
+  for (const [table, tok] of cases) {
+    const s = await setup({ flows: [flow()] });
+    s.db.failOn(table, 'select', 'the database is resting');
+    const g = await s.get(tok(s));
+    assert.equal(g.status, 503, table);
+    assert.equal(g.body.error, 'unavailable');
+    assert.ok(hasBoth(g.body.message));
+    assert.doesNotMatch(JSON.stringify(g.body), /resting/, 'the database\'s words stay inside');
+  }
+  const p = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow()] });
+  p.db.failOn('app_config', 'select', 'x');
+  const r = await p.post({ t: p.offer, a: 'grid', slots: [] });
+  assert.equal(r.status, 503);
+  assert.equal(p.db.rows('hub_onboard_grids').length, 0);
+});
+
+test('D6: telling the owner has a time limit, so a hung notify cannot hold the answer', async () => {
+  const s = await setup({ cand: { owner: null }, config: { offer_signer_email: 'valex@welfareavenue.com' } });
+  await s.post({ t: s.offer, a: 'decline' });
+  assert.ok(s.rig.fetchLog[0].signal instanceof AbortSignal);
+});
+
+test('M1: a default manager\'s first link greets them by name, before anyone has confirmed them', async () => {
+  const s = await setup({ flows: [flow({ manager_member_id: null, manager_link_member_id: 1 })] });
+  assert.equal((await s.get(s.mgr)).body.first, 'Ruth');
+});
+
+test('M8: Decline on a card with an owner leaves the telling to the stage-move trigger, so they get one message', async () => {
+  const s = await setup();
+  await s.post({ t: s.offer, a: 'decline' });
+  assert.equal(s.rig.fetchLog.length, 0);
+  const none = await setup({ cand: { owner: null }, config: { offer_signer_email: 'valex@welfareavenue.com' } });
+  await none.post({ t: none.offer, a: 'decline' });
+  assert.equal(none.rig.fetchLog.length, 1);
+});
+
+test('M11: the hire\'s link says when the call is booked, so the page can word what remains', async () => {
+  const s = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow({ call_at: '2026-11-20T15:00:00Z' })] });
+  const g = await s.get(s.offer);
+  assert.equal(g.body.callBooked, true);
+  assert.equal(g.body.closed, false);
+  const n = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow()] });
+  assert.equal((await n.get(n.offer)).body.callBooked, false);
 });
