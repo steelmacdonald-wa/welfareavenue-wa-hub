@@ -55,7 +55,7 @@ function fx() {
   return f;
 }
 const CAP = { ok: true, token: true, accounts: [{ platform: 'facebook' }, { platform: 'instagram' }], granted: ['pages_manage_posts', 'instagram_content_publish', 'pages_show_list'], missing: ['instagram_manage_comments', 'pages_manage_engagement'], can: { instagram: true, facebook: true, threads: false, linkedin: true, tiktok: false, youtube: false }, mode: { instagram: 'direct', facebook: 'direct', threads: 'reminder', linkedin: 'make', tiktok: 'reminder', youtube: 'reminder' }, settings: {}, studio: {}, connections: {} };
-const CONN = { ok: true, can_change: true, can_meta: true, redirect_uri: 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/social-connect', connections: { threads: { app_saved: true, app_id: '12345…' }, youtube: { app_saved: false }, tiktok: { app_saved: false }, linkedin: { app_saved: false }, make: { saved: true, secret: 'abc123def0', status: 'saved' }, meta: { token: true } } };
+const CONN = { ok: true, platforms: JSON.parse(require('fs').readFileSync(require('path').join(__dirname, 'fx_w277.json'), 'utf8')).studio_platforms.map(p => Object.assign({}, p, { active: true })), can_change: true, can_meta: true, redirect_uri: 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/social-connect', connections: { threads: { app_saved: true, app_id: '12345…' }, youtube: { app_saved: false }, tiktok: { app_saved: false }, linkedin: { app_saved: false }, make: { saved: true, secret: 'abc123def0', status: 'saved' }, meta: { token: true } } };
 const INIT = `
   window.confirm = function () { window.__CONFIRMS = (window.__CONFIRMS || 0) + 1; return true; };
   window.print = function () { window.__PRINTED = document.body.classList.contains('w225print'); };
@@ -193,27 +193,39 @@ const click = (p, sel) => p.evaluate(s => { const el = document.querySelector(s)
     const pr = await f.ev(() => window.__PRINTED);
     ok('Print sets the print class while printing', pr === true, pr);
 
-    /* connections */
+    /* connections (wave277: the Connections page, one list of accounts; the actions go through its hooks) */
+    await f.ev(() => { window.__CONFIRMS = 0; window.__CONFIRM0 = window.confirm; window.confirm = function () { window.__CONFIRMS++; throw new Error('confirm used'); }; });
     await f.hash('#studio/connections?connected=threads', 1500);
     t = await f.ev(HOST);
-    const cards = await f.ev(() => document.querySelectorAll('#w225host .cx > .card').length);
-    ok('Connections: the Threads flash, nine cards (wave250: Meta live and WhatsApp), the redirect address, the Make filter code', /Threads is connected/.test(t) && cards === 9 && /functions\/v1\/social-connect/.test(t) && /abc123def0/.test(t), [cards, t.slice(0, 600)]);
+    const rows = await f.ev(() => Array.from(document.querySelectorAll('#w277conn [data-w277row]')).map(r => r.getAttribute('data-w277row')));
+    ok('Connections: the Threads flash and one row per account (Meta, Threads, LinkedIn, TikTok, YouTube)', /Threads is connected/.test(t) && JSON.stringify(rows) === '["meta","threads","linkedin","tiktok","youtube"]', [rows, t.slice(0, 600)]);
     const hashNow = await f.ev(() => location.hash);
     ok('the flash clears the address', hashNow === '#studio/connections', hashNow);
-    await p.fill('#w225cid-youtube', 'yt-client-1234.apps.googleusercontent.com'); await p.fill('#w225csec-youtube', 'GOCSPX-secret-value'); await click(p, '#w225host [data-w225cx="save_app|youtube"]'); await p.waitForTimeout(500);
+    await click(p, '#w277conn [data-w277row="linkedin"] .w277nm'); await p.waitForTimeout(400);
+    await click(p, '#w277conn [data-w277disc="linkedin"] details.w277adv > summary'); await p.waitForTimeout(200);
+    const li = await f.ev(() => (document.querySelector('#w277conn [data-w277disc="linkedin"]') || {}).innerText || '');
+    ok('LinkedIn: the redirect address, and the Make filter code under Advanced', /functions\/v1\/social-connect/.test(li) && /abc123def0/.test(li), li.slice(0, 600));
+    await click(p, '#w277conn [data-w277row="youtube"] .w277nm'); await p.waitForTimeout(400);
+    await p.fill('#w277id-youtube', 'yt-client-1234.apps.googleusercontent.com'); await p.fill('#w277sec-youtube', 'GOCSPX-secret-value'); await click(p, '#w277conn [data-w277act="save_keys"][data-w277k="youtube"]'); await p.waitForTimeout(500);
     calls = await f.ev(() => window.__CALLS);
     const sa = calls.filter(c => c[1].action === 'save_app')[0];
-    const cleared = await f.ev(() => ({ a: (document.getElementById('w225csec-youtube') || {}).value || '', b: (document.getElementById('w225cid-youtube') || {}).value || '' }));
-    ok('Save the keys sends them to social-connect and empties the boxes', sa && sa[1].platform === 'youtube' && sa[1].secret === 'GOCSPX-secret-value' && cleared.a === '' && cleared.b === '', [sa, cleared]);
-    await click(p, '#w225host [data-w225cx="make_test"]'); await p.waitForTimeout(500);
+    const cleared = await f.ev(() => ({ a: (document.getElementById('w277sec-youtube') || {}).value || '', b: (document.getElementById('w277id-youtube') || {}).value || '' }));
+    ok('Save keys sends them to social-connect and empties the boxes', sa && sa[1].platform === 'youtube' && sa[1].secret === 'GOCSPX-secret-value' && cleared.a === '' && cleared.b === '', [sa, cleared]);
+    await click(p, '#w277conn [data-w277row="linkedin"] .w277nm'); await p.waitForTimeout(400);
+    await f.ev(() => { const d = document.querySelector('#w277conn [data-w277disc="linkedin"] details.w277adv'); if (d) d.open = true; });
+    await click(p, '#w277conn [data-w277act="make_test"]'); await p.waitForTimeout(400);
+    const asked = await f.ev(() => ({ modal: !!document.getElementById('w277modal'), sent: (window.__CALLS || []).some(c => c[1].action === 'make_test') }));
+    await click(p, '#w277modal [data-w277ok]'); await p.waitForTimeout(500);
     calls = await f.ev(() => window.__CALLS);
-    ok('a test post asks first, then sends confirm:true', calls.some(c => c[1].action === 'make_test' && c[1].confirm === true) && (await f.ev(() => window.__CONFIRMS)) >= 1, calls.slice(-2));
-    await click(p, '#w225host [data-w225cx="remind_preview"]'); await p.waitForTimeout(500);
+    ok('a test post asks in the Hub modal first, then sends confirm:true (confirm() never called)', asked.modal && !asked.sent && calls.some(c => c[1].action === 'make_test' && c[1].confirm === true) && (await f.ev(() => window.__CONFIRMS)) === 0, [asked, calls.slice(-2)]);
+    await click(p, '#w277conn [data-w277act="remind_preview"]'); await p.waitForTimeout(500);
     t = await f.ev(HOST);
     ok('Preview a reminder shows who and the Slack text, sending nothing', /To: joy\.dumansi/.test(t) && /Time to post on LinkedIn/.test(t), t.slice(-500));
-    await p.fill('#w225metatok', 'EAAB' + 'x'.repeat(60)); await click(p, '#w225host [data-w225cx="meta_save"]'); await p.waitForTimeout(600);
-    const mt = await f.ev(() => (document.getElementById('w225metatok') || {}).value);
+    await click(p, '#w277conn [data-w277row="meta"] .w277nm'); await p.waitForTimeout(400);
+    await p.fill('#w277metatok', 'EAAB' + 'x'.repeat(60)); await click(p, '#w277conn [data-w277act="meta_save"]'); await p.waitForTimeout(600);
+    const mt = await f.ev(() => (document.getElementById('w277metatok') || {}).value);
     ok('Replace the Meta token empties the box after saving', mt === '', mt);
+    await f.ev(() => { window.confirm = window.__CONFIRM0; });
 
     /* the composer (wave121, rebuilt by parts225): six platforms, the approval banner for a lead */
     await f.hash('#contentcal/2', 2200);

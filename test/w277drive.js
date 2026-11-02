@@ -55,6 +55,10 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     ok('the attention strip names LinkedIn, Expires in 5 days, with Reconnect', attn && /LinkedIn/.test(attn.t) && /Expires in 5 days/.test(attn.t) && attn.b.some(x => /^Reconnect\|reconnect\|linkedin$/.test(x)), attn);
     adminPills = await f.ev(PILLS);
     ok('pills: LinkedIn Expires in 5 days, TikTok To TikTok drafts, Threads Not connected, Meta Connected', adminPills.linkedin === 'Expires in 5 days' && adminPills.tiktok === 'To TikTok drafts' && adminPills.threads === 'Not connected' && adminPills.meta === 'Connected', adminPills);
+    const lefts = await f.ev(() => Array.from(document.querySelectorAll('#w277conn [data-w277pill]')).map(p => Math.round(p.getBoundingClientRect().left)));
+    ok('the pills line up in one column across the rows', lefts.length === 4 && lefts.every(x => x === lefts[0]), lefts);
+    const chipL = await f.ev(() => Array.from(document.querySelectorAll('#w277conn .w277ch')).map(p => Math.round(p.getBoundingClientRect().left)));
+    ok('the chips line up in one column across the rows', chipL.every(x => x === chipL[0]), chipL);
     const chips = await f.ev(() => { const r = document.querySelector('#w277conn [data-w277row="linkedin"]'); return r ? r.innerText.replace(/\s+/g, ' ') : ''; });
     ok('LinkedIn chips: Photos 20, Video, Comments', /Photos 20/.test(chips) && /Video/.test(chips) && /Comments/.test(chips), chips);
     /* the disclosure */
@@ -82,6 +86,7 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     await p.click('#w277conn [data-w277act="disconnect"][data-w277k="tiktok"]'); await p.waitForTimeout(400);
     const modal = await f.ev(() => { const m = document.getElementById('w277modal'); return m ? { vis: !!(m.offsetWidth || m.offsetHeight), t: m.innerText.replace(/\s+/g, ' ') } : null; });
     ok('Disconnect opens #w277modal (no confirm)', modal && modal.vis && /TikTok/.test(modal.t), modal);
+    ok('a destructive modal focuses Cancel, so Enter does not disconnect', await f.ev(() => !!(document.activeElement && document.activeElement.hasAttribute('data-w277cancel'))));
     ok('nothing sent before the modal is answered', (await calls(f, 'disconnect')).length === 0);
     await p.click('#w277modal [data-w277ok]'); await p.waitForTimeout(700);
     const dc = await calls(f, 'disconnect');
@@ -119,7 +124,22 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     await f.close();
   }
 
-  /* 3. the seg is ASCII with no dashes */
+  /* 3. no registry in the status answer: wave225's own list, every action still there */
+  {
+    const st = status(true); delete st.platforms;
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#studio/connections', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT(st), wait: 5000 });
+    const v = await f.ev(() => ({ rows: Array.from(document.querySelectorAll('#w277conn [data-w277row]')).map(r => r.getAttribute('data-w277row')), note: (document.querySelector('#w277conn .w277note') || {}).textContent || '', chips: document.querySelectorAll('#w277conn .w277ch span').length, keys: ['threads', 'linkedin', 'tiktok', 'youtube'].every(k => document.getElementById('w277id-' + k) && document.getElementById('w277sec-' + k)), tok: !!document.getElementById('w277metatok'), acts: Array.from(new Set(Array.from(document.querySelectorAll('#w277conn [data-w277act]')).map(b => b.getAttribute('data-w277act')))) }));
+    ok('no registry: rows from the wave225 list (Meta, Threads, LinkedIn, TikTok, YouTube), no chips', JSON.stringify(v.rows) === '["meta","threads","linkedin","tiktok","youtube"]' && v.chips === 0, v);
+    ok('no registry: the quiet note under the masthead', v.note === 'Platform details are unavailable right now; the accounts below still work.', v.note);
+    ok('no registry: keys, Connect, Disconnect, Save keys and the Meta token all reachable', v.keys && v.tok && ['connect', 'disconnect', 'save_keys', 'meta_check', 'meta_save', 'reconnect'].every(a => v.acts.indexOf(a) >= 0), v.acts);
+    await f.ev(() => { document.getElementById('w277id-youtube').value = 'yt-id-12345'; document.getElementById('w277sec-youtube').value = 'yt-secret-12345'; document.querySelector('#w277conn [data-w277act="save_keys"][data-w277k="youtube"]').click(); });
+    await f.page.waitForTimeout(600);
+    ok('no registry: Save keys still sends save_app', (await calls(f, 'save_app')).some(c => c[1].platform === 'youtube'));
+    ok('no page errors (no registry)', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+
+  /* 4. the seg is ASCII with no dashes */
   {
     const seg = fs.readFileSync(path.join(__dirname, '../build/src/277_wave277.seg'), 'utf8');
     ok('the seg has no em or en dash (raw or escaped)', !/[\u2013\u2014]/.test(seg) && !/\\u201[34]/i.test(seg) && !/&mdash;|&ndash;/.test(seg));

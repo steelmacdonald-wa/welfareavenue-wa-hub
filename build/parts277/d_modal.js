@@ -21,6 +21,6 @@
       function onBack(e) { if (e.target === back) finish(false); }
       function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } }
       box.addEventListener('click', onClick); back.addEventListener('click', onBack); document.addEventListener('keydown', onKey, true);
-      setTimeout(function () { var b = document.querySelector('#w277modal [data-w277ok]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 0);
+      setTimeout(function () { var b = document.querySelector(danger ? '#w277modal [data-w277cancel]' : '#w277modal [data-w277ok]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 0);
     });
   }

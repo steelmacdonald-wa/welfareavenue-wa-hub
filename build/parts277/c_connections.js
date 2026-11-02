@@ -116,7 +116,7 @@
   function connectHtml() {
     var S = St(); if (!S) return '';
     if (!S.conn) { loadConn().then(paint); return '<div id="w277conn" aria-busy="true"><div class="w277card"><div class="w277empty">Checking the connections.</div></div></div>'; }
-    if (S.conn.error) return '<div id="w277conn"><div class="w277card"><div class="w277empty">Could not read the connections. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Try again</a></div></div></div>';
+    if (S.conn.error) return '<div id="w277conn"><div class="w277card"><div class="w277empty">Could not read the connections: ' + E(S.conn.error) + ' <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Try again</a></div></div></div>';
     var ps = platforms(), meta = ps.filter(function (p) { return META.indexOf(p.key) >= 0; }), rows = [], metaDone = false;
     ps.forEach(function (p) {
       if (META.indexOf(p.key) >= 0) {
@@ -130,6 +130,7 @@
     var fl = S.keys.flash;
     return '<div id="w277conn">'
       + (fl ? '<div class="w277flash' + (fl.ok ? '' : ' bad') + '" role="status">' + E(fl.text) + '</div>' : '')
+      + (noRegistry() ? '<p class="w277note" role="status">Platform details are unavailable right now; the accounts below still work.</p>' : '')
       + '<div class="w277bar"><span>Keys and tokens go into the vault and are never shown again.</span>' + btn('reload', '', 'Check again', 'sm') + '</div>'
       + attnHtml()
       + (rows.length ? '<div class="w277card" role="list">' + rows.join('') + '</div>' : '<div class="w277card"><div class="w277empty">No platforms are on yet. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Check again</a></div></div>')

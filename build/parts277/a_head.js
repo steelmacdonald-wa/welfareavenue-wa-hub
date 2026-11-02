@@ -55,8 +55,19 @@
   function connOf(k) { var c = conn(); return (c && c.connections && c.connections[k]) || {}; }
   function canChange() { var c = conn(); return !!(c && c.can_change); }
   function canMeta() { var c = conn(); return !!(c && c.can_meta); }
+  /* without the registry (status answered no platforms): wave225's own list, no chips, no steps */
+  function fallbackPlatforms() {
+    var x = w(), PLX = (x && x.PLX) || {}, ORD = (x && x.PORDER) || [];
+    return ORD.filter(function (k) { return PLX[k]; }).map(function (k, i) {
+      var meta = META.indexOf(k) >= 0, modes = { direct: 'Posts directly', reminder: 'Reminder to post by hand' };
+      if (k === 'linkedin') modes.make = 'Posts through Make'; if (k === 'tiktok') modes.drafts = 'Lands in TikTok drafts';
+      return { key: k, label: PLX[k][0], short: PLX[k][1], colour: PLX[k][2], sort: i + 1, auth: meta ? 'meta_token' : 'oauth', caps: {}, scopes: [], steps: [], modes: modes, active: true };
+    });
+  }
+  function noRegistry() { var S = St(), c = conn(); return !!c && !c.error && !((S && S.platforms && S.platforms.length) || (c.platforms && c.platforms.length)); }
   function platforms() {
     var S = St(), list = (S && S.platforms && S.platforms.length ? S.platforms : (conn() && conn().platforms)) || [];
+    if (!list.length && noRegistry()) list = fallbackPlatforms();
     return list.filter(function (p) { return p && p.key && p.active !== false; }).slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
   }
   function platOf(k) { return platforms().filter(function (p) { return p.key === k; })[0] || null; }

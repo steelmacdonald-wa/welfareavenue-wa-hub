@@ -7,6 +7,7 @@
     css.textContent = ''
       + '#w277conn{font-family:' + BODY + ';color:' + INK + ';max-width:1100px;font-size:14.5px;line-height:1.45;}'
       + C + '*{box-sizing:border-box;}'
+      + C + '.w277note{margin:0 0 10px;color:' + MUTED + ';font-size:13.5px;}'
       + C + '.w277bar{display:flex;align-items:center;gap:12px;margin:0 0 12px;color:' + MUTED + ';font-size:13.5px;}' + C + '.w277bar span{flex:1;min-width:0;}'
       + C + '.w277flash{border:1px solid ' + LINE + ';border-radius:14px;padding:10px 14px;margin:0 0 12px;background:' + SURF + ';}' + C + '.w277flash.bad{border-color:' + FLAG + ';background:none;color:' + FLAG + ';}'
       /* the attention strip: flag on a hairline, no fill */
@@ -16,8 +17,8 @@
       /* the card and its rows */
       + C + '.w277card{background:' + CARD + ';border:1px solid ' + LINE + ';border-radius:18px;margin:0 0 14px;overflow:hidden;}'
       + C + '.w277item + .w277item{border-top:1px solid ' + LINE + ';}'
-      + C + '.w277row{display:grid;grid-template-columns:minmax(28px,max-content) auto auto minmax(0,1fr) auto;grid-template-areas:"mk nm pl ch ac";align-items:center;gap:6px 12px;min-height:48px;padding:8px 16px;cursor:pointer;transition:transform 160ms ' + OUT + ',background-color 120ms ease;}'
-      + C + '.w277row:active{transform:scale(.97);}'
+      + C + '.w277row{display:grid;grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;grid-template-areas:"mk nm pl ch ac";align-items:center;gap:6px 12px;min-height:48px;padding:8px 16px;cursor:pointer;transition:transform 160ms ' + OUT + ',background-color 120ms ease;}'
+      + C + '.w277row:active:not(:has(.w277btn:active)){transform:scale(.97);}'
       + C + '.w277mk{grid-area:mk;display:flex;}' + C + '.w277nm{grid-area:nm;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}'
       + C + '.w277pl{grid-area:pl;}' + C + '.w277ch{grid-area:ch;display:flex;flex-wrap:wrap;gap:4px 12px;color:' + MUTED + ';font-size:12.5px;}' + C + '.w277act{grid-area:ac;display:flex;justify-content:flex-end;}'
       + C + '.w277m{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;color:#FFFAF2;font:700 12px ' + HEAD + ';letter-spacing:.02em;flex:none;}'
@@ -59,6 +60,15 @@
       + '@media (hover:hover) and (pointer:fine){' + C + '.w277row:hover{background:' + SURF + ';}' + '#w277conn .w277btn:hover,#w277modal .w277btn:hover{background:' + SURF2 + ';}' + '#w277conn .w277btn.gold:hover,#w277modal .w277btn.gold:hover{background:' + GOLD + ';filter:brightness(1.05);}}'
       /* reduced motion: opacity stays, the height jumps */
       + '@media (prefers-reduced-motion:reduce){' + C + '.w277disc,' + C + '.w277disc.open{transition:opacity 120ms ease;}' + C + '.w277row,' + C + '.w277btn,' + C + '.w277chev{transition:none;}' + C + '.w277row:active,' + C + '.w277btn:active{transform:none;}}'
+      /* wide: the rows share the card's columns (subgrid) so names, pills and chips line up; without subgrid, a fixed name column */
+      + '@supports not (grid-template-columns:subgrid){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;}}'
+      + '@supports (grid-template-columns:subgrid){@media (min-width:621px){'
+      + C + '.w277card[role="list"]{display:grid;grid-template-columns:minmax(28px,max-content) minmax(140px,1fr) auto minmax(0,1.2fr) auto;column-gap:12px;}'
+      + C + '.w277card[role="list"] > .w277item{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277row{grid-template-columns:subgrid;grid-template-areas:none;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277disc{grid-column:1 / -1;}'
+      + C + '.w277row > .w277mk{grid-area:auto;grid-column:1;grid-row:1;}' + C + '.w277row > .w277nm{grid-area:auto;grid-column:2;grid-row:1;}' + C + '.w277row > .w277pl{grid-area:auto;grid-column:3;grid-row:1;}' + C + '.w277row > .w277ch{grid-area:auto;grid-column:4;grid-row:1;}' + C + '.w277row > .w277act{grid-area:auto;grid-column:5;grid-row:1;}'
+      + '}}'
       /* 620: the chips wrap under the name, the action stays on the right */
       + '@media (max-width:620px){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(0,1fr) auto auto;grid-template-areas:"mk nm pl ac" ". ch ch ch";}' + C + '.w277body{padding-left:16px;}}'
       /* 480: two lines, the action full width */

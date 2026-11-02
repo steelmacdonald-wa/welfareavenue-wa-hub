@@ -87187,7 +87187,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, hashtags: hashtagsHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
     m250: function () { return M250; }, load250: load250, loadAds250: loadAds250,   /* waves 250 to 254 */
     monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl,
-    W: W, posts: posts, loadConn: loadConn, connAct: connAct, modeOf: modeOf, connectExtra: connectExtra250   /* wave277 reuses these */
+    W: W, posts: posts, loadConn: loadConn, connAct: connAct, modeOf: modeOf, connectExtra: connectExtra250, PLX: PLX, PORDER: PORDER   /* wave277 reuses these */
   };
 })();
 /* =====================================================================
@@ -87247,8 +87247,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function connOf(k) { var c = conn(); return (c && c.connections && c.connections[k]) || {}; }
   function canChange() { var c = conn(); return !!(c && c.can_change); }
   function canMeta() { var c = conn(); return !!(c && c.can_meta); }
+  /* without the registry (status answered no platforms): wave225's own list, no chips, no steps */
+  function fallbackPlatforms() {
+    var x = w(), PLX = (x && x.PLX) || {}, ORD = (x && x.PORDER) || [];
+    return ORD.filter(function (k) { return PLX[k]; }).map(function (k, i) {
+      var meta = META.indexOf(k) >= 0, modes = { direct: 'Posts directly', reminder: 'Reminder to post by hand' };
+      if (k === 'linkedin') modes.make = 'Posts through Make'; if (k === 'tiktok') modes.drafts = 'Lands in TikTok drafts';
+      return { key: k, label: PLX[k][0], short: PLX[k][1], colour: PLX[k][2], sort: i + 1, auth: meta ? 'meta_token' : 'oauth', caps: {}, scopes: [], steps: [], modes: modes, active: true };
+    });
+  }
+  function noRegistry() { var S = St(), c = conn(); return !!c && !c.error && !((S && S.platforms && S.platforms.length) || (c.platforms && c.platforms.length)); }
   function platforms() {
     var S = St(), list = (S && S.platforms && S.platforms.length ? S.platforms : (conn() && conn().platforms)) || [];
+    if (!list.length && noRegistry()) list = fallbackPlatforms();
     return list.filter(function (p) { return p && p.key && p.active !== false; }).slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
   }
   function platOf(k) { return platforms().filter(function (p) { return p.key === k; })[0] || null; }
@@ -87307,6 +87318,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     css.textContent = ''
       + '#w277conn{font-family:' + BODY + ';color:' + INK + ';max-width:1100px;font-size:14.5px;line-height:1.45;}'
       + C + '*{box-sizing:border-box;}'
+      + C + '.w277note{margin:0 0 10px;color:' + MUTED + ';font-size:13.5px;}'
       + C + '.w277bar{display:flex;align-items:center;gap:12px;margin:0 0 12px;color:' + MUTED + ';font-size:13.5px;}' + C + '.w277bar span{flex:1;min-width:0;}'
       + C + '.w277flash{border:1px solid ' + LINE + ';border-radius:14px;padding:10px 14px;margin:0 0 12px;background:' + SURF + ';}' + C + '.w277flash.bad{border-color:' + FLAG + ';background:none;color:' + FLAG + ';}'
       /* the attention strip: flag on a hairline, no fill */
@@ -87316,8 +87328,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       /* the card and its rows */
       + C + '.w277card{background:' + CARD + ';border:1px solid ' + LINE + ';border-radius:18px;margin:0 0 14px;overflow:hidden;}'
       + C + '.w277item + .w277item{border-top:1px solid ' + LINE + ';}'
-      + C + '.w277row{display:grid;grid-template-columns:minmax(28px,max-content) auto auto minmax(0,1fr) auto;grid-template-areas:"mk nm pl ch ac";align-items:center;gap:6px 12px;min-height:48px;padding:8px 16px;cursor:pointer;transition:transform 160ms ' + OUT + ',background-color 120ms ease;}'
-      + C + '.w277row:active{transform:scale(.97);}'
+      + C + '.w277row{display:grid;grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;grid-template-areas:"mk nm pl ch ac";align-items:center;gap:6px 12px;min-height:48px;padding:8px 16px;cursor:pointer;transition:transform 160ms ' + OUT + ',background-color 120ms ease;}'
+      + C + '.w277row:active:not(:has(.w277btn:active)){transform:scale(.97);}'
       + C + '.w277mk{grid-area:mk;display:flex;}' + C + '.w277nm{grid-area:nm;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}'
       + C + '.w277pl{grid-area:pl;}' + C + '.w277ch{grid-area:ch;display:flex;flex-wrap:wrap;gap:4px 12px;color:' + MUTED + ';font-size:12.5px;}' + C + '.w277act{grid-area:ac;display:flex;justify-content:flex-end;}'
       + C + '.w277m{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;color:#FFFAF2;font:700 12px ' + HEAD + ';letter-spacing:.02em;flex:none;}'
@@ -87359,6 +87371,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '@media (hover:hover) and (pointer:fine){' + C + '.w277row:hover{background:' + SURF + ';}' + '#w277conn .w277btn:hover,#w277modal .w277btn:hover{background:' + SURF2 + ';}' + '#w277conn .w277btn.gold:hover,#w277modal .w277btn.gold:hover{background:' + GOLD + ';filter:brightness(1.05);}}'
       /* reduced motion: opacity stays, the height jumps */
       + '@media (prefers-reduced-motion:reduce){' + C + '.w277disc,' + C + '.w277disc.open{transition:opacity 120ms ease;}' + C + '.w277row,' + C + '.w277btn,' + C + '.w277chev{transition:none;}' + C + '.w277row:active,' + C + '.w277btn:active{transform:none;}}'
+      /* wide: the rows share the card's columns (subgrid) so names, pills and chips line up; without subgrid, a fixed name column */
+      + '@supports not (grid-template-columns:subgrid){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;}}'
+      + '@supports (grid-template-columns:subgrid){@media (min-width:621px){'
+      + C + '.w277card[role="list"]{display:grid;grid-template-columns:minmax(28px,max-content) minmax(140px,1fr) auto minmax(0,1.2fr) auto;column-gap:12px;}'
+      + C + '.w277card[role="list"] > .w277item{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277row{grid-template-columns:subgrid;grid-template-areas:none;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277disc{grid-column:1 / -1;}'
+      + C + '.w277row > .w277mk{grid-area:auto;grid-column:1;grid-row:1;}' + C + '.w277row > .w277nm{grid-area:auto;grid-column:2;grid-row:1;}' + C + '.w277row > .w277pl{grid-area:auto;grid-column:3;grid-row:1;}' + C + '.w277row > .w277ch{grid-area:auto;grid-column:4;grid-row:1;}' + C + '.w277row > .w277act{grid-area:auto;grid-column:5;grid-row:1;}'
+      + '}}'
       /* 620: the chips wrap under the name, the action stays on the right */
       + '@media (max-width:620px){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(0,1fr) auto auto;grid-template-areas:"mk nm pl ac" ". ch ch ch";}' + C + '.w277body{padding-left:16px;}}'
       /* 480: two lines, the action full width */
@@ -87483,7 +87504,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function connectHtml() {
     var S = St(); if (!S) return '';
     if (!S.conn) { loadConn().then(paint); return '<div id="w277conn" aria-busy="true"><div class="w277card"><div class="w277empty">Checking the connections.</div></div></div>'; }
-    if (S.conn.error) return '<div id="w277conn"><div class="w277card"><div class="w277empty">Could not read the connections. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Try again</a></div></div></div>';
+    if (S.conn.error) return '<div id="w277conn"><div class="w277card"><div class="w277empty">Could not read the connections: ' + E(S.conn.error) + ' <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Try again</a></div></div></div>';
     var ps = platforms(), meta = ps.filter(function (p) { return META.indexOf(p.key) >= 0; }), rows = [], metaDone = false;
     ps.forEach(function (p) {
       if (META.indexOf(p.key) >= 0) {
@@ -87497,6 +87518,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var fl = S.keys.flash;
     return '<div id="w277conn">'
       + (fl ? '<div class="w277flash' + (fl.ok ? '' : ' bad') + '" role="status">' + E(fl.text) + '</div>' : '')
+      + (noRegistry() ? '<p class="w277note" role="status">Platform details are unavailable right now; the accounts below still work.</p>' : '')
       + '<div class="w277bar"><span>Keys and tokens go into the vault and are never shown again.</span>' + btn('reload', '', 'Check again', 'sm') + '</div>'
       + attnHtml()
       + (rows.length ? '<div class="w277card" role="list">' + rows.join('') + '</div>' : '<div class="w277card"><div class="w277empty">No platforms are on yet. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Check again</a></div></div>')
@@ -87527,7 +87549,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       function onBack(e) { if (e.target === back) finish(false); }
       function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } }
       box.addEventListener('click', onClick); back.addEventListener('click', onBack); document.addEventListener('keydown', onKey, true);
-      setTimeout(function () { var b = document.querySelector('#w277modal [data-w277ok]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 0);
+      setTimeout(function () { var b = document.querySelector(danger ? '#w277modal [data-w277cancel]' : '#w277modal [data-w277ok]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 0);
     });
   }
 
@@ -87587,7 +87609,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (a === 'health') {
         S277.busy[tag] = true; paint();
         var hr = await fn('social-connect', { action: 'health' });
-        if (hr && hr.connections) { S.conn = hr; S.platforms = hr.platforms || S.platforms; }
+        if (hr && hr.connections) { var keep = { can_change: S.conn.can_change, can_meta: S.conn.can_meta, redirect_uri: S.conn.redirect_uri }; Object.assign(S.conn, hr, keep); if (hr.platforms && hr.platforms.length) S.platforms = hr.platforms; }
         S277.busy[tag] = false; toastS('Checked again'); paint(); return;
       }
       if (a === 'connect' || a === 'reconnect') {

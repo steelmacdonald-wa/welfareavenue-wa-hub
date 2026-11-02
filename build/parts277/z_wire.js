@@ -55,7 +55,7 @@
       if (a === 'health') {
         S277.busy[tag] = true; paint();
         var hr = await fn('social-connect', { action: 'health' });
-        if (hr && hr.connections) { S.conn = hr; S.platforms = hr.platforms || S.platforms; }
+        if (hr && hr.connections) { var keep = { can_change: S.conn.can_change, can_meta: S.conn.can_meta, redirect_uri: S.conn.redirect_uri }; Object.assign(S.conn, hr, keep); if (hr.platforms && hr.platforms.length) S.platforms = hr.platforms; }
         S277.busy[tag] = false; toastS('Checked again'); paint(); return;
       }
       if (a === 'connect' || a === 'reconnect') {
