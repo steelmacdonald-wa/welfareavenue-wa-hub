@@ -621,7 +621,7 @@ async function signerSet(email: string, who: Who, auth: string) {
 }
 
 /* ---------- wave216c: the open positions' job descriptions, public as PDFs ---------- */
-function slugOf(s: string): string { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'role'; }
+function slugOf(s: string): string { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'role'; }
 async function jdPublish(force: boolean) {
   const { data: open } = await svc.rpc('wa216_open_positions');
   const ids = ((open || []) as Array<{ id: number }>).map(p => Number(p.id));
