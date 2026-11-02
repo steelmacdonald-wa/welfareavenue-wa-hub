@@ -11,8 +11,9 @@ Nothing is rebuilt. Every card the older waves draw on Home stays theirs, with i
 | Up next | `#w272next` | Open task uses `w116Board.open`; Mark as done uses `toggleTask` with a 5 second Undo; Do this later is per device, for the day |
 | My tasks, today first | `.w272lt`, `#w272laterbtn` | The rest waits behind Later, remembered per device. Wave109's own tick and Undo are unchanged |
 | Your apps | `#w272apps` | `WA_APP.yours()`. The launcher stays |
-| Set up your Hub | `#w272setup` | Stands in for `#w219card` while it shows. Not now hides it; a button under Show everything brings it back |
-| The small note | `#w272tip` | At most twice per device, 14 days apart, 25 seconds after the start, only on Home, only when no other window is open. No scrim, takes no focus |
+| Set up your Hub | `#w272setup` | Stands in for `#w219card` and the Policies card. Steel (02/11/26): no Not now; every row stays until done and the card leaves on its own. Rows: the app, notifications, each required policy not yet signed (Open, then Sign; the same tables as wave105). Notifications are turned on through `__wa219.turnOn()` with the result said in the row, never only in a toast; blocked permission shows the browser's own steps and Check again; coming back to the tab checks again |
+| The small note | `#w272tip` | At most twice per device, 14 days apart, on any page but Home (Home has the card), only when no other window is open. No scrim, takes no focus |
+| The design pass (02/11/26) | `b_home.js` | One dark surface (Up next), one warm surface (Set up your Hub), every other card a quiet group. Native ticks drawn as round controls, 48px rows, hairlines, press feedback on every button, hover only with a mouse, a 140 ms blur crossfade when Up next changes, nothing animating on arrival. The next serving (wave171) and announcements (wave180) are quieted to match |
 | How-to window | `#w272sheet` | Tabs for iPhone, Android and Computer |
 | Films | `e_howto.js`, `window.w272howto(host, kind)` | Silent. Every frame is a function of `seek(t)`. Autoplay stops for reduced motion |
 | Directors | `d_director.js`, wave74, wave260 | Greeting, Set up your Hub (the app only), their meetings, their Board pages |
@@ -40,6 +41,9 @@ Mentions (`#w65menbox`) is always on Home for staff, with its empty message when
 
 ## Tests
 `test/w272drive.js`: admin, leader, plain member and HR member, computer and phone, then a director on both. `test/w272film.js` renders stills of the films. On Windows set `WA_CHROME` to a Chrome path, and `NODE_PATH` to a folder with playwright. `build/assemble_all.js` is the same assembly as `build.sh`, without a slow shell loop.
+
+## Second release, 02/11/26 (Steel: notifications did not turn on; redesign with Emil's craft; Policies only until signed; no Not now)
+The first live cut turned notifications on through wave219's button, whose only reply was a toast: when something failed, nothing on the card said so. Now the row itself reports: Asking your browser, the browser's own steps when it is blocked (the installed app on Windows included), the reason when a step fails, Try again, Check again, and a fresh check whenever the tab comes back. Steel's own devices on 02/11: two FCM rows, the app's one last saved 30/10 (a later send found one gone), so his app window most likely holds a subscription the Hub no longer has; Turn on re-saves it.
 
 ## Undo
 Run the same pipeline with `build/candidate.html` from the commit before this wave, set `pages.mypage` back to none on the board profile, and set `onboarding_template` row `wa272appsetup` to `active = false` (the trigger removes it from active onboardings).
