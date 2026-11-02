@@ -37,7 +37,8 @@ const INIT = `window.__INV = []; window.__WA_INVOKE = function (name, opts) { va
     { id: 'AC2', at: '2026-09-23T14:00:00Z', direction: 'outgoing', status: 'no-answer', duration: 0, line: 'Ops', answered: false, logged: false } ] }, error: null };
   if (b.action === 'quo_log') return { data: { ok: true, call: { id: 77, candidate_id: b.id, outcome: 'reached', quo_call_id: b.call_id, summary: 'Talked about the role', transcript: 'Us: hi', called_at: '2026-09-24T14:00:00Z' } }, error: null };
   if (b.action === 'offer_preview') return { data: { ok: true, html: '<p>Letter</p>', role: 'Operations Manager', mail_mode: 'test', test_to: 'test@x', signer: 'Steel', signer_title: 'Chair',
-    manager: { default: { member_id: 5, name: 'Ada Bell', how: 'reports_to' }, choices: [{ id: 5, name: 'Ada Bell' }, { id: 3, name: 'Old Hand' }, { id: 7, name: 'Ruth Owen' }] } }, error: null };
+    manager: b.id === 9403 ? { default: { member_id: 8, name: 'Nora Gone', how: 'reports_to', available: false, why: 'no_email' }, choices: [{ id: 5, name: 'Ada Bell' }, { id: 7, name: 'Ruth Owen' }] }
+      : { default: { member_id: 5, name: 'Ada Bell', how: 'reports_to', available: true, why: null }, choices: [{ id: 5, name: 'Ada Bell' }, { id: 3, name: 'Old Hand' }, { id: 7, name: 'Ruth Owen' }] } }, error: null };
   /* wave275: the server's refusal, as functions.invoke gives it (a non-2xx status, the body in error.context) */
   if (b.action === 'offer_send' && String(b.f && b.f.manager_member_id) === '3') return { data: null, error: { message: 'Edge Function returned a non-2xx status code', context: { json: function () { return Promise.resolve({ error: 'Old Hand is no longer active on the roster. Choose another onboarding manager.', code: 'manager_inactive' }); } } } };
   if (b.action === 'offer_send') return { data: { ok: true, emailed: { mode: 'test' }, signer: 'Steel', manager: { asked: true, name: 'Ada Bell' }, warnings: [] }, error: null };
@@ -155,6 +156,11 @@ const cand = (id) => `w197.state().cands.filter(function (c) { return c.id === $
   ok('Offer w275: the panel opens with the position\'s manager chosen', await f.ev(() => (document.getElementById('w211o_manager') || {}).value === '5'));
   await f.page.selectOption('#w211o_manager', '7'); await f.page.selectOption('#w211o_hours', '6'); await f.page.click('#w211m [data-w211a="osend"][data-mail="1"]'); await f.page.waitForTimeout(600);
   ok('Offer w275: it sends the hours and the manager chosen', await f.ev(() => { var s = window.__INV.filter(x => x.body.action === 'offer_send').pop(); return s && String(s.body.f.hours) === '6' && String(s.body.f.manager_member_id) === '7' && s.body.email === true && !document.getElementById('w211m').classList.contains('open'); }), await f.ev(() => window.__INV.filter(x => x.body.action === 'offer_send').map(x => x.body.f)));
+  /* a position whose manager cannot be asked (no email on the roster): the select stays on the placeholder and the note says why */
+  await f.ev(() => w211.askOffer(9403)); await f.page.waitForTimeout(600);
+  ok('Offer w275: an unavailable default is not chosen, and the note says why', await f.ev(() => { var m = document.getElementById('w211o_manager'), n = document.getElementById('w211o_mnote'); return m && m.value === '' && !Array.from(m.options).some(o => o.value === '8') && n && /Nora Gone is who the position reports to, but has no email on the roster, so choose someone else\./.test(n.textContent) && !/Nora Gone is who the position reports to\./.test(n.textContent); }), await f.ev(() => (document.getElementById('w211o_mnote') || {}).textContent));
+  await f.page.click('#w211m [data-w211a="osend"][data-mail="1"]'); await f.page.waitForTimeout(300);
+  ok('Offer w275: so it will not send until someone is chosen', await f.ev(() => /Choose the onboarding manager/.test((document.querySelector('#w211m .w211err') || {}).textContent || '') && window.__INV.filter(x => x.body.action === 'offer_send').length === 1));
   ok('Offer w275: no page errors', f.errs.length === 0, f.errs);
   await f.close();
 

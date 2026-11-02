@@ -612,22 +612,31 @@ async function offerCheck(f: OfferF): Promise<{ hours: number; mgr: Mgr }> {
   if (!email) throw new Refused('manager_no_email', name + ' has no email on the roster, so the Hub cannot ask them for times. Add it on their roster profile, or choose another onboarding manager.');
   return { hours, mgr: { id: mid, name, email } };
 }
-/* the panel's "Onboarding manager": the position's manager as wa271_default_manager tells it (and how), and the active roster to choose from */
+/* the panel's "Onboarding manager": the position's manager as wa271_default_manager tells it (and how), and the roster to choose from: active, named and
+   with an email, the same test offerCheck makes, so the panel never offers someone the send refuses. A default who fails it is available: false, with why
+   ('inactive' | 'no_email'), and the panel leaves the choice to HR. */
 async function managerChoices(id: number) {
-  let def: { member_id: number | null; name: string | null; how: string } = { member_id: null, name: null, how: 'none' };
+  let def: { member_id: number | null; name: string | null; how: string; available: boolean; why: string | null } = { member_id: null, name: null, how: 'none', available: false, why: null };
   try {
     const { data, error } = await svc.rpc('wa271_default_manager', { p_candidate: id });
-    if (!error && data) def = { member_id: (data as any).member_id ?? null, name: (data as any).name ?? null, how: String((data as any).how || 'none') };
+    if (!error && data) def = { member_id: (data as any).member_id ?? null, name: (data as any).name ?? null, how: String((data as any).how || 'none'), available: false, why: null };
   } catch (_) { /* none: HR chooses */ }
-  const { data: tm } = await svc.from('team_members').select('id, name, active');
-  const choices = ((tm || []) as any[]).filter((m) => m.active !== false && String(m.name || '').trim()).map((m) => ({ id: m.id, name: String(m.name).trim() })).sort((a, b) => a.name.localeCompare(b.name));
+  const { data: tm } = await svc.from('team_members').select('id, name, email, active');
+  const all = (tm || []) as any[];
+  const ok = (m: any) => m.active !== false && !!String(m.name || '').trim() && !!String(m.email || '').trim();
+  const choices = all.filter(ok).map((m) => ({ id: m.id, name: String(m.name).trim() })).sort((a, b) => a.name.localeCompare(b.name));
+  if (def.member_id != null) {
+    const m = all.find((x) => String(x.id) === String(def.member_id));
+    def.available = !!m && ok(m);
+    def.why = def.available ? null : !m || m.active === false ? 'inactive' : 'no_email';
+  }
   return { default: def, choices };
 }
 /* the manager is asked for times: wa275_offer_sent made the offered flow with the card's manager (a flow already there keeps its row); an offer sent again
    with another manager moves the flow to them while nothing is proposed. Then onboard-run ask_manager {flow_id}, with the trigger secret. Never fails the offer. */
 const LATER = ' The Hub\'s hourly job tries again, or HR can send the link from the card.';
 const endStop = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : s.trim() + '.');
-async function askManager(id: number, m: Mgr, warnings: string[]): Promise<{ asked: boolean; name: string; skipped?: string }> {
+async function askManager(id: number, m: Mgr, warnings: string[]): Promise<{ asked: boolean; name: string; skipped?: string; already?: boolean }> {
   const out = { asked: false, name: m.name };
   const { data: f, error } = await svc.from('hub_onboard_flows').select('id, status, manager_member_id, proposed_at, hire_answer, call_at').eq('candidate_id', id).order('id', { ascending: false }).limit(1).maybeSingle();
   if (error || !f) { warnings.push('The onboarding card for this offer was not found' + (error ? ' (' + error.message + ')' : '') + ', so ' + m.name + ' was not asked for times yet. Tell Steel.'); return out; }
@@ -650,7 +659,8 @@ async function askManager(id: number, m: Mgr, warnings: string[]): Promise<{ ask
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { warnings.push(m.name + ' was not asked for times yet: ' + endStop(String(j?.message || j?.error || 'onboard-run said ' + r.status)) + LATER); return out; }
     for (const w of (Array.isArray(j?.warnings) ? j.warnings : [])) warnings.push(String(w));
-    if (j?.skipped) return { asked: j.skipped === 'already_sent', name: m.name, skipped: String(j.skipped) };
+    if (j?.skipped === 'already_sent') return { asked: true, already: true, name: m.name, skipped: 'already_sent' };   // asked before: nothing sent this time
+    if (j?.skipped) { warnings.push(m.name + ' was not asked for times: ' + endStop(String(j.reason || j.skipped))); return { ...out, skipped: String(j.skipped) }; }
     return { asked: true, name: m.name };
   } catch (e) {
     warnings.push(m.name + ' was not asked for times yet: ' + endStop(String((e as Error).message || e)) + LATER);
@@ -713,8 +723,12 @@ async function offerSend(id: number, f0: OfferF, sendEmail: boolean, who: Who) {
   const saved = await svc.from('hub_candidates').update({ ...card, offer_hours: hours, onboard_manager_id: mgr.id }).eq('id', id);
   if (saved.error) {
     console.warn('offer hours and manager', saved.error.message);
-    await svc.from('hub_candidates').update(card).eq('id', id);
+    const fallback = await svc.from('hub_candidates').update(card).eq('id', id);
     warnings.push('The hours and the onboarding manager could not be saved on the card (' + saved.error.message + '). Tell Steel.');
+    if (fallback.error) {   // the email has gone, but the card does not say so: HR must know what is missing
+      console.warn('offer bookkeeping', fallback.error.message);
+      warnings.push('The card could not record the offer either (' + fallback.error.message + '). ' + (emailed ? 'The email went out, but the card does not show when it was sent, to whom, the letter\'s link or the note.' : 'The card does not show the letter\'s link or the note.') + ' Tell Steel. The letter is in Offer Letters: ' + docUrl);
+    }
   }
   /* wave271: the reply-by and start dates the letter carries, for the Ready to onboard list; its own update, so the bookkeeping above never depends on the columns */
   const dated = await svc.from('hub_candidates').update({ offer_respond_by: isoDay(f.respond_by), offer_start: isoDay(f.start) }).eq('id', id);

@@ -96,7 +96,9 @@
 //               waiting with nothing proposed and the call not booked: the propose link goes once when it never went or went to a manager since
 //               replaced (propose_links); onboard_remind_hours after it, the manager is reminded once (onboard_remind, onboard-remind-propose-<flow>,
 //               claimed on reminded_manager_at) and HR is told once (onboard_remind to hr_notify_emails, onboard-remind-propose-hr-<flow>, claimed with
-//               wa275_tick_set(flow, 'propose_hr_reminded_at')). None of the wave271 grid messages go to such a flow. wave271 flows keep their path.
+//               wa275_tick_set(flow, 'propose_hr_reminded_at')); neither once times were proposed (after the hire's no the manager answers from
+//               the card). With no active manager with an email, HR is told once (onboard_remind, onboard-no-manager-<flow>, setup_ticks
+//               no_manager_told_at) that the card needs one. None of the wave271 grid messages go to such a flow. wave271 flows keep their path.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -1908,6 +1910,7 @@ async function hireTimesNow(b: Row): Promise<Response> {
 const ASK_COLS = PROPOSE_COLS + ', created_at, manager_link_sent_at, reminded_manager_at';
 const ASKABLE = ['offered', 'waiting'];
 const HR_TOLD = 'propose_hr_reminded_at';   // setup_ticks: HR told once that nothing was proposed (not a rundown tick)
+const NO_MANAGER_TOLD = 'no_manager_told_at';   // setup_ticks: HR told once that the hire has no active onboarding manager with an email (not a rundown tick)
 const liveProposal = (f: Row) => !!f.proposed_at && !f.hire_answer;
 /* the propose path, as onboard-link's modeOf: offered or a proposal, or created on or after onboard_v2_since (NaN: unset, so only the first two) */
 const proposeMode = (f: Row, since: number) => f.status === 'offered' || !!f.proposed_at || (!Number.isNaN(since) && !!f.created_at && Date.parse(String(f.created_at)) >= since);
@@ -2189,8 +2192,23 @@ async function remind(): Promise<Response> {
       if (proposeMode(f, since)) {
         if (notAsked(f, c, since)) continue;   // closed, booked, past the asking, or times waiting for the hire's answer
         const pm = await managerFor(f, c);
-        if (!pm || pm.active === false) { out.skipped.push('flow ' + f.id + ': no active onboarding manager to ask for times'); continue; }
-        if (!pm.email) { out.skipped.push('flow ' + f.id + ': ' + pm.name + ' has no email on the roster'); continue; }
+        const missing = !pm ? 'has no onboarding manager' : pm.active === false ? 'has ' + pm.name + ' as onboarding manager, who is no longer active on the roster' : !pm.email ? 'has ' + pm.name + ' as onboarding manager, who has no email on the roster' : '';
+        if (missing) {   // nobody can be asked for times: HR is told once (setup_ticks.no_manager_told_at), and the card needs a manager
+          out.skipped.push('flow ' + f.id + ': ' + c.name + ' ' + missing);
+          if (!hr.length || f.setup_ticks?.[NO_MANAGER_TOLD]) continue;
+          const { data: mine, error: tickErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: NO_MANAGER_TOLD, p_value: new Date().toISOString(), p_if_unset: true });
+          if (tickErr || mine !== true) continue;
+          const told = await tell({
+            event: 'onboard_remind', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-no-manager-' + f.id,
+            title: c.name + ' needs an onboarding manager',
+            body: c.name + ' (' + (c.role || 'new hire') + ') ' + missing + ', so nobody can be asked for the onboarding call and the 1-on-1. Choose a manager on their card in Onboarding.',
+            text: ':warning: *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') ' + slackEsc(missing) + ', so nobody can be asked for the onboarding call and the 1-on-1. <' + HUB + '/#hrcentre/onboarding|Open Onboarding> to choose a manager on their card.',
+          });
+          if (!told.handled) { await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: NO_MANAGER_TOLD, p_value: null }); out.skipped.push('flow ' + f.id + ': HR notice not delivered, will try again (' + told.note + ')'); }
+          else out.reminded_hr++;
+          continue;
+        }
+        if (!pm) continue;   // never reached: missing covers it (narrows pm for the type checker)
         if (!f.manager_link_sent_at || String(f.manager_link_member_id) !== String(pm.id)) {
           const r = await askManagerFor(f, c, pm, false, 'hub (hourly)');
           if ('error' in r) out.skipped.push('flow ' + f.id + ': propose link not delivered, will try again (' + r.error + ')');
@@ -2198,6 +2216,7 @@ async function remind(): Promise<Response> {
           continue;
         }
         if (!waited(f.manager_link_sent_at)) continue;
+        if (f.proposed_at) continue;   // times were proposed (the hire said no to them): the manager hears that through onboard_answer and answers from the card, so no "not proposed" reminder
         const path = '/o/' + await signedToken('mgr', f.id), link = HUB + path;
         if (!f.reminded_manager_at) {
           const { data: won } = await svc.from('hub_onboard_flows').update({ reminded_manager_at: new Date().toISOString() }).eq('id', f.id).is('reminded_manager_at', null).select('id');

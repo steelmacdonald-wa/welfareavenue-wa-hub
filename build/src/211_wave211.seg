@@ -125,13 +125,14 @@
   var HOURS = ['4', '6', '8'];
   function managerDefault(r) {   /* the position's manager, put in once the preview says who, unless HR has chosen already */
     var d = r && r.manager && r.manager.default;
-    if (!M.f.manager_member_id && d && d.member_id != null) M.f.manager_member_id = String(d.member_id);
+    if (!M.f.manager_member_id && d && d.member_id != null && d.available !== false) M.f.manager_member_id = String(d.member_id);   /* an unavailable default stays a placeholder */
   }
   function managerBits(f, d) {
     var m = (d && d.manager) || { default: null, choices: [] }, def = m.default || {}, choices = m.choices || [];
+    var who = def.how === 'team_lead' ? (def.name || 'They') + ' is the only leader of the position\u2019s department' : (def.name || 'They') + ' is who the position reports to';
     var how = def.member_id == null ? 'The Hub cannot tell who manages this position, so choose the onboarding manager.'
-      : def.how === 'team_lead' ? (def.name || 'They') + ' is the only leader of the position\u2019s department.'
-      : (def.name || 'They') + ' is who the position reports to.';
+      : def.available === false ? who + (def.why === 'no_email' ? ', but has no email on the roster' : ', but is no longer active on the roster') + ', so choose someone else.'
+      : who + '.';
     return '<label for="w211o_manager">Onboarding manager</label><select id="w211o_manager" required aria-describedby="w211o_mnote"><option value="">Choose the onboarding manager...</option>' +
       choices.map(function (p) { return '<option value="' + E(p.id) + '"' + (String(p.id) === String(f.manager_member_id) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('') + '</select>' +
       '<p class="w197note" id="w211o_mnote">' + (d ? E(how) + ' ' : '') + 'They are asked to propose the onboarding call and the 1-on-1 as soon as the offer goes out.</p>';
@@ -190,7 +191,7 @@
     M.busy = true; M.err = ''; paintOffer();
     try {
       var r = await fn({ action: 'offer_send', id: M.id, f: M.f, email: !!mail }); var id = M.id; shut();
-      var asked = r.manager && r.manager.asked ? ' ' + r.manager.name + ' was asked to propose times.' : '', warn = (r.warnings || []).length ? ' ' + r.warnings.join(' ') : '';   /* wave275 */
+      var asked = r.manager && r.manager.asked ? ' ' + r.manager.name + (r.manager.already ? ' was already asked to propose times.' : ' was asked to propose times.') : '', warn = (r.warnings || []).length ? ' ' + r.warnings.join(' ') : '';   /* wave275 */
       toastS((r.emailed ? (r.emailed.mode === 'live' || r.emailed.mode === 'practice' ? 'Offer letter emailed (a copy to ' + (r.signer || 'the signer') + ')' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters') + (asked || warn ? '.' + asked + warn : ''));
       await reload(id);
     } catch (e) { M.busy = false; M.err = e.message; paintOffer(); }

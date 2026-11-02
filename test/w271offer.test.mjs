@@ -308,8 +308,8 @@ test('w275 the letter and its preview say the hours chosen; the default 4 leaves
   assert.match(Buffer.from(s.mails()[0].body.attachments[0].content, 'base64').toString('utf8'), /6 hours/);
 });
 
-test('w275 offer_preview gives the panel the position\'s manager (and how it was chosen) and the active roster to choose from', async () => {
-  const team = [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', active: true }, { id: 2, name: 'Ada Bell', email: 'ada.bell@welfareavenue.com', active: true }, { id: 3, name: 'Old Hand', email: 'old.hand@welfareavenue.com', active: false }, { id: 5, name: '', email: 'x@welfareavenue.com', active: true }];
+test('w275 offer_preview gives the panel the position\'s manager (and how it was chosen) and the active roster with an email to choose from', async () => {
+  const team = [{ id: 1, name: 'Ruth Owen', email: 'ruth.owen@welfareavenue.com', active: true }, { id: 2, name: 'Ada Bell', email: 'ada.bell@welfareavenue.com', active: true }, { id: 3, name: 'Old Hand', email: 'old.hand@welfareavenue.com', active: false }, { id: 5, name: '', email: 'x@welfareavenue.com', active: true }, { id: 6, name: 'No Mail', email: null, active: true }, { id: 7, name: 'Blank Mail', email: '  ', active: true }];
   const s = await setup({ team });
   const asked = [];
   s.rig.db.onRpc('wa271_default_manager', (a, _db, w) => { asked.push([a, w.jwt]); return { member_id: 1, name: 'Ruth Owen', how: 'reports_to' }; });
@@ -317,14 +317,63 @@ test('w275 offer_preview gives the panel the position\'s manager (and how it was
   const b = await r.json();
   assert.equal(r.status, 200, JSON.stringify(b));
   assert.deepEqual(asked, [[{ p_candidate: 11 }, null]], 'asked once, as the service key');
-  assert.deepEqual(b.manager, { default: { member_id: 1, name: 'Ruth Owen', how: 'reports_to' }, choices: [{ id: 2, name: 'Ada Bell' }, { id: 1, name: 'Ruth Owen' }] });
+  assert.deepEqual(b.manager, { default: { member_id: 1, name: 'Ruth Owen', how: 'reports_to', available: true, why: null }, choices: [{ id: 2, name: 'Ada Bell' }, { id: 1, name: 'Ruth Owen' }] }, 'no one inactive, unnamed or without an email');
   assert.ok(b.html, 'the letter as before');
   /* the default the Hub cannot tell: none; and a failing lookup still gives the choices */
   const none = await setup({ team });
   none.rig.db.onRpc('wa271_default_manager', () => { throw new Error('no such function'); });
   const r2 = await (await none.rig.call(new Request(SB + '/functions/v1/recruit-actions', { method: 'POST', headers: { Authorization: 'Bearer stub', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'offer_preview', id: 11, f: FORM }) }))).json();
-  assert.deepEqual(r2.manager.default, { member_id: null, name: null, how: 'none' });
+  assert.deepEqual(r2.manager.default, { member_id: null, name: null, how: 'none', available: false, why: null });
   assert.equal(r2.manager.choices.length, 2);
+  /* a default the send would refuse is said to be unavailable, with why, and is not among the choices */
+  for (const [id, why] of [[3, 'inactive'], [6, 'no_email'], [7, 'no_email'], [99, 'inactive']]) {
+    const u = await setup({ team });
+    u.rig.db.onRpc('wa271_default_manager', () => ({ member_id: id, name: 'Someone', how: 'reports_to' }));
+    const r3 = await (await u.rig.call(new Request(SB + '/functions/v1/recruit-actions', { method: 'POST', headers: { Authorization: 'Bearer stub', 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'offer_preview', id: 11, f: FORM }) }))).json();
+    assert.deepEqual([r3.manager.default.available, r3.manager.default.why], [false, why], String(id));
+    assert.ok(!r3.manager.choices.some((x) => x.id === id));
+  }
+});
+
+test('w275 fix: an ask_manager skip says why in the warnings; "already sent" is reported as already asked, with no warning', async () => {
+  const proposed = await setup({ askReply: () => ({ json: { ok: true, skipped: 'proposed', reason: 'Times are already proposed for this new hire and wait for their answer, so the manager was not asked again.' } }) });
+  const a = await proposed.send(FORM);
+  assert.equal(a.status, 200);
+  assert.deepEqual([a.body.manager.asked, a.body.manager.skipped, a.body.manager.already], [false, 'proposed', undefined]);
+  assert.deepEqual(a.body.warnings, ['Ruth Owen was not asked for times: Times are already proposed for this new hire and wait for their answer, so the manager was not asked again.']);
+  for (const skipped of ['closed', 'not_open', 'wave271']) {
+    const s = await setup({ askReply: () => ({ json: { ok: true, skipped, reason: 'Because.' } }) });
+    const b = await s.send(FORM);
+    assert.equal(b.body.manager.asked, false);
+    assert.equal(b.body.warnings.length, 1, skipped);
+    assert.match(b.body.warnings[0], /^Ruth Owen was not asked for times: Because\.$/);
+  }
+  const already = await setup({ askReply: () => ({ json: { ok: true, skipped: 'already_sent', reason: 'Ruth Owen already has their link to propose times.' } }) });
+  const c = await already.send(FORM);
+  assert.deepEqual(c.body.manager, { asked: true, already: true, name: 'Ruth Owen', skipped: 'already_sent' });
+  assert.deepEqual(c.body.warnings, []);
+});
+
+test('w275 fix: when neither card update can be saved, the offer says what the card does not record (the email has gone)', async () => {
+  const s = await setup();
+  s.rig.db.failOn('hub_candidates', 'update', 'trigger wa275_offer_sent raised');
+  s.rig.db.failOn('hub_candidates', 'update', 'trigger wa275_offer_sent raised');
+  const out = await s.send(FORM);
+  assert.equal(out.status, 200);
+  assert.equal(s.mails().length, 1, 'the email went');
+  assert.equal(s.cand0().offer_sent_at, null, 'not recorded');
+  assert.equal(out.body.manager, null);
+  assert.equal(asks(s).length, 0);
+  assert.equal(out.body.warnings.length, 2, JSON.stringify(out.body.warnings));
+  assert.match(out.body.warnings[0], /hours and the onboarding manager could not be saved/);
+  assert.match(out.body.warnings[1], /could not record the offer either \(trigger wa275_offer_sent raised\)\. The email went out, but the card does not show when it was sent, to whom, the letter's link or the note\. Tell Steel\. The letter is in Offer Letters: https:\/\/drive\.stub\.test\/doc1$/);
+  for (const w of out.body.warnings) assert.ok(hubWords(w), w);
+  /* one failure only: the fallback saves the bookkeeping, with the one warning */
+  const one = await setup();
+  one.rig.db.failOn('hub_candidates', 'update', 'column offer_hours does not exist');
+  const r = await one.send(FORM);
+  assert.equal(r.body.warnings.length, 1);
+  assert.equal(one.cand0().offer_sent_at, '2026-11-01T15:00:00.000Z');
 });
 
 test('w275 "Create the letter only" stores the hours and the manager but asks nobody: the offer has not gone out', async () => {

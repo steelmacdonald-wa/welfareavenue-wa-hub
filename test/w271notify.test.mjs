@@ -922,3 +922,56 @@ test('w275 remind: a propose-path flow whose link never went (or went to a manag
   assert.equal(fresh.asks().length, 1);
   assert.equal(fresh.sent.filter((m) => m.event === 'onboard_grid' || (m.event === 'onboard_remind' && /availability/.test(m.title))).length, 0);
 });
+
+/* ---------- wave275 Task 5, fix round 1 ---------- */
+test('w275 fix: after the hire said no to proposed times, remind sends neither the manager\'s "not proposed" reminder nor the HR notice', async () => {
+  const w = await askWorld({ fl: { status: 'waiting', manager_link_member_id: 2, manager_link_sent_at: '2026-10-15T12:00:00Z', proposed_call_at: '2026-10-26T14:00:00Z', proposed_one_on_one_at: '2026-10-26T16:00:00Z', proposed_at: '2026-10-16T10:00:00Z', proposed_by: SAM, hire_answer: 'no' }, cand: { accepted_on: '2026-10-15' } });
+  const before = w.snapshot();
+  const r = await w.remind();
+  assert.equal(r.status, 200);
+  assert.deepEqual(w.sent, [], 'the manager heard of the no through onboard_answer and answers from the card');
+  assert.deepEqual(w.snapshot(), before);
+  assert.deepEqual(w.rig.fetchLog, []);
+});
+
+test('w275 fix: a propose-path flow with no active onboarding manager (none, inactive, or no roster email): HR is told once that the card needs one', async () => {
+  for (const [o, words] of [
+    [{ fl: { manager_member_id: null }, manager: { member_id: null, name: null, how: 'none' } }, /Alex Tremblay \(Program Coordinator\) has no onboarding manager, so nobody can be asked/],
+    [{ tables: { team_members: [TEAM[0], { ...TEAM[1], active: false }, TEAM[2]] } }, /has Sam Lee as onboarding manager, who is no longer active on the roster/],
+    [{ fl: { manager_member_id: 3 } }, /has No Mail as onboarding manager, who has no email on the roster/],
+  ]) {
+    const w = await askWorld(o);
+    const r = await w.remind();
+    assert.equal(w.sent.length, 1, JSON.stringify(o));
+    const m = w.sent[0];
+    assert.equal(m.event, 'onboard_remind');
+    assert.deepEqual(m.to, HR);
+    assert.equal(m.tag, 'onboard-no-manager-21');
+    assert.equal(m.url, '#hrcentre/onboarding');
+    assert.equal(m.title, 'Alex Tremblay needs an onboarding manager');
+    assert.match(m.body, words);
+    assert.match(m.body, /Choose a manager on their card in Onboarding\.$/);
+    for (const s of [m.text, m.title, m.body]) assert.ok(hubWords(s), s);
+    assert.equal(r.body.reminded_hr, 1);
+    assert.ok(w.flow().setup_ticks.no_manager_told_at);
+    w.rig.setNow('2026-10-21T12:00:00Z');
+    await w.remind();
+    await w.remind();
+    assert.equal(w.sent.length, 1, 'once');
+    assert.deepEqual(w.rig.fetchLog.filter((e) => e.url !== NOTIFY), []);
+  }
+  /* not reached: the mark is given back and the next hour tries again */
+  let word = 'failed';
+  const lost = await askWorld({ fl: { manager_member_id: null }, manager: { member_id: null, name: null, how: 'none' }, notifyReply: (e) => answer(Object.fromEntries(HR.map((h) => [h, word])))(e) });
+  const a = await lost.remind();
+  assert.equal(a.body.reminded_hr, 0);
+  assert.equal(lost.flow().setup_ticks.no_manager_told_at, null);
+  assert.ok(a.body.skipped.some((s) => /HR notice not delivered/.test(s)), JSON.stringify(a.body.skipped));
+  word = 'sent';
+  assert.equal((await lost.remind()).body.reminded_hr, 1);
+  /* no HR list: nothing sent, nothing marked */
+  const nobody = await askWorld({ fl: { manager_member_id: null }, manager: { member_id: null, name: null, how: 'none' }, config: { hr_notify_emails: '' } });
+  await nobody.remind();
+  assert.deepEqual(nobody.sent, []);
+  assert.equal(nobody.flow().setup_ticks.no_manager_told_at, undefined);
+});
