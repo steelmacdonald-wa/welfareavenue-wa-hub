@@ -67,6 +67,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
   const browser = await launch();
   try {
     let f = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fixture(), rpcs: RPCS, width: 1440, wait: 5000 });
+    await f.page.addStyleTag({ content: '#w272tip{display:none!important}' });
     await f.ev(INSTALL, { owners: OWNERS, log: LOG });
     await f.hash('#volunteering/e/900', 3500);
     /* ---------- the Texts strip ---------- */
@@ -137,7 +138,41 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
     ok('no page errors', f.errs.length === 0, f.errs);
     await f.close();
     /* ---------- a phone ---------- */
+    /* ---------- wave273: what they told us, on the card; asking an applicant to use the form ---------- */
+    {
+      const fx = fixture();
+      fx.event_roster.push({ id: 9020, event_id: 900, person_id: null, person_name: 'Laura Cook', role: 'cook', status: 'Confirmed', confirm_status: 'confirmed', recipe_id: null, detail: {},
+        confirm: { via: 'link', attending: 'yes', at: '2026-10-28T00:26:09Z', cook_location: 'home', address: '4-2572 Rue Wurtele', postal_code: 'H2K 2R4', neighbourhood: 'Centre-Sud', ingredients: 'need', delivery_windows: ['wed', 'fri'], guide_read: true } });
+      fx.event_roster.push({ id: 9021, event_id: 900, person_id: null, person_name: 'Andres Driver', role: 'driver', status: 'Confirmed', confirm_status: 'confirmed', detail: {}, confirm: { via: 'reply', attending: 'yes', at: '2026-10-27T22:37:43Z' } });
+      fx.event_roster.push({ id: 9022, event_id: 900, person_id: null, person_name: 'Old Sheet Cook', role: 'cook', status: 'TBD', detail: { pickup_dropoff: 'Drop-off', ingredients_delivered: 'No' }, confirm: null });
+      fx.volunteer_applications.push({ id: 83, person_id: null, contact_id: 7003, name: 'Keran Traoret', email: 'k@example.com', phone: '', roles: ['server'], role_text: 'Volunteer', source: 'email', status: 'received', applied_at: '2026-09-24T12:00:00Z', message: 'Hello' });
+      const g = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fx, rpcs: RPCS, width: 1440, wait: 5000 });
+      await g.page.addStyleTag({ content: '#w272tip{display:none!important}' });
+      await g.ev(INSTALL, { owners: OWNERS, log: LOG });
+      await g.ev(() => { const r0 = db.rpc; db.rpc = function (fn, args) { if (fn === 'wa273_ask_signup') { window.__REC.calls.push({ fn: fn, args: args }); return Promise.resolve({ data: args.p_send ? { ok: true, status: 'contacted', note: 'Asked to sign up by email', by: 'Steel', to: 'k@example.com' } : { ok: true, subject: 'Thanks for applying', text: 'We received your application through email.', to: 'k@example.com', from: 'volunteer@welfareavenue.com', reply: 'steel.macdonald@welfareavenue.com' }, error: null }); } return r0(fn, args); }; });
+      await g.hash('#volunteering/e/900', 3500);
+      const txt = await g.ev(() => { const o = {}; document.querySelectorAll('#w119 .pc[data-w119card]').forEach(pc => { o[pc.getAttribute('data-w119card')] = (pc.querySelector('.w273a') || {}).innerText || ''; }); return o; });
+      ok('w273: a cook\'s answers on the card', /Said yes on their page/.test(txt['9020']) && /Pick-up/.test(txt['9020']) && /4-2572 Rue Wurtele, H2K 2R4 \(Centre-Sud\)/.test(txt['9020']) && /Needs them sent/.test(txt['9020']) && /Wed, Fri/.test(txt['9020']), txt['9020']);
+      ok('w273: a yes by text says there are no details', /Said yes by text.*no details yet/.test(txt['9021']), txt['9021']);
+      ok('w273: the old sheet still shows', /Drop-off/.test(txt['9022']) && /Using their own/.test(txt['9022']), txt['9022']);
+      await g.hash('#volunteering/applicants', 2600);
+      const has = await g.ev(() => ({ email: !!document.querySelector('li.w209app[data-w209id="83"] [data-w273ask]'), site: !!document.querySelector('li.w209app[data-w209id="82"] [data-w273ask]') }));
+      ok('w273: Ask to sign up on an email applicant, not a website one', has.email && !has.site, has);
+      await g.ev(() => document.querySelector('[data-w273ask="83"]').click());
+      await g.page.waitForTimeout(400);
+      const pv = await g.ev(() => (document.querySelector('li.w209app[data-w209id="83"] .w273p') || {}).innerText || '');
+      ok('w273: the preview shows before anything goes', /Thanks for applying/.test(pv) && /volunteer@welfareavenue.com/.test(pv) && /Send the email/.test(pv), pv);
+      const before = await g.ev(() => window.__REC.calls.filter(c => c.fn === 'wa273_ask_signup' && c.args.p_send).length);
+      ok('w273: nothing sent by the preview', before === 0, before);
+      await g.ev(() => document.querySelector('[data-w273send="83"]').click());
+      await g.page.waitForTimeout(500);
+      const sent = await g.ev(() => ({ n: window.__REC.calls.filter(c => c.fn === 'wa273_ask_signup' && c.args.p_send).length, open: !!document.querySelector('li.w209app[data-w209id="83"] .w273p') }));
+      ok('w273: Send sends once and closes', sent.n === 1 && !sent.open, sent);
+      ok('w273: no page errors', g.errs.length === 0, g.errs);
+      await g.close();
+    }
     f = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fixture(), rpcs: RPCS, width: 390, wait: 5000 });
+    await f.page.addStyleTag({ content: '#w272tip{display:none!important}' });
     await f.ev(INSTALL, { owners: OWNERS, log: LOG });
     await f.hash('#volunteering/e/900', 3500);
     const ph = await f.ev(() => ({ strip: !!document.querySelector('#w119 .w258strip'), sw: document.documentElement.scrollWidth <= window.innerWidth + 1 }));

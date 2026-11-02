@@ -65,6 +65,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **The weekly introduction (wave227).** A pop-up that opens on its own waits for the loading screen and for any other pop-up (two quiet checks in a row) and steps aside while the due-date check is open; a new one does the same (see `busyScreen` in 227_wave227.seg). The introductions use open profile facts only (`wa227_profile`: role, team, responsibilities, profile line, projects led, goals owned), never meetings, tasks or HR; the Hub sends nothing for them (no Slack, email or notification). Test with `test/w227drive.js`; a test never calls intros without dry.
 
+- **Who emails come from (wave273).** A new email template gets a route in `app_config.mail_senders` (volunteer@, operations@, job@), and its `send` call passes the person handling it as `reply_to`. mail-send and recruit-actions deploy as one line importing `fn/<name>/index.ts` at a pinned commit, while the vault's access token is invalid.
+
 - **Home (wave272).** Home is laid out in `build/parts272/b_home.js`: a new card on `#mpBody` needs a line there with its `order` (and `grid-column` if it is not full width), or it lands at the start of the grid. Never rebuild an older card; lay it out. Mentions (`#w65menbox`) always shows for staff; `test/w272drive.js` fails if it does not. A new pop-up over Home waits for the others (`otherOpen`). Directors reach Home through `hub_access_profiles` board `pages.mypage`; a card for them needs its data readable by `is_board_viewer()`.
 
 ## Hub training
