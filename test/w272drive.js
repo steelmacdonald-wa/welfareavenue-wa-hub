@@ -68,7 +68,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
         if (!document.querySelector('[data-w272do="done"]')) return null;
         const first = title(), out = { first };
         const later = document.querySelector('[data-w272do="later"]');
-        if (later) { later.click(); await w(50); out.movedOn = title() !== first; }
+        if (later) { later.click(); await w(320); out.movedOn = title() !== first; }   /* the card crossfades for 140 ms */
         const t2 = title(); document.querySelector('[data-w272do="done"]').click(); await w(1200);
         const toastEl = document.getElementById('w272toast'); out.toast = !!toastEl && toastEl.classList.contains('on'); out.gone = title() !== t2;
         if (toastEl) toastEl.querySelector('button').click(); await w(1200); out.back = title() === t2 || [...document.querySelectorAll('#mpBody [data-w109]')].some(r => r.textContent.indexOf(t2) >= 0);
@@ -79,13 +79,23 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
       /* the small note: never over another window, Not now closes it, and it does not come back within 14 days */
       const tip = await f.ev(async () => {
         const w = ms => new Promise(r => setTimeout(r, ms)); localStorage.removeItem('wa272.tip'); window.w272.closeTip();
-        window.w272.setupOpen(); window.w272.tryTip(); const blocked = !document.getElementById('w272tip'); window.w272.closeHow();
+        location.hash = '#calendar'; await w(400); window.w272.setupOpen(); window.w272.tryTip(); const blocked = !document.getElementById('w272tip'); window.w272.closeHow();
         window.w272.tryTip(); const shown = !!document.getElementById('w272tip');
         const modal = shown && document.getElementById('w272tip').getAttribute('aria-modal');
         if (shown) document.querySelector('[data-w272tip]').click(); await w(300);
-        const closed = !document.getElementById('w272tip'); window.w272.tryTip(); return { blocked, shown, modal, closed, again: !!document.getElementById('w272tip') };
+        const closed = !document.getElementById('w272tip'); window.w272.tryTip(); const again = !!document.getElementById('w272tip'); location.hash = '#mypage'; await w(600); return { blocked, shown, modal, closed, again };
       });
       ok(tip.blocked && tip.shown && !tip.modal && tip.closed && !tip.again, tag + ' the small note ' + JSON.stringify(tip));
+      /* Set up your Hub: no Not now, the rows stay until done; a policy row opens, then signs */
+      const su = await f.ev(async () => {
+        const w = ms => new Promise(r => setTimeout(r, ms)); await w(800);
+        const el = document.getElementById('w272setup'); if (!el) return { none: true };
+        const out = { notNow: !!el.querySelector('[data-w272s="hide"]'), rows: [...el.querySelectorAll('.rw')].map(r => r.getAttribute('data-k')), prog: el.querySelector('.prog').textContent };
+        const open = el.querySelector('[data-w272pol="open"]');
+        if (open) { out.signBefore = !el.querySelector('[data-w272pol="sign"]').disabled; open.addEventListener('click', e => e.preventDefault(), { once: true }); open.click(); await w(500); out.signAfter = !el.querySelector('[data-w272pol="sign"]').disabled; }
+        return out;
+      });
+      if (!su.none) { ok(!su.notNow, tag + ' setup has no Not now'); ok(su.rows.length >= 1, tag + ' setup rows ' + JSON.stringify(su)); if (su.signBefore !== undefined) ok(su.signBefore === false && su.signAfter === true, tag + ' sign waits for open ' + JSON.stringify(su)); }
       /* the how-to window, each tab */
       const how = await f.ev(async () => {
         window.w272.setupOpen(); await new Promise(r => setTimeout(r, 200));

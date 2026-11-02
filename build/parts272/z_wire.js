@@ -39,6 +39,8 @@
   }
   /* wave219 settles after the start: the card follows it */
   window.addEventListener('wa-push', function () { paintSetup(); });
+  /* the small note waits for a page that is not Home */
+  window.addEventListener('hashchange', function () { if (!onHome()) { clearTimeout(TIP.timer); TIP.timer = setTimeout(tryTip, 6000); } });
 
   /* ---------- test hook ---------- */
   window.w272 = { paint: paint, paintSetup: paintSetup, setupOpen: openHow, closeHow: closeHow, tryTip: tryTip, closeTip: closeTip, ranked: ranked, todayCount: todayCount, state: function () { return { app: appDone(), push: pushDone(), bip: BIP, standalone: standalone(), done: allDone() }; }, _bip: function (v) { BIP = !!v; paintSetup(); } };
