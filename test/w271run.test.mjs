@@ -1647,15 +1647,21 @@ test('M9: a quote in a name reaches Slack as a quote', async () => {
   assert.doesNotMatch(text, /&quot;/);
 });
 
-/* TEMPLATE: the SOP's Onboarding Email */
+/* TEMPLATE: the SOP's Onboarding Email. The text is kept with its [brackets] and filled in when it is read (action welcome). */
 const HR_ROW = { id: 7, name: 'Hana Rossi', email: 'hr.person@welfareavenue.com', active: true };
 const numbers = (text) => text.split('\n').filter((l) => /^\d+\. /.test(l)).map((l) => l.split('.')[0]).join('');
-test('TEMPLATE: at Start the Hub saves its own text with the real values, in the SOP\'s order', async () => {
+const readWelcome = async (s) => { const r = await s.post({ action: 'welcome', flow_id: 21 }); assert.equal(r.status, 200); return r.body; };
+test('TEMPLATE: after Start the Hub\'s own text reads with the real values, in the SOP\'s order, and nothing of it is saved', async () => {
   const s = await setup({ config: { onboard_slack_join_link: 'https://join.slack.example/x', onboard_google_video: 'https://video.example/g' }, tables: { team_members: [...TEAM, HR_ROW] } });
   assert.equal((await s.start({ group_session: 'November 12', canva_link: 'https://www.canva.com/brand/join?token=a' })).status, 200);
-  const f = s.flow(), t = f.welcome_text;
-  assert.equal(f.welcome_edited, false);
-  assert.equal(f.welcome_subject, 'Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(s.flow().welcome_edited, false);
+  assert.equal(s.flow().welcome_subject, null, 'the Hub\'s own text is not saved, so it follows the template');
+  assert.equal(s.flow().welcome_text, null);
+  const before = s.snapshot();
+  const w = await readWelcome(s), t = w.text;
+  assert.deepEqual(s.snapshot(), before, 'reading writes nothing');
+  assert.equal(w.edited, false);
+  assert.equal(w.subject, 'Welcome to Welfare Avenue! Your Next Steps');
   assert.ok(t.startsWith('Dear Alex,\n\nCongratulations and welcome to the team at Welfare Avenue!\nWe\'re excited you\'ve accepted the Program Coordinator role within our organization.'), t);
   assert.match(t, /Your first day is Sunday, November 1, 2026, and we can't wait/, 'the Toronto date of the call, in words');
   assert.match(t, /Your onboarding call: Sunday, November 1, 2026.*10:30.*\. The invite is in your calendar\./);
@@ -1672,14 +1678,15 @@ test('TEMPLATE: at Start the Hub saves its own text with the real values, in the
   assert.doesNotMatch(t, /\[|—|\bAI\b/, 'no marked place left, Hub words only');
 });
 
-test('TEMPLATE: optional lines are left out and the steps renumber', async () => {
-  const s = await setup({ tables: { hub_positions: [{ id: 5, title: 'Program Coordinator', dept: 'progdev', jd_url: null }] } });
+test('TEMPLATE: optional lines are left out and the steps renumber; no role reads as a sentence of its own', async () => {
+  const s = await setup({ cand: { role: '' }, tables: { hub_positions: [{ id: 5, title: 'Program Coordinator', dept: 'progdev', jd_url: null }] } });
   await s.start({ one_on_one_at: null });
-  const t = s.flow().welcome_text;
+  const t = (await readWelcome(s)).text;
   assert.equal(numbers(t), '12345', 'no Canva link: one step fewer');
   assert.doesNotMatch(t, /Canva/);
   assert.doesNotMatch(t, /group onboarding session/);
   assert.doesNotMatch(t, /video/i);
+  assert.match(t, /We're excited you've accepted our offer\./);
   assert.match(t, /Sam Lee: we'll confirm the time soon\./);
   assert.match(t, /https:\/\/welfareavenue\.slack\.com/, 'the Slack default');
   assert.match(t, /4\. Sign the Contract/);
@@ -1687,27 +1694,43 @@ test('TEMPLATE: optional lines are left out and the steps renumber', async () =>
   assert.match(t, /\nThe Welfare Avenue team$/, 'an HR person not on the roster: the team signs');
 });
 
-test('TEMPLATE: French, in the same order', async () => {
-  const s = await setup({ cand: { role: 'Gestionnaire des opérations' }, tables: { team_members: [...TEAM, HR_ROW] } });
+test('TEMPLATE: French, in the same order, with the French role name and natural wording', async () => {
+  const s = await setup({ cand: { role: 'Operations Manager', summary: 'Français' }, tables: { team_members: [...TEAM, HR_ROW] } });
   await s.start({ group_session: '12 novembre', canva_link: 'https://www.canva.com/x' });
-  const t = s.flow().welcome_text;
-  assert.equal(s.flow().welcome_subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
+  const w = await readWelcome(s), t = w.text;
+  assert.equal(w.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
   assert.ok(t.startsWith('Bonjour Alex,\n\nFélicitations et bienvenue dans l\'équipe de Welfare Avenue!'), t);
-  assert.match(t, /accepté le poste de Gestionnaire des opérations/);
-  assert.match(t, /Votre premier jour est le dimanche 1er novembre 2026|Votre premier jour est le dimanche 1 novembre 2026/);
-  assert.match(t, /Votre appel d'accueil : /);
-  assert.match(t, /avec votre gestionnaire, Sam Lee : /);
-  assert.match(t, /le 12 novembre\. Si vous ne pouvez pas y être, dites-le-nous\./);
-  assert.match(t, /Courriel : alex\.tremblay@welfareavenue\.com\./);
+  assert.match(t, /accepté le poste de Gestionnaire des opérations au sein/, 'ROLE_FR, as on the /o/ page');
+  assert.match(t, /Votre premier jour est le dimanche 1er novembre 2026,/, '1er for the first of the month');
+  assert.match(t, /Votre appel d'accueil : dimanche 1er novembre 2026 à 22 h 30\./);
+  assert.match(t, /avec votre gestionnaire, Sam Lee : mardi 3 novembre 2026 à /);
+  assert.match(t, /avec Sam Lee, le 12 novembre\. Si vous ne pouvez pas y être, dites-le-nous\./);
+  assert.match(t, /Adresse courriel : alex\.tremblay@welfareavenue\.com\. Nous vous transmettrons votre premier mot de passe en privé\. Vous le changerez lors de votre première connexion\./);
+  assert.match(t, /avec votre nouvelle adresse courriel Welfare Avenue : /);
   assert.match(t, /4\. Joignez-vous à notre équipe Canva : https:\/\/www\.canva\.com\/x/);
-  assert.match(t, /5\. Signez le contrat\./);
+  assert.match(t, /5\. Signez le contrat\. Il vous est envoyé par DocuSign à votre adresse courriel personnelle\./);
+  assert.match(t, /pour que votre intégration se déroule en douceur, dans un climat accueillant\./);
+  assert.doesNotMatch(t, /individuellement|poste de proposé/);
   assert.equal(numbers(t), '123456');
   assert.doesNotMatch(t, /\[|—/);
-  const n = await setup({ cand: { role: 'Gestionnaire des opérations' } });
+  const n = await setup({ cand: { role: '', summary: 'Français' } });
   await n.start({ one_on_one_at: null });
-  assert.equal(numbers(n.flow().welcome_text), '12345');
-  assert.match(n.flow().welcome_text, /nous vous confirmerons l'heure bientôt/);
-  assert.match(n.flow().welcome_text, /L'équipe de Welfare Avenue$/);
+  const u = (await readWelcome(n)).text;
+  assert.match(u, /Nous sommes ravis que vous ayez accepté notre offre\./, 'no role: a sentence of its own');
+  assert.equal(numbers(u), '12345');
+  assert.match(u, /nous vous confirmerons l'heure bientôt/);
+  assert.match(u, /L'équipe de Welfare Avenue$/);
+});
+
+test('TEMPLATE: with no manager on the roster, it says "your manager" once, in both languages', async () => {
+  for (const [cand, once, twice] of [[{}, /with your manager: /, /your manager, your manager/], [{ summary: 'Français' }, /avec votre gestionnaire : /, /votre gestionnaire, votre gestionnaire/]]) {
+    const s = await setup({ cand });
+    await s.start();
+    s.rows('team_members').splice(s.rows('team_members').findIndex((m) => m.id === 2), 1);   // the manager's row is gone
+    const t = (await readWelcome(s)).text;
+    assert.match(t, once);
+    assert.doesNotMatch(t, twice);
+  }
 });
 
 test('TEMPLATE: the preview says what fills in at Start, and writes nothing', async () => {
@@ -1718,66 +1741,123 @@ test('TEMPLATE: the preview says what fills in at Start, and writes nothing', as
   assert.match(w.text, /\[Canva link: fills in at Start, or this line is left out\]/);
   assert.equal(numbers(w.text), '123456');
   assert.deepEqual(s.snapshot(), before);
-  const fr = await setup({ cand: { role: 'Gestionnaire des opérations' } });
+  const fr = await setup({ cand: { summary: 'Français' } });
   assert.match((await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text, /\[premier jour : rempli au démarrage\]/);
 });
 
 test('TEMPLATE: no password goes in the text, even with a password nonce on the flow', async () => {
   const s = await setup({ fl: { pw_nonce: 'SECRETNONCE', pw_expires_at: '2026-12-01T00:00:00Z' } });
   await s.start();
-  const t = s.flow().welcome_text;
+  const t = (await readWelcome(s)).text;
   assert.doesNotMatch(t, /SECRETNONCE|\/o\//);
   assert.equal(t.split('\n').filter((l) => /password/i.test(l)).length, 1, 'only the sentence saying HR shares it');
   assert.match(t, /We'll share your first password with you one to one\. You'll change it the first time you sign in\./);
 });
 
-test('TEMPLATE: HR\'s edits win, and any marked place they kept fills in', async () => {
+test('TEMPLATE: HR\'s edits are saved with their brackets, and read with the NEW time after change_time, their own sentences kept', async () => {
   const s = await setup();
   const p = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome;
-  const text = 'My own opening.\n' + p.text;
+  const text = 'My own opening, just for Alex.\n' + p.text;
   await s.start({ one_on_one_at: null, welcome: { subject: 'My subject', text } });
   const f = s.flow();
   assert.equal(f.welcome_edited, true);
   assert.equal(f.welcome_subject, 'My subject');
-  assert.ok(f.welcome_text.startsWith('My own opening.\nDear Alex,'));
-  assert.match(f.welcome_text, /Your first day is Sunday, November 1, 2026/);
-  assert.doesNotMatch(f.welcome_text, /\[/, 'nothing left to fill in');
-  assert.doesNotMatch(f.welcome_text, /Canva|group onboarding/, 'empty lines go from an edited text too');
-  assert.equal(numbers(f.welcome_text), '12345');
-  const kept = f.welcome_text;
+  assert.equal(f.welcome_text, text, 'saved as typed, brackets and all');
+  let w = await readWelcome(s);
+  assert.equal(w.edited, true);
+  assert.equal(w.subject, 'My subject');
+  assert.ok(w.text.startsWith('My own opening, just for Alex.\nDear Alex,'));
+  assert.match(w.text, /Your first day is Sunday, November 1, 2026/);
+  assert.doesNotMatch(w.text, /\[/);
+  assert.equal(numbers(w.text), '12345', 'empty Canva and group lines go from an edited text too');
   await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
-  assert.equal(s.flow().welcome_text, kept, 'a later change leaves HR\'s text alone');
-  assert.equal((await s.post({ action: 'preview', flow_id: 21 })).body.welcome.subject, 'My subject', 'the preview shows what they saved');
-});
-
-test('TEMPLATE: the Hub\'s own saved text follows a change of time, 1-on-1, manager and Canva link', async () => {
-  const s = await started({}, { one_on_one_at: null });
-  assert.match(s.flow().welcome_text, /we'll confirm the time soon/);
-  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
-  assert.match(s.flow().welcome_text, /Your first day is Wednesday, November 4, 2026/);
+  w = await readWelcome(s);
+  assert.ok(w.text.startsWith('My own opening, just for Alex.\n'), 'their sentence is kept');
+  assert.match(w.text, /Your first day is Wednesday, November 4, 2026/, 'the NEW call date');
+  assert.match(w.text, /Your onboarding call: Wednesday, November 4, 2026.*9:30/);
+  assert.doesNotMatch(w.text, /November 1, 2026/, 'nothing of the old date is left');
   await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
-  assert.match(s.flow().welcome_text, /Sam Lee: Thursday, November 5, 2026/);
   await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
-  assert.match(s.flow().welcome_text, /with your manager, Ruth Owen: /);
-  await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
-  assert.match(s.flow().welcome_text, /Join our Canva team: https:\/\/www\.canva\.com\/new/);
-  assert.equal(numbers(s.flow().welcome_text), '123456');
-  await s.post({ action: 'set_canva_link', flow_id: 21, link: '' });
-  assert.doesNotMatch(s.flow().welcome_text, /Canva/);
+  w = await readWelcome(s);
+  assert.match(w.text, /with your manager, Ruth Owen: Thursday, November 5, 2026/);
+  assert.doesNotMatch(w.text, /we'll confirm the time soon|Sam Lee/);
+  assert.equal(s.flow().welcome_text, text, 'what HR typed is never rewritten');
 });
 
-test('TEMPLATE: a practice flow saves the text on its own row and nothing else', async () => {
+test('TEMPLATE: a Canva link added after Start appears in HR\'s edited text, and goes again when it is cleared', async () => {
+  const s = await setup();
+  const p = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome;
+  await s.start({ welcome: { subject: p.subject, text: p.text.replace('Dear Alex,', 'Hello Alex!') } });
+  let t = (await readWelcome(s)).text;
+  assert.doesNotMatch(t, /Canva/);
+  assert.equal(numbers(t), '12345');
+  await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
+  t = (await readWelcome(s)).text;
+  assert.match(t, /^Hello Alex!/);
+  assert.match(t, /4\. Join our Canva team: https:\/\/www\.canva\.com\/new/);
+  assert.equal(numbers(t), '123456');
+  await s.post({ action: 'set_canva_link', flow_id: 21, link: '' });
+  assert.doesNotMatch((await readWelcome(s)).text, /Canva/);
+});
+
+test('TEMPLATE: a subject-only edit keeps the subject and leaves the body the Hub\'s own, so it follows changes', async () => {
+  const s = await setup();
+  const p = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome;
+  await s.start({ welcome: { subject: 'Welcome aboard, Alex', text: p.text } });
+  assert.equal(s.flow().welcome_subject, 'Welcome aboard, Alex');
+  assert.equal(s.flow().welcome_text, null, 'an unchanged body is not saved');
+  assert.equal(s.flow().welcome_edited, true);
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  const w = await readWelcome(s);
+  assert.equal(w.subject, 'Welcome aboard, Alex');
+  assert.match(w.text, /Your first day is Wednesday, November 4, 2026/);
+});
+
+test('TEMPLATE: the Hub\'s own text follows a change of time, 1-on-1, manager and Canva link', async () => {
+  const s = await started({}, { one_on_one_at: null });
+  assert.match((await readWelcome(s)).text, /we'll confirm the time soon/);
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.match((await readWelcome(s)).text, /Your first day is Wednesday, November 4, 2026/);
+  await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.match((await readWelcome(s)).text, /Sam Lee: Thursday, November 5, 2026/);
+  await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.match((await readWelcome(s)).text, /with your manager, Ruth Owen: /);
+  await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
+  const t = (await readWelcome(s)).text;
+  assert.match(t, /Join our Canva team: https:\/\/www\.canva\.com\/new/);
+  assert.equal(numbers(t), '123456');
+});
+
+test('TEMPLATE: a practice flow reads the same, and writes nothing to read it', async () => {
   const s = await setup({ cand: { practice: true } });
   await s.start();
-  assert.match(s.flow().welcome_text, /Your first day is Sunday, November 1, 2026/);
   const before = s.snapshot();
   s.rig.fetchLog.length = 0;
-  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
-  assert.match(s.flow().welcome_text, /Wednesday, November 4, 2026/);
-  const after = s.snapshot();
-  delete before.hub_onboard_flows; delete after.hub_onboard_flows;
-  assert.deepEqual(after, before);
+  assert.match((await readWelcome(s)).text, /Your first day is Sunday, November 1, 2026/);
+  assert.deepEqual(s.snapshot(), before);
   assert.equal(s.rig.fetchLog.length, 0);
+});
+
+test('C1: a roster that cannot be read stops Start: it never lets an address through', async () => {
+  for (const skip of [[], ['google']]) {
+    const s = await setup();
+    s.db.failOn('team_members', 'select', 'the database is resting', 1);   // the manager reads; the address check does not
+    const before = s.snapshot();
+    const r = await s.start({ wa_email: 'sam.lee@welfareavenue.com', skip });
+    assert.equal(r.status, 503, JSON.stringify(skip));
+    assert.equal(r.body.error, 'roster_check');
+    assert.equal(r.body.message, 'The Hub could not check the roster. Try again.');
+    assert.deepEqual(s.snapshot(), before);
+  }
+});
+
+test('backed_out logs whether the flow had started', async () => {
+  const before = await setup();
+  await before.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.ok(before.rows('change_log').some((r) => r.new_value === 'withdrawn (backed out before Start onboarding)'));
+  const after = await started();
+  await after.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.ok(after.rows('change_log').some((r) => r.new_value === 'withdrawn (backed out after Start onboarding)'));
 });
 
 const CANVA = 'https://www.canva.com/brand/join?token=abc123';

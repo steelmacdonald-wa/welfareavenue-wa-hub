@@ -8,6 +8,7 @@
 //               address on someone else's roster profile is refused, and one only Workspace knows is not stored: nothing may attach this person to another mailbox.
 //   retry {flow_id, step}          {steps}. Reruns that step and what was waiting on it. A done step is refused.
 //   google_manual {flow_id, wa_email}   {steps}. HR made the account by hand: records the address and finishes what waited on it.
+//   welcome {flow_id}              {subject, text, edited}. The welcome email as it reads now (HR's edits kept, the marked places filled in after Start). Reads only.
 //   task_done {flow_id, step}      {steps}. HR did a step left to them. Not for google, which has google_manual.
 //   set_canva_link {flow_id, link}   {ok, canva_link}. The fresh Canva invite link HR pastes for this hire (Canva's links last 30 days, so none is kept in settings). Empty clears it;
 //               otherwise it must start with https://www.canva.com/. Any flow that has not backed out; it writes the flow row only. start takes canva_link with the same check.
@@ -161,10 +162,12 @@ async function getMember(id: unknown): Promise<Row | null> {
   const { data } = await svc.from('team_members').select('id, name, email, active').eq('id', Number(id)).maybeSingle();
   return data;
 }
+const ROSTER_CHECK = 'The Hub could not check the roster. Try again.';
 async function membersByEmail(email: unknown): Promise<Row[]> {   // ilike for the case; _ is a wildcard there, so the exact match is made here
   const e = String(email || '').trim().toLowerCase();
   if (!e) return [];
-  const { data } = await svc.from('team_members').select('id, name, email, active').ilike('email', e);
+  const { data, error } = await svc.from('team_members').select('id, name, email, active').ilike('email', e);
+  if (error) throw new Error(ROSTER_CHECK);   // a roster that cannot be read is never taken as "nobody has this address"
   return ((data || []) as Row[]).filter((m) => String(m.email || '').trim().toLowerCase() === e);
 }
 async function readSteps(flowId: number): Promise<StepRow[]> {
@@ -617,9 +620,11 @@ async function preview(b: Row, by: string): Promise<Response> {
   return json({ address, address_taken: state.taken, address_owner: claim.owner, address_own: claim.own, needs_address: !address, manager, department: pos?.dept || null, canva_link: f.canva_link || null, grids, hub_events: Array.from(seen.values()), steps, welcome: await welcomeFor(f, c, by), warnings });
 }
 /* ---------- the welcome email, as in the SOP's Onboarding Email ---------- */
-/* renderWelcome(flow, candidate, facts) -> {subject, text}, and Task 11 reuses it for the sent email. No password ever goes in this text. Before Start (facts.draft) what is not
-   known yet shows as a marked place in [square brackets], which fillWelcome fills in at Start, in the Hub's text and in what HR edited alike. A line whose value is empty goes,
-   and the steps renumber. */
+/* renderWelcome(flow, candidate, facts) -> {subject, text}, and Task 11 reuses it for the sent email. No password ever goes in this text.
+   The text is kept with its marked places in [square brackets] and filled in only when it is read (the preview after Start, the card, the sender), so a
+   later change of time, manager, address or Canva link always shows. HR's edits are saved as typed, brackets and all (welcome_subject, welcome_text, only
+   the part they changed); the Hub's own text is never saved, so it follows the template. Before Start (facts.draft) the brackets stay as they are.
+   A line whose value is empty goes, and the steps renumber. */
 const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
   en: {
     day: '[first day: fills in at Start]', call: '[call date and time: fills in at Start]', one: '[1-on-1 date and time: fills in at Start]', manager: '[manager: fills in at Start]',
@@ -630,38 +635,51 @@ const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
     group: '[date de la séance de groupe : remplie au démarrage, ou cette ligne est retirée]', address: '[adresse Welfare Avenue : remplie au démarrage]', canva: '[lien Canva : rempli au démarrage, ou cette ligne est retirée]',
   },
 };
+/* the role in French, as the /o/ page names it (build/o/index.html ROLE_FR; functions are single files) */
+const ROLE_FR: Record<string, string> = { 'Operations Manager': 'Gestionnaire des opérations', 'HR Technician': 'Technicien·ne RH', 'Event Coordinator': 'Coordonnateur·rice d\'événements' };
 export type WelcomeFacts = { draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string };
-const dayWords = (at: string, lang: 'en' | 'fr') => new Date(at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ });
-/* puts the flow's values in the marked places. Empty group session or Canva link: that line goes, and the numbered steps count again. */
+/* a date in words; French says 1er for the first of the month, which Intl does not */
+function dayWords(at: string, lang: 'en' | 'fr'): string {
+  if (lang === 'en') return new Date(at).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ });
+  const p: Record<string, string> = {};
+  for (const x of new Intl.DateTimeFormat('fr-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ }).formatToParts(new Date(at))) p[x.type] = x.value;
+  return p.weekday + ' ' + (p.day === '1' ? '1er' : p.day) + ' ' + p.month + ' ' + p.year;
+}
+const atWords = (at: string, lang: 'en' | 'fr') => lang === 'en' ? whenText(at, 'en')
+  : dayWords(at, 'fr') + ' à ' + new Date(at).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit', timeZone: TZ });
+/* puts the flow's values in the marked places. Empty group session or Canva link: that line goes, and the numbered steps count again. No manager: "your manager" once. */
 function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string {
-  const lang = langOf(c), fr = lang === 'fr', slots = WELCOME_SLOTS[lang];
+  const lang = langOf(c), fr = lang === 'fr', slots = WELCOME_SLOTS[lang], yours = fr ? 'votre gestionnaire' : 'your manager';
   const values: Record<string, string | null> = {
     day: f.call_at ? dayWords(f.call_at, lang) : null,
-    call: f.call_at ? whenText(f.call_at, lang) : null,
-    one: f.one_on_one_at ? whenText(f.one_on_one_at, lang) : (fr ? 'nous vous confirmerons l\'heure bientôt' : 'we\'ll confirm the time soon'),
-    manager: facts.manager || (fr ? 'votre gestionnaire' : 'your manager'),
+    call: f.call_at ? atWords(f.call_at, lang) : null,
+    one: f.one_on_one_at ? atWords(f.one_on_one_at, lang) : (fr ? 'nous vous confirmerons l\'heure bientôt' : 'we\'ll confirm the time soon'),
+    manager: facts.manager || yours,
     group: String(f.group_session ?? '').trim() || null,
-    address: f.wa_email || (fr ? 'nous vous le confirmerons bientôt' : 'we\'ll confirm it soon'),
+    address: f.wa_email || (fr ? 'nous vous la confirmerons bientôt' : 'we\'ll confirm it soon'),
     canva: f.canva_link || null,
   };
   let removed = false;
   const lines: string[] = [];
-  for (const line of text.split('\n')) {
+  for (let line of text.split('\n')) {
     if (['group', 'canva'].some((k) => !values[k] && line.includes(slots[k]))) { removed = true; continue; }
+    if (!facts.manager) line = line.split(yours + ', ' + slots.manager).join(yours);   // never "your manager, your manager"
     lines.push(Object.keys(slots).reduce((l, k) => (values[k] == null ? l : l.split(slots[k]).join(values[k]!)), line));
   }
   if (!removed) return lines.join('\n');
   let n = 0;
   return lines.map((l) => (/^\d+\. /.test(l) ? String(++n) + l.slice(l.indexOf('.')) : l)).join('\n');
 }
-export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: string; text: string } {
-  const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name), role = c.role || (fr ? 'proposé' : 'offered');
+/* the Hub's own text, with its marked places */
+function welcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: string } {
+  const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name);
+  const role = String(c.role || '').trim(), roleFr = ROLE_FR[role] || role;
   const steps: string[] = fr ? [
     '1. Vos rencontres :\n   - Votre appel d\'accueil : ' + s.call + '. L\'invitation est dans votre calendrier.\n   - Une rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '.\n   - Votre séance d\'accueil de groupe en personne avec ' + s.manager + ', le ' + s.group + '. Si vous ne pouvez pas y être, dites-le-nous. Cette étape est essentielle.',
-    '2. Activez votre compte Google Welfare Avenue. Courriel : ' + s.address + '. Nous vous transmettrons votre premier mot de passe individuellement. Vous le changerez à votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
-    '3. Joignez-vous à notre espace Slack avec votre nouveau courriel Welfare Avenue : ' + facts.slack,
+    '2. Activez votre compte Google Welfare Avenue. Adresse courriel : ' + s.address + '. Nous vous transmettrons votre premier mot de passe en privé. Vous le changerez lors de votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
+    '3. Joignez-vous à notre espace Slack avec votre nouvelle adresse courriel Welfare Avenue : ' + facts.slack,
     '4. Joignez-vous à notre équipe Canva : ' + s.canva,
-    '5. Signez le contrat. Il vous est envoyé par DocuSign à votre courriel personnel.',
+    '5. Signez le contrat. Il vous est envoyé par DocuSign à votre adresse courriel personnelle.',
     '6. Lisez votre description de poste et préparez les questions que vous voulez aborder avec votre direction' + (facts.jdUrl ? ' : ' + facts.jdUrl : '.'),
   ] : [
     '1. Your meetings:\n   - Your onboarding call: ' + s.call + '. The invite is in your calendar.\n   - A 1-on-1 introductory meeting with your manager, ' + s.manager + ': ' + s.one + '.\n   - Your in-person group onboarding session with ' + s.manager + ' on ' + s.group + '. If you can\'t make it, let us know. This step is crucial.',
@@ -672,45 +690,50 @@ export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: s
     '6. Review your job description and prepare questions to ask about it with your director' + (facts.jdUrl ? ': ' + facts.jdUrl : '.'),
   ];
   const text = (fr ? [
-    'Bonjour ' + first + ',', '', 'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!', 'Nous sommes ravis que vous ayez accepté le poste de ' + role + ' au sein de notre organisme.',
+    'Bonjour ' + first + ',', '', 'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!',
+    roleFr ? 'Nous sommes ravis que vous ayez accepté le poste de ' + roleFr + ' au sein de notre organisme.' : 'Nous sommes ravis que vous ayez accepté notre offre.',
     'Votre premier jour est le ' + s.day + ', et nous avons hâte de vous accueillir. Pour bien commencer, voici les prochaines étapes :', '', 'Prochaines étapes :', ...steps, '',
-    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre accueil se passe en douceur et chaleureusement.',
+    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre intégration se déroule en douceur, dans un climat accueillant.',
     'Au plaisir de voir tout le beau travail que vous accomplirez avec nous!', facts.hrName,
   ] : [
-    'Dear ' + first + ',', '', 'Congratulations and welcome to the team at Welfare Avenue!', 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.',
+    'Dear ' + first + ',', '', 'Congratulations and welcome to the team at Welfare Avenue!',
+    role ? 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.' : 'We\'re excited you\'ve accepted our offer.',
     'Your first day is ' + s.day + ', and we can\'t wait to have you on board. To get started, please take the following steps:', '', 'Next Steps:', ...steps, '',
     'If you run into any technical issues or have any questions, don\'t hesitate to reach out. We\'re here to help make your onboarding experience smooth and welcoming.',
     'Looking forward to seeing all the great work you\'ll do with us!', facts.hrName,
   ]).join('\n');
-  return { subject: fr ? 'Bienvenue chez Welfare Avenue! Vos prochaines étapes' : 'Welcome to Welfare Avenue! Your Next Steps', text: facts.draft ? text : fillWelcome(text, f, c, facts) };
+  return { subject: fr ? 'Bienvenue chez Welfare Avenue! Vos prochaines étapes' : 'Welcome to Welfare Avenue! Your Next Steps', text };
 }
-/* what renderWelcome needs from the database. who: the HR person, by email; not on the roster, the team signs it */
+/* the email as it reads now: HR's saved subject or text where they changed it, else the Hub's own; filled in unless facts.draft */
+export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: string; text: string } {
+  const own = welcomeTemplate(c, facts);
+  const subject = typeof f.welcome_subject === 'string' && f.welcome_subject ? f.welcome_subject : own.subject;
+  const text = typeof f.welcome_text === 'string' && f.welcome_text ? f.welcome_text : own.text;
+  return { subject, text: facts.draft ? text : fillWelcome(text, f, c, facts) };
+}
+/* what renderWelcome needs from the database. who: the HR person, by email; not on the roster (or the roster cannot be read), the team signs it */
 async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean): Promise<WelcomeFacts> {
   const m = await getMember(f.manager_member_id);
   let jd: Row = null;
   if (c.position_id) ({ data: jd } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
-  const hr = (await membersByEmail(who))[0];
+  const hr = (await membersByEmail(who).catch(() => []))[0];
   return {
     draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null,
     slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com',
     hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
   };
 }
-/* the text for the preview: what HR saved wins; otherwise the Hub's own, with marked places until Start */
+/* the preview and the card: before Start, the marked places; after it, the real values */
 async function welcomeFor(f: Row, c: Row, by: string): Promise<{ subject: string; text: string }> {
-  if ((f.welcome_subject || f.welcome_text) && f.welcome_edited !== false) return { subject: f.welcome_subject || '', text: f.welcome_text || '' };
-  return renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, !AFTER_START.includes(f.status)));
+  return renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, !AFTER_START.includes(f.status) && f.status !== 'backed_out'));
 }
-/* a time, the manager, the address or the Canva link changed after Start: the Hub's own saved text follows. What HR edited stays theirs. It only touches the flow row, and it cannot fail the change. */
-async function refreshWelcome(flowId: number, by: string): Promise<void> {
-  try {
-    const f = await getFlow(flowId);
-    if (!f || f.welcome_edited !== false || !AFTER_START.includes(f.status)) return;
-    const c = await getCand(f.candidate_id);
-    if (!c) return;
-    const w = renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, false));
-    await svc.from('hub_onboard_flows').update({ welcome_subject: w.subject, welcome_text: w.text }).eq('id', f.id).eq('welcome_edited', false);
-  } catch (_) { /* the saved text is a convenience for HR; the change itself stands */ }
+/* welcome {flow_id}: the email as it reads now, for the card's Copy button. Reads only. */
+async function welcomeNow(b: Row, by: string): Promise<Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  return json({ ...(await welcomeFor(f, c, by)), edited: !!f.welcome_edited });
 }
 
 /* before Start: is this manager someone other than the one who got the grid link? Their marks are not this manager's, and any reminder was not for them */
@@ -775,9 +798,12 @@ async function start(b: Row, by: string, asUser: Row): Promise<Response> {
   if (!addr && googleOn) return no('no_address', 'Type the new address, or skip the Google account step.', 400);
   const canva = canvaLink(b.canva_link);
   if (canva instanceof Response) return canva;
-  const claim = await rosterClaim(addr, c);
+  let claim: { owner: string | null; own: boolean }, taken: boolean;
+  try {
+    claim = await rosterClaim(addr, c);
+    taken = (await addressState(addr, c.member_id, practice)).taken;
+  } catch (_) { return no('roster_check', ROSTER_CHECK, 503); }   // fails closed: an unreadable roster never lets an address through
   if (claim.owner) return no('address_taken', onProfileOf(addr!, claim.owner));
-  const taken = (await addressState(addr, c.member_id, practice)).taken;
   if (googleOn && taken) return no('address_taken', addr + ' is already in use. Change the address, or skip the Google account step.');
   /* Google skipped and Workspace has the address, on nobody's roster profile: it is someone's mailbox, so it is not stored and gets no invites */
   const keep = !googleOn && taken && !claim.own ? null : addr;
@@ -792,12 +818,13 @@ async function start(b: Row, by: string, asUser: Row): Promise<Response> {
   };
   if (otherManager) patch.reminded_manager_at = null;
   /* the card's saved text: the Hub's own with the real times, or what HR edited, with any marked place they kept filled in */
-  const facts = await welcomeFacts({ ...f, ...patch }, c, by, false);
-  const own = renderWelcome({ ...f, ...patch }, c, facts);
+  /* HR's edits are kept as typed, brackets and all, and only the part they changed: the rest stays the Hub's own and follows the template. Filled in when read. */
+  const own = welcomeTemplate(c, await welcomeFacts({ ...f, ...patch }, c, by, true));
   const edited = b.welcome && typeof b.welcome === 'object' ? b.welcome : null;
-  patch.welcome_subject = typeof edited?.subject === 'string' ? edited.subject : own.subject;
-  patch.welcome_text = typeof edited?.text === 'string' ? fillWelcome(edited.text, { ...f, ...patch }, c, facts) : own.text;
-  patch.welcome_edited = !!edited;
+  const mine = (v: unknown, base: string) => (typeof v === 'string' && v.trim() && v !== base ? v : null);
+  patch.welcome_subject = mine(edited?.subject, own.subject);
+  patch.welcome_text = mine(edited?.text, own.text);
+  patch.welcome_edited = !!(patch.welcome_subject || patch.welcome_text);
   /* the claim: of two presses, only one finds the flow still waiting or ready */
   const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', ['waiting', 'ready']).select(FLOW_COLS);
   if (error) return no('save', 'The Hub could not start this: ' + error.message + '. Try again.', 500);
@@ -865,7 +892,6 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   const held = (await readSteps(f.id)).filter((r) => r.status === 'hr_task' && stepOf(r.step)?.needs.includes('google') && stepOf(r.step)?.run);
   for (const r of held) await svc.from('hub_onboard_steps').update({ status: 'waiting', at: now, by }).eq('flow_id', f.id).eq('step', r.step).eq('status', 'hr_task');
   await advance(ctx);
-  await refreshWelcome(f.id, by);
   return reply(f.id);
 }
 
@@ -905,7 +931,6 @@ async function setCanvaLink(b: Row, by: string): Promise<Response> {
   const { data: won, error } = await svc.from('hub_onboard_flows').update({ canva_link: c.link, updated_at: new Date().toISOString() }).eq('id', f.id).neq('status', 'backed_out').select('id');
   if (error) return no('save', 'The Canva link could not be saved: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('backed_out', BACKED_OUT_NOW);
-  await refreshWelcome(f.id, by);
   return json({ ok: true, canva_link: c.link });
 }
 
@@ -962,7 +987,7 @@ async function bookOneOnOne(b: Row, by: string, asUser: Row): Promise<Response> 
   if (error) return no('save', 'The Hub could not book this: ' + error.message + '. Try again.', 500);
   const flow = (won as Row[] | null)?.[0];
   if (!flow) return no('already_booked', 'The 1-on-1 was just booked, or this onboarding just changed. Reload the page.');
-  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, one_on_one_at: when.at }); }
+  if (f.practice) return json({ ok: true, practice: true, one_on_one_at: when.at });
   const ctx = await makeCtx(flow, by, asUser);
   let invite: Invite;
   try {
@@ -977,7 +1002,6 @@ async function bookOneOnOne(b: Row, by: string, asUser: Row): Promise<Response> 
     at: new Date().toISOString(), by,
   }).eq('flow_id', f.id).eq('step', 'invites').eq('status', 'done');
   await log('onboard_flow', f.id, 'one_on_one_at', null, when.at, by);
-  await refreshWelcome(f.id, by);
   return json({ ok: true, one_on_one_at: when.at, invited: invite.to, mode: invite.live ? 'live' : 'test' });
 }
 
@@ -1007,7 +1031,7 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
   const { data: won, error } = await svc.from('hub_onboard_flows').update({ [col]: when.at, updated_at: new Date().toISOString() }).eq('id', f.id).in('status', AFTER_START).eq(col, old).select('id');
   if (error) return no('save', 'The Hub could not change this: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('changed', 'Someone has just changed this onboarding. Reload the page to see the new time.');
-  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, which, at: when.at, warnings: [] }); }
+  if (f.practice) return json({ ok: true, practice: true, which, at: when.at, warnings: [] });
 
   const back = () => svc.from('hub_onboard_flows').update({ [col]: old, updated_at: new Date().toISOString() }).eq('id', f.id).eq(col, when.at);
   const movePlan = kind === 'call' && !!f.onboarding_id;
@@ -1054,7 +1078,6 @@ async function changeTime(b: Row, by: string, asUser: Row): Promise<Response> {
     }
   } else warnings.push('There is no ' + word + ' invite yet, so Google was not asked. The new time is used when the invites are sent.');
   await log('onboard_flow', f.id, col, old, when.at, by);
-  await refreshWelcome(f.id, by);
 
   const first = c.name + ' (' + (c.role || 'new hire') + ')';
   const told = await tellManager(
@@ -1102,7 +1125,7 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
   const { data: won, error } = await (f.manager_member_id == null ? claim.is('manager_member_id', null) : claim.eq('manager_member_id', f.manager_member_id)).select('id');
   if (error) return no('save', 'The Hub could not change this: ' + error.message + '. Try again.', 500);
   if (!(won as unknown[] | null)?.length) return no('changed', 'Someone has just changed this onboarding. Reload the page.');
-  if (f.practice) { await refreshWelcome(f.id, by); return json({ ok: true, practice: true, manager: { member_id: m.id, name: m.name }, warnings: [] }); }
+  if (f.practice) return json({ ok: true, practice: true, manager: { member_id: m.id, name: m.name }, warnings: [] });
 
   const warnings: string[] = [];
   if (booked) {
@@ -1119,7 +1142,6 @@ async function changeManager(b: Row, by: string, asUser: Row): Promise<Response>
     if (gridError) warnings.push('The old manager\'s marks on the availability grid could not be cleared: ' + gridError.message + '. They may still show.');
   }
   await log('onboard_flow', f.id, 'manager_member_id', f.manager_member_id, m.id, by);
-  await refreshWelcome(f.id, by);
 
   const first = c.name + ' (' + (c.role || 'new hire') + ')';
   const stamp = f.id + '-' + Date.now();
@@ -1179,7 +1201,7 @@ async function backedOut(b: Row, by: string, _asUser: Row): Promise<Response> {
   }
   const { error: cardError } = await svc.from('hub_candidates').update({ status: 'withdrawn', close_reason: closeReason, stage_at: now, updated_at: now, updated_by: by }).eq('id', c.id).not('status', 'in', '(withdrawn,declined)');
   if (cardError) warnings.push('The card could not be moved to Withdrawn: ' + cardError.message + '. Move it by hand.');
-  else await log('candidate', c.id, 'status', c.status, 'withdrawn (backed out after Start onboarding)', by);
+  else await log('candidate', c.id, 'status', c.status, 'withdrawn (backed out ' + (AFTER_START.includes(f.status) ? 'after' : 'before') + ' Start onboarding)', by);
 
   /* nothing is taken out of Google, Slack or the Hub here: HR does that, and this names only what this flow made */
   const status = new Map((await readSteps(f.id)).map((r) => [r.step, r.status]));
@@ -1379,6 +1401,7 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'start') return await start(b, by, asUser);
     if (b.action === 'task_done') return await taskDone(b, by, asUser);
     if (b.action === 'set_canva_link') return await setCanvaLink(b, by);
+    if (b.action === 'welcome') return await welcomeNow(b, by);
     if (b.action === 'retry') return await retry(b, by, asUser);
     if (b.action === 'google_manual') return await googleManual(b, by, asUser);
     if (b.action === 'send_grid_link') return await sendGridLink(b, by);

@@ -59,8 +59,8 @@ comment on column public.hub_onboard_flows.one_on_one_event_id is 'The Google Ca
 comment on column public.hub_onboard_flows.onboarding_id is 'The onboarding plan Start created (onboardings.id). Null before Start and for practice flows.';
 comment on column public.hub_onboard_flows.slack_channel_id is 'The Slack onboarding channel the Hub added the hire to. Null until the hourly Slack check finds their account.';
 comment on column public.hub_onboard_flows.slack_user_id is 'The hire''s Slack user id, found by their welfareavenue.com address. Null until then.';
-comment on column public.hub_onboard_flows.welcome_subject is 'The welcome email subject, saved at Start: what HR edited in the preview, or the Hub''s own (welcome_edited says which). Never holds a password.';
-comment on column public.hub_onboard_flows.welcome_text is 'The welcome email body, saved at Start: what HR edited in the preview, or the Hub''s own with the real times (welcome_edited says which). Never holds a password.';
+comment on column public.hub_onboard_flows.welcome_subject is 'The welcome email subject HR typed in the preview, saved at Start only if they changed it. Null: the Hub''s own subject. Never holds a password.';
+comment on column public.hub_onboard_flows.welcome_text is 'The welcome email body HR typed in the preview, saved at Start only if they changed it, as typed with its [square bracket] places, which onboard-run fills in each time it is read (so a later change of time, manager, address or Canva link shows). Null: the Hub''s own text, which follows the template. Never holds a password.';
 comment on column public.hub_onboard_flows.pw_nonce is 'Signs the one-time password link. A secret: left out of the browser column grants, read only by edge functions with the service key.';
 comment on column public.hub_onboard_flows.pw_expires_at is 'When the one-time password link stops working (onboard_password_days after it was made).';
 comment on column public.hub_onboard_flows.pw_used_at is 'When the new hire opened the one-time password page. Set once; a second open shows nothing.';
@@ -71,7 +71,7 @@ comment on column public.hub_onboard_flows.started_at is 'When Start onboarding 
 comment on column public.hub_onboard_flows.created_at is 'When the acceptance created the flow.';
 comment on column public.hub_onboard_flows.updated_at is 'Last change; set by whoever writes the row.';
 comment on column public.hub_onboard_flows.roster_created is 'What the roster step did: true, it created the profile; false, the profile was on the roster before and it only linked it. Null until the step runs. The They backed out list words itself from this.';
-comment on column public.hub_onboard_flows.welcome_edited is 'Whose welcome text is saved: true, HR edited it in the preview and it stays as they left it; false, the Hub''s own, which follows a change of time, manager, address or Canva link. Null until Start.';
+comment on column public.hub_onboard_flows.welcome_edited is 'Whose welcome email this is: true, HR changed the subject or the text in the preview (welcome_subject, welcome_text keep their wording); false, the Hub''s own throughout. Null until Start. Either way the bracketed places are filled in when it is read.';
 comment on column public.hub_onboard_flows.canva_link is 'a fresh Canva invite link HR pastes for this hire; Canva''s links last 30 days';
 
 -- 3. the times people marked (the new hire's grid, the manager's grid)

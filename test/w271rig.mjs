@@ -90,7 +90,8 @@ class Query {
   run() {
     const { db, table, op } = this;
     const failure = db.failures.find((x) => x.table === table && x.op === op);
-    if (failure) { db.failures.splice(db.failures.indexOf(failure), 1); return { data: null, error: { message: failure.message } }; }
+    if (failure && failure.after > 0) failure.after--;   // let this many through first
+    else if (failure) { db.failures.splice(db.failures.indexOf(failure), 1); return { data: null, error: { message: failure.message } }; }
     const rows = db.rows(table);
     const matches = () => rows.filter((r) => this.tests.every((t) => t(r)));
     let hit;
@@ -137,7 +138,7 @@ function makeDb({ tables, config, secrets, serial }) {
     fire(t, op, n, o) { for (const h of this.hooks) if (h.t === t && h.op === op) h.fn(n, o, this); },
     onRpc(name, fn) { this.handlers[name] = fn; },   // fn(args, db, { jwt }) returns the data; throw to return an error. jwt is null on the service client, as auth.jwt() is live
     setCaller(user) { this.caller = user; },   // what auth.getUser() returns: { email, id, ... } or null (signed out)
-    failOn(t, op, message = 'rig: forced failure') { this.failures.push({ table: t, op, message }); },   // the next op on t returns this error
+    failOn(t, op, message = 'rig: forced failure', after = 0) { this.failures.push({ table: t, op, message, after }); },   // the next op on t returns this error (after lets that many through first)
     async rpc(name, args = {}, who = { jwt: null }) {
       const fn = this.handlers[name];
       if (!fn) return { data: null, error: { message: 'rig: rpc ' + name + ' is not registered' } };
