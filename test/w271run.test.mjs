@@ -172,7 +172,7 @@ test('preview still answers when the Directory check fails, with a warning', asy
 test('only HR or an admin gets in', async () => {
   const no = await setup({ hr: false, admin: false });
   const before = no.snapshot();
-  for (const action of ['preview', 'start', 'retry', 'google_manual', 'send_grid_link']) {
+  for (const action of ['preview', 'start', 'retry', 'google_manual', 'send_grid_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out']) {
     const r = await no.post({ action, flow_id: 21, candidate_id: 11, step: 'plan', wa_email: 'a.b@welfareavenue.com', manager_member_id: 2, call_at: CALL });
     assert.equal(r.status, 403, action);
   }
@@ -790,4 +790,523 @@ test('nothing in a full run went to a URL nobody registered', async () => {
   await s.start();
   await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
   assert.deepEqual(s.rig.unregistered(), []);
+});
+
+/* ---------- Task 7: changes after Start ---------- */
+const NEW_CALL = '2026-11-04T14:30:00.000Z';   // 09:30 on 04/11/26 in Toronto
+const NEW_ONE = '2026-11-05T15:00:00.000Z';
+const EVENTS = 'https://www.googleapis.com/calendar/v3/calendars/hub%40welfareavenue.com/events/';
+async function started(over = {}, start = {}) {   // Start has run: both invites booked, Sam Lee the manager
+  const s = await setup(over);
+  const r = await s.start(start);
+  assert.equal(r.status, 200);
+  s.calReset = () => { s.rig.fetchLog.length = 0; };
+  return s;
+}
+const changeActions = (s) => ({
+  book_one_on_one: () => s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE }),
+  change_time: () => s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL }),
+  change_manager: () => s.post({ action: 'change_manager', flow_id: 21, member_id: 1 }),
+  backed_out: () => s.post({ action: 'backed_out', flow_id: 21, reason: 'Took another job' }),
+});
+
+test('book_one_on_one after Start sends the invite then, to the hire and the manager', async () => {
+  const s = await started({}, { one_on_one_at: null });
+  assert.equal(s.flow().one_on_one_at, null);
+  assert.equal(s.flow().one_on_one_event_id, null);
+  s.calReset();
+  const r = await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.equal(Date.parse(s.flow().one_on_one_at), Date.parse(NEW_ONE));
+  assert.equal(s.flow().one_on_one_event_id, 'onboard21oneonone');
+  const [w, ...rest] = s.calWrites();
+  assert.equal(rest.length, 0, 'one calendar write');
+  assert.equal(w.method, 'POST');
+  assert.match(w.url, /\/events\?conferenceDataVersion=1&sendUpdates=all$/);
+  assert.equal(w.body.id, 'onboard21oneonone');
+  assert.deepEqual(w.body.attendees.map((a) => a.email).sort(), ['alex@example.com', 'sam.lee@welfareavenue.com']);
+  assert.equal(w.body.start.dateTime, NEW_ONE);
+  assert.equal(w.body.end.dateTime, '2026-11-05T15:30:00.000Z');
+  assert.match(w.body.summary, /^1-on-1: Alex Tremblay and Sam Lee$/);
+  assert.match(s.step('invites').detail, /1-on-1/);
+  assert.doesNotMatch(s.step('invites').detail, /still to book/, 'the card no longer says it is still to book');
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('book_one_on_one in mail test mode keeps the invite to the test inboxes', async () => {
+  const s = await started({ live: false }, { one_on_one_at: null });
+  s.calReset();
+  assert.equal((await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE })).status, 200);
+  const [w] = s.calWrites();
+  assert.deepEqual(w.body.attendees.map((a) => a.email), ['tester@welfareavenue.com']);
+  assert.match(w.body.summary, /^\[TEST, for alex@example\.com\] 1-on-1: /);
+});
+
+test('book_one_on_one refuses a 1-on-1 already booked, a past or unreadable time, and a manager who cannot be invited', async () => {
+  const booked = await started();
+  const before = booked.snapshot();
+  booked.calReset();
+  const again = await booked.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.equal(again.status, 409);
+  assert.match(again.body.message, /already booked/);
+  assert.deepEqual(booked.snapshot(), before);
+  assert.equal(booked.calWrites().length, 0);
+
+  const s = await started({}, { one_on_one_at: null });
+  const snap = s.snapshot();
+  s.calReset();
+  for (const at of ['2026-10-19T12:00:00Z', 'soon', '', null, undefined]) {
+    const r = await s.post({ action: 'book_one_on_one', flow_id: 21, at });
+    assert.equal(r.status, 400, String(at));
+    assert.ok(r.body.message.endsWith('.'));
+  }
+  const sam = () => s.rows('team_members').find((m) => m.id === 2);
+  sam().email = null;
+  const noMail = await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.equal(noMail.status, 409);
+  assert.match(noMail.body.message, /no email/);
+  sam().email = 'sam.lee@welfareavenue.com';
+  sam().active = false;
+  assert.equal((await s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE })).status, 409);
+  sam().active = true;
+  assert.deepEqual(s.snapshot(), snap);
+  assert.equal(s.calWrites().length, 0);
+});
+
+test('book_one_on_one: two presses book once, and a Google refusal leaves it unbooked', async () => {
+  const s = await started({}, { one_on_one_at: null });
+  s.calReset();
+  const [a, b] = await Promise.all([s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE }), s.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(s.calWrites().length, 1);
+
+  const f = await started({}, { one_on_one_at: null });
+  f.calReset();
+  f.calReply = (e) => (e.method === 'POST' ? { status: 500, json: { error: { message: 'Backend Error' } } } : null);
+  const r = await f.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE });
+  assert.equal(r.status, 502);
+  assert.match(r.body.message, /Backend Error/);
+  assert.doesNotMatch(r.body.message, /Press Retry/, 'there is no Retry button for this');
+  assert.ok(r.body.message.endsWith('.'));
+  assert.equal(f.flow().one_on_one_at, null, 'not marked as booked');
+  assert.equal(f.flow().one_on_one_event_id, null);
+});
+
+test('change_time on the 1-on-1 patches the same event, tells the guests through Google and re-notifies the manager', async () => {
+  const s = await started();
+  s.moved.length = 0;
+  s.calReset();
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE });
+  assert.equal(r.status, 200);
+  assert.equal(Date.parse(s.flow().one_on_one_at), Date.parse(NEW_ONE));
+  const [w, ...rest] = s.calWrites();
+  assert.equal(rest.length, 0);
+  assert.equal(w.method, 'PATCH');
+  assert.equal(w.url, EVENTS + 'onboard21oneonone?sendUpdates=all');
+  assert.equal(w.body.start.dateTime, NEW_ONE);
+  assert.equal(w.body.end.dateTime, '2026-11-05T15:30:00.000Z', 'the 30 minute 1-on-1');
+  assert.equal(w.body.start.timeZone, 'America/Toronto');
+  assert.deepEqual(w.body.attendees.map((a) => a.email).sort(), ['alex@example.com', 'sam.lee@welfareavenue.com']);
+  assert.equal(s.moved.length, 0, 'the 1-on-1 does not move day one');
+  const [n] = s.notifies();
+  assert.equal(s.notifies().length, 1);
+  assert.equal(n.body.event, 'onboard_date');
+  assert.equal(n.body.to_email, 'sam.lee@welfareavenue.com');
+  assert.match(n.body.body, /1-on-1/);
+  assert.match(n.body.body, /November 5, 2026/);
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('change_time on the call moves the plan, the event and the manager, and uses the Toronto date', async () => {
+  const s = await started();
+  const onb = s.flow().onboarding_id;
+  assert.ok(onb);
+  s.moved.length = 0;
+  s.calReset();
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 200);
+  assert.equal(Date.parse(s.flow().call_at), Date.parse(NEW_CALL));
+  assert.deepEqual(s.moved, [{ p_onboarding: onb, p_new: '2026-11-04' }]);
+  const [w] = s.calWrites();
+  assert.equal(s.calWrites().length, 1);
+  assert.equal(w.url, EVENTS + 'onboard21call?sendUpdates=all');
+  assert.equal(w.body.end.dateTime, '2026-11-04T15:30:00.000Z', 'the 60 minute call');
+  const [n] = s.notifies();
+  assert.equal(n.body.to_email, 'sam.lee@welfareavenue.com');
+  assert.match(n.body.title, /2026-11-04/);
+  assert.equal(s.rows('change_log').some((x) => x.entity_type === 'onboard_flow' && x.field === 'call_at'), true, 'the change is logged');
+});
+
+test('change_time near the clock change keeps the Toronto date of the instant', async () => {
+  const s = await started();
+  s.moved.length = 0;
+  await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: '2026-11-08T03:30:00.000Z' });   // 22:30 on 07/11/26 in Toronto
+  assert.equal(s.moved[0].p_new, '2026-11-07');
+});
+
+test('change_time refuses a past time, the same time, a missing booking, a bad choice and a bad time, with nothing written', async () => {
+  const s = await started({}, { one_on_one_at: null });
+  const before = s.snapshot();
+  s.moved.length = 0;
+  s.calReset();
+  const cases = [
+    [{ which: 'call', at: '2026-10-19T12:00:00Z' }, 400, /passed/],
+    [{ which: 'call', at: CALL }, 400, /already the time/],
+    [{ which: 'call', at: 'whenever' }, 400, /time/],
+    [{ which: 'call' }, 400, /time/],
+    [{ which: 'one_on_one', at: NEW_ONE }, 409, /not booked yet/],
+    [{ which: 'lunch', at: NEW_ONE }, 400, /call or the 1-on-1/],
+    [{ at: NEW_ONE }, 400, /call or the 1-on-1/],
+  ];
+  for (const [over, status, re] of cases) {
+    const r = await s.post({ action: 'change_time', flow_id: 21, ...over });
+    assert.equal(r.status, status, JSON.stringify(over));
+    assert.match(r.body.message, re, JSON.stringify(over));
+    assert.ok(r.body.message.endsWith('.'));
+  }
+  assert.deepEqual(s.snapshot(), before);
+  assert.equal(s.calWrites().length + s.notifies().length, 0);
+  assert.equal(s.moved.length, 0);
+});
+
+test('change_time in mail test mode keeps the invites to the test inboxes', async () => {
+  const s = await started({ live: false });
+  s.calReset();
+  await s.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE });
+  const [w] = s.calWrites();
+  assert.deepEqual(w.body.attendees.map((a) => a.email), ['tester@welfareavenue.com']);
+});
+
+test('change_time: when Google refuses, the time and the plan dates go back and HR is told', async () => {
+  const s = await started();
+  const onb = s.flow().onboarding_id;
+  const callBefore = s.flow().call_at;
+  s.moved.length = 0;
+  s.calReset();
+  s.calReply = () => ({ status: 403, json: { error: { message: 'Forbidden' } } });
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 502);
+  assert.match(r.body.message, /Forbidden/);
+  assert.match(r.body.message, /not changed/);
+  assert.ok(r.body.message.endsWith('.'));
+  assert.equal(s.flow().call_at, callBefore);
+  assert.deepEqual(s.moved, [{ p_onboarding: onb, p_new: '2026-11-04' }, { p_onboarding: onb, p_new: '2026-11-01' }], 'moved, then moved back');
+  assert.equal(s.notifies().length, 0, 'the manager hears nothing about a change that did not happen');
+});
+
+test('change_time: the plan failing to move changes nothing and never reaches Google', async () => {
+  const s = await started();
+  const callBefore = s.flow().call_at;
+  s.calReset();
+  s.rig.db.onRpc('wa271_move_start', () => { throw new Error('plan is locked'); });
+  const r = await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
+  assert.equal(r.status, 500);
+  assert.match(r.body.message, /plan is locked/);
+  assert.equal(s.flow().call_at, callBefore);
+  assert.equal(s.calWrites().length, 0);
+});
+
+test('change_time: two presses at once move it once; a manager who was not reached is a warning, not a failure', async () => {
+  const s = await started();
+  s.calReset();
+  const [a, b] = await Promise.all([
+    s.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE }),
+    s.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE }),
+  ]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(s.calWrites().length, 1);
+  assert.equal(s.notifies().length, 1);
+
+  const n = await started({ notifyReply: () => ({ json: { outcome: { 'sam.lee@welfareavenue.com': 'no_slack' }, hub: 'off' } }) });
+  const w = await n.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE });
+  assert.equal(w.status, 200);
+  assert.equal(Date.parse(n.flow().one_on_one_at), Date.parse(NEW_ONE));
+  assert.ok(w.body.warnings.some((x) => /Sam Lee was not told/.test(x) && x.endsWith('.')), JSON.stringify(w.body));
+});
+
+test('change_manager moves the 1-on-1 to the new attendee and tells both managers', async () => {
+  const s = await started();
+  Object.assign(s.rows('hub_onboard_flows')[0], { manager_link_sent_at: '2026-10-21T12:00:00Z', manager_link_member_id: 2, reminded_manager_at: '2026-10-23T12:00:00Z' });
+  s.calReset();
+  const r = await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.status, 200);
+  assert.equal(s.flow().manager_member_id, 1);
+  assert.equal(s.flow().manager_link_sent_at, null);
+  assert.equal(s.flow().manager_link_member_id, null);
+  assert.equal(s.flow().reminded_manager_at, null);
+  const [w] = s.calWrites();
+  assert.equal(s.calWrites().length, 1);
+  assert.equal(w.method, 'PATCH');
+  assert.equal(w.url, EVENTS + 'onboard21oneonone?sendUpdates=all');
+  assert.deepEqual(w.body.attendees.map((a) => a.email).sort(), ['alex@example.com', 'ruth.owen@welfareavenue.com']);
+  assert.match(w.body.summary, /^1-on-1: Alex Tremblay and Ruth Owen$/);
+  const sent = Object.fromEntries(s.notifies().map((n) => [n.body.to_email, n.body]));
+  assert.deepEqual(Object.keys(sent).sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  for (const b of Object.values(sent)) assert.equal(b.event, 'onboard_date');
+  assert.match(sent['ruth.owen@welfareavenue.com'].body, /You are now their manager/);
+  assert.match(sent['sam.lee@welfareavenue.com'].body, /Ruth Owen/);
+  assert.equal(s.rows('change_log').find((x) => x.entity_type === 'onboard_flow' && x.field === 'manager_member_id').new_value, '1');
+});
+
+test('change_manager before the 1-on-1 is booked touches no invite, and the new manager gets a fresh grid', async () => {
+  const s = await started({ tables: { hub_onboard_grids: [{ flow_id: 21, who: 'manager', slots: ['2026-11-03T15:00:00Z'] }, { flow_id: 21, who: 'hire', slots: ['2026-11-03T16:00:00Z'] }] } }, { one_on_one_at: null });
+  Object.assign(s.rows('hub_onboard_flows')[0], { manager_link_sent_at: '2026-10-21T12:00:00Z', manager_link_member_id: 2 });
+  s.calReset();
+  const r = await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.status, 200);
+  assert.equal(s.calWrites().length, 0, 'no 1-on-1, so no invite to move');
+  assert.equal(s.flow().manager_link_sent_at, null, 'the hourly job sends the new manager their link');
+  assert.deepEqual(s.rows('hub_onboard_grids').find((g) => g.who === 'manager').slots, [], 'the old manager\'s marks are not carried over');
+  assert.deepEqual(s.rows('hub_onboard_grids').find((g) => g.who === 'hire').slots, ['2026-11-03T16:00:00Z'], 'the hire\'s marks stay');
+  assert.equal(s.notifies().length, 2);
+  assert.match(s.notifies().find((n) => n.body.to_email === 'ruth.owen@welfareavenue.com').body.body, /link/);
+});
+
+test('change_manager refuses the same person, someone off the roster, someone inactive or without an email', async () => {
+  const s = await started();
+  const before = s.snapshot();
+  s.calReset();
+  const ruth = () => s.rows('team_members').find((m) => m.id === 1);
+  const cases = [
+    [{ member_id: 2 }, /already the manager/, () => {}],
+    [{ member_id: 999 }, /roster/, () => {}],
+    [{ member_id: null }, /roster/, () => {}],
+    [{ member_id: 1 }, /not active/, () => { ruth().active = false; }],
+    [{ member_id: 1 }, /no email/, () => { ruth().active = true; ruth().email = null; }],
+  ];
+  for (const [over, re, prep] of cases) {
+    prep();
+    const r = await s.post({ action: 'change_manager', flow_id: 21, ...over });
+    assert.equal(r.status >= 400 && r.status < 500, true, JSON.stringify(over));
+    assert.match(r.body.message, re);
+    assert.ok(r.body.message.endsWith('.'));
+  }
+  ruth().email = 'ruth.owen@welfareavenue.com';
+  assert.deepEqual(s.snapshot(), before);
+  assert.equal(s.calWrites().length + s.notifies().length, 0);
+});
+
+test('change_manager: when Google refuses, the old manager stays and nobody is told; two presses change it once', async () => {
+  const f = await started();
+  Object.assign(f.rows('hub_onboard_flows')[0], { manager_link_sent_at: '2026-10-21T12:00:00Z', manager_link_member_id: 2 });
+  f.calReset();
+  f.calReply = () => ({ status: 500, json: { error: { message: 'Backend Error' } } });
+  const r = await f.post({ action: 'change_manager', flow_id: 21, member_id: 1 });
+  assert.equal(r.status, 502);
+  assert.match(r.body.message, /Backend Error/);
+  assert.equal(f.flow().manager_member_id, 2);
+  assert.equal(f.flow().manager_link_sent_at, '2026-10-21T12:00:00Z', 'the old link record is back');
+  assert.equal(f.flow().manager_link_member_id, 2);
+  assert.equal(f.notifies().length, 0);
+
+  const s = await started();
+  s.calReset();
+  const [a, b] = await Promise.all([s.post({ action: 'change_manager', flow_id: 21, member_id: 1 }), s.post({ action: 'change_manager', flow_id: 21, member_id: 1 })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(s.calWrites().length, 1);
+  assert.equal(s.notifies().length, 2);
+});
+
+test('backed_out cancels both events, closes the onboarding and the flow, withdraws the card, and lists what to remove without removing it', async () => {
+  const s = await started();
+  await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  s.rows('hub_onboard_flows')[0].slack_channel_id = 'C0NEW';
+  Object.assign(s.step('hub'), { status: 'done' });
+  const onb = s.flow().onboarding_id;
+  const rowCounts = Object.fromEntries(Object.entries(s.snapshot()).map(([k, v]) => [k, v.length]));
+  s.calReset();
+  const r = await s.post({ action: 'backed_out', flow_id: 21, reason: 'Took another job' });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.equal(s.flow().status, 'backed_out');
+  const w = s.calWrites();
+  assert.deepEqual(w.map((e) => e.method), ['PATCH', 'PATCH'], 'cancelled, never deleted');
+  assert.deepEqual(w.map((e) => e.url).sort(), [EVENTS + 'onboard21call?sendUpdates=all', EVENTS + 'onboard21oneonone?sendUpdates=all']);
+  for (const e of w) assert.equal(e.body.status, 'cancelled');
+  assert.equal(s.rig.fetchLog.some((e) => e.method === 'DELETE'), false);
+  const o = s.rows('onboardings').find((x) => x.id === onb);
+  assert.equal(o.status, 'completed');
+  assert.ok(o.completed_at, 'closed the way the Hub closes a plan');
+  assert.equal(s.cand().status, 'withdrawn');
+  assert.equal(s.cand().close_reason, 'Backed out after accepting: Took another job');
+  assert.equal(r.body.remove.length, 3);
+  assert.match(r.body.remove.find((x) => /Google/.test(x)), /alex\.tremblay@welfareavenue\.com/);
+  assert.ok(r.body.remove.some((x) => /Slack/.test(x) && /C0NEW/.test(x)));
+  assert.ok(r.body.remove.some((x) => /Hub access/.test(x)));
+  for (const x of r.body.remove) assert.ok(x.endsWith('.'));
+  const after = Object.fromEntries(Object.entries(s.snapshot()).map(([k, v]) => [k, v.length]));
+  for (const [k, n] of Object.entries(rowCounts)) assert.ok(after[k] >= n, k + ' lost rows');
+  assert.equal(s.notifies().length + s.gmail().length, 0);
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('backed_out names only what this flow made', async () => {
+  const none = await started();
+  const r = await none.post({ action: 'backed_out', flow_id: 21, reason: '' });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.remove, [], 'google, hub and slack are HR tasks that were never done');
+  assert.equal(none.cand().close_reason, 'Backed out after accepting');
+
+  const skipped = await started({}, { skip: ['google', 'hub', 'slack', 'welcome'] });
+  assert.deepEqual((await skipped.post({ action: 'backed_out', flow_id: 21, reason: 'x' })).body.remove, []);
+
+  const googleOnly = await started();
+  await googleOnly.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  const g = await googleOnly.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  assert.equal(g.body.remove.length, 1);
+  assert.match(g.body.remove[0], /Google/);
+});
+
+test('backed_out: two presses cancel once; a Google refusal leaves the flow open, an invite already gone does not', async () => {
+  const s = await started();
+  s.calReset();
+  const [a, b] = await Promise.all([s.post({ action: 'backed_out', flow_id: 21, reason: 'x' }), s.post({ action: 'backed_out', flow_id: 21, reason: 'x' })]);
+  assert.deepEqual([a.status, b.status].sort(), [200, 409]);
+  assert.equal(s.calWrites().length, 2);
+  assert.equal(s.rows('change_log').filter((x) => x.entity_type === 'candidate' && /backed out/i.test(x.new_value || '')).length, 1);
+
+  const f = await started();
+  f.calReset();
+  f.calReply = () => ({ status: 500, json: { error: { message: 'Backend Error' } } });
+  const r = await f.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  assert.equal(r.status, 502);
+  assert.match(r.body.message, /Backend Error/);
+  assert.match(r.body.message, /still open/);
+  assert.ok(r.body.message.endsWith('.'));
+  assert.equal(f.flow().status, 'running', 'the claim is given back');
+  assert.equal(f.cand().status, 'hired');
+  assert.equal(f.rows('onboardings')[0].completed_at, null);
+
+  const gone = await started();
+  gone.calReset();
+  gone.calReply = () => ({ status: 410, json: { error: { message: 'Resource has been deleted' } } });
+  const ok = await gone.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  assert.equal(ok.status, 200);
+  assert.equal(gone.flow().status, 'backed_out');
+});
+
+test('backed_out: a plan that will not close is a warning, and the rest still happened', async () => {
+  const s = await started();
+  s.db.failOn('onboardings', 'update', 'plan is locked');
+  const r = await s.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  assert.equal(r.status, 200);
+  assert.equal(s.flow().status, 'backed_out');
+  assert.equal(s.cand().status, 'withdrawn');
+  assert.ok(r.body.warnings.some((x) => /plan could not be closed/.test(x) && /plan is locked/.test(x) && x.endsWith('.')), JSON.stringify(r.body));
+});
+
+test('after backed_out, Retry and the manual Google step refuse, and nothing can change', async () => {
+  const s = await started();
+  await s.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  const before = s.snapshot();
+  s.calReset();
+  const tries = [
+    s.post({ action: 'retry', flow_id: 21, step: 'invites' }),
+    s.post({ action: 'retry', flow_id: 21, step: 'google' }),
+    s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' }),
+    s.post({ action: 'start', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com', manager_member_id: 2, call_at: CALL }),
+    ...Object.values(changeActions(s)).map((go) => go()),
+  ];
+  for (const r of await Promise.all(tries)) {
+    assert.equal(r.status, 409);
+    assert.ok(r.body.message.endsWith('.'));
+  }
+  assert.deepEqual(s.snapshot(), before);
+  assert.equal(s.calWrites().length + s.notifies().length + s.gmail().length, 0);
+  assert.match((await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL })).body.message, /backed out/);
+  assert.match((await s.post({ action: 'retry', flow_id: 21, step: 'invites' })).body.message, /backed out/);
+  assert.match((await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' })).body.message, /backed out/);
+});
+
+test('the four changes refuse a flow that has not been started, with nothing written', async () => {
+  for (const status of ['waiting', 'ready']) {
+    const s = await setup({ fl: { status, call_at: CALL, call_event_id: 'onboard21call' } });
+    const before = s.snapshot();
+    for (const go of Object.values(changeActions(s))) {
+      const r = await go();
+      assert.equal(r.status, 409, status);
+      assert.match(r.body.message, /Start onboarding/);
+      assert.ok(r.body.message.endsWith('.'));
+    }
+    assert.deepEqual(s.snapshot(), before);
+    assert.equal(s.rig.fetchLog.length, 0);
+  }
+  const s = await setup();
+  assert.equal((await s.post({ action: 'change_time', flow_id: 999, which: 'call', at: NEW_CALL })).status, 404);
+});
+
+test('the changes work whether the flow is running or started', async () => {
+  for (const status of ['running', 'started']) {
+    const s = await started();
+    s.rows('hub_onboard_flows')[0].status = status;
+    assert.equal((await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL })).status, 200, status);
+    assert.equal((await s.post({ action: 'change_manager', flow_id: 21, member_id: 1 })).status, 200, status);
+    assert.equal(s.flow().status, status, 'the status is left as it was');
+    assert.equal((await s.post({ action: 'backed_out', flow_id: 21, reason: 'x' })).status, 200, status);
+    assert.equal(s.flow().status, 'backed_out');
+  }
+});
+
+test('a practice flow changes only its own row: no Calendar, no notify, no roster, no plan, no card', async () => {
+  const mk = async (start = {}) => {
+    const s = await setup({ cand: { practice: true } });
+    assert.equal((await s.start(start)).status, 200);
+    s.rig.fetchLog.length = 0;
+    return s;
+  };
+  const others = (s) => { const t = s.snapshot(); delete t.hub_onboard_flows; delete t.hub_onboard_steps; return t; };
+
+  const book = await mk({ one_on_one_at: null });
+  let frozen = others(book);
+  assert.equal((await book.post({ action: 'book_one_on_one', flow_id: 21, at: NEW_ONE })).status, 200);
+  assert.equal(Date.parse(book.flow().one_on_one_at), Date.parse(NEW_ONE));
+  assert.deepEqual(others(book), frozen);
+  assert.equal(book.rig.fetchLog.length, 0);
+
+  const time = await mk();
+  time.moved.length = 0;
+  frozen = others(time);
+  assert.equal((await time.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL })).status, 200);
+  assert.equal((await time.post({ action: 'change_time', flow_id: 21, which: 'one_on_one', at: NEW_ONE })).status, 200);
+  assert.equal(Date.parse(time.flow().call_at), Date.parse(NEW_CALL));
+  assert.equal(time.moved.length, 0);
+  assert.deepEqual(others(time), frozen);
+  assert.equal(time.rig.fetchLog.length, 0);
+
+  const mgr = await mk();
+  frozen = others(mgr);
+  assert.equal((await mgr.post({ action: 'change_manager', flow_id: 21, member_id: 1 })).status, 200);
+  assert.equal(mgr.flow().manager_member_id, 1);
+  assert.deepEqual(others(mgr), frozen);
+  assert.equal(mgr.rig.fetchLog.length, 0);
+
+  const out = await mk();
+  frozen = others(out);
+  const r = await out.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  assert.equal(r.status, 200);
+  assert.equal(out.flow().status, 'backed_out');
+  assert.deepEqual(r.body.remove, []);
+  assert.deepEqual(others(out), frozen);
+  assert.equal(out.rig.fetchLog.length, 0);
+});
+
+test('after backed_out the grid and password links of onboard-link are closed', async () => {
+  const s = await started();
+  await s.post({ action: 'backed_out', flow_id: 21, reason: 'x' });
+  const tables = structuredClone(s.snapshot());
+  tables.hub_candidates[0].status = 'hired';   // so that only the flow shuts the links
+  tables.hub_candidates[0].accepted_on = '2026-10-15';
+  Object.assign(tables.hub_onboard_flows[0], { pw_nonce: 'nonce1', pw_expires_at: '2026-12-01T00:00:00Z', pw_used_at: null });
+  const link = await loadFn('onboard-link', { tables: { hub_candidates: tables.hub_candidates, hub_onboard_flows: tables.hub_onboard_flows, hub_onboard_grids: [], team_members: tables.team_members, change_log: [] } });
+  link.setNow(NOW);
+  const get = async (t) => (await link.call(new Request('https://stub.supabase.test/functions/v1/onboard-link?t=' + encodeURIComponent(t)))).json();
+  const post = async (body) => (await link.call(new Request('https://stub.supabase.test/functions/v1/onboard-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))).json();
+  const before = structuredClone(link.db.tables);
+  for (const t of [await link.mod.wa271Token('offer', 11), await link.mod.wa271Token('mgr', 21)]) {
+    assert.equal((await get(t)).closed, true);
+    assert.equal((await post({ t, a: 'grid', slots: [] })).closed, true);
+  }
+  assert.equal((await get(await link.mod.wa271Token('pw', 21, 'nonce1'))).closed, true, 'the password link');
+  assert.deepEqual(link.db.tables, before);
 });
