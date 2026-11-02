@@ -75,7 +75,7 @@ begin
   assert (select sort from public.hub_notification_kinds where key = 'meet_propose') = 60, 'meet_propose sorts 60';
   assert (select sort from public.hub_notification_kinds where key = 'meet_avail_ask') = 61, 'meet_avail_ask sorts 61';
   assert not exists (select 1 from public.hub_notification_kinds where key in ('meet_propose', 'meet_avail_ask')
-                      and (row_to_json(hub_notification_kinds)::text ~ '—' or row_to_json(hub_notification_kinds)::text ~ '\mAI\M')), 'no em dash, no "AI"';
+                      and (row_to_json(hub_notification_kinds)::text ~ chr(8212) or row_to_json(hub_notification_kinds)::text ~ '\mAI\M')), 'no em dash, no "AI"';
 end $$;
 
 -- ---------------------------------------------------------------- Sam: due, save, mine
