@@ -527,6 +527,7 @@
   /* the email as it reads now, from onboard-run (welcome): HR's wording kept, today's times, manager, address and links filled in. wave275: also once the
      Hub has sent it (a copy on the card) or when sending failed; [first password] stays as it is, since only the sent email has the password */
   var WELCOME_COPY = ['hr_task', 'failed', 'done'];
+  function welcomeStatus(f) { var r = (f.steps || []).filter(function (x) { return x.step === 'welcome'; })[0]; return r ? r.status : ''; }
   function welcomeHtml(f) {
     var w = S.welcome[f.id];
     if (!w) return '<div class="dt"><div class="o271ln">Loading the email...</div></div>';
@@ -534,7 +535,9 @@
     return '<div class="dt">'
       + (w.sent_at ? '<div class="o271ln" data-o271sent><b>Sent ' + E(whenText(w.sent_at)) + '.</b> This copy reads as the email does now.</div>' : '')
       + '<div class="o271ln"><b>Subject:</b> ' + E(w.subject || '') + (w.edited ? ' <small>(your edit)</small>' : '') + '</div><div class="o271pre">' + E(w.text || '') + '</div>'
-      + (/\[first password\]|\[premier mot de passe\]/.test(w.text || '') ? '<div class="o271ln">[first password] stays as it is here: the Hub puts the password in only as the email goes, so nobody reads it on the card.</div>' : '')
+      + (/\[first password\]|\[premier mot de passe\]/.test(w.text || '') ? '<div class="o271ln" data-o271pwnote>' + (welcomeStatus(f) === 'hr_task'
+          ? 'You send this one yourself, and the Hub cannot fill in [first password] for you: ask an admin for the login details and put them in before you send it.'
+          : '[first password] stays as it is here: the Hub puts the password in only as the email goes, so nobody reads it on the card.') + '</div>' : '')
       + '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>'
       + '</div>';
   }

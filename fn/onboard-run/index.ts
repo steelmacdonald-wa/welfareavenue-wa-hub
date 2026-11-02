@@ -72,11 +72,13 @@
 //   The step welcome (no switch; needs invites only): sendWelcome sends the saved template (HR's edits kept), filled in as it goes, from hub@ to the personal
 //               address through Gmail (mail_mode test: the test inboxes, the real address named), Reply-To the person who started it when that is a WA address.
 //               It has both times (Toronto), both Meet links (hub_events, else Calendar), the login paragraph and the setup rundown (its page, /o/<offer
-//               token>?setup, for a wave275 hire). The first password is read from the vault (ONBOARD_FIRST_PASSWORD) only then, only when the google step is
-//               done, and put into that outgoing message alone; with the account step not done, or the password unset, the login paragraph says HR will send
-//               the login details separately. welcome_sent_at claims the send (a second run says already sent) and is given back when Gmail refuses.
-//   set_first_password {password}   {ok, set, set_at, warnings?}. Admins only (is_wa_admin; HR are refused). 8 to 100 characters, a letter and a digit, no
-//               space at either end, else 400 bad_password in a plain sentence. Stored with wa_vault_set (service role); change_log says "set" with no value;
+//               token>?setup, for a wave275 hire; no Meet part when the invites step was skipped). The first password is read from the vault
+//               (ONBOARD_FIRST_PASSWORD) only then, only when the Hub's own google step made the account (setup_ticks.google_made_at) and the password has
+//               not been changed since (onboard_first_password_at), and put into that outgoing message alone. Otherwise (no account yet, one HR made by hand,
+//               the password changed or unset) the login lines say HR will send the login details separately, and the detail says why. welcome_sent_at
+//               claims the send (a second run says already sent) and is given back when Gmail refuses.
+//   set_first_password {password}   {ok, set, set_at, warnings?}. Admins only (is_wa_admin; HR are refused). 8 to 100 printable ASCII characters, a letter
+//               and a digit, no space at either end, else 400 bad_password in a plain sentence. Stored with wa_vault_set (service role); change_log says "set" with no value;
 //               app_config onboard_first_password_at keeps when.
 //   first_password_state {}   {set, set_at}. Admins only. From onboard_first_password_at; the vault is never read here.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word).
@@ -522,6 +524,9 @@ async function runGoogle(ctx: Ctx): Promise<string> {
   const { error } = await svc.from('hub_onboard_flows').update({ wa_email: addr, updated_at: new Date().toISOString() }).eq('id', f.id);
   if (error) throw new Error('The account ' + addr + ' is in Google, but the Hub could not save the address: ' + error.message + '. Press "I created it, continue" with ' + addr + '.');
   ctx.flow.wa_email = addr;
+  /* wave275 Task 4: the Hub made this account with the vault password, at this time: the welcome email gives that password only when this mark is there and
+     the password has not been changed since. Best effort: without the mark the email says HR sends the login details, which is never wrong. */
+  await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'google_made_at', p_value: new Date().toISOString() });
   if (c.member_id) {   // the profile made at Accept has the personal address until the account exists
     const m = await getMember(c.member_id);
     if (m && !/@welfareavenue\.com$/i.test(String(m.email || ''))) await svc.from('team_members').update({ email: addr }).eq('id', m.id);
@@ -850,20 +855,31 @@ export const SETUP_STEPS: Array<{ key: string; title: { en: string; fr: string }
     body: { en: 'Look in your Calendar for your team\'s weekly meeting and accept the invitation.', fr: 'Cherchez dans votre Agenda la rencontre hebdomadaire de votre équipe et acceptez l\'invitation.' } },
 ];
 const rundownLines = (lang: 'en' | 'fr') => SETUP_STEPS.map((x, i) => '   ' + (i + 1) + '. ' + x.title[lang] + '. ' + x.body[lang]).join('\n');
-/* the account step is not done: the login step (its numbered line and the lines under it), or in HR's own wording the line with the placeholder, becomes
-   the sentence that HR sends the details separately */
+/* the login is not the Hub's to give: the login lines become the sentence that HR sends the details separately. The login lines are the template's own
+   (its heading, Email, the placeholder, the change-it sentence and the video) and any line with the placeholder; every other line HR wrote under that
+   step stays. The template's own heading (or a numbered line holding the placeholder) becomes the sentence, keeping its number; a heading HR rewrote stays,
+   with the sentence in the placeholder's place. A placeholder outside a numbered step: that line alone. */
+const LOGIN_HEADS = ['Sign in to your Welfare Avenue Google account at mail.google.com:', 'Connectez-vous à votre compte Google Welfare Avenue sur mail.google.com :'];
+const LOGIN_OWN = [/\[new address\]|\[nouvelle adresse\]/, /^\s*Google will ask you to change it the first time you sign in\.\s*$/, /^\s*Google vous demandera de le changer lors de votre première connexion\.\s*$/, /^\s*This video shows you how: /, /^\s*Pour vous guider, regardez cette vidéo : /];
+const hasPassword = (l: string) => PASSWORD_MARKS.some((p) => l.includes(p));
 function loginLater(text: string, lang: 'en' | 'fr'): string {
-  const lines = text.split('\n');
+  const lines = text.split('\n'), later = LOGIN_LATER[lang];
+  const indent = (l: string) => /^\s*/.exec(l)?.[0] || '';
   for (;;) {
-    const at = lines.findIndex((l) => PASSWORD_MARKS.some((p) => l.includes(p)));
+    const at = lines.findIndex(hasPassword);
     if (at < 0) return lines.join('\n');
     let start = at;
     while (start > 0 && /^\s+\S/.test(lines[start])) start--;   // a line under a numbered step: up to its number
-    const num = /^(\d+\. )/.exec(lines[start]);
-    if (!num) { lines.splice(at, 1, (/^\s*/.exec(lines[at])?.[0] || '') + LOGIN_LATER[lang]); continue; }
+    const num = /^(\d+\. )(.*)$/.exec(lines[start]);
+    if (!num) { lines.splice(at, 1, indent(lines[at]) + later); continue; }
     let end = start + 1;
     while (end < lines.length && /^\s+\S/.test(lines[end])) end++;
-    lines.splice(start, end - start, num[1] + LOGIN_LATER[lang]);
+    const under = lines.slice(start + 1, end);
+    const ownHead = at === start || LOGIN_HEADS.includes(num[2].trim());
+    const kept = ownHead
+      ? [num[1] + later, ...under.filter((l) => !hasPassword(l) && !LOGIN_OWN.some((r) => r.test(l)))]
+      : [lines[start], ...under.map((l) => (hasPassword(l) ? indent(l) + later : l)).filter((l) => !LOGIN_OWN.some((r) => r.test(l)))];
+    lines.splice(start, end - start, ...kept);
   }
 }
 /* the role in French, as the /o/ page names it (build/o/index.html ROLE_FR; functions are single files) */
@@ -872,7 +888,9 @@ export type WelcomeFacts = {
   draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string;
   login?: boolean;                                    // wave275: the account step is done (the login paragraph stays, [first password] and all); else HR sends the details
   meet?: { call: string | null; one: string | null }; // the Meet links of the two invites, when known
+  noInvites?: boolean;                                // the invites step was skipped: no invite comes from the Hub, so the email names no Meet link
   setupLink?: string | null;                          // the hire's rundown page (/o/<offer token>?setup), for a wave275 hire only
+  loginWhy?: string;                                  // for HR, when login is false: why the email says HR sends the login details
 };
 /* a date in words; French says 1er for the first of the month, which Intl does not */
 function dayWords(at: string, lang: 'en' | 'fr'): string {
@@ -902,6 +920,12 @@ function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string 
     password: null,
   };
   if (!facts.login) text = loginLater(text, lang);
+  if (facts.noInvites) {   // no invite will come from the Hub: the Meet part of each meeting line goes, the rest of the line stays
+    for (const k of ['callmeet', 'onemeet']) {
+      for (const label of [WELCOME_SLOTS.en[k], WELCOME_SLOTS.fr[k]]) text = text.replace(new RegExp('[ \\t]*Google Meet ?: ' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+      values[k] = '';   // anywhere else HR put it
+    }
+  }
   let removed = false;
   const lines: string[] = [];
   for (let line of text.split('\n')) {
@@ -965,15 +989,28 @@ async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean, live = 
   let jd: Row = null;
   if (c.position_id) ({ data: jd } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
   const hr = (await membersByEmail(who).catch(() => []))[0];
-  const google = draft ? null : (await readSteps(f.id)).find((r) => r.step === 'google');
-  return {
+  const facts: WelcomeFacts = {
     draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null,
     slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com',
     hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
-    login: google?.status === 'done' && !!f.wa_email,   // skipped is not done: the Hub did not make that account, so it cannot give its password
-    meet: draft ? { call: null, one: null } : await meetLinks(f, live && !f.practice),
-    setupLink: draft ? null : await setupPage(f, c),
   };
+  if (draft) return facts;
+  const steps = await readSteps(f.id);
+  const status = (k: string) => steps.find((r) => r.step === k)?.status;
+  const { data: more } = await svc.from('hub_onboard_flows').select('created_at, proposed_at, setup_ticks').eq('id', f.id).maybeSingle();
+  const login = await loginState(f, status('google'), (more as Row | null)?.setup_ticks);
+  return { ...facts, ...login, noInvites: status('invites') === 'skipped', meet: await meetLinks(f, live && !f.practice), setupLink: await setupPage((more || {}) as Row, c) };
+}
+/* the login paragraph is the Hub's to give only for an account the Hub itself made with the vault password (setup_ticks.google_made_at, set by the google
+   step), and only while that password has not been changed since (app_config onboard_first_password_at, set by set_first_password). An account HR made by
+   hand ("I created it, continue") or skipped has a password the Hub does not know. */
+async function loginState(f: Row, google: string | undefined, ticks: Row): Promise<{ login: boolean; loginWhy?: string }> {
+  if (google !== 'done' || !f.wa_email) return { login: false, loginWhy: 'The Google account is not made yet, so it says HR will send the login details separately: send them once the account exists.' };
+  const made = Date.parse(String(ticks?.google_made_at ?? ''));
+  if (Number.isNaN(made)) return { login: false, loginWhy: 'The Google account was made by hand, so the Hub does not know its password: it says HR will send the login details separately. Send them yourself.' };
+  const changed = Date.parse((await cfg(PW_AT)).trim());
+  if (!Number.isNaN(changed) && changed > made) return { login: false, loginWhy: 'The first password was changed in admin settings after the Hub made the account, so the account still has the earlier one: it says HR will send the login details separately. Send them yourself.' };
+  return { login: true };
 }
 /* the Meet link of each invite: the calendar sync's copy (hub_events, by the event id the invites step saved), else, when asked, Calendar itself. Best
    effort: without one the email says the link is in the invite. */
@@ -1001,9 +1038,8 @@ async function meetLinks(f: Row, ask: boolean): Promise<{ call: string | null; o
 }
 /* the rundown page is the offer link with ?setup. onboard-link keeps it open after booking for a wave275 hire only (a proposal, or a flow made on or after
    onboard_v2_since); a wave271 hire's link shuts once the meetings are booked, so their email lists the steps without it. */
-async function setupPage(f: Row, c: Row): Promise<string | null> {
-  const { data } = await svc.from('hub_onboard_flows').select('created_at, proposed_at').eq('id', f.id).maybeSingle();
-  if (!(data as Row | null)?.proposed_at && !(await isV2((data || {}) as Row))) return null;
+async function setupPage(row: Row, c: Row): Promise<string | null> {   // row: the flow's created_at and proposed_at
+  if (!row?.proposed_at && !(await isV2(row || {}))) return null;
   return HUB + '/o/' + await offerToken(c.id) + '?setup';
 }
 /* the preview and the card: before Start, the marked places; after it, the real values */
@@ -1053,12 +1089,14 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
   try {
     const facts = await welcomeFacts(f, c, f.started_by || ctx.by, false, true);
     const w = renderWelcome(f, c, facts);
-    let text = w.text, why = '';
-    if (!facts.login) why = ' The Google account is not made yet, so it says HR will send the login details separately: send them once the account exists.';
-    else if (PASSWORD_MARKS.some((p) => text.includes(p))) {
+    let text = w.text, why = facts.login ? '' : ' ' + (facts.loginWhy || '');
+    if (facts.login && PASSWORD_MARKS.some((p) => text.includes(p))) {
       password = await firstPassword();
       if (password) text = PASSWORD_MARKS.reduce((t, p) => t.split(p).join(password), text);
-      else { text = loginLater(text, langOf(c)); why = ' The first password is not set in admin settings, so it says HR will send the login details separately: send them yourself.'; }
+      else {
+        text = renderWelcome(f, c, { ...facts, login: false }).text;
+        why = ' The first password is not set in admin settings, so it says HR will send the login details separately: send them yourself.';
+      }
     }
     const signer = String(f.started_by || '').trim().toLowerCase();
     const sent = await deliver({ practice: false, to, subject: w.subject, text, html: welcomeHtml(text), ...(/@welfareavenue\.com$/.test(signer) ? { replyTo: signer } : {}) });
@@ -1074,7 +1112,7 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
 
 /* ---------- the first password (wave275 Task 4): set_first_password and first_password_state, admins only ---------- */
 /* The value goes to the vault (wa_vault_set, service role only) and nowhere else: change_log says "set", and app_config onboard_first_password_at keeps
-   when, which is all first_password_state reads (it never reads the vault). Google's rules: 8 to 100 characters, no space at either end; the Hub also asks
+   when, which is all first_password_state reads (it never reads the vault). Google's rules: 8 to 100 printable ASCII characters, no space at either end; the Hub also asks
    for a letter and a digit. */
 const PW_AT = 'onboard_first_password_at';
 function passwordProblem(v: unknown): string | null {
@@ -1083,7 +1121,8 @@ function passwordProblem(v: unknown): string | null {
   if (v !== v.trim()) return 'cannot start or end with a space (Google\'s rule).';
   if (v.length < 8) return 'needs at least 8 characters (Google\'s rule).';
   if (v.length > 100) return 'can have at most 100 characters (Google\'s rule).';
-  if (!/\p{L}/u.test(v) || !/[0-9]/.test(v)) return 'needs at least a letter and a digit.';
+  if (!/^[\x20-\x7E]+$/.test(v)) return 'can use only plain letters (no accents), digits, spaces and the signs on an English keyboard (Google\'s rule).';
+  if (!/[A-Za-z]/.test(v) || !/[0-9]/.test(v)) return 'needs at least a letter and a digit.';
   return null;
 }
 async function setFirstPassword(b: Row, by: string): Promise<Response> {

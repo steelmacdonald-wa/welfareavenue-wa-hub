@@ -1660,13 +1660,18 @@ test('M9: a quote in a name reaches Slack as a quote', async () => {
 const HR_ROW = { id: 7, name: 'Hana Rossi', email: 'hr.person@welfareavenue.com', active: true };
 const numbers = (text) => text.split('\n').filter((l) => /^\d+\. /.test(l)).map((l) => l.split('.')[0]).join('');
 const readWelcome = async (s) => { const r = await s.post({ action: 'welcome', flow_id: 21 }); assert.equal(r.status, 200); return r.body; };
+/* the account as the Hub's own google step leaves it: done, with setup_ticks.google_made_at (an account HR made by hand gives no password: see w275 Task 4) */
+const hubMade = async (s) => {
+  await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  s.flow().setup_ticks = { ...(s.flow().setup_ticks || {}), google_made_at: '2026-10-20T12:00:00.000Z' };
+};
 test('TEMPLATE: after Start the Hub\'s own text reads with the real values, in the SOP\'s order, and nothing of it is saved', async () => {
   const s = await setup({ config: { onboard_slack_join_link: 'https://join.slack.example/x', onboard_google_video: 'https://video.example/g' }, tables: { team_members: [...TEAM, HR_ROW] } });
   assert.equal((await s.start({ group_session: 'November 12', canva_link: 'https://www.canva.com/brand/join?token=a' })).status, 200);
   assert.equal(s.flow().welcome_edited, false);
   assert.equal(s.flow().welcome_subject, null, 'the Hub\'s own text is not saved, so it follows the template');
   assert.equal(s.flow().welcome_text, null);
-  await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });   // the account exists: the card's copy has the login paragraph
+  await hubMade(s);   // the Hub made the account: the card's copy has the login paragraph
   const before = s.snapshot();
   const w = await readWelcome(s), t = w.text;
   assert.deepEqual(s.snapshot(), before, 'reading writes nothing');
@@ -1710,7 +1715,7 @@ test('TEMPLATE: optional lines are left out and the steps renumber; no role read
 test('TEMPLATE: French, in the same order, with the French role name and natural wording', async () => {
   const s = await setup({ cand: { role: 'Operations Manager', summary: 'Français' }, tables: { team_members: [...TEAM, HR_ROW] } });
   await s.start({ group_session: '12 novembre', canva_link: 'https://www.canva.com/x' });
-  await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  await hubMade(s);
   const w = await readWelcome(s), t = w.text;
   assert.equal(w.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
   assert.ok(t.startsWith('Bonjour Alex,\n\nFélicitations et bienvenue dans l\'équipe de Welfare Avenue!'), t);
@@ -1769,7 +1774,7 @@ test('TEMPLATE: no password goes in the text, even with a password nonce on the 
   const s = await setup({ fl: { pw_nonce: 'SECRETNONCE', pw_expires_at: '2026-12-01T00:00:00Z' } });
   s.rig.env.ONBOARD_FIRST_PASSWORD = 'Lantern-Harbour-62';
   await s.start();
-  await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  await hubMade(s);
   const t = (await readWelcome(s)).text;
   assert.doesNotMatch(t, /SECRETNONCE|Lantern-Harbour-62|\/o\//, 'a wave271 hire gets no /o/ link here');
   assert.deepEqual(t.split('\n').filter((l) => /password/i.test(l)), ['   First password: [first password]'], 'wave275 Task 4: only the placeholder, which only the sent email fills');
@@ -3014,4 +3019,91 @@ test('w275 welcome: Start (the wave271 path) sends it once the invites are out, 
   assert.doesNotMatch(sent[0].bodies[0], /You can tick each step off/, 'a wave271 hire\'s link shuts at booking, so no rundown page: the steps are still listed');
   assert.match(sent[0].bodies[0], /   1\. Add your Welfare Avenue account to Chrome\./);
   assert.match(s.flow().welcome_text, /\[first password\]/, 'the saved text keeps the placeholder');
+});
+
+/* wave275 Task 4, review fixes */
+test('w275 fix: an account HR made by hand gives no vault password: the email says HR sends the login details, and the vault is not read; the Hub\'s own account is marked', async () => {
+  const hub = await t4();
+  await hub.acceptSetup();
+  assert.equal(hub.flow().setup_ticks.google_made_at, NOW_ISO, 'the google step marks the account the Hub made, and when');
+  const s = await t4({ pw: null });
+  await s.acceptSetup();
+  assert.equal(s.step('google').status, 'hr_task');
+  s.rig.env.ONBOARD_FIRST_PASSWORD = FIRST_PW;   // set now: still not the password of an account HR made
+  const g = await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  assert.equal(g.status, 200, JSON.stringify(g.body));
+  assert.equal(s.step('google').status, 'done');
+  assert.equal(s.flow().setup_ticks?.google_made_at ?? null, null, 'no mark for an account made by hand');
+  s.pwReads = 0;
+  await s.book();
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  assert.match(s.step('welcome').detail, /made by hand, so the Hub does not know its password/);
+  const text = mail(s.welcomes()[0]).bodies[0];
+  assert.match(text, /\n2\. HR will send your login details separately\.\n3\. /);
+  assert.doesNotMatch(text, /First password|\[first password\]/);
+  assert.ok(!text.includes(FIRST_PW));
+  assert.equal(s.pwReads, 0, 'the vault is not read');
+  assert.match((await s.card()).text, /2\. HR will send your login details separately\./);
+  s.noPw();
+});
+
+test('w275 fix: the first password changed after the Hub made the account: the email does not give it; one set before is given', async () => {
+  const s = await t4();
+  await s.acceptSetup();
+  assert.equal(s.step('google').status, 'done');
+  s.rows('app_config').push({ key: 'onboard_first_password_at', value: '2026-10-20T13:00:00.000Z' });   // an admin set a new one an hour after the account was made
+  s.rig.env.ONBOARD_FIRST_PASSWORD = 'Newer-Password-77';
+  s.pwReads = 0;
+  await s.book();
+  assert.match(s.step('welcome').detail, /changed in admin settings after the Hub made the account/);
+  const text = mail(s.welcomes()[0]).bodies[0];
+  assert.match(text, /\n2\. HR will send your login details separately\.\n/);
+  assert.ok(!text.includes(FIRST_PW) && !text.includes('Newer-Password-77'));
+  assert.equal(s.pwReads, 0);
+  const before = await t4({ config: { onboard_first_password_at: '2026-10-20T11:00:00.000Z' } });
+  await before.acceptSetup();
+  await before.book();
+  assert.equal(count(mail(before.welcomes()[0]).bodies[0], FIRST_PW), 1, 'set before the account: that is its password');
+});
+
+test('w275 fix: set_first_password takes printable ASCII only, as Google does', async () => {
+  const s = await vaultRig();
+  for (const password of ['Mot-de-passé-48', 'Pässword-1234', 'Harbour Lantern48', 'Harbour-48-\u{1F511}x']) {
+    const before = s.snapshot();
+    const r = await s.post({ action: 'set_first_password', password });
+    assert.equal(r.status, 400, JSON.stringify(password));
+    assert.equal(r.body.message, 'The first password can use only plain letters (no accents), digits, spaces and the signs on an English keyboard (Google\'s rule). Nothing was changed.');
+    assert.deepEqual(s.snapshot(), before);
+  }
+  assert.equal(s.vault.length, 0);
+  const ok = await s.post({ action: 'set_first_password', password: 'Plain ascii-48!~' });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+});
+
+test('w275 fix: with the invites step skipped the email names no Meet link, and keeps the times', async () => {
+  const s = await setup();
+  await s.start({ skip: ['invites'] });
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  const text = mail(s.gmail()[0]).bodies[0];
+  assert.match(text, /Your onboarding call: Sunday, November 1, 2026.*10:30.*\. The invite is in your calendar\.\n/);
+  assert.match(text, /with your manager, Sam Lee: Tuesday, November 3, 2026.*\n/);
+  assert.doesNotMatch(text, /Google Meet|will come with the invite|\[/);
+  const fr = await setup({ cand: { summary: 'Français' } });
+  await fr.start({ skip: ['invites'] });
+  assert.doesNotMatch(mail(fr.gmail()[0]).bodies[0], /Google Meet|viendra avec l'invitation|\[/);
+});
+
+test('w275 fix: the login sentence takes the place of the login lines only; other lines HR wrote under that step stay', async () => {
+  const s = await setup();
+  const r = s.rig.mod.renderWelcome;
+  const f = flow({ status: 'running', call_at: P_CALL, one_on_one_at: P_ONE, wa_email: 'alex.tremblay@welfareavenue.com' }), c = candidate();
+  const facts = { manager: 'Sam Lee', jdUrl: null, video: 'https://video.example/g', slack: 'https://welfareavenue.slack.com', hrName: 'Hana Rossi', meet: { call: null, one: null }, setupLink: null, login: false };
+  const own = '2. Sign in to your Welfare Avenue Google account at mail.google.com:\n   Email: [new address]\n   First password: [first password]\n   Google will ask you to change it the first time you sign in.\n   This video shows you how: https://video.example/g\n   If you get stuck, call Sam on 555-0100.\n3. Next.';
+  assert.equal(r({ ...f, welcome_text: own }, c, facts).text, '2. HR will send your login details separately.\n   If you get stuck, call Sam on 555-0100.\n3. Next.');
+  const theirs = '2. Your login:\n   First password: [first password]\n   Keep it safe.\n3. Next.';
+  assert.equal(r({ ...f, welcome_text: theirs }, c, facts).text, '2. Your login:\n   HR will send your login details separately.\n   Keep it safe.\n3. Next.', 'a heading HR rewrote stays');
+  const onNumber = '2. Your password is [first password].\n   Keep it safe.\n3. Next.';
+  assert.equal(r({ ...f, welcome_text: onNumber }, c, facts).text, '2. HR will send your login details separately.\n   Keep it safe.\n3. Next.');
+  const both = '2. Your login:\n   Email: [new address], password: [first password]\n3. Next.';
+  assert.equal(r({ ...f, welcome_text: both }, c, facts).text, '2. Your login:\n   HR will send your login details separately.\n3. Next.', 'a line with the placeholder becomes the sentence, even with the address on it');
 });

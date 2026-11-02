@@ -505,9 +505,11 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     allErrs.push(...f.errs); await f.close();
   }
   {
-    const f = await fresh(b, { who: 'member', hash: '#hrcentre/onboarding', fixture: fx271(), rpcs: rpcs271(), init: INIT, wait: 5000 });
+    const f = await fresh(b, { who: 'member', hash: '#hrcentre/onboarding', fixture: fx271({ started: true }), rpcs: rpcs271(), init: INIT, wait: 5000 });
     await open(f);
     ok('PW: HR who are not admins see no first password, and the state is not asked for', !(await f.ev(() => !!document.querySelector('[data-o271pw]'))) && (await calls(f, 'first_password_state')).length === 0);
+    const note = await f.ev(s2 => { const e = document.querySelector(s2 + ' [data-o271pwnote]'); return e ? e.innerText : null; }, card(FLOW.started));
+    ok('TODO: a welcome still HR\'s to send says HR sends it and an admin gives the login details, not that the Hub fills the password', /You send this one yourself/.test(note || '') && /ask an admin for the login details/.test(note || '') && !/the Hub puts the password in/.test(note || ''), note);
     allErrs.push(...f.errs); await f.close();
   }
 
