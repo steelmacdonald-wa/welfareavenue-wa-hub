@@ -32,8 +32,9 @@
 //   wave275 (v2):
 //   propose {flow_id, call_at, one_on_one_at, by?}   {ok, repeated, proposal: {call_at, one_on_one_at, by, at}, hire_emailed, warnings[], practice?}. The manager's two times
 //               for the hire, the rules kept here once: both at least onboard_propose_lead_hours (48) ahead; each whole meeting (onboard_call_min, onboard_one_on_one_min)
-//               inside one block of the manager's availability for that Toronto weekday (an except entry for the date replaces the weekday; none saved: Monday to
-//               Friday 9 to 5); clear of hub@ meetings the manager is invited to (hub_events, not cancelled); clear of the booked and proposed times of the manager's
+//               inside one block of the manager's availability for that Toronto weekday (read only through wa275_availability_of with the service key: amended
+//               02/11/26, the week is wave276's typical week saved on Home, Monday to Friday 9 to 5 while none is saved; an except entry for the date, from the
+//               roster row, replaces the weekday; a read that fails refuses with 503 and saves nothing); clear of hub@ meetings the manager is invited to (hub_events, not cancelled); clear of the booked and proposed times of the manager's
 //               other flows (backed out flows and closed cards left out); the two not overlapping each other. Refusals {error, message (English), messages {en, fr},
 //               which?}: bad_time (also a time with no zone, Z or +hh:mm), lead_time, overlap, outside_hours, busy, taken, already_booked (the hire said yes, or
 //               call_at is set), closed, no_manager, manager_inactive, manager_no_email (the hub@ check needs their roster email), changed. A proposal another
@@ -1766,12 +1767,20 @@ async function takenTimes(flowId: number, managerId: number, callMin: number, on
 
 const spansOf = (callAt: string, oneAt: string, callMin: number, oneMin: number): Array<[Which, number, number]> =>
   [['call', Date.parse(callAt), Date.parse(callAt) + callMin * 60000], ['one_on_one', Date.parse(oneAt), Date.parse(oneAt) + oneMin * 60000]];
+/* the manager's availability, read only through wa275_availability_of (amended 02/11/26, Steel: the week is wave276's typical week, saved on Home, and the
+   one-off dates stay on the roster row; the function joins them, with Monday to Friday 9 to 5 when no week is saved). A read that fails throws. */
+async function availabilityOf(memberId: number): Promise<Row> {
+  const { data, error } = await svc.rpc('wa275_availability_of', { p_member: memberId });
+  if (error || !data || typeof data !== 'object') throw new Error('The manager\'s availability could not be read' + (error ? ' (' + error.message + ')' : '') + '.');
+  return data as Row;
+}
 /* the rules both times must meet, kept once for propose and for the hire's Yes (book), in this order: at least lead hours ahead; each whole meeting inside
    one block of the manager's availability for that Toronto date; clear of hub@ meetings they are invited to; clear of their other new hires' times.
    null: both fine. A read that fails throws, so nothing is saved or booked on a guess. */
 async function timesProblem(flowId: number, m: Row, spans: Array<[Which, number, number]>, lead: number, callMin: number, oneMin: number): Promise<{ code: string; which: Which } | null> {
   for (const [which, s] of spans) if (s < Date.now() + lead * 3600000) return { code: 'lead_time', which };
-  const av = m.availability && typeof m.availability === 'object' ? m.availability : DEFAULT_AVAILABILITY;
+  const read = await availabilityOf(Number(m.id));
+  const av = read.availability && typeof read.availability === 'object' ? read.availability : DEFAULT_AVAILABILITY;
   for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return { code: 'outside_hours', which };
   const from = Math.min(spans[0][1], spans[1][1]), to = Math.max(spans[0][2], spans[1][2]);
   const { data: evs, error } = await svc.from('hub_events').select('id, start_at, end_at').contains('attendee_emails', [String(m.email || '').trim().toLowerCase()]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
@@ -1794,7 +1803,7 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
   if (!callAt || !oneAt || !zoned(b.call_at) || !zoned(b.one_on_one_at)) return refuse('bad_time', 400);
   const managerId = f.manager_member_id ?? f.manager_link_member_id;
-  const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active, availability').eq('id', Number(managerId)).maybeSingle() : { data: null };
+  const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active').eq('id', Number(managerId)).maybeSingle() : { data: null };
   if (!m) return refuse('no_manager');
   if (m.active === false) return refuse('manager_inactive', 409, undefined, undefined, String(m.name || 'The manager'));
   const mEmail = String(m.email || '').trim().toLowerCase();
@@ -2089,7 +2098,7 @@ async function book(b: Row): Promise<Response> {
   if (!f.proposed_at || !f.proposed_call_at || !f.proposed_one_on_one_at) return refuse('no_proposal');
   if (!callAt || !oneAt || !sameInstant(callAt, f.proposed_call_at) || !sameInstant(oneAt, f.proposed_one_on_one_at)) return refuse('changed');
   const managerId = f.manager_member_id ?? f.manager_link_member_id;
-  const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active, availability').eq('id', Number(managerId)).maybeSingle() : { data: null };
+  const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active').eq('id', Number(managerId)).maybeSingle() : { data: null };
   if (!m) return refuse('no_manager');
   if (m.active === false) return refuse('manager_inactive', 409, undefined, undefined, String(m.name || 'The manager'));
   const mEmail = String(m.email || '').trim().toLowerCase();

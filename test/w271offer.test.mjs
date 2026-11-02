@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, generateKeyPairSync } from 'node:crypto';
 import { loadFn } from './w271rig.mjs';
+import { availabilityOf } from './w275avail.mjs';
 
 const NOW = '2026-11-01T15:00:00Z';
 const SB = 'https://stub.supabase.test';
@@ -458,6 +459,7 @@ test('w275 integration: the offer, the trigger and the real onboard-run on one d
   assert.equal(mail.length, 1, 'and the email from hub@');
   const t = decodeURIComponent(notified[0].url.slice('/o/'.length));
   s.link.db.tables = s.rig.db.tables;
+  s.link.db.onRpc('wa275_availability_of', availabilityOf);   // amended 02/11/26: the manager's hours are read through the function
   const g2 = await s.link.call(new Request(SB + '/functions/v1/onboard-link?t=' + encodeURIComponent(t)));
   const b = await g2.json();
   assert.equal(g2.status, 200, JSON.stringify(b));

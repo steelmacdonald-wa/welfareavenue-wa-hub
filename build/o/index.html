@@ -17,10 +17,11 @@
      stray Enter cannot decline), and the person still presses it, so a mail scanner that opens the link answers nothing. If the
      server cannot be reached the page says so and offers to try again; it only says a link does not work when the function says so. The new hire's grid needs grid.minHours hours (the function's onboard_grid_min_hours, 10 by default) before Save is enabled: the counter reads "N of M hours marked" and one plain sentence says why Save waits; the manager's grid has no minimum. English and French (?l=fr, else the function's lang). Grid times come from the instants
      the function sends, formatted with Intl in America/Toronto, never by adding offsets. The password view is a stub until Task 10.
-     wave275 (Task 2, 02/11/26): a manager link in mode propose shows the manager's own page instead of the 1-on-1 grid: first a notice when their
-     availability is missing or more than 30 days old ("Please confirm your availability: it was last set on <date>"), then their weekly blocks
-     (each weekday: start and end times, Remove, Add a block) and exceptions by date (Add a date, Remove this date; no blocks means not available
-     that day), saved with Save availability; then the two picks, "Onboarding call (60 min)" and "1-on-1 (30 min)", each a click on a cell of the
+     wave275 (Task 2, 02/11/26; amended in Task 6 the same day, Steel: the week is wave276's typical week): a manager link in mode propose shows the
+     manager's own page instead of the 1-on-1 grid: first, when no week is saved on Home or their team asked again since, "Set your week on the
+     Hub's Home page" with a link to hub.welfareavenue.com (wave276's pop-up opens there); then their usual week, read-only, as the function derives
+     it; then their one-off dates (Add a date, Remove this date; no blocks means not available that day), saved with Save these dates (only the dates
+     are posted); then the two picks, "Onboarding call (60 min)" and "1-on-1 (30 min)", each a click on a cell of the
      next 14 days. A cell that cannot start the meeting being picked (outside the saved hours, under the lead time, over a hub@ meeting or another
      new hire's times, or over the other pick) is greyed and disabled, with a legend; onboard-run checks again when "Propose these times" is pressed,
      and its refusal shows in the page's language. A wave271 flow (mode grid, or no mode) keeps the grid as it was.
@@ -104,6 +105,8 @@
   .link { background: none; border: 0; padding: 6px 4px; color: var(--green); font: 500 15px 'Space Grotesk', sans-serif; text-decoration: underline; cursor: pointer; border-radius: 6px; }
   .link.rm { color: var(--muted); }
   .none { display: inline-block; color: var(--muted); font-size: 15px; padding: 7px 10px 7px 0; }
+  .wk { display: inline-block; font-size: 16px; font-weight: 500; padding: 7px 14px 7px 0; }   /* amended 02/11/26: the usual week, read-only */
+  .stale a { color: var(--green); font-weight: 600; }
   .ex { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
   .exd { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; margin: 0 0 8px; }
   .btn.inline { display: inline-block; width: auto; padding: 14px 28px; margin: 18px 0 6px; }
@@ -536,13 +539,16 @@
     en: {
       title: 'Welfare Avenue: propose times',
       intro: 'Please propose two times for <strong>{hire}</strong>, who is joining us as <strong>{role}</strong>: the onboarding call ({callMin} minutes, their first day) and your 1-on-1 with them ({oneMin} minutes).',
-      staleAt: 'Please confirm your availability: it was last set on {date}. Check the hours below and press Save availability.',
-      staleNone: 'Please confirm your availability: it has not been set yet, so the Hub is using Monday to Friday, 9 am to 5 pm. Check the hours below and press Save availability.',
-      avH: 'Your availability', avNote: 'Toronto time (Eastern). The hours you are usually free for onboarding calls and 1-on-1s. The times you can pick below come from these hours.',
+      setWeek: 'Set your week on the Hub\'s Home page', openHub: 'Open the Hub',
+      staleAt: 'Your team asked for your week again since you last set it on {date}, so please check it there.',
+      staleNone: 'You have not set it yet, so the Hub is using Monday to Friday, 9 am to 5 pm.',
+      avH: 'Your availability', avNote: 'Toronto time (Eastern). Your usual week is the one you keep on the Hub\'s Home page. The times you can pick below come from it and from your one-off dates.',
+      weekH: 'Your usual week', weekSet: 'Set on {date}.', weekDefault: 'Not set yet: Monday to Friday, 9 am to 5 pm, until you set it.',
+      exSave: 'Save these dates', exSaved: 'Saved. The times below now follow these dates.',
       to: 'to', remove: 'Remove', addBlock: 'Add a block', notAvail: 'Not available',
-      exH: 'Exceptions', exNote: 'A date that is not like your usual week: not available at all, or other hours.', exNone: 'No exceptions.', addEx: 'Add a date', removeEx: 'Remove this date', exDate: 'Date', exOff: 'Not available that day',
+      exH: 'One-off dates', exNote: 'A date that is not like your usual week: not available at all, or other hours.', exNone: 'No one-off dates.', addEx: 'Add a date', removeEx: 'Remove this date', exDate: 'Date', exOff: 'Not available that day',
       start: '{d}, block {n}, start', end: '{d}, block {n}, end',
-      saveAv: 'Save availability', avSaved: 'Saved. The times below now follow these hours.', avDirty: 'You have changes that are not saved yet. Save them to use them below.',
+      avDirty: 'You have changes that are not saved yet. Save them to use them below.',
       avBadTime: 'Each block needs a start and an end, with the end after the start.', avBadDate: 'Each exception needs a date, and each date only once.',
       pickH: 'Pick the times', pickNote: 'Choose a meeting, then click a free time. You can pick times at least {lead} hours from now, inside your hours, and clear of your meetings.',
       call: 'Onboarding call ({n} min)', one: '1-on-1 ({n} min)', notPicked: 'Not picked yet',
@@ -559,13 +565,16 @@
     fr: {
       title: 'Welfare Avenue: proposer des heures',
       intro: 'Veuillez proposer deux heures pour <strong>{hire}</strong>, qui se joint à nous comme <strong>{role}</strong>: l’appel d’accueil ({callMin} minutes, sa première journée) et votre rencontre individuelle ({oneMin} minutes).',
-      staleAt: 'Veuillez confirmer vos disponibilités: elles ont été indiquées pour la dernière fois le {date}. Vérifiez les heures ci-dessous et appuyez sur Enregistrer mes disponibilités.',
-      staleNone: 'Veuillez confirmer vos disponibilités: elles n’ont pas encore été indiquées, alors le Hub utilise du lundi au vendredi, de 9 h à 17 h. Vérifiez les heures ci-dessous et appuyez sur Enregistrer mes disponibilités.',
-      avH: 'Vos disponibilités', avNote: 'Heure de Toronto (Est). Les heures où vous êtes habituellement libre pour les appels d’accueil et les rencontres individuelles. Les heures à choisir plus bas viennent de ces plages.',
+      setWeek: 'Indiquez votre semaine sur la page d’accueil du Hub', openHub: 'Ouvrir le Hub',
+      staleAt: 'Votre équipe a redemandé votre semaine depuis que vous l’avez indiquée le {date}: veuillez la vérifier là-bas.',
+      staleNone: 'Vous ne l’avez pas encore indiquée, alors le Hub utilise du lundi au vendredi, de 9 h à 17 h.',
+      avH: 'Vos disponibilités', avNote: 'Heure de Toronto (Est). Votre semaine habituelle est celle que vous gardez sur la page d’accueil du Hub. Les heures à choisir plus bas viennent d’elle et de vos dates ponctuelles.',
+      weekH: 'Votre semaine habituelle', weekSet: 'Indiquée le {date}.', weekDefault: 'Pas encore indiquée: du lundi au vendredi, de 9 h à 17 h, en attendant.',
+      exSave: 'Enregistrer ces dates', exSaved: 'Enregistré. Les heures ci-dessous suivent maintenant ces dates.',
       to: 'à', remove: 'Retirer', addBlock: 'Ajouter une plage', notAvail: 'Non disponible',
-      exH: 'Exceptions', exNote: 'Une date différente de votre semaine habituelle: pas disponible du tout, ou d’autres heures.', exNone: 'Aucune exception.', addEx: 'Ajouter une date', removeEx: 'Retirer cette date', exDate: 'Date', exOff: 'Non disponible ce jour-là',
+      exH: 'Dates ponctuelles', exNote: 'Une date différente de votre semaine habituelle: pas disponible du tout, ou d’autres heures.', exNone: 'Aucune date ponctuelle.', addEx: 'Ajouter une date', removeEx: 'Retirer cette date', exDate: 'Date', exOff: 'Non disponible ce jour-là',
       start: '{d}, plage {n}, début', end: '{d}, plage {n}, fin',
-      saveAv: 'Enregistrer mes disponibilités', avSaved: 'Enregistré. Les heures ci-dessous suivent maintenant ces plages.', avDirty: 'Certaines modifications ne sont pas encore enregistrées. Enregistrez-les pour les utiliser plus bas.',
+      avDirty: 'Certaines modifications ne sont pas encore enregistrées. Enregistrez-les pour les utiliser plus bas.',
       avBadTime: 'Chaque plage doit avoir un début et une fin, et la fin doit suivre le début.', avBadDate: 'Chaque exception doit avoir une date, et chaque date une seule fois.',
       pickH: 'Choisir les heures', pickNote: 'Choisissez une rencontre, puis cliquez sur une heure libre. Vous pouvez choisir des heures au moins {lead} heures plus tard, dans vos plages et en dehors de vos rencontres.',
       call: 'Appel d’accueil ({n} min)', one: 'Rencontre individuelle ({n} min)', notPicked: 'Pas encore choisie',
@@ -611,7 +620,18 @@
     WD.forEach(function (d) { w[d] = (((av.weekly || {})[d]) || []).map(function (b) { return [String(b[0] || ''), String(b[1] || '')]; }); });
     return { weekly: w, except: (av.except || []).map(function (x) { return { date: String(x.date || ''), free: (x.free || []).map(function (b) { return [String(b[0] || ''), String(b[1] || '')]; }) }; }) };
   }
-  function dirty() { return JSON.stringify(norm(S.av)) !== JSON.stringify(norm(S.avSaved)); }
+  function dirty() { return JSON.stringify(norm(S.av).except) !== JSON.stringify(norm(S.avSaved).except); }   // amended 02/11/26: only the one-off dates are edited here
+  /* a wall-clock "HH:MM" as the page's language writes a time (Intl on a fixed day in UTC, so no zone moves it) */
+  function hmText(s) { var m = hmMin(s); if (isNaN(m)) return String(s || ''); var loc = lang === 'fr' ? 'fr-CA' : 'en-CA'; return new Intl.DateTimeFormat(loc, { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' }).format(new Date(Date.UTC(2026, 0, 5, Math.floor(m / 60), m % 60))); }
+  /* the usual week, read-only: it is set on the Hub's Home page (wave276), and the function sends it as blocks */
+  function weekHtml() {
+    var tx = p(), j = S.j, w = S.avSaved.weekly, h = '<h3>' + tx.weekH + '</h3><p class="note" id="weekat">' + (j.noWeek ? tx.weekDefault : j.availabilityAt ? say(tx.weekSet, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : '') + '</p><div class="week" id="week">';
+    WD.forEach(function (d, i) {
+      var list = w[d] || [];
+      h += '<div class="wd"><div class="wdn">' + esc(tx.days[i]) + '</div><div class="blocks">' + (list.length ? list.map(function (b) { return '<span class="wk">' + esc(hmText(b[0])) + ' ' + esc(tx.to) + ' ' + esc(hmText(b[1])) + '</span>'; }).join('') : '<span class="none">' + esc(tx.notAvail) + '</span>') + '</div></div>';
+    });
+    return h + '</div>';
+  }
   function whenLong(iso) { return fmt({ weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
   function whenShort(iso) { return fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)); }
 
@@ -625,11 +645,9 @@
     });
     return h + '<button type="button" class="link" data-act="add" data-path="' + path + '">' + esc(tx.addBlock) + '</button>';
   }
-  function listAt(path) { return path.charAt(0) === 'w' ? S.av.weekly[path.slice(2)] : S.av.except[Number(path.slice(2))].free; }
-  function editorHtml() {
-    var tx = p(), h = '<div class="week">';
-    WD.forEach(function (d, i) { h += '<div class="wd"><div class="wdn">' + esc(tx.days[i]) + '</div><div class="blocks">' + blocksHtml('w:' + d, S.av.weekly[d], tx.days[i]) + '</div></div>'; });
-    h += '</div><h3>' + tx.exH + '</h3><p class="note">' + tx.exNote + '</p>';
+  function listAt(path) { return S.av.except[Number(path.slice(2))].free; }
+  function editorHtml() {   // amended 02/11/26: the one-off dates only; the week above is read-only
+    var tx = p(), h = '<h3>' + tx.exH + '</h3><p class="note">' + tx.exNote + '</p>';
     if (!S.av.except.length) h += '<p class="note" id="exnone">' + tx.exNone + '</p>';
     S.av.except.forEach(function (x, i) {
       h += '<div class="ex"><label class="exd">' + esc(tx.exDate) + ' <input type="date" value="' + esc(x.date) + '" data-x="' + i + '"></label>' +
@@ -649,9 +667,7 @@
     else n.className = 'hide';
   }
   function avProblem() {
-    var bad = false, seen = {};
-    WD.forEach(function (d) { S.av.weekly[d].forEach(function (b) { if (!(hmMin(b[0]) < hmMin(b[1]))) bad = true; }); });
-    if (bad) return p().avBadTime;
+    var seen = {};
     for (var i = 0; i < S.av.except.length; i++) {
       var x = S.av.except[i];
       if (!/^\d{4}-\d{2}-\d{2}$/.test(x.date) || seen[x.date]) return p().avBadDate;
@@ -688,15 +704,14 @@
     S.busy = true;
     var btn = document.getElementById('saveav'); btn.disabled = true;
     var body = norm(S.av);
-    post({ t: token, a: 'availability', availability: { weekly: body.weekly, except: body.except, tz: TZ } }).then(function (r) {
+    post({ t: token, a: 'availability', availability: { except: body.except, tz: TZ } }).then(function (r) {
       S.busy = false; btn.disabled = false;
       var j = r.j;
       if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
       if (j && j.ok) {
         S.avSaved = norm(j.availability); S.av = norm(j.availability);
-        S.j.availability = j.availability; S.j.availabilityAt = j.availabilityAt; S.j.availabilityStale = false;
-        S.avMsg = p().avSaved;
-        var st = document.getElementById('stale'); if (st) st.className = 'hide';
+        S.j.availability = j.availability; S.j.availabilityAt = j.availabilityAt; S.j.availabilityStale = !!j.availabilityStale; S.j.noWeek = !!j.noWeek;   // the week is still Home's to set
+        S.avMsg = p().exSaved;
         paintEditor(); paintPicks();
         return;
       }
@@ -768,9 +783,10 @@
     document.title = tx.title; document.documentElement.lang = lang;
     card.className = 'card wide';
     var h = '<div class="sec"><h1 tabindex="-1">' + fill(t().hi, j) + '</h1><p>' + say(tx.intro, { hire: j.hire, role: j.role, callMin: S.callMin, oneMin: S.oneMin }) + '</p>';
-    if (j.availabilityStale) h += '<p class="stale" id="stale" role="note">' + (j.availabilityAt ? say(tx.staleAt, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : tx.staleNone) + '</p>';   // say escapes the date; the sentence is the page's own
-    h += '<h2>' + tx.avH + '</h2><p class="note">' + tx.avNote + '</p><div id="editor"></div>' +
-      '<button class="btn inline" id="saveav" type="button">' + tx.saveAv + '</button><p id="avnote" class="hide" role="status"></p><p id="averr" class="err hide" role="alert"></p>' +
+    /* amended 02/11/26: no week saved on Home, or the team asked again since: the sentence and the way there (wave276's pop-up #w276pop opens on Home when a week is due) */
+    if (j.noWeek || j.availabilityStale) h += '<p class="stale" id="stale" role="note"><b>' + tx.setWeek + '.</b> ' + (!j.noWeek && j.availabilityAt ? say(tx.staleAt, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : tx.staleNone) + ' <a id="sethub" href="https://hub.welfareavenue.com/" target="_blank" rel="noopener">' + tx.openHub + '</a></p>';   // say escapes the date; the sentences are the page's own
+    h += '<h2>' + tx.avH + '</h2><p class="note">' + tx.avNote + '</p>' + weekHtml() + '<div id="editor"></div>' +
+      '<button class="btn inline" id="saveav" type="button">' + tx.exSave + '</button><p id="avnote" class="hide" role="status"></p><p id="averr" class="err hide" role="alert"></p>' +
       '<h2>' + tx.pickH + '</h2>' + statusHtml() + '<p class="note">' + say(tx.pickNote, { lead: S.lead }) + '</p>' +
       '<div class="picks" id="picks"><button type="button" class="pick" id="pick-call" data-pick="call" aria-pressed="false"><b><i class="sw sw-call"></i>' + esc(say(tx.call, { n: S.callMin })) + '</b><span></span></button>' +
       '<button type="button" class="pick" id="pick-one" data-pick="one" aria-pressed="false"><b><i class="sw sw-one"></i>' + esc(say(tx.one, { n: S.oneMin })) + '</b><span></span></button></div>' +

@@ -375,3 +375,28 @@ create function public.call_edge(fn text, payload jsonb) returns bigint language
 declare v_id bigint;
 begin insert into public.w271_edge_calls (fn, payload) values (fn, payload) returning id into v_id; return v_id; end $$;
 revoke all on function public.call_edge(text, jsonb) from public, anon, authenticated;
+
+-- 6. wave276 (team availability, live since 02/11/26 from build/wa276_avail.sql on branch wave276-availability): the two tables and the four grid settings, as
+--    live has them, so the wave275 derived week (wa275_week_of, wa275_availability_of) can be proved here. wa275a never creates them: live already has them.
+insert into public.app_config (key, value) values ('avail_min_hours', '10'), ('avail_grid_start', '480'), ('avail_grid_end', '1320'), ('avail_cell_min', '30')
+on conflict (key) do nothing;
+create table public.hub_team_avail (
+  id bigserial primary key,
+  email text not null,
+  department text not null,
+  effective_from date not null default current_date,
+  slots smallint[] not null default '{}',
+  hours numeric not null default 0,
+  snoozed_until timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (email, department, effective_from)
+);
+create table public.hub_team_avail_ask (
+  id bigserial primary key,
+  department text not null,
+  ask_date date not null,
+  set_by text,
+  note text,
+  created_at timestamptz default now()
+);

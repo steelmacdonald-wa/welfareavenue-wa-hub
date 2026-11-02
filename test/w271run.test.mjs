@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { loadFn } from './w271rig.mjs';
+import { availabilityOf, weekRows } from './w275avail.mjs';
 
 const URL_ = 'https://stub.supabase.test/functions/v1/onboard-run';
 const NOTIFY = 'https://stub.supabase.test/functions/v1/notify';
@@ -49,6 +50,7 @@ async function setup({ cand = {}, fl = {}, config = {}, tables = {}, hr = true, 
   const moved = [];
   rig.db.onRpc('wa271_move_start', (a) => { moved.push(a); return null; });
   rig.db.onRpc('wa271_default_manager', () => ({ member_id: 2, name: 'Sam Lee', how: 'reports_to' }));
+  rig.db.onRpc('wa275_availability_of', availabilityOf);   // wave275 (amended 02/11/26): the week from hub_team_avail, the one-off dates from the roster
 
   const s = {
     rig, db: rig.db, assigned, moved, taken: new Set(), calReply: null,
@@ -1984,7 +1986,8 @@ test('M10: task_done marks a step left to HR as done, with who did it, and ticks
 /* NOW is Tuesday 20/10/26, 08:00 in Toronto (UTC-4). Monday 26/10/26: the call at 10:00 (14:00Z), the 1-on-1 at 11:30 (15:30Z). */
 const P_CALL = '2026-10-26T14:00:00.000Z', P_ONE = '2026-10-26T15:30:00.000Z', NOW_ISO = '2026-10-20T12:00:00.000Z';
 const SECRET = { 'x-wa-secret': 'trigger-secret-for-tests' };
-const SAM_AT = (availability) => [TEAM[0], { ...TEAM[1], availability, availability_at: '2026-10-19T12:00:00Z' }];
+/* amended 02/11/26: Sam's week is the one he saved on Home (wave276, hub_team_avail); his one-off dates stay on the roster row. Spread it into tables. */
+const SAM_AT = ({ weekly, except = [] }) => ({ team_members: [TEAM[0], { ...TEAM[1], availability: { except, tz: 'America/Toronto' }, availability_at: '2026-10-19T12:00:00Z' }], hub_team_avail: weekRows('Sam.Lee@welfareavenue.com', weekly) });
 const noDash = (s) => !/—/.test(s) && !/\bAI\b/.test(s);
 /* the stand-in for wa275_tick_set (build/wa275a_streamlined.sql 7a, proved in test/w275sql.sql): one key merged; p_if_unset writes only while the key is empty */
 function tickSet(a, db) {
@@ -2104,20 +2107,38 @@ test('w275 propose: each meeting\'s whole span inside one availability block for
   refused(await early.propose({ one_on_one_at: '2026-10-26T12:45:00Z' }), 'outside_hours', 'one_on_one');   // 08:45
   const edges = await w275();
   assert.equal((await edges.propose({ call_at: '2026-10-26T20:00:00Z', one_on_one_at: '2026-10-26T13:00:00Z' })).status, 200, '16:00 to 17:00 and 09:00 to 09:30 touch the edges of 9 to 5');
-  const split = await w275({ tables: { team_members: SAM_AT({ weekly: { mon: [['09:00', '10:30'], ['10:30', '12:00']] }, except: [], tz: 'America/Toronto' }) } });
+  const split = await w275({ tables: SAM_AT({ weekly: { mon: [['09:00', '10:30'], ['11:00', '12:00']] } }) });   // amended 02/11/26: cells that touch are one block now, so the gap is half an hour
   refused(await split.propose({ call_at: '2026-10-26T14:00:00Z', one_on_one_at: '2026-10-26T15:30:00Z' }), 'outside_hours', 'call');   // 10:00 to 11:00 crosses two blocks: not inside one
 });
 
 test('w275 propose: an except entry for the date replaces the weekday\'s blocks (empty: not available that day)', async () => {
   const av = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], sat: [['10:00', '11:30']] }, except: [{ date: '2026-10-26', free: [] }, { date: '2026-10-27', free: [['18:00', '21:00']] }], tz: 'America/Toronto' };
-  const off = await w275({ tables: { team_members: SAM_AT(av) } });
+  const off = await w275({ tables: SAM_AT(av) });
   refused(await off.propose(), 'outside_hours', 'call');
-  const evening = await w275({ tables: { team_members: SAM_AT(av) } });
+  const evening = await w275({ tables: SAM_AT(av) });
   refused(await evening.propose({ call_at: '2026-10-27T14:00:00Z', one_on_one_at: '2026-10-27T23:00:00Z' }), 'outside_hours', 'call');   // 10:00 on a day whose except says 18:00 to 21:00
-  const ok = await w275({ tables: { team_members: SAM_AT(av) } });
+  const ok = await w275({ tables: SAM_AT(av) });
   assert.equal((await ok.propose({ call_at: '2026-10-27T22:00:00Z', one_on_one_at: '2026-10-28T00:00:00Z' })).status, 200, '18:00 and 20:00 on the except day');
-  const satOk = await w275({ tables: { team_members: SAM_AT(av) } });
+  const satOk = await w275({ tables: SAM_AT(av) });
   assert.equal((await satOk.propose({ call_at: '2026-10-24T14:00:00Z', one_on_one_at: '2026-10-24T15:00:00Z' })).status, 200, 'a saved Saturday block');
+});
+
+test('w275 amended (Task 6): the manager\'s availability is read only through wa275_availability_of, with the service key: the week saved on Home is the week, a weekly left on the roster row is never read, and a read that fails saves nothing', async () => {
+  const calls = [];
+  const home = await w275({ tables: { team_members: [TEAM[0], { ...TEAM[1], availability: { weekly: { mon: [['09:00', '17:00']] }, except: [], tz: 'America/Toronto' } }], hub_team_avail: weekRows('sam.lee@welfareavenue.com', { sat: [['10:00', '12:00']] }) } });
+  home.db.onRpc('wa275_availability_of', (a, db, w) => { calls.push({ a, jwt: w.jwt }); return availabilityOf(a, db, w); });
+  refused(await home.propose(), 'outside_hours', 'call');   // Monday 10:00: only the old weekly on the roster row says Monday, and it is not read
+  assert.deepEqual(calls.map((c) => [Number(c.a.p_member), c.jwt]), [[2, null]], 'read once, for the flow\'s manager, with the service key');
+  const sat = await w275({ tables: { hub_team_avail: weekRows('sam.lee@welfareavenue.com', { sat: [['10:00', '12:00']] }) } });
+  assert.equal((await sat.propose({ call_at: '2026-10-24T14:00:00Z', one_on_one_at: '2026-10-24T15:00:00Z' })).status, 200, 'Saturday 10:00 and 11:00: the week saved on Home');
+  const broken = await w275();
+  broken.db.onRpc('wa275_availability_of', () => { throw new Error('permission denied for function wa275_availability_of'); });
+  const before = broken.snapshot();
+  const r = await broken.propose();
+  assert.equal(r.status, 503, JSON.stringify(r.body));
+  assert.match(r.body.message, /availability could not be read .*permission denied.*Nothing was saved/);
+  assert.deepEqual(broken.snapshot(), before);
+  assert.equal(broken.rig.fetchLog.length, 0);
 });
 
 test('w275 propose: no overlap with a hub@ meeting the manager is invited to (cancelled ones and other people\'s do not count)', async () => {
@@ -2564,9 +2585,9 @@ test('w275 book (the hire\'s Yes): both meetings booked with the manager, the pl
 });
 
 test('w275 book re-checks both times: under 24 hours away, outside the manager\'s hours now, or on a hub@ meeting is stale; nothing is booked, the answer is no, the manager and HR are told', async () => {
-  const sam = SAM_AT({ weekly: { mon: [['13:00', '17:00']] }, except: [], tz: 'America/Toronto' });
+  const sam = SAM_AT({ weekly: { mon: [['13:00', '17:00']] } });
   const meeting = { id: 'e9', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-26T15:45:00Z', end_at: '2026-10-26T16:15:00Z' };
-  for (const [opts, at, which] of [[{}, '2026-10-25T15:00:00Z', 'call'], [{ tables: { team_members: sam } }, null, 'call'], [{ tables: { hub_events: [meeting] } }, null, 'one_on_one']]) {
+  for (const [opts, at, which] of [[{}, '2026-10-25T15:00:00Z', 'call'], [{ tables: sam }, null, 'call'], [{ tables: { hub_events: [meeting] } }, null, 'one_on_one']]) {
     const s = await t3({ fl: PROPOSED, ...opts });
     await s.acceptSetup();
     if (at) s.rig.setNow(at);

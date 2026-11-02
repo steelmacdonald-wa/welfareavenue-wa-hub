@@ -8,7 +8,7 @@
    the function's lang); a closed link says to contact HR; a saved grid reloads with its cells marked; the manager's grid; the password
    stub; decline; errors; no sideways scroll at 390 px; no "AI" and no em dash on the page.
    wave271d (section 13): the hire's minimum hours, "N of M hours marked", Save disabled below it with the plain sentence, in both languages; none for the manager.
-   wave275 Task 2 (section 14): the manager's propose page (mode propose): the stale notice (missing, or last set on a date), the weekday editor
+   wave275 Task 2 (section 14; amended in Task 6, 02/11/26: the week is wave276's, read-only, with "Set your week on the Hub's Home page" when none is saved or the team asked again; only one-off dates are edited): the manager's propose page (mode propose): the stale notice, the editor
    (Add a block, Remove, exceptions by date) and Save availability (one POST of exactly what is shown; a block that ends before it starts is
    refused on the page), the two picks from the free cells (too soon, outside the hours, a hub@ meeting, another new hire and the other pick are
    greyed and disabled, with a legend), Propose these times (one POST under a double click), onboard-run's refusal in the page's language, an
@@ -72,7 +72,8 @@ function makeFn(over) {
     const b = call.body || {};
     if (b.a === 'availability') {
       if (S.postAv) return send(S.postAv.status, S.postAv.body);
-      return send(200, { ok: true, availability: Object.assign({}, b.availability, { tz: 'America/Toronto' }), availabilityAt: '2026-10-28T13:00:00.000Z', availabilityStale: false });
+      const x = S.extra || {};   // amended 02/11/26: the dates are saved, and the function reads the whole of it again (the week is still Home's)
+      return send(200, { ok: true, availability: { weekly: (x.availability || {}).weekly || {}, except: (b.availability || {}).except || [], tz: 'America/Toronto' }, availabilityAt: x.availabilityAt || null, availabilityStale: !!x.availabilityStale, noWeek: !!x.noWeek, exceptAt: '2026-10-28T13:00:00Z' });
     }
     if (b.a === 'propose') {
       await new Promise(r => setTimeout(r, S.proposeDelay));
@@ -498,7 +499,7 @@ async function dragFrom(p, a, b) {
     { /* 14. wave275 (a block of its own, so its names stay its own): the manager's propose page. NOW is Wednesday 28/10/26, 9:00 a.m. in Toronto (UTC-4 until 01/11); 48 hours ahead is Friday 30/10 9:00 a.m. (13:00Z). */
     const DEF_AV = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: 'America/Toronto' };
     const mgr275 = (over) => makeFn(Object.assign({ kind: 'manager', first: 'Marc', hire: 'Amina', lang: 'en' }, over || {}, { extra: Object.assign({
-      mode: 'propose', proposal: null, availability: DEF_AV, availabilityAt: null, availabilityStale: true,
+      mode: 'propose', proposal: null, availability: DEF_AV, availabilityAt: null, availabilityStale: true, noWeek: true,
       busy: [{ start: '2026-11-02T15:00:00Z', end: '2026-11-02T16:00:00Z' }, { start: '2026-11-03T19:00:00Z', end: '2026-11-03T20:00:00Z', taken: true }],   // fix round 1: no titles over the link
       lengths: { callMin: 60, oneMin: 30 }, leadHours: 48, hireAccepted: false, hireAnswer: null }, (over || {}).extra || {}) }));
     const st = (p, iso) => p.evaluate(i => { const c = document.querySelector('[data-slot="' + i + '"]'); return c ? { dis: c.disabled, cls: c.className, k: (c.querySelector('.k') || {}).textContent || '' } : null; }, iso);
@@ -506,8 +507,8 @@ async function dragFrom(p, a, b) {
     f = await open(browser, { fn: mgr275() });
     t = await text(f.page);
     ok('propose: one GET, no POST, no grid of the old kind', f.gets().length === 1 && f.posts().length === 0 && (await f.page.locator('#save').count()) === 0, f.calls.map(c => c.method));
-    ok('propose: the stale notice comes first and says it was never set', /^Please confirm your availability: it has not been set yet/.test((await f.page.locator('#stale').innerText()).trim()) && t.indexOf('Please confirm your availability') < t.indexOf('Your availability\n'), t.slice(0, 600));
-    ok('propose: seven weekdays, Monday 09:00 to 17:00, Saturday not available', (await f.page.locator('.wd').count()) === 7 && await f.page.locator('input[data-path="w:mon"][data-k="0"]').inputValue() === '09:00' && await f.page.locator('input[data-path="w:mon"][data-k="1"]').inputValue() === '17:00' && /Not available/.test(await f.page.locator('.wd').nth(5).innerText()));
+    ok('propose (amended 02/11/26): no week saved, so "Set your week on the Hub\'s Home page" comes first, says the default, and links to the Hub', /^Set your week on the Hub's Home page\. You have not set it yet, so the Hub is using Monday to Friday, 9 am to 5 pm\. Open the Hub$/.test((await f.page.locator('#stale').innerText()).trim()) && t.indexOf('Set your week') < t.indexOf('Your availability\n') && await f.page.locator('#sethub').getAttribute('href') === 'https://hub.welfareavenue.com/', t.slice(0, 600));
+    ok('propose: the usual week is read-only: seven weekdays, Monday 9:00 a.m. to 5:00 p.m., Saturday not available, no time boxes, no Add a block', (await f.page.locator('#week .wd').count()) === 7 && /9:00\s*a\.m\. to 5:00\s*p\.m\./.test(await f.page.locator('#week .wd').nth(0).innerText()) && /Not available/.test(await f.page.locator('#week .wd').nth(5).innerText()) && (await f.page.locator('#week input, [data-path^="w:"]').count()) === 0 && /Not set yet: Monday to Friday/.test(await f.page.locator('#weekat').innerText()), await f.page.locator('#week').innerText());
     ok('propose: the intro names the hire, the role and both lengths', /Amina/.test(t) && /Event Coordinator/.test(t) && /60 minutes/.test(t) && /30 minutes/.test(t));
     ok('propose: a legend and both picks, Propose disabled until both are picked', /Outside your hours, or too soon/.test(t) && /A meeting, or another new hire/.test(t) && /Onboarding call \(60 min\)/.test(t) && /1-on-1 \(30 min\)/.test(t) && await f.page.locator('#propose').isDisabled());
     let a = await st(f.page, '2026-10-29T14:00:00Z'), b2 = await st(f.page, '2026-10-31T14:00:00Z'), c2 = await st(f.page, '2026-10-30T14:00:00Z'), d2 = await st(f.page, '2026-10-30T20:30:00Z'), e2 = await st(f.page, '2026-11-02T15:00:00Z'), g2 = await st(f.page, '2026-11-03T19:00:00Z');
@@ -534,27 +535,26 @@ async function dragFrom(p, a, b) {
     ok('propose: no errors', f.errors.length === 0, f.errors);
     await f.ctx.close();
 
-    /* the availability editor */
+    /* the one-off dates editor (amended 02/11/26: the week is set on Home, so only dates are edited and posted here) */
     f = await open(browser, { fn: mgr275() });
-    await f.page.locator('button[data-act="add"][data-path="w:sat"]').click();
-    await f.page.locator('input[data-path="w:sat"][data-k="0"]').fill('10:00');
-    await f.page.locator('input[data-path="w:sat"][data-k="1"]').fill('12:00');
-    await f.page.locator('button[data-act="rm"][data-path="w:mon"]').click();
-    await f.page.locator('button[data-act="add"][data-path="w:tue"]').click();
-    ok('editor: a second block on a day starts as an evening', await f.page.locator('input[data-path="w:tue"][data-i="1"][data-k="0"]').inputValue() === '18:00');
-    await f.page.locator('button[data-act="rm"][data-path="w:tue"][data-i="1"]').click();
+    ok('editor: no one-off dates yet', /No one-off dates\./.test(await f.page.locator('#editor').innerText()) && /Save these dates/.test(await f.page.locator('#saveav').innerText()));
     await f.page.locator('button[data-act="addx"]').click();
     await f.page.locator('input[data-x="0"]').fill('2026-11-04');
+    await f.page.locator('button[data-act="addx"]').click();
+    await f.page.locator('input[data-x="1"]').fill('2026-10-31');
+    await f.page.locator('button[data-act="add"][data-path="x:1"]').click();
+    await f.page.locator('input[data-path="x:1"][data-k="0"]').fill('10:00');
+    await f.page.locator('input[data-path="x:1"][data-k="1"]').fill('12:00');
     ok('editor: unsaved changes are said, and the cells still follow the saved hours', /not saved yet/.test(await f.page.locator('#avnote').innerText()) && (await st(f.page, '2026-10-31T14:00:00Z')).dis);
     await shot(f.page, 'w275-editor-desktop');
     await f.page.locator('#saveav').click();
     await f.page.waitForSelector('#avnote.saved', { timeout: 4000 });
     pp = f.posts();
     const sentAv = pp[0] && pp[0].body.availability;
-    ok('Save availability posts exactly what is shown', pp.length === 1 && pp[0].body.a === 'availability' && JSON.stringify(sentAv) === JSON.stringify({ weekly: { mon: [], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']], sat: [['10:00', '12:00']], sun: [] }, except: [{ date: '2026-11-04', free: [] }], tz: 'America/Toronto' }), sentAv);
-    ok('saved: the stale notice goes, the note says saved', !(await f.page.locator('#stale').isVisible()) && /Saved\./.test(await f.page.locator('#avnote').innerText()));
-    ok('saved: Saturday 10:00 is now free, Monday and the exception day are not', !(await st(f.page, '2026-10-31T14:00:00Z')).dis && (await st(f.page, '2026-11-02T14:00:00Z')).dis && (await st(f.page, '2026-11-04T15:00:00Z')).dis);
-    await f.page.locator('input[data-path="w:tue"][data-k="1"]').fill('08:00');
+    ok('Save these dates posts exactly the dates shown, and no week', pp.length === 1 && pp[0].body.a === 'availability' && JSON.stringify(sentAv) === JSON.stringify({ except: [{ date: '2026-11-04', free: [] }, { date: '2026-10-31', free: [['10:00', '12:00']] }], tz: 'America/Toronto' }), sentAv);
+    ok('saved: the note says saved, and "Set your week" stays (the week is still Home\'s to set)', /Saved\./.test(await f.page.locator('#avnote').innerText()) && await f.page.locator('#stale').isVisible());
+    ok('saved: Saturday 10:00 is free that one date, and Wednesday 04/11 is not', !(await st(f.page, '2026-10-31T14:00:00Z')).dis && (await st(f.page, '2026-11-04T15:00:00Z')).dis && !(await st(f.page, '2026-11-02T17:00:00Z')).dis);
+    await f.page.locator('input[data-path="x:1"][data-k="1"]').fill('08:00');
     await f.page.locator('#saveav').click();
     await f.page.waitForTimeout(200);
     ok('a block that ends before it starts is refused on the page, nothing posted', f.posts().length === 1 && /end after the start/.test(await f.page.locator('#averr').innerText()));
@@ -572,21 +572,23 @@ async function dragFrom(p, a, b) {
     await f.ctx.close();
 
     /* stale with a date, recent, an existing proposal, a yes */
-    f = await open(browser, { fn: mgr275({ extra: { availabilityAt: '2026-09-01T12:00:00Z' } }) });
-    ok('stale: "it was last set on September 1, 2026"', /Please confirm your availability: it was last set on September 1, 2026\./.test(await f.page.locator('#stale').innerText()), await f.page.locator('#stale').innerText());
+    const SAT = { weekly: { tue: [['18:00', '21:00']], sat: [['10:00', '12:00']] }, except: [], tz: 'America/Toronto' };
+    f = await open(browser, { fn: mgr275({ extra: { availabilityAt: '2026-09-01T12:00:00Z', noWeek: false, availability: SAT } }) });
+    ok('stale (amended): the team asked again since "September 1, 2026", with the way to Home', /^Set your week on the Hub's Home page\. Your team asked for your week again since you last set it on September 1, 2026, so please check it there\. Open the Hub$/.test((await f.page.locator('#stale').innerText()).trim()), await f.page.locator('#stale').innerText());
+    ok('stale: the week shown is the one saved, Tuesday 6:00 p.m. to 9:00 p.m., and Saturday 10:00 is free to pick', /6:00\s*p\.m\. to 9:00\s*p\.m\./.test(await f.page.locator('#week .wd').nth(1).innerText()) && /Set on September 1, 2026\./.test(await f.page.locator('#weekat').innerText()) && !(await st(f.page, '2026-10-31T14:00:00Z')).dis && (await st(f.page, '2026-10-30T14:00:00Z')).dis);
     await f.ctx.close();
-    f = await open(browser, { fn: mgr275({ extra: { availabilityAt: '2026-10-20T12:00:00Z', availabilityStale: false, proposal: { call_at: '2026-11-02T14:00:00Z', one_on_one_at: '2026-11-02T16:00:00Z', by: 'marc@welfareavenue.com', at: '2026-10-27T12:00:00Z' } } }) });
+    f = await open(browser, { fn: mgr275({ extra: { availabilityAt: '2026-10-20T12:00:00Z', availabilityStale: false, noWeek: false, proposal: { call_at: '2026-11-02T14:00:00Z', one_on_one_at: '2026-11-02T16:00:00Z', by: 'marc@welfareavenue.com', at: '2026-10-27T12:00:00Z' } } }) });
     ok('recent: no stale notice', (await f.page.locator('#stale').count()) === 0);
     ok('existing proposal: both picks filled, the status line, Propose enabled', /pk-call/.test((await st(f.page, '2026-11-02T14:00:00Z')).cls) && /pk-one/.test((await st(f.page, '2026-11-02T16:00:00Z')).cls) && /Proposed so far/.test(await text(f.page)) && await f.page.locator('#propose').isEnabled());
     await f.ctx.close();
-    f = await open(browser, { fn: mgr275({ extra: { availabilityStale: false, availabilityAt: '2026-10-20T12:00:00Z', hireAnswer: 'yes', hireAccepted: true, proposal: { call_at: '2026-11-02T14:00:00Z', one_on_one_at: '2026-11-02T16:00:00Z', by: 'marc@welfareavenue.com', at: '2026-10-27T12:00:00Z' } } }) });
+    f = await open(browser, { fn: mgr275({ extra: { availabilityStale: false, noWeek: false, availabilityAt: '2026-10-20T12:00:00Z', hireAnswer: 'yes', hireAccepted: true, proposal: { call_at: '2026-11-02T14:00:00Z', one_on_one_at: '2026-11-02T16:00:00Z', by: 'marc@welfareavenue.com', at: '2026-10-27T12:00:00Z' } } }) });
     ok('a yes: the page says booked, every cell and Propose are disabled', /Amina said yes to these times/.test(await text(f.page)) && await f.page.locator('#propose').isDisabled() && (await f.page.locator('[data-slot]:not([disabled])').count()) === 0);
     await f.ctx.close();
 
     /* French */
     f = await open(browser, { qs: '?l=fr', fn: mgr275() });
     t = await text(f.page);
-    ok('French: the notice, the days, the button, the legend', /Veuillez confirmer vos disponibilités: elles n’ont pas encore été indiquées/.test(t) && /lundi/.test(t) && /Proposer ces heures/.test(t) && /En dehors de vos heures, ou trop tôt/.test(t) && (await f.page.evaluate(() => document.documentElement.lang)) === 'fr', t.slice(0, 500));
+    ok('French: the notice, the days, the button, the legend', /Indiquez votre semaine sur la page d’accueil du Hub\. Vous ne l’avez pas encore indiquée/.test(t) && /Ouvrir le Hub/.test(t) && /Dates ponctuelles/.test(t) && /lundi/.test(t) && /Proposer ces heures/.test(t) && /En dehors de vos heures, ou trop tôt/.test(t) && (await f.page.evaluate(() => document.documentElement.lang)) === 'fr', t.slice(0, 500));
     await shot(f.page, 'w275-propose-fr');
     await f.page.locator('#lang a').click();
     await f.page.waitForTimeout(150);
@@ -597,7 +599,6 @@ async function dragFrom(p, a, b) {
     f = await open(browser, { phone: true, fn: mgr275() });
     ok('phone: no sideways scroll, day chips', await noScroll(f.page) && (await f.page.locator('.chip').count()) > 0);
     ok('phone: it opens on the first day the call can start (Friday 30/10, the first after the 48 hours)', await f.page.locator('.chip.on').getAttribute('data-day') === '2026-10-30');
-    ok('phone: the time inputs show the whole time', await f.page.evaluate(() => Array.from(document.querySelectorAll('.blk input')).every(i => i.scrollWidth <= i.clientWidth + 1 && i.getBoundingClientRect().width >= 110)));
     ok('phone: at the top of the page the Propose bar is not over the editor', await f.page.evaluate(() => document.getElementById('propose').getBoundingClientRect().top >= window.innerHeight));
     await shot(f.page, 'w275-propose-phone');
     await f.page.locator('.chip[data-day="2026-10-30"]').tap();
@@ -606,7 +607,9 @@ async function dragFrom(p, a, b) {
     ok('phone: two taps pick both, Propose enabled, still no sideways scroll', await f.page.locator('#propose').isEnabled() && await noScroll(f.page));
     await view(f.page, 'w275-propose-phone-window');
     await f.page.locator('button[data-act="addx"]').tap();
-    ok('phone: an exception row fits', await noScroll(f.page));
+    await f.page.locator('button[data-act="add"][data-path="x:0"]').tap();
+    ok('phone: a one-off date row fits', await noScroll(f.page));
+    ok('phone: the time inputs show the whole time', await f.page.evaluate(() => { const l = Array.from(document.querySelectorAll('.blk input')); return l.length === 2 && l.every(i => i.scrollWidth <= i.clientWidth + 1 && i.getBoundingClientRect().width >= 110); }));
     await f.ctx.close();
 
     /* fix round 1: a link that is no longer this person's shows the server's sentence and nothing to edit */

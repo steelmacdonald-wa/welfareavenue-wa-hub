@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { loadFn } from './w271rig.mjs';
+import { availabilityOf } from './w275avail.mjs';
 
 const BASE = 'https://stub.supabase.test/functions/v1/';
 const NOTIFY = BASE + 'notify', RUN = BASE + 'onboard-run', PUSH = BASE + 'hub-push';
@@ -679,6 +680,7 @@ test('w275 ask_manager (the trigger secret): a Slack DM through onboard_propose 
   /* the link the manager got, read by onboard-link itself on the same database */
   const ol = await loadFn('onboard-link', {});
   ol.db.tables = w.db.tables;
+  ol.db.onRpc('wa275_availability_of', availabilityOf);   // amended 02/11/26: the manager's hours are read through the function
   ol.setNow(NOW);
   const t = decodeURIComponent(new URL(link).pathname.slice(3));
   assert.equal(t, await ol.mod.wa271Token('mgr', 21), 'onboard-link\'s own token for the flow');

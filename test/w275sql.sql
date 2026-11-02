@@ -76,6 +76,7 @@ begin
   assert not has_function_privilege('anon', 'public.wa275_availability_set(jsonb)', 'execute') and has_function_privilege('authenticated', 'public.wa275_availability_set(jsonb)', 'execute'), 'availability_set grants';
   assert not has_function_privilege('anon', 'public.wa275_availability_of(bigint)', 'execute') and has_function_privilege('authenticated', 'public.wa275_availability_of(bigint)', 'execute'), 'availability_of grants';
   assert not has_function_privilege('anon', 'public.wa275_flow_row(bigint)', 'execute') and not has_function_privilege('authenticated', 'public.wa275_flow_row(bigint)', 'execute'), 'flow_row is not callable from the browser';
+  assert not has_function_privilege('anon', 'public.wa275_week_of(bigint)', 'execute') and not has_function_privilege('authenticated', 'public.wa275_week_of(bigint)', 'execute'), 'week_of (no access check of its own) is not callable from the browser';
   assert not has_function_privilege('anon', 'public.wa275_offer_sent()', 'execute') and not has_function_privilege('authenticated', 'public.wa275_offer_sent()', 'execute'), 'the trigger function is not callable';
   assert not has_function_privilege('anon', 'public.wa275_availability_ok(jsonb)', 'execute'), 'a signed-out visitor cannot run the availability check';
 
@@ -339,18 +340,20 @@ begin
   begin perform public.wa271_ready_list(); assert false, 'a plain manager must not read the HR list'; exception when raise_exception then if sqlerrm like 'Only HR%' then null; else raise; end if; end;
 end $$;
 
--- a manager's availability date shows on the row once saved (the person sets their own)
-do $$
-begin
-  perform public.wa275_availability_set('{"weekly":{"mon":[["09:00","12:00"]]},"tz":"America/Toronto"}'::jsonb);
-end $$;
+-- a manager's availability date shows on the row once they saved their week on Home (wave276's hub_team_avail; amended 02/11/26)
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w275.hr@example.invalid"}', true);
 do $$
 declare r jsonb; i record;
 begin
   select * into i from w275_ids;
   select e into r from jsonb_array_elements(public.wa271_ready_list()) e where (e ->> 'flow_id')::bigint = i.alpha;
-  assert jsonb_typeof(r -> 'manager_availability_at') = 'string', 'manager_availability_at shows once the manager saved';
+  assert (r -> 'manager_no_week') = 'true'::jsonb and (r -> 'manager_week_stale') = 'true'::jsonb, 'no week saved: the card says so (manager_no_week, manager_week_stale)';
+  insert into public.hub_team_avail (email, department, effective_from, slots, hours, updated_at)
+  values ('w275.mgr1@example.invalid', 'w275test', current_date - 3, '{540,570}', 1, now() - interval '2 days');
+  select e into r from jsonb_array_elements(public.wa271_ready_list()) e where (e ->> 'flow_id')::bigint = i.alpha;
+  assert (r ->> 'manager_availability_at')::timestamptz = now() - interval '2 days', 'manager_availability_at is when the manager last saved their week';
+  assert (r -> 'manager_no_week') = 'false'::jsonb and (r -> 'manager_week_stale') = 'false'::jsonb, 'a saved week with no ask since is current';
+  delete from public.hub_team_avail where email = 'w275.mgr1@example.invalid';
 end $$;
 
 -- ---------------------------------------------------------------- hours_confirmed_at is readable by HR (on the card row) and was set
@@ -449,53 +452,95 @@ reset role;
 update public.team_members set availability = null, availability_at = null where email = 'w275.other@example.invalid';
 
 -- ---------------------------------------------------------------- setting and reading availability
+-- Amended 02/11/26 (Steel): the week is wave276's typical week (hub_team_avail, saved on Home); team_members.availability keeps only one-off dates
+-- (except) and tz. A slot is weekday * 1440 + minute (weekday 0 = Monday, Toronto wall time), a cell avail_cell_min (30) minutes.
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w275.other@example.invalid"}', true);
 do $$
-declare mid bigint; r jsonb; before_set timestamptz;
+declare mid bigint; r jsonb; saved timestamptz;
 begin
   select id into mid from public.team_members where email = 'w275.other@example.invalid';
 
-  -- nothing saved: the default, stale
+  -- nothing saved: the default, no week, stale
   r := public.wa275_availability_of(mid);
   assert (r ->> 'stale')::boolean, 'nothing saved is stale';
+  assert (r ->> 'no_week')::boolean, 'nothing saved: no_week';
   assert r -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","17:00"]]'::jsonb and r -> 'availability' -> 'weekly' -> 'fri' = '[["09:00","17:00"]]'::jsonb, 'the default is Monday to Friday 09:00 to 17:00';
   assert not (r -> 'availability' -> 'weekly' ? 'sat') or r -> 'availability' -> 'weekly' -> 'sat' = '[]'::jsonb, 'the default has no weekend';
   assert not (r -> 'availability' -> 'weekly' ? 'sun') or r -> 'availability' -> 'weekly' -> 'sun' = '[]'::jsonb, 'the default has no Sunday';
   assert r -> 'availability' ->> 'tz' = 'America/Toronto', 'the default is in Toronto time';
+  assert r -> 'availability' -> 'except' = '[]'::jsonb, 'no one-off dates';
   assert public.wa275_availability_ok(r -> 'availability'), 'the default passes the check';
   assert jsonb_typeof(r -> 'availability_at') = 'null', 'no time saved for the default';
 
-  -- set my own
-  before_set := clock_timestamp();
-  perform public.wa275_availability_set('{"weekly":{"mon":[["10:00","12:00"]],"wed":[["13:00","15:30"]]},"except":[{"date":"2026-11-11","free":[]}],"tz":"America/Toronto"}'::jsonb);
+  -- the week saved on Home: the current row is the newest effective_from on or before today, with a save time; its cells joined into blocks
+  saved := now() - interval '5 days';
+  insert into public.hub_team_avail (email, department, effective_from, slots, hours, updated_at) values
+    ('W275.Other@Example.Invalid', 'w275test', current_date - 10, '{540,570,600,840,3660,3690,9240}', 3.5, saved),     -- Mon 09:00 to 10:30 and 14:00 to 14:30, Wed 13:00 to 14:00, Sun 10:00 to 10:30
+    ('w275.other@example.invalid', 'w275test', current_date - 40, '{1500,1530}', 1, now() - interval '40 days'),     -- an older week: not current
+    ('w275.other@example.invalid', 'w275test', current_date + 5, '{2000}', 0.5, now() - interval '20 days'),         -- a week that starts later waits for its day
+    ('w275.other@example.invalid', 'w275test', current_date, '{}', 0, null);                                          -- an Ask me later row only (no save time): not an answer
   r := public.wa275_availability_of(mid);
-  assert not (r ->> 'stale')::boolean, 'just saved is not stale';
-  assert r -> 'availability' -> 'weekly' -> 'mon' = '[["10:00","12:00"]]'::jsonb and not (r -> 'availability' -> 'weekly' ? 'tue'), 'what was saved is what comes back';
-  assert r -> 'availability' -> 'except' -> 0 ->> 'date' = '2026-11-11', 'the except day comes back';
-  assert (select availability_at from public.team_members where id = mid) >= before_set - interval '1 second', 'availability_at was stamped';
-  assert (r ->> 'availability_at')::timestamptz = (select availability_at from public.team_members where id = mid), 'and returned';
+  assert not (r ->> 'no_week')::boolean, 'a saved week is a week';
+  assert not (r ->> 'stale')::boolean, 'a week saved with no ask since is current';
+  assert r -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","10:30"],["14:00","14:30"]]'::jsonb, format('Monday is two blocks, cells joined, each ending at its last cell''s end: %s', r -> 'availability' -> 'weekly');
+  assert r -> 'availability' -> 'weekly' -> 'wed' = '[["13:00","14:00"]]'::jsonb, 'Wednesday';
+  assert r -> 'availability' -> 'weekly' -> 'sun' = '[["10:00","10:30"]]'::jsonb, 'Sunday is weekday 6';
+  assert not (r -> 'availability' -> 'weekly' ? 'tue') and not (r -> 'availability' -> 'weekly' ? 'thu'), 'the older week and the later week are not used';
+  assert (r ->> 'availability_at')::timestamptz = saved, 'availability_at is when the current week was saved';
+  assert public.wa275_availability_ok(r -> 'availability'), 'the derived week passes the check';
 
-  -- a bad one is refused with words, and leaves the saved one alone
-  begin perform public.wa275_availability_set('{"weekly":{"mon":[["12:00","10:00"]]}}'::jsonb); assert false, 'bad availability should be refused';
+  -- the union of their teams: a Monday 10:30 to 11:00 cell on a second team joins the 09:00 block
+  insert into public.hub_team_avail (email, department, effective_from, slots, hours, updated_at) values ('w275.other@example.invalid', 'w275two', current_date - 1, '{630}', 0.5, now() - interval '1 day');
+  r := public.wa275_availability_of(mid);
+  assert r -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","11:00"],["14:00","14:30"]]'::jsonb, format('the teams'' weeks are joined: %s', r -> 'availability' -> 'weekly' -> 'mon');
+  assert (r ->> 'availability_at')::timestamptz = now() - interval '1 day', 'availability_at is the newest save of the current weeks';
+
+  -- current means saved on or after the latest ask (on or before today) for any of their teams, as wave276's pop-up counts it
+  insert into public.hub_team_avail_ask (department, ask_date, set_by) values ('w275test', current_date - 2, 'w275 test');
+  assert not (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'one team asked again, the other team''s week is current: not stale';
+  insert into public.hub_team_avail_ask (department, ask_date, set_by) values ('w275two', current_date, 'w275 test');
+  assert (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'both teams asked since the last saves: stale';
+  assert public.wa275_availability_of(mid) -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","11:00"],["14:00","14:30"]]'::jsonb, 'a stale week is still the week used';
+  update public.hub_team_avail set updated_at = now() where email = 'w275.other@example.invalid' and department = 'w275two' and effective_from = current_date - 1;
+  assert not (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'saved again on the ask day: current';
+  insert into public.hub_team_avail_ask (department, ask_date, set_by) values ('w275two', current_date + 3, 'w275 test'), ('w275test', current_date + 3, 'w275 test');
+  assert not (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'an ask dated later does not count yet';
+
+  -- the cell length is app_config avail_cell_min
+  update public.app_config set value = '60' where key = 'avail_cell_min';
+  assert public.wa275_availability_of(mid) -> 'availability' -> 'weekly' -> 'wed' = '[["13:00","14:30"]]'::jsonb, format('with 60-minute cells, 13:00 and 13:30 each last an hour, joined where they overlap: %s', public.wa275_availability_of(mid) -> 'availability' -> 'weekly');
+  update public.app_config set value = '30' where key = 'avail_cell_min';
+
+  -- an empty saved week counts as no week (the default applies, and the person is asked to set it)
+  delete from public.hub_team_avail where email = 'w275.other@example.invalid' and department = 'w275two';
+  update public.hub_team_avail set slots = '{}' where lower(email) = 'w275.other@example.invalid' and effective_from = current_date - 10;
+  r := public.wa275_availability_of(mid);
+  assert (r ->> 'no_week')::boolean and r -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","17:00"]]'::jsonb, 'an empty week: the default, no_week';
+  update public.hub_team_avail set slots = '{540,570,600,840,3660,3690,9240}' where lower(email) = 'w275.other@example.invalid' and effective_from = current_date - 10;
+
+  -- one-off dates are the person's own, on the roster row; a weekly key there is refused, and an old one is never read
+  perform public.wa275_availability_set('{"except":[{"date":"2026-11-11","free":[]},{"date":"2026-11-12","free":[["18:00","20:00"]]}],"tz":"America/Toronto"}'::jsonb);
+  r := public.wa275_availability_of(mid);
+  assert r -> 'availability' -> 'except' -> 0 ->> 'date' = '2026-11-11' and r -> 'availability' -> 'except' -> 1 -> 'free' = '[["18:00","20:00"]]'::jsonb, 'the one-off dates come back';
+  assert r -> 'availability' -> 'weekly' -> 'mon' = '[["09:00","10:30"],["14:00","14:30"]]'::jsonb, 'and the week is still the saved one';
+  assert (select availability_at from public.team_members where id = mid) = now(), 'availability_at on the roster row was stamped (this transaction''s time)';
+  assert (r ->> 'except_at')::timestamptz = now(), 'and returned as except_at';
+  assert (r ->> 'availability_at')::timestamptz = saved, 'availability_at stays the week''s save time';
+  assert not ((select availability from public.team_members where id = mid) ? 'weekly'), 'no weekly is stored';
+  begin perform public.wa275_availability_set('{"weekly":{"mon":[["10:00","12:00"]]},"except":[]}'::jsonb); assert false, 'a weekly key should be refused';
+  exception when raise_exception then if sqlerrm like 'Your typical week is set on the Hub''s Home page%' then null; else raise; end if; end;
+  begin perform public.wa275_availability_set('{"except":[{"date":"2026-11-11","free":[["12:00","10:00"]]}]}'::jsonb); assert false, 'bad availability should be refused';
   exception when raise_exception then if sqlerrm like 'That availability is not valid%' then null; else raise; end if; end;
   begin perform public.wa275_availability_set(null); assert false, 'null should be refused';
   exception when raise_exception then if sqlerrm like 'That availability is not valid%' then null; else raise; end if; end;
   begin perform public.wa275_availability_set('[]'::jsonb); assert false, 'a list should be refused';
   exception when raise_exception then if sqlerrm like 'That availability is not valid%' then null; else raise; end if; end;
-  assert (public.wa275_availability_of(mid) -> 'availability' -> 'weekly' -> 'mon') = '[["10:00","12:00"]]'::jsonb, 'a refused save changed nothing';
-
-  -- 29 days old is recent, 31 days old is stale
-  update public.team_members set availability_at = now() - interval '29 days' where id = mid;
-  assert not (public.wa275_availability_of(mid) ->> 'stale')::boolean, '29 days old is not stale';
-  update public.team_members set availability_at = now() - interval '31 days' where id = mid;
-  assert (public.wa275_availability_of(mid) ->> 'stale')::boolean, '31 days old is stale';
-  update public.team_members set availability_at = null where id = mid;
-  assert (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'saved but with no date is stale';
-  assert public.wa275_availability_of(mid) -> 'availability' -> 'weekly' -> 'mon' = '[["10:00","12:00"]]'::jsonb, 'and the saved times still come back';
-  -- the empty object counts as nothing saved? no: an empty week is a choice (never available), the default is only for null
-  update public.team_members set availability = '{}'::jsonb, availability_at = now() where id = mid;
-  assert public.wa275_availability_of(mid) -> 'availability' = '{}'::jsonb and not (public.wa275_availability_of(mid) ->> 'stale')::boolean, 'an empty availability is what the person saved';
+  assert jsonb_array_length(public.wa275_availability_of(mid) -> 'availability' -> 'except') = 2, 'a refused save changed nothing';
+  update public.team_members set availability = '{"weekly":{"tue":[["06:00","07:00"]]},"except":[]}'::jsonb where id = mid;   -- an older value written straight to the column
+  assert not (public.wa275_availability_of(mid) -> 'availability' -> 'weekly' ? 'tue'), 'a weekly left in the column is never read';
   update public.team_members set availability = null, availability_at = null where id = mid;
+  delete from public.hub_team_avail where lower(email) = 'w275.other@example.invalid';
+  delete from public.hub_team_avail_ask where set_by = 'w275 test';
 end $$;
 
 -- who may read someone's availability

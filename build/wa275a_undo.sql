@@ -100,6 +100,7 @@ end $undo$;
 alter table if exists public.team_members drop constraint if exists team_members_availability_check;
 drop function if exists public.wa275_my_cards();
 drop function if exists public.wa275_flow_row(bigint);
+drop function if exists public.wa275_week_of(bigint);   -- amended 02/11/26: the week from wave276 (its tables stay: they are wave276's)
 drop function if exists public.wa275_manager_of(bigint);
 drop function if exists public.wa275_availability_set(jsonb);
 drop function if exists public.wa275_availability_of(bigint);

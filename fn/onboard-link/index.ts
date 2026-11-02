@@ -21,16 +21,20 @@
 //   A read that fails is a 503 (unavailable), not a bad link: the page offers to try again.
 // wave275 (v2), the mgr link only. GET adds mode: 'propose' (the wave275 path) or 'grid' (a wave271 flow keeps its 1-on-1 grid: created before
 //   app_config onboard_v2_since, or, with no release time set, a flow that is not offered and has nothing proposed). In propose mode GET also gives
-//   {proposal: {call_at, one_on_one_at, by, at} | null, availability (saved, or Monday to Friday 09:00 to 17:00), availabilityAt, availabilityStale (none
-//   saved, or saved more than 30 days ago), busy: [{start, end, taken?}] (hub@ meetings the manager is invited to over the next 21 days, never their
+//   {proposal: {call_at, one_on_one_at, by, at} | null, availability: {weekly, except, tz}, availabilityAt, availabilityStale, noWeek, exceptAt (all from
+//   wa275_availability_of, the one read of a manager's hours: amended 02/11/26, the week is wave276's typical week saved on Home, Monday to Friday 09:00 to
+//   17:00 with noWeek while none is saved; stale when no team's week was saved since its latest ask; except is the one-off dates on the roster row; the
+//   page shows the week read-only and sends the manager to Home to change it), busy: [{start, end, taken?}] (hub@ meetings the manager is invited to over the next 21 days, never their
 //   titles, then the booked and proposed times of their other new hires, taken: true; a proposal its hire has answered is left out), lengths: {callMin,
 //   oneMin}, leadHours, hireAccepted, hireAnswer}; the page draws its cells from grid. The manager is the flow's manager_member_id, else whoever got the
 //   link. The link is theirs only while manager_link_member_id (who the Hub last sent it to) is set and is that manager: otherwise GET gives
 //   {mode, notYours: true, message} and nothing of their hours or calendar, and both POSTs are refused (409 not_yours).
-//   POST {t, a: 'availability', availability}   checked as the database checks it (wa275_availability_ok: weekly mon..sun, blocks ["HH:MM","HH:MM"] on
-//              5-minute marks, 00:00 to 23:55, end after start; except [{date, free}] with real dates, once each; tz America/Toronto), at most 12 blocks a
-//              day and 120 exceptions; saved with the service key on the manager's roster row with availability_at now (wa275_availability_set needs a
-//              sign-in, and this link is the manager's own). {ok, availability, availabilityAt, availabilityStale: false}; refused: 400 bad_availability.
+//   POST {t, a: 'availability', availability: {except, tz?}}   the one-off dates only (amended 02/11/26: a weekly key is 400 weekly_moved, "set your
+//              week on the Hub's Home page"), checked as the database checks them (wa275_availability_ok: except [{date, free}] with real dates, once each,
+//              blocks ["HH:MM","HH:MM"] on 5-minute marks, 00:00 to 23:55, end after start; tz America/Toronto), at most 12 blocks a day and 120 dates;
+//              saved with the service key on the manager's roster row as {except, tz} with availability_at now (wa275_availability_set needs a sign-in, and
+//              this link is the manager's own). The answer is wa275_availability_of read again: {ok, availability, availabilityAt, availabilityStale,
+//              noWeek, exceptAt}; refused: 400 bad_availability.
 //   POST {t, a: 'propose', call_at, one_on_one_at}   relays to onboard-run propose with the trigger secret and by 'manager': the rules (lead time,
 //              availability, hub@ meetings, other hires' times, overlap, already booked) are onboard-run's alone, and so is the save. {ok, repeated,
 //              proposal, hireEmailed, practice?}; a refusal keeps onboard-run's status, error and which, with message {en, fr}; onboard-run not answering is 503.
@@ -94,6 +98,7 @@ const MSG: Record<string, { en: string; fr: string }> = {
   closed: { en: 'This link is no longer active. Please contact HR.', fr: 'Ce lien n\'est plus actif. Veuillez communiquer avec les RH.' },
   unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
   bad_availability: { en: 'Some of those hours do not work. Use times on 5-minute marks from 00:00 to 23:55, each end after its start, and a date once each. Please check and save again.', fr: 'Certaines de ces heures ne conviennent pas. Utilisez des heures par tranches de 5 minutes de 00:00 à 23:55, chaque fin après son début, et chaque date une seule fois. Vérifiez puis enregistrez de nouveau.' },
+  weekly_moved: { en: 'Your usual week is now set on the Hub\'s Home page, at hub.welfareavenue.com. Here you can only add or remove one-off dates.', fr: 'Votre semaine habituelle se règle maintenant sur la page d\'accueil du Hub, à hub.welfareavenue.com. Ici, vous pouvez seulement ajouter ou retirer des dates ponctuelles.' },
   no_manager: { en: 'This new hire has no onboarding manager yet. Please contact HR.', fr: 'Cette nouvelle recrue n\'a pas encore de gestionnaire d\'accueil. Veuillez communiquer avec les RH.' },
   not_yours: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' },
   no_proposal: { en: 'We are still choosing your times. You will get an email within two days.', fr: 'Nous choisissons encore vos heures. Vous recevrez un courriel d\'ici deux jours.' },
@@ -328,10 +333,17 @@ async function view(l: Link) {
 }
 
 /* ---------- wave275: the manager's availability and the proposal ---------- */
-type Member = { id: number; name: string | null; email: string | null; availability?: unknown; availability_at?: string | null };
-const DEFAULT_AVAILABILITY = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: TZ };
-const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
-const STALE_DAYS = 30, BUSY_DAYS = 21, MAX_BLOCKS = 12, MAX_EXCEPT = 120;
+type Member = { id: number; name: string | null; email: string | null };
+const BUSY_DAYS = 21, MAX_BLOCKS = 12, MAX_EXCEPT = 120;
+const NO_MANAGER_HOURS = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: TZ };   // no manager yet: nothing to read
+/* the manager's hours, read only through wa275_availability_of (amended 02/11/26: the week is wave276's typical week, saved on Home; the one-off dates are on
+   the roster row; Monday to Friday 09:00 to 17:00 with noWeek while no week is saved). A read that fails throws, so the page says it could not load. */
+async function hoursOf(id: number) {
+  const { data, error } = await svc.rpc('wa275_availability_of', { p_member: id });
+  if (error || !data || typeof data !== 'object') throw new Error('availability: ' + (error ? error.message : 'no answer'));
+  const d = data as Record<string, unknown>;
+  return { availability: d.availability, availabilityAt: normal(d.availability_at) || null, availabilityStale: d.stale !== false, noWeek: d.no_week === true, exceptAt: normal(d.except_at) || null };
+}
 const managerIdOf = (f: Flow | null) => (f ? f.manager_member_id ?? f.manager_link_member_id ?? null : null);
 /* the token is signed over the flow alone, so it says nothing about who holds it: the link is the manager's only while the Hub last sent it to that manager
    (manager_link_member_id). After set_manager or change_manager the old holder's link, or a forwarded one, must not write the new manager's hours or times. */
@@ -339,7 +351,7 @@ const heldByManager = (f: Flow | null) => !!f && f.manager_link_member_id != nul
 async function managerRow(l: Link): Promise<Member | null> {
   const id = managerIdOf(l.flow);
   if (id == null) return null;
-  const { data, error } = await svc.from('team_members').select('id, name, email, availability, availability_at').eq('id', id).maybeSingle();
+  const { data, error } = await svc.from('team_members').select('id, name, email').eq('id', id).maybeSingle();
   if (error) throw new Error('manager: ' + error.message);
   return (data as Member | null) || null;
 }
@@ -361,8 +373,7 @@ async function proposeView(l: Link, m: Member | null) {
   const f = l.flow!;
   const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min', 'onboard_propose_lead_hours']);
   const callMin = positive(cfg.get('onboard_call_min'), 60), oneMin = positive(cfg.get('onboard_one_on_one_min'), 30);
-  const saved = m && m.availability && typeof m.availability === 'object' ? m.availability : null;
-  const at = m?.availability_at || null;
+  const hours = m ? await hoursOf(m.id) : null;
   const busy: Array<{ start: string; end: string; taken?: true }> = [];   // no meeting titles over a no-login link: the page says "hub@ meeting"
   const now = Date.now(), until = now + BUSY_DAYS * 86400000;
   const email = String(m?.email || '').trim().toLowerCase();
@@ -398,8 +409,7 @@ async function proposeView(l: Link, m: Member | null) {
   busy.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
   return {
     proposal: f.proposed_at ? { call_at: normal(f.proposed_call_at), one_on_one_at: normal(f.proposed_one_on_one_at), by: f.proposed_by ?? null, at: normal(f.proposed_at) } : null,   // instants as the grid's cells are written
-    availability: saved || DEFAULT_AVAILABILITY, availabilityAt: at,
-    availabilityStale: !saved || !at || Date.parse(at) < now - STALE_DAYS * 86400000,
+    ...(hours || { availability: NO_MANAGER_HOURS, availabilityAt: null, availabilityStale: true, noWeek: true, exceptAt: null }),
     busy, lengths: { callMin, oneMin }, leadHours: positive(cfg.get('onboard_propose_lead_hours'), 48),
     hireAccepted: !!l.cand.accepted_on, hireAnswer: f.hire_answer ?? null,
   };
@@ -424,21 +434,13 @@ const realDate = (s: unknown) => {
   const [y, m, d] = s.split('-').map(Number), t = new Date(Date.UTC(y, m - 1, d));
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
 };
-export function cleanAvailability(v: unknown): { weekly: Record<string, Array<[string, string]>>; except: Array<{ date: string; free: Array<[string, string]> }>; tz: string } | null {
+/* amended 02/11/26: only the one-off dates are the mgr link's to save ({except, tz?}); the week is set on Home. 'weekly' when the value carries one. */
+export function cleanAvailability(v: unknown): { except: Array<{ date: string; free: Array<[string, string]> }>; tz: string } | 'weekly' | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
-  if (Object.keys(o).some((k) => !['weekly', 'except', 'tz'].includes(k))) return null;
+  if ('weekly' in o) return 'weekly';
+  if (Object.keys(o).some((k) => !['except', 'tz'].includes(k))) return null;
   if ('tz' in o && o.tz !== TZ) return null;
-  const weekly: Record<string, Array<[string, string]>> = {};
-  if ('weekly' in o) {
-    if (!o.weekly || typeof o.weekly !== 'object' || Array.isArray(o.weekly)) return null;
-    for (const [k, b] of Object.entries(o.weekly as Record<string, unknown>)) {
-      if (!WEEKDAYS.includes(k)) return null;
-      const list = blocksOk(b);
-      if (!list) return null;
-      weekly[k] = list;
-    }
-  }
   const except: Array<{ date: string; free: Array<[string, string]> }> = [];
   if ('except' in o) {
     if (!Array.isArray(o.except) || o.except.length > MAX_EXCEPT) return null;
@@ -454,7 +456,7 @@ export function cleanAvailability(v: unknown): { weekly: Record<string, Array<[s
     }
     except.sort((a, b) => (a.date < b.date ? -1 : 1));
   }
-  return { weekly, except, tz: TZ };
+  return { except, tz: TZ };
 }
 
 async function saveAvailability(l: Link, value: unknown) {
@@ -465,11 +467,12 @@ async function saveAvailability(l: Link, value: unknown) {
   if ((await modeOf(l)) !== 'propose') return fail('wrong_link', 400);   // a wave271 grid link never sets anyone's hours
   if (!heldByManager(l.flow)) return fail('not_yours', 409);
   const availability = cleanAvailability(value);
+  if (availability === 'weekly') return fail('weekly_moved', 400);
   if (!availability) return fail('bad_availability', 400);
   const at = new Date().toISOString();
   const { data, error } = await svc.from('team_members').update({ availability, availability_at: at }).eq('id', id).select('id');
   if (error || !(data as unknown[] | null)?.length) return fail('save', 500);
-  return json({ ok: true, availability, availabilityAt: at, availabilityStale: false });
+  return json({ ok: true, ...(await hoursOf(Number(id))) });   // read back through the one function, so the page shows what the rules will use
 }
 
 /* the proposal: onboard-run holds the rules and the save; this only checks the link and relays */

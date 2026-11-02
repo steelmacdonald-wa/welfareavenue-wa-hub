@@ -47,8 +47,8 @@ grant select (proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at
 -- 3. people's weekly availability, on the roster. The shape is checked by wa275_availability_ok (below); the page and the functions only ever store what passes it.
 alter table public.team_members add column if not exists availability jsonb;
 alter table public.team_members add column if not exists availability_at timestamptz;
-comment on column public.team_members.availability is 'wave275: when this person is free for onboarding calls and 1-on-1s, as {"weekly": {"mon": [["09:00","17:00"]], ...}, "except": [{"date": "2026-11-11", "free": []}], "tz": "America/Toronto"}. Times are HH:MM on 5-minute marks; an except day replaces that weekday (empty free = unavailable that day). Checked by wa275_availability_ok. Set by the person through wa275_availability_set (or by HR for them); read through wa275_availability_of. Null: nothing saved, and the Hub assumes Monday to Friday 09:00 to 17:00 and calls it stale. Note: team_members is readable by staff, so a staff member can read this column directly; it holds nothing but free times.';
-comment on column public.team_members.availability_at is 'wave275: when availability was last saved. More than 30 days ago (or null) counts as stale: the Hub asks the person to confirm before it offers their times.';
+comment on column public.team_members.availability is 'wave275: this person''s one-off dates for onboarding calls and 1-on-1s, as {"except": [{"date": "2026-11-11", "free": []}], "tz": "America/Toronto"}. Times are HH:MM on 5-minute marks; an except day replaces that weekday (empty free = unavailable that day). Their usual week is not here: it is wave276''s typical week (hub_team_avail, saved on Home), and wa275_availability_of joins the two (Steel, 02/11/26). A weekly key is never written by the Hub and never read. Checked by wa275_availability_ok. Set by the person through wa275_availability_set, by HR through onboard-run (availability_for), or from the mgr link. Null: no one-off dates. Note: team_members is readable by staff, so a staff member can read this column directly; it holds nothing but free times.';
+comment on column public.team_members.availability_at is 'wave275: when the one-off dates (availability) were last saved. Not the week''s save time: that is hub_team_avail.updated_at (wa275_availability_of availability_at).';
 
 -- 3a. the shape check: one block list ...
 create or replace function public.wa275_blocks_ok(p_blocks jsonb)
@@ -108,6 +108,61 @@ comment on function public.wa275_availability_ok(jsonb) is 'wave275: true when t
 
 alter table public.team_members drop constraint if exists team_members_availability_check;
 alter table public.team_members add constraint team_members_availability_check check (public.wa275_availability_ok(availability));
+
+-- 3c. (amended 02/11/26, Steel: the manager's week is wave276's typical week) the person's week from hub_team_avail, as blocks. Internal: no access check of its
+--     own, so only the definer functions below call it. Needs wave276 (hub_team_avail, hub_team_avail_ask), which is live; this file does not create them.
+create or replace function public.wa275_week_of(p_member bigint)
+returns jsonb language plpgsql stable security definer set search_path to '' as $function$
+declare
+  v_email text; v_cell int; v_at timestamptz; v_stale boolean; v_weekly jsonb := '{}'::jsonb;
+  v_days text[] := array['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+  v_slot int; v_wd int; v_min int; v_cur_wd int := -1; v_s int; v_e int; v_list jsonb := '[]'::jsonb;
+  hm constant text := 'FM00';
+begin
+  select lower(trim(coalesce(m.email, ''))) into v_email from public.team_members m where m.id = p_member;
+  v_cell := coalesce((select case when trim(c.value) ~ '^[0-9]{1,3}$' and trim(c.value)::int > 0 then trim(c.value)::int end from public.app_config c where c.key = 'avail_cell_min'), 30);
+  -- each team's current week: the newest saved row (a save time) whose effective_from is today or earlier, as wa_avail_mine reads it
+  select max(r.updated_at) into v_at from (
+    select distinct on (h.department) h.updated_at from public.hub_team_avail h
+     where coalesce(v_email, '') <> '' and lower(trim(h.email)) = v_email and h.effective_from <= current_date and h.updated_at is not null
+     order by h.department, h.effective_from desc, h.id desc) r;
+  -- the union of the teams' cells, each [start, start + cell), joined where they touch or overlap
+  for v_slot in
+    select distinct x::int from (
+      select distinct on (h.department) h.slots from public.hub_team_avail h
+       where coalesce(v_email, '') <> '' and lower(trim(h.email)) = v_email and h.effective_from <= current_date and h.updated_at is not null
+       order by h.department, h.effective_from desc, h.id desc) r, unnest(r.slots) x
+     where x >= 0 and x < 7 * 1440 order by 1
+  loop
+    v_wd := v_slot / 1440; v_min := v_slot % 1440;
+    if v_wd <> v_cur_wd or v_min > v_e then
+      if v_cur_wd >= 0 then v_list := v_list || jsonb_build_array(jsonb_build_array(to_char(v_s / 60, hm) || ':' || to_char(v_s % 60, hm), to_char(least(v_e, 1440) / 60, hm) || ':' || to_char(least(v_e, 1440) % 60, hm))); end if;
+      if v_wd <> v_cur_wd then
+        if v_cur_wd >= 0 then v_weekly := v_weekly || jsonb_build_object(v_days[v_cur_wd + 1], v_list); end if;
+        v_list := '[]'::jsonb; v_cur_wd := v_wd;
+      end if;
+      v_s := v_min; v_e := v_min + v_cell;
+    else
+      v_e := greatest(v_e, v_min + v_cell);
+    end if;
+  end loop;
+  if v_cur_wd >= 0 then
+    v_list := v_list || jsonb_build_array(jsonb_build_array(to_char(v_s / 60, hm) || ':' || to_char(v_s % 60, hm), to_char(least(v_e, 1440) / 60, hm) || ':' || to_char(least(v_e, 1440) % 60, hm)));
+    v_weekly := v_weekly || jsonb_build_object(v_days[v_cur_wd + 1], v_list);
+  end if;
+  -- current: saved on or after the latest ask (on or before today) for any of their teams, as wa_avail_due counts it; stale otherwise, or with nothing saved
+  v_stale := coalesce(v_email, '') = '' or not exists (
+    select 1 from (select h.department, max(h.updated_at) as last_saved from public.hub_team_avail h
+                    where lower(trim(h.email)) = v_email and h.updated_at is not null group by h.department) t
+     where t.last_saved >= coalesce((select max(k.ask_date) from public.hub_team_avail_ask k where k.department = t.department and k.ask_date <= current_date), '-infinity'::date));
+  if v_weekly = '{}'::jsonb then
+    return jsonb_build_object('weekly', '{"mon":[["09:00","17:00"]],"tue":[["09:00","17:00"]],"wed":[["09:00","17:00"]],"thu":[["09:00","17:00"]],"fri":[["09:00","17:00"]]}'::jsonb,
+                              'no_week', true, 'stale', true, 'availability_at', v_at);
+  end if;
+  return jsonb_build_object('weekly', v_weekly, 'no_week', false, 'stale', v_stale, 'availability_at', v_at);
+end $function$;
+revoke all on function public.wa275_week_of(bigint) from public, anon, authenticated;
+comment on function public.wa275_week_of(bigint) is 'wave275 (amended 02/11/26): one roster person''s usual week for onboarding, from wave276''s typical week, as {weekly: {mon..sun: [["HH:MM","HH:MM"]]}, no_week, stale, availability_at}. The rows are hub_team_avail for their roster email (lower case): for each team, the newest row saved (updated_at set) with effective_from today or earlier; the teams'' cells (weekday * 1440 + minute, weekday 0 Monday, Toronto wall time, avail_cell_min minutes each) are joined into blocks where they touch. No cells: Monday to Friday 09:00 to 17:00 with no_week and stale true. stale: no team whose last save is on or after its latest hub_team_avail_ask date on or before today (or that has no ask). availability_at: the newest save of the current rows. No access check of its own: wa275_availability_of and wa275_flow_row call it. Not callable from the browser.';
 
 -- 4. the offer going out starts the flow (only when offer_sent_at goes from empty to a time; touching it again, or setting it again, starts nothing new)
 create or replace function public.wa275_offer_sent()
@@ -194,14 +249,17 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
     'setup_ticks', f.setup_ticks,
     'welcome_sent_at', f.welcome_sent_at,
     'accounts_at', f.accounts_at,
-    'manager_availability_at', m.availability_at)
+    'manager_availability_at', w.week -> 'availability_at',
+    'manager_no_week', coalesce(w.week -> 'no_week', 'true'::jsonb),
+    'manager_week_stale', coalesce(w.week -> 'stale', 'true'::jsonb))
   from public.hub_onboard_flows f
+  left join lateral (select public.wa275_week_of(f.manager_member_id) as week) w on f.manager_member_id is not null
   join public.hub_candidates c on c.id = f.candidate_id
   left join public.team_members m on m.id = f.manager_member_id
   where f.id = p_flow
 $function$;
 revoke all on function public.wa275_flow_row(bigint) from public, anon, authenticated;
-comment on function public.wa275_flow_row(bigint) is 'wave275: one flow as the card list shows it (jsonb): everything wave271''s Ready list gave (flow_id, candidate_id, status, practice, name, role, email, accepted_on, offer dates, late, grids, call_at, one_on_one_at, manager_member_id, default_manager, other_open_rows) plus manager_name, offer_hours, hours_confirmed_at, the proposal (proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at), the answer (hire_answer, hire_answered_at), ask_availability, setup_ticks, welcome_sent_at, accounts_at and manager_availability_at. default_manager is HR''s only (null for a manager). Does no access check of its own: only wa271_ready_list and wa275_my_cards call it, after theirs. Not callable from the browser.';
+comment on function public.wa275_flow_row(bigint) is 'wave275: one flow as the card list shows it (jsonb): everything wave271''s Ready list gave (flow_id, candidate_id, status, practice, name, role, email, accepted_on, offer dates, late, grids, call_at, one_on_one_at, manager_member_id, default_manager, other_open_rows) plus manager_name, offer_hours, hours_confirmed_at, the proposal (proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at), the answer (hire_answer, hire_answered_at), ask_availability, setup_ticks, welcome_sent_at, accounts_at, and the manager''s week (amended 02/11/26: wa275_week_of, wave276''s typical week): manager_availability_at (when it was saved), manager_no_week and manager_week_stale. default_manager is HR''s only (null for a manager). Does no access check of its own: only wa271_ready_list and wa275_my_cards call it, after theirs. Not callable from the browser.';
 
 -- 6a. the Ready to onboard list, now built from the shared row (HR, admins and the service key). It also lists offered flows: a card runs from the offer.
 create or replace function public.wa271_ready_list()
@@ -242,7 +300,8 @@ revoke all on function public.wa275_my_cards() from public, anon;
 grant execute on function public.wa275_my_cards() to authenticated, service_role;
 comment on function public.wa275_my_cards() is 'wave275: the onboarding cards of the hires the signed-in person manages, as a jsonb list in the same row shape as wa271_ready_list (wa275_flow_row), oldest first. The person is the active team_members row with their sign-in email; the flows are those whose manager_member_id is that row, not backed out, on a card not declined or withdrawn. A plain member sees only their own hires; the default_manager field is null for them. Empty for a signed-out visitor, someone not on the roster, and the service key.';
 
--- 7. availability: a person sets their own, and HR, an admin, the person or the service key read it
+-- 7. availability: a person sets their own one-off dates, and HR, an admin, the person or the service key read the whole of it (the week from wave276, the
+--    dates from the roster row). Amended 02/11/26 (Steel): the week is wave276's typical week, set on Home; nothing here stores a week.
 create or replace function public.wa275_availability_set(p_availability jsonb)
 returns void language plpgsql security definer set search_path to '' as $function$
 declare v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', '')));
@@ -251,19 +310,22 @@ begin
   if not exists (select 1 from public.team_members m where m.active and lower(trim(coalesce(m.email, ''))) = v_email) then
     raise exception 'Only people on the team can set their availability';
   end if;
-  if p_availability is null or jsonb_typeof(p_availability) <> 'object' or not public.wa275_availability_ok(p_availability) then
-    raise exception 'That availability is not valid: use days mon to sun, times as HH:MM on 5-minute marks, and each end after its start';
+  if p_availability is not null and jsonb_typeof(p_availability) = 'object' and p_availability ? 'weekly' then
+    raise exception 'Your typical week is set on the Hub''s Home page now. Here you can only add or remove one-off dates';
   end if;
-  update public.team_members set availability = p_availability, availability_at = now()
+  if p_availability is null or jsonb_typeof(p_availability) <> 'object' or not public.wa275_availability_ok(p_availability) then
+    raise exception 'That availability is not valid: use real dates, times as HH:MM on 5-minute marks, and each end after its start';
+  end if;
+  update public.team_members set availability = jsonb_build_object('except', coalesce(p_availability -> 'except', '[]'::jsonb), 'tz', 'America/Toronto'), availability_at = now()
    where active and lower(trim(coalesce(email, ''))) = v_email;
 end $function$;
 revoke all on function public.wa275_availability_set(jsonb) from public, anon;
 grant execute on function public.wa275_availability_set(jsonb) to authenticated, service_role;
-comment on function public.wa275_availability_set(jsonb) is 'wave275: the signed-in person (the active team_members row with their sign-in email) saves their own availability and the time it was saved. Refuses a signed-out visitor, someone not on the roster, and anything wa275_availability_ok refuses, each with a plain message. Called by My page and, through the page, the manager''s own editor. HR sets someone else''s through onboard-run (availability_for) with the service key.';
+comment on function public.wa275_availability_set(jsonb) is 'wave275 (amended 02/11/26): the signed-in person (the active team_members row with their sign-in email) saves their own one-off dates, {except: [{date, free}], tz}, and the time it was saved (availability_at). Their usual week is wave276''s typical week, set on Home, so a weekly key is refused with a plain sentence. Refuses a signed-out visitor, someone not on the roster, and anything wa275_availability_ok refuses, each with a plain message. HR sets someone else''s through onboard-run (availability_for) with the service key; the mgr link saves the manager''s own.';
 
 create or replace function public.wa275_availability_of(p_member bigint)
 returns jsonb language plpgsql stable security definer set search_path to '' as $function$
-declare v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', ''))); v_m public.team_members;
+declare v_email text := lower(trim(coalesce(auth.jwt() ->> 'email', ''))); v_m public.team_members; v_w jsonb;
 begin
   if not (coalesce(auth.role(), '') = 'service_role' or public.wa_is_hr() or public.is_hub_admin()
           or (v_email <> '' and exists (select 1 from public.team_members m where m.id = p_member and lower(trim(coalesce(m.email, ''))) = v_email))) then
@@ -271,14 +333,19 @@ begin
   end if;
   select * into v_m from public.team_members where id = p_member;
   if not found then raise exception 'That person is not on the roster'; end if;
+  v_w := public.wa275_week_of(p_member);
   return jsonb_build_object(
-    'availability', coalesce(v_m.availability, '{"weekly":{"mon":[["09:00","17:00"]],"tue":[["09:00","17:00"]],"wed":[["09:00","17:00"]],"thu":[["09:00","17:00"]],"fri":[["09:00","17:00"]]},"except":[],"tz":"America/Toronto"}'::jsonb),
-    'availability_at', v_m.availability_at,
-    'stale', v_m.availability is null or v_m.availability_at is null or v_m.availability_at < now() - interval '30 days');
+    'availability', jsonb_build_object('weekly', v_w -> 'weekly',
+                                       'except', case when jsonb_typeof(v_m.availability -> 'except') = 'array' then v_m.availability -> 'except' else '[]'::jsonb end,
+                                       'tz', 'America/Toronto'),
+    'availability_at', v_w -> 'availability_at',
+    'stale', v_w -> 'stale',
+    'no_week', v_w -> 'no_week',
+    'except_at', v_m.availability_at);
 end $function$;
 revoke all on function public.wa275_availability_of(bigint) from public, anon;
 grant execute on function public.wa275_availability_of(bigint) to authenticated, service_role;
-comment on function public.wa275_availability_of(bigint) is 'wave275: {availability, availability_at, stale} for one roster person. availability is what they saved, or Monday to Friday 09:00 to 17:00 (Toronto time) when nothing is saved; stale is true when nothing is saved, it has no save time, or it was saved more than 30 days ago. HR, admins, the person themselves and the service key only; raises for anyone else, and for someone who is not on the roster.';
+comment on function public.wa275_availability_of(bigint) is 'wave275 (amended 02/11/26): {availability: {weekly, except, tz}, availability_at, stale, no_week, except_at} for one roster person, the one read of a manager''s availability (onboard-run''s propose and book rules, onboard-link''s mgr page, the card''s picker). weekly is wave276''s typical week (wa275_week_of: their current hub_team_avail rows, the teams joined, cells as blocks), or Monday to Friday 09:00 to 17:00 with no_week true when they have saved none; except is their one-off dates from team_members.availability (a weekly key there is never read); availability_at is when the week was saved, except_at when the dates were; stale is true with no week, or when no team''s week was saved on or after that team''s latest ask. HR, admins, the person themselves and the service key only; raises for anyone else, and for someone who is not on the roster.';
 
 -- 7a. one key of a flow's setup_ticks, merged into what is there (never the whole object rewritten from a stale copy). p_if_unset: only while that key is empty
 --     (absent or json null), which is how onboard-run claims a send (hire_times) so two calls at once send once.
