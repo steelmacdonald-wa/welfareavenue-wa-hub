@@ -31,7 +31,7 @@ create table if not exists public.hub_team_avail (
 create index if not exists hub_team_avail_dept_idx on public.hub_team_avail (department, effective_from);
 comment on table public.hub_team_avail is 'wave276: when each team member is usually free to meet, one row per person, team and start date. Written only through wa_avail_save and wa_avail_snooze (the browser has no insert or update on the table, so it cannot set hours, dates or someone else''s row). The current grid is the newest row whose effective_from is today or earlier; a row with a later date waits for its day. A person reads their own rows and the rows of a team they are on or manage.';
 comment on column public.hub_team_avail.id is 'Row id.';
-comment on column public.hub_team_avail.email is 'Whose week this is: their sign-in email in lower case (wa_email() at save time).';
+comment on column public.hub_team_avail.email is 'Whose week this is: their Welfare Avenue address in lower case (mybox_me() at save time, so a sign-in alias in wa_email_aliases is stored as the address the team roster uses).';
 comment on column public.hub_team_avail.department is 'Team code (dept_meta.department). A person on two teams keeps one grid for each.';
 comment on column public.hub_team_avail.effective_from is 'The first day this week applies, for example the first day of term. The newest row on or before today is the current one.';
 comment on column public.hub_team_avail.slots is 'The free cells, each the start of a cell as weekday * 1440 + minute of the day (weekday 0 = Monday, Toronto wall time), sorted with no repeats. Cells are avail_cell_min minutes long.';
@@ -79,7 +79,7 @@ language sql stable security definer set search_path to '' as $$
                  join public.org_positions b on b.id = o.reports_to
                  join public.team_members m on m.id = b.member_id
                  join public.team_members s on s.id = o.member_id
-                where lower(m.email) = any (public.my_emails()) and s.department = p_dept))
+                where lower(m.email) = any (public.my_emails() || lower(public.mybox_me())) and s.department = p_dept))
 $$;
 revoke all on function public.wa_avail_can_manage(text) from public, anon;
 grant execute on function public.wa_avail_can_manage(text) to authenticated, service_role;
@@ -95,22 +95,27 @@ comment on function public.wa_avail_can_see(text) is 'wave276: true when the sig
 
 create or replace function public.wa_avail_manager_of(p_email text, p_dept text) returns boolean
 language sql stable security definer set search_path to '' as $$
+  -- the address given and, when it is an alias (wa_email_aliases, as mybox_me() reads it), the Welfare Avenue address it belongs to
+  with e as (
+    select lower(trim(p_email)) as x
+    union select lower(a.email) from public.wa_email_aliases a where lower(trim(p_email)) = any (select lower(y) from unnest(a.aliases) y)
+  )
   select coalesce(p_dept, '') <> '' and coalesce(p_email, '') <> '' and (
-    exists (select 1 from public.hub_roles r where r.email = lower(p_email) and r.role = 'admin')
-    or exists (select 1 from public.wa_hr_access h where h.email = lower(p_email))
+    exists (select 1 from public.hub_roles r where r.email in (select x from e) and r.role = 'admin')
+    or exists (select 1 from public.wa_hr_access h where h.email in (select x from e))
     or exists (select 1 from public.hub_roles r
-                where r.email = lower(p_email) and r.role = 'leader'
+                where r.email in (select x from e) and r.role = 'leader'
                   and (r.profile = p_dept or exists (select 1 from public.team_members t
-                                                      where lower(t.email) = lower(p_email) and t.department = p_dept and coalesce(t.active, true))))
+                                                      where lower(t.email) in (select x from e) and t.department = p_dept and coalesce(t.active, true))))
     or exists (select 1 from public.org_positions o
                  join public.org_positions b on b.id = o.reports_to
                  join public.team_members m on m.id = b.member_id
                  join public.team_members s on s.id = o.member_id
-                where lower(m.email) = lower(p_email) and s.department = p_dept))
+                where lower(m.email) in (select x from e) and s.department = p_dept))
 $$;
 revoke all on function public.wa_avail_manager_of(text, text) from public, anon, authenticated;
 grant execute on function public.wa_avail_manager_of(text, text) to service_role;
-comment on function public.wa_avail_manager_of(text, text) is 'wave276: the wa_avail_can_manage rule for any email (admin, HR, a leader of the team, or the person the team''s seats report to). The notify function calls it with the service key before it lets someone message the whole team; the browser cannot call it.';
+comment on function public.wa_avail_manager_of(text, text) is 'wave276: the wa_avail_can_manage rule for any email (admin, HR, a leader of the team, or the person the team''s seats report to). An alias in wa_email_aliases counts as the Welfare Avenue address it belongs to, as mybox_me() does at sign-in. The notify function calls it with the service key before it lets someone message the whole team; the browser cannot call it.';
 
 -- 6. the signed-in person: which of their teams want their week, their current grid, save, and Ask me later
 create or replace function public.wa_avail_due()
@@ -122,7 +127,7 @@ language sql stable security definer set search_path to '' as $$
                         where k.department = t.dept and k.ask_date <= current_date) a on true
     left join lateral (select max(h.updated_at) as last_saved, max(h.snoozed_until) as snoozed
                          from public.hub_team_avail h
-                        where h.department = t.dept and lower(h.email) = any (public.my_emails())) s on true
+                        where h.department = t.dept and lower(h.email) = any (public.my_emails() || lower(public.mybox_me()))) s on true
    where (s.snoozed is null or s.snoozed <= now())
      and (s.last_saved is null or (a.ask_date is not null and s.last_saved < a.ask_date))
    order by t.dept
@@ -136,7 +141,7 @@ language sql stable security definer set search_path to '' as $$
   select jsonb_build_object('id', h.id, 'effective_from', h.effective_from, 'slots', to_jsonb(h.slots), 'hours', h.hours,
                             'updated_at', h.updated_at, 'snoozed_until', h.snoozed_until)
     from public.hub_team_avail h
-   where h.department = p_dept and lower(h.email) = any (public.my_emails()) and h.effective_from <= current_date and h.updated_at is not null
+   where h.department = p_dept and lower(h.email) = any (public.my_emails() || lower(public.mybox_me())) and h.effective_from <= current_date and h.updated_at is not null
    order by h.effective_from desc, h.id desc
    limit 1
 $$;
@@ -147,7 +152,7 @@ comment on function public.wa_avail_mine(text) is 'wave276: the signed-in person
 create or replace function public.wa_avail_save(p_dept text, p_from date, p_slots smallint[]) returns jsonb
 language plpgsql security definer set search_path to '' as $$
 declare
-  v_email text := public.wa_email();
+  v_email text := lower(public.mybox_me());   -- the Welfare Avenue address, also when they signed in with an alias
   v_slots smallint[];
   v_hours numeric;
   v_id bigint;
@@ -167,17 +172,17 @@ begin
     set slots = excluded.slots, hours = excluded.hours, snoozed_until = null, updated_at = now()
   returning h.id into v_id;
   update public.hub_team_avail h set snoozed_until = null
-   where h.department = p_dept and lower(h.email) = any (public.my_emails()) and h.snoozed_until is not null;
+   where h.department = p_dept and lower(h.email) = any (public.my_emails() || lower(public.mybox_me())) and h.snoozed_until is not null;
   return jsonb_build_object('id', v_id, 'hours', v_hours, 'min_hours', public.wa_avail_setting('avail_min_hours'));
 end $$;
 revoke all on function public.wa_avail_save(text, date, smallint[]) from public, anon;
 grant execute on function public.wa_avail_save(text, date, smallint[]) to authenticated, service_role;
-comment on function public.wa_avail_save(text, date, smallint[]) is 'wave276: saves the signed-in person''s typical week for one of their teams from a date (today when empty). Same person, team and date: the row is replaced. Hours = number of slots times avail_cell_min over 60. Clears any Ask me later. Returns {id, hours, min_hours}; under min_hours the page shows its note but the grid is saved anyway. Refuses a team the person is not on.';
+comment on function public.wa_avail_save(text, date, smallint[]) is 'wave276: saves the signed-in person''s typical week for one of their teams from a date (today when empty), under their Welfare Avenue address (mybox_me(): a sign-in alias saves as the address the roster uses). Same person, team and date: the row is replaced. Hours = number of slots times avail_cell_min over 60. Clears any Ask me later. Returns {id, hours, min_hours}; under min_hours the page shows its note but the grid is saved anyway. Refuses a team the person is not on.';
 
 create or replace function public.wa_avail_snooze(p_dept text) returns void
 language plpgsql security definer set search_path to '' as $$
 declare
-  v_email text := public.wa_email();
+  v_email text := lower(public.mybox_me());   -- the Welfare Avenue address, also when they signed in with an alias
 begin
   if coalesce(v_email, '') = '' then raise exception 'Sign in first'; end if;
   if p_dept is null or not (p_dept = any (public.wa180_my_teams())) then
@@ -185,7 +190,7 @@ begin
   end if;
   update public.hub_team_avail h set snoozed_until = now() + interval '3 days'
    where h.id = (select x.id from public.hub_team_avail x
-                  where x.department = p_dept and lower(x.email) = any (public.my_emails())
+                  where x.department = p_dept and lower(x.email) = any (public.my_emails() || lower(public.mybox_me()))
                   order by x.effective_from desc, x.id desc limit 1);
   if not found then
     insert into public.hub_team_avail (email, department, effective_from, slots, hours, snoozed_until, updated_at)
@@ -204,6 +209,7 @@ declare
   v_start int := public.wa_avail_setting('avail_grid_start')::int;
   v_end int := public.wa_avail_setting('avail_grid_end')::int;
   v_today date := (now() at time zone 'America/Toronto')::date;
+  v_ask date := (select max(k.ask_date) from public.hub_team_avail_ask k where k.department = p_dept and k.ask_date <= current_date);
   v jsonb;
 begin
   if not public.wa_avail_can_see(p_dept) then
@@ -219,6 +225,11 @@ begin
       from public.hub_team_avail h
      where h.department = p_dept and h.effective_from <= current_date and h.updated_at is not null
      order by lower(h.email), h.effective_from desc, h.id desc
+  ), saved as (   -- the last save of any grid (a later-dated one too), the rule wa_avail_ask_set and wa_avail_due use for "since the ask"
+    select lower(h.email) as email, max(h.updated_at) as last_saved
+      from public.hub_team_avail h
+     where h.department = p_dept and h.updated_at is not null
+     group by lower(h.email)
   ), ev as (
     select lower(a.e) as email,
            e.start_at at time zone 'America/Toronto' as ls,
@@ -250,19 +261,23 @@ begin
     'can_manage', public.wa_avail_can_manage(p_dept),
     'cell_min', v_cell, 'start', v_start, 'end', v_end,
     'min_hours', public.wa_avail_setting('avail_min_hours'),
-    'ask_date', (select max(k.ask_date) from public.hub_team_avail_ask k where k.department = p_dept and k.ask_date <= current_date),
+    'ask_date', v_ask,
+    'me', lower(public.mybox_me()),
     'members', coalesce((select jsonb_agg(jsonb_build_object('email', tm.email, 'name', tm.name, 'slots', to_jsonb(cur.slots), 'hours', cur.hours,
-                                                             'updated_at', cur.updated_at) order by tm.name, tm.email)
-                           from tm join cur on cur.email = tm.email), '[]'::jsonb),
-    'missing', coalesce((select jsonb_agg(jsonb_build_object('email', tm.email, 'name', tm.name) order by tm.name, tm.email)
-                           from tm where not exists (select 1 from cur where cur.email = tm.email)), '[]'::jsonb),
+                                                             'updated_at', cur.updated_at,
+                                                             'since_ask', v_ask is null or coalesce(sv.last_saved >= v_ask, false)) order by tm.name, tm.email)
+                           from tm join cur on cur.email = tm.email left join saved sv on sv.email = tm.email), '[]'::jsonb),
+    'missing', coalesce((select jsonb_agg(jsonb_build_object('email', tm.email, 'name', tm.name,
+                                                             'since_ask', sv.last_saved is not null and (v_ask is null or sv.last_saved >= v_ask)) order by tm.name, tm.email)
+                           from tm left join saved sv on sv.email = tm.email
+                          where not exists (select 1 from cur where cur.email = tm.email)), '[]'::jsonb),
     'clashes', coalesce((select jsonb_agg(jsonb_build_object('email', clash.email, 'slot', clash.slot) order by clash.email, clash.slot) from clash), '[]'::jsonb))
   into v;
   return v;
 end $$;
 revoke all on function public.wa_avail_team(text) from public, anon;
 grant execute on function public.wa_avail_team(text) to authenticated, service_role;
-comment on function public.wa_avail_team(text) is 'wave276: a team''s availability for its Agenda tab, for the team and its managers only. Returns {can_manage, cell_min, start, end, min_hours, ask_date, members:[{email, name, slots, hours, updated_at}], missing:[{email, name}], clashes:[{email, slot}]}. members are the active roster with a current saved grid; missing the rest of the active roster with an email; clashes the grid cells where a member is in a confirmed hub_events meeting in 3 or more of the next 4 weeks (Toronto time, events of 12 hours or more left out).';
+comment on function public.wa_avail_team(text) is 'wave276: a team''s availability for its Agenda tab, for the team and its managers only. Returns {can_manage, cell_min, start, end, min_hours, ask_date, me, members:[{email, name, slots, hours, updated_at, since_ask}], missing:[{email, name, since_ask}], clashes:[{email, slot}]}. me is the caller''s own address (mybox_me(), so an alias reads as the Welfare Avenue address the roster uses); ask_date the latest ask dated today or earlier. members are the active roster with a current saved grid; missing the rest of the active roster with an email; since_ask is true when the person saved a grid (any date) on or after ask_date, or there is no ask, the rule Ask the team and the Home pop-up use (false on missing unless a later-dated grid was saved since); clashes the grid cells where a member is in a confirmed hub_events meeting in 3 or more of the next 4 weeks (Toronto time, events of 12 hours or more left out).';
 
 create or replace function public.wa_avail_ask_set(p_dept text, p_date date, p_note text) returns jsonb
 language plpgsql security definer set search_path to '' as $$
@@ -301,8 +316,8 @@ grant all on public.hub_team_avail, public.hub_team_avail_ask to service_role;
 grant usage, select on sequence public.hub_team_avail_id_seq, public.hub_team_avail_ask_id_seq to service_role;
 
 drop policy if exists hub_team_avail_own_read on public.hub_team_avail;
-create policy hub_team_avail_own_read on public.hub_team_avail for select to authenticated using (lower(email) = any (public.my_emails()));
-comment on policy hub_team_avail_own_read on public.hub_team_avail is 'wave276: a person reads their own grids.';
+create policy hub_team_avail_own_read on public.hub_team_avail for select to authenticated using (lower(email) = any (public.my_emails() || lower(public.mybox_me())));
+comment on policy hub_team_avail_own_read on public.hub_team_avail is 'wave276: a person reads their own grids, whichever of their addresses they signed in with (my_emails() and mybox_me()).';
 drop policy if exists hub_team_avail_team_read on public.hub_team_avail;
 create policy hub_team_avail_team_read on public.hub_team_avail for select to authenticated using (public.wa_avail_can_see(department));
 comment on policy hub_team_avail_team_read on public.hub_team_avail is 'wave276: the team and the people who manage it read the team''s grids.';

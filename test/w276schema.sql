@@ -1,7 +1,8 @@
 -- wave276 (Task 1): the smallest slice of the live schema that build/wa276_avail.sql touches, for the offline proof in test/w276sql.mjs.
 -- Tables and the role/auth set-up follow test/w271schema.sql (extracted from live 01/11/26). Helper bodies: is_hub_admin, wa_is_hr and is_wa_staff
 -- from test/w271schema.sql; wa_leads_team and wa_in_team from build/data/wa144_meet.sql; wa180_my_teams from build/data/wa180_announce.rec.sql;
--- my_emails and mybox_me are cut down (no hub_directory or wa_email_aliases here: they return the sign-in email and its dotless spelling).
+-- my_emails (build/data/wa124_calendar.sql) and mybox_me (build/data/wa170_inbox.sql) are the live bodies, over cut-down hub_directory
+-- (email, aliases) and wa_email_aliases (build/data/wa165_speakers.sql) tables, so an alias sign-in maps to the Welfare Avenue address.
 -- hub_events and dept_meta carry only the columns the migration reads. No live data: the dept_meta rows are the team codes and labels only.
 -- Not a copy of live: do not apply it anywhere but the offline PGlite database.
 
@@ -118,6 +119,19 @@ create table public.hub_notification_kinds (
 insert into public.hub_notification_kinds (key, grp, grp_title, sort, title, blurb, says, audience, sender)
 values ('timeoff_request', 'people', 'People and HR', 10, 'Someone asks for time off', 'test row', 'test row', 'the HR notify list', 'hr-notify, notify');
 
+create table public.hub_directory (
+  email text primary key,
+  aliases text[]
+);
+
+create table public.wa_email_aliases (
+  email text primary key,
+  aliases text[] not null default '{}',
+  note text,
+  updated_at timestamptz not null default now()
+);
+alter table public.wa_email_aliases enable row level security;
+
 -- 4. helper functions
 create or replace function public.wa_email() returns text
 language sql stable security definer set search_path to '' as $$
@@ -125,18 +139,22 @@ language sql stable security definer set search_path to '' as $$
 $$;
 
 create or replace function public.my_emails() returns text[]
-language sql stable security definer set search_path to '' as $$
+language sql stable security definer set search_path = '' as $$
   select array_remove(array_agg(distinct e), null) from (
     select public.wa_email() as e
     union select regexp_replace(split_part(public.wa_email(), '@', 1), '\.', '', 'g') || '@' || split_part(public.wa_email(), '@', 2)
+    union select lower(a) from public.hub_directory d, unnest(coalesce(d.aliases, '{}'::text[])) a where lower(d.email) = public.wa_email()
+    union select lower(d.email) from public.hub_directory d where public.wa_email() = any (select lower(x) from unnest(coalesce(d.aliases, '{}'::text[])) x)
   ) s where coalesce(e, '') <> '' and e <> '@'
 $$;
 
 create or replace function public.mybox_me() returns text
 language sql stable security definer set search_path to '' as $$
-  select public.wa_email()
+  select coalesce((select a.email from public.wa_email_aliases a
+                    where public.wa_email() = any (select lower(x) from unnest(a.aliases) x) limit 1), public.wa_email())
 $$;
 revoke all on function public.mybox_me() from public, anon;
+grant execute on function public.mybox_me() to authenticated;
 
 create or replace function public.is_hub_admin()
 returns boolean language sql stable security definer set search_path to '' as $function$

@@ -228,6 +228,9 @@ begin
   assert (j->>'can_manage')::boolean = false, 'Sam cannot manage';
   assert (j->>'cell_min')::int = 30 and (j->>'start')::int = 480 and (j->>'end')::int = 1320 and (j->>'min_hours')::numeric = 10, 'the grid settings';
   assert (j->>'ask_date')::date = current_date, 'the latest ask';
+  assert j->>'me' = 'sam.lee@welfareavenue.com', 'me is the caller''s own address (' || coalesce(j->>'me', 'null') || ')';
+  assert (j->'members'->0->>'since_ask')::boolean, 'Sam saved since the latest ask (' || (j->'members')::text || ')';
+  assert not (j->'missing'->0->>'since_ask')::boolean, 'the member with no grid is not up to date';
   assert jsonb_array_length(j->'members') = 1 and j->'members'->0->>'email' = 'sam.lee@welfareavenue.com', 'members has Sam only (' || (j->'members')::text || ')';
   assert j->'members'->0->>'name' = 'Sam Lee' and j->'members'->0->>'hours' = '10' and jsonb_array_length(j->'members'->0->'slots') = 20, 'with his name, hours and slots';
   assert jsonb_array_length(j->'missing') = 1 and j->'missing'->0->>'email' = 'w276.other@example.invalid', 'missing has the other active member only (' || (j->'missing')::text || ')';
@@ -257,11 +260,46 @@ begin
   assert j->'missing' = '["w276.other@example.invalid"]'::jsonb, 'missing lists the member with no grid (' || (j->'missing')::text || ')';
   -- Sam's grid goes stale (saved 10 days ago), and an ask for tomorrow: the ask just set counts, so Sam is missing too
   update public.hub_team_avail set updated_at = now() - interval '10 days' where email = 'sam.lee@welfareavenue.com';
+  assert not (public.wa_avail_team('opsmtl')->'members'->0->>'since_ask')::boolean, 'a grid saved before the latest ask is not up to date (since_ask)';
   j := public.wa_avail_ask_set('opsmtl', current_date + 1, 'term');
   assert (j->>'ask_date')::date = current_date + 1, 'the ask date comes back';
   assert j->'missing' = '["sam.lee@welfareavenue.com", "w276.other@example.invalid"]'::jsonb, 'missing has the stale grid and the member with none (' || (j->'missing')::text || ')';
   assert (select count(*) from public.hub_team_avail_ask where department = 'opsmtl' and ask_date = current_date + 1 and note = 'term' and set_by = 'ruth.owen@welfareavenue.com') = 1, 'the ask is stored with who set it';
 end $$;
+
+-- ---------------------------------------------------------------- an alias sign-in (as Steel signs in with a gmail listed in wa_email_aliases)
+-- the roster, the aliases table and the directory carry the Welfare Avenue address; hub_roles has the alias (as live has both for Steel)
+insert into public.team_members (name, email, department, active) values ('Test Alias', 'w276.alias@welfareavenue.com', 'opsmtl', true);
+insert into public.wa_email_aliases (email, aliases) values ('w276.alias@welfareavenue.com', array['w276alias@example.invalid']);
+insert into public.hub_directory (email, aliases) values ('w276.alias@welfareavenue.com', array['w276alias@example.invalid']);
+insert into public.hub_roles (email, role, profile) values ('w276alias@example.invalid', 'leader', null);
+select set_config('request.jwt.claims', '{"role":"authenticated","email":"w276alias@example.invalid"}', true);
+do $$
+declare j jsonb; m jsonb;
+begin
+  assert public.mybox_me() = 'w276.alias@welfareavenue.com', 'the alias maps to the Welfare Avenue address';
+  assert public.wa180_my_teams() = array['opsmtl'], 'signed in with the alias, on opsmtl';
+  assert (select array_agg(department) from public.wa_avail_due()) = array['opsmtl'], 'alias: due before saving';
+  j := public.wa_avail_save('opsmtl', current_date, array[1020, 1050]::smallint[]);
+  assert (select email from public.hub_team_avail where id = (j->>'id')::bigint) = 'w276.alias@welfareavenue.com', 'alias: the save is stored under the Welfare Avenue address';
+  assert not exists (select 1 from public.wa_avail_due()), 'alias: after saving nothing is due';
+  assert public.wa_avail_mine('opsmtl')->>'hours' = '1', 'alias: mine finds the saved grid';
+  assert public.wa_avail_can_manage('opsmtl'), 'alias: a leader of opsmtl manages it';
+  j := public.wa_avail_team('opsmtl');
+  assert j->>'me' = 'w276.alias@welfareavenue.com', 'alias: me is the Welfare Avenue address (' || coalesce(j->>'me', 'null') || ')';
+  select x into m from jsonb_array_elements(j->'members') x where x->>'email' = 'w276.alias@welfareavenue.com';
+  assert m is not null and (m->>'since_ask')::boolean, 'alias: the team view has the grid under the Welfare Avenue address, up to date (' || (j->'members')::text || ')';
+  assert not exists (select 1 from jsonb_array_elements(j->'missing') x where x->>'email' in ('w276.alias@welfareavenue.com', 'w276alias@example.invalid')), 'alias: not missing';
+  perform public.wa_avail_snooze('opsmtl');
+  assert (select count(*) from public.hub_team_avail where email = 'w276alias@example.invalid') = 0, 'alias: no row is ever stored under the alias';
+  assert (select count(*) from public.hub_team_avail where email = 'w276.alias@welfareavenue.com' and snoozed_until > now()) = 1, 'alias: the snooze lands on the saved row';
+end $$;
+set local role authenticated;
+do $$
+begin
+  assert (select count(*) from public.hub_team_avail where email = 'w276.alias@welfareavenue.com') = 1, 'alias: reads the own row through row security';
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------- row security, as the browser
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"sam.lee@welfareavenue.com"}', true);
@@ -324,6 +362,9 @@ begin
   assert public.wa_avail_manager_of('w276.boss@example.invalid', 'opsmtl'), 'the org chart manager manages opsmtl (service key)';
   assert not public.wa_avail_manager_of('sam.lee@welfareavenue.com', 'opsmtl'), 'Sam does not';
   assert not public.wa_avail_manager_of('ruth.owen@welfareavenue.com', 'hr'), 'Ruth does not manage hr';
+  assert public.wa_avail_manager_of('w276alias@example.invalid', 'opsmtl'), 'a leader known by an alias manages opsmtl (the alias maps to the roster address, as wa_avail_can_manage grants)';
+  assert public.wa_avail_manager_of('W276Alias@example.invalid', 'opsmtl'), 'the alias matches in any case';
+  assert not public.wa_avail_manager_of('w276alias@example.invalid', 'hr'), 'but not hr';
 end $$;
 reset role;
 
