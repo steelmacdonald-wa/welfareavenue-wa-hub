@@ -1,4 +1,6 @@
-// Welfare Avenue: social-connect (v2, 12/10/26, wave231 TikTok analytics; v1 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-connect (v2.1, 02/11/26, LinkedIn asks only for scopes the app holds; v2 12/10/26, wave231 TikTok analytics; v1 09/10/26, wave225 the Content Studio)
+// v2.1: the LinkedIn authorize URL drops r_organization_admin (the app was never granted it, and LinkedIn refuses the whole
+// request when one scope is missing); rw_organization_admin already covers reading the Page.
 // v2: TikTok asks for user.info.profile, user.info.stats and video.list beside user.info.basic and video.upload (the Hub's
 // TikTok analytics, tiktok-pull), keeps the scopes TikTok granted in the vault login, shows @username on the card, and runs
 // the first tiktok-pull right after connecting so Analytics has the account, its followers and its videos at once.
@@ -94,7 +96,7 @@ function authorizeUrl(platform: string, id: string, state: string): string {
   if (platform === 'threads') return 'https://threads.net/oauth/authorize?client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&scope=threads_basic,threads_content_publish,threads_manage_replies,threads_read_replies,threads_manage_insights,threads_manage_mentions,threads_delete&response_type=code&state=' + s;
   if (platform === 'youtube') return 'https://accounts.google.com/o/oauth2/v2/auth?client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&scope=' + encodeURIComponent('https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.force-ssl') + '&state=' + s;
   if (platform === 'tiktok') return 'https://www.tiktok.com/v2/auth/authorize/?client_key=' + encodeURIComponent(id) + '&scope=' + TIKTOK_SCOPES + '&response_type=code&redirect_uri=' + r + '&state=' + s;
-  if (platform === 'linkedin') return 'https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&state=' + s + '&scope=' + encodeURIComponent('w_organization_social r_organization_social rw_organization_admin r_organization_admin');
+  if (platform === 'linkedin') return 'https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=' + encodeURIComponent(id) + '&redirect_uri=' + r + '&state=' + s + '&scope=' + encodeURIComponent('w_organization_social r_organization_social rw_organization_admin');
   throw new Error('unknown platform');
 }
 async function form(url: string, params: Record<string, string>): Promise<Any> {
