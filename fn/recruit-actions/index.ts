@@ -1,3 +1,6 @@
+// wave271, 01/11/26: the offer email gets Accept and Decline buttons (hub.welfareavenue.com/o/<token>, the page and function of onboard-link; the
+// token is its 'offer' token, copied here as offerToken), and offer_send saves the letter's reply-by and start dates on the card
+// (hub_candidates.offer_respond_by, offer_start). The letter, its PDF and the "just reply to this email" line are unchanged.
 // Welfare Avenue: recruit-actions (v7, 15/10/26, wave245: the stage_moved DM to the person handling an applicant goes through
 // notify (event applicant): their own switch for that kind in the notification centre, the Hub notification on their devices,
 // and the log the centre shows them; the direct DM from here is the fallback when notify cannot be reached. Steel: "The
@@ -18,7 +21,8 @@
 //                                             Nobody is texted twice in 7 days unless force; answered cards are skipped.
 //   offer_preview {id, f}                     the offer letter, as it will read (HTML), whether email is in test mode, the signers
 //   offer_send {id, f, email?}                the signed letter as a PDF in Recruitment > Offer Letters and (email) an email to
-//                                             them with the PDF and the note. mail_mode test sends it to the test inboxes.
+//                                             them with the PDF and the note, and Accept and Decline buttons (wave271). mail_mode test
+//                                             sends it to the test inboxes. The reply-by and start dates are saved on the card.
 //   offer_signer_set {email}                  who signs offer letters by default (HR or an admin)
 //   stage_moved {id, old, new, by}            (trigger) a card moved to Interview, Offer or Hired, or closed after an interview:
 //                                             a line in the HR channel and a DM to the person handling it
@@ -509,10 +513,28 @@ async function letterPdf(name: string, role: string, f: OfferF, s: Signer, pract
   if (pages.length > 1) pages.forEach((p, i) => { const pt = (i + 1) + ' / ' + pages.length; p.drawText(pt, { x: R - F.body.widthOfTextAtSize(pt, 7.5), y: 46, size: 7.5, font: F.body, color: MUTED }); });
   return await pdf.save();
 }
+/* wave271: the Accept and Decline links. The token is onboard-link's 'offer' token (its wa271Token): <candidate id>.<first 20 characters of the
+   base64url HMAC-SHA256 of the id>, keyed 'onboard-offer:' + the service key. Functions are single files, so it is copied here; the test
+   proves the two agree. The page opens on the token and saves nothing; a ?a= hint says which button was pressed in the email, and ?l=fr
+   opens it in French. */
+async function offerToken(id: number): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('onboard-offer:' + SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return id + '.' + b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(String(id))))).slice(0, 20);
+}
+type OfferLinks = { accept: string; decline: string; acceptLabel: string; declineLabel: string; lead: string };
+async function offerLinks(id: number, fr: boolean): Promise<OfferLinks> {
+  const base = HUB + '/o/' + await offerToken(id), tail = fr ? '&l=fr' : '';
+  return { accept: base + '?a=accept' + tail, decline: base + '?a=decline' + tail, acceptLabel: fr ? 'Accepter' : 'Accept', declineLabel: fr ? 'Refuser' : 'Decline', lead: fr ? 'Ou répondez d’un clic :' : 'Or answer with one click:' };
+}
+/* a date column takes a real YYYY-MM-DD or nothing (the form sends '' for no start date) */
+function isoDay(v: unknown): string | null {
+  const m = String(v == null ? '' : v).match(/^\d{4}-\d{2}-\d{2}/);
+  return m && new Date(m[0] + 'T12:00:00Z').toISOString().slice(0, 10) === m[0] ? m[0] : null;
+}
 /* the email: the CRM's layout (mail-send), the signer's sign-off */
 const E_CREAM = '#FFFAF2', E_GREEN = '#103F39', E_INK = '#1F201E', E_GOLD = '#DCA527';
 const E_HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", E_BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
-function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preheader: string): string {
+function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preheader: string, links: OfferLinks): string {
   const fr = f.lang === 'fr';
   const P = (x: string) => `<p style="margin:0 0 16px;font-family:${E_BODY};font-size:16px;line-height:26px;color:${E_INK};">${x}</p>`;
   const B = (x: string) => `<strong style="color:${E_GREEN};font-weight:700;">${x}</strong>`;
@@ -524,6 +546,12 @@ function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preh
     (note ? note.split(/\n{2,}/).map(p => P(esc(p.trim()).replace(/\n/g, '<br>'))).join('') : '') +
     P(fr ? 'Nous serions ravis de vous accueillir comme ' + B(esc(role)) + '. Votre lettre d’offre est jointe à ce courriel (PDF).' : 'We would love to welcome you as our ' + B(esc(role)) + '. Your offer letter is attached to this email as a PDF.') +
     P(fr ? 'Merci de nous donner votre réponse d’ici le ' + B(esc(dLong(f.respond_by, true))) + ' : il suffit de répondre à ce courriel.' : 'Please let us know your answer by ' + B(esc(dLong(f.respond_by, false))) + ': just reply to this email.') +
+    P(esc(links.lead)) +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;"><tr>` +
+    `<td style="background-color:${E_GREEN};border:2px solid ${E_GREEN};border-radius:6px;"><a href="${esc(links.accept)}" style="display:inline-block;padding:12px 28px;font-family:${E_BODY};font-size:16px;line-height:20px;font-weight:700;color:${E_CREAM};text-decoration:none;">${esc(links.acceptLabel)}</a></td>` +
+    `<td style="width:12px;font-size:0;line-height:0;">&nbsp;</td>` +
+    `<td style="background-color:${E_CREAM};border:2px solid ${E_GREEN};border-radius:6px;"><a href="${esc(links.decline)}" style="display:inline-block;padding:12px 28px;font-family:${E_BODY};font-size:16px;line-height:20px;font-weight:700;color:${E_GREEN};text-decoration:none;">${esc(links.declineLabel)}</a></td>` +
+    `</tr></table>` +
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;"><tr><td style="width:40px;height:3px;background-color:${E_GOLD};font-size:0;line-height:0;">&nbsp;</td></tr></table>` +
     P((fr ? 'Au plaisir,' : 'Warmly,') + '<br>' + B(esc(s.name)) + (t ? '<br>' + esc(t) : '') + '<br>Welfare Avenue');
   const small = `font-family:${E_BODY};font-size:13px;line-height:20px;color:${E_CREAM};`;
@@ -586,10 +614,12 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     const subject = (own ? '[PRACTICE] ' : mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
     const note = String(f.note || '').trim();
     const t = fr ? s.title_fr : s.title;
+    const links = await offerLinks(id, fr);
+    const answer = '\n\n' + links.lead + '\n' + links.acceptLabel + (fr ? ' : ' : ': ') + links.accept + '\n' + links.declineLabel + (fr ? ' : ' : ': ') + links.decline;
     const text = fr
-      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Nous serions ravis de vous accueillir comme ' + role + '. Votre lettre d’offre est jointe à ce courriel (PDF).\n\nMerci de nous donner votre réponse d’ici le ' + dLong(f.respond_by, true) + ' : il suffit de répondre à ce courriel.\n\nAu plaisir,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com'
-      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'We would love to welcome you as our ' + role + '. Your offer letter is attached to this email as a PDF.\n\nPlease let us know your answer by ' + dLong(f.respond_by, false) + ': just reply to this email.\n\nWarmly,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com';
-    const html = offerEmailHtml(first(c.name), role, f, s, fr ? 'Votre lettre d’offre pour le poste de ' + role : 'Your offer letter for the ' + role + ' position');
+      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Nous serions ravis de vous accueillir comme ' + role + '. Votre lettre d’offre est jointe à ce courriel (PDF).\n\nMerci de nous donner votre réponse d’ici le ' + dLong(f.respond_by, true) + ' : il suffit de répondre à ce courriel.' + answer + '\n\nAu plaisir,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com'
+      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'We would love to welcome you as our ' + role + '. Your offer letter is attached to this email as a PDF.\n\nPlease let us know your answer by ' + dLong(f.respond_by, false) + ': just reply to this email.' + answer + '\n\nWarmly,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com';
+    const html = offerEmailHtml(first(c.name), role, f, s, fr ? 'Votre lettre d’offre pour le poste de ' + role : 'Your offer letter for the ' + role + ' position', links);
     const key = Deno.env.get('RESEND_API_KEY') || await getSecret('RESEND_API_KEY');
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({
       from: fromName + ' <' + fromEmail + '>', to: rcpt, ...(bcc.length ? { bcc } : {}), reply_to: replyTo, subject, html, text,
@@ -603,6 +633,9 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
   await svc.from('hub_candidates').update({ offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
     notes: (String(c.notes || '') + '\nOffer letter (signed by ' + s.name + ') ' + (emailed ? (emailed.mode === 'live' || emailed.mode === 'practice' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
     updated_at: now.toISOString(), updated_by: who.name }).eq('id', id);
+  /* wave271: the reply-by and start dates the letter carries, for the Ready to onboard list; its own update, so the bookkeeping above never depends on the columns */
+  const dated = await svc.from('hub_candidates').update({ offer_respond_by: isoDay(f.respond_by), offer_start: isoDay(f.start) }).eq('id', id);
+  if (dated.error) console.warn('offer dates', dated.error.message);
   await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: 'offer_letter', old_value: null, new_value: (emailed ? 'emailed (' + emailed.mode + ')' : 'created') + ', signed by ' + s.name + ': ' + docUrl, changed_by: who.name });
   return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig };
 }

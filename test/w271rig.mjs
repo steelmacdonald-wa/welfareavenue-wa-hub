@@ -10,6 +10,7 @@
 // How it works: module.registerHooks sends 'jsr:@supabase/supabase-js@2' to an in-memory stub, globalThis.Deno gets env.get and a
 // serve that keeps the handler, and globalThis.fetch is the recorder. Several functions can be loaded side by side: each call
 // switches the globals to its own function, secrets, database and clock.
+// 'npm:pdf-lib@1.17.1' and 'npm:@pdf-lib/fontkit@1.1.1' resolve to test/w271pdf.mjs (a recording stand-in), so recruit-actions loads.
 // What the stub does NOT do: triggers (register a stand-in with db.on), row security (every client sees every row), embedded
 // selects like 'a, b(c)', and counts. It throws on those so a later task adds exactly what it needs.
 import module from 'node:module';
@@ -18,6 +19,8 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const STUB = 'wa271-stub:supabase-js';
+const PDF_STUB = pathToFileURL(join(here, 'w271pdf.mjs')).href;
+const PDF_SPECIFIERS = ['npm:pdf-lib@1.17.1', 'npm:@pdf-lib/fontkit@1.1.1'];
 const RealDate = Date;
 const state = { current: null, installed: false, loads: 0, pending: null };
 
@@ -150,7 +153,11 @@ function install() {
   if (state.installed) return;
   state.installed = true;
   module.registerHooks({
-    resolve(specifier, context, next) { return specifier === 'jsr:@supabase/supabase-js@2' ? { url: STUB, shortCircuit: true } : next(specifier, context); },
+    resolve(specifier, context, next) {
+      if (specifier === 'jsr:@supabase/supabase-js@2') return { url: STUB, shortCircuit: true };
+      if (PDF_SPECIFIERS.includes(specifier)) return { url: PDF_STUB, shortCircuit: true };
+      return next(specifier, context);
+    },
     load(url, context, next) {
       return url === STUB ? { format: 'module', source: 'export const createClient = (...a) => globalThis.__w271.createClient(...a);', shortCircuit: true } : next(url, context);
     },
