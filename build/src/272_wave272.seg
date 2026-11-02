@@ -680,7 +680,7 @@
   function tipState() { var o = null; try { o = JSON.parse(lsGet(KEY_TIP) || 'null'); } catch (e) { o = null; } return o || { n: 0, at: 0 }; }
   function otherOpen() {
     if (!document.documentElement.classList.contains('wa-ready')) return true;
-    if (document.getElementById('w272back') || document.getElementById('w213pop') || document.getElementById('w262new')) return true;
+    if (document.getElementById('w272back') || document.getElementById('w213pop') || document.getElementById('w262new') || document.getElementById('w276pop')) return true;
     var vis = function (el) { if (!el) return false; var c = getComputedStyle(el); return c.display !== 'none' && c.visibility !== 'hidden' && el.getBoundingClientRect().width > 0; };
     if (vis(document.getElementById('w238loop')) || vis(document.getElementById('w177pop')) || vis(document.getElementById('w227'))) return true;
     if (document.querySelector('.w122tp')) return true;
