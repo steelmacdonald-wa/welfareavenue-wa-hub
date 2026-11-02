@@ -32,7 +32,8 @@
     note: {},   /* flow id, or 'c' and a candidate id: { ok, err, warnings } on a card */
     yes: {},    /* candidate id: asking whether they really said yes by email */
     canva: {},  /* flow id: the Canva link being typed on a card */
-    welcome: {}, /* flow id: the welcome email as it reads now, {subject, text, edited} or {err} */
+    welcome: {}, /* flow id: the welcome email as it reads now, {subject, text, edited, sent_at} or {err} */
+    pw: null,   /* wave275: the first password's state, {set, set_at}, for admins only; never the password */
     busy: {}
   };
 
@@ -66,7 +67,7 @@
     '.o271b:disabled{opacity:.45;cursor:not-allowed;}' +
     '.o271pn{border-top:1px solid ' + LINE + ';margin-top:12px;padding-top:12px;min-width:0;}' +
     '.o271f{display:block;font-size:12px;font-weight:600;color:' + MUTE + ';margin:10px 0 3px;}' +
-    '.o271 input[type=text],.o271 input[type=datetime-local],.o271 select,.o271 textarea{font:inherit;font-size:14px;width:100%;max-width:420px;box-sizing:border-box;min-height:36px;padding:6px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + GROUND + ';}' +
+    '.o271 input[type=text],.o271 input[type=password],.o271 input[type=datetime-local],.o271 select,.o271 textarea{font:inherit;font-size:14px;width:100%;max-width:420px;box-sizing:border-box;min-height:36px;padding:6px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + GROUND + ';}' +
     '.o271 textarea{max-width:none;min-height:120px;}' +
     '.o271two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px;}' +
     '.o271said{font-size:12px;color:' + GREEN + ';margin-top:3px;min-height:15px;}' +
@@ -200,7 +201,7 @@
         S.backed = begun.filter(function (x) { return x.status === 'backed_out'; });
         S.offers = await readOffers();
         await readWelcomes(S.started);
-        await Promise.all([readPeople(), readCfg()]);
+        await Promise.all([readPeople(), readCfg(), readPw()]);
       } catch (e) {
         var msg = String((e && e.message) || e);
         if (/Only HR/i.test(msg) || !surelyHr()) S.denied = true;

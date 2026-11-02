@@ -113,7 +113,8 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     ok('preview: manager and the rule that chose them', await f.page.inputValue(card(FLOW.real) + ' [data-o271i="mgr"]') === String(MGR.first) && /reports to/i.test(t), t.slice(0, 900));
     ok('preview: both times', /Onboarding call/.test(t) && /1-on-1/.test(t));
     ok('preview: the email is editable', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="text"]') && await f.page.isEditable(card(FLOW.real) + ' [data-o271i="subj"]'));
-    ok('preview: Build 1 says who sends the email', /HR sends this one for now/.test(t), t.slice(0, 1500));
+    ok('preview: it says who sends the email (wave275 Task 4: the Hub)', /The Hub sends this one/.test(t) && !/HR sends this one for now/.test(t), t.slice(0, 1500));
+    ok('preview: it says [first password] is filled in only in the email itself', /\[first password\] is filled in only in the email itself/.test(t), t.slice(0, 1500));
     ok('TEMPLATE: the preview says the bracketed places fill in at Start', /square brackets\] fills in from the times/.test(t), t.slice(0, 1500));
     ok('preview: the group session field', await f.page.isEditable(card(FLOW.real) + ' [data-o271i="group"]'));
     s = await f.ev(sel => Array.from(document.querySelectorAll(sel + ' [data-o271skip]')).map(x => ({ k: x.getAttribute('data-o271skip'), on: x.checked, off: x.disabled })), card(FLOW.real));
@@ -468,6 +469,45 @@ const consoleErrs = f => { const out = []; f.page.on('console', m => { if (m.typ
     await f.ev(s2 => document.querySelector(s2).scrollIntoView(), card(FLOW.started));
     await f.page.waitForTimeout(200);
     await shot(f, 'phone_started_390');
+    allErrs.push(...f.errs); await f.close();
+  }
+
+  /* ---------- 7. wave275 Task 4: the first password (admins only), and the welcome once the Hub has sent it ---------- */
+  {
+    const PW = 'Harbour-Lantern-48';   // made up for this test: it must never be in the page's HTML or text
+    const htmlHas = (f, x) => f.ev(v => document.documentElement.outerHTML.indexOf(v) >= 0 || document.body.innerText.indexOf(v) >= 0, x);
+    const fx = fx271({ started: true });
+    fx.hub_onboard_steps.forEach(r => { if (r.step === 'welcome') { r.status = 'done'; r.detail = 'Sent the welcome email to sam@example.invalid from hub@welfareavenue.com.'; } });
+    fx.hub_onboard_flows[0].welcome_sent_at = '2026-09-25T19:30:00Z';
+    const f = await fresh(b, { who: 'admin', hash: '#hrcentre/onboarding', fixture: fx, rpcs: rpcs271(), init: INIT, wait: 5000 });
+    await open(f, '#hrcentre/overview'); await open(f);
+    let s = await f.ev(() => { const e = document.querySelector('[data-o271pwstate]'), i = document.querySelector('[data-o271i="pw"]'); return { line: e && e.innerText, type: i && i.type, value: i && i.getAttribute('value') }; });
+    ok('PW: an admin sees "First password: not set" and a password box with no value in it', s.line === 'First password: not set' && s.type === 'password' && s.value === null, s);
+    ok('PW: the state comes from first_password_state', (await calls(f, 'first_password_state')).length >= 1);
+    await fill(f, '[data-o271i="pw"]', PW);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(300);
+    ok('PW: what is typed survives a repaint, and is never in the page', (await f.page.inputValue('[data-o271i="pw"]')) === PW && !(await htmlHas(f, PW)));
+    await click(f, '[data-o271a="pwset"]');
+    const c = await calls(f, 'set_first_password');
+    ok('PW: Set sends it once, to set_first_password', c.length === 1 && c[0].body.password === PW, c.length);
+    s = await f.ev(() => document.querySelector('[data-o271pwstate]').innerText);
+    ok('PW: the line says "set on" the date, and the box is empty again', s === 'First password: set on September 25, 2026' && (await f.page.inputValue('[data-o271i="pw"]')) === '', s);
+    ok('PW: the password is nowhere in the page after Set', !(await htmlHas(f, PW)));
+    await fill(f, '[data-o271i="pw"]', 'short1a');
+    await click(f, '[data-o271a="pwset"]');
+    s = await f.ev(() => document.querySelector('[data-o271pw]').innerText);
+    ok('PW: a refusal shows its plain sentence, without the value', /needs at least 8 characters/.test(s) && !(await htmlHas(f, 'short1a')), s);
+    const t = await f.ev(s2 => document.querySelector(s2).innerText, card(FLOW.started));
+    ok('SENT: a welcome the Hub sent shows when it went and keeps a copy, [first password] as it is, with Copy', /Sent .*Sep.*25/.test(t) && /First password: \[first password\]/.test(t) && /stays as it is here/.test(t) && await f.page.isVisible(card(FLOW.started) + ' [data-o271a="copywelcome"]'), t);
+    ok('SENT: no Done and no Canva box under a welcome that went', !(await f.ev(s2 => !!document.querySelector(s2 + ' [data-o271a="taskdone"][data-step="welcome"]') || !!document.querySelector(s2 + ' [data-o271canva]'), card(FLOW.started))));
+    await shot(f, 'pw_admin_1366');
+    allErrs.push(...f.errs); await f.close();
+  }
+  {
+    const f = await fresh(b, { who: 'member', hash: '#hrcentre/onboarding', fixture: fx271(), rpcs: rpcs271(), init: INIT, wait: 5000 });
+    await open(f);
+    ok('PW: HR who are not admins see no first password, and the state is not asked for', !(await f.ev(() => !!document.querySelector('[data-o271pw]'))) && (await calls(f, 'first_password_state')).length === 0);
     allErrs.push(...f.errs); await f.close();
   }
 

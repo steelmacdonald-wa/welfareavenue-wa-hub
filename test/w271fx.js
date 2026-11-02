@@ -78,7 +78,7 @@ const INIT = `(function(){
   function setStep(id, key, status, detail) { (window.__WAFIX.hub_onboard_steps || []).forEach(function (r) { if (String(r.flow_id) === String(id) && r.step === key) { r.status = status; r.detail = detail; r.at = new Date().toISOString(); } }); }
   var KEYS = ['roster', 'google', 'plan', 'invites', 'manager', 'hub', 'slack', 'welcome'];
   var LABEL = { roster: 'Roster profile', google: 'Google account', plan: 'Onboarding plan', invites: 'Calendar invites', manager: 'Tell the manager', hub: 'Hub access', slack: 'Slack channel', welcome: 'Welcome email' };
-  var MODE = { roster: 'run', google: 'hr_task', plan: 'run', invites: 'run', manager: 'run', hub: 'hr_task', slack: 'hr_task', welcome: 'hr_task' };
+  var MODE = { roster: 'run', google: 'hr_task', plan: 'run', invites: 'run', manager: 'run', hub: 'hr_task', slack: 'hr_task', welcome: 'run' };   // wave275 Task 4: the Hub sends the welcome
   var H = function (h, m) { return new Date(Date.UTC(2026, 8, 28, h + 4, m || 0)).toISOString(); };
   function hireSlots() { var o = []; for (var h = 8; h < 12; h++) { o.push(H(h)); o.push(H(h, 30)); } return o; }
   function mgrSlots() { var o = []; for (var h = 10; h < 14; h++) { o.push(H(h)); o.push(H(h, 30)); } return o; }
@@ -118,9 +118,15 @@ const INIT = `(function(){
       case 'set_manager': return { data: String(b.flow_id) === '502' ? { ok: true, practice: true, cleared: false } : { ok: true, cleared: true }, error: null };
       case 'welcome': {   // as onboard-run reads it: what HR saved, or the Hub's own, with the bracketed places filled from the flow
         var fw = flow(b.flow_id) || {};
-        var text = (fw.welcome_text || 'Dear Sam,\\n\\nCongratulations and welcome. Your first day is [first day: fills in at Start].')
+        var text = (fw.welcome_text || 'Dear Sam,\\n\\nCongratulations and welcome. Your first day is [first day: fills in at Start].\\n   First password: [first password]')
           + (fw.group_session ? '\\nYour in-person group onboarding session on ' + fw.group_session + '.' : '');
-        return { data: { subject: fw.welcome_subject || 'Welcome to Welfare Avenue! Your Next Steps', text: text.split('[first day: fills in at Start]').join('Wednesday, September 30, 2026'), edited: !!(fw.welcome_subject || fw.welcome_text) }, error: null };
+        return { data: { subject: fw.welcome_subject || 'Welcome to Welfare Avenue! Your Next Steps', text: text.split('[first day: fills in at Start]').join('Wednesday, September 30, 2026'), edited: !!(fw.welcome_subject || fw.welcome_text), sent_at: fw.welcome_sent_at || null }, error: null };
+      }
+      case 'first_password_state': return { data: window.__O271_PW || { set: false, set_at: null }, error: null };   // wave275 Task 4: the real one answers admins only
+      case 'set_first_password': {
+        if (typeof b.password !== 'string' || b.password.length < 8) return refuse('bad_password', 'The first password needs at least 8 characters (Google\\'s rule). Nothing was changed.', 400);
+        window.__O271_PW = { set: true, set_at: new Date().toISOString() };
+        return { data: { ok: true, set: true, set_at: window.__O271_PW.set_at }, error: null };
       }
       case 'set_canva_link': flow(b.flow_id).canva_link = b.link || null; return { data: { ok: true, canva_link: b.link || null }, error: null };
       case 'task_done': setStep(b.flow_id, b.step, 'done', 'Done by hr@example.invalid.'); return { data: { steps: steps(b.flow_id) }, error: null };

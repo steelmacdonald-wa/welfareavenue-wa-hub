@@ -120,7 +120,9 @@
       + '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o271i="subj" data-f="' + E(id) + '" value="' + E(P.subject) + '">'
       + '<label class="o271f">Welcome email: text</label><textarea data-o271i="text" data-f="' + E(id) + '">' + E(P.text) + '</textarea>'
       + '<div class="o271ln">Anything in [square brackets] fills in from the times, manager, address and links, and changes with them after Start. Leave the brackets in place, even if you change the rest.</div>'
-      + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>' : '')
+      + '<div class="o271ln">[first password] is filled in only in the email itself, as it goes: nobody reads the password here or on the card. If the Google account is not made by then, that step says HR will send the login details separately.</div>'
+      + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>'
+        : welcomeStep && welcomeStep.mode === 'run' ? '<div class="o271ln" data-o271who="welcome"><b>The Hub sends this one</b> from hub@ to their personal address once the invites are out, with your edits. A copy stays on the card.</div>' : '')
       + canvaHowHtml()
       + '<label class="o271f">Fresh Canva invite link</label><input type="text" style="max-width:none" autocomplete="off" data-o271i="canva" data-f="' + E(id) + '" value="' + E(P.canva) + '">'
       + '<div class="o271said" data-o271said="canva">' + E(canvaSaid(P.canva)) + '</div>'

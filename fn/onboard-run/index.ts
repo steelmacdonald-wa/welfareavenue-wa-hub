@@ -1,4 +1,5 @@
-// Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps)
+// Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
+// v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card)
 // The signed-in function behind HR's Start onboarding button. All actions are POST {action, ...}, for HR or admins only
 // (wa_is_hr or is_wa_admin, run as the caller's JWT):
 //   preview {flow_id, wa_email?}   {address, address_taken, address_owner, address_own, needs_address, manager, department, grids, hub_events, steps, welcome, warnings}. Writes nothing.
@@ -8,7 +9,8 @@
 //               address on someone else's roster profile is refused, and one only Workspace knows is not stored: nothing may attach this person to another mailbox.
 //   retry {flow_id, step}          {steps}. Reruns that step and what was waiting on it. A done step is refused.
 //   google_manual {flow_id, wa_email}   {steps}. HR made the account by hand: records the address and finishes what waited on it.
-//   welcome {flow_id}              {subject, text, edited}. The welcome email as it reads now (HR's edits kept, the marked places filled in after Start). Reads only.
+//   welcome {flow_id}              {subject, text, edited, sent_at}. The welcome email as it reads now (HR's edits kept, the marked places filled in after Start or
+//               booking, [first password] kept as it is). Reads only.
 //   task_done {flow_id, step}      {steps}. HR did a step left to them. Not for google, which has google_manual.
 //   set_canva_link {flow_id, link}   {ok, canva_link}. The fresh Canva invite link HR pastes for this hire (Canva's links last 30 days, so none is kept in settings). Empty clears it;
 //               otherwise it must start with https://www.canva.com/. Any flow that has not backed out; it writes the flow row only. start takes canva_link with the same check.
@@ -58,7 +60,7 @@
 //               theirs) and the manager and HR are told (onboard_answer); nothing is booked. Otherwise the flow is claimed (waiting or ready to running,
 //               hire_answer yes, the manager as started_by, so both invites go to them), the rows not yet made are seeded, and the answer goes back at once:
 //               the steps run after it (EdgeRuntime.waitUntil; a local run waits), and every step that can run does: plan (fills team_members.start_date and hub_candidates.start_date from the call and moves the card
-//               to Hired, then makes the plan), invites, manager, and the rest; welcome stays as wave271 has it. HR is told (onboard_answer). The flow is
+//               to Hired, then makes the plan), invites, manager, welcome (v4) and the rest. HR is told (onboard_answer). The flow is
 //               started once nothing is left for HR. Refused: changed, no_proposal, answered (the hire said no), not_accepted, closed, already_booked.
 //   The step google (setting onboard_auto_google): users.insert as steel.macdonald@welfareavenue.com into the root unit, first.last from the name when
 //               the flow has no address (a roster clash stops here), with the vault secret ONBOARD_FIRST_PASSWORD read at that moment and nowhere else
@@ -66,7 +68,18 @@
 //               before done. Google refusing (409 already exists, licences) is an HR task with Google's reason, the password scrubbed out. The step hub
 //               (also off with onboard_auto_hub): hub-invite through its trigger-secret path, at member level. A run may end a step as an HR task with
 //               its own sentence (HrTask). retry, google_manual and task_done also work on a flow that has not been started once it has that step's row.
-// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts).
+//   wave275 (v4):
+//   The step welcome (no switch; needs invites only): sendWelcome sends the saved template (HR's edits kept), filled in as it goes, from hub@ to the personal
+//               address through Gmail (mail_mode test: the test inboxes, the real address named), Reply-To the person who started it when that is a WA address.
+//               It has both times (Toronto), both Meet links (hub_events, else Calendar), the login paragraph and the setup rundown (its page, /o/<offer
+//               token>?setup, for a wave275 hire). The first password is read from the vault (ONBOARD_FIRST_PASSWORD) only then, only when the google step is
+//               done, and put into that outgoing message alone; with the account step not done, or the password unset, the login paragraph says HR will send
+//               the login details separately. welcome_sent_at claims the send (a second run says already sent) and is given back when Gmail refuses.
+//   set_first_password {password}   {ok, set, set_at, warnings?}. Admins only (is_wa_admin; HR are refused). 8 to 100 characters, a letter and a digit, no
+//               space at either end, else 400 bad_password in a plain sentence. Stored with wa_vault_set (service role); change_log says "set" with no value;
+//               app_config onboard_first_password_at keeps when.
+//   first_password_state {}   {set, set_at}. Admins only. From onboard_first_password_at; the vault is never read here.
+// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
 // sentence for detail; a throw is a failed step, and the message is what HR reads.
@@ -131,8 +144,10 @@ export const STEPS: Step[] = [
   { key: 'manager', label: 'Tell the manager', needs: ['roster'], at: 'booking', run: runManager },
   { key: 'slack', label: 'Slack channel', needs: ['roster'], at: 'booking', setting: 'onboard_auto_slack', ticks: ['hrb4', 'hrb5'],
     task: 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.' },   // Build 3 adds run
-  { key: 'welcome', label: 'Welcome email', needs: ['google'], at: 'booking', setting: 'onboard_auto_google', ticks: ['hrb1'],
-    task: 'Send the welcome email to their personal address.' },   // wave275 Task 4 adds run
+  /* wave275 Task 4: the welcome needs the invites (their Meet links) and nothing else, and has no switch: it goes at booking whether or not the account
+     exists (settled rule 2), and its login paragraph says which */
+  { key: 'welcome', label: 'Welcome email', needs: ['invites'], at: 'booking', ticks: ['hrb1'], run: sendWelcome,
+    task: 'Send the welcome email to their personal address.' },
 ];
 /* a run that finds the step is HR's to do ends it as hr_task with this sentence, not as failed */
 class HrTask extends Error {}
@@ -189,7 +204,7 @@ function langOf(c: Row): 'fr' | 'en' {   // the same test recruit-actions and on
 }
 
 /* ---------- rows ---------- */
-const FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, call_event_id, one_on_one_event_id, onboarding_id, slack_channel_id, welcome_subject, welcome_text, started_by, started_at, roster_created, canva_link, welcome_edited';
+const FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, call_event_id, one_on_one_event_id, onboarding_id, slack_channel_id, welcome_subject, welcome_text, started_by, started_at, roster_created, canva_link, welcome_edited, welcome_sent_at';
 const CAND_COLS = 'id, name, role, status, email, summary, notes, position_id, accepted_on, offer_sent_at, member_id, start_date, practice';
 async function getFlow(id: unknown): Promise<Row | null> {
   const n = Number(id);
@@ -538,7 +553,7 @@ async function runHub(ctx: Ctx): Promise<string> {
   return 'Invited ' + f.wa_email + ' to the Hub at ' + (j.hub_role || 'member') + ' level' + (j.email_sent ? ', and the invitation went to that address.' : '.');
 }
 
-/* ---------- mail: who it really goes to, and the Gmail send from hub@ (Task 11 uses this for the welcome email) ---------- */
+/* ---------- mail: who it really goes to, and the Gmail send from hub@ (wave275 Task 4 sends the welcome email through it) ---------- */
 /* mail_mode test (or unset): the test inboxes instead of the real people, with the real address named. No inboxes: a refusal. */
 async function reach(real: string[]): Promise<{ live: boolean; to: string[]; prefix: string }> {
   if (((await cfg('mail_mode')) || 'test') === 'live') return { live: true, to: real, prefix: '' };
@@ -791,24 +806,74 @@ async function preview(b: Row, by: string): Promise<Response> {
   return json({ address, address_taken: state.taken, address_owner: claim.owner, address_own: claim.own, needs_address: !address, manager, department: pos?.dept || null, canva_link: f.canva_link || null, grids, hub_events: Array.from(seen.values()), steps, welcome: await welcomeFor(f, c, by), warnings });
 }
 /* ---------- the welcome email, as in the SOP's Onboarding Email ---------- */
-/* renderWelcome(flow, candidate, facts) -> {subject, text}, and Task 11 reuses it for the sent email. No password ever goes in this text.
+/* renderWelcome(flow, candidate, facts) -> {subject, text}; sendWelcome (the step welcome) sends what it gives. No password ever goes in this text: the
+   place for it is [first password] ([premier mot de passe] in French), which only sendWelcome replaces, in the outgoing message alone.
    The text is kept with its marked places in [square brackets] and filled in only when it is read (the preview after Start, the card, the sender), so a
    later change of time, manager, address or Canva link always shows. HR's edits are saved as typed, brackets and all (welcome_subject, welcome_text, only
-   the part they changed); the Hub's own text is never saved, so it follows the template. Before Start (facts.draft) the brackets stay as they are.
-   A line whose value is empty goes, and the steps renumber. */
+   the part they changed); the Hub's own text is never saved, so it follows the template. Before Start or booking (facts.draft) the brackets stay as they are.
+   A line whose value is empty goes, and the steps renumber. wave275 Task 4: the Meet links, the login paragraph (or, when the account step is not
+   done, "HR will send your login details separately" in its place) and the setup rundown, with a link to its page for a wave275 hire. */
 const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
   en: {
     day: '[first day: fills in at Start]', call: '[call date and time: fills in at Start]', one: '[1-on-1 date and time: fills in at Start]', manager: '[manager: fills in at Start]',
     group: '[group session date: fills in at Start, or this line is left out]', address: '[Welfare Avenue address: fills in at Start]', canva: '[Canva link: fills in at Start, or this line is left out]',
+    newaddr: '[new address]', password: '[first password]', callmeet: '[call Meet link]', onemeet: '[1-on-1 Meet link]', setup: '[setup page link]',
   },
   fr: {
     day: '[premier jour : rempli au démarrage]', call: '[date et heure de l\'appel : remplies au démarrage]', one: '[date et heure de la rencontre : remplies au démarrage]', manager: '[gestionnaire : rempli au démarrage]',
     group: '[date de la séance de groupe : remplie au démarrage, ou cette ligne est retirée]', address: '[adresse Welfare Avenue : remplie au démarrage]', canva: '[lien Canva : rempli au démarrage, ou cette ligne est retirée]',
+    newaddr: '[nouvelle adresse]', password: '[premier mot de passe]', callmeet: '[lien Meet de l\'appel]', onemeet: '[lien Meet de la rencontre]', setup: '[lien de la page de préparation]',
   },
 };
+const PASSWORD_MARKS = [WELCOME_SLOTS.en.password, WELCOME_SLOTS.fr.password];   // either works in either language: only sendWelcome fills them
+const LOGIN_LATER = { en: 'HR will send your login details separately.', fr: 'Les RH vous enverront vos informations de connexion séparément.' };
+const REMOVABLE = ['group', 'canva', 'setup'];   // an empty value takes its line out
+/* the setup rundown of the /o/ page (onboard-link SETUP), word for word: functions are single files, so this is its copy for the email. Change both together. */
+export const SETUP_STEPS: Array<{ key: string; title: { en: string; fr: string }; body: { en: string; fr: string } }> = [
+  { key: 'profile', title: { en: 'Add your Welfare Avenue account to Chrome', fr: 'Ajoutez votre compte Welfare Avenue à Chrome' },
+    body: { en: 'In Chrome, add a new profile, sign in with your Welfare Avenue address and turn on sync. Keep your Welfare Avenue work in that profile from now on.', fr: 'Dans Chrome, ajoutez un nouveau profil, connectez-vous avec votre adresse Welfare Avenue et activez la synchronisation. Gardez votre travail pour Welfare Avenue dans ce profil à partir de maintenant.' } },
+  { key: 'bookmarks', title: { en: 'Bookmark Gmail and Calendar', fr: 'Ajoutez Gmail et Agenda à vos favoris' },
+    body: { en: 'In that profile, open Gmail (mail.google.com) and Google Calendar (calendar.google.com), and bookmark both.', fr: 'Dans ce profil, ouvrez Gmail (mail.google.com) et Google Agenda (calendar.google.com), puis ajoutez-les tous les deux à vos favoris.' } },
+  { key: 'hub', title: { en: 'Sign in to the Hub', fr: 'Connectez-vous au Hub' },
+    body: { en: 'Go to hub.welfareavenue.com and press Sign in with Google, with your Welfare Avenue account.', fr: 'Allez sur hub.welfareavenue.com et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.' } },
+  { key: 'slack', title: { en: 'Join Slack', fr: 'Joignez-vous à Slack' },
+    body: { en: 'Join the Welfare Avenue Slack with your Welfare Avenue address (the link is in your welcome email), then accept the invitation to your onboarding channel.', fr: 'Joignez-vous au Slack de Welfare Avenue avec votre adresse Welfare Avenue (le lien est dans votre courriel de bienvenue), puis acceptez l\'invitation à votre canal d\'accueil.' } },
+  { key: 'academy', title: { en: 'Open the Avenue Academy and your plan', fr: 'Ouvrez l\'Avenue Academy et votre plan' },
+    body: { en: 'In the Hub, open the Avenue Academy and look through your onboarding plan, so you know what your first weeks hold.', fr: 'Dans le Hub, ouvrez l\'Avenue Academy et parcourez votre plan d\'accueil, pour savoir ce qui vous attend les premières semaines.' } },
+  { key: 'loom', title: { en: 'Accept the Loom invitation', fr: 'Acceptez l\'invitation Loom' },
+    body: { en: 'When the Loom invitation reaches your Welfare Avenue inbox, accept it.', fr: 'Quand l\'invitation Loom arrive dans votre boîte Welfare Avenue, acceptez-la.' } },
+  { key: 'canva', title: { en: 'Join Canva', fr: 'Joignez-vous à Canva' },
+    body: { en: 'If your welcome email has a Canva link, use it to join the Welfare Avenue team on Canva.', fr: 'Si votre courriel de bienvenue contient un lien Canva, utilisez-le pour vous joindre à l\'équipe Welfare Avenue sur Canva.' } },
+  { key: 'drives', title: { en: 'Find your Drives and Google Groups', fr: 'Repérez vos Drives et vos groupes Google' },
+    body: { en: 'In Google Drive, look under Shared drives for the team drives you have been added to, and check which Google Groups you are in. Nothing to do with them yet.', fr: 'Dans Google Drive, regardez sous Drives partagés les dossiers d\'équipe auxquels vous avez été ajouté, et vérifiez de quels groupes Google vous faites partie. Rien à faire pour l\'instant.' } },
+  { key: 'weekly', title: { en: 'Find your weekly meeting', fr: 'Repérez votre rencontre hebdomadaire' },
+    body: { en: 'Look in your Calendar for your team\'s weekly meeting and accept the invitation.', fr: 'Cherchez dans votre Agenda la rencontre hebdomadaire de votre équipe et acceptez l\'invitation.' } },
+];
+const rundownLines = (lang: 'en' | 'fr') => SETUP_STEPS.map((x, i) => '   ' + (i + 1) + '. ' + x.title[lang] + '. ' + x.body[lang]).join('\n');
+/* the account step is not done: the login step (its numbered line and the lines under it), or in HR's own wording the line with the placeholder, becomes
+   the sentence that HR sends the details separately */
+function loginLater(text: string, lang: 'en' | 'fr'): string {
+  const lines = text.split('\n');
+  for (;;) {
+    const at = lines.findIndex((l) => PASSWORD_MARKS.some((p) => l.includes(p)));
+    if (at < 0) return lines.join('\n');
+    let start = at;
+    while (start > 0 && /^\s+\S/.test(lines[start])) start--;   // a line under a numbered step: up to its number
+    const num = /^(\d+\. )/.exec(lines[start]);
+    if (!num) { lines.splice(at, 1, (/^\s*/.exec(lines[at])?.[0] || '') + LOGIN_LATER[lang]); continue; }
+    let end = start + 1;
+    while (end < lines.length && /^\s+\S/.test(lines[end])) end++;
+    lines.splice(start, end - start, num[1] + LOGIN_LATER[lang]);
+  }
+}
 /* the role in French, as the /o/ page names it (build/o/index.html ROLE_FR; functions are single files) */
 const ROLE_FR: Record<string, string> = { 'Operations Manager': 'Gestionnaire des opérations', 'HR Technician': 'Technicien·ne RH', 'Event Coordinator': 'Coordonnateur·rice d\'événements' };
-export type WelcomeFacts = { draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string };
+export type WelcomeFacts = {
+  draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string;
+  login?: boolean;                                    // wave275: the account step is done (the login paragraph stays, [first password] and all); else HR sends the details
+  meet?: { call: string | null; one: string | null }; // the Meet links of the two invites, when known
+  setupLink?: string | null;                          // the hire's rundown page (/o/<offer token>?setup), for a wave275 hire only
+};
 /* a date in words; French says 1er for the first of the month, which Intl does not */
 function dayWords(at: string, lang: 'en' | 'fr'): string {
   if (lang === 'en') return new Date(at).toLocaleDateString('en-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: TZ });
@@ -818,24 +883,32 @@ function dayWords(at: string, lang: 'en' | 'fr'): string {
 }
 const atWords = (at: string, lang: 'en' | 'fr') => lang === 'en' ? whenText(at, 'en')
   : dayWords(at, 'fr') + ' à ' + new Date(at).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit', timeZone: TZ });
-/* puts the flow's values in the marked places. Empty group session or Canva link: that line goes, and the numbered steps count again. No manager: "your manager" once. */
+/* puts the flow's values in the marked places. Empty group session, Canva link or rundown page: that line goes, and the numbered steps count again. No
+   manager: "your manager" once. The account step not done: the login step says HR sends the details. [first password] is never filled here. */
 function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string {
   const lang = langOf(c), fr = lang === 'fr', slots = WELCOME_SLOTS[lang], yours = fr ? 'votre gestionnaire' : 'your manager';
+  const address = f.wa_email || (fr ? 'nous vous la confirmerons bientôt' : 'we\'ll confirm it soon');
+  const meet = (link: string | null | undefined, booked: boolean) => link || (fr ? (booked ? 'le lien est dans votre invitation' : 'le lien viendra avec l\'invitation') : (booked ? 'the link is in your calendar invite' : 'the link will come with the invite'));
   const values: Record<string, string | null> = {
     day: f.call_at ? dayWords(f.call_at, lang) : null,
     call: f.call_at ? atWords(f.call_at, lang) : null,
     one: f.one_on_one_at ? atWords(f.one_on_one_at, lang) : (fr ? 'nous vous confirmerons l\'heure bientôt' : 'we\'ll confirm the time soon'),
     manager: facts.manager || yours,
     group: String(f.group_session ?? '').trim() || null,
-    address: f.wa_email || (fr ? 'nous vous la confirmerons bientôt' : 'we\'ll confirm it soon'),
+    address, newaddr: address,
     canva: f.canva_link || null,
+    callmeet: meet(facts.meet?.call, !!f.call_event_id), onemeet: meet(facts.meet?.one, !!f.one_on_one_event_id),
+    setup: facts.setupLink || null,
+    password: null,
   };
+  if (!facts.login) text = loginLater(text, lang);
   let removed = false;
   const lines: string[] = [];
   for (let line of text.split('\n')) {
-    if (['group', 'canva'].some((k) => !values[k] && line.includes(slots[k]))) { removed = true; continue; }
+    if (REMOVABLE.some((k) => !values[k] && line.includes(slots[k]))) { removed = true; continue; }
     if (!facts.manager) line = line.split(yours + ', ' + slots.manager).join(yours);   // never "your manager, your manager"
-    lines.push(Object.keys(slots).reduce((l, k) => (values[k] == null ? l : l.split(slots[k]).join(values[k]!)), line));
+    const filled = Object.keys(slots).reduce((l, k) => (values[k] == null || !l.includes(slots[k]) ? l : l.split(slots[k]).join(values[k]!)), line);
+    lines.push(filled === line ? line : filled.replace(/([ap]\.m\.)\./g, '$1'));   // a time ending in "p.m." before the template's full stop: one stop, not two
   }
   if (!removed) return lines.join('\n');
   let n = 0;
@@ -846,19 +919,21 @@ function welcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: 
   const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name);
   const role = String(c.role || '').trim(), roleFr = ROLE_FR[role] || role;
   const steps: string[] = fr ? [
-    '1. Vos rencontres :\n   - Votre appel d\'accueil : ' + s.call + '. L\'invitation est dans votre calendrier.\n   - Une rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '.\n   - Votre séance d\'accueil de groupe en personne avec ' + s.manager + ', le ' + s.group + '. Si vous ne pouvez pas y être, dites-le-nous. Cette étape est essentielle.',
-    '2. Activez votre compte Google Welfare Avenue. Adresse courriel : ' + s.address + '. Nous vous transmettrons votre premier mot de passe en privé. Vous le changerez lors de votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
+    '1. Vos rencontres :\n   - Votre appel d\'accueil : ' + s.call + '. L\'invitation est dans votre calendrier. Google Meet : ' + s.callmeet + '\n   - Une rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '. Google Meet : ' + s.onemeet + '\n   - Votre séance d\'accueil de groupe en personne avec ' + s.manager + ', le ' + s.group + '. Si vous ne pouvez pas y être, dites-le-nous. Cette étape est essentielle.',
+    '2. Connectez-vous à votre compte Google Welfare Avenue sur mail.google.com :\n   Adresse courriel : ' + s.newaddr + '\n   Premier mot de passe : ' + s.password + '\n   Google vous demandera de le changer lors de votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
     '3. Joignez-vous à notre espace Slack avec votre nouvelle adresse courriel Welfare Avenue : ' + facts.slack,
     '4. Joignez-vous à notre équipe Canva : ' + s.canva,
     '5. Signez le contrat. Il vous est envoyé par DocuSign à votre adresse courriel personnelle.',
     '6. Lisez votre description de poste et préparez les questions que vous voulez aborder avec votre direction' + (facts.jdUrl ? ' : ' + facts.jdUrl : '.'),
+    '7. Avant votre appel d\'accueil, préparez votre ordinateur vous-même, étape par étape :\n   Vous pouvez cocher chaque étape sur cette page, pour que votre gestionnaire sache où vous en êtes : ' + s.setup + '\n' + rundownLines('fr'),
   ] : [
-    '1. Your meetings:\n   - Your onboarding call: ' + s.call + '. The invite is in your calendar.\n   - A 1-on-1 introductory meeting with your manager, ' + s.manager + ': ' + s.one + '.\n   - Your in-person group onboarding session with ' + s.manager + ' on ' + s.group + '. If you can\'t make it, let us know. This step is crucial.',
-    '2. Activate your Welfare Avenue Google account. Email: ' + s.address + '. We\'ll share your first password with you one to one. You\'ll change it the first time you sign in.' + (facts.video ? '\n   This video shows you how: ' + facts.video : ''),
+    '1. Your meetings:\n   - Your onboarding call: ' + s.call + '. The invite is in your calendar. Google Meet: ' + s.callmeet + '\n   - A 1-on-1 introductory meeting with your manager, ' + s.manager + ': ' + s.one + '. Google Meet: ' + s.onemeet + '\n   - Your in-person group onboarding session with ' + s.manager + ' on ' + s.group + '. If you can\'t make it, let us know. This step is crucial.',
+    '2. Sign in to your Welfare Avenue Google account at mail.google.com:\n   Email: ' + s.newaddr + '\n   First password: ' + s.password + '\n   Google will ask you to change it the first time you sign in.' + (facts.video ? '\n   This video shows you how: ' + facts.video : ''),
     '3. Join your Slack workspace with your new Welfare Avenue email: ' + facts.slack,
     '4. Join our Canva team: ' + s.canva,
     '5. Sign the Contract. Sent via DocuSign to your personal email.',
     '6. Review your job description and prepare questions to ask about it with your director' + (facts.jdUrl ? ': ' + facts.jdUrl : '.'),
+    '7. Before your onboarding call, set up your computer on your own, step by step:\n   You can tick each step off on this page, so your manager can see where you are: ' + s.setup + '\n' + rundownLines('en'),
   ];
   const text = (fr ? [
     'Bonjour ' + first + ',', '', 'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!',
@@ -882,29 +957,148 @@ export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: s
   const text = typeof f.welcome_text === 'string' && f.welcome_text ? f.welcome_text : own.text;
   return { subject, text: facts.draft ? text : fillWelcome(text, f, c, facts) };
 }
-/* what renderWelcome needs from the database. who: the HR person, by email; not on the roster (or the roster cannot be read), the team signs it */
-async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean): Promise<WelcomeFacts> {
+/* what renderWelcome needs from the database. who: the person who signs, by email (HR who pressed Start; at the hire's Yes, the manager, who booked the
+   times with them); not on the roster (or the roster cannot be read), the team signs it. Filled in (not draft), also: whether the account step is done, the
+   Meet links (hub_events, as the calendar sync saved them; live, the sender asks Calendar for any still missing) and the rundown page. */
+async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean, live = false): Promise<WelcomeFacts> {
   const m = await getMember(f.manager_member_id);
   let jd: Row = null;
   if (c.position_id) ({ data: jd } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
   const hr = (await membersByEmail(who).catch(() => []))[0];
+  const google = draft ? null : (await readSteps(f.id)).find((r) => r.step === 'google');
   return {
     draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null,
     slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com',
     hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
+    login: google?.status === 'done' && !!f.wa_email,   // skipped is not done: the Hub did not make that account, so it cannot give its password
+    meet: draft ? { call: null, one: null } : await meetLinks(f, live && !f.practice),
+    setupLink: draft ? null : await setupPage(f, c),
   };
+}
+/* the Meet link of each invite: the calendar sync's copy (hub_events, by the event id the invites step saved), else, when asked, Calendar itself. Best
+   effort: without one the email says the link is in the invite. */
+const meetOf = (ev: Row): string | null => {
+  const link = ev?.hangoutLink || ((ev?.conferenceData?.entryPoints || []) as Row[]).find((e) => e?.entryPointType === 'video' && e?.uri)?.uri;
+  return typeof link === 'string' && /^https:\/\/\S+$/.test(link) ? link : null;
+};
+async function meetLinks(f: Row, ask: boolean): Promise<{ call: string | null; one: string | null }> {
+  const ids: Record<'call' | 'one', string | null> = { call: f.call_event_id || null, one: f.one_on_one_event_id || null };
+  const out: Record<'call' | 'one', string | null> = { call: null, one: null };
+  const known = Object.values(ids).filter((x): x is string => !!x);
+  if (!known.length) return out;
+  const { data } = await svc.from('hub_events').select('id, meet_link').in('id', known);
+  for (const k of ['call', 'one'] as const) out[k] = meetOf({ hangoutLink: ((data || []) as Row[]).find((e) => e.id === ids[k])?.meet_link });
+  if (!ask || (['call', 'one'] as const).every((k) => !ids[k] || out[k])) return out;
+  try {
+    const t = await calToken();
+    for (const k of ['call', 'one'] as const) {
+      if (!ids[k] || out[k]) continue;
+      const r = await gcal(t, 'GET', eventsPath + '/' + encodeURIComponent(ids[k]!) + '?fields=hangoutLink,conferenceData');
+      if (r.ok) out[k] = meetOf(r.j);
+    }
+  } catch (_) { /* see above */ }
+  return out;
+}
+/* the rundown page is the offer link with ?setup. onboard-link keeps it open after booking for a wave275 hire only (a proposal, or a flow made on or after
+   onboard_v2_since); a wave271 hire's link shuts once the meetings are booked, so their email lists the steps without it. */
+async function setupPage(f: Row, c: Row): Promise<string | null> {
+  const { data } = await svc.from('hub_onboard_flows').select('created_at, proposed_at').eq('id', f.id).maybeSingle();
+  if (!(data as Row | null)?.proposed_at && !(await isV2((data || {}) as Row))) return null;
+  return HUB + '/o/' + await offerToken(c.id) + '?setup';
 }
 /* the preview and the card: before Start, the marked places; after it, the real values */
 async function welcomeFor(f: Row, c: Row, by: string): Promise<{ subject: string; text: string }> {
   return renderWelcome(f, c, await welcomeFacts(f, c, f.started_by || by, !AFTER_START.includes(f.status) && f.status !== 'backed_out'));
 }
-/* welcome {flow_id}: the email as it reads now, for the card's Copy button. Reads only. */
+/* welcome {flow_id}: the email as it reads now, for the card's Copy button, with [first password] kept: the password never reaches HR's eyes. Reads only. */
 async function welcomeNow(b: Row, by: string): Promise<Response> {
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
-  return json({ ...(await welcomeFor(f, c, by)), edited: !!f.welcome_edited });
+  return json({ ...(await welcomeFor(f, c, by)), edited: !!f.welcome_edited, sent_at: f.welcome_sent_at ?? null });
+}
+
+/* ---------- step: welcome (wave275 Task 4) ---------- */
+/* The welcome email, from hub@ to the personal address, once the invites are out (at booking, or at Start). The text is the saved template (HR's edits
+   kept) filled in now. The first password is read from the vault here and nowhere else, only when the account step made the account and the text has its
+   place, and goes into this one outgoing message only: the flow keeps its bracketed text, and no row, step detail or log line ever holds the value.
+   Claimed with welcome_sent_at, so a second run says it was already sent; the claim is given back when the send fails, so Retry can send it. A practice
+   flow never gets here: the runner simulates every step for it. */
+async function firstPassword(): Promise<string> {   // '' when it cannot be read or is under 8 characters, as the google step treats it
+  const { data, error } = await svc.rpc('get_secret', { secret_name: 'ONBOARD_FIRST_PASSWORD' });
+  return !error && typeof data === 'string' && data.length >= 8 ? data : '';
+}
+/* the email's HTML part: the same text, its links clickable */
+function welcomeHtml(text: string): string {
+  const line = (l: string) => esc(l).replace(/^ +/, (sp) => '&nbsp;'.repeat(sp.length)).replace(/https?:\/\/[^\s<]*[^\s<.,;:!?)]/g, (u) => '<a href="' + u + '" style="color:#103F39;">' + u + '</a>');
+  return '<!doctype html><html><body style="margin:0;padding:32px 16px;background:#FFFAF2;font-family:Helvetica,Arial,sans-serif;color:#1F201E;"><div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid rgba(16,63,57,.10);padding:28px 32px;font-size:15px;line-height:1.55;">'
+    + text.split('\n').map(line).join('<br>') + '</div></body></html>';
+}
+async function sendWelcome(ctx: Ctx): Promise<string> {
+  const f = ctx.flow, c = await getCand(f.candidate_id);
+  if (!c) throw new Error('The candidate card is gone, so there is nobody to welcome.');
+  const to = String(c.email || '').trim().toLowerCase();
+  if (!to) throw new Error('The card has no personal email, so the welcome email cannot reach them. Add it, then press Retry.');
+  /* the claim: of two runs, one finds welcome_sent_at empty */
+  const now = new Date().toISOString();
+  const { data: won, error: claimErr } = await svc.from('hub_onboard_flows').update({ welcome_sent_at: now, updated_at: now }).eq('id', f.id).is('welcome_sent_at', null).select('id');
+  if (claimErr) throw new Error('The Hub could not record the welcome email, so it did not send it: ' + claimErr.message + '. Press Retry.');
+  if (!(won as unknown[] | null)?.length) {
+    const { data: was } = await svc.from('hub_onboard_flows').select('welcome_sent_at').eq('id', f.id).maybeSingle();
+    const at = (was as Row | null)?.welcome_sent_at;
+    return 'The welcome email was already sent' + (at ? ' on ' + whenText(at) : '') + ', so it was not sent again.';
+  }
+  let password = '';
+  try {
+    const facts = await welcomeFacts(f, c, f.started_by || ctx.by, false, true);
+    const w = renderWelcome(f, c, facts);
+    let text = w.text, why = '';
+    if (!facts.login) why = ' The Google account is not made yet, so it says HR will send the login details separately: send them once the account exists.';
+    else if (PASSWORD_MARKS.some((p) => text.includes(p))) {
+      password = await firstPassword();
+      if (password) text = PASSWORD_MARKS.reduce((t, p) => t.split(p).join(password), text);
+      else { text = loginLater(text, langOf(c)); why = ' The first password is not set in admin settings, so it says HR will send the login details separately: send them yourself.'; }
+    }
+    const signer = String(f.started_by || '').trim().toLowerCase();
+    const sent = await deliver({ practice: false, to, subject: w.subject, text, html: welcomeHtml(text), ...(/@welfareavenue\.com$/.test(signer) ? { replyTo: signer } : {}) });
+    password = '';
+    return 'Sent the welcome email to ' + to + ' from ' + CAL + (sent.mode === 'test' ? ', and email is in test mode, so it went only to ' + sent.to.join(', ') : '') + '.' + why;
+  } catch (e) {
+    const said = scrub(errText(e), password);
+    password = '';
+    await svc.from('hub_onboard_flows').update({ welcome_sent_at: null }).eq('id', f.id).eq('welcome_sent_at', now);   // given back, so Retry can send it
+    throw new Error(said);
+  }
+}
+
+/* ---------- the first password (wave275 Task 4): set_first_password and first_password_state, admins only ---------- */
+/* The value goes to the vault (wa_vault_set, service role only) and nowhere else: change_log says "set", and app_config onboard_first_password_at keeps
+   when, which is all first_password_state reads (it never reads the vault). Google's rules: 8 to 100 characters, no space at either end; the Hub also asks
+   for a letter and a digit. */
+const PW_AT = 'onboard_first_password_at';
+function passwordProblem(v: unknown): string | null {
+  if (typeof v !== 'string') return 'must be typed as text.';
+  if (!v) return 'is empty. Type one with at least 8 characters, a letter and a digit.';
+  if (v !== v.trim()) return 'cannot start or end with a space (Google\'s rule).';
+  if (v.length < 8) return 'needs at least 8 characters (Google\'s rule).';
+  if (v.length > 100) return 'can have at most 100 characters (Google\'s rule).';
+  if (!/\p{L}/u.test(v) || !/[0-9]/.test(v)) return 'needs at least a letter and a digit.';
+  return null;
+}
+async function setFirstPassword(b: Row, by: string): Promise<Response> {
+  const problem = passwordProblem(b.password);
+  if (problem) return no('bad_password', 'The first password ' + problem + ' Nothing was changed.', 400);
+  const { error } = await svc.rpc('wa_vault_set', { p_name: 'ONBOARD_FIRST_PASSWORD', p_value: b.password, p_note: 'The first password of new Google accounts (wave275 onboarding), set in the Hub by ' + by + '.' });
+  if (error) return no('save', 'The first password could not be saved: ' + scrub(String(error.message), b.password).slice(0, 200) + '. Nothing was changed.', 500);
+  const now = new Date().toISOString();
+  await log('app_setting', 'ONBOARD_FIRST_PASSWORD', 'first password', null, 'set', by);
+  const { error: atErr } = await svc.from('app_config').upsert({ key: PW_AT, value: now, updated_at: now }, { onConflict: 'key' });
+  return json({ ok: true, set: true, set_at: now, ...(atErr ? { warnings: ['The first password is set, but the Hub could not record when, so the card may say it is not set. Set it again to fix that.'] } : {}) });
+}
+async function firstPasswordState(): Promise<Response> {
+  const ms = Date.parse((await cfg(PW_AT)).trim());
+  return json(Number.isNaN(ms) ? { set: false, set_at: null } : { set: true, set_at: new Date(ms).toISOString() });
 }
 
 /* before Start: is this manager someone other than the one who got the grid link? Their marks are not this manager's, and any reminder was not for them */
@@ -1946,6 +2140,10 @@ Deno.serve(async (req: Request) => {
     if (!by) return no('signed_out', 'Please sign in again.', 401);
     const [hr, admin] = await Promise.all([asUser.rpc('wa_is_hr'), asUser.rpc('is_wa_admin')]);
     const b = await req.json().catch(() => ({}));
+    if (b.action === 'set_first_password' || b.action === 'first_password_state') {   // wave275 Task 4: admins only, not HR
+      if (admin.data !== true) return no('not_allowed', 'Only admins can see or set the first password.', 403);
+      return b.action === 'set_first_password' ? await setFirstPassword(b, by) : await firstPasswordState();
+    }
     if (b.action === 'propose') {   // wave275: HR, an admin, or this flow's own manager (wa275_manager_of, as the caller)
       if (hr.data !== true && admin.data !== true && (await asUser.rpc('wa275_manager_of', { p_flow: Number(b.flow_id) })).data !== true) return no('not_allowed', 'Only HR, admins and this new hire\'s manager can propose times.', 403);
       return await propose(b, by, false);

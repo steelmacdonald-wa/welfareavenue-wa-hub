@@ -8,7 +8,7 @@
     var tagClass = status === 'done' ? 'ok' : status === 'failed' ? 'no' : status === 'hr_task' ? 'hr' : '';
     var h = '<li><div class="ttl">' + n + '. ' + E(label) + ' <span class="o271tag ' + tagClass + '">' + E(WORD[status] || status) + '</span>' + (r.practice ? '<span class="o271tag pr">Practice</span>' : '') + '</div>';
     if (r.detail) h += '<div class="dt' + (status === 'failed' ? ' fail' : '') + '">' + (status === 'hr_task' ? 'To do: ' : '') + E(r.detail) + '</div>';
-    if (key === 'welcome' && status === 'hr_task') h += welcomeHtml(f) + canvaCardHtml(f);
+    if (key === 'welcome' && WELCOME_COPY.indexOf(status) >= 0) h += welcomeHtml(f) + (status === 'done' ? '' : canvaCardHtml(f));   /* wave275: a copy stays on the card once it is sent */
     if (status === 'hr_task' && key !== 'google') h += '<div class="row"><button type="button" class="o271b" data-o271a="taskdone" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['t' + id + key] ? ' disabled' : '') + '>Done</button></div>';
     if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
     if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
@@ -40,19 +40,23 @@
     catch (e) { delete S.busy['v' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
   }
   /* what HR edited in the preview, under the welcome to-do, to send by hand */
-  /* the email as it reads now, from onboard-run (welcome): HR's wording kept, today's times, manager, address and links filled in */
+  /* the email as it reads now, from onboard-run (welcome): HR's wording kept, today's times, manager, address and links filled in. wave275: also once the
+     Hub has sent it (a copy on the card) or when sending failed; [first password] stays as it is, since only the sent email has the password */
+  var WELCOME_COPY = ['hr_task', 'failed', 'done'];
   function welcomeHtml(f) {
     var w = S.welcome[f.id];
     if (!w) return '<div class="dt"><div class="o271ln">Loading the email...</div></div>';
     if (w.err) return '<div class="dt"><div class="o271err">' + E(w.err) + '</div></div>';
     return '<div class="dt">'
+      + (w.sent_at ? '<div class="o271ln" data-o271sent><b>Sent ' + E(whenText(w.sent_at)) + '.</b> This copy reads as the email does now.</div>' : '')
       + '<div class="o271ln"><b>Subject:</b> ' + E(w.subject || '') + (w.edited ? ' <small>(your edit)</small>' : '') + '</div><div class="o271pre">' + E(w.text || '') + '</div>'
+      + (/\[first password\]|\[premier mot de passe\]/.test(w.text || '') ? '<div class="o271ln">[first password] stays as it is here: the Hub puts the password in only as the email goes, so nobody reads it on the card.</div>' : '')
       + '<div class="row"><button type="button" class="o271b" data-o271a="copywelcome" data-f="' + E(f.id) + '">Copy the text</button></div>'
       + '</div>';
   }
   async function readWelcomes(flows) {
     S.welcome = {};
-    await Promise.all(flows.filter(function (f) { return (f.steps || []).some(function (r) { return r.step === 'welcome' && r.status === 'hr_task'; }); }).map(async function (f) {
+    await Promise.all(flows.filter(function (f) { return (f.steps || []).some(function (r) { return r.step === 'welcome' && WELCOME_COPY.indexOf(r.status) >= 0; }); }).map(async function (f) {
       try { S.welcome[f.id] = await run('welcome', { flow_id: Number(f.id) }); } catch (e) { S.welcome[f.id] = { err: e.message }; }
     }));
   }
@@ -61,6 +65,37 @@
     var text = [w.subject, w.text].filter(Boolean).join('\n\n');   /* the group session is already a line of the text */
     try { await navigator.clipboard.writeText(text); toast('Copied'); }
     catch (e) { toast('The browser would not copy it. Select the text and copy it yourself.'); }
+  }
+  /* ---------- wave275: the first password of new Google accounts, for admins (first_password_state and set_first_password refuse everyone else) ---------- */
+  /* The page never holds it: the box is type password, its value is never written into the page's HTML (a repaint gives it back as a property only), and
+     Set sends it once and empties the box. The line says only whether it is set, and when. */
+  function isAdmin() { try { return WA40_MINE.role === 'admin'; } catch (e) { return false; } }
+  async function readPw() {
+    if (!isAdmin()) { S.pw = null; return; }
+    try { S.pw = await run('first_password_state', {}); } catch (e) { S.pw = null; }
+  }
+  function dayLong(at) { try { return new Date(at).toLocaleDateString('en-CA', { timeZone: TZ, year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return String(at); } }
+  function pwHtml() {
+    var P = S.pw; if (!P) return '';
+    return '<div class="o271cd" data-o271pw>'
+      + '<div class="o271ln" data-o271pwstate><b>First password:</b> ' + (P.set && P.set_at ? 'set on ' + E(dayLong(P.set_at)) : 'not set') + '</div>'
+      + '<div class="o271ln">Every Google account the Hub makes starts with it, and Google asks the new person to change it the first time they sign in. Only the welcome email carries it. At least 8 characters, with a letter and a digit.</div>'
+      + '<div class="o271btns"><input type="password" autocomplete="new-password" aria-label="' + (P.set ? 'A new first password' : 'The first password') + '" data-o271i="pw" data-f="pw">'
+      + '<button type="button" class="o271b" data-o271a="pwset" data-f="pw"' + (S.busy.pw ? ' disabled' : '') + '>Set</button></div>'
+      + noteHtml('pw') + '</div>';
+  }
+  async function setPw() {
+    var box = document.querySelector('[data-o271i="pw"]'); if (!box || S.busy.pw) return;
+    var typed = box.value;
+    S.busy.pw = true; delete S.note.pw; paint();
+    try {
+      var r = await run('set_first_password', { password: typed });
+      var now = document.querySelector('[data-o271i="pw"]'); if (now) now.value = '';
+      S.pw = { set: true, set_at: r.set_at };
+      S.note.pw = { ok: 'The first password is set.', warnings: r.warnings || [] };
+    } catch (e) { S.note.pw = { err: e.message }; }
+    typed = '';
+    delete S.busy.pw; paint();
   }
   function gaddrOf(f) { if (S.gaddr && S.gaddr[f.id] != null) return S.gaddr[f.id]; return f.wa_email || ''; }
   function nameOf(id) { var p = S.people.filter(function (x) { return String(x.id) === String(id); })[0]; return p ? p.name : 'Not chosen'; }
@@ -220,7 +255,7 @@
     }
     var active = document.activeElement, keep = active && el.contains(active) && active.getAttribute && active.getAttribute('data-o271i');
     var keepFlow = keep ? active.getAttribute('data-f') : '', sel = keep && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
-    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>';
+    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>' + pwHtml();
     if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
     if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
     else if (!S.ready.length && !S.started.length && !S.offers.length && !S.backed.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
@@ -230,7 +265,10 @@
     if (S.backed.length) html += '<h3 class="o271h">Backed out</h3>' + S.backed.map(backedHtml).join('');
     /* each grid keeps its scroll through a repaint */
     var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
+    var pwBox = el.querySelector('[data-o271i="pw"]'), pwTyped = pwBox ? pwBox.value : '';   /* a first password being typed survives the repaint, as a property, never in the HTML */
     el.innerHTML = html;
+    if (pwTyped) { var pwAgain = el.querySelector('[data-o271i="pw"]'); if (pwAgain) pwAgain.value = pwTyped; }
+    pwTyped = '';
     Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { var v = scrolls[b.getAttribute('data-o271grid')]; if (v) b.scrollLeft = v; });
     if (keep) {
       var again = el.querySelector('[data-o271i="' + keep + '"][data-f="' + keepFlow + '"]');
@@ -285,6 +323,7 @@
     if (a === 'copywelcome') { copyWelcome(f); return; }
     if (a === 'copycanva') { copyCanva(f); return; }
     if (a === 'canvasave') { saveCanva(f); return; }
+    if (a === 'pwset') { setPw(); return; }
     var cand = b.getAttribute('data-cand');
     if (a === 'yesask') { S.yes[cand] = true; delete S.note['c' + cand]; paint(); return; }
     if (a === 'yesno') { delete S.yes[cand]; paint(); return; }
