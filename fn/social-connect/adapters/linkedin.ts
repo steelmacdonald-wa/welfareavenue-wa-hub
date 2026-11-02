@@ -18,7 +18,7 @@ export const linkedin: Adapter = {
     const now = ctx.now();
     return {
       label: org ? 'the Page ' + org.split(':').pop() : 'LinkedIn (no Page admin role found)',
-      conn: { status: 'connected', mode: 'direct', org_urn: org, account_id: org, name: 'Welfare Avenue (LinkedIn)', scopes_granted: String(t.scope || '').split(' ').filter(Boolean), connected_by: by, connected_at: iso(now), expires_at: iso(now + Number(t.expires_in || 5184000) * 1000), last_error: null, state: null },
+      conn: { status: 'connected', mode: 'direct', org_urn: org, account_id: org, name: 'Welfare Avenue (LinkedIn)', scopes_granted: String(t.scope || '').split(/[\s,]+/).filter(Boolean), connected_by: by, connected_at: iso(now), expires_at: iso(now + Number(t.expires_in || 5184000) * 1000), last_error: null, state: null },
     };
   },
   async health(_p, _conn, ctx) {

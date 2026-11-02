@@ -21,3 +21,11 @@ Deno.test('platforms caches for the ttl and sorts', async () => {
   assertEquals(a.map(p => p.key), ['a', 'b']); assertEquals(calls, 1); assertEquals(b.length, 2);
   const all = await platforms(svc as any, { ttlMs: 0, includeInactive: true }); assertEquals(all.length, 3);
 });
+
+Deno.test('platforms keeps answering from the cache when the table read fails', async () => {
+  const good = fakeSvc(() => [{ key: 'x', sort: 1, active: true }]);
+  await platforms(good as any, { ttlMs: 0 });
+  const bad = { from: () => ({ select: () => ({ order: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }) }) };
+  const list = await platforms(bad as any, { ttlMs: 0 });
+  assertEquals(list.map(p => p.key), ['x']);
+});

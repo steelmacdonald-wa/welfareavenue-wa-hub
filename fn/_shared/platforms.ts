@@ -42,9 +42,12 @@ export async function platforms(
   const ttl = opts.ttlMs ?? 60000;
   if (!cache.at || Date.now() - cache.at >= ttl) {
     const { data, error } = await svc.from('studio_platforms').select('*').order('sort');
-    if (error) throw new Error('studio_platforms: ' + error.message);
-    const list = ((data || []) as Platform[]).slice().sort((a, b) => a.sort - b.sort);
-    cache = { at: Date.now(), list };
+    // a failed read answers from the last good list when there is one; it throws only with no cache at all
+    if (error && !cache.at) throw new Error('studio_platforms: ' + error.message);
+    if (!error) {
+      const list = ((data || []) as Platform[]).slice().sort((a, b) => a.sort - b.sort);
+      cache = { at: Date.now(), list };
+    }
   }
   return opts.includeInactive ? cache.list : cache.list.filter((p) => p.active);
 }

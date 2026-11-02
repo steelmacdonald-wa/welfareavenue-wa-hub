@@ -68,6 +68,15 @@ Deno.test('linkedin finish stores granted scopes, expiry and the Page as account
   assert(!JSON.stringify(r.conn).includes('"t"'), 'no token in the record');
 });
 
+Deno.test('linkedin finish splits granted scopes on spaces or commas and drops empties', async () => {
+  const { ctx } = fakeCtx({
+    'https://www.linkedin.com/oauth/v2/accessToken': { access_token: 't', expires_in: 5184000, scope: ' w_organization_social,r_organization_social  rw_organization_admin, ' },
+    'https://api.linkedin.com/rest/organizationAcls': { elements: [] },
+  });
+  const r = await linkedin.finish(P, { id: 'client-1', secret: 'sec-123456' }, 'c', REDIRECT, 'x', ctx);
+  assertEquals(r.conn.scopes_granted, ['w_organization_social', 'r_organization_social', 'rw_organization_admin']);
+});
+
 Deno.test('linkedin health reads the ACL with the stored token and throws on a non-2xx', async () => {
   const { ctx, calls } = fakeCtx({ 'https://api.linkedin.com/rest/organizationAcls': { elements: [] } });
   await ctx.vaultSet('SOCIAL_LINKEDIN_TOKEN', 'tok', '');

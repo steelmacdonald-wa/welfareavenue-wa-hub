@@ -23,11 +23,16 @@ export const tiktok: Adapter = {
       conn: { status: 'connected', open_id: t.open_id || '', account_id: t.open_id || '', name: label, username: user.username || null, handle: user.username ? '@' + user.username : '', scopes: scope, scopes_granted: scope.split(',').filter(Boolean), connected_by: by, connected_at: iso(now), expires_at: lasts(t, now), last_error: null, state: null },
     };
   },
-  // refresh first, as tiktok-pull does (the new login goes back into the vault), then read the account
+  // as tiktok-pull does: reuse the access token while it has over two minutes left, otherwise refresh (the new login goes
+  // back into the vault); then read the account
   async health(p, _conn, ctx) {
     const t = JSON.parse(await ctx.getSecret('SOCIAL_TIKTOK_TOKEN'));
-    const c = await clientOf(ctx, p.key); if (!c) throw new Error('the app keys are missing');
     if (!t || !t.refresh_token) throw new Error('no TikTok refresh token: connect TikTok again');
+    if (t.access_token && Number(t.expires_at || 0) > ctx.now() + 120000) {
+      await must(ctx, API + '/user/info/?fields=open_id', { headers: { Authorization: 'Bearer ' + t.access_token } });
+      return checked(ctx);
+    }
+    const c = await clientOf(ctx, p.key); if (!c) throw new Error('the app keys are missing');
     const b = await must(ctx, API + '/oauth/token/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_key: c.id, client_secret: c.secret, grant_type: 'refresh_token', refresh_token: t.refresh_token }).toString() });
     if (!b.access_token) throw new Error('TikTok refresh refused: ' + JSON.stringify(b).slice(0, 160));
     const now = ctx.now();

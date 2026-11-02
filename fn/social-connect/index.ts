@@ -7,6 +7,8 @@
 // v3: new action health (publishers) checks every connected platform now and writes what it found.
 // v3: refresh renews and checks every connected platform; a failure marks that one in error and the rest carry on;
 //     a login expiring within 7 days tells the publishers (notify, once a week) so posts keep going out.
+// v3 (review fixes): the sign-in return, status and health keep working when the registry cannot be read; TikTok
+//     health refreshes only when its access token is near expiry; a renewal is saved before its check runs.
 // v2.1: the LinkedIn authorize URL drops r_organization_admin (the app was never granted it).
 // v2: TikTok asks for the analytics scopes too, shows @username and runs the first tiktok-pull right after connecting.
 // The Content Studio's Connections page: it keeps every platform login in the vault and never shows a secret back.
@@ -34,7 +36,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { byKey, names, type Platform, platforms } from './platforms.ts';
 import { ADAPTERS } from './adapters/index.ts';
-import { type Any, clientOf, type Conn, type Ctx } from './adapters/types.ts';
+import { type Any, clientOf, type Conn, type Ctx, type Platform as P } from './adapters/types.ts';
 import { DAY, EXPIRING_DAYS, healthOf, toConn } from './health.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -94,10 +96,20 @@ async function caller(req: Request): Promise<Me | null> {
 function rand(n = 24): string { const b = crypto.getRandomValues(new Uint8Array(n)); return Array.from(b).map(x => x.toString(16).padStart(2, '0')).join(''); }
 
 /* v3: the registry: the active platforms, the ones signed in by OAuth (with an adapter), and their names */
-async function reg() {
+type Reg = { list: Platform[]; oauth: P[]; keys: string[]; by: Record<string, P>; NAME: Record<string, string> };
+const NAMES: Record<string, string> = { threads: 'Threads', youtube: 'YouTube', tiktok: 'TikTok', linkedin: 'LinkedIn', make: 'Make.com', meta: 'Meta' };
+async function reg(): Promise<Reg> {
   const list = await platforms(svc);
   const oauth = list.filter(p => p.auth === 'oauth' && ADAPTERS[p.key]);
-  return { list, oauth, keys: oauth.map(p => p.key), by: byKey(list), NAME: { ...names(list), make: 'Make.com', meta: 'Meta' } as Record<string, string> };
+  return { list, oauth, keys: oauth.map(p => p.key), by: byKey(list), NAME: { ...NAMES, ...names(list) } };
+}
+/* v3: without the registry (its read failed and nothing is cached) the adapters still work from a minimal platform */
+async function regSafe(): Promise<Reg> {
+  try { return await reg(); } catch (e) {
+    console.log('social-connect: registry unavailable: ' + msg(e));
+    const oauth: P[] = Object.keys(ADAPTERS).map(key => ({ key, label: NAMES[key] || key, auth: 'oauth', active: true, scopes: [] }));
+    return { list: [], oauth, keys: oauth.map(p => p.key), by: Object.fromEntries(oauth.map(p => [p.key, p])), NAME: NAMES };
+  }
 }
 
 /* v2: the first TikTok pull, so Analytics shows the account at once (a failure there never fails the connection) */
@@ -108,7 +120,7 @@ async function firstTikTokPull(): Promise<void> {
     clearTimeout(tm);
   } catch (_) { /* the morning pull catches up */ }
 }
-async function finish(p: Platform, code: string, by: string): Promise<string> {
+async function finish(p: P, code: string, by: string): Promise<string> {
   const c = await clientOf(ctx, p.key); if (!c) throw new Error('save the app keys first');
   const r = await ADAPTERS[p.key].finish(p, c, code, REDIRECT, by, ctx);
   await setConn(p.key, r.conn, by);
@@ -116,10 +128,12 @@ async function finish(p: Platform, code: string, by: string): Promise<string> {
   return r.label;
 }
 /* v3: renew (refresh only) and check one platform; a failure marks it in error and never stops the others */
-async function check(p: Platform, conn: Conn, renew: boolean, by: string): Promise<string> {
+async function check(p: P, conn: Conn, renew: boolean, by: string): Promise<string> {
   const a = ADAPTERS[p.key];
+  let r: Partial<Conn> = {};
   try {
-    const r = renew && a.refresh ? await a.refresh(p, conn, ctx) : {};
+    // a renewal is saved before the check, so a failed check never loses it (the vault already holds the new token)
+    if (renew && a.refresh) { r = await a.refresh(p, conn, ctx); if (Object.keys(r).length) await setConn(p.key, r, by); }
     const h = await a.health(p, { ...conn, ...r }, ctx);
     const patch = { ...r, ...h };
     await setConn(p.key, { ...patch, health: healthOf({ ...conn, ...patch }, Date.now()) }, by);
@@ -130,7 +144,7 @@ async function check(p: Platform, conn: Conn, renew: boolean, by: string): Promi
   }
 }
 /* v3: tell the publishers about a login that lapses within 7 days (once a week per platform) */
-async function warn(R: Awaited<ReturnType<typeof reg>>): Promise<string[]> {
+async function warn(R: Reg): Promise<string[]> {
   const c = await conns(), now = Date.now(), out: string[] = [];
   let to: string[] | null = null;
   for (const p of R.oauth) {
@@ -148,7 +162,7 @@ async function warn(R: Awaited<ReturnType<typeof reg>>): Promise<string[]> {
   }
   return out;
 }
-async function status(me: Me, R: Awaited<ReturnType<typeof reg>>): Promise<Response> {
+async function status(me: Me, R: Reg): Promise<Response> {
   const c = await conns(), now = Date.now(), out: Record<string, Any> = {};
   for (const k of Object.keys(c)) { const v = { ...(c[k] || {}) }; delete v.state; out[k] = v; }
   for (const k of R.keys) out[k] = { ...toConn(k, c[k], now), app_saved: !!(await clientOf(ctx, k)) };
@@ -179,21 +193,25 @@ Deno.serve(async (req: Request) => {
     if (ev === 'delete') { const code = rand(8); await log('threads', 'Threads asked for data deletion (' + code + ')', 'threads'); return json({ url: 'https://welfareavenue.com/data-deletion/', confirmation_code: code }); }
     const state = url.searchParams.get('state') || '', code = url.searchParams.get('code') || '';
     const err = url.searchParams.get('error_description') || url.searchParams.get('error') || '';
-    const all = await conns(); const R = await reg();
-    const platform = R.keys.find(p => all[p] && all[p].state && all[p].state.value === state) || '';
     const back = (q: string) => new Response(null, { status: 302, headers: { Location: BACK + '?' + q } });
-    if (!platform) return back('error=' + encodeURIComponent('That sign-in has expired; press Connect again'));
-    const st = all[platform].state;
-    if (Date.now() > Number(st.exp || 0)) return back('error=' + encodeURIComponent('That sign-in took too long; press Connect again'));
-    if (err || !code) { await setConn(platform, { state: null }, st.by); return back('error=' + encodeURIComponent(R.NAME[platform] + ': ' + (err || 'no code came back'))); }
+    // v3: whatever fails here, the person lands back on the Connections page with the reason
     try {
-      const what = await finish(R.by[platform], code, st.by);
-      await log(platform, 'connected ' + R.NAME[platform] + ' (' + what + ')', st.by);
-      return back('connected=' + platform);
-    } catch (e) {
-      await setConn(platform, { state: null, last_error: msg(e).slice(0, 200) }, st.by);
-      return back('error=' + encodeURIComponent(R.NAME[platform] + ': ' + msg(e).slice(0, 160)));
-    }
+      const all = await conns();
+      const platform = Object.keys(ADAPTERS).find(p => all[p] && all[p].state && all[p].state.value === state) || '';
+      if (!platform) return back('error=' + encodeURIComponent('That sign-in has expired; press Connect again'));
+      const st = all[platform].state;
+      if (Date.now() > Number(st.exp || 0)) return back('error=' + encodeURIComponent('That sign-in took too long; press Connect again'));
+      if (err || !code) { await setConn(platform, { state: null }, st.by); return back('error=' + encodeURIComponent(NAMES[platform] + ': ' + (err || 'no code came back'))); }
+      const R = await regSafe();
+      try {
+        const what = await finish(R.by[platform] || { key: platform, label: NAMES[platform], auth: 'oauth', active: true, scopes: [] }, code, st.by);
+        await log(platform, 'connected ' + R.NAME[platform] + ' (' + what + ')', st.by);
+        return back('connected=' + platform);
+      } catch (e) {
+        await setConn(platform, { state: null, last_error: msg(e).slice(0, 200) }, st.by);
+        return back('error=' + encodeURIComponent(R.NAME[platform] + ': ' + msg(e).slice(0, 160)));
+      }
+    } catch (e) { return back('error=' + encodeURIComponent('Connecting failed: ' + msg(e).slice(0, 160))); }
   }
 
   const me = await caller(req);
@@ -201,31 +219,31 @@ Deno.serve(async (req: Request) => {
   const body = await req.json().catch(() => ({})) as Record<string, Any>;
   const action = String(body.action || 'status');
   try {
-    const R = await reg();
-    if (action === 'status') return await status(me, R);
+    if (action === 'status') return await status(me, await regSafe());
     if (action === 'refresh') {
       if (!me.auto) return json({ error: 'automation only' }, 401);
-      const c = await conns(); const out: string[] = [];
+      const R = await regSafe(); const c = await conns(); const out: string[] = [];
       for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') out.push(await check(p, c[p.key], true, 'refresh')); }
       out.push(...await warn(R));
       return json({ ok: true, done: out });
     }
     if (!me.publisher) return json({ error: 'Only marketing leads and admins change the connections' }, 403);
     if (action === 'health') {
-      const c = await conns();
+      const R = await regSafe(); const c = await conns();
       for (const p of R.oauth) { if (c[p.key] && c[p.key].status === 'connected') await check(p, c[p.key], false, me.email); }
       return await status(me, R);
     }
     if (action === 'save_app') {
-      const p = String(body.platform || ''); if (R.keys.indexOf(p) < 0) return json({ error: 'which platform?' }, 400);
+      const p = String(body.platform || ''); if (!ADAPTERS[p]) return json({ error: 'which platform?' }, 400);
       const id = String(body.id || '').trim(), sec = String(body.secret || '').trim();
       if (!/^[\w.\-:]{4,200}$/.test(id) || sec.length < 8 || sec.length > 300) return json({ error: 'Paste both the id and the secret as the developer console shows them' }, 400);
-      await vaultSet('SOCIAL_' + p.toUpperCase() + '_CLIENT', JSON.stringify({ id, secret: sec }), 'wave225: ' + R.NAME[p] + ' app keys for the Content Studio (social-connect)');
+      await vaultSet('SOCIAL_' + p.toUpperCase() + '_CLIENT', JSON.stringify({ id, secret: sec }), 'wave225: ' + NAMES[p] + ' app keys for the Content Studio (social-connect)');
       await setConn(p, { app_id: id.slice(0, 6) + '\u2026', app_saved_at: iso(), app_saved_by: me.email }, me.email);
-      await log(p, R.NAME[p] + ' app keys saved', me.email);
+      await log(p, NAMES[p] + ' app keys saved', me.email);
       return json({ ok: true });
     }
     if (action === 'start') {
+      const R = await reg();
       const p = String(body.platform || ''); if (R.keys.indexOf(p) < 0) return json({ error: 'which platform?' }, 400);
       const c = await clientOf(ctx, p); if (!c) return json({ error: 'Save the ' + R.NAME[p] + ' app keys first' }, 400);
       const state = rand(18);
@@ -240,7 +258,7 @@ Deno.serve(async (req: Request) => {
       await setConn(p, { status: 'disconnected', disconnected_by: me.email, disconnected_at: iso(), state: null }, me.email);
       // v2: the TikTok analytics account stops syncing (its history stays)
       if (p === 'tiktok') { try { await svc.from('social_accounts').update({ status: 'disconnected' }).eq('platform', 'tiktok').neq('external_id', 'csv'); } catch (_) { /* none */ } }
-      await log(p, (R.NAME[p] || p) + ' disconnected', me.email);
+      await log(p, (NAMES[p] || p) + ' disconnected', me.email);
       return json({ ok: true });
     }
     if (action === 'meta_token') {
