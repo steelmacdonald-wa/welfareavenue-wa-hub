@@ -293,6 +293,18 @@ end $function$;
 revoke all on function public.onboarding_assign(bigint, text) from public, anon;   -- live: postgres, authenticated, service_role
 comment on function public.onboarding_assign(bigint, text) is 'Starts an HR onboarding plan for a roster member: creates the onboardings row, copies the onboarding_template steps with due dates, and copies the hr_setup_template steps. p_by is stored as given. Staff only (checked inside). Called by the page (HR centre). Access: authenticated.';
 
+-- 4b. what wa166_person_card (build/wa271c_card.sql, Task 8) reads and is not otherwise here: the help table, and the avenue state as a stand-in
+create table public.onboarding_help (
+  id bigint generated always as identity primary key,
+  onboarding_id bigint not null references public.onboardings (id) on delete cascade,
+  step_name text,
+  note text,
+  status text default 'open',
+  created_at timestamptz not null default now()
+);
+create or replace function public.wa166_path_state(p_member bigint, p_key text)
+returns jsonb language sql stable as $function$ select jsonb_build_object('key', p_key, 'done', 0, 'total', 0) $function$;
+
 -- 5. the one trigger on team_members that wa271_move_start meets (live body)
 create or replace function public.wa181_keep_start()
 returns trigger language plpgsql set search_path to '' as $function$

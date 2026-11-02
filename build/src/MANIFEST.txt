@@ -287,6 +287,8 @@
 260_wave260
 # 262_wave262: a simpler Hub for each person (Steel, 20/10/26, after the 19/10 leadership meeting): Home shows what matters first, the rest behind Show everything on Home (wa262.home); the What changed pop-up on Home, once per person, with its tour (tour:whatsnew) and the person's apps. Also in this wave: 134 (the More fold and Other teams under your team), 153 (Your apps, More apps), 127 and 131 (The Brain in Other Tools), 118 (its crumb), 122 (the chrome and Home tours), 213 (batched saves, All in this section, due today). Data: build/data/wa262a_confirm_fast.sql, wa262b_due_today.sql.
 262_wave262
+# 271_wave271: HR onboarding, what HR sees (Steel, 01/11/26): HR centre > Onboarding gets Ready to onboard above the existing section: who accepted, the availability grids and the time picker in Toronto time, the preview, Start onboarding, each step's result with Retry and "I created it, continue", and Change time, Change manager, Book the 1-on-1 and They backed out. Also in this wave: 166 (the lead's card says Starts on before day one). Data: build/wa271a_onboard.sql, wa271b_remind.sql, wa271c_card.sql; edge function onboard-run.
+271_wave271
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

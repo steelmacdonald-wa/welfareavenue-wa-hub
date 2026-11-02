@@ -1,0 +1,663 @@
+/* =====================================================================
+   WA v271 HR onboarding: what HR sees (01/11/26, Build 1 of the automation)
+   =====================================================================
+   HR Center > Onboarding gets Ready to onboard, above the existing section: everyone who accepted, with their grid status, the time picker
+   (the hire's grid, the manager's over it for the 1-on-1, hub@ meetings greyed), the preview, Start onboarding, and a card with each step's
+   result, Retry, "I created it, continue" and the changes after Start. All writes go through the onboard-run edge function; its refusals are
+   shown as they come. wa46Render is private to wave46 (its wraps elsewhere never fire), so this wave keeps its section in place with an
+   observer, the pattern wave93 uses. The server decides who sees it: wa271_ready_list refuses anyone but HR and admins.
+   Times are America/Toronto wall clock, through Intl only: an instant is never made by adding an offset. */
+(function () {
+  if (window.__wa271) return; window.__wa271 = true;
+  var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
+  var E = esc;
+  var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, onboarding_id, started_at';   /* named: pw_nonce is withheld from the browser */
+  var STEP_COLS = 'flow_id, step, status, detail, practice, at';
+  var CAND_COLS = 'id, name, role, email';
+  var STEPS = [['roster', 'Roster profile'], ['google', 'Google account'], ['plan', 'Onboarding plan'], ['invites', 'Calendar invites'], ['manager', 'Tell the manager'], ['hub', 'Hub access'], ['slack', 'Slack channel'], ['welcome', 'Welcome email']];
+  var WORD = { done: 'Done', skipped: 'Skipped', failed: 'Failed', waiting: 'Waiting', hr_task: 'For HR', running: 'Running', pending: 'Running' };
+  var RULE = { reports_to: 'the position reports to them', team_lead: 'they lead the department', chosen: 'chosen by HR', none: 'HR must choose' };
+  var STALE_MS = 10 * 60 * 1000;      /* as in onboard-run: a step left running this long was cut off, so Retry may take it */
+  var KEEP_DAYS = 30;                 /* a finished flow stays on the list this long after its call; then it lives under Onboarding */
+
+  var S = {
+    ready: [], started: [], people: [], cfg: { days: 14, start: 8, end: 21, cell: 30 }, loaded: false, denied: false, err: '', loading: null,
+    pick: {},   /* flow id: the open picker and preview */
+    act: {},    /* flow id: the open change panel on a started card */
+    note: {},   /* flow id: { ok, err, warnings } on a card */
+    out: [],    /* what They backed out left for HR: { name, remove, warnings } until HR closes it */
+    busy: {}
+  };
+
+  /* ---------- style ---------- */
+  var st = document.createElement('style'); st.id = 'o271css';
+  st.textContent =
+    '.o271 h2{margin:0 0 4px;}' +
+    '.o271 .o271sub{font-size:13px;color:' + MUTE + ';margin:0 0 12px;}' +
+    '.o271 h3.o271h{font-size:14px;margin:18px 0 8px;color:' + GREEN + ';}' +
+    '.o271cd{border:1px solid ' + LINE + ';border-radius:14px;padding:14px;margin:0 0 10px;background:var(--wa-card,' + CREAM + ');min-width:0;}' +
+    '.o271top{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;}' +
+    '.o271top b{font-size:15px;color:' + GROUND + ';overflow-wrap:anywhere;}' +
+    '.o271top span{font-size:13px;color:' + MUTE + ';overflow-wrap:anywhere;}' +
+    '.o271tag{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 9px;background:#ECEBE3;color:' + GROUND + ';}' +
+    '.o271tag.pr{background:' + PURPLE + ';color:' + CREAM + ';}' +
+    '.o271tag.late{background:' + RED + ';color:' + CREAM + ';}' +
+    '.o271tag.ok{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '.o271tag.no{background:' + RED + ';color:' + CREAM + ';}' +
+    '.o271tag.hr{background:' + GOLD + ';color:' + GROUND + ';}' +
+    '.o271chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}' +
+    '.o271ln{font-size:13px;margin:4px 0;color:' + GROUND + ';overflow-wrap:anywhere;}' +
+    '.o271warn{font-size:13px;margin:6px 0;padding:7px 10px;border-radius:10px;background:rgba(220,165,39,.16);color:' + GROUND + ';overflow-wrap:anywhere;}' +
+    '.o271warn.pr{background:rgba(111,100,171,.16);}' +
+    '.o271err{font-size:13px;margin:8px 0;padding:7px 10px;border-radius:10px;background:rgba(179,64,47,.12);color:' + RED + ';font-weight:600;overflow-wrap:anywhere;}' +
+    '.o271okn{font-size:13px;margin:8px 0;color:' + GREEN + ';font-weight:600;}' +
+    '.o271btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}' +
+    '.o271b{font:inherit;font-size:13px;font-weight:600;min-height:36px;padding:6px 12px;border-radius:10px;border:1px solid ' + GREEN + ';background:transparent;color:' + GREEN + ';cursor:pointer;}' +
+    '.o271b.pri{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '.o271b.dng{border-color:' + RED + ';color:' + RED + ';}' +
+    '.o271b.dngp{background:' + RED + ';border-color:' + RED + ';color:' + CREAM + ';}' +
+    '.o271b:disabled{opacity:.45;cursor:not-allowed;}' +
+    '.o271pn{border-top:1px solid ' + LINE + ';margin-top:12px;padding-top:12px;min-width:0;}' +
+    '.o271f{display:block;font-size:12px;font-weight:600;color:' + MUTE + ';margin:10px 0 3px;}' +
+    '.o271 input[type=text],.o271 input[type=datetime-local],.o271 select,.o271 textarea{font:inherit;font-size:14px;width:100%;max-width:420px;box-sizing:border-box;min-height:36px;padding:6px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + GROUND + ';}' +
+    '.o271 textarea{max-width:none;min-height:120px;}' +
+    '.o271two{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 14px;}' +
+    '.o271said{font-size:12px;color:' + GREEN + ';margin-top:3px;min-height:15px;}' +
+    '.o271said.cl{color:' + RED + ';}' +
+    '.o271md{display:inline-flex;border:1px solid ' + GREEN + ';border-radius:10px;overflow:hidden;margin:0 0 8px;}' +
+    '.o271md button{font:inherit;font-size:13px;font-weight:600;padding:6px 12px;border:none;background:transparent;color:' + GREEN + ';cursor:pointer;min-height:34px;}' +
+    '.o271md button.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '.o271lg{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:' + MUTE + ';margin:0 0 6px;}' +
+    '.o271lg i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:4px;vertical-align:-2px;border:1px solid ' + LINE + ';}' +
+    '.o271gw{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid ' + LINE + ';border-radius:10px;background:' + CREAM + ';}' +
+    '.o271gw table.o271g{display:table!important;width:auto!important;max-width:none!important;border-collapse:separate;border-spacing:1px;font-size:11px;}' +
+    '.o271g th{font-weight:600;color:' + MUTE + ';padding:2px 3px;text-align:center;white-space:nowrap;text-transform:none;letter-spacing:0;background:' + CREAM + ';}' +
+    '.o271g thead th{position:sticky;top:0;z-index:2;}' +
+    '.o271g tbody th{position:sticky;left:0;z-index:1;text-align:right;padding-right:6px;}' +
+    '.o271g td{padding:0;}' +
+    '.o271c{display:block;width:42px;height:24px;padding:0;border:1px solid #ECEBE3;border-radius:4px;background:#F4F2EA;cursor:pointer;font:inherit;font-size:9.5px;font-weight:700;color:' + CREAM + ';line-height:1;}' +
+    '.o271c.h{background:rgba(16,63,57,.30);border-color:rgba(16,63,57,.30);}' +
+    '.o271c.m{background:rgba(111,100,171,.34);border-color:rgba(111,100,171,.34);}' +
+    '.o271c.h.m{background:' + GREEN + ';border-color:' + GREEN + ';}' +
+    '.o271c.busy{background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px);border-color:#C9C8C1;}' +
+    '.o271c.scall,.o271c.sone{background:' + GOLD + ';border-color:' + GROUND + ';color:' + GROUND + ';}' +
+    '.o271st{list-style:none;margin:8px 0 0;padding:0;}' +
+    '.o271st li{padding:8px 0;border-top:1px solid #ECEBE3;font-size:13px;min-width:0;}' +
+    '.o271st li:first-child{border-top:none;}' +
+    '.o271st .ttl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:600;color:' + GROUND + ';}' +
+    '.o271st .dt{margin:3px 0 0;color:' + GROUND + ';overflow-wrap:anywhere;}' +
+    '.o271st .dt.fail{color:' + RED + ';}' +
+    '.o271st .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;}' +
+    '.o271st .row input{flex:1 1 200px;min-width:0;}' +
+    '.o271sw{display:flex;gap:8px;align-items:center;font-size:13px;padding:5px 0;flex-wrap:wrap;color:' + GROUND + ';}' +
+    '.o271sw input{width:18px;height:18px;margin:0;flex:none;}' +
+    '.o271sw small{color:' + MUTE + ';}' +
+    '.o271out{border:1px solid ' + RED + ';border-radius:14px;padding:14px;margin:0 0 10px;}' +
+    '.o271out ul{margin:6px 0;padding-left:18px;font-size:13px;}' +
+    '.o271out li{margin:3px 0;overflow-wrap:anywhere;}' +
+    '@media (max-width:700px){.o271cd{padding:12px;}.o271c{height:30px;}.o271gw{max-height:62vh;overflow:auto;}.o271 input[type=text],.o271 input[type=datetime-local],.o271 select{max-width:none;}}';
+  document.head.appendChild(st);
+
+  /* ---------- times: Toronto wall clock, through Intl only ---------- */
+  var PARTS = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  var pad2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  function wall(at) {
+    var o = {}; PARTS.formatToParts(new Date(at)).forEach(function (p) { o[p.type] = p.value; });
+    var h = Number(o.hour) % 24, mi = Number(o.minute);
+    return { y: Number(o.year), mo: Number(o.month), d: Number(o.day), h: h, mi: mi, date: o.year + '-' + o.month + '-' + o.day, mins: h * 60 + mi };
+  }
+  /* the value for a datetime-local box */
+  function toLocal(at) { var w = wall(at); return w.date + 'T' + pad2(w.h) + ':' + pad2(w.mi); }
+  /* a typed Toronto wall clock to an instant (ms): ask Intl what wall clock a guess reads as, and move by the difference. null when it cannot be read, or the clock skips that time */
+  function toInstant(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(v || '')); if (!m) return null;
+    var want = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]), guess = want;
+    for (var i = 0; i < 3; i++) { var w = wall(guess); var diff = Date.UTC(w.y, w.mo - 1, w.d, w.h, w.mi) - want; if (!diff) return guess; guess -= diff; }
+    return null;
+  }
+  var isoOf = function (v) { var ms = toInstant(v); return ms == null ? null : new Date(ms).toISOString(); };
+  function whenText(at) { try { return new Date(at).toLocaleString('en-CA', { timeZone: TZ, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' Toronto'; } catch (e) { return String(at); } }
+  function dayText(d) { try { return new Date(String(d).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(d); } }
+
+  /* ---------- the edge function: a refusal comes back as its own sentence ---------- */
+  async function say(err) {
+    try {
+      var ctx = err && err.context;
+      if (ctx && typeof ctx.json === 'function') {
+        var j = await (typeof ctx.clone === 'function' ? ctx.clone() : ctx).json();
+        if (j && (j.message || j.error)) return String(j.message || j.error);
+      }
+    } catch (e) { /* its own message, below */ }
+    return String((err && err.message) || err || 'The Hub could not do that. Try again.');
+  }
+  async function run(action, body) {
+    var r;
+    try { r = await db.functions.invoke('onboard-run', { body: Object.assign({ action: action }, body || {}) }); }
+    catch (e) { throw new Error(await say(e)); }
+    if (r && r.error) throw new Error(await say(r.error));
+    var d = (r && r.data) || {};
+    if (d.error) throw new Error(String(d.message || d.error));
+    return d;
+  }
+
+  /* ---------- reads ---------- */
+  function hrPage() { return typeof window.wa46IsHr === 'function' && window.wa46IsHr(); }
+  function surelyHr() { try { return WA40_MINE.role === 'admin' || WA40_MINE.profile === 'hr'; } catch (e) { return false; } }
+  async function readStarted() {
+    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started']);
+    if (f.error) throw f.error;
+    var cut = Date.now() - KEEP_DAYS * 86400000;
+    var flows = (f.data || []).filter(function (x) { return x.status === 'running' || !x.call_at || Date.parse(x.call_at) >= cut; });
+    if (!flows.length) return [];
+    var ids = flows.map(function (x) { return x.id; }), cids = flows.map(function (x) { return x.candidate_id; });
+    var res = await Promise.all([db.from('hub_onboard_steps').select(STEP_COLS).in('flow_id', ids), db.from('hub_candidates').select(CAND_COLS).in('id', cids)]);
+    if (res[0].error) throw res[0].error;
+    if (res[1].error) throw res[1].error;
+    return flows.map(function (x) {
+      var c = (res[1].data || []).filter(function (y) { return String(y.id) === String(x.candidate_id); })[0] || {};
+      var rows = (res[0].data || []).filter(function (y) { return String(y.flow_id) === String(x.id); });
+      return Object.assign({}, x, { name: c.name || 'Someone', role: c.role || '', email: c.email || '', steps: rows });
+    });
+  }
+  async function readPeople() {
+    if (S.people.length) return;
+    var r = await db.from('team_members').select('id, name, active');
+    if (!r.error) S.people = (r.data || []).filter(function (p) { return p.name; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  }
+  async function readCfg() {
+    var r = await db.from('app_config').select('key, value').in('key', ['onboard_grid_days', 'onboard_grid_start', 'onboard_grid_end', 'onboard_grid_cell_min']);
+    var map = { onboard_grid_days: 'days', onboard_grid_start: 'start', onboard_grid_end: 'end', onboard_grid_cell_min: 'cell' };
+    ((r && r.data) || []).forEach(function (x) { var n = Number(x.value); if (map[x.key] && isFinite(n) && n >= 0 && (n > 0 || x.key === 'onboard_grid_start')) S.cfg[map[x.key]] = n; });
+  }
+  function load() {
+    if (S.loading) return S.loading;
+    S.loading = (async function () {
+      try {
+        var r = await db.rpc('wa271_ready_list');
+        if (r && r.error) throw r.error;
+        S.denied = false; S.err = '';
+        S.ready = ((r && r.data) || []).filter(function (x) { return x.status === 'waiting' || x.status === 'ready'; });
+        S.started = await readStarted();
+        await Promise.all([readPeople(), readCfg()]);
+      } catch (e) {
+        var msg = String((e && e.message) || e);
+        if (/Only HR/i.test(msg) || !surelyHr()) S.denied = true;
+        else S.err = 'The Hub could not load this list: ' + msg;
+      }
+      S.loaded = true; S.loading = null;
+      /* a picker or panel for someone who has left the list goes with them */
+      Object.keys(S.pick).forEach(function (id) { if (!S.ready.some(function (x) { return String(x.flow_id) === id; })) delete S.pick[id]; });
+      Object.keys(S.act).forEach(function (id) { if (!S.started.some(function (x) { return String(x.id) === id; })) delete S.act[id]; });
+      paint();
+    })();
+    return S.loading;
+  }
+
+  /* ---------- Ready to onboard: one card ---------- */
+  function warnBox(w) { return '<div class="o271warn' + (/practice applicant/i.test(w) ? ' pr' : '') + '">' + E(w) + '</div>'; }
+  function noteHtml(id) {
+    var n = S.note[id]; if (!n) return '';
+    return (n.ok ? '<div class="o271okn">' + E(n.ok) + '</div>' : '') + (n.warnings || []).map(warnBox).join('') + (n.err ? '<div class="o271err">' + E(n.err) + '</div>' : '');
+  }
+  function managerLine(m) {
+    if (m && m.member_id) return 'Manager: ' + E(m.name) + ' (' + E(RULE[m.how] || m.how) + ')';
+    return 'Manager: ' + E(RULE.none);
+  }
+  function readyCard(x) {
+    var other = Number(x.other_open_rows) || 0, id = x.flow_id, P = S.pick[id];
+    return '<div class="o271cd" data-o271flow="' + E(id) + '">'
+      + '<div class="o271top"><b>' + E(x.name) + '</b><span>' + E(x.role || '') + '</span>' + (x.practice ? '<i class="o271tag pr" style="font-style:normal">Practice</i>' : '') + '</div>'
+      + '<div class="o271chips">'
+      + '<span class="o271tag' + (x.grids && x.grids.hire === 'marked' ? ' ok' : '') + '">New hire\'s grid: ' + (x.grids && x.grids.hire === 'marked' ? 'marked' : 'not marked yet') + '</span>'
+      + '<span class="o271tag' + (x.grids && x.grids.manager === 'marked' ? ' ok' : '') + '">Manager\'s grid: ' + (x.grids && x.grids.manager === 'marked' ? 'marked' : 'not marked yet') + '</span>'
+      + (x.late ? '<span class="o271tag late">Answered after the reply-by date</span>' : '')
+      + '</div>'
+      + '<div class="o271ln">' + (x.accepted_on ? 'Accepted ' + E(dayText(x.accepted_on)) : '') + (x.offer_start ? ' &middot; The offer suggested ' + E(dayText(x.offer_start)) : '') + '</div>'
+      + '<div class="o271ln">' + managerLine(x.default_manager) + '</div>'
+      + (other ? warnBox('This person has ' + other + ' other application' + (other === 1 ? '' : 's') + ' still open. Close ' + (other === 1 ? 'it' : 'them') + ' by hand so they do not get a second account.') : '')
+      + noteHtml(id)
+      + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
+      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button></div>'
+      + (P ? pickHtml(x, P) : '')
+      + '</div>';
+  }
+
+  /* ---------- the grid: a key names it, 'p<flow>' on the picker and 'a<flow>' on a change panel ---------- */
+  function gridOf(key) { var id = String(key).slice(1); var o = key.charAt(0) === 'p' ? S.pick[id] : S.act[id]; return o && o.g; }
+  function newGrid(key, pv, mode) {
+    var g = { key: key, pv: pv, mode: mode, vals: { call: '', one: '' }, hideManager: false, days: [], rows: [] };
+    var slots = (pv.grids && (pv.grids.hire || []).concat(pv.grids.manager || [])) || [];
+    /* walk the instants and read each one on the Toronto clock: a clock change takes care of itself */
+    var cfg = S.cfg, step = cfg.cell * 60000, now = Date.now(), t = Math.ceil(now / step) * step, last = now + cfg.days * 86400000;
+    slots.forEach(function (x) { var ms = Date.parse(x); if (ms > last) last = ms + step; });
+    var byDate = {}, rows = {};
+    for (; t < last; t += step) {
+      var w = wall(t);
+      if (w.mins < cfg.start * 60 || w.mins + cfg.cell > cfg.end * 60) continue;
+      if (!byDate[w.date]) { byDate[w.date] = { date: w.date, at: t, cells: {} }; g.days.push(byDate[w.date]); }
+      byDate[w.date].cells[w.mins] = t;
+      rows[w.mins] = true;
+    }
+    g.rows = Object.keys(rows).map(Number).sort(function (a, b) { return a - b; });
+    g.hire = setOf(pv.grids && pv.grids.hire); g.manager = setOf(pv.grids && pv.grids.manager);
+    g.events = (pv.hub_events || []).map(function (e) { return { from: Date.parse(e.start_at), to: Date.parse(e.end_at), who: e.who || [], summary: e.summary || 'A meeting' }; });
+    return g;
+  }
+  function setOf(a) { var o = {}; (a || []).forEach(function (x) { o[Date.parse(x)] = true; }); return o; }
+  function clashes(g, ms, mode) {
+    var end = ms + S.cfg.cell * 60000;
+    return g.events.filter(function (e) { return e.from < end && e.to > ms && (mode === 'one' ? (e.who.indexOf('hire') >= 0 || (e.who.indexOf('manager') >= 0 && !g.hideManager)) : e.who.indexOf('hire') >= 0); });
+  }
+  function rowLabel(mins) { var h = Math.floor(mins / 60), mi = mins % 60; return (h % 12 || 12) + ':' + pad2(mi) + (h < 12 ? ' am' : ' pm'); }
+  function dayHead(d) {
+    var at = new Date(d.at);
+    return E(at.toLocaleDateString('en-US', { timeZone: TZ, weekday: 'short' })) + '<br>' + E(at.toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }));
+  }
+  function tableHtml(g) {
+    var call = toInstant(g.vals.call), one = toInstant(g.vals.one);
+    var h = '<table class="o271g"><thead><tr><th></th>' + g.days.map(function (d) { return '<th>' + dayHead(d) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    g.rows.forEach(function (mins) {
+      h += '<tr><th>' + E(rowLabel(mins)) + '</th>';
+      g.days.forEach(function (d) {
+        var t = d.cells[mins];
+        if (t == null) { h += '<td></td>'; return; }
+        var cl = ['o271c'], bits = [whenText(t)];
+        if (g.hire[t]) { cl.push('h'); bits.push('the new hire marked this'); }
+        if (g.mode === 'one' && !g.hideManager && g.manager[t]) { cl.push('m'); bits.push('the manager marked this'); }
+        var busy = clashes(g, t, g.mode);
+        if (busy.length) { cl.push('busy'); bits.push('in a meeting: ' + busy.map(function (e) { return e.summary; }).join(', ')); }
+        var label = '';
+        if (t === call) { cl.push('scall'); label = 'Call'; } else if (t === one) { cl.push('sone'); label = '1-1'; }
+        h += '<td><button type="button" class="' + cl.join(' ') + '" data-o271cell="' + E(new Date(t).toISOString()) + '" data-g="' + E(g.key) + '" title="' + E(bits.join('; ')) + '" aria-label="' + E(bits.join('; ')) + '">' + label + '</button></td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table>';
+  }
+  function legendHtml(g) {
+    return '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>New hire marked</span>'
+      + (g.mode === 'one' && !g.hideManager ? '<span><i style="background:rgba(111,100,171,.34)"></i>Manager marked</span><span><i style="background:' + GREEN + '"></i>Both</span>' : '')
+      + '<span><i style="background:repeating-linear-gradient(45deg,#C9C8C1,#C9C8C1 3px,#E6E5DE 3px,#E6E5DE 6px)"></i>In a meeting</span><span>Toronto time</span></div>';
+  }
+  function gridHtml(g) {
+    if (!g.days.length) return '';
+    return '<div data-o271lg="' + E(g.key) + '">' + legendHtml(g) + '</div><div class="o271gw" data-o271grid="' + E(g.key) + '">' + tableHtml(g) + '</div>';
+  }
+  function refreshGrid(g) {
+    var box = document.querySelector('[data-o271grid="' + g.key + '"]'); if (box) box.innerHTML = tableHtml(g);   /* the box keeps its scroll on a phone */
+    var lg = document.querySelector('[data-o271lg="' + g.key + '"]'); if (lg) lg.innerHTML = legendHtml(g);
+  }
+  function saidHtml(g, mode) {
+    var v = g.vals[mode]; if (!v) return { text: mode === 'call' ? 'Not picked yet' : 'Not picked: it can be booked later', cl: '' };
+    var ms = toInstant(v); if (ms == null) return { text: 'That time does not exist on the Toronto clock. Pick another.', cl: 'cl' };
+    var busy = clashes(g, ms, mode);
+    return { text: whenText(ms) + (busy.length ? '. Clashes with ' + busy.map(function (e) { return e.summary; }).join(', ') : ''), cl: busy.length ? 'cl' : '' };
+  }
+
+  /* ---------- the picker and preview ---------- */
+  function memberOptions(chosen) {
+    return '<option value="">Choose a manager...</option>' + S.people.filter(function (p) { return p.active !== false; }).map(function (p) { return '<option value="' + E(p.id) + '"' + (String(p.id) === String(chosen) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('');
+  }
+  function startBlock(P) {
+    var addr = String(P.addr || '').trim().toLowerCase(), googleOn = !P.skip.google, g = P.g;
+    if (!g.vals.call) return 'Pick a time for the onboarding call.';
+    if (toInstant(g.vals.call) == null) return 'That call time does not exist on the Toronto clock. Pick another.';
+    if (g.vals.one && toInstant(g.vals.one) == null) return 'That 1-on-1 time does not exist on the Toronto clock. Pick another.';
+    if (!P.managerId) return 'Choose a manager.';
+    if (addr && !ADDR.test(addr)) return 'The new address must be a plain address ending in @welfareavenue.com.';
+    if (!addr && googleOn) return 'Type the new address, or turn off the Google account step.';
+    if (googleOn && P.takenAddr && P.takenAddr === addr) return addr + ' is already in use. Change the address, or turn off the Google account step.';
+    return '';
+  }
+  function saidBlock(g, mode) { var s = saidHtml(g, mode); return '<div class="o271said ' + s.cl + '" data-o271said="' + mode + '">' + E(s.text) + '</div>'; }
+  function pickHtml(x, P) {
+    var id = x.flow_id, pv = P.pv, g = P.g, block = startBlock(P);
+    var welcomeStep = (pv.steps || []).filter(function (s) { return s.key === 'welcome'; })[0];
+    var h = '<div class="o271pn">' + (pv.warnings || []).map(warnBox).join('')
+      + '<h3 class="o271h">1. The times</h3>'
+      + '<div class="o271md" role="group" aria-label="Which meeting you are picking"><button type="button" class="' + (g.mode === 'call' ? 'on' : '') + '" data-o271a="mode" data-mode="call" data-f="' + E(id) + '">Onboarding call</button><button type="button" class="' + (g.mode === 'one' ? 'on' : '') + '" data-o271a="mode" data-mode="one" data-f="' + E(id) + '">1-on-1</button></div>'
+      + (g.hideManager ? '<div class="o271ln">The grid does not show the manager you just chose: these marks are the other manager\'s.</div>' : '')
+      + gridHtml(g)
+      + '<div class="o271two"><div><label class="o271f">Onboarding call (Toronto time)</label><input type="datetime-local" data-o271i="call" data-f="' + E(id) + '" value="' + E(g.vals.call) + '">' + saidBlock(g, 'call') + '</div>'
+      + '<div><label class="o271f">1-on-1 with the manager (Toronto time, optional)</label><input type="datetime-local" data-o271i="one" data-f="' + E(id) + '" value="' + E(g.vals.one) + '">' + saidBlock(g, 'one') + '</div></div>'
+      + '<h3 class="o271h">2. The preview</h3>'
+      + '<div class="o271two"><div><label class="o271f">New address</label><input type="text" autocomplete="off" data-o271i="addr" data-f="' + E(id) + '" value="' + E(P.addr) + '"></div>'
+      + '<div><label class="o271f">Manager</label><select data-o271i="mgr" data-f="' + E(id) + '">' + memberOptions(P.managerId) + '</select><div class="o271said" data-o271said="rule">' + E(ruleLine(P)) + '</div></div></div>'
+      + '<label class="o271f">Group session (leave blank to leave the line out)</label><input type="text" data-o271i="group" data-f="' + E(id) + '" value="' + E(P.group) + '">'
+      + '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o271i="subj" data-f="' + E(id) + '" value="' + E(P.subject) + '">'
+      + '<label class="o271f">Welcome email: text</label><textarea data-o271i="text" data-f="' + E(id) + '">' + E(P.text) + '</textarea>'
+      + (welcomeStep && welcomeStep.mode === 'hr_task' ? '<div class="o271ln"><b>HR sends this one for now.</b> The Hub saves your edits and leaves it as a to-do on the card.</div>' : '')
+      + '<h3 class="o271h">3. The steps that will run</h3>'
+      + (pv.steps || []).map(function (s) {
+          var locked = s.key === 'roster', word = s.mode === 'hr_task' ? 'HR does this one' : s.mode === 'practice' ? 'Practice: nothing real changes' : 'The Hub does this';
+          return '<label class="o271sw"><input type="checkbox" data-o271skip="' + E(s.key) + '" data-f="' + E(id) + '"' + (P.skip[s.key] ? '' : ' checked') + (locked ? ' disabled' : '') + '> ' + E(s.label) + ' <small>' + E(word) + (locked ? '. Every other step needs it.' : '') + '</small></label>';
+        }).join('')
+      + (P.err ? '<div class="o271err">' + E(P.err) + '</div>' : '')
+      + '<div class="o271said cl" data-o271said="block">' + E(block) + '</div>'
+      + '<div class="o271btns"><button type="button" class="o271b pri" data-o271a="start" data-f="' + E(id) + '"' + (block || S.busy['s' + id] ? ' disabled' : '') + '>' + (S.busy['s' + id] ? 'Working through the steps...' : 'Start onboarding') + '</button></div>'
+      + '</div>';
+    return h;
+  }
+  function ruleLine(P) {
+    if (!P.managerId) return RULE.none;
+    if (String(P.managerId) === String(P.pv.manager && P.pv.manager.member_id)) return 'The Hub used: ' + (RULE[P.pv.manager.how] || P.pv.manager.how);
+    return RULE.chosen;
+  }
+  /* an input changed: what depends on it, without redrawing what HR is typing in */
+  function liveUpdate(id) {
+    var P = S.pick[id]; if (!P) return;
+    var root = document.querySelector('[data-o271flow="' + id + '"]'); if (!root) return;
+    ['call', 'one'].forEach(function (m) { var el = root.querySelector('[data-o271said="' + m + '"]'); if (el) { var s = saidHtml(P.g, m); el.textContent = s.text; el.className = 'o271said ' + s.cl; } });
+    var rule = root.querySelector('[data-o271said="rule"]'); if (rule) rule.textContent = ruleLine(P);
+    var block = startBlock(P), bl = root.querySelector('[data-o271said="block"]'); if (bl) bl.textContent = block;
+    var b = root.querySelector('[data-o271a="start"]'); if (b && !S.busy['s' + id]) b.disabled = !!block;
+  }
+  async function openPick(x) {
+    var id = x.flow_id;
+    if (S.pick[id]) { delete S.pick[id]; paint(); return; }
+    S.busy['o' + id] = true; delete S.note[id]; paint();
+    try {
+      var pv = await run('preview', { flow_id: id });
+      var g = newGrid('p' + id, pv, 'call');
+      if (x.call_at) g.vals.call = toLocal(x.call_at);
+      if (x.one_on_one_at) g.vals.one = toLocal(x.one_on_one_at);
+      S.pick[id] = { pv: pv, g: g, addr: pv.address || '', managerId: (pv.manager && pv.manager.member_id) || '', group: '', subject: (pv.welcome && pv.welcome.subject) || '', text: (pv.welcome && pv.welcome.text) || '', skip: {}, takenAddr: pv.address_taken ? String(pv.address || '').toLowerCase() : '', err: '' };
+    } catch (e) { S.note[id] = { err: e.message }; }
+    delete S.busy['o' + id]; paint();
+  }
+  /* the address changed: ask again. Only the warnings and the clash change; what HR typed stays */
+  async function recheckAddress(id) {
+    var P = S.pick[id]; if (!P) return;
+    var addr = String(P.addr || '').trim().toLowerCase(); P.addr = addr;
+    if (!ADDR.test(addr)) { liveUpdate(id); return; }
+    try {
+      var pv = await run('preview', { flow_id: Number(id), wa_email: addr });
+      if (!S.pick[id] || String(S.pick[id].addr).trim().toLowerCase() !== addr) return;
+      P.pv.warnings = pv.warnings; P.pv.address_taken = pv.address_taken;
+      P.takenAddr = pv.address_taken ? addr : '';
+      paint();
+    } catch (e) { P.err = e.message; paint(); }
+  }
+  async function start(id) {
+    var P = S.pick[id], x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
+    if (!P || !x || S.busy['s' + id] || startBlock(P)) return;
+    S.busy['s' + id] = true; P.err = ''; paint();
+    var body = {
+      flow_id: Number(id), wa_email: String(P.addr || '').trim().toLowerCase(), manager_member_id: Number(P.managerId), call_at: isoOf(P.g.vals.call),
+      one_on_one_at: P.g.vals.one ? isoOf(P.g.vals.one) : null, group_session: P.group || null,
+      skip: Object.keys(P.skip).filter(function (k) { return P.skip[k]; })
+    };
+    var w0 = P.pv.welcome || {};
+    if (P.subject !== (w0.subject || '') || P.text !== (w0.text || '')) body.welcome = { subject: P.subject, text: P.text };   /* an untouched email stays the Hub's own */
+    try {
+      await run('start', body);
+      delete S.pick[id];
+      delete S.busy['s' + id];
+      await load();
+      toast('Onboarding started');
+    } catch (e) { delete S.busy['s' + id]; P.err = e.message; toast(e.message); paint(); }
+  }
+
+  /* ---------- a started card ---------- */
+  function stepHtml(f, key, label, n) {
+    var r = (f.steps || []).filter(function (x) { return x.step === key; })[0];
+    if (!r) return '<li><div class="ttl">' + n + '. ' + E(label) + '</div></li>';
+    var status = r.status, id = f.id;
+    var stuck = (status === 'running' || status === 'pending') && Date.now() - Date.parse(r.at) >= STALE_MS;
+    var tagClass = status === 'done' ? 'ok' : status === 'failed' ? 'no' : status === 'hr_task' ? 'hr' : '';
+    var h = '<li><div class="ttl">' + n + '. ' + E(label) + ' <span class="o271tag ' + tagClass + '">' + E(WORD[status] || status) + '</span>' + (r.practice ? '<span class="o271tag pr">Practice</span>' : '') + '</div>';
+    if (r.detail) h += '<div class="dt' + (status === 'failed' ? ' fail' : '') + '">' + (status === 'hr_task' ? 'To do: ' : '') + E(r.detail) + '</div>';
+    if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
+    if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
+      h += '<div class="row"><input type="text" autocomplete="off" aria-label="The address you created" placeholder="first.last@welfareavenue.com" data-o271i="gaddr" data-f="' + E(id) + '" value="' + E(gaddrOf(f)) + '">'
+        + '<button type="button" class="o271b pri" data-o271a="gmanual" data-f="' + E(id) + '"' + (S.busy['g' + id] ? ' disabled' : '') + '>I created it, continue</button></div>';
+    }
+    return h + '</li>';
+  }
+  function gaddrOf(f) { if (S.gaddr && S.gaddr[f.id] != null) return S.gaddr[f.id]; return f.wa_email || ''; }
+  function nameOf(id) { var p = S.people.filter(function (x) { return String(x.id) === String(id); })[0]; return p ? p.name : 'Not chosen'; }
+  function panelHtml(f, A) {
+    var id = f.id, g = A.g, h = '<div class="o271pn">', busy = S.busy['a' + id];
+    if (A.kind === 'back') {
+      h += '<div class="o271ln"><b>Did ' + E(f.name) + ' back out?</b> This cancels their invites, closes the onboarding and moves the card to Withdrawn. It removes nothing from Google, Slack or the Hub: you get a list of what to take out by hand.</div>'
+        + '<label class="o271f">Why (optional)</label><input type="text" data-o271i="reason" data-f="' + E(id) + '" value="' + E(A.reason || '') + '">'
+        + '<div class="o271btns"><button type="button" class="o271b dngp" data-o271a="actgo" data-f="' + E(id) + '"' + (busy ? ' disabled' : '') + '>Yes, they backed out</button><button type="button" class="o271b" data-o271a="actno" data-f="' + E(id) + '">Cancel</button></div>';
+    } else if (A.kind === 'manager') {
+      h += '<label class="o271f">New manager</label><select data-o271i="member" data-f="' + E(id) + '">' + memberOptions(A.member) + '</select>'
+        + '<div class="o271ln">The Hub moves the 1-on-1 invite to them and tells both managers.</div>'
+        + '<div class="o271btns"><button type="button" class="o271b pri" data-o271a="actgo" data-f="' + E(id) + '"' + (busy || !A.member ? ' disabled' : '') + '>Change manager</button><button type="button" class="o271b" data-o271a="actno" data-f="' + E(id) + '">Cancel</button></div>';
+    } else {
+      var isBook = A.kind === 'book', mode = isBook ? 'one' : (A.which === 'one_on_one' ? 'one' : 'call');
+      if (!isBook) {
+        h += '<label class="o271f">Which meeting</label><select data-o271i="which" data-f="' + E(id) + '"><option value="call"' + (mode === 'call' ? ' selected' : '') + '>Onboarding call</option>' + (f.one_on_one_at ? '<option value="one_on_one"' + (mode === 'one' ? ' selected' : '') + '>1-on-1</option>' : '') + '</select>';
+      }
+      if (g) h += '<div style="margin-top:8px">' + gridHtml(g) + '</div>';
+      h += '<label class="o271f">' + (isBook ? '1-on-1' : 'New time') + ' (Toronto time)</label><input type="datetime-local" data-o271i="at" data-f="' + E(id) + '" value="' + E(A.at || '') + '">'
+        + '<div class="o271ln">' + (isBook ? 'The invite goes out as soon as you book it.' : (mode === 'call' ? 'Google tells the guests, the manager is told, and the plan\'s dates move with it.' : 'Google tells the guests and the manager is told.')) + '</div>'
+        + '<div class="o271btns"><button type="button" class="o271b pri" data-o271a="actgo" data-f="' + E(id) + '"' + (busy || !A.at ? ' disabled' : '') + '>' + (isBook ? 'Book the 1-on-1' : 'Change time') + '</button><button type="button" class="o271b" data-o271a="actno" data-f="' + E(id) + '">Cancel</button></div>';
+    }
+    return h + '</div>';
+  }
+  function startedCard(f) {
+    var id = f.id, A = S.act[id], acting = A && A.kind;
+    return '<div class="o271cd" data-o271flow="' + E(id) + '">'
+      + '<div class="o271top"><b>' + E(f.name) + '</b><span>' + E(f.role || '') + '</span>' + (f.practice ? '<i class="o271tag pr" style="font-style:normal">Practice</i>' : '') + '<i class="o271tag" style="font-style:normal">' + (f.status === 'started' ? 'Started' : 'Under way') + '</i></div>'
+      + '<div class="o271ln">Onboarding call: ' + E(f.call_at ? whenText(f.call_at) : 'not set') + '</div>'
+      + '<div class="o271ln">1-on-1: ' + E(f.one_on_one_at ? whenText(f.one_on_one_at) : 'not booked yet') + '</div>'
+      + '<div class="o271ln">Manager: ' + E(nameOf(f.manager_member_id)) + (f.wa_email ? ' &middot; Address: ' + E(f.wa_email) : '') + '</div>'
+      + noteHtml(id)
+      + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
+      + '<div class="o271btns">'
+      + '<button type="button" class="o271b" data-o271a="act" data-kind="time" data-f="' + E(id) + '"' + (acting === 'time' ? ' disabled' : '') + '>Change time</button>'
+      + '<button type="button" class="o271b" data-o271a="act" data-kind="manager" data-f="' + E(id) + '"' + (acting === 'manager' ? ' disabled' : '') + '>Change manager</button>'
+      + (f.one_on_one_at ? '' : '<button type="button" class="o271b" data-o271a="act" data-kind="book" data-f="' + E(id) + '"' + (acting === 'book' ? ' disabled' : '') + '>Book the 1-on-1</button>')
+      + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (acting === 'back' ? ' disabled' : '') + '>They backed out</button>'
+      + '</div>'
+      + (A ? panelHtml(f, A) : '')
+      + '</div>';
+  }
+  function flowOf(id) { return S.started.filter(function (x) { return String(x.id) === String(id); })[0]; }
+
+  /* ---------- the changes ---------- */
+  async function openAct(id, kind) {
+    var f = flowOf(id); if (!f) return;
+    delete S.note[id];
+    var A = S.act[id] = { kind: kind, at: '', member: '', which: 'call', reason: '', g: null };
+    paint();
+    if (kind !== 'book' && kind !== 'time') return;
+    /* the marks and meetings for the picker. Typing a time works without them */
+    try {
+      var pv = await run('preview', { flow_id: Number(id) });
+      if (S.act[id] !== A) return;
+      A.g = newGrid('a' + id, pv, kind === 'book' ? 'one' : 'call');
+      paint();
+    } catch (e) { if (S.act[id] === A) { S.note[id] = { err: e.message }; paint(); } }
+  }
+  async function actGo(id) {
+    var A = S.act[id], f = flowOf(id); if (!A || !f || S.busy['a' + id]) return;
+    var at = null;
+    if (A.kind === 'book' || A.kind === 'time') {
+      at = isoOf(A.at);
+      if (!at) { S.note[id] = { err: 'That time does not exist on the Toronto clock. Pick another.' }; paint(); return; }
+    }
+    S.busy['a' + id] = true; paint();
+    try {
+      var note = { ok: 'Done.' };
+      if (A.kind === 'book') { await run('book_one_on_one', { flow_id: Number(id), at: at }); note.ok = 'The 1-on-1 is booked and the invite has gone out.'; }
+      else if (A.kind === 'time') { var r = await run('change_time', { flow_id: Number(id), which: A.which, at: at }); note = { ok: 'The time has changed.', warnings: r.warnings || [] }; }
+      else if (A.kind === 'manager') { var m = await run('change_manager', { flow_id: Number(id), member_id: Number(A.member) }); note = { ok: 'The manager has changed.', warnings: m.warnings || [] }; }
+      else {
+        var b = await run('backed_out', { flow_id: Number(id), reason: A.reason || '' });
+        S.out.push({ name: f.name, remove: b.remove || [], warnings: b.warnings || [] });
+        delete S.note[id];
+        note = null;
+      }
+      delete S.act[id];
+      if (note) S.note[id] = note;
+      delete S.busy['a' + id];
+      await load();
+    } catch (e) { delete S.busy['a' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
+  async function retry(id, step) {
+    var key = 'r' + id + step; if (S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; paint();
+    try { await run('retry', { flow_id: Number(id), step: step }); delete S.busy[key]; await load(); }
+    catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
+  async function googleManual(id) {
+    var f = flowOf(id); if (!f || S.busy['g' + id]) return;
+    S.busy['g' + id] = true; delete S.note[id]; paint();
+    try {
+      await run('google_manual', { flow_id: Number(id), wa_email: String(gaddrOf(f)).trim().toLowerCase() });
+      delete S.busy['g' + id]; if (S.gaddr) delete S.gaddr[id];
+      await load();
+    } catch (e) { delete S.busy['g' + id]; S.note[id] = { err: e.message }; toast(e.message); paint(); }
+  }
+  async function sendLink(id, candidate) {
+    if (S.busy['l' + id]) return;
+    S.busy['l' + id] = true; delete S.note[id]; paint();
+    try { await run('send_grid_link', { candidate_id: Number(candidate) }); S.note[id] = { ok: 'The availability link has gone out.' }; toast('Link sent'); }
+    catch (e) { S.note[id] = { err: e.message }; toast(e.message); }
+    delete S.busy['l' + id]; paint();
+  }
+
+  /* ---------- the section ---------- */
+  function outHtml() {
+    return S.out.map(function (o, i) {
+      return '<div class="o271out"><div class="o271ln"><b>' + E(o.name) + ' backed out.</b> Take these out by hand:</div>'
+        + (o.remove.length ? '<ul>' + o.remove.map(function (r) { return '<li>' + E(r) + '</li>'; }).join('') + '</ul>' : '<div class="o271ln">Nothing was made for them, so there is nothing to take out.</div>')
+        + o.warnings.map(warnBox).join('')
+        + '<div class="o271btns"><button type="button" class="o271b" data-o271a="outok" data-i="' + i + '">Done</button></div></div>';
+    }).join('');
+  }
+  function paint() {
+    var el = document.getElementById('o271'); if (!el) return;
+    var panel = document.getElementById('hrcentre');
+    if (S.denied) {
+      el.innerHTML = ''; el.setAttribute('data-w197s', 'none'); el.classList.remove('w197on');
+      return;
+    }
+    var active = document.activeElement, keep = active && el.contains(active) && active.getAttribute && active.getAttribute('data-o271i');
+    var keepFlow = keep ? active.getAttribute('data-f') : '', sel = keep && active.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
+    var html = '<h2>Ready to onboard</h2><p class="o271sub">Everyone who has accepted an offer. Pick the times, check the preview, then press Start onboarding.</p>' + outHtml();
+    if (S.err) html += '<div class="o271err">' + E(S.err) + '</div>';
+    if (!S.loaded) html += '<p class="o271sub">Loading...</p>';
+    else if (!S.ready.length && !S.started.length) html += '<p class="o271sub">Nobody is waiting to be onboarded.</p>';
+    html += S.ready.map(readyCard).join('');
+    if (S.started.length) html += '<h3 class="o271h">Onboarding started</h3>' + S.started.map(startedCard).join('');
+    /* each grid keeps its scroll through a repaint */
+    var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { scrolls[b.getAttribute('data-o271grid')] = b.scrollLeft; });
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('[data-o271grid]'), function (b) { var v = scrolls[b.getAttribute('data-o271grid')]; if (v) b.scrollLeft = v; });
+    if (keep) {
+      var again = el.querySelector('[data-o271i="' + keep + '"][data-f="' + keepFlow + '"]');
+      if (again) { try { again.focus(); if (sel) again.setSelectionRange(sel[0], sel[1]); } catch (e) { /* not a text box */ } }
+    }
+    if (panel && panel.getAttribute('data-w197') === 'onboarding') el.classList.add('w197on');
+  }
+  function onbSection() { var a = document.querySelector('#w46body > .w46sec [data-w46assign]'); return a ? a.closest('.w46sec') : null; }
+  function onPage() { var p = document.getElementById('hrcentre'); return (p && p.getAttribute('data-w197') === 'onboarding') || /^#hrcentre\/onboarding(\?|$)/.test(String(location.hash || '')); }
+  function install() {
+    var body = document.getElementById('w46body'); if (!body || !hrPage()) return;
+    var sec = onbSection(); if (!sec) return;   /* still loading, or a page redraw is on its way */
+    var el = document.getElementById('o271');
+    if (el && el.parentNode === body && el.nextElementSibling === sec) return;
+    if (!el) {
+      el = document.createElement('div'); el.id = 'o271'; el.className = 'o271 w197card w197blk'; el.setAttribute('data-w197s', S.denied ? 'none' : 'onboarding');
+    }
+    body.insertBefore(el, sec);
+    paint();
+    if (onPage() && !S.loaded) load();
+  }
+  function arrive() { install(); if (document.getElementById('o271') && onPage()) load(); }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var cell = t.closest('[data-o271cell]');
+    if (cell) {
+      var g = gridOf(cell.getAttribute('data-g')); if (!g) return;
+      var key = cell.getAttribute('data-g'), id = key.slice(1), local = toLocal(cell.getAttribute('data-o271cell'));
+      if (key.charAt(0) === 'a') {
+        var A = S.act[id]; if (A) { A.at = local; g.vals[g.mode] = local; refreshGrid(g); var box = document.querySelector('[data-o271flow="' + id + '"] [data-o271i="at"]'); if (box) box.value = local; var go = document.querySelector('[data-o271flow="' + id + '"] [data-o271a="actgo"]'); if (go) go.disabled = false; }
+      } else {
+        g.vals[g.mode] = local; refreshGrid(g);
+        var inp = document.querySelector('[data-o271flow="' + id + '"] [data-o271i="' + g.mode + '"]'); if (inp) inp.value = local;
+        liveUpdate(id);
+      }
+      return;
+    }
+    var b = t.closest('[data-o271a]'); if (!b || b.disabled) return;
+    var a = b.getAttribute('data-o271a'), f = b.getAttribute('data-f');
+    if (a === 'link') { sendLink(f, b.getAttribute('data-cand')); return; }
+    if (a === 'open') { var x = S.ready.filter(function (r) { return String(r.flow_id) === String(f); })[0]; if (x) openPick(x); return; }
+    if (a === 'mode') { var P = S.pick[f]; if (P) { P.g.mode = b.getAttribute('data-mode'); paint(); } return; }
+    if (a === 'start') { start(f); return; }
+    if (a === 'retry') { retry(f, b.getAttribute('data-step')); return; }
+    if (a === 'gmanual') { googleManual(f); return; }
+    if (a === 'act') { openAct(f, b.getAttribute('data-kind')); return; }
+    if (a === 'actgo') { actGo(f); return; }
+    if (a === 'actno') { delete S.act[f]; paint(); return; }
+    if (a === 'outok') { S.out.splice(Number(b.getAttribute('data-i')), 1); paint(); return; }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    var k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f'); if (!k || !id) return;
+    var P = S.pick[id], A = S.act[id];
+    if (k === 'gaddr') { S.gaddr = S.gaddr || {}; S.gaddr[id] = t.value; return; }
+    if (A && k === 'reason') { A.reason = t.value; return; }
+    if (A && k === 'at') {
+      A.at = t.value;
+      if (A.g) { A.g.vals[A.g.mode] = t.value; refreshGrid(A.g); }
+      var go = document.querySelector('[data-o271flow="' + id + '"] [data-o271a="actgo"]'); if (go) go.disabled = !A.at;
+      return;
+    }
+    if (!P) return;
+    if (k === 'call' || k === 'one') { P.g.vals[k] = t.value; refreshGrid(P.g); liveUpdate(id); return; }
+    if (k === 'addr') { P.addr = t.value; liveUpdate(id); return; }
+    if (k === 'group') { P.group = t.value; return; }
+    if (k === 'subj') { P.subject = t.value; return; }
+    if (k === 'text') { P.text = t.value; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    var skip = t.getAttribute('data-o271skip'), k = t.getAttribute('data-o271i'), id = t.getAttribute('data-f');
+    if (skip && S.pick[id]) { S.pick[id].skip[skip] = !t.checked; liveUpdate(id); return; }
+    if (!k || !id) return;
+    var P = S.pick[id], A = S.act[id];
+    if (k === 'addr' && P) { P.addr = t.value; recheckAddress(id); return; }
+    if (k === 'mgr' && P) {
+      P.managerId = t.value;
+      var changed = String(P.managerId) !== String(P.pv.manager && P.pv.manager.member_id);
+      if (changed !== P.g.hideManager) { P.g.hideManager = changed; paint(); } else liveUpdate(id);
+      return;
+    }
+    if (k === 'member' && A) { A.member = t.value; paint(); return; }
+    if (k === 'which' && A) {
+      A.which = t.value; A.at = '';
+      if (A.g) { A.g.mode = t.value === 'one_on_one' ? 'one' : 'call'; A.g.vals = { call: '', one: '' }; }
+      paint();
+    }
+  });
+
+  /* ---------- wiring: the section stays above the Onboarding section whenever wave46 redraws ---------- */
+  function arm(tries) {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) { if ((tries || 0) < 40) setTimeout(function () { arm((tries || 0) + 1); }, 800); return; }
+    if (panel.dataset.o271mo) return;
+    panel.dataset.o271mo = '1';
+    new MutationObserver(function () { try { install(); } catch (e) { /* the next redraw */ } }).observe(panel, { childList: true, subtree: true });
+    /* wave197 can change page without a hashchange (replaceState): its page attribute says when Onboarding opens */
+    new MutationObserver(function (list) { if (list.some(function (m) { return m.oldValue !== 'onboarding'; }) && panel.getAttribute('data-w197') === 'onboarding') { try { arrive(); } catch (e) { /* the next redraw */ } } }).observe(panel, { attributes: true, attributeFilter: ['data-w197'], attributeOldValue: true });
+    arrive();
+  }
+  if (typeof startApp === 'function') {
+    var __sa271 = startApp;
+    startApp = async function () { var out = await __sa271.apply(this, arguments); try { arm(0); } catch (e) { /* non-fatal */ } return out; };
+  }
+  window.addEventListener('hashchange', function () { if (onPage()) setTimeout(arrive, 120); });
+
+  /* ---------- test hook ---------- */
+  window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; } };
+})();

@@ -14,6 +14,7 @@ const read = (p) => readFileSync(join(here, p), 'utf8');
 const schema = read('w271schema.sql');
 const migration = read('../build/wa271a_onboard.sql');
 const remind = read('../build/wa271b_remind.sql');
+const card = read('../build/wa271c_card.sql');
 const undo = read('../build/wa271a_undo.sql');
 const assertions = read('w271sql.sql');
 
@@ -80,6 +81,28 @@ try {
   await checkRemind(db, 'wa271b');
   await runAssertions(db, 'assertions');
 
+  // ---- Task 8: the lead's card says starts_on while day one is ahead, and only then
+  await db.exec(card);
+  await db.exec(card);   // safe to run twice
+  console.log('wa271c_card: applied twice with no error');
+  const cardOf = async (startSql) => {
+    await db.exec(`insert into public.team_members (name, email) values ('Test Person Card', 'w271.card@example.invalid');
+      insert into public.onboardings (member_id, person_name, started_at) select id, name, ${startSql} from public.team_members where name = 'Test Person Card';`);
+    const r = await one(db, `select public.wa166_person_card((select id from public.onboardings where person_name = 'Test Person Card'), 'manager') as j,
+      ${startSql}::text as d`);
+    await db.exec(`delete from public.onboardings where person_name = 'Test Person Card'; delete from public.team_members where name = 'Test Person Card';`);
+    return r;
+  };
+  const TODAY = `(now() at time zone 'America/Toronto')::date`;
+  let c1 = await cardOf(`(${TODAY} + 5)`);
+  ok(c1.j.starts_on === c1.d && c1.j.day === 1, 'a first day ahead: starts_on is that date');
+  c1 = await cardOf(TODAY);
+  ok(c1.j.starts_on === null && c1.j.day === 1, 'on day one: starts_on is null and the day is 1');
+  c1 = await cardOf(`(${TODAY} - 3)`);
+  ok(c1.j.starts_on === null && c1.j.day === 4, 'after day one: starts_on is null and the day counts');
+  ok((await one(db, `select has_function_privilege('authenticated', 'public.wa166_person_card(bigint,text)', 'execute') as x`)).x === false, 'the card stays out of reach of the browser');
+  ok(/starts_on/.test((await one(db, `select obj_description('public.wa166_person_card(bigint,text)'::regprocedure, 'pg_proc') as c`)).c), 'the card comment says starts_on');
+
   // ---- the undo. Put real-looking work in first: an accepted candidate (kept) and its flow (dropped with the tables).
   await db.exec(`
     insert into public.hub_candidates (name, email, status) values ('Test Person Undo', 'w271.undo@example.invalid', 'offer');
@@ -88,6 +111,7 @@ try {
   await db.exec(undo);
   await db.exec(undo);   // safe to run twice
   console.log('undo: applied twice with no error');
+  ok(!/starts_on/.test((await one(db, `select pg_get_functiondef('public.wa166_person_card(bigint,text)'::regprocedure) as d`)).d), 'the undo takes starts_on off the lead card');
 
   ok((await one(db, `select to_regclass('public.hub_onboard_flows') as r`)).r === null, 'flows table dropped');
   ok((await one(db, `select to_regclass('public.hub_onboard_grids') as r`)).r === null, 'grids table dropped');
