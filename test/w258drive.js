@@ -67,6 +67,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
   const browser = await launch();
   try {
     let f = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fixture(), rpcs: RPCS, width: 1440, wait: 5000 });
+    await f.page.addStyleTag({ content: '#w272tip{display:none!important}' });
     await f.ev(INSTALL, { owners: OWNERS, log: LOG });
     await f.hash('#volunteering/e/900', 3500);
     /* ---------- the Texts strip ---------- */
@@ -146,6 +147,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
       fx.event_roster.push({ id: 9022, event_id: 900, person_id: null, person_name: 'Old Sheet Cook', role: 'cook', status: 'TBD', detail: { pickup_dropoff: 'Drop-off', ingredients_delivered: 'No' }, confirm: null });
       fx.volunteer_applications.push({ id: 83, person_id: null, contact_id: 7003, name: 'Keran Traoret', email: 'k@example.com', phone: '', roles: ['server'], role_text: 'Volunteer', source: 'email', status: 'received', applied_at: '2026-09-24T12:00:00Z', message: 'Hello' });
       const g = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fx, rpcs: RPCS, width: 1440, wait: 5000 });
+      await g.page.addStyleTag({ content: '#w272tip{display:none!important}' });
       await g.ev(INSTALL, { owners: OWNERS, log: LOG });
       await g.ev(() => { const r0 = db.rpc; db.rpc = function (fn, args) { if (fn === 'wa273_ask_signup') { window.__REC.calls.push({ fn: fn, args: args }); return Promise.resolve({ data: args.p_send ? { ok: true, status: 'contacted', note: 'Asked to sign up by email', by: 'Steel', to: 'k@example.com' } : { ok: true, subject: 'Thanks for applying', text: 'We received your application through email.', to: 'k@example.com', from: 'volunteer@welfareavenue.com', reply: 'steel.macdonald@welfareavenue.com' }, error: null }); } return r0(fn, args); }; });
       await g.hash('#volunteering/e/900', 3500);
@@ -170,6 +172,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
       await g.close();
     }
     f = await fresh(browser, { who: 'admin', hash: '#volunteering', fixture: fixture(), rpcs: RPCS, width: 390, wait: 5000 });
+    await f.page.addStyleTag({ content: '#w272tip{display:none!important}' });
     await f.ev(INSTALL, { owners: OWNERS, log: LOG });
     await f.hash('#volunteering/e/900', 3500);
     const ph = await f.ev(() => ({ strip: !!document.querySelector('#w119 .w258strip'), sw: document.documentElement.scrollWidth <= window.innerWidth + 1 }));
