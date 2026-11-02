@@ -569,5 +569,31 @@ end $$;
 reset role;
 grant execute on function public.wa275_availability_ok(jsonb) to authenticated;
 
+-- wa275_tick_set (fix round 1): one key merged, a claim that wins once, the service key only
+do $$
+begin
+  assert has_function_privilege('service_role', 'public.wa275_tick_set(bigint, text, jsonb, boolean)', 'execute'), 'the service key may set a tick';
+  assert not has_function_privilege('authenticated', 'public.wa275_tick_set(bigint, text, jsonb, boolean)', 'execute') and not has_function_privilege('anon', 'public.wa275_tick_set(bigint, text, jsonb, boolean)', 'execute'), 'the browser may not';
+  assert obj_description('public.wa275_tick_set(bigint, text, jsonb, boolean)'::regprocedure, 'pg_proc') is not null, 'tick_set is commented';
+end $$;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+do $$
+declare f bigint;
+begin
+  select min(id) into f from public.hub_onboard_flows;
+  update public.hub_onboard_flows set setup_ticks = '{"gmail": true}' where id = f;
+  assert public.wa275_tick_set(f, 'hire_times_at', '"2026-11-02T12:00:00Z"'::jsonb, true), 'the first claim wins';
+  assert not public.wa275_tick_set(f, 'hire_times_at', '"2026-11-02T12:05:00Z"'::jsonb, true), 'a second claim loses';
+  assert (select setup_ticks from public.hub_onboard_flows where id = f) = '{"gmail": true, "hire_times_at": "2026-11-02T12:00:00Z"}'::jsonb, 'merged: the other tick stays, the first claim stands';
+  assert public.wa275_tick_set(f, 'hire_times_at', 'null'::jsonb), 'clearing the key';
+  assert public.wa275_tick_set(f, 'hire_times_at', '"2026-11-02T13:00:00Z"'::jsonb, true), 'a cleared key can be claimed again';
+  assert public.wa275_tick_set(f, 'hire_times_at', null), 'an SQL null clears it too';
+  assert (select setup_ticks ->> 'hire_times_at' from public.hub_onboard_flows where id = f) is null, 'cleared';
+  assert (select setup_ticks ->> 'gmail' from public.hub_onboard_flows where id = f) = 'true', 'the other tick is never touched';
+  assert not public.wa275_tick_set(-1, 'hire_times_at', 'null'::jsonb), 'no such flow: false';
+  begin perform public.wa275_tick_set(f, 'Bad Key', 'null'::jsonb); assert false, 'a bad key is refused';
+  exception when raise_exception then null; end;
+end $$;
+
 select 'w275sql: all assertions passed' as result;
 rollback;

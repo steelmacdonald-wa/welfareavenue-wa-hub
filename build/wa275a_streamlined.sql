@@ -280,6 +280,21 @@ revoke all on function public.wa275_availability_of(bigint) from public, anon;
 grant execute on function public.wa275_availability_of(bigint) to authenticated, service_role;
 comment on function public.wa275_availability_of(bigint) is 'wave275: {availability, availability_at, stale} for one roster person. availability is what they saved, or Monday to Friday 09:00 to 17:00 (Toronto time) when nothing is saved; stale is true when nothing is saved, it has no save time, or it was saved more than 30 days ago. HR, admins, the person themselves and the service key only; raises for anyone else, and for someone who is not on the roster.';
 
+-- 7a. one key of a flow's setup_ticks, merged into what is there (never the whole object rewritten from a stale copy). p_if_unset: only while that key is empty
+--     (absent or json null), which is how onboard-run claims a send (hire_times) so two calls at once send once.
+create or replace function public.wa275_tick_set(p_flow bigint, p_key text, p_value jsonb, p_if_unset boolean default false)
+returns boolean language plpgsql security definer set search_path to '' as $function$
+begin
+  if p_key is null or p_key !~ '^[a-z_]{1,40}$' then raise exception 'wa275_tick_set: the key must be 1 to 40 of a to z and _'; end if;
+  update public.hub_onboard_flows
+     set setup_ticks = coalesce(setup_ticks, '{}'::jsonb) || jsonb_build_object(p_key, p_value), updated_at = now()
+   where id = p_flow and (not coalesce(p_if_unset, false) or setup_ticks ->> p_key is null);
+  return found;
+end $function$;
+revoke all on function public.wa275_tick_set(bigint, text, jsonb, boolean) from public, anon, authenticated;
+grant execute on function public.wa275_tick_set(bigint, text, jsonb, boolean) to service_role;
+comment on function public.wa275_tick_set(bigint, text, jsonb, boolean) is 'wave275: sets one key of hub_onboard_flows.setup_ticks to p_value (a json null clears it), merged into the object that is there, and returns true when the row was written. With p_if_unset true it writes only while that key is absent or null: onboard-run claims the hire_times email with it (key hire_times_at) and clears the key when new times are proposed. Keys are 1 to 40 of a to z and _. The service key only (onboard-run and onboard-link); never the browser.';
+
 -- 8. settings (HR can change them) ; onboard_v2_since is deliberately absent: it is set at release
 insert into public.app_config (key, value) values
   ('onboard_auto_hub', 'on'), ('onboard_propose_lead_hours', '48'), ('onboard_yes_lead_hours', '24')

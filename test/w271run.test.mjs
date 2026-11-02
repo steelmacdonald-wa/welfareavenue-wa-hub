@@ -1958,9 +1958,19 @@ const P_CALL = '2026-10-26T14:00:00.000Z', P_ONE = '2026-10-26T15:30:00.000Z', N
 const SECRET = { 'x-wa-secret': 'trigger-secret-for-tests' };
 const SAM_AT = (availability) => [TEAM[0], { ...TEAM[1], availability, availability_at: '2026-10-19T12:00:00Z' }];
 const noDash = (s) => !/—/.test(s) && !/\bAI\b/.test(s);
+/* the stand-in for wa275_tick_set (build/wa275a_streamlined.sql 7a, proved in test/w275sql.sql): one key merged; p_if_unset writes only while the key is empty */
+function tickSet(a, db) {
+  const f = db.rows('hub_onboard_flows').find((r) => Number(r.id) === Number(a.p_flow));
+  if (!f) return false;
+  const cur = f.setup_ticks && typeof f.setup_ticks === 'object' ? f.setup_ticks : {};
+  if (a.p_if_unset && cur[a.p_key] != null) return false;
+  f.setup_ticks = { ...cur, [a.p_key]: a.p_value ?? null };
+  return true;
+}
 async function w275({ cand, fl = {}, config = {}, tables, hr = true, admin = false, manager = false, flows = [], notifyReply } = {}) {
   const s = await setup({ cand, fl: { manager_member_id: 2, ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', ...config }, tables, hr, admin, notifyReply });
   s.db.onRpc('wa275_manager_of', (a, _d, w) => { assert.ok(w.jwt, 'the manager check runs as the caller'); assert.equal(Number(a.p_flow), 21); return manager; });
+  s.db.onRpc('wa275_tick_set', (a, db, w) => { assert.equal(w.jwt, null, 'ticks are set with the service key'); return tickSet(a, db); });
   for (const f of flows) s.db.rows('hub_onboard_flows').push(f);
   s.propose = (body = {}, headers) => s.post({ action: 'propose', flow_id: 21, call_at: P_CALL, one_on_one_at: P_ONE, ...body }, headers);
   s.asLink = (body = {}) => s.propose({ by: 'manager', ...body }, SECRET);
@@ -2035,7 +2045,7 @@ test('w275 propose before the hire accepted: saved and HR told, but no email to 
   assert.equal(s.gmail().length, 0);
   assert.equal(s.notifies().length, 1);
   assert.equal(s.flow().proposed_call_at, P_CALL);
-  assert.equal(s.flow().setup_ticks, undefined, 'nothing recorded for a mail that was not sent');
+  assert.equal(s.flow().setup_ticks.hire_times_at, null, 'nothing recorded for a mail that was not sent');
 });
 
 test('w275 propose: both times at least onboard_propose_lead_hours (48) ahead, else lead_time; nothing saved, nothing sent', async () => {
@@ -2191,7 +2201,7 @@ test('w275 propose: HR not reached, or the hire\'s email refused, leaves the pro
   assert.equal(r3.status, 200);
   assert.equal(r3.body.hire_emailed, false);
   assert.ok(r3.body.warnings.some((w) => /was not emailed/.test(w) && /test recipients/.test(w)), JSON.stringify(r3.body.warnings));
-  assert.equal(down.flow().setup_ticks, undefined, 'a mail that was not sent is not recorded, so hire_times can try again');
+  assert.equal(down.flow().setup_ticks.hire_times_at, null, 'a mail that was not sent gives its claim back, so hire_times can try again');
   assert.equal(down.flow().proposed_call_at, P_CALL);
 });
 
@@ -2220,4 +2230,73 @@ test('w275 hire_times {flow_id}: the secret only; emails the hire once per propo
   const p = await practice.post({ action: 'hire_times', flow_id: 21 }, SECRET);
   assert.equal(p.body.practice, true);
   assert.equal(practice.rig.fetchLog.length, 0);
+});
+
+/* ---------- wave275 Task 2, fix round 1 ---------- */
+test('w275 fix: a proposal another hire has answered (hire_answer set) no longer counts as taken; their booked times still do', async () => {
+  const other = (over) => ({ id: 22, candidate_id: 12, practice: false, status: 'waiting', manager_member_id: 2, call_at: null, one_on_one_at: null, proposed_call_at: '2026-10-26T14:30:00Z', proposed_one_on_one_at: null, hire_answer: null, ...over });
+  const tables = { hub_candidates: [candidate(), candidate({ id: 12, name: 'Bo Chen', email: 'bo@example.com' })] };
+  refused(await (await w275({ tables, flows: [other()] })).propose(), 'taken', 'call');
+  assert.equal((await (await w275({ tables, flows: [other({ hire_answer: 'no' })] })).propose()).status, 200, 'a no: that proposal is dead');
+  assert.equal((await (await w275({ tables, flows: [other({ hire_answer: 'yes' })] })).propose()).status, 200, 'a yes: the proposal itself is spent');
+  refused(await (await w275({ tables, flows: [other({ hire_answer: 'yes', call_at: '2026-10-26T14:30:00Z' })] })).propose(), 'taken', 'call');
+});
+
+test('w275 fix: a hire who accepts while the proposal is being saved is still emailed (the card is read again after the claim)', async () => {
+  const s = await w275({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  s.db.on('hub_onboard_flows', 'update', (n, o, db) => { if (n.proposed_at && !o.proposed_at) db.rows('hub_candidates')[0].accepted_on = '2026-10-20'; });   // Accept lands between the read and the claim
+  const r = await s.asLink();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.hire_emailed, true);
+  assert.equal(s.gmail().length, 1);
+  assert.deepEqual(r.body.warnings, []);
+  const quiet = await w275({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  const q = await quiet.asLink();
+  assert.deepEqual(q.body.warnings, [], 'not accepted yet is a quiet no, not a warning');
+});
+
+test('w275 fix: hire_times claims the send with wa275_tick_set, so two calls at once send once; other ticks are kept; a failed write is said', async () => {
+  const s = await w275({ fl: { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_at: NOW_ISO, setup_ticks: { gmail: true } } });
+  const both = await Promise.all([s.post({ action: 'hire_times', flow_id: 21 }, SECRET), s.post({ action: 'hire_times', flow_id: 21 }, SECRET)]);
+  assert.deepEqual(both.map((r) => r.status), [200, 200]);
+  assert.equal(s.gmail().length, 1, 'one email');
+  assert.deepEqual(both.map((r) => r.body.skipped || 'sent').sort(), ['already_sent', 'sent']);
+  assert.equal(s.flow().setup_ticks.gmail, true, 'merged: the hire\'s own tick stays');
+  assert.ok(s.flow().setup_ticks.hire_times_at);
+  const broken = await w275({ fl: { proposed_call_at: P_CALL, proposed_one_on_one_at: P_ONE, proposed_at: NOW_ISO } });
+  broken.db.onRpc('wa275_tick_set', () => { throw new Error('permission denied for function wa275_tick_set'); });
+  const h = await broken.post({ action: 'hire_times', flow_id: 21 }, SECRET);
+  assert.equal(h.status, 500);
+  assert.equal(h.body.error, 'tick_failed');
+  assert.match(h.body.message, /could not be recorded, so nothing was sent \(permission denied/);
+  assert.equal(broken.gmail().length, 0);
+  const p = await broken.propose();
+  assert.equal(p.status, 200, 'the proposal itself is saved');
+  assert.ok(p.body.warnings.some((w) => /could not be cleared \(permission denied/.test(w)), JSON.stringify(p.body.warnings));
+  assert.equal(broken.gmail().length, 0);
+});
+
+test('w275 fix: propose refuses a manager with no roster email (the hub@ check needs it) and an inactive manager', async () => {
+  const noMail = await w275({ tables: { team_members: [TEAM[0], { ...TEAM[1], email: null }] } });
+  const r = await noMail.propose();
+  refused(r, 'manager_no_email');
+  assert.match(r.body.messages.en, /^Sam Lee has no email on the roster, so the Hub cannot check their calendar\./);
+  assert.equal(noMail.flow().proposed_at, undefined);
+  const gone = await w275({ tables: { team_members: [TEAM[0], { ...TEAM[1], active: false }] } });
+  const g = await gone.asLink();
+  refused(g, 'manager_inactive');
+  assert.match(g.body.messages.en, /^Sam Lee is no longer active/);
+  assert.equal(gone.rig.fetchLog.length, 0);
+});
+
+test('w275 fix: a time without its zone (Z or +hh:mm) is bad_time; the same instant with an offset is fine', async () => {
+  for (const body of [{ call_at: '2026-10-26T14:00:00' }, { one_on_one_at: '2026-10-26T15:30' }, { call_at: '2026-10-26' }]) {
+    const s = await w275();
+    refused(await s.propose(body), 'bad_time');
+    assert.equal(s.flow().proposed_at, undefined);
+  }
+  const ok = await w275();
+  const r = await ok.propose({ call_at: '2026-10-26T10:00:00-04:00', one_on_one_at: '2026-10-26T11:30:00.000-04:00' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(ok.flow().proposed_call_at, P_CALL);
 });

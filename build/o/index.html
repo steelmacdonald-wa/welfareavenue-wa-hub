@@ -498,7 +498,7 @@
       current: 'Proposed so far: the onboarding call on {call} and the 1-on-1 on {one}. You can change them until {hire} answers.',
       yes: '{hire} said yes to these times, so they are booked: the onboarding call on {call} and the 1-on-1 on {one}. To change them, open their card in Onboarding in the Hub.',
       no: '{hire} said no to the times proposed. You can propose new ones below, or pick from their card in Onboarding.',
-      takenT: 'Another new hire', offT: 'Not available', callT: 'Call', oneT: '1-on-1',
+      takenT: 'Another new hire', hubT: 'hub@ meeting', offT: 'Not available', callT: 'Call', oneT: '1-on-1',
       days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     },
     fr: {
@@ -521,7 +521,7 @@
       current: 'Proposé pour l’instant: l’appel d’accueil le {call} et la rencontre individuelle le {one}. Vous pouvez les modifier jusqu’à la réponse de {hire}.',
       yes: '{hire} a dit oui à ces heures: elles sont fixées. L’appel d’accueil le {call} et la rencontre individuelle le {one}. Pour les modifier, ouvrez sa fiche dans Accueil, dans le Hub.',
       no: '{hire} a dit non aux heures proposées. Vous pouvez en proposer d’autres ci-dessous, ou choisir depuis sa fiche dans Accueil.',
-      takenT: 'Une autre nouvelle recrue', offT: 'Non disponible', callT: 'Appel', oneT: 'Individuelle',
+      takenT: 'Une autre nouvelle recrue', hubT: 'Rencontre hub@', offT: 'Non disponible', callT: 'Appel', oneT: 'Individuelle',
       days: ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
     }
   };
@@ -664,7 +664,7 @@
   function busyTitle(iso) {
     var s = Date.parse(iso), e = s + S.cellMin * 60000;
     var hit = (S.j.busy || []).filter(function (b) { return s < Date.parse(b.end) && Date.parse(b.start) < e; })[0];
-    return hit ? (hit.taken ? p().takenT : hit.title || p().lgBusy) : '';
+    return hit ? (hit.taken ? p().takenT : p().hubT) : '';   // the function never sends a meeting's title over this link
   }
   function covered(which, iso) { if (!S.picked[which]) return false; var sp = spanOf(which, S.picked[which]), s = Date.parse(iso); return s >= sp[0] && s < sp[1]; }
   function locked() { return S.j.hireAnswer === 'yes'; }
@@ -816,6 +816,7 @@
     if (!forced) lang = pickLang(j.lang) || lang;
     if (j.closed) S.view = 'closed';
     else if (j.kind === 'password') S.view = 'password';
+    else if (j.kind === 'manager' && j.notYours) S.view = 'closed';   // wave275: the link was sent to someone else since: the function's sentence, nothing to edit
     else if (j.kind === 'manager') S.view = j.mode === 'propose' ? 'propose' : 'grid';   // wave275: a wave271 flow (mode grid, or none) keeps its grid
     else if (j.answered === 'decline') { S.view = 'declined'; S.repeated = true; }
     else if (j.answered === 'accept') S.view = 'grid';

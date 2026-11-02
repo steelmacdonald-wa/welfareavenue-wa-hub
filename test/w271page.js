@@ -499,7 +499,7 @@ async function dragFrom(p, a, b) {
     const DEF_AV = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: 'America/Toronto' };
     const mgr275 = (over) => makeFn(Object.assign({ kind: 'manager', first: 'Marc', hire: 'Amina', lang: 'en' }, over || {}, { extra: Object.assign({
       mode: 'propose', proposal: null, availability: DEF_AV, availabilityAt: null, availabilityStale: true,
-      busy: [{ start: '2026-11-02T15:00:00Z', end: '2026-11-02T16:00:00Z', title: 'Board meeting' }, { start: '2026-11-03T19:00:00Z', end: '2026-11-03T20:00:00Z', title: '', taken: true }],
+      busy: [{ start: '2026-11-02T15:00:00Z', end: '2026-11-02T16:00:00Z' }, { start: '2026-11-03T19:00:00Z', end: '2026-11-03T20:00:00Z', taken: true }],   // fix round 1: no titles over the link
       lengths: { callMin: 60, oneMin: 30 }, leadHours: 48, hireAccepted: false, hireAnswer: null }, (over || {}).extra || {}) }));
     const st = (p, iso) => p.evaluate(i => { const c = document.querySelector('[data-slot="' + i + '"]'); return c ? { dis: c.disabled, cls: c.className, k: (c.querySelector('.k') || {}).textContent || '' } : null; }, iso);
     const press = (p, iso) => p.evaluate(i => document.querySelector('[data-slot="' + i + '"]').click(), iso);   // a click on the cell itself (the sticky bar can cover the lower rows)
@@ -514,7 +514,7 @@ async function dragFrom(p, a, b) {
     ok('cells: too soon (Thursday) and Saturday are greyed and disabled; Friday 10:00 is free', a.dis && /off/.test(a.cls) && b2.dis && /off/.test(b2.cls) && !c2.dis && c2.cls === 'cell', [a, b2, c2]);
     ok('cells: 4:30 pm cannot start a 60-minute call inside 9 to 5', d2.dis, d2);
     ok('cells: a hub@ meeting and another new hire\'s time are greyed as busy', e2.dis && /busy/.test(e2.cls) && g2.dis && /busy/.test(g2.cls), [e2, g2]);
-    ok('cells: the busy cell names the meeting', await f.page.locator('[data-slot="2026-11-02T15:00:00Z"]').getAttribute('title') === 'Board meeting');
+    ok('cells: a busy cell says "hub@ meeting", another hire\'s says so', await f.page.locator('[data-slot="2026-11-02T15:00:00Z"]').getAttribute('title') === 'hub@ meeting' && await f.page.locator('[data-slot="2026-11-03T19:00:00Z"]').getAttribute('title') === 'Another new hire');
     await shot(f.page, 'w275-propose-desktop');
     await press(f.page, '2026-10-30T14:00:00Z');
     a = await st(f.page, '2026-10-30T14:00:00Z'); b2 = await st(f.page, '2026-10-30T14:30:00Z'); d2 = await st(f.page, '2026-10-30T20:30:00Z');
@@ -607,6 +607,15 @@ async function dragFrom(p, a, b) {
     await view(f.page, 'w275-propose-phone-window');
     await f.page.locator('button[data-act="addx"]').tap();
     ok('phone: an exception row fits', await noScroll(f.page));
+    await f.ctx.close();
+
+    /* fix round 1: a link that is no longer this person's shows the server's sentence and nothing to edit */
+    f = await open(browser, { fn: makeFn({ kind: 'manager', first: 'Marc', hire: 'Amina', lang: 'en', extra: { mode: 'propose', notYours: true, message: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' } } }) });
+    t = await text(f.page);
+    ok('not yours: the sentence, no editor, no picks, no grid', /This link is no longer yours; a new link is on its way to the right person\./.test(t) && (await f.page.locator('#editor, #picks, [data-slot]').count()) === 0 && f.posts().length === 0, t.slice(0, 300));
+    await f.ctx.close();
+    f = await open(browser, { qs: '?l=fr', fn: makeFn({ kind: 'manager', first: 'Marc', hire: 'Amina', lang: 'en', extra: { mode: 'propose', notYours: true, message: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' } } }) });
+    ok('not yours (French)', /Ce lien n'est plus le vôtre/.test(await text(f.page)));
     await f.ctx.close();
 
     /* Hub words on every wave275 view */

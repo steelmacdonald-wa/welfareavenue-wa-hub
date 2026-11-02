@@ -21,9 +21,11 @@
 // wave275 (v2), the mgr link only. GET adds mode: 'propose' (the wave275 path) or 'grid' (a wave271 flow keeps its 1-on-1 grid: created before
 //   app_config onboard_v2_since, or, with no release time set, a flow that is not offered and has nothing proposed). In propose mode GET also gives
 //   {proposal: {call_at, one_on_one_at, by, at} | null, availability (saved, or Monday to Friday 09:00 to 17:00), availabilityAt, availabilityStale (none
-//   saved, or saved more than 30 days ago), busy: [{start, end, title, taken?}] (hub@ meetings the manager is invited to over the next 21 days, then the
-//   booked and proposed times of their other new hires, taken: true, untitled), lengths: {callMin, oneMin}, leadHours, hireAccepted, hireAnswer}; the
-//   page draws its cells from grid. The manager is the flow's manager_member_id, else whoever got the link (manager_link_member_id).
+//   saved, or saved more than 30 days ago), busy: [{start, end, taken?}] (hub@ meetings the manager is invited to over the next 21 days, never their
+//   titles, then the booked and proposed times of their other new hires, taken: true; a proposal its hire has answered is left out), lengths: {callMin,
+//   oneMin}, leadHours, hireAccepted, hireAnswer}; the page draws its cells from grid. The manager is the flow's manager_member_id, else whoever got the
+//   link. The link is theirs only while manager_link_member_id (who the Hub last sent it to) is set and is that manager: otherwise GET gives
+//   {mode, notYours: true, message} and nothing of their hours or calendar, and both POSTs are refused (409 not_yours).
 //   POST {t, a: 'availability', availability}   checked as the database checks it (wa275_availability_ok: weekly mon..sun, blocks ["HH:MM","HH:MM"] on
 //              5-minute marks, 00:00 to 23:55, end after start; except [{date, free}] with real dates, once each; tz America/Toronto), at most 12 blocks a
 //              day and 120 exceptions; saved with the service key on the manager's roster row with availability_at now (wa275_availability_set needs a
@@ -31,7 +33,8 @@
 //   POST {t, a: 'propose', call_at, one_on_one_at}   relays to onboard-run propose with the trigger secret and by 'manager': the rules (lead time,
 //              availability, hub@ meetings, other hires' times, overlap, already booked) are onboard-run's alone, and so is the save. {ok, repeated,
 //              proposal, hireEmailed, practice?}; a refusal keeps onboard-run's status, error and which, with message {en, fr}; onboard-run not answering is 503.
-//   Both need propose mode for propose; a closed link gives {closed: true} as before, and the offer link cannot do either (wrong_link).
+//   Both need propose mode (a wave271 grid link is wrong_link) and a link the manager holds (not_yours); a closed link gives {closed: true} as before,
+//   and the offer link cannot do either (wrong_link).
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
 // Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell, onboard_grid_min_hours the hire's minimum (app_config). The wall-clock
 // times are turned into instants with Intl for each day, so a clock change (01/11/26, 14/03/27) never shifts a cell by an hour.
@@ -72,6 +75,7 @@ const MSG: Record<string, { en: string; fr: string }> = {
   unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
   bad_availability: { en: 'Some of those hours do not work. Use times on 5-minute marks from 00:00 to 23:55, each end after its start, and a date once each. Please check and save again.', fr: 'Certaines de ces heures ne conviennent pas. Utilisez des heures par tranches de 5 minutes de 00:00 à 23:55, chaque fin après son début, et chaque date une seule fois. Vérifiez puis enregistrez de nouveau.' },
   no_manager: { en: 'This new hire has no onboarding manager yet. Please contact HR.', fr: 'Cette nouvelle recrue n\'a pas encore de gestionnaire d\'accueil. Veuillez communiquer avec les RH.' },
+  not_yours: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' },
 };
 const fail = (error: string, status: number) => json({ ok: false, error, message: MSG[error] }, status);
 /* built with the number, so the one message that carries a figure sits beside the static table */
@@ -256,7 +260,8 @@ async function view(l: Link) {
     const m = await managerRow(l);   // the flow's manager; before wave275 a default manager had no manager_member_id before Start, so then whoever got the link
     first = firstName(m?.name);
     const mode = await modeOf(l);
-    extra = mode === 'propose' ? { mode, ...(await proposeView(l, m)) } : { mode };
+    if (mode === 'propose' && !heldByManager(l.flow)) extra = { mode, notYours: true, message: MSG.not_yours };   // nothing of the manager's hours or calendar for a link that is not theirs
+    else extra = mode === 'propose' ? { mode, ...(await proposeView(l, m)) } : { mode };
   }
   const grid = l.kind === 'password' ? null : await gridWindow();
   const inWindow = new Set(grid ? grid.slots : []);   // saved slots that have since started, or fell out of the window, are not shown
@@ -275,6 +280,9 @@ const DEFAULT_AVAILABILITY = { weekly: { mon: [['09:00', '17:00']], tue: [['09:0
 const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const STALE_DAYS = 30, BUSY_DAYS = 21, MAX_BLOCKS = 12, MAX_EXCEPT = 120;
 const managerIdOf = (f: Flow | null) => (f ? f.manager_member_id ?? f.manager_link_member_id ?? null : null);
+/* the token is signed over the flow alone, so it says nothing about who holds it: the link is the manager's only while the Hub last sent it to that manager
+   (manager_link_member_id). After set_manager or change_manager the old holder's link, or a forwarded one, must not write the new manager's hours or times. */
+const heldByManager = (f: Flow | null) => !!f && f.manager_link_member_id != null && String(f.manager_link_member_id) === String(managerIdOf(f));
 async function managerRow(l: Link): Promise<Member | null> {
   const id = managerIdOf(l.flow);
   if (id == null) return null;
@@ -302,20 +310,20 @@ async function proposeView(l: Link, m: Member | null) {
   const callMin = positive(cfg.get('onboard_call_min'), 60), oneMin = positive(cfg.get('onboard_one_on_one_min'), 30);
   const saved = m && m.availability && typeof m.availability === 'object' ? m.availability : null;
   const at = m?.availability_at || null;
-  const busy: Array<{ start: string; end: string; title: string; taken?: true }> = [];
+  const busy: Array<{ start: string; end: string; taken?: true }> = [];   // no meeting titles over a no-login link: the page says "hub@ meeting"
   const now = Date.now(), until = now + BUSY_DAYS * 86400000;
   const email = String(m?.email || '').trim().toLowerCase();
   if (email) {
-    const { data, error } = await svc.from('hub_events').select('start_at, end_at, summary').contains('attendee_emails', [email]).neq('status', 'cancelled')
+    const { data, error } = await svc.from('hub_events').select('start_at, end_at').contains('attendee_emails', [email]).neq('status', 'cancelled')
       .lt('start_at', new Date(until).toISOString()).gt('end_at', new Date(now).toISOString());
     if (error) throw new Error('events: ' + error.message);
-    for (const e of (data || []) as Array<{ start_at: string; end_at: string; summary: string | null }>) {
+    for (const e of (data || []) as Array<{ start_at: string; end_at: string }>) {
       const s = normal(e.start_at), en = normal(e.end_at);
-      if (s && en) busy.push({ start: s, end: en, title: String(e.summary || '') });
+      if (s && en) busy.push({ start: s, end: en });
     }
   }
   if (m) {   // the manager's other new hires: shown so the page can grey them; onboard-run refuses them (taken) whatever the page shows
-    const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at')
+    const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at, hire_answer')
       .or('manager_member_id.eq.' + m.id + ',manager_link_member_id.eq.' + m.id);
     if (error) throw new Error('other flows: ' + error.message);
     const rows = ((data || []) as Array<Record<string, unknown>>).filter((x) => Number(x.id) !== f.id && x.status !== 'backed_out' && Number(x.manager_member_id ?? x.manager_link_member_id) === m.id);
@@ -326,9 +334,10 @@ async function proposeView(l: Link, m: Member | null) {
       for (const x of rows) {
         if (shutCards.has(String(x.candidate_id))) continue;
         for (const [col, len] of [['call_at', callMin], ['proposed_call_at', callMin], ['one_on_one_at', oneMin], ['proposed_one_on_one_at', oneMin]] as Array<[string, number]>) {
+          if (col.startsWith('proposed_') && x.hire_answer) continue;   // an answered proposal is spent, as onboard-run counts it
           const s = normal(x[col]);
           if (!s || Date.parse(s) + len * 60000 <= now || Date.parse(s) >= until) continue;
-          busy.push({ start: s, end: stamp(Date.parse(s) + len * 60000), title: '', taken: true });
+          busy.push({ start: s, end: stamp(Date.parse(s) + len * 60000), taken: true });
         }
       }
     }
@@ -400,6 +409,8 @@ async function saveAvailability(l: Link, value: unknown) {
   if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
   const id = managerIdOf(l.flow);
   if (id == null) return fail('no_manager', 409);
+  if ((await modeOf(l)) !== 'propose') return fail('wrong_link', 400);   // a wave271 grid link never sets anyone's hours
+  if (!heldByManager(l.flow)) return fail('not_yours', 409);
   const availability = cleanAvailability(value);
   if (!availability) return fail('bad_availability', 400);
   const at = new Date().toISOString();
@@ -413,6 +424,7 @@ async function relayPropose(l: Link, callAt: unknown, oneAt: unknown) {
   if (l.kind !== 'manager') return fail('wrong_link', 400);
   if (shut(l) || !OPEN.includes(l.cand.status)) return closedReply(booked(l));
   if ((await modeOf(l)) !== 'propose') return fail('wrong_link', 400);   // a wave271 flow: its manager marks the 1-on-1 grid instead
+  if (!heldByManager(l.flow)) return fail('not_yours', 409);
   const { data: sec } = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
   if (!sec) return fail('unavailable', 503);
   let res: Response;

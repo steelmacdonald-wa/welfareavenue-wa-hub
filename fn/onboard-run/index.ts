@@ -33,14 +33,18 @@
 //               inside one block of the manager's availability for that Toronto weekday (an except entry for the date replaces the weekday; none saved: Monday to
 //               Friday 9 to 5); clear of hub@ meetings the manager is invited to (hub_events, not cancelled); clear of the booked and proposed times of the manager's
 //               other flows (backed out flows and closed cards left out); the two not overlapping each other. Refusals {error, message (English), messages {en, fr},
-//               which?}: bad_time, lead_time, overlap, outside_hours, busy, taken, already_booked (the hire said yes, or call_at is set), closed, no_manager, changed.
+//               which?}: bad_time (also a time with no zone, Z or +hh:mm), lead_time, overlap, outside_hours, busy, taken, already_booked (the hire said yes, or
+//               call_at is set), closed, no_manager, manager_inactive, manager_no_email (the hub@ check needs their roster email), changed. A proposal another
+//               flow's hire has answered (hire_answer set) no longer counts as taken.
 //               Opened by HR, an admin or the flow's manager (wa275_manager_of, by = the caller's email), and by the trigger secret, which is the mgr link
 //               (onboard-link relays with by 'manager': by = the manager's roster email). The claim is a conditional update on proposed_at as it was read, so a
 //               double press saves and tells once; the same times by the same person again are {repeated: true}. Saved: HR (hr_notify_emails) is told through
-//               notify (event onboard_answer, "<manager> proposed times for <hire>"), and a hire who has accepted is emailed (hire_times). Practice: saved, no fetch.
+//               notify (event onboard_answer, "<proposer> proposed times for <hire>"), setup_ticks.hire_times_at is cleared (wa275_tick_set), and hire_times
+//               runs after the claim whatever the card said when it was read (not yet accepted is a quiet no). Practice: saved, no fetch.
 //   hire_times {flow_id}   {ok, mode, to} | {ok, skipped: 'already_sent'} | {ok, practice: true}. The trigger secret only. Emails the hire the /o/ offer link that asks
-//               yes or no about the proposed times (Task 3 writes the email's words), once per proposal: setup_ticks.hire_times_at at or after proposed_at means
-//               sent. Refused: no_proposal, not_accepted, closed, no_email; not_sent (502) when Gmail or the mail mode refuses, recording nothing so it can try again.
+//               yes or no about the proposed times (Task 3 writes the email's words), once per proposal: the send is claimed with wa275_tick_set(flow,
+//               'hire_times_at', now, p_if_unset), so two calls at once send once, and the claim is given back if Gmail refuses. Refused: no_proposal,
+//               not_accepted, closed, no_email; not_sent (502) when Gmail or the mail mode refuses; tick_failed (500) when the claim cannot be written.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -1299,9 +1303,11 @@ const clash = (s1: number, e1: number, s2: number, e2: number) => s1 < e2 && s2 
 type Which = 'call' | 'one_on_one';
 const PROPOSE_COLS = FLOW_COLS + ', manager_link_member_id, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, setup_ticks';
 const MEETING = { call: { en: 'The onboarding call', fr: 'L’appel d’accueil' }, one_on_one: { en: 'The 1-on-1', fr: 'La rencontre individuelle' } };
-function proposeWords(code: string, which?: Which, n?: number): { en: string; fr: string } {
+function proposeWords(code: string, which?: Which, n?: number, name = ''): { en: string; fr: string } {
   const w = which ? MEETING[which] : { en: '', fr: '' };
   switch (code) {
+    case 'manager_no_email': return { en: name + ' has no email on the roster, so the Hub cannot check their calendar. Add it on their roster profile, then try again.', fr: name + ' n’a pas de courriel au répertoire, alors le Hub ne peut pas vérifier son agenda. Ajoutez-le à son profil, puis réessayez.' };
+    case 'manager_inactive': return { en: name + ' is no longer active on the roster, so times cannot be proposed for them. Change the manager on the card first.', fr: name + ' n’est plus actif au répertoire: aucune heure ne peut être proposée en son nom. Changez d’abord le gestionnaire sur la fiche.' };
     case 'bad_time': return { en: 'Pick a time for the onboarding call and for the 1-on-1 first.', fr: 'Choisissez d’abord une heure pour l’appel d’accueil et pour la rencontre individuelle.' };
     case 'lead_time': return { en: w.en + ' must be at least ' + n + ' hours from now. Pick a later time.', fr: w.fr + ' doit être au moins ' + n + ' heures plus tard. Choisissez une heure plus tardive.' };
     case 'overlap': return { en: 'The onboarding call and the 1-on-1 overlap. Pick times that do not.', fr: 'L’appel d’accueil et la rencontre individuelle se chevauchent. Choisissez des heures distinctes.' };
@@ -1316,16 +1322,18 @@ function proposeWords(code: string, which?: Which, n?: number): { en: string; fr
   }
 }
 /* a refusal: message (English, as every onboard-run refusal) and messages {en, fr} for the mgr link's page; which names the meeting */
-function refuse(code: string, status = 409, which?: Which, n?: number): Response {
-  const messages = proposeWords(code, which, n);
+function refuse(code: string, status = 409, which?: Which, n?: number, name?: string): Response {
+  const messages = proposeWords(code, which, n, name);
   return json({ error: code, message: messages.en, messages, ...(which ? { which } : {}) }, status);
 }
 const sameInstant = (a: unknown, b: unknown) => a != null && b != null && Date.parse(String(a)) === Date.parse(String(b));
+/* a time with its zone written (Z or +hh:mm): '2026-11-04T10:00' alone would be read in the server's own zone */
+const zoned = (v: unknown) => typeof v === 'string' && /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/i.test(v.trim());
 const CLOSED_CARD = ['declined', 'withdrawn'];
 
 /* the other flows of this manager: their booked and proposed times, each as [start, end). Backed-out flows and closed cards do not count. */
 async function takenTimes(flowId: number, managerId: number, callMin: number, oneMin: number): Promise<Array<[number, number]>> {
-  const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at')
+  const { data, error } = await svc.from('hub_onboard_flows').select('id, candidate_id, status, manager_member_id, manager_link_member_id, call_at, one_on_one_at, proposed_call_at, proposed_one_on_one_at, hire_answer')
     .or('manager_member_id.eq.' + managerId + ',manager_link_member_id.eq.' + managerId);
   if (error) throw new Error('The other new hires\' times could not be read. Try again.');
   const rows = ((data || []) as Row[]).filter((f) => Number(f.id) !== flowId && f.status !== 'backed_out' && Number(f.manager_member_id ?? f.manager_link_member_id) === managerId);
@@ -1337,6 +1345,7 @@ async function takenTimes(flowId: number, managerId: number, callMin: number, on
   for (const f of rows) {
     if (closed.has(String(f.candidate_id))) continue;
     for (const [col, len] of [['call_at', callMin], ['proposed_call_at', callMin], ['one_on_one_at', oneMin], ['proposed_one_on_one_at', oneMin]] as Array<[string, number]>) {
+      if (col.startsWith('proposed_') && f.hire_answer) continue;   // a proposal the hire has answered is spent: a yes is booked (call_at), a no is dead
       const at = f[col] ? Date.parse(String(f[col])) : NaN;
       if (!Number.isNaN(at)) out.push([at, at + len * 60000]);
     }
@@ -1354,11 +1363,13 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return refuse('closed');
   if (f.hire_answer === 'yes' || f.call_at) return refuse('already_booked');
   const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
-  if (!callAt || !oneAt) return refuse('bad_time', 400);
+  if (!callAt || !oneAt || !zoned(b.call_at) || !zoned(b.one_on_one_at)) return refuse('bad_time', 400);
   const managerId = f.manager_member_id ?? f.manager_link_member_id;
   const { data: m } = managerId != null ? await svc.from('team_members').select('id, name, email, active, availability').eq('id', Number(managerId)).maybeSingle() : { data: null };
   if (!m) return refuse('no_manager');
+  if (m.active === false) return refuse('manager_inactive', 409, undefined, undefined, String(m.name || 'The manager'));
   const mEmail = String(m.email || '').trim().toLowerCase();
+  if (!mEmail) return refuse('manager_no_email', 409, undefined, undefined, String(m.name || 'The manager'));   // never skip the hub@ check in silence
   const by = link ? (mEmail || 'manager (mgr link)') : caller;
   const [callMin, oneMin, lead] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_propose_lead_hours', 48)];
   const spans: Array<[Which, number, number]> = [['call', Date.parse(callAt), Date.parse(callAt) + callMin * 60000], ['one_on_one', Date.parse(oneAt), Date.parse(oneAt) + oneMin * 60000]];
@@ -1366,7 +1377,7 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   if (clash(spans[0][1], spans[0][2], spans[1][1], spans[1][2])) return refuse('overlap');
   const av = m.availability && typeof m.availability === 'object' ? m.availability : DEFAULT_AVAILABILITY;
   for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return refuse('outside_hours', 409, which);
-  if (mEmail) {
+  {
     const from = Math.min(spans[0][1], spans[1][1]), to = Math.max(spans[0][2], spans[1][2]);
     const { data: evs, error } = await svc.from('hub_events').select('id, start_at, end_at').contains('attendee_emails', [mEmail]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
     if (error) return no('failed', 'The manager\'s hub@ meetings could not be read, so nothing was saved. Try again.', 503);
@@ -1392,9 +1403,12 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   }
   await log('onboard_flow', f.id, 'proposed_times', f.proposed_at ? f.proposed_call_at + ' / ' + f.proposed_one_on_one_at : null, callAt + ' / ' + oneAt, by);
   const saved = { call_at: callAt, one_on_one_at: oneAt, by, at };
-  if (f.practice || c.practice) return json({ ok: true, repeated: false, practice: true, proposal: saved, hire_emailed: false, warnings: [] });
-
   const warnings: string[] = [];
+  /* new times: the record of the last email to the hire is cleared (merged, one key), so hire_times can claim the send for these */
+  const { error: clearErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'hire_times_at', p_value: null });
+  if (clearErr) warnings.push('The record of the last email to ' + firstName(c.name) + ' could not be cleared (' + clearErr.message + '), so they were not emailed these times. Send them from the card.');
+  if (f.practice || c.practice) return json({ ok: true, repeated: false, practice: true, proposal: saved, hire_emailed: false, warnings });
+
   /* HR hears through onboard_answer (onboard_propose is the manager's own kind) */
   const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
   const proposer = by === mEmail ? String(m.name || by) : (await membersByEmail(by).catch(() => []))[0]?.name || by;
@@ -1409,10 +1423,11 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
     });
     if (!told.handled) warnings.push('HR was not told: ' + (told.note || 'notify gave no answer') + '.');
   }
+  /* always asked, after the claim: hireTimes reads the card again, so a hire who accepts while this runs is still emailed; not yet accepted is a quiet no */
   let emailed = false;
-  if (c.accepted_on) {
+  if (!clearErr) {
     const sent = await hireTimes(f.id, by);
-    if ('error' in sent) warnings.push(firstName(c.name) + ' was not emailed the times: ' + sent.error);
+    if ('error' in sent) { if (sent.code !== 'not_accepted') warnings.push(firstName(c.name) + ' was not emailed the times: ' + sent.error); }
     else emailed = !sent.skipped;
   }
   return json({ ok: true, repeated: false, proposal: saved, hire_emailed: emailed, warnings });
@@ -1441,26 +1456,26 @@ async function hireTimes(flowId: unknown, replyTo?: string): Promise<{ ok: true;
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return { code: 'closed', error: 'The card is closed.' };
   if (!f.proposed_call_at || !f.proposed_one_on_one_at || !f.proposed_at) return { code: 'no_proposal', error: 'No times have been proposed yet.' };
   if (!c.accepted_on) return { code: 'not_accepted', error: 'The offer has not been accepted yet.' };
-  const ticks = f.setup_ticks && typeof f.setup_ticks === 'object' ? f.setup_ticks : {};
-  if (ticks.hire_times_at && Date.parse(ticks.hire_times_at) >= Date.parse(f.proposed_at)) return { ok: true, skipped: 'already_sent' };
-  const stampNow = () => ({ ...ticks, hire_times_at: new Date().toISOString() });
-  if (f.practice || c.practice) {
-    await svc.from('hub_onboard_flows').update({ setup_ticks: stampNow() }).eq('id', f.id);
-    return { ok: true, practice: true };
-  }
+  if (f.setup_ticks?.hire_times_at) return { ok: true, skipped: 'already_sent' };   // propose clears it for new times
+  const practice = !!(f.practice || c.practice);
   const to = String(c.email || '').trim().toLowerCase();
-  if (!to) return { code: 'no_email', error: 'The card has no personal email. Add it, then send the times from the card.' };
+  if (!practice && !to) return { code: 'no_email', error: 'The card has no personal email. Add it, then send the times from the card.' };
+  /* the claim: wa275_tick_set writes hire_times_at only while it is empty (one key, merged), so two calls at once send once */
+  const { data: won, error: claimErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'hire_times_at', p_value: new Date().toISOString(), p_if_unset: true });
+  if (claimErr) return { code: 'tick_failed', error: 'the send could not be recorded, so nothing was sent (' + claimErr.message + '). Try again.' };
+  if (won !== true) return { ok: true, skipped: 'already_sent' };
+  if (practice) return { ok: true, practice: true };
   try {
     const sent = await deliver({ practice: false, to, ...timesMail(firstName(c.name), HUB + '/o/' + await offerToken(c.id), langOf(c) === 'fr'), ...(replyTo && /@/.test(replyTo) ? { replyTo } : {}) });
-    await svc.from('hub_onboard_flows').update({ setup_ticks: stampNow() }).eq('id', f.id);
     return { ok: true, mode: sent.mode, to: sent.to };
   } catch (e) {
-    return { code: 'not_sent', error: errText(e) };
+    const { error: back } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'hire_times_at', p_value: null });   // give the claim back so a retry can send
+    return { code: 'not_sent', error: errText(e) + (back ? ' The Hub also could not clear its record of the send (' + back.message + '), so a retry will think it went: tell Steel.' : '') };
   }
 }
 async function hireTimesNow(b: Row): Promise<Response> {
   const r = await hireTimes(b.flow_id);
-  if ('error' in r) return no(r.code, r.error, r.code === 'not_found' ? 404 : r.code === 'not_sent' ? 502 : 409);
+  if ('error' in r) return no(r.code, r.error, r.code === 'not_found' ? 404 : r.code === 'not_sent' ? 502 : r.code === 'tick_failed' ? 500 : 409);
   return json(r);
 }
 /* ---------- remind: the hourly job ---------- */

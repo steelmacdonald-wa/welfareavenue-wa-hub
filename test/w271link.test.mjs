@@ -633,7 +633,15 @@ test('M11: the hire\'s link says when the call is booked, so the page can word w
 const RUN = 'https://stub.supabase.test/functions/v1/onboard-run';
 const W_CALL = '2026-11-04T15:00:00.000Z', W_ONE = '2026-11-04T16:30:00.000Z';
 const DEFAULT_AV = { weekly: { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] }, except: [], tz: 'America/Toronto' };
-const offered = (over = {}) => flow({ status: 'offered', created_at: '2026-10-30T12:00:00Z', proposed_call_at: null, proposed_one_on_one_at: null, proposed_by: null, proposed_at: null, hire_answer: null, ...over });
+const offered = (over = {}) => flow({ status: 'offered', created_at: '2026-10-30T12:00:00Z', manager_link_member_id: 2, proposed_call_at: null, proposed_one_on_one_at: null, proposed_by: null, proposed_at: null, hire_answer: null, ...over });   // the Hub sent this link to Sam (2)
+const tickSet = (a, db) => {   // the stand-in for wa275_tick_set, as in test/w271run.test.mjs
+  const f = db.rows('hub_onboard_flows').find((r) => Number(r.id) === Number(a.p_flow));
+  if (!f) return false;
+  const cur = f.setup_ticks && typeof f.setup_ticks === 'object' ? f.setup_ticks : {};
+  if (a.p_if_unset && cur[a.p_key] != null) return false;
+  f.setup_ticks = { ...cur, [a.p_key]: a.p_value ?? null };
+  return true;
+};
 const SAM = (over = {}) => ({ id: 2, name: 'Sam Lee', email: 'sam.lee@welfareavenue.com', active: true, ...over });
 const relayOk = (over = {}) => ({ json: { ok: true, repeated: false, proposal: { call_at: W_CALL, one_on_one_at: W_ONE, by: 'sam.lee@welfareavenue.com', at: '2026-11-01T12:00:00.000Z' }, hire_emailed: false, warnings: ['HR was not told: hr_notify_emails is empty.'], ...over } });
 
@@ -666,10 +674,11 @@ test('w275 GET (mgr link, offered flow): mode propose, no proposal, the default 
   assert.equal(b.hireAccepted, false);
   assert.equal(b.hireAnswer, null);
   assert.deepEqual(b.busy, [
-    { start: '2026-11-03T15:00:00Z', end: '2026-11-03T16:00:00Z', title: 'Board meeting' },
-    { start: '2026-11-05T15:00:00Z', end: '2026-11-05T16:00:00Z', title: '', taken: true },
-    { start: '2026-11-05T17:00:00Z', end: '2026-11-05T17:30:00Z', title: '', taken: true },
-  ]);
+    { start: '2026-11-03T15:00:00Z', end: '2026-11-03T16:00:00Z' },
+    { start: '2026-11-05T15:00:00Z', end: '2026-11-05T16:00:00Z', taken: true },
+    { start: '2026-11-05T17:00:00Z', end: '2026-11-05T17:30:00Z', taken: true },
+  ], 'no meeting title ever leaves over the no-login link');
+  assert.doesNotMatch(JSON.stringify(b), /Board meeting/);
   assert.ok(b.grid && b.grid.slots.length > 0, 'the window gives the page its cells');
 });
 
@@ -737,7 +746,7 @@ test('w275 POST availability: anything the Task 1 rule refuses is a 400 bad_avai
   const g = await gone.post({ t: gone.mgr, a: 'availability', availability: DEFAULT_AV });
   assert.equal(g.body.closed, true);
   assert.equal(gone.db.rows('team_members')[1].availability, undefined);
-  const nobody = await setup({ flows: [offered({ manager_member_id: null })] });
+  const nobody = await setup({ flows: [offered({ manager_member_id: null, manager_link_member_id: null })] });
   assert.equal((await nobody.post({ t: nobody.mgr, a: 'availability', availability: DEFAULT_AV })).body.error, 'no_manager');
 });
 
@@ -790,6 +799,7 @@ test('w275 integration: the mgr link and the real onboard-run on one database sa
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
   const run = await loadFn('onboard-run', { secrets: { GOOGLE_SA_KEY: JSON.stringify({ client_email: 'hub@stub.iam', private_key: privateKey, token_uri: 'https://oauth2.googleapis.com/token' }) } });
   run.db.tables = s.db.tables;   // one database for both functions
+  run.db.onRpc('wa275_tick_set', tickSet);
   run.setNow(NOW);
   run.fetchOn(NOTIFY, (e) => ({ json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } }));
   run.fetchOn('https://oauth2.googleapis.com/token', { json: { access_token: 'tok', expires_in: 3600 } });
@@ -821,6 +831,7 @@ test('w275 POST propose on a practice flow: the one relay, and onboard-run makes
   const s = await setup({ cand: { practice: true }, flows: [offered({ practice: true })], notify: false, tables: { team_members: [team[0], SAM()] } });
   const run = await loadFn('onboard-run', {});
   run.db.tables = s.db.tables;
+  run.db.onRpc('wa275_tick_set', tickSet);
   run.setNow(NOW);
   s.rig.fetchOn(RUN, (e) => run.call(new Request(RUN, { method: 'POST', headers: e.headers, body: JSON.stringify(e.body) })));
   const r = await s.post({ t: s.mgr, a: 'propose', call_at: W_CALL, one_on_one_at: W_ONE });
@@ -829,4 +840,57 @@ test('w275 POST propose on a practice flow: the one relay, and onboard-run makes
   assert.equal(s.rig.fetchLog.length, 1);
   assert.equal(run.fetchLog.length, 0);
   assert.equal(s.db.rows('hub_onboard_flows')[0].proposed_call_at, W_CALL);
+});
+
+/* ---------- wave275 Task 2, fix round 1: a mgr link is the manager's only while the Hub last sent it to them ---------- */
+const NOT_YOURS_EN = 'This link is no longer yours; a new link is on its way to the right person.';
+test('w275 fix: the manager changed (manager_member_id is not who got the link): GET shows nothing of theirs, and neither POST writes or relays', async () => {
+  const av = { weekly: { tue: [['18:00', '21:00']] }, except: [], tz: 'America/Toronto' };
+  const s = await setup({ flows: [offered({ manager_member_id: 2, manager_link_member_id: 1 })], notify: false,
+    tables: { team_members: [{ ...team[0], active: true }, SAM({ availability: av, availability_at: '2026-10-30T12:00:00Z' })], hub_events: [{ id: 'e1', summary: 'Board meeting', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-11-03T15:00:00Z', end_at: '2026-11-03T16:00:00Z' }] } });
+  const before = s.snapshot();
+  const g = (await s.get(s.mgr)).body;
+  assert.equal(g.notYours, true);
+  assert.equal(g.message.en, NOT_YOURS_EN);
+  assert.ok(hasBoth(g.message));
+  for (const k of ['availability', 'busy', 'proposal', 'availabilityAt']) assert.equal(g[k], undefined, 'no ' + k + ' for the old holder');
+  const a = await s.post({ t: s.mgr, a: 'availability', availability: DEFAULT_AV });
+  assert.equal(a.status, 409);
+  assert.equal(a.body.error, 'not_yours');
+  assert.deepEqual(a.body.message, { en: NOT_YOURS_EN, fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' });
+  const p = await s.post({ t: s.mgr, a: 'propose', call_at: W_CALL, one_on_one_at: W_ONE });
+  assert.equal(p.status, 409);
+  assert.equal(p.body.error, 'not_yours');
+  assert.deepEqual(s.snapshot(), before, 'neither Sam\'s hours nor Ruth\'s were written');
+  assert.equal(s.rig.fetchLog.length, 0, 'nothing relayed to onboard-run');
+});
+
+test('w275 fix: a cleared manager_link_member_id (change_manager resets it) refuses both POSTs until the new link goes out', async () => {
+  const s = await setup({ flows: [offered({ manager_link_member_id: null })], notify: false, tables: { team_members: [team[0], SAM()] } });
+  const before = s.snapshot();
+  assert.equal((await s.get(s.mgr)).body.notYours, true);
+  assert.equal((await s.post({ t: s.mgr, a: 'availability', availability: DEFAULT_AV })).body.error, 'not_yours');
+  assert.equal((await s.post({ t: s.mgr, a: 'propose', call_at: W_CALL, one_on_one_at: W_ONE })).body.error, 'not_yours');
+  assert.deepEqual(s.snapshot(), before);
+  assert.equal(s.rig.fetchLog.length, 0);
+  /* the hourly job sends the new link: the same token works again for the manager it was sent to */
+  s.db.rows('hub_onboard_flows')[0].manager_link_member_id = 2;
+  assert.equal((await s.post({ t: s.mgr, a: 'availability', availability: DEFAULT_AV })).status, 200);
+  /* a default manager with no manager_member_id: the link holder is the manager */
+  const d = await setup({ flows: [offered({ manager_member_id: null, manager_link_member_id: 2 })], notify: false, tables: { team_members: [team[0], SAM()] } });
+  assert.equal((await d.post({ t: d.mgr, a: 'availability', availability: DEFAULT_AV })).status, 200);
+});
+
+test('w275 fix: a wave271 grid link (mode grid) cannot set anyone\'s availability', async () => {
+  const s = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow({ created_at: '2026-10-20T12:00:00Z', manager_link_member_id: 2 })], tables: { team_members: [team[0], SAM()] } });
+  const r = await s.post({ t: s.mgr, a: 'availability', availability: DEFAULT_AV });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.error, 'wrong_link');
+  assert.equal(s.db.rows('team_members')[1].availability, undefined);
+});
+
+test('w275 fix: GET leaves out another hire\'s proposal once that hire has answered; their booked times stay', async () => {
+  const other = offered({ id: 22, candidate_id: 12, hire_answer: 'no', proposed_call_at: '2026-11-05T15:00:00Z', proposed_one_on_one_at: '2026-11-05T17:00:00Z', one_on_one_at: '2026-11-06T15:00:00Z' });
+  const s = await setup({ flows: [offered(), other], tables: { hub_candidates: [candidate({ accepted_on: null }), candidate({ id: 12, name: 'Bo Chen' })] } });
+  assert.deepEqual((await s.get(s.mgr)).body.busy, [{ start: '2026-11-06T15:00:00Z', end: '2026-11-06T15:30:00Z', taken: true }]);
 });
