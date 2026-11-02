@@ -4,6 +4,8 @@
 // and its undo is a part of build/wa271a_undo.sql. PGlite has no pg_cron or pg_net, so test/w271schema.sql stubs cron.schedule, cron.unschedule and call_edge.
 // Then proves the undo: the 2-argument onboarding_assign comes back exactly as it was, due_day = 3, accepted_on data untouched,
 // and the migration and the assertions still pass after an undo. Touches no live database. Exits non-zero on any failure.
+// wave275 (Task 1): build/wa275a_streamlined.sql is loaded after wave271 (twice), test/w275sql.sql runs against it, test/w271sql.sql runs again with it loaded,
+// and the undo round trip takes wa275a_undo.sql first (the wave271 ready list and accept trigger come back exactly), then the wave271 undo as before.
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +20,9 @@ const card = read('../build/wa271c_card.sql');
 const minHours = read('../build/wa271d_min_hours.sql');
 const undo = read('../build/wa271a_undo.sql');
 const assertions = read('w271sql.sql');
+const streamlined = read('../build/wa275a_streamlined.sql');
+const undo275 = read('../build/wa275a_undo.sql');
+const assertions275 = read('w275sql.sql');
 
 let checks = 0;
 const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
@@ -31,6 +36,19 @@ async function runAssertions(db, label) {
   ok(line === 'w271sql: all assertions passed', label + ': the assertion script finished');
   console.log(label + ': ' + line);
 }
+
+async function runAssertions275(db, label) {
+  const res = await db.exec(assertions275);
+  const last = res.filter((r) => r.rows && r.rows.length).pop();
+  const line = last && last.rows[0] && last.rows[0].result;
+  ok(line === 'w275sql: all assertions passed', label + ': the wave275 assertion script finished');
+  console.log(label + ': ' + line);
+}
+const FN271 = `select pg_get_functiondef('public.wa271_ready_list()'::regprocedure) as ready, obj_description('public.wa271_ready_list()'::regprocedure, 'pg_proc') as ready_cmt,
+  (select proacl::text from pg_proc where oid = 'public.wa271_ready_list()'::regprocedure) as ready_acl,
+  pg_get_functiondef('public.wa271_cand_accepted()'::regprocedure) as acc, obj_description('public.wa271_cand_accepted()'::regprocedure, 'pg_proc') as acc_cmt,
+  (select proacl::text from pg_proc where oid = 'public.wa271_cand_accepted()'::regprocedure) as acc_acl,
+  (select pg_get_constraintdef(oid) from pg_constraint where conrelid = 'public.hub_onboard_flows'::regclass and conname = 'hub_onboard_flows_status_check') as status_check`;
 
 /* Task 6: the notification kinds, the manager-link columns and the hourly cron job, as wa271b_remind.sql leaves them */
 const KINDS = ['onboard_date', 'onboard_grid', 'onboard_remind'];
@@ -114,11 +132,60 @@ try {
   await db.exec(minHours);
   ok((await one(db, `select value from public.app_config where key = 'onboard_grid_min_hours'`)).value === '6', 'wa271d: running it again keeps the value HR set');
 
+  // ---- wave275 (Task 1): the streamlined onboarding, on top of wave271
+  const wa271Before = await one(db, FN271);   // what wave271 has now: the wa275 undo must bring exactly this back
+  await db.exec(streamlined);
+  await db.exec(streamlined);   // safe to run twice
+  console.log('wa275a_streamlined: applied twice with no error');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa275_offer_sent'`)).n === 1, 'wa275: one offer-sent trigger after two runs');
+  ok((await one(db, `select count(*)::int as n from pg_constraint where conrelid = 'public.team_members'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%wa275_availability_ok%'`)).n === 1, 'wa275: one availability check after two runs');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key in ('onboard_propose', 'onboard_answer', 'onboard_ready')`)).n === 3, 'wa275: three new kinds after two runs');
+  await runAssertions275(db, 'wa275 assertions');
+  await runAssertions275(db, 'wa275 assertions (second run; the first rolled back)');
+  await runAssertions(db, 'wa271 assertions with wa275 loaded');
+  // running the migration again keeps a value HR changed
+  await db.exec(`update public.app_config set value = '72' where key = 'onboard_propose_lead_hours'`);
+  await db.exec(streamlined);
+  ok((await one(db, `select value from public.app_config where key = 'onboard_propose_lead_hours'`)).value === '72', 'wa275: running it again keeps a value HR changed');
+  await db.exec(`update public.app_config set value = '48' where key = 'onboard_propose_lead_hours'`);
+
   // ---- the undo. Put real-looking work in first: an accepted candidate (kept) and its flow (dropped with the tables).
   await db.exec(`
     insert into public.hub_candidates (name, email, status) values ('Test Person Undo', 'w271.undo@example.invalid', 'offer');
     update public.hub_candidates set accepted_on = date '2026-11-20', offer_respond_by = date '2026-11-18' where name = 'Test Person Undo';`);
   ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows`)).n === 1, 'the accepted candidate has a flow before the undo');
+  // wave275 first: an offered flow (one the wave271 check would refuse), then the wa275 undo twice
+  await db.exec(`
+    insert into public.team_members (name, email) values ('Test Person Mgr Undo', 'w275.mgrundo@example.invalid');
+    update public.team_members set availability = '{"weekly":{"mon":[["09:00","10:00"]]}}'::jsonb, availability_at = now() where email = 'w275.mgrundo@example.invalid';
+    insert into public.hub_candidates (name, email, status, offer_hours, onboard_manager_id) values ('Test Person Offered Undo', 'w275.offeredundo@example.invalid', 'offer', 6, (select id from public.team_members where email = 'w275.mgrundo@example.invalid'));
+    update public.hub_candidates set offer_sent_at = now() where name = 'Test Person Offered Undo';`);
+  ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows where status = 'offered'`)).n === 1, 'an offered flow exists before the wa275 undo');
+  await db.exec(undo275);
+  await db.exec(undo275);   // safe to run twice
+  console.log('wa275 undo: applied twice with no error');
+  ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows`)).n === 1, 'wa275 undo: the offered flow is gone, the accepted flow stays');
+  ok((await one(db, `select status from public.hub_onboard_flows`)).status === 'waiting', 'wa275 undo: the kept flow is still waiting');
+  ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa275%'`)).n === 0, 'wa275 undo: no wa275 function left');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa275_offer_sent'`)).n === 0, 'wa275 undo: the offer-sent trigger is gone');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa271_cand_accepted'`)).n === 1, 'wa275 undo: the wave271 accept trigger is still there');
+  ok((await one(db, `select count(*)::int as n from information_schema.columns where table_schema = 'public' and ((table_name = 'hub_candidates' and column_name in ('offer_hours', 'onboard_manager_id', 'hours_confirmed_at'))
+      or (table_name = 'team_members' and column_name in ('availability', 'availability_at'))
+      or (table_name = 'hub_onboard_flows' and column_name in ('proposed_call_at', 'proposed_one_on_one_at', 'proposed_by', 'proposed_at', 'hire_answer', 'hire_answered_at', 'setup_ticks', 'welcome_sent_at', 'accounts_at', 'ask_availability')))`)).n === 0, 'wa275 undo: every wa275 column is gone');
+  ok((await one(db, `select count(*)::int as n from pg_constraint where conrelid = 'public.team_members'::regclass and contype = 'c' and pg_get_constraintdef(oid) like '%wa275%'`)).n === 0, 'wa275 undo: the availability check is gone');
+  ok((await one(db, `select count(*)::int as n from pg_indexes where indexname = 'hub_candidates_onboard_manager_idx'`)).n === 0, 'wa275 undo: the manager index is gone');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key in ('onboard_propose', 'onboard_answer', 'onboard_ready')`)).n === 0, 'wa275 undo: the three new kinds are gone');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key in ('onboard_date', 'onboard_grid', 'onboard_remind', 'timeoff_request')`)).n === 4, 'wa275 undo: the wave271 kinds stay');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in ('onboard_auto_hub', 'onboard_propose_lead_hours', 'onboard_yes_lead_hours', 'onboard_v2_since')`)).n === 0, 'wa275 undo: the wave275 settings are gone');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in ('onboard_call_min', 'onboard_grid_min_hours')`)).n === 2, 'wa275 undo: the wave271 settings stay');
+  const wa271After = await one(db, FN271);
+  for (const k of Object.keys(wa271Before)) ok(wa271After[k] === wa271Before[k], 'wa275 undo: wave271 ' + k + ' is back exactly as it was');
+  let refused = false;
+  try { await db.exec(`update public.hub_onboard_flows set status = 'offered'`); } catch (e) { refused = /status_check/.test(String(e.message)); }
+  ok(refused, 'wa275 undo: the wave271 status check refuses offered again');
+  await db.exec(`delete from public.hub_candidates where name = 'Test Person Offered Undo'; delete from public.team_members where name = 'Test Person Mgr Undo';`);
+  console.log('wa275 undo: every check passed');
+  await runAssertions(db, 'wa271 assertions after the wa275 undo');
   await db.exec(undo);
   await db.exec(undo);   // safe to run twice
   console.log('undo: applied twice with no error');
@@ -176,6 +243,9 @@ try {
   await db.exec(`delete from public.onboardings where person_name = 'Test Person Restored'; delete from public.team_members where name = 'Test Person Restored'; delete from public.hub_roles where email = 'w271.restorer@example.invalid';`);
   ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows`)).n === 0, 're-applied: no flow for the candidate accepted before (the trigger is for new acceptances)');
   await runAssertions(db, 're-applied assertions');
+  await db.exec(streamlined);
+  await runAssertions275(db, 're-applied wave275 assertions');
+  await runAssertions(db, 're-applied wave271 assertions with wave275 loaded');
 
   console.log(`w271sql.mjs: OK (${checks} runner checks, plus both assertion runs)`);
   process.exit(0);
