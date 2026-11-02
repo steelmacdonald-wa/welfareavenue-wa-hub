@@ -6,6 +6,10 @@
 //   retry {flow_id, step}          {steps}. Reruns that step and what was waiting on it. A done step is refused.
 //   google_manual {flow_id, wa_email}   {steps}. HR made the account by hand: records the address and finishes what waited on it.
 //   send_grid_link {candidate_id, accepted?}   {ok}. For offers already out: mails the /o/ link; accepted: true sets accepted_on if it is empty.
+//   remind {}   {ok, grid_links, reminded_hr, reminded_managers, skipped}. The Hub's hourly job (cron wa-onboard-remind, wa271_remind()), and the ONLY action the
+//               trigger secret (x-wa-secret) may run here; a signed-in person cannot. Tells each manager their availability-grid link (event onboard_grid) once,
+//               then reminds HR (hr_notify_emails) about a hire's empty grid and the manager about theirs (event onboard_remind), each once, after
+//               onboard_remind_hours. Everything goes through notify to staff; nothing is ever sent to the new hire. Practice flows are left alone.
 // Exports: STEPS, suggestAddress(name), nextSteps(steps).
 // The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -661,11 +665,12 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
 
 /* ---------- send_grid_link ---------- */
 /* onboard-link's offer token: <candidate id>.<20 characters of HMAC-SHA256>, key 'onboard-offer:' + the service key */
-async function offerToken(id: number): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('onboard-offer:' + SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+async function signedToken(purpose: 'offer' | 'mgr', id: number): Promise<string> {   // mgr: id = the flow, the manager's grid link
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('onboard-' + purpose + ':' + SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(String(id))));
   return id + '.' + b64url(sig).slice(0, 20);
 }
+const offerToken = (id: number) => signedToken('offer', id);
 function gridMail(first: string, link: string, fr: boolean): { subject: string; text: string; html: string } {
   const c = fr
     ? { subject: 'Vos disponibilités pour votre accueil à Welfare Avenue', hi: 'Bonjour ' + first + ',', body: 'Merci de nous indiquer quand vous êtes disponible pour votre appel d\'accueil et votre rencontre avec votre gestionnaire. Cela prend une minute.', button: 'Indiquer mes disponibilités', end: 'Au plaisir,' }
@@ -702,10 +707,121 @@ async function sendGridLink(b: Row, by: string): Promise<Response> {
   }
 }
 
+/* ---------- remind: the hourly job ---------- */
+const REMIND_COLS = FLOW_COLS + ', created_at, reminded_hire_at, reminded_manager_at, manager_link_sent_at, manager_link_member_id';
+const LIVE_FLOW = ['waiting', 'ready', 'running', 'started'];       // a flow that backed out is left alone
+const OPEN_CARD = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // as onboard-link: a card in any other stage is closed
+const slackEsc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/* one call to notify, as the Hub itself; null when it worked, else the reason */
+async function tell(body: Record<string, unknown>): Promise<string | null> {
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/notify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': await getSecret('WA_TRIGGER_SECRET'), Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify(body),
+    });
+    if (res.ok) return null;
+    const j = await res.json().catch(() => ({}));
+    return String(j?.error || res.status).slice(0, 160);
+  } catch (e) { return errText(e); }
+}
+const marked = (grids: Row[], who: string) => grids.some((g) => g.who === who && Array.isArray(g.slots) && g.slots.length > 0);
+
+async function remind(): Promise<Response> {
+  const out = { ok: true, grid_links: 0, reminded_hr: 0, reminded_managers: 0, skipped: [] as string[] };
+  const hours = await cfgNum('onboard_remind_hours', 48);
+  const waited = (since: unknown) => !!since && Date.now() - Date.parse(String(since)) >= hours * 3600000;
+  const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
+  const { data } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', LIVE_FLOW).eq('practice', false);
+  for (const f of (data || []) as Row[]) {
+    try {
+      const c = await getCand(f.candidate_id);
+      if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
+      const { data: g } = await svc.from('hub_onboard_grids').select('who, slots').eq('flow_id', f.id);
+      const grids = (g || []) as Row[];
+      const hireBooked = !!f.call_at && !!f.one_on_one_at;
+
+      /* HR: the hire has not marked their grid. The claim comes first, so two runs at once send one message. */
+      if (!hireBooked && !f.reminded_hire_at && waited(f.created_at) && !marked(grids, 'hire')) {
+        if (!hr.length) out.skipped.push('flow ' + f.id + ': no hr_notify_emails');
+        else {
+          const { data: won } = await svc.from('hub_onboard_flows').update({ reminded_hire_at: new Date().toISOString() }).eq('id', f.id).is('reminded_hire_at', null).select('id');
+          if ((won as unknown[] | null)?.length) {
+            const bit = 'has not marked their availability yet (they accepted on ' + String(c.accepted_on || f.created_at).slice(0, 10) + ')';
+            const failed = await tell({
+              event: 'onboard_remind', to: hr, url: '#hrcentre/onboarding', tag: 'onboard-remind-hire-' + f.id,
+              title: c.name + ' has not marked their availability',
+              body: c.name + ' (' + (c.role || 'new hire') + ') ' + bit + '. Open Onboarding to send the link again or pick a time.',
+              text: ':hourglass_flowing_sand: *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') ' + bit + '. <' + HUB + '/#hrcentre/onboarding|Open Onboarding> to send the link again or pick a time.',
+            });
+            if (failed) { await svc.from('hub_onboard_flows').update({ reminded_hire_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': HR reminder not sent (' + failed + ')'); }
+            else out.reminded_hr++;
+          }
+        }
+      }
+
+      /* the manager: who they are (HR confirmed, else the one the Hub can tell), then their link once, then one reminder */
+      if (f.one_on_one_at) continue;   // the 1-on-1 is booked, so their grid is shut
+      let managerId = f.manager_member_id;
+      if (!managerId) {
+        const { data: dm } = await svc.rpc('wa271_default_manager', { p_candidate: c.id });
+        managerId = (dm as Row | null)?.member_id ?? null;
+      }
+      const m = managerId ? await getMember(managerId) : null;
+      if (!m || m.active === false) continue;
+      if (!m.email) { out.skipped.push('flow ' + f.id + ': ' + m.name + ' has no email on the roster'); continue; }
+      const path = '/o/' + await signedToken('mgr', f.id), link = HUB + path;
+      if (!f.manager_link_sent_at || String(f.manager_link_member_id) !== String(m.id)) {
+        const prev = { manager_link_sent_at: f.manager_link_sent_at ?? null, manager_link_member_id: f.manager_link_member_id ?? null, reminded_manager_at: f.reminded_manager_at ?? null };
+        const claim = svc.from('hub_onboard_flows').update({ manager_link_sent_at: new Date().toISOString(), manager_link_member_id: m.id, reminded_manager_at: null }).eq('id', f.id);
+        const { data: won } = await (f.manager_link_sent_at ? claim.eq('manager_link_member_id', f.manager_link_member_id) : claim.is('manager_link_sent_at', null)).select('id');
+        if (!(won as unknown[] | null)?.length) continue;
+        const failed = await tell({
+          event: 'onboard_grid', to_email: String(m.email).toLowerCase(), url: path, tag: 'onboard-grid-' + f.id,
+          title: 'Mark your availability for ' + c.name,
+          body: c.name + ' (' + (c.role || 'new hire') + ') is joining. Please mark when you are free for your 1-on-1 with them. It takes a minute.',
+          text: ':calendar: *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') is joining. Please mark when you are free for your 1-on-1 with them. It takes a minute. <' + link + '|Mark my availability>',
+        });
+        if (failed) { await svc.from('hub_onboard_flows').update(prev).eq('id', f.id); out.skipped.push('flow ' + f.id + ': grid link not sent (' + failed + ')'); }
+        else out.grid_links++;
+        continue;
+      }
+      if (!f.reminded_manager_at && waited(f.manager_link_sent_at) && !marked(grids, 'manager')) {
+        const { data: won } = await svc.from('hub_onboard_flows').update({ reminded_manager_at: new Date().toISOString() }).eq('id', f.id).is('reminded_manager_at', null).select('id');
+        if (!(won as unknown[] | null)?.length) continue;
+        const failed = await tell({
+          event: 'onboard_remind', to_email: String(m.email).toLowerCase(), url: path, tag: 'onboard-remind-manager-' + f.id,
+          title: 'Your availability for ' + c.name + ' is still empty',
+          body: 'You have not marked when you are free for your 1-on-1 with ' + c.name + ' yet. It takes a minute.',
+          text: ':hourglass_flowing_sand: You have not marked when you are free for your 1-on-1 with *' + slackEsc(c.name) + '* yet. It takes a minute. <' + link + '|Mark my availability>',
+        });
+        if (failed) { await svc.from('hub_onboard_flows').update({ reminded_manager_at: null }).eq('id', f.id); out.skipped.push('flow ' + f.id + ': manager reminder not sent (' + failed + ')'); }
+        else out.reminded_managers++;
+      }
+    } catch (e) {
+      out.skipped.push('flow ' + f.id + ': ' + errText(e));
+    }
+  }
+  return json(out);
+}
+
+function sameText(a: string, b: string): boolean {   // the trigger secret is compared without stopping at the first difference
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return no('method', 'This function only takes POST.', 405);
   try {
+    /* the Hub itself (cron, through call_edge): the trigger secret opens remind and nothing else. For any other action, or a wrong secret, it is as if
+       the header were not there: the sign-in check below decides. */
+    const given = req.headers.get('x-wa-secret');
+    if (given) {
+      let system = false;
+      try { system = sameText(given, await getSecret('WA_TRIGGER_SECRET')); } catch (_) { /* fall through */ }
+      if (system && (await req.clone().json().catch(() => ({}))).action === 'remind') return await remind();
+    }
     const authHeader = req.headers.get('Authorization') || '';
     if (!authHeader.startsWith('Bearer ')) return no('signed_out', 'Please sign in again.', 401);
     const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: authHeader } } });
@@ -720,6 +836,7 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'retry') return await retry(b, by, asUser);
     if (b.action === 'google_manual') return await googleManual(b, by, asUser);
     if (b.action === 'send_grid_link') return await sendGridLink(b, by);
+    if (b.action === 'remind') return no('not_allowed', 'remind is the Hub\'s own hourly job.', 403);
     return no('unknown_action', 'The Hub does not know that action. Reload the page.', 400);
   } catch (e) {
     return no('failed', errText(e), 500);

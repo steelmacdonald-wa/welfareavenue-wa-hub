@@ -1,3 +1,7 @@
+// v16 (wave271, 01/11/26): three more relay events for HR onboarding, from onboard-run (the trigger secret only): onboard_date (the manager is
+// told the new hire's call date and time), onboard_grid (the manager's link to mark their availability) and onboard_remind (a grid still empty:
+// to HR about the hire's, to the manager about theirs). Same shape as the v15 relay kinds. A url that already starts with / (a page of the Hub,
+// like /o/<token>) goes to hub-push as it is; a #hash gets its slash as before. Nothing here is ever sent to the new hire.
 // v15 (wave245, 15/10/26, Steel: "The notifications need to be even more robust and descriptive"): every message tried is
 // logged in hub_notifications_sent (the kind, the words, the outcome: sent, skipped and why, failed and why), so the
 // notification centre shows each person their Recent. The task, request, suggestion, mention and reminder messages say
@@ -157,7 +161,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still'];   /* v15: the relayed kinds reach the Hub too */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind'];   /* v15: the relayed kinds reach the Hub too */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -575,17 +579,17 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
 
   /* v15: a kind another function composes (hr-notify, recruit-actions, checkin-post): the Slack DM through the switch and
      the log here, the Hub notification through hub-push's relay (its own switch) */
-  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still') {
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind') {
     const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 12);
     const text = String(body.text || '').slice(0, 3000);
     if (!to.length || !text) return { error: 'to and text required' };
-    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?' })[event]);
-    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage' })[event]);
+    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty' })[event]);
+    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding' })[event]);
     const plainBody = String(body.body || plainOf(text)).slice(0, 400);
     const outs: Record<string, string> = {};
     for (const e of Array.from(new Set(to))) outs[e] = await deliver(event, null, e, text, { title, url, ref: body.tag ? String(body.tag) : undefined });
     let hub = 'off';
-    if (coalesceOn(await appConfig('push_on'))) hub = await hubRelay(event, Array.from(new Set(to)), title, plainBody, '/' + url, String(body.tag || (event + '-' + Date.now())));
+    if (coalesceOn(await appConfig('push_on'))) hub = await hubRelay(event, Array.from(new Set(to)), title, plainBody, url.startsWith('/') ? url : '/' + url, String(body.tag || (event + '-' + Date.now())));
     return { event, outcome: outs, hub };
   }
 

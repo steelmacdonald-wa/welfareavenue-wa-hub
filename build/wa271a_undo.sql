@@ -1,7 +1,18 @@
--- Welfare Avenue Hub: wave271 (271a) undo, 01/11/26. Reverses build/wa271a_onboard.sql: drops the onboarding flow objects, puts the two-argument
+-- Welfare Avenue Hub: wave271 (271a) undo, 01/11/26. Reverses build/wa271a_onboard.sql and, first, build/wa271b_remind.sql (section 0): drops the onboarding flow objects, puts the two-argument
 -- onboarding_assign back exactly as live had it, and restores the onboarding call checklist to day 3. Safe to run twice.
 -- It does NOT touch hub_candidates.accepted_on, start_date or any other candidate data. It does drop the flows, grids and step results (and the two offer date columns),
 -- so run it only when the wave is being backed out; anything HR set up on the Ready list is lost.
+
+-- 0. wave271b (build/wa271b_remind.sql), first, while the tables it touches still exist: the hourly job, its function, the three notification kinds and the two
+--    manager-link columns. The hub_notifications_sent rows already logged stay (they are a record, and nothing reads the kind from the registry to show them).
+do $undo$
+begin
+  if to_regclass('cron.job') is not null and exists (select 1 from cron.job where jobname = 'wa-onboard-remind') then perform cron.unschedule('wa-onboard-remind'); end if;
+end $undo$;
+drop function if exists public.wa271_remind();
+delete from public.hub_notification_kinds where key in ('onboard_date', 'onboard_grid', 'onboard_remind');
+alter table if exists public.hub_onboard_flows drop column if exists manager_link_sent_at;
+alter table if exists public.hub_onboard_flows drop column if exists manager_link_member_id;
 
 -- 1. the accept trigger and its function
 drop trigger if exists wa271_cand_accepted on public.hub_candidates;

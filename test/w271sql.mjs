@@ -1,5 +1,7 @@
 // wave271 (Task 1): offline proof of build/wa271a_onboard.sql and build/wa271a_undo.sql on PGlite. Run: node test/w271sql.mjs
 // Loads test/w271schema.sql (a slice of the live schema), the migration (twice, to prove it is safe to run again), then test/w271sql.sql.
+// Task 6 adds build/wa271b_remind.sql (the notification kinds, the manager-link columns, the hourly wa271_remind cron job) on top of it, with its own checks,
+// and its undo is a part of build/wa271a_undo.sql. PGlite has no pg_cron or pg_net, so test/w271schema.sql stubs cron.schedule, cron.unschedule and call_edge.
 // Then proves the undo: the 2-argument onboarding_assign comes back exactly as it was, due_day = 3, accepted_on data untouched,
 // and the migration and the assertions still pass after an undo. Touches no live database. Exits non-zero on any failure.
 import { PGlite } from '@electric-sql/pglite';
@@ -11,6 +13,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const read = (p) => readFileSync(join(here, p), 'utf8');
 const schema = read('w271schema.sql');
 const migration = read('../build/wa271a_onboard.sql');
+const remind = read('../build/wa271b_remind.sql');
 const undo = read('../build/wa271a_undo.sql');
 const assertions = read('w271sql.sql');
 
@@ -27,6 +30,39 @@ async function runAssertions(db, label) {
   console.log(label + ': ' + line);
 }
 
+/* Task 6: the notification kinds, the manager-link columns and the hourly cron job, as wa271b_remind.sql leaves them */
+const KINDS = ['onboard_date', 'onboard_grid', 'onboard_remind'];
+async function checkRemind(db, label) {
+  const kinds = (await db.query(`select * from public.hub_notification_kinds where key = any($1) order by key`, [KINDS])).rows;
+  ok(kinds.length === 3, label + ': the three kinds are in the registry');
+  for (const k of kinds) {
+    ok(k.grp === 'people' && k.grp_title === 'People and HR', label + ': ' + k.key + ' sits in People and HR');
+    ok(k.hub === true && k.slack === true && k.email === false && k.channel_only === false && k.active === true, label + ': ' + k.key + ' has a Hub and a Slack switch and no email');
+    ok(k.title && k.blurb && k.says && k.example_title && k.example_body && k.example_url === '#hrcentre/onboarding' && k.audience && k.sender, label + ': ' + k.key + ' is fully described');
+    ok(!/\bAI\b|\u2014/.test(JSON.stringify(k)), label + ': ' + k.key + ' has no "AI" and no em dash');
+  }
+  ok(new Set(kinds.map((k) => k.sort)).size === 3, label + ': the three kinds have their own order');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key = 'timeoff_request'`)).n === 1, label + ': the existing kinds are untouched');
+  for (const c of ['manager_link_sent_at', 'manager_link_member_id']) {
+    ok((await one(db, `select col_description('public.hub_onboard_flows'::regclass, (select attnum from pg_attribute where attrelid = 'public.hub_onboard_flows'::regclass and attname = '${c}')) as d`)).d, label + ': ' + c + ' has a comment');
+    ok((await one(db, `select has_column_privilege('authenticated', 'public.hub_onboard_flows', '${c}', 'select') as g`)).g === true, label + ': HR can read ' + c);
+  }
+  ok((await one(db, `select has_column_privilege('authenticated', 'public.hub_onboard_flows', 'pw_nonce', 'select') as g`)).g === false, label + ': pw_nonce is still hidden from the browser');
+  const fn = await one(db, `select obj_description('public.wa271_remind()'::regprocedure, 'pg_proc') as cmt,
+      has_function_privilege('anon', 'public.wa271_remind()', 'execute') as anon, has_function_privilege('authenticated', 'public.wa271_remind()', 'execute') as auth,
+      has_function_privilege('service_role', 'public.wa271_remind()', 'execute') as svc`);
+  ok(fn.cmt && fn.anon === false && fn.auth === false && fn.svc === true, label + ': wa271_remind is commented and only the service key may call it');
+  const jobs = (await db.query(`select schedule, command from cron.job where jobname = 'wa-onboard-remind'`)).rows;
+  ok(jobs.length === 1, label + ': exactly one wa-onboard-remind job');
+  ok(/^\d{1,2} \* \* \* \*$/.test(jobs[0].schedule), label + ': it runs hourly (' + jobs[0].schedule + ')');
+  ok(/wa271_remind\(\)/.test(jobs[0].command), label + ': it runs wa271_remind()');
+  await db.exec('delete from public.w271_edge_calls');
+  await db.query('select public.wa271_remind()');
+  const calls = (await db.query('select fn, payload from public.w271_edge_calls')).rows;
+  ok(calls.length === 1 && calls[0].fn === 'onboard-run' && calls[0].payload.action === 'remind' && Object.keys(calls[0].payload).length === 1, label + ': wa271_remind calls onboard-run with {"action":"remind"} and nothing else');
+  console.log(label + ': wa271b checks passed');
+}
+
 try {
   const db = new PGlite();
   await db.exec(schema);
@@ -38,6 +74,10 @@ try {
   await db.exec(migration);
   await db.exec(migration);   // safe to run twice
   console.log('migration: applied twice with no error');
+  await db.exec(remind);
+  await db.exec(remind);   // safe to run twice, and leaves one cron job
+  console.log('wa271b_remind: applied twice with no error');
+  await checkRemind(db, 'wa271b');
   await runAssertions(db, 'assertions');
 
   // ---- the undo. Put real-looking work in first: an accepted candidate (kept) and its flow (dropped with the tables).
@@ -52,7 +92,10 @@ try {
   ok((await one(db, `select to_regclass('public.hub_onboard_flows') as r`)).r === null, 'flows table dropped');
   ok((await one(db, `select to_regclass('public.hub_onboard_grids') as r`)).r === null, 'grids table dropped');
   ok((await one(db, `select to_regclass('public.hub_onboard_steps') as r`)).r === null, 'steps table dropped');
-  ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa271%'`)).n === 0, 'no wa271 function left');
+  ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa271%'`)).n === 0, 'no wa271 function left (wa271_remind included)');
+  ok((await one(db, `select count(*)::int as n from cron.job where jobname = 'wa-onboard-remind'`)).n === 0, 'the hourly cron job is gone');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key = any(array['onboard_date', 'onboard_grid', 'onboard_remind'])`)).n === 0, 'the three notification kinds are gone');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key = 'timeoff_request'`)).n === 1, 'the other notification kinds are untouched by the undo');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa271_cand_accepted'`)).n === 0, 'accept trigger dropped');
   ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = 'hub_candidates' and column_name in ('offer_respond_by', 'offer_start')`)).n === 0, 'offer columns dropped');
   ok((await one(db, `select count(*)::int as n from public.app_config where key like 'onboard\\_%'`)).n === 0, 'onboard_ settings removed');
@@ -92,6 +135,8 @@ try {
 
   // ---- and the migration goes back on after an undo
   await db.exec(migration);
+  await db.exec(remind);
+  await checkRemind(db, 're-applied wa271b');
   await db.exec(`delete from public.onboardings where person_name = 'Test Person Restored'; delete from public.team_members where name = 'Test Person Restored'; delete from public.hub_roles where email = 'w271.restorer@example.invalid';`);
   ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows`)).n === 0, 're-applied: no flow for the candidate accepted before (the trigger is for new acceptances)');
   await runAssertions(db, 're-applied assertions');

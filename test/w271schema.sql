@@ -317,3 +317,49 @@ insert into public.hr_setup_template (id, phase, name, sort, who, due_day) value
   ('h-call', 'The onboarding call', 'Test step on the call', 2, 'hr', 3),
   ('h-call2', 'The onboarding call', 'Second test step on the call', 3, 'hr', 3),
   ('h-lead', 'Manager follow-through', 'Test step for the manager', 4, 'lead', 7);
+
+-- 7. wave271b (Task 6): what build/wa271b_remind.sql touches. hub_notification_kinds is the live table from wave245 (columns as they are today).
+create table public.hub_notification_kinds (
+  key text primary key,
+  grp text not null,
+  grp_title text not null,
+  sort int not null default 100,
+  title text not null,
+  blurb text not null,
+  says text not null,
+  example_title text,
+  example_body text,
+  example_url text,
+  hub boolean not null default true,
+  slack boolean not null default true,
+  email boolean not null default false,
+  channel_only boolean not null default false,
+  audience text not null default 'everyone',
+  sender text,
+  active boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+insert into public.hub_notification_kinds (key, grp, grp_title, sort, title, blurb, says, audience, sender)
+values ('timeoff_request', 'people', 'People and HR', 10, 'Someone asks for time off', 'test row', 'test row', 'the HR notify list', 'hr-notify, notify');
+
+-- PGlite has no pg_cron and no pg_net: stand-ins with the same names and shapes. cron.job keeps the jobs; call_edge only records the call.
+create schema if not exists cron;
+create table cron.job (jobid bigserial primary key, jobname text unique, schedule text not null, command text not null);
+create function cron.schedule(job_name text, schedule text, command text) returns bigint language plpgsql as $$
+declare v_id bigint;
+begin
+  insert into cron.job (jobname, schedule, command) values (job_name, schedule, command)
+  on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command returning jobid into v_id;
+  return v_id;
+end $$;
+create function cron.unschedule(job_name text) returns boolean language plpgsql as $$
+begin
+  delete from cron.job where jobname = job_name;
+  if not found then raise exception 'could not find valid entry for job ''%''', job_name; end if;
+  return true;
+end $$;
+create table public.w271_edge_calls (id bigserial primary key, fn text, payload jsonb);
+create function public.call_edge(fn text, payload jsonb) returns bigint language plpgsql security definer set search_path to '' as $$
+declare v_id bigint;
+begin insert into public.w271_edge_calls (fn, payload) values (fn, payload) returning id into v_id; return v_id; end $$;
+revoke all on function public.call_edge(text, jsonb) from public, anon, authenticated;
