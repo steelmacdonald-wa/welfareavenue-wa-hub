@@ -135,7 +135,7 @@ async function runWorld({ cand = {}, fl = {}, config = {}, tables = {}, hr = tru
   rig.fetchOn(NOTIFY, async (e) => {
     w.sent.push(e.body);
     if (notifyReply) return notifyReply(e);
-    if (!notify) return { json: { outcome: {}, hub: 'off' } };
+    if (!notify) return { json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } };
     const r = await notify.call(new Request(NOTIFY, { method: 'POST', headers: e.headers, body: JSON.stringify(e.body) }));
     rig.client();   // the call switched the globals to notify: switch them back
     return r;
@@ -274,7 +274,7 @@ test('remind: with no hr_notify_emails nothing is sent and nothing is marked, so
 
 test('remind: when notify cannot be reached the reminder is not marked as sent, and the next hour sends it', async () => {
   let fail = true;
-  const w = await runWorld({ notifyReply: () => (fail ? { status: 500, json: { error: 'boom' } } : { json: { outcome: {} } }) });
+  const w = await runWorld({ notifyReply: () => (fail ? { status: 500, json: { error: 'boom' } } : { json: { outcome: { 'hr.one@welfareavenue.com': 'sent', 'hr.two@welfareavenue.com': 'sent' } } }) });
   const r = await w.remind();
   assert.equal(r.status, 200);
   assert.equal(r.body.reminded_hr, 0);
@@ -401,4 +401,17 @@ test('remind: end to end through notify, the HR list and the manager get their S
   assert.deepEqual(w.rig.unregistered(), []);
   assert.deepEqual(notify.unregistered(), []);
   assert.ok(notify.fetchLog.every((e) => !JSON.stringify(e).includes(HIRE)));
+});
+
+test('remind: when the flows query fails (for example wa271b not applied yet) the job says so with a 500, not a quiet ok', async () => {
+  const w = await runWorld();
+  w.db.failOn('hub_onboard_flows', 'select', 'column hub_onboard_flows.manager_link_member_id does not exist');
+  const r = await w.remind();
+  assert.equal(r.status, 500);
+  assert.equal(r.body.ok, false);
+  assert.match(r.body.message, /manager_link_member_id/);
+  assert.equal(w.sent.length, 0);
+  const again = await w.remind();   // the failure was a one-off: the next hour runs as normal
+  assert.equal(again.status, 200);
+  assert.equal(again.body.ok, true);
 });

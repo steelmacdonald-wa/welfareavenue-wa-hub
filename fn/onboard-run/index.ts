@@ -730,7 +730,8 @@ async function remind(): Promise<Response> {
   const hours = await cfgNum('onboard_remind_hours', 48);
   const waited = (since: unknown) => !!since && Date.now() - Date.parse(String(since)) >= hours * 3600000;
   const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
-  const { data } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', LIVE_FLOW).eq('practice', false);
+  const { data, error: listErr } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', LIVE_FLOW).eq('practice', false);
+  if (listErr) return json({ ok: false, error: 'remind_failed', message: 'The flows could not be read, so nothing was reminded: ' + listErr.message + '. If wa271b_remind.sql is not applied yet, apply it first.' }, 500);   // a broken deploy order must show in cron, not pass as an empty hour
   for (const f of (data || []) as Row[]) {
     try {
       const c = await getCand(f.candidate_id);
