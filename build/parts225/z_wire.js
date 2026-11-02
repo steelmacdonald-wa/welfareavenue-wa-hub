@@ -15,7 +15,7 @@
     else if (!S.loaded && !W()) html = '<div class="card"><div class="empty">Loading the Content Studio…</div></div>';
     else {
       try {
-        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'messages' ? messagesHtml() : S.sec === 'hashtags' ? hashtagsHtml() : S.sec === 'ads' ? adsHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? connectHtml() : overviewHtml();
+        html = S.sec === 'queue' ? queueHtml() : S.sec === 'approvals' ? approvalsHtml() : S.sec === 'inbox' ? inboxHtml() : S.sec === 'messages' ? messagesHtml() : S.sec === 'hashtags' ? hashtagsHtml() : S.sec === 'ads' ? adsHtml() : S.sec === 'library' ? libraryHtml() : S.sec === 'pages' ? pagesHtml() : S.sec === 'links' ? linksHtml() : S.sec === 'report' ? reportHtml() : S.sec === 'connections' ? (window.w277 && window.w277.connectHtml ? window.w277.connectHtml() : connectHtml()) : overviewHtml();
       } catch (e) { console.warn('wave225 paint', e); html = '<div class="card"><div class="empty">Something went wrong drawing this page: ' + E(e.message || e) + '</div></div>'; }
     }
     if (!(S.sec === 'pages' && S.sub === 'edit' && lpPatch(h, html))) h.innerHTML = html;
@@ -220,6 +220,7 @@
     counts: counts, state: function () { return S; }, paint: paint, show: show, load: loadAll, route: route, reload: reload,
     html: { overview: overviewHtml, queue: queueHtml, approvals: approvalsHtml, inbox: inboxHtml, messages: messagesHtml, hashtags: hashtagsHtml, ads: adsHtml, library: libraryHtml, links: linksHtml, report: reportHtml, connections: connectHtml },
     m250: function () { return M250; }, load250: load250, loadAds250: loadAds250,   /* waves 250 to 254 */
-    monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl
+    monthStats: monthStats, reportSummary: reportSummary, suggestTimes: suggestTimes, goalStatus: goalStatus, streak: streak, makeLink: makeLink, shortUrl: shortUrl,
+    W: W, posts: posts, loadConn: loadConn, connAct: connAct, modeOf: modeOf   /* wave277 reuses these */
   };
 })();

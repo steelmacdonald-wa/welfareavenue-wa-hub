@@ -136,7 +136,7 @@
     })();
     return S.loading;
   }
-  async function loadConn() { try { S.conn = await fn('social-connect', { action: 'status' }); } catch (e) { S.conn = { error: e.message || String(e) }; } }
+  async function loadConn() { try { S.conn = await fn('social-connect', { action: 'status' }); } catch (e) { S.conn = { error: e.message || String(e) }; } S.platforms = (S.conn && S.conn.platforms) || []; }   /* wave277: the registry */
   function counts() {
     var pend = posts().filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; }).length;
     var open = S.comments.filter(function (c) { return c.status === 'open' && !c.from_us; }).length;
