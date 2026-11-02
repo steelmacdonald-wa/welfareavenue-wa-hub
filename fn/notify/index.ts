@@ -1,3 +1,6 @@
+// v17 (wave274, 02/11/26): a request with no owner goes to the team's people (hub_settings.team_inbox.people), before the team's leaders.
+// team-inbox no longer posts those in the channel, so when no DM could be delivered it is asked to (request_channel). A suggestion with
+// nobody to tell no longer counts as covered.
 // v16 (wave271, 01/11/26): three more relay events for HR onboarding, from onboard-run (the trigger secret only): onboard_date (the manager is
 // told the new hire's call date and time), onboard_grid (the manager's link to mark their availability) and onboard_remind (a grid still empty:
 // to HR about the hire's, to the manager about theirs). Same shape as the v15 relay kinds. A url that already starts with / (a page of the Hub,
@@ -444,12 +447,21 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
   if (event === 'request_filed') {
     const id = Number(body.request_id);
     await new Promise(r => setTimeout(r, 3000));
-    const { data: sug } = await svc.from('request_suggestions').select('id').eq('request_id', id).maybeSingle();
-    if (sug) { await log(event, 'request ' + id, 'skipped: covered by suggestion_accepted'); return { event, outcome: 'covered' }; }
     const { data: r } = await svc.from('dept_requests').select('*').eq('id', id).maybeSingle();
     if (!r) return { error: 'request not found' };
-    const { data: rt } = await svc.from('request_types').select('label, default_assignee').eq('key', r.type_key).maybeSingle();
+    const { data: rt } = await svc.from('request_types').select('label, default_assignee, channel').eq('key', r.type_key).maybeSingle();
+    const { data: sug } = await svc.from('request_suggestions').select('id, assignee').eq('request_id', id).maybeSingle();
+    if (sug && (sug.assignee || rt?.default_assignee)) { await log(event, 'request ' + id, 'skipped: covered by suggestion_accepted'); return { event, outcome: 'covered' }; }
     const recipient = r.assignee || rt?.default_assignee || null;
+    /* v17: nobody could be reached by DM: team-inbox posts it in the channel after all */
+    const toChannel = async (outs: string[]) => {
+      if (rt?.channel || !outs.every(o => o === 'failed' || o === 'no_slack' || o === 'no_email')) return;
+      try {
+        const sec = await getSecret('WA_TRIGGER_SECRET');
+        await fetch(SUPABASE_URL + '/functions/v1/team-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': sec, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ event: 'request_channel', request_id: id }) });
+        await log(event, 'request ' + id, 'no DM delivered: asked team-inbox to post in the channel');
+      } catch (e) { await log(event, 'request ' + id, 'no DM delivered, channel call failed: ' + String(e).slice(0, 100)); }
+    };
     /* v15: the type, who asked, when it is needed, the details */
     const text = ':inbox_tray: New request for your team: *' + slackEsc(String(r.title || rt?.label || r.type_key)) + '*'
       + (rt?.label && r.title && rt.label !== r.title ? ' (' + slackEsc(String(rt.label)) + ')' : '')
@@ -462,7 +474,16 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     const meta: Meta = { title: 'New request for your team', url: '#requests', ref: 'request-' + id };
     if (recipient) {
       const out = await deliver(event, String(recipient), null, text, meta);
+      await toChannel([out]);
       return { event, outcome: out };
+    }
+    const { data: cfg } = await svc.from('hub_settings').select('value').eq('key', 'team_inbox').maybeSingle();
+    const named = (((cfg?.value || {}) as { people?: Record<string, string[]> }).people || {})[String(r.department)] || [];
+    if (named.length) {
+      const outs = [];
+      for (const e of named) outs.push(await deliver(event, null, String(e).toLowerCase(), text, meta));
+      await toChannel(outs);
+      return { event, outcome: outs.join(',') };
     }
     const { data: leads } = await svc.from('hub_roles').select('email, role').eq('role', 'leader');
     const { data: tms } = await svc.from('team_members').select('name, email, department').eq('active', true).eq('department', r.department);
