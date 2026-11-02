@@ -107,7 +107,7 @@
     if (el.hasAttribute('data-w225sug')) { S.suggest = S.suggest ? null : suggestTimes(); paint(); return; }
     if (el.hasAttribute('data-w225goalsave')) { saveGoals(); return; }
     if ((x = arg(el, 'data-w225apr'))) { S.f.apr = x; paint(); return; }
-    if (el.hasAttribute('data-w241apsave')) { saveApprovers(); return; }
+    if (el.hasAttribute('data-w241apsave') || el.hasAttribute('data-w277apsave')) { saveApprovers(); return; }
     if ((x = arg(el, 'data-w225dec'))) { var dp = x.split('|'); el.setAttribute('disabled', '1'); decideFrom(dp[0], dp[1]); return; }
     /* comments */
     if ((x = arg(el, 'data-w225rp'))) { S.reply[x] = S.reply[x] || { text: '' }; paint(); var ta = document.querySelector('#w225host [data-w225rtext="' + x + '"]'); if (ta) ta.focus(); return; }

@@ -126,6 +126,9 @@
           q(db.from('hub_settings').select('key, value, updated_at').in('key', ['content_studio', 'link_page', 'studio_inbox_sync']))
         ]);
         S.pub = rs[0].data === true; S.mk = rs[1].data === true;
+        /* wave277: the marketing team, for the approvers picker (only a publisher sees it) */
+        S.marketing = [];
+        if (S.pub) { var tm = await q(db.from('team_members').select('id,name,email,department,role,active,nicknames').eq('active', true).eq('department', 'marketing').order('name')); S.marketing = (tm.data || []).filter(function (m) { return m.email; }); }
         S.comments = rs[2].data || []; S.links = rs[3].data || []; S.clicks = rs[4].data || []; S.social = rs[5].data || [];
         (rs[6].data || []).forEach(function (r) { if (r.key === 'content_studio') S.settings = r.value || {}; else if (r.key === 'link_page') S.linkPage = r.value || {}; else if (r.key === 'studio_inbox_sync') S.inboxLast = r.value || null; });
         S.cap = w ? w.cap() : S.cap;

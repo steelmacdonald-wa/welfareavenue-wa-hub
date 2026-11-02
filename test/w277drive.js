@@ -159,6 +159,41 @@ const calls = (f, a) => f.ev(a => (window.__CALLS || []).filter(c => c[0] === 's
     await f.close();
   }
 
+  /* 3c. approvers picked from the marketing team (Task 8) */
+  {
+    const REC = `
+      window.__REC = function () {
+        if (window.__RECON || typeof db === 'undefined') return; window.__RECON = true; window.__W = [];
+        var orpc = db.rpc.bind(db);
+        db.rpc = function (n, a) { if (/^studio_/.test(n)) window.__W.push(['rpc', n, a]); return orpc(n, a); };
+      };`;
+    const AP = JSON.parse(JSON.stringify(FX));
+    const mem = (id, name, email, dept, nick) => ({ id, name, email, department: dept, role: 'Member', active: true, nicknames: nick });
+    AP.team_members = [mem(9001, 'Ian Odhiambo', 'ian.odhiambo@welfareavenue.com', 'marketing', []), mem(9002, 'Kahkashan Ansary', 'kahkashan.ansary@welfareavenue.com', 'marketing', ['KK']), mem(9003, 'Fiona Finance', 'fiona.finance@welfareavenue.com', 'finance', [])];
+    AP.hub_settings = AP.hub_settings.filter(s => s.key !== 'content_studio').concat([{ key: 'content_studio', value: { hashtag_cap: 5, approvers: ['ian.odhiambo@welfareavenue.com', 'kahkashan.ansary@welfareavenue.com'] }, updated_at: '2026-11-02T00:00:00Z' }]);
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#studio/approvals', fixture: AP, rpcs: Object.assign({ studio_settings_save: { ok: true } }, RP), init: INIT(status(true)) + REC, wait: 5000 });
+    const p = f.page; await f.ev(() => window.__REC());
+    const v = await f.ev(() => ({ boxes: Array.from(document.querySelectorAll('#w225host [data-w277ap]')).map(b => ({ e: b.getAttribute('data-w277ap'), c: b.checked, l: b.closest('label') ? b.closest('label').textContent.replace(/\s+/g, ' ').trim() : '' })), old: !!document.querySelector('#w225host [data-w241approvers]'), save: !!document.querySelector('#w225host [data-w277apsave]'), t: document.getElementById('w225host').innerText }));
+    ok('approvers: two checkboxes, both ticked', v.boxes.length === 2 && v.boxes.every(b => b.c), v.boxes);
+    ok('approvers: the finance member is not listed', !/Fiona/.test(v.t) && !v.boxes.some(b => /finance/.test(b.e)), v.boxes);
+    ok('approvers: KK shows the nickname, Ian shows none', v.boxes.some(b => /Kahkashan Ansary/.test(b.l) && /KK/.test(b.l)) && v.boxes.some(b => /Ian Odhiambo/.test(b.l) && !/\(/.test(b.l)), v.boxes);
+    ok('approvers: Save approvers button present, old text input absent', v.save && !v.old, v);
+    await f.ev(() => { document.querySelector('#w225host [data-w277ap="kahkashan.ansary@welfareavenue.com"]').click(); document.querySelector('#w225host [data-w277apsave]').click(); }); await p.waitForTimeout(800);
+    const sv = await f.ev(() => (window.__W || []).filter(w => w[0] === 'rpc' && w[1] === 'studio_settings_save'));
+    ok('approvers: unticking KK and saving records approvers for Ian only, other settings kept', sv.length === 1 && sv[0][2].p_key === 'content_studio' && JSON.stringify(sv[0][2].p_value.approvers) === '["ian.odhiambo@welfareavenue.com"]' && sv[0][2].p_value.hashtag_cap === 5, sv);
+    ok('approvers: after saving KK stays unticked', await f.ev(() => document.querySelector('#w225host [data-w277ap="kahkashan.ansary@welfareavenue.com"]').checked === false));
+    ok('no page errors (approvers)', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+  /* 3d. no marketing members: the old text input stays */
+  {
+    const AP = JSON.parse(JSON.stringify(FX)); AP.team_members = (AP.team_members || []).filter(m => m.department !== 'marketing');
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#studio/approvals', fixture: AP, rpcs: Object.assign({ studio_settings_save: { ok: true } }, RP), init: INIT(status(true)), wait: 4500 });
+    const v = await f.ev(() => ({ old: !!document.querySelector('#w225host [data-w241approvers]'), old2: !!document.querySelector('#w225host [data-w241apsave]'), boxes: document.querySelectorAll('#w225host [data-w277ap]').length }));
+    ok('approvers: with no marketing members the text input and its Save stay', v.old && v.old2 && v.boxes === 0, v);
+    await f.close();
+  }
+
   /* 4. the seg is ASCII with no dashes */
   {
     const seg = fs.readFileSync(path.join(__dirname, '../build/src/277_wave277.seg'), 'utf8');
