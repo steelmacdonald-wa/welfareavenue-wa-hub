@@ -93340,7 +93340,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - Agenda tab (#team/<code>/agenda): "When can we meet?" above the agenda tool (#w276panel before #w116agHost): the
      heat map (a cell's shade = available / members with a grid; hover or tap lists names), the best slots (top three
      windows of at least 60 minutes by headcount, then fewest calendar clashes) with Propose for managers, "k of n
-     entered", My availability, and Ask the team for managers.
+     entered" (or "k of n up to date since <ask date>"), My availability, and Ask the team for managers. Times are Toronto time, and
+     both say so (tzNote).
    - Slots are weekday * 1440 + minute of the day, weekday 0 = Monday (Toronto wall time). Every read and write goes
      through the wa_avail_* RPCs (build/wa276_avail.sql); notify v18 sends meet_propose and meet_avail_ask.
    window.w276: paintAgenda, openPop, best (the pure ranking), slot, unslot, hours. */
@@ -93383,6 +93384,35 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function clockHour(min) { var h = Math.floor((Number(min) % 1440) / 60); return (h % 12 || 12) + ' ' + (h < 12 ? 'a.m.' : 'p.m.'); }
   /* {di, start, end} -> "Tuesday 5:00 p.m. to 6:30 p.m." (no full stop: notify ends the sentence) */
   function windowLabel(w) { return DAYS[w.di] + ' ' + clock(w.start) + ' to ' + clock(w.end); }
+  /* "2026-09-01" -> "Tue 1 Sep" */
+  var MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function dayLabel(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); if (!m) return String(iso || '');
+    var y = Number(m[1]), mo = Number(m[2]), da = Number(m[3]);
+    if (mo < 3) y -= 1;   /* the weekday by arithmetic (Sakamoto), so no Date object and no time zone is involved; 0 = Sunday */
+    var wd = (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4][mo - 1] + da) % 7;
+    return DAYS_SHORT[(wd + 6) % 7] + ' ' + da + ' ' + MONTHS_SHORT[mo - 1];
+  }
+  /* The grid is Toronto wall time. zone: the browser's time zone (Intl), passed in so the test can set it. */
+  var EASTERN = ['America/Toronto', 'America/New_York', 'America/Montreal', 'America/Detroit', 'US/Eastern', 'EST5EDT'];
+  function myZone() { try { return String(Intl.DateTimeFormat().resolvedOptions().timeZone || ''); } catch (e) { return ''; } }
+  function tzNote(zone) {
+    zone = zone == null ? myZone() : String(zone);
+    return 'Times are Toronto time.' + (zone && EASTERN.indexOf(zone) < 0 ? ' You seem to be in ' + zone + '; enter the Toronto hours.' : '');
+  }
+  /* The Agenda status line and the names on tap, on the rule Ask the team and the Home pop-up use: with an ask, up to date
+     means saved since it (wa_avail_team's since_ask, on members and missing alike); with none, a saved grid counts.
+     t: the wa_avail_team answer -> {text, behind:[names], label} */
+  function teamStatus(t) {
+    var members = (t && t.members) || [], missing = (t && t.missing) || [], all = members.concat(missing), n = all.length, ask = t && t.ask_date;
+    var nm = function (m) { return m.name || m.email; };
+    if (!ask) {
+      return { text: members.length + ' of ' + n + ' entered' + (missing.length ? ', ' + missing.length + ' outstanding' : ''), behind: missing.map(nm), label: 'Not yet entered' };
+    }
+    var behind = all.filter(function (m) { return m.since_ask === false || (m.since_ask == null && missing.indexOf(m) >= 0); });
+    var k = n - behind.length;
+    return { text: k + ' of ' + n + ' up to date since ' + dayLabel(ask) + (behind.length ? ', ' + behind.length + ' outstanding' : ''), behind: behind.map(nm), label: 'Not up to date since ' + dayLabel(ask) };
+  }
 
   /* The best windows: for each starting cell, grow the window a cell at a time while someone stays available for all
      of it; each time the group shrinks (or the run ends) and the window is at least 60 minutes, it is a candidate with
@@ -93627,6 +93657,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (document.getElementById('w276pop')) return false;
     if (due && (otherOpen() || !onHome())) return false;   /* the Home ask never stacks on another window, nor opens off Home */
     P.dept = dept; P.due = due || null; P.from = opener; P.busy = false; P.cfg = cfgFrom(team); P.loadFailed = !!mineErr;
+    if (team && team.me) me = String(team.me).toLowerCase();   /* the roster's address, also when signed in with an alias */
     var clashes = ((team && team.clashes) || []).filter(function (c) { return String(c.email || '').toLowerCase() === me; }).map(function (c) { return Number(c.slot); });
     var slots = (mine && mine.slots) || [];
     var lbl = teamLabel(dept);
@@ -93635,7 +93666,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<button type="button" class="x" aria-label="Close" data-w276="later">&times;</button>'
       + '<p class="k">' + E(lbl) + '</p>'
       + '<h2 id="w276title" tabindex="-1">Your availability for ' + E(lbl) + ' meetings</h2>'
-      + '<p class="lead" id="w276lead">Mark the times you are usually free in a typical week. Drag across cells to mark several at once, or tap one at a time.</p>'
+      + '<p class="lead" id="w276lead">Mark the times you are usually free in a typical week. Drag across cells to mark several at once, or tap one at a time. ' + E(tzNote()) + '</p>'
       + '<div class="from"><label for="w276from">Valid from</label><input type="date" id="w276from" value="' + E(isoToday()) + '" aria-describedby="w276fromh"><p id="w276fromh" class="help">Pick the date your week changes, for example the first day of term.</p></div>'
       + (clashes.length ? '<p class="legend"><span class="sw"></span>Usually in a meeting (from your Hub calendar)</p>' : '')
       + '<div id="w276grid"></div>'
@@ -93818,18 +93849,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       panel.querySelector('#w276retry').addEventListener('click', function () { paintAgenda(dept); });
       return;
     }
-    var c = cfgFrom(t), members = t.members || [], missing = t.missing || [], can = !!t.can_manage;
-    var k = members.length, n = members.length + missing.length;
+    var c = cfgFrom(t), members = t.members || [], can = !!t.can_manage;
+    var k = members.length;
     var wins = best(members, c.cellMin, t.clashes || []);
-    var status = k + ' of ' + n + ' entered' + (missing.length ? ', ' + missing.length + ' outstanding' : '');
+    var ts = teamStatus(t), status = ts.text;
     panel.innerHTML = '<div class="hd"><h3 id="w276ph"><span class="k">' + E(teamLabel(dept)) + '</span>When can we meet?</h3>'
       + '<div class="acts"><button type="button" class="b2" id="w276mine">My availability</button>'
       + (can ? '<button type="button" class="b1" id="w276ask">Ask the team</button>' : '') + '</div></div>'
-      + (can && missing.length
+      + (can && ts.behind.length
         ? '<p class="st"><button type="button" class="lk" id="w276st" aria-expanded="false" aria-controls="w276miss">' + E(status) + '</button></p>'
-          + '<p id="w276miss" hidden>Not yet entered: ' + E(missing.map(function (m) { return m.name || m.email; }).join(', ')) + '</p>'
+          + '<p id="w276miss" hidden>' + E(ts.label) + ': ' + E(ts.behind.join(', ')) + '</p>'
         : '<p class="st">' + E(status) + '</p>')
-      + '<div class="body"><div class="map"><p class="help">Darker means more of the team is free. Tap or point at a time to see who.</p><div id="w276heat"></div><p id="w276cell" aria-live="polite"></p></div>'
+      + '<div class="body"><div class="map"><p class="help">Darker means more of the team is free. Tap or point at a time to see who. ' + E(tzNote()) + '</p><div id="w276heat"></div><p id="w276cell" aria-live="polite"></p></div>'
       + '<div class="side"><h4>Best slots</h4><ol id="w276best">'
       + wins.map(function (w, i) {
         return '<li><span class="w">' + E(windowLabel(w)) + '</span><span class="n">' + w.n + ' of ' + k + ' can make it' + (w.clash ? ', clashes with ' + (w.clash === 1 ? '1 regular meeting' : w.clash + ' regular meetings') : '') + '</span>'
@@ -93981,7 +94012,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   });
 
   /* ---------- test hook ---------- */
-  window.w276 = { paintAgenda: paintAgenda, openPop: openPop, best: best, slot: slot, unslot: unslot, hours: hours, windowLabel: windowLabel, closePop: closePop, state: function () { return W276; } };
+  window.w276 = { paintAgenda: paintAgenda, openPop: openPop, best: best, slot: slot, unslot: unslot, hours: hours, windowLabel: windowLabel, tzNote: tzNote, teamStatus: teamStatus, closePop: closePop, state: function () { return W276; } };
 })();
 /* =====================================================================
    WA v271 HR onboarding: what HR sees (01/11/26, Build 1 of the automation)
