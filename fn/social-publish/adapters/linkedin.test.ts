@@ -1,8 +1,8 @@
 // wave277: the LinkedIn publisher posts photos (one, or two to twenty as multiImage) and one video, and keeps the Make.com
 // fallback. Every request goes through a recording fake fetch, so the assertions read the real request bodies.
 import { assert, assertEquals, assertRejects } from 'jsr:@std/assert';
-import { linkedin } from './linkedin.ts';
-import { type Caps, images, Manual, type Post, type PubCtx, videos } from './types.ts';
+import { linkedin, linkedinFinish } from './linkedin.ts';
+import { type Caps, images, Manual, Pending, type Post, type PubCtx, videos } from './types.ts';
 
 const CAPS: Caps = { text: true, images: true, max_images: 20, video: true, max_video_s: 600, comments: true, analytics: true, link_in_caption: true };
 const ORG = 'urn:li:organization:42';
@@ -102,7 +102,7 @@ Deno.test('linkedin: one video initializes with its size, uploads every part, fi
     if (url === 'https://api.linkedin.com/rest/videos?action=initializeUpload') return { json: { value: { video: VID, uploadToken: '', uploadInstructions: [{ uploadUrl: 'https://up.example/p1', firstByte: 0, lastByte: 5 }, { uploadUrl: 'https://up.example/p2', firstByte: 6, lastByte: 9 }] } } };
     if (url.startsWith('https://up.example/')) return { status: 200, headers: { etag: 'etag-' + url.slice(-2) } };
     if (url === 'https://api.linkedin.com/rest/videos?action=finalizeUpload') return { status: 200 };
-    if (url === 'https://api.linkedin.com/rest/videos/' + encodeURIComponent(VID) && method === 'GET') return { json: { status: n < 3 ? 'PROCESSING' : 'AVAILABLE' } };
+    if (url === 'https://api.linkedin.com/rest/videos/' + encodeURIComponent(VID) && method === 'GET') return { json: { status: n < 2 ? 'PROCESSING' : 'AVAILABLE' } };
     if (url === 'https://api.linkedin.com/rest/posts') return { status: 201, headers: { 'x-restli-id': 'urn:li:share:5' } };
     return { status: 404 };
   }, DIRECT, CONN);
@@ -117,7 +117,7 @@ Deno.test('linkedin: one video initializes with its size, uploads every part, fi
   assertEquals(Array.from(puts[1].body as Uint8Array), [6, 7, 8, 9]);
   const fin = calls.find(c => c.url === 'https://api.linkedin.com/rest/videos?action=finalizeUpload')!;
   assertEquals(fin.body, { finalizeUploadRequest: { video: VID, uploadToken: '', uploadedPartIds: ['etag-p1', 'etag-p2'] } });
-  assertEquals(calls.filter(c => c.url.startsWith('https://api.linkedin.com/rest/videos/urn')).length, 3);
+  assertEquals(calls.filter(c => c.url.startsWith('https://api.linkedin.com/rest/videos/urn')).length, 2);
   assertEquals(sleeps, [5000, 5000]);
   const body = calls.find(c => c.url === 'https://api.linkedin.com/rest/posts')!.body as Record<string, any>;
   assertEquals(body.content.media.id, VID);
@@ -127,7 +127,7 @@ Deno.test('linkedin: one video initializes with its size, uploads every part, fi
   assert(calls.findIndex(c => c.url.endsWith('finalizeUpload')) < calls.findIndex(c => c.url === 'https://api.linkedin.com/rest/posts'));
 });
 
-Deno.test('linkedin: a video still processing after twelve checks comes back pending, with nothing posted', async () => {
+Deno.test('linkedin: a video still processing after two checks throws Pending with its urn, with nothing posted', async () => {
   const VID = 'urn:li:video:slow';
   const { ctx, calls, sleeps } = fake((url) => {
     if (url === 'https://cdn.example/v.mp4') return { bytes: new Uint8Array(4) };
@@ -137,11 +137,43 @@ Deno.test('linkedin: a video still processing after twelve checks comes back pen
     if (url.startsWith('https://api.linkedin.com/rest/videos/')) return { json: { status: 'PROCESSING' } };
     return { status: 404 };
   }, DIRECT, CONN);
-  const r = await linkedin.publish(post([{ url: 'https://cdn.example/v.mp4', mime: 'video/mp4' }]), CAPS, ctx);
-  assertEquals(r.pending, true);
-  assertEquals(r.id, VID);
-  assertEquals(calls.filter(c => c.url.startsWith('https://api.linkedin.com/rest/videos/urn')).length, 12);
-  assertEquals(sleeps.length, 11);
+  const e = await assertRejects(() => linkedin.publish(post([{ url: 'https://cdn.example/v.mp4', mime: 'video/mp4' }]), CAPS, ctx), Pending);
+  assertEquals(e.container, VID);
+  assertEquals(calls.filter(c => c.method === 'GET' && c.url.startsWith('https://api.linkedin.com/rest/videos/urn')).length, 2);
+  assertEquals(sleeps, [5000, 5000]);
+  assertEquals(calls.filter(c => c.url === 'https://api.linkedin.com/rest/posts').length, 0);
+});
+
+const SLOW = 'urn:li:video:later';
+const statusRoute = (status: string) => (url: string, method: string) => {
+  if (url === 'https://api.linkedin.com/rest/videos/' + encodeURIComponent(SLOW) && method === 'GET') return { json: { status } };
+  if (url === 'https://api.linkedin.com/rest/posts') return { status: 201, headers: { 'x-restli-id': 'urn:li:share:88' } };
+  return { status: 404 };
+};
+
+Deno.test('linkedinFinish: AVAILABLE posts the video once and returns the post', async () => {
+  const { ctx, calls } = fake(statusRoute('AVAILABLE'), DIRECT, CONN);
+  const r = await linkedinFinish(ctx, post([{ url: 'https://cdn.example/v.mp4', mime: 'video/mp4' }]), SLOW);
+  assertEquals(r, { id: 'urn:li:share:88', url: 'https://www.linkedin.com/feed/update/urn:li:share:88' });
+  const posts = calls.filter(c => c.url === 'https://api.linkedin.com/rest/posts');
+  assertEquals(posts.length, 1);
+  const body = posts[0].body as Record<string, any>;
+  assertEquals(body.author, ORG);
+  assertEquals(body.commentary, 'Hello LinkedIn');
+  assertEquals(body.content, { media: { id: SLOW, title: 'Winter drive' } });
+  assertEquals(posts[0].headers['Linkedin-Version'], '202609');
+});
+
+Deno.test('linkedinFinish: still PROCESSING answers null and posts nothing', async () => {
+  const { ctx, calls } = fake(statusRoute('PROCESSING'), DIRECT, CONN);
+  assertEquals(await linkedinFinish(ctx, post([]), SLOW), null);
+  assertEquals(calls.length, 1);
+  assertEquals(calls.filter(c => c.url === 'https://api.linkedin.com/rest/posts').length, 0);
+});
+
+Deno.test('linkedinFinish: PROCESSING_FAILED throws and posts nothing', async () => {
+  const { ctx, calls } = fake(statusRoute('PROCESSING_FAILED'), DIRECT, CONN);
+  await assertRejects(() => linkedinFinish(ctx, post([]), SLOW), Error, 'LinkedIn could not process the video');
   assertEquals(calls.filter(c => c.url === 'https://api.linkedin.com/rest/posts').length, 0);
 });
 

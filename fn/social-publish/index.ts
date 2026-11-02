@@ -4,8 +4,9 @@
 //     active and inactive, so an old post naming an inactive platform still resolves; without the registry, v5's literals.
 // v6: capabilities (capabilities.ts) adds platforms (the active ones) and caps (key to caps); each mode comes from its adapter.
 // v6: LinkedIn posts two to caps.max_images photos as one multiImage post, and one video (initialize, upload the parts,
-//     finalize, wait up to a minute for AVAILABLE; still processing comes back pending). A video with photos, or two videos,
-//     or more photos than the caps allow, goes to the reminder with the reason.
+//     finalize, check twice for AVAILABLE). A video with photos, or two videos, or more photos than the caps allow, goes to
+//     the reminder with the reason.
+// v6 fix: a slow LinkedIn video goes through the pending pipeline like Instagram and Threads (finishPending posts it later).
 // v6: publishers() adds the approvers the database counts (wa241_approvers), so an approver is a publisher here too.
 // v5 (wave242): the notification centre's switches for the Content Studio kind (wa_notify_prefs.prefs.kinds.content_studio =
 //   {hub, slack}) decide: Slack off means no DM whatever the devices; Hub off means no Hub notification; no entry means the
@@ -50,6 +51,7 @@ import { ADAPTERS } from './adapters/index.ts';
 import { type Any, type Caps, containerStatus, firstCommentOf, graph, images, kindOf, Manual, Pending, type Post, type PubCtx, rawCaption, type Targets, THREADS, videos } from './adapters/types.ts';
 import { igFinish } from './adapters/instagram.ts';
 import { threadsFinish, threadsTarget } from './adapters/threads.ts';
+import { linkedinFinish } from './adapters/linkedin.ts';
 import { capabilitiesOf } from './capabilities.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -417,6 +419,10 @@ async function finishPending(): Promise<Any[]> {
           const s = await containerStatus(ctx, String(r.container), th.token, THREADS);
           if (s === 'FINISHED') { const fin = await threadsFinish(ctx, th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Threads: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Threads: the video was still processing after 30 minutes'); }
+        } else if (pl === 'linkedin') {
+          const fin = await linkedinFinish(ctx, p, String(r.container));
+          if (fin) { results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to LinkedIn: <' + fin.url + '|open>'); }
+          else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('LinkedIn did not finish processing the video'); }
         } else { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': cannot finish without its connection'); }
       } catch (e) { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': ' + String((e as Error).message || e).slice(0, 300)); }
     }
