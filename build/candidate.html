@@ -92332,12 +92332,45 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     });
   }
 
-  /* ---------- notifications: one tap, and the result said in the row ---------- */
+  /* ---------- notifications: one tap, and the result said in the row ----------
+     Steel (02/11/26) got 'This browser did not start the Hub's notification helper': wave219 waits ten seconds for the
+     service worker and says only that. Here the helper is checked first: the browser's own refusal, or the worker's state,
+     goes in the row, with what to do about it. When the permission still has to be asked, wave219 goes first, straight
+     from the tap (Safari only allows the question there), and the helper is looked at only if that fails. */
+  function waitActive(reg, ms) {
+    return new Promise(function (res) {
+      if (reg.active) return res(reg.active);
+      var done = false, t = setTimeout(function () { if (!done) { done = true; res(null); } }, ms);
+      function check() { if (reg.active && !done) { done = true; clearTimeout(t); res(reg.active); } }
+      var sw = reg.installing || reg.waiting; if (sw) sw.addEventListener('statechange', check);
+      reg.addEventListener('updatefound', function () { var n = reg.installing; if (n) n.addEventListener('statechange', check); });
+    });
+  }
+  async function helper() {
+    if (!('serviceWorker' in navigator)) return { ok: false, why: 'This browser has no notification helper (no service workers), so Hub notifications cannot work here.' };
+    var reg = null, err = '';
+    try { reg = await navigator.serviceWorker.getRegistration('/'); } catch (e) { /* fine */ }
+    if (!reg) { try { reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch (e) { err = String((e && e.message) || e || 'no reason given'); } }
+    if (!reg) {
+      var store = /storage|cookie|insecure|invalid state|security|denied/i.test(err);
+      return { ok: false, why: 'Your browser refused the Hub\u2019s notification helper (' + err.replace(/^Failed to register a ServiceWorker[^:]*:s*/i, '').slice(0, 160) + ').' + (store ? ' Allow cookies and site data for hub.welfareavenue.com in the browser\u2019s site settings, then reload the Hub.' : ' Reload the Hub and try again.') };
+    }
+    var act = await waitActive(reg, 10000);
+    if (!act) { var st = reg.installing ? 'still installing' : reg.waiting ? 'waiting to start' : 'not running'; return { ok: false, why: 'The Hub\u2019s notification helper is ' + st + ' after ten seconds. Close every Hub window, open the Hub again and try once more.' }; }
+    return { ok: true };
+  }
   async function turnOnPush() {
     var A = window.__wa219;
     if (!A || !A.turnOn) { S.pushErr = 'The Hub is still loading. Try again in a moment.'; paintSetup(); return; }
     if (S.pushBusy) return;
     S.pushBusy = true; S.pushErr = ''; S.pushMsg = 'Asking your browser\u2026'; paintSetup();
+    var st0 = push() || {};
+    if (st0.perm === 'granted') {
+      S.pushMsg = 'Starting the notification helper\u2026'; paintSetup();
+      var h0 = await helper();
+      if (!h0.ok) { S.pushBusy = false; S.pushMsg = ''; S.pushErr = h0.why; paintSetup(); return; }
+      S.pushMsg = 'Saving this device\u2026'; paintSetup();
+    }
     var slow = setTimeout(function () { S.pushMsg = 'Still working. If nothing happens, reload the Hub and try again.'; paintSetup(); }, 12000);
     /* wave219 says what went wrong in a toast; here it goes in the row instead */
     var said = '', t0 = window.toast, had = typeof t0 === 'function';
@@ -92350,6 +92383,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else {
       var st = push() || {};
       S.pushErr = st.perm === 'denied' ? '' : (said && !/^Hub notifications are on/.test(said) ? said : 'That did not work. Try again, or reload the Hub and try once more.');
+      /* wave219's one-line answer about the helper: look at the helper and say what is really the matter */
+      if (/notification helper/.test(S.pushErr)) { try { var h1 = await helper(); if (!h1.ok) S.pushErr = h1.why; } catch (e) { /* keep */ } }
     }
     paintSetup();
   }
@@ -92440,18 +92475,36 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var st = tipState();
     if (st.n >= 2 || (st.at && Date.now() - st.at < 14 * 86400000) || document.getElementById('w272tip')) return;
     if (otherOpen()) { if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 5000); return; }
-    lsSet(KEY_TIP, JSON.stringify({ n: st.n + 1, at: Date.now() }));
     var el = document.createElement('div'); el.id = 'w272tip'; el.setAttribute('role', 'region'); el.setAttribute('aria-label', 'Add the Hub as an app');
     var where = IOS || ANDROID ? 'on this phone' : 'on this computer';
     el.innerHTML = '<b>Keep the Hub one tap away</b><p>Add it as an app ' + where + ': its own icon, and notifications when someone needs you.</p><div class="acts">'
       + (BIP ? '<button type="button" class="go" data-w219="install" data-w272s="again">Install</button>' : '<button type="button" class="go" data-w272s="how">Show me how</button>')
       + '<button type="button" class="no" data-w272tip="no">Not now</button></div>';
-    document.body.appendChild(el); void el.offsetWidth; el.classList.add('on');
+    document.body.appendChild(el);
+    /* never over a button someone could want (another session saw it cover one on the serving page): if anything you can
+       press sits under its corner, wait and look again */
+    if (coversControl(el)) { el.remove(); if (TIP.tries++ < 40) TIP.timer = setTimeout(tryTip, 20000); return; }
+    lsSet(KEY_TIP, JSON.stringify({ n: st.n + 1, at: Date.now() }));
+    void el.offsetWidth; el.classList.add('on'); TIP.at = Date.now();
+    /* it leaves on its own: after the first press anywhere else, or after 20 seconds */
+    clearTimeout(TIP.gone); TIP.gone = setTimeout(hideTip, 20000);
   }
+  function coversControl(el) {
+    try {
+      var r = el.getBoundingClientRect(), pts = [[r.left + 8, r.top + 8], [r.right - 8, r.top + 8], [r.left + 8, r.bottom - 8], [r.right - 8, r.bottom - 8], [(r.left + r.right) / 2, (r.top + r.bottom) / 2]];
+      return pts.some(function (p) {
+        return document.elementsFromPoint(p[0], p[1]).some(function (x) { return x !== el && !el.contains(x) && x.closest && !x.closest('#w272tip') && x.matches('button, a, input, select, textarea, [role=button], [tabindex]') && getComputedStyle(x).visibility !== 'hidden'; });
+      });
+    } catch (e) { return false; }
+  }
+  function hideTip() { var t = document.getElementById('w272tip'); if (!t) return; t.classList.remove('on'); setTimeout(function () { t.remove(); }, 220); }
+  document.addEventListener('pointerdown', function (e) {
+    var t = document.getElementById('w272tip'); if (!t || t.contains(e.target)) return;
+    if (Date.now() - (TIP.at || 0) > 800) hideTip();
+  }, true);
   document.addEventListener('click', function (e) {
     var b = e.target && e.target.closest && e.target.closest('[data-w272tip]'); if (!b) return;
-    var t = document.getElementById('w272tip'); if (!t) return;
-    t.classList.remove('on'); setTimeout(function () { t.remove(); }, 220);
+    hideTip();
   });
   window.addEventListener('hashchange', function () { if (onHome()) closeTip(); });
 
