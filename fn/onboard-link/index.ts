@@ -438,7 +438,7 @@ async function managerFree(l: Link, grid: Grid): Promise<string[] | null> {
       meetings = ((data || []) as Array<{ start_at: string; end_at: string }>).map((e) => [Date.parse(e.start_at), Date.parse(e.end_at)] as [number, number]).filter(([a, z]) => !Number.isNaN(a) && !Number.isNaN(z));
     }
     const hmOf = (v: unknown) => { const x = /^(\d{2}):(\d{2})$/.exec(String(v)); return x ? Number(x[1]) * 60 + Number(x[2]) : NaN; };   // as onboard-run reads blocks: a derived week may end at 24:00
-    return grid.slots.filter((iso) => {
+    const free = grid.slots.filter((iso) => {
       const s0 = Date.parse(iso), s1 = s0 + len, a = torontoParts(s0), z = torontoParts(s1);
       const date = day(a.y, a.m, a.d), endDate = day(z.y, z.m, z.d);
       const startMin = a.h * 60 + a.min, endMin = endDate === date ? z.h * 60 + z.min : 24 * 60;
@@ -447,6 +447,10 @@ async function managerFree(l: Link, grid: Grid): Promise<string[] | null> {
       const inside = Array.isArray(blocks) && blocks.some((b) => Array.isArray(b) && hmOf(b[0]) <= startMin && endMin <= hmOf(b[1]));
       return inside && !meetings.some(([ms, me]) => s0 < me && ms < s1);
     });
+    /* round 2: greyed cells cannot be marked, so a manager free for less than the hire's minimum over the window (grid.minHours, the setting saveGrid's
+       too_few_slots enforces) would leave the hire unable to save. Then no mask: the grid shows as before, and the hire can always reach the minimum. */
+    if (free.length * grid.cellMin < grid.minHours * 60) return null;
+    return free;
   } catch (_) { return null; }
 }
 const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];

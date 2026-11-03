@@ -1180,6 +1180,29 @@ test('w275 whole-branch I3: GET (offer link, propose path) gives managerFree, th
   assert.equal((await s.get(s.mgr)).body.managerFree, undefined);
 });
 
+test('w275 whole-branch round 2: a manager free for less than the hire\'s minimum over the window gives no mask, so the hire can always reach it; free for that much or more, the mask', async () => {
+  const said = { ...withProposal, hire_answer: 'no', hire_answered_at: '2026-11-01T11:00:00Z' };
+  const weekOf = (weekly) => ({ team_members: [team[0], SAM()], hub_team_avail: weekRows('sam.lee@welfareavenue.com', weekly, { at: '2026-10-25T12:00:00Z' }) });
+  /* the window is 1 to 14 November: two Tuesdays. 9 to 12 on Tuesdays is 6 hours, under the 10 the hire must mark */
+  const sparse = await hire({ fl: said, config: { onboard_grid_min_hours: '10' }, tables: weekOf({ tue: [['09:00', '12:00']] }) });
+  const g = (await sparse.get(sparse.offer)).body;
+  assert.equal(g.grid.minHours, 10);
+  assert.equal(g.managerFree, null, 'no greys: the grid shows as before');
+  const r = await sparse.post({ t: sparse.offer, a: 'grid', slots: g.grid.slots.slice(0, 20) });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.saved, 20, 'the hire reaches the minimum');
+  /* exactly the minimum (9 to 2 on two Tuesdays, 10 hours) and more: the mask */
+  for (const [blk, n] of [[['09:00', '14:00'], 20], [['09:00', '15:00'], 24]]) {
+    const s = await hire({ fl: said, config: { onboard_grid_min_hours: '10' }, tables: weekOf({ tue: [blk] }) });
+    const b = (await s.get(s.offer)).body;
+    assert.ok(Array.isArray(b.managerFree), JSON.stringify(blk));
+    assert.equal(b.managerFree.length, n, JSON.stringify(blk) + ': half-hour cells on the two Tuesdays');
+  }
+  /* the minimum is the setting the server enforces (too_few_slots), not a fixed 10 */
+  const six = await hire({ fl: said, config: { onboard_grid_min_hours: '6' }, tables: weekOf({ tue: [['09:00', '12:00']] }) });
+  assert.equal((await six.get(six.offer)).body.managerFree.length, 12, 'a 6-hour minimum: 6 free hours are enough for the mask');
+});
+
 test('w275 whole-branch: the manager and HR told of a No get a link to the Hub\'s Home (a manager who is a plain member cannot open HR Center)', async () => {
   const s = await hire({ fl: withProposal });
   await s.post({ t: s.offer, a: 'no' });
