@@ -87,6 +87,7 @@
     try { history.replaceState(null, '', location.pathname + location.search + h.slice(0, i)); } catch (e) { /* fine */ }
   }
   async function connAct(what) {
+    if (window.w277 && window.w277.connAct) return window.w277.connAct(what);   /* wave277 */
     var parts = String(what).split('|'), a = parts[0], k = parts[1];
     var val = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; };
     var clear = function (id) { var el = document.getElementById(id); if (el) el.value = ''; };

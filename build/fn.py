@@ -109,6 +109,9 @@ def get(name):
 def deploy(name, verify=None):
     p = os.path.join(ROOT, 'fn', name, 'index.ts')
     src = open(p).read()
+    if "'./platforms.ts'" in src:
+        print(name + ' imports ./platforms.ts, which fn-deploy cannot carry yet. Deploy it through the Supabase connector (deploy_edge_function) with files index.ts and platforms.ts (from fn/_shared), plus any adapters/*.ts.')
+        sys.exit(2)
     if verify is None:
         mp = os.path.join(ROOT, 'fn', name, 'meta.json')
         if os.path.exists(mp):

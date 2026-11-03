@@ -1,0 +1,41 @@
+{
+  "studio_platforms": [
+    { "key": "instagram", "label": "Instagram", "short": "IG", "colour": "#C13584", "sort": 1, "auth": "meta_token", "console_url": null, "console_note": null, "steps": [],
+      "caps": { "text": true, "images": true, "max_images": 10, "video": true, "max_video_s": 900, "comments": true, "analytics": true, "link_in_caption": false },
+      "scopes": [], "modes": { "direct": "Posts directly", "reminder": "Reminder to post by hand" }, "active": true, "updated_at": "2026-11-02T12:00:00Z" },
+    { "key": "facebook", "label": "Facebook", "short": "f", "colour": "#1877F2", "sort": 2, "auth": "meta_token", "console_url": null, "console_note": null, "steps": [],
+      "caps": { "text": true, "images": true, "max_images": 10, "video": true, "max_video_s": 90, "comments": true, "analytics": true, "link_in_caption": true },
+      "scopes": [], "modes": { "direct": "Posts directly", "reminder": "Reminder to post by hand" }, "active": true, "updated_at": "2026-11-02T12:00:00Z" },
+    { "key": "threads", "label": "Threads", "short": "@", "colour": "#1F201E", "sort": 3, "auth": "oauth", "console_url": "https://developers.facebook.com/apps/", "console_note": "Meta for Developers: the Welfare Avenue Threads app, Use cases, Access the Threads API, Settings",
+      "steps": ["Steel adds the Welfare Avenue Threads account as a Threads tester in the app and accepts the invite in Threads (Settings, Account, Website permissions).", "Copy the Threads app ID and app secret below and save them.", "Press Connect and sign in to Threads as @welfareavenue."],
+      "caps": { "text": true, "images": true, "max_images": 20, "video": true, "max_video_s": 300, "comments": true, "analytics": true, "link_in_caption": true },
+      "scopes": ["threads_basic", "threads_content_publish", "threads_manage_replies", "threads_read_replies", "threads_manage_insights", "threads_manage_mentions", "threads_delete"],
+      "modes": { "direct": "Posts directly", "reminder": "Reminder to post by hand" }, "active": true, "updated_at": "2026-11-02T12:00:00Z" },
+    { "key": "linkedin", "label": "LinkedIn", "short": "in", "colour": "#0A66C2", "sort": 4, "auth": "oauth", "console_url": "https://www.linkedin.com/developers/apps", "console_note": "LinkedIn Developers: My apps, the Welfare Avenue app, Auth",
+      "steps": ["Copy the client ID and secret from the LinkedIn app's Auth tab and save them below.", "Press Connect and sign in as an admin of the Welfare Avenue Page."],
+      "caps": { "text": true, "images": true, "max_images": 20, "video": true, "max_video_s": 600, "comments": true, "analytics": true, "link_in_caption": true },
+      "scopes": ["w_organization_social", "r_organization_social", "rw_organization_admin", "r_organization_social_feed", "w_organization_social_feed", "r_organization_followers"],
+      "modes": { "direct": "Posts directly", "make": "Posts through Make", "reminder": "Reminder to post by hand" }, "active": true, "updated_at": "2026-11-02T12:00:00Z" },
+    { "key": "tiktok", "label": "TikTok", "short": "Tk", "colour": "#EE1D52", "sort": 5, "auth": "oauth", "console_url": "https://developers.tiktok.com/apps/", "console_note": "TikTok for Developers: Manage apps, the Welfare Avenue app, Basic information",
+      "steps": ["The TikTok app has Login Kit and Content Posting API with video.upload, and the redirect address below.", "Copy the client key and client secret below and save them.", "Press Connect and sign in to TikTok as Welfare Avenue. Videos then land in the TikTok drafts to finish in the app."],
+      "caps": { "text": true, "images": false, "max_images": 0, "video": true, "max_video_s": 600, "comments": false, "analytics": true, "link_in_caption": false },
+      "scopes": ["user.info.basic", "user.info.profile", "user.info.stats", "video.list", "video.upload"],
+      "modes": { "drafts": "Lands in TikTok drafts", "reminder": "Reminder to post by hand" }, "active": true, "updated_at": "2026-11-02T12:00:00Z" },
+    { "key": "youtube", "label": "YouTube", "short": "\u25b6", "colour": "#FF0000", "sort": 6, "auth": "oauth", "console_url": "https://console.cloud.google.com/apis/credentials", "console_note": "Google Cloud: APIs and services, Credentials, the Web client",
+      "steps": ["In Google Cloud, the OAuth client lists the redirect address below and the YouTube Data API v3 is on.", "Copy the client ID and client secret below and save them.", "Press Connect and pick the Welfare Avenue channel (the brand account)."],
+      "caps": { "text": true, "images": false, "max_images": 0, "video": true, "max_video_s": 180, "comments": false, "analytics": false, "link_in_caption": true },
+      "scopes": ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly", "https://www.googleapis.com/auth/youtube.force-ssl"],
+      "modes": { "direct": "Posts directly", "reminder": "Reminder to post by hand" }, "active": false, "updated_at": "2026-11-02T12:00:00Z" }
+  ],
+  "hub_settings": [
+    { "key": "content_studio", "value": { "goals": { "instagram": 3 }, "hashtag_cap": 5, "track_links": true, "tz": "America/Toronto", "approvers": ["ian.odhiambo@welfareavenue.com"] }, "updated_at": "2026-09-20T00:00:00Z" }
+  ],
+  "connections": {
+    "linkedin": { "status": "connected", "mode": "direct", "name": "Welfare Avenue (LinkedIn)", "connected_by": "steel.macdonald@welfareavenue.com", "connected_at": "2026-09-20T12:00:00Z", "expires_at": "2026-09-30T12:00:00Z", "scopes_granted": ["w_organization_social"], "health": "expiring", "app_saved": true },
+    "tiktok": { "status": "connected", "mode": "drafts", "handle": "@welfareavenue", "health": "ok", "app_saved": true },
+    "threads": {},
+    "youtube": {},
+    "meta": { "token": true, "granted": ["pages_manage_posts"], "missing": [] },
+    "make": { "saved": false, "secret": null }
+  }
+}

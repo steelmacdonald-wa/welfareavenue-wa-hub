@@ -21,7 +21,12 @@
     var intro = S.pub ? 'You approve posts: open one to check it, then Approve or Send it back with a note. The person who sent it hears about it in the Hub and on Slack.' : 'Scheduling a post sends it here: the approvers hear in the Hub and on Slack, and once approved it goes out at the time you picked. You hear back the same way.';
     /* wave241: who gets the approval pings (hub_settings content_studio.approvers); empty means the marketing leads and admins */
     var aps = ((S.settings || {}).approvers || []).join(', ');
-    var apBox = S.pub ? '<div class="card" style="margin:0 0 12px"><div class="row"><b>Approvers</b><input type="text" data-w241approvers placeholder="ian.odhiambo@welfareavenue.com, kahkashan.ansary@welfareavenue.com" value="' + E(aps) + '" style="flex:1;min-width:240px"><a class="btn225 sm pri" data-w241apsave="1">Save</a></div><p class="muted" style="margin:6px 0 0">The people pinged when a post waits (with Approve and Send it back links on Slack). Admins and marketing leads can always approve; empty means all of them are pinged.</p></div>' : '';
+    var mk277 = S.marketing || [], apSet = ((S.settings || {}).approvers || []).map(function (x) { return lower(x); });
+    var apHelp = '<p class="muted" style="margin:6px 0 0">The people pinged when a post waits (with Approve and Send it back links on Slack). Admins and marketing leads can always approve; empty means all of them are pinged.</p>';
+    var apBox = S.pub ? (mk277.length
+      /* wave277: pick the approvers from the marketing team; the text input below is the fallback when the team list is empty */
+      ? '<div class="card" style="margin:0 0 12px"><div class="row"><b>Approvers</b>' + mk277.map(function (m) { var em = lower(m.email), nk = (m.nicknames || [])[0]; return '<label class="row" style="gap:6px;cursor:pointer"><input type="checkbox" data-w277ap="' + E(em) + '"' + (apSet.indexOf(em) >= 0 ? ' checked' : '') + '><span>' + E(m.name || em) + (nk ? ' <span class="muted">(' + E(nk) + ')</span>' : '') + '</span></label>'; }).join('') + '<span class="sp"></span><a class="btn225 sm pri" data-w277apsave="1">Save approvers</a></div>' + apHelp + '</div>'
+      : '<div class="card" style="margin:0 0 12px"><div class="row"><b>Approvers</b><input type="text" data-w241approvers placeholder="ian.odhiambo@welfareavenue.com, kahkashan.ansary@welfareavenue.com" value="' + E(aps) + '" style="flex:1;min-width:240px"><a class="btn225 sm pri" data-w241apsave="1">Save</a></div>' + apHelp + '</div>') : '';
     return apBox + '<div class="row" style="margin:0 0 12px"><span class="seg">' + tabs.map(function (t) { return '<a data-w225apr="' + t[0] + '" class="' + (cur[0] === t[0] ? 'on' : '') + '">' + E(t[1]) + '<span class="n">' + t[2].length + '</span></a>'; }).join('') + '</span><span class="sp"></span><span class="muted">' + E(intro) + '</span></div>' +
       (cur[2].length ? cur[2].map(apCard).join('') : '<div class="card"><div class="empty">' + (cur[0] === 'pending' ? 'Nothing waits for an approval.' : cur[0] === 'changes' ? 'Nothing was sent back.' : cur[0] === 'mine' ? 'You have not sent anything for approval.' : 'Nothing approved in the last 30 days.') + '</div></div>');
   }
@@ -38,8 +43,9 @@
     if (inp) { inp.focus(); try { inp.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ } toastS('Write the note, then Send it back'); }
   }
   async function saveApprovers() {
-    var inp = document.querySelector('#w225host [data-w241approvers]'); if (!inp) return;
-    var list = inp.value.split(/[,\s;]+/).map(function (x) { return lower(x); }).filter(function (x) { return /@/.test(x); });
+    var boxes = document.querySelectorAll('#w225host [data-w277ap]'), list;
+    if (boxes.length) list = Array.prototype.filter.call(boxes, function (c) { return c.checked; }).map(function (c) { return lower(c.getAttribute('data-w277ap')); });
+    else { var inp = document.querySelector('#w225host [data-w241approvers]'); if (!inp) return; list = inp.value.split(/[,\s;]+/).map(function (x) { return lower(x); }).filter(function (x) { return /@/.test(x); }); }
     try { var value = Object.assign({}, S.settings || {}, { approvers: list }); var r = await db.rpc('studio_settings_save', { p_key: 'content_studio', p_value: value }); if (r.error) throw r.error; S.settings = value; toastS(list.length ? 'Approvers saved: ' + list.length : 'Approvers cleared: the marketing leads and admins are pinged'); paint(); }
     catch (x) { toastS('Could not save: ' + (x.message || x)); }
   }
