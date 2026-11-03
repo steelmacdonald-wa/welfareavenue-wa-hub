@@ -26,7 +26,7 @@
 | Flow status (extended) | `offered`, `waiting`, `ready`, `running`, `started`, `backed_out` |
 | Step keys, in order | `roster`, `google`, `hub`, `plan`, `invites`, `manager`, `slack`, `welcome` |
 | Step timing | at Accept: `roster`, `google`, `hub`; at booking: `plan`, `invites`, `manager`, `welcome`; `slack` stays an HR task |
-| Dependencies | `google` and `plan` need `roster`; `hub` needs `google`; `invites`, `manager`, `welcome` need `plan`; `welcome` also waits on nothing else (login paragraph varies) |
+| Dependencies | `google` and `plan` need `roster`; `hub` needs `google`; `invites` and `manager` need `roster` (as wave271: a failed plan does not hold back the invites); `welcome` needs `invites` (its Meet links) and nothing else (the login paragraph varies). Amended by the controller after Task 3 review. |
 | Hours a week | `4`, `6`, `8`; default `4`; stored as `hub_candidates.offer_hours int` |
 | Proposal lead time | at least 48 hours ahead when proposed; at least 24 hours ahead when the hire presses Yes |
 | Meeting lengths | call `onboard_call_min` (60), 1-on-1 `onboard_one_on_one_min` (30) |
@@ -64,11 +64,11 @@
   - `wa275_availability_set(p_availability jsonb) returns void` (a signed-in person sets their own), and the read of a manager's availability is through the function `wa275_availability_of(p_member bigint)` (HR, admin, or the person)
   - `hub_notification_kinds` rows for the three new kinds; `app_config` keys from Fixed values (except `onboard_v2_since`, set at release)
 
-- [ ] **Step 1: Write `test/w275sql.sql`** (begin/rollback), asserting: an offer sent creates an `offered` flow with the manager; accepting moves it to `waiting` and keeps the proposal; a second offer_sent update creates no second flow; `wa275_manager_of` is true for the manager's email, HR and admins, false for another member; `wa275_my_cards` returns only that manager's flows; availability validation (a block end after its start, times on 5-minute marks, weekday keys only; `except` dates valid); `hours_confirmed_at` set is readable by HR; `onboard_v2_since` absent until release.
-- [ ] **Step 2: Run the PGlite runner.** Expected: FAIL.
-- [ ] **Step 3: Write the migration and undo**, in wave271's style, every object commented, RLS on nothing new (no new tables), column grants excluding nothing new. The availability validation is a check function `wa275_availability_ok(jsonb)`.
-- [ ] **Step 4: Run.** Expected: PASS, twice, and the undo round trip.
-- [ ] **Step 5: Commit** (`wave275a:` prefix; branch `wave275-streamlined` from `wave271-onboarding`).
+- [x] **Step 1: Write `test/w275sql.sql`** (begin/rollback), asserting: an offer sent creates an `offered` flow with the manager; accepting moves it to `waiting` and keeps the proposal; a second offer_sent update creates no second flow; `wa275_manager_of` is true for the manager's email, HR and admins, false for another member; `wa275_my_cards` returns only that manager's flows; availability validation (a block end after its start, times on 5-minute marks, weekday keys only; `except` dates valid); `hours_confirmed_at` set is readable by HR; `onboard_v2_since` absent until release.
+- [x] **Step 2: Run the PGlite runner.** Expected: FAIL.
+- [x] **Step 3: Write the migration and undo**, in wave271's style, every object commented, RLS on nothing new (no new tables), column grants excluding nothing new. The availability validation is a check function `wa275_availability_ok(jsonb)`.
+- [x] **Step 4: Run.** Expected: PASS, twice, and the undo round trip.
+- [x] **Step 5: Commit** (`wave275a:` prefix; branch `wave275-streamlined` from `wave271-onboarding`).
 
 ## Task 2: The manager's side: `mgr` link proposes times and edits availability
 
@@ -84,11 +84,11 @@
   - POST `{t, a: 'propose', ...}` on a flow already answered `yes` is refused (`already_booked`)
 - The page: the manager's view in `/o/index.html` shows the availability editor (weekday rows with blocks; add a block, remove a block; exceptions by date), the stale notice ("Please confirm your availability: it was last set on <date>" when older than 30 days or missing), the two picks from a grid of their free cells (busy greyed), and "Propose these times".
 
-- [ ] **Step 1: Write failing tests** for each rule above, including: default availability when none saved; a block outside 00:00 to 24:00 refused; a proposal inside an exception refused; a slot taken by another flow refused; propose then hire-accepts path sends `hire_times`; practice flow proposes without any fetch.
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.** Keep the manager page in `/o/index.html` (the design leaves the split to the builder; one file keeps the headers and redirects as they are).
-- [ ] **Step 4: Run** `node --test test/w271link.test.mjs` and `cd test && node w271page.js`. Expected: PASS.
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write failing tests** for each rule above, including: default availability when none saved; a block outside 00:00 to 24:00 refused; a proposal inside an exception refused; a slot taken by another flow refused; propose then hire-accepts path sends `hire_times`; practice flow proposes without any fetch.
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.** Keep the manager page in `/o/index.html` (the design leaves the split to the builder; one file keeps the headers and redirects as they are).
+- [x] **Step 4: Run** `node --test test/w271link.test.mjs` and `cd test && node w271page.js`. Expected: PASS.
+- [x] **Step 5: Commit.**
 
 ## Task 3: The hire's side: Accept with hours, Yes or No, the closing page, the rundown; the at-Accept setup
 
@@ -108,11 +108,11 @@
   - Step `google` run: `users.insert` to `/` with the vault password and `changePasswordAtNextLogin: true`, acting as `steel.macdonald@welfareavenue.com`; read back before done; 409 or no licence become `hr_task` with Google's reason; password unset becomes `hr_task` "The first password is not set in admin settings"; practice simulates. Step `hub` run: hub-invite at member level through the secret path (`fn/hub-invite/index.ts` gains `x-wa-secret` for `invite` only, member level forced).
 - The closing view: "Thank you, <name>. Your invites are on their way; <manager> will see you on <date>." (or "<manager> will pick from your times") with the rundown link.
 
-- [ ] **Step 1: Write failing tests:** Accept without `hours_ok` refused when hours set, allowed when hours null (wave271 offers); roster at Accept has no start date and the card stays `offer`, both filled at booking; a second `no` refused; accept with no proposal shows the waiting message; Accept triggers `accept_setup` once; Yes books and the flow is `started` with both events and the welcome sent; Yes with a stale time returns `stale` and books nothing; No records and notifies; grid save after No shows closing; setup ticks save and are idempotent; `google` with password unset is `hr_task`; a Workspace 409 is `hr_task`; `hub` through the secret path; practice: no fetch; the password never appears in any table snapshot or captured console (Global Constraint).
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement**, reusing wave271's step table: give `google` and `hub` their `run`, add the timing field, and split `advance` into the two groups.
-- [ ] **Step 4: Run** all `test/w271*` suites. Expected: PASS.
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write failing tests:** Accept without `hours_ok` refused when hours set, allowed when hours null (wave271 offers); roster at Accept has no start date and the card stays `offer`, both filled at booking; a second `no` refused; accept with no proposal shows the waiting message; Accept triggers `accept_setup` once; Yes books and the flow is `started` with both events and the welcome sent; Yes with a stale time returns `stale` and books nothing; No records and notifies; grid save after No shows closing; setup ticks save and are idempotent; `google` with password unset is `hr_task`; a Workspace 409 is `hr_task`; `hub` through the secret path; practice: no fetch; the password never appears in any table snapshot or captured console (Global Constraint).
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement**, reusing wave271's step table: give `google` and `hub` their `run`, add the timing field, and split `advance` into the two groups.
+- [x] **Step 4: Run** all `test/w271*` suites. Expected: PASS.
+- [x] **Step 5: Commit.**
 
 ## Task 4: The welcome email and the first password setting
 
@@ -126,11 +126,11 @@
   - `set_first_password {password}` (admins only, JWT): refuses under 8 characters or without a letter and a digit; stores through `wa_vault_set('ONBOARD_FIRST_PASSWORD', ...)`; writes change_log "set" with no value; `first_password_state` returns `{set: boolean, set_at}`
   - the card shows "First password: set on <date>" or "not set", with the admin field to set it (type password, never echoed)
 
-- [ ] **Step 1: Write failing tests:** the rendered preview and the saved copy contain `[first password]` and never the vault value; the sent MIME contains the value exactly once; the variant when `google` is `hr_task`; `set_first_password` refusals and the change_log row without the value; a non-admin refused; the drive test shows the state line and never a password in the DOM.
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write failing tests:** the rendered preview and the saved copy contain `[first password]` and never the vault value; the sent MIME contains the value exactly once; the variant when `google` is `hr_task`; `set_first_password` refusals and the change_log row without the value; a non-admin refused; the drive test shows the state line and never a password in the DOM.
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run.** Expected: PASS.
+- [x] **Step 5: Commit.**
 
 ## Task 5: The offer panel asks for the manager and the hours; the manager is asked for times
 
@@ -141,11 +141,11 @@
 - Produces: `offer_send` requires `hours` in `{4,6,8}` and `manager_member_id` (default from `wa271_default_manager` shown in the panel), stores `offer_hours` and `onboard_manager_id`, then (the trigger made the `offered` flow) calls `onboard-run` `ask_manager {flow_id}` (secret): a Slack DM and an email from hub@ to the manager with their `mgr` link, and a reminder after `onboard_remind_hours` through `remind` (extend wave271's `remind`: flows `offered` with no proposal)
 - The panel: "Onboarding manager" select (required) and "Hours a week" as 4, 6 or 8.
 
-- [ ] **Step 1: Write failing tests:** send refused without a manager or with hours outside the set; stored values; `ask_manager` sends the DM and the email with a token that verifies through `onboard-link`; the reminder once; the drive test shows the two fields and the refusal.
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run.** Expected: PASS.
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write failing tests:** send refused without a manager or with hours outside the set; stored values; `ask_manager` sends the DM and the email with a token that verifies through `onboard-link`; the reminder once; the drive test shows the two fields and the refusal.
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run.** Expected: PASS.
+- [x] **Step 5: Commit.**
 
 ## Task 6: The card for HR and the manager; availability on My page
 
@@ -155,13 +155,14 @@
 
 **Interfaces:**
 - Consumes: `wa275_my_cards`, `wa271_ready_list` (extended), `onboard-run` actions (`propose` from the card for HR or the manager: same rules as Task 2; `book` from the grid; wave271's change actions now allowed to `wa275_manager_of`), `wa275_availability_set`/`_of`.
-- Produces: the card has the switch "Availability: ask the hire / already communicated" (`set_ask_availability {flow_id, on}`), "Enter their availability" (HR or the manager fills the hire's grid on their behalf through `grid_for {flow_id, who, slots}`) and "Set <manager>'s availability" (`availability_for {member_id, availability}`, HR or admin); the Ready card shows the proposal state ("Proposed by Kahkashan: Wed 4 Nov 10 am and Thu 5 Nov 10 am; waiting for James"), the hire's answer, the hours confirmation, the setup steps with results, the rundown ticks ("3 of 8 setup steps done"); a manager sees their own hires' cards on their team page and Home; My page gets "My availability" (the same editor as Task 2) with the stale notice.
+- Produces: the card has the switch "Availability: ask the hire / already communicated" (`set_ask_availability {flow_id, on}`), "Enter their availability" (HR or the manager fills the hire's grid on their behalf through `grid_for {flow_id, who, slots}`) and "Set <manager>'s availability" (`availability_for {member_id, availability}`, HR or admin); the Ready card shows the proposal state ("Proposed by Kahkashan: Wed 4 Nov 10 am and Thu 5 Nov 10 am; waiting for James"), the hire's answer, the hours confirmation, the setup steps with results, the rundown ticks ("3 of 8 setup steps done"); a manager sees their own hires' cards on their team page and Home; HR can edit the welcome text before booking on a wave275 flow (`set_welcome {flow_id, subject, text}`, brackets kept, same rule as Start's preview); the card shows the first-password state and the admin field from Task 4.
+- **Amended 02/11/26 (Steel's ruling after wave276 went live):** the onboarding manager's availability is **wave276's typical week**, not a second entry. `wa275_availability_of(p_member)` now derives `weekly` from the manager's current `hub_team_avail` rows (their roster email, the newest `effective_from` on or before today per team, the union of teams; `slots` are `weekday * 1440 + minute`, weekday 0 = Monday, Toronto wall time, cells of `avail_cell_min` minutes, joined into blocks) and keeps `except` and `tz` from `team_members.availability` (which no longer holds `weekly`); with no saved week the default Monday to Friday 09:00 to 17:00 applies and the manager's page and the card say "Set your week on the Hub's Home page" (wave276's pop-up `#w276pop`). Every read of a manager's availability (onboard-run's `propose` rules, onboard-link's mgr GET, the card's picker) goes through that function. The mgr link's editor keeps **one-off exceptions only**; the weekly editor on the mgr link and the planned "My availability" editor on My page are dropped; `wa275_availability_set` and `availability_for` take `{except, tz}` only. "Current" means saved on or after the latest wave276 ask on or before today for any of their teams (wave276's own rule); the separate 30-day staleness prompt is dropped. `b_avail.js` becomes the exceptions editor shared by the card and the mgr page. Settled for Task 6 and for the whole-branch review; if wrong, the weekly editor from Task 2 is still in git history.
 
-- [ ] **Step 1: Write failing `test/w275drive.js`** (admin, HR member, a plain member who manages a hire, a leader, board; 390 px): who sees which cards; propose from the card; the already-communicated switch hides the hire's grid on No and lets HR enter the hire's times; HR sets a manager's availability; the plain-member manager can book and change time but not see other cards; the availability editor saves; no console errors; no sideways scroll.
-- [ ] **Step 2: Run.** Expected: FAIL.
-- [ ] **Step 3: Implement**, wrapping wave271's renderers per `docs/ARCHITECTURE.md` section 5.
-- [ ] **Step 4: Run** `w275drive`, `w271drive`, `w211drive`. Expected: PASS.
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write failing `test/w275drive.js`** (admin, HR member, a plain member who manages a hire, a leader, board; 390 px): who sees which cards; propose from the card; the already-communicated switch hides the hire's grid on No and lets HR enter the hire's times; HR sets a manager's availability; the plain-member manager can book and change time but not see other cards; the availability editor saves; no console errors; no sideways scroll.
+- [x] **Step 2: Run.** Expected: FAIL.
+- [x] **Step 3: Implement**, wrapping wave271's renderers per `docs/ARCHITECTURE.md` section 5.
+- [x] **Step 4: Run** `w275drive`, `w271drive`, `w211drive`. Expected: PASS.
+- [x] **Step 5: Commit.**
 
 ## Task 7: Release
 
