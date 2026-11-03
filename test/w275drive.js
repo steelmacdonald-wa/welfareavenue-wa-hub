@@ -255,6 +255,26 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
     await done(f);
   }
 
+  /* ---------- 4c. re-review fix: an error that is not the "Only HR" refusal decides nothing ----------
+     The same leader (not on the hr profile), with HR's list failing for another reason: the error is kept to show, they are not sent to their own
+     hires, HR's tools stay on, and the next load asks for HR's list again and gets it. */
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }), init: init + '\n' + 'window.__WA_RPC_ERRORS = { wa271_ready_list: "upstream request timeout" };' });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    let s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, denied: S.denied, err: S.err, tools: window.o271R.hrTools(), mineRpc: (window.__O275_RPC || []).length }; });
+    ok("a timeout on HR's list: the error is kept to show (not hidden as a refusal), and the leader is not sent to their own hires", s.hrList == null && !s.mine && s.denied === false && /could not load this list: upstream request timeout/.test(s.err) && s.tools === true, s);
+    await f.ev(() => { window.__WA_RPC_ERRORS = {}; });
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, err: S.err, ready: S.ready.map((x) => x.flow_id) }; });
+    ok("the next load asks for HR's list again and gets it", s.hrList === true && !s.mine && !s.err && [F.said, F.offered, FLOW.real].every((id) => s.ready.indexOf(id) >= 0), s);
+    ok('no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
   /* ---------- 5. 390 px ---------- */
   {
     const f = await go({ who: 'plain', width: 390, hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }), init: init + '\n' + NOT_HR });

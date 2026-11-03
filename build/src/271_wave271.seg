@@ -196,6 +196,7 @@
   function loadHr() {
     if (S.loading) return S.loading;
     S.loading = (async function () {
+      S.refused = false; S.loadErr = '';   /* wave275 reads these: the database's own "Only HR" refusal, and any other failure, apart */
       try {
         var r = await db.rpc('wa271_ready_list');
         if (r && r.error) throw r.error;
@@ -209,6 +210,7 @@
         await Promise.all([readPeople(), readCfg(), readPw()]);
       } catch (e) {
         var msg = String((e && e.message) || e);
+        if (/Only HR/i.test(msg)) S.refused = true; else S.loadErr = msg;
         if (/Only HR/i.test(msg) || !surelyHr()) S.denied = true;
         else S.err = 'The Hub could not load this list: ' + msg;
       }

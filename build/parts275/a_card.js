@@ -90,7 +90,11 @@
     if (!staffUser()) return loadHr();
     if (S.hrList === false) return loadMine();
     return loadHr().then(function () {
-      if (S.denied) { S.hrList = false; return loadMine(); }
+      if (S.refused) { S.hrList = false; return loadMine(); }   /* the database's own "Only HR": their own hires from now on */
+      if (S.loadErr) {   /* anything else decides nothing: the error shows as wave271 shows it, and the next load asks for HR's list again */
+        if (S.denied) { S.denied = false; S.err = 'The Hub could not load this list: ' + S.loadErr; R.paint(); }
+        return;
+      }
       S.hrList = true;
     });
   };
