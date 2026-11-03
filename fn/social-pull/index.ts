@@ -638,7 +638,7 @@ async function syncLinkedin(a: Account, tok: string, days: number): Promise<{ ro
   const rows: Row[] = []; const skipped: string[] = [];
   const put = (day: string | null, metric: string, v: number | null) => { if (day && v != null) rows.push({ platform: 'linkedin', account_id: a.id, day, metric, value: v }); };
   // followers today
-  try { const r = await li('/networkSizes/' + eurn + '?edgeType=CompanyFollowedByMember', tok); put(until, 'followers', num0(r.firstDegreeSize)); }
+  try { const r = await li('/networkSizes/' + eurn + '?edgeType=COMPANY_FOLLOWED_BY_MEMBER', tok); put(until, 'followers', num0(r.firstDegreeSize)); }
   catch (e) { skipped.push('followers: ' + String((e as Error).message).slice(0, 80)); }
   // follower gains by day
   try {
