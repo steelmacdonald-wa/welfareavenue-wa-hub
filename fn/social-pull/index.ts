@@ -637,14 +637,20 @@ async function syncLinkedin(a: Account, tok: string, days: number): Promise<{ ro
   const since = dayAgo(span), until = dayAgo(0);
   const rows: Row[] = []; const skipped: string[] = [];
   const put = (day: string | null, metric: string, v: number | null) => { if (day && v != null) rows.push({ platform: 'linkedin', account_id: a.id, day, metric, value: v }); };
-  // followers today
-  try { const r = await li('/networkSizes/' + eurn + '?edgeType=COMPANY_FOLLOWED_BY_MEMBER', tok); put(until, 'followers', num0(r.firstDegreeSize)); }
+  // followers today (LinkedIn gives the total only for now, so the series is walked back from today with the daily gains)
+  let total: number | null = null;
+  try { const r = await li('/networkSizes/' + eurn + '?edgeType=COMPANY_FOLLOWED_BY_MEMBER', tok); total = num0(r.firstDegreeSize); put(until, 'followers', total); }
   catch (e) { skipped.push('followers: ' + String((e as Error).message).slice(0, 80)); }
   // follower gains by day
+  const gains: Record<string, number> = {};
   try {
     const r = await li('/organizationalEntityFollowerStatistics?q=organizationalEntity&organizationalEntity=' + eurn + '&' + liIntervals(since), tok);
-    for (const el of (r.elements || [])) { const g = el.followerGains || {}; put(liDay(el), 'new_followers', (num0(g.organicFollowerGain) || 0) + (num0(g.paidFollowerGain) || 0)); }
+    for (const el of (r.elements || [])) { const g = el.followerGains || {}; const day = liDay(el); const v = (num0(g.organicFollowerGain) || 0) + (num0(g.paidFollowerGain) || 0); put(day, 'new_followers', v); if (day) gains[day] = v; }
   } catch (e) { skipped.push('follower gains: ' + String((e as Error).message).slice(0, 80)); }
+  if (total != null) {
+    let run = total;
+    for (let i = 1; i <= span; i++) { const later = dayAgo(i - 1), day = dayAgo(i); run -= gains[later] || 0; put(day, 'followers', Math.max(0, run)); }
+  }
   // impressions, reach, clicks, likes, comments, shares by day
   try {
     const r = await li('/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=' + eurn + '&' + liIntervals(since), tok);
