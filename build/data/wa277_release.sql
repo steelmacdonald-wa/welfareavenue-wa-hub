@@ -17,6 +17,9 @@ on conflict (key) do update set grp = excluded.grp, grp_title = excluded.grp_tit
 -- the Academy lesson: the approvers are now set on the Approvals page, not named in the text
 update public.trainings set body = replace(body::text, 'the named approvers (Ian and KK)', 'the approvers set on the Approvals page')::jsonb where key = 'lesson:studio';
 update public.trainings set body = replace(body::text, 'how it goes to Ian and KK for approval', 'how it goes to the approvers')::jsonb where key = 'lesson:studio';
+-- found at release (02/11/26): the quiz answer and three step texts named them too
+update public.trainings set body = replace(body::text, 'The named approvers, Ian and KK, in the Hub and on Slack', 'The approvers set on the Approvals page, in the Hub and on Slack')::jsonb where key = 'lesson:studio';
+update public.trainings set body = replace(body::text, 'Ian and KK hear', 'The approvers hear')::jsonb where key = 'lesson:studio';
 
 select key, (body::text like '%Ian and KK%') as still_names_ian_and_kk from public.trainings where key = 'lesson:studio';
 
