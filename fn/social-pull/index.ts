@@ -1,9 +1,9 @@
-// Welfare Avenue: social-pull (v1.7, 27/09/26: a copy of each post's photo in Hub storage, social_posts.thumb_cached, because the Hub's content security policy only loads images from the Hub and Meta's photo links expire; action rehost, and each sync copies the new photos. v1.6, 25/09/26: backfill walks each account back as far as its API allows (Facebook and Instagram two years, posts and media all of them, GA4 since the property started), Instagram follower demographics (age and gender, cities, countries), a WhatsApp Business check in the probe, posts deduplicated before the upsert (GA4 pages); v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.8, 03/11/26: LinkedIn read through its API once the Page is connected on Content Studio > Connections (wave277): followers, follower gains, impressions, unique impressions, clicks, likes, comments, shares and page views by day, and the Page's posts with their statistics; the first API sync takes the last 365 days, then each morning the usual window; the CSV route stays for a Page that is not connected. v1.7, 27/09/26: a copy of each post's photo in Hub storage, social_posts.thumb_cached, because the Hub's content security policy only loads images from the Hub and Meta's photo links expire; action rehost, and each sync copies the new photos. v1.6, 25/09/26: backfill walks each account back as far as its API allows (Facebook and Instagram two years, posts and media all of them, GA4 since the property started), Instagram follower demographics (age and gender, cities, countries), a WhatsApp Business check in the probe, posts deduplicated before the upsert (GA4 pages); v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
 // (GOOGLE_SA_KEY, added as a Viewer on the property), and takes CSV exports
-// for the platforms whose APIs need an approval first (TikTok, LinkedIn).
+// for the platforms whose APIs need an approval first (TikTok; LinkedIn until its Page is connected, v1.8).
 // Writes social_accounts, social_daily (one row per platform, day, metric)
 // and social_posts; writes the weekly note with the router (task digest).
 // Actions (POST):
@@ -364,7 +364,7 @@ async function syncGa4(a: Account, days: number): Promise<{ rows: number; posts:
 
 /* ---------- history and audience (v1.6) ---------- */
 const MAX_BACK = 730; // Meta keeps two years of insights; GA4 keeps what the property collected
-type History = { daily_from?: string | null; daily_done?: boolean; totals_from?: string | null; totals_done?: boolean; posts_after?: string | null; posts_done?: boolean; started_at?: string; updated_at?: string; notes?: string[] };
+type History = { daily_from?: string | null; daily_done?: boolean; totals_from?: string | null; totals_done?: boolean; posts_after?: string | null; posts_done?: boolean; started_at?: string; updated_at?: string; notes?: string[]; linkedin_api_from?: string | null };
 function hist(a: Account): History { return ((a.meta || {}) as Any).history || {}; }
 async function saveHistory(a: Account, h: History, extra: Record<string, Any> = {}): Promise<void> {
   const { data: cur } = await svc.from('social_accounts').select('meta').eq('id', a.id).single();
@@ -542,6 +542,7 @@ async function backfill(a: Account, budget: number): Promise<Any> {
   if (a.platform === 'facebook') return { ...(await backfillFacebook(a, await getSecret('META_SYSTEM_TOKEN'), budget)), id: a.id, ms: Date.now() - started };
   if (a.platform === 'instagram') return { ...(await backfillInstagram(a, await getSecret('META_SYSTEM_TOKEN'), budget)), id: a.id, ms: Date.now() - started };
   if (a.platform === 'ga4') return { ...(await backfillGa4(a)), id: a.id, ms: Date.now() - started };
+  if (a.platform === 'linkedin' && a.status !== 'csv') { const r = await syncLinkedin(a, await getSecret('SOCIAL_LINKEDIN_TOKEN'), 365); await saveHistory(a, { ...h, daily_done: true, posts_done: true, daily_from: dayAgo(365), notes: r.skipped }); return { id: a.id, platform: 'linkedin', done: true, daily_from: dayAgo(365), rows: r.rows, posts: r.posts, notes: r.skipped, ms: Date.now() - started }; }   /* v1.8 */
   return { id: a.id, platform: a.platform, done: true, notes: ['a CSV platform: its history is what the export holds'] };
 }
 
@@ -583,6 +584,7 @@ async function syncAccount(a: Account, days: number): Promise<Any> {
       const token = await getSecret('META_SYSTEM_TOKEN');
       out = a.platform === 'facebook' ? await syncFacebook(a, token, days) : await syncInstagram(a, token, days);
     } else if (a.platform === 'ga4') out = await syncGa4(a, days);
+    else if (a.platform === 'linkedin') out = await syncLinkedin(a, await getSecret('SOCIAL_LINKEDIN_TOKEN'), days);   /* v1.8 */
     else return { id: a.id, platform: a.platform, skipped: 'csv platform' };
     const err = out.rows === 0 && out.posts === 0 && out.skipped.length ? out.skipped.join(' | ').slice(0, 400) : null;
     await markSync(a.id, err);
@@ -592,6 +594,106 @@ async function syncAccount(a: Account, days: number): Promise<Any> {
     await markSync(a.id, msg);
     return { id: a.id, platform: a.platform, error: msg, ms: Date.now() - started };
   }
+}
+
+/* ---------- LinkedIn (v1.8) ----------
+   Reads the Page the Hub is connected to (Content Studio > Connections, social-connect wave277) with the Community
+   Management login in the vault (SOCIAL_LINKEDIN_TOKEN, r_organization_social and rw_organization_admin). Daily numbers
+   come from the organization statistics endpoints; the posts from /rest/posts with their share statistics. A login that
+   has lapsed is reported as the account's error with the way back (reconnect on the Connections page). */
+const LI = 'https://api.linkedin.com/rest';
+const liHeaders = (tok: string) => ({ Authorization: 'Bearer ' + tok, 'Linkedin-Version': '202609', 'X-Restli-Protocol-Version': '2.0.0' });
+async function li(path: string, tok: string): Promise<Any> {
+  const res = await fetch(LI + path, { headers: liHeaders(tok), signal: AbortSignal.timeout(20000) });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error('LinkedIn login lapsed: reconnect the Page on Content Studio > Connections');
+  if (res.status === 403) throw new Error('LinkedIn refused (403): the login lacks a scope or the Page admin role; reconnect on Content Studio > Connections');
+  if (!res.ok) throw new Error('LinkedIn HTTP ' + res.status + (body.message ? ': ' + String(body.message).slice(0, 120) : ''));
+  return body;
+}
+function liUrn(a: Account): string { return 'urn:li:organization:' + String(a.external_id || '').replace(/^urn:li:organization:/, ''); }
+function liIntervals(since: string): string { return 'timeIntervals=(timeRange:(start:' + (unix(since) * 1000) + ',end:' + Date.now() + '),timeGranularityType:DAY)'; }
+function liDay(el: Any): string | null { const t = el && el.timeRange && Number(el.timeRange.start); return t ? isoDay(new Date(t)) : null; }
+const num0 = (v: Any): number | null => (typeof v === 'number' && isFinite(v)) ? v : null;
+/* the Page the Studio connected becomes the Analytics account: the CSV row (if any) keeps its history and takes the Page id */
+async function adoptLinkedin(): Promise<Account | null> {
+  const { data: st } = await svc.from('hub_settings').select('value').eq('key', 'studio_connections').maybeSingle();
+  const c = ((st && st.value) || {}).linkedin || {};
+  const id = String(c.org_urn || c.account_id || '').replace(/^urn:li:organization:/, '');
+  if (c.status !== 'connected' || !id || !(await secretOrNull('SOCIAL_LINKEDIN_TOKEN'))) return null;
+  const { data: cur } = await svc.from('social_accounts').select('*').eq('platform', 'linkedin').order('id').limit(1).maybeSingle();
+  if (cur && cur.external_id === id && (cur.status === 'connected' || cur.status === 'error')) return cur as Account;
+  if (cur) {
+    const { data, error } = await svc.from('social_accounts').update({ external_id: id, status: 'connected', last_error: null, url: cur.url || 'https://www.linkedin.com/company/' + id + '/', meta: { ...(cur.meta || {}), org_urn: 'urn:li:organization:' + id, api_since: new Date().toISOString() } }).eq('id', cur.id).select('*').single();
+    if (error) throw new Error(error.message);
+    return data as Account;
+  }
+  return await upsertAccount({ platform: 'linkedin', external_id: id, name: c.name || 'Welfare Avenue', handle: null, url: 'https://www.linkedin.com/company/' + id + '/', status: 'connected', meta: { by: 'automation', org_urn: 'urn:li:organization:' + id, api_since: new Date().toISOString() } });
+}
+async function syncLinkedin(a: Account, tok: string, days: number): Promise<{ rows: number; posts: number; skipped: string[] }> {
+  const urn = liUrn(a), eurn = encodeURIComponent(urn);
+  const h = hist(a);
+  const span = h.linkedin_api_from ? days : 365;   /* the first API sync takes the year LinkedIn allows */
+  const since = dayAgo(span), until = dayAgo(0);
+  const rows: Row[] = []; const skipped: string[] = [];
+  const put = (day: string | null, metric: string, v: number | null) => { if (day && v != null) rows.push({ platform: 'linkedin', account_id: a.id, day, metric, value: v }); };
+  // followers today
+  try { const r = await li('/networkSizes/' + eurn + '?edgeType=CompanyFollowedByMember', tok); put(until, 'followers', num0(r.firstDegreeSize)); }
+  catch (e) { skipped.push('followers: ' + String((e as Error).message).slice(0, 80)); }
+  // follower gains by day
+  try {
+    const r = await li('/organizationalEntityFollowerStatistics?q=organizationalEntity&organizationalEntity=' + eurn + '&' + liIntervals(since), tok);
+    for (const el of (r.elements || [])) { const g = el.followerGains || {}; put(liDay(el), 'new_followers', (num0(g.organicFollowerGain) || 0) + (num0(g.paidFollowerGain) || 0)); }
+  } catch (e) { skipped.push('follower gains: ' + String((e as Error).message).slice(0, 80)); }
+  // impressions, reach, clicks, likes, comments, shares by day
+  try {
+    const r = await li('/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=' + eurn + '&' + liIntervals(since), tok);
+    for (const el of (r.elements || [])) {
+      const t = el.totalShareStatistics || {}; const day = liDay(el);
+      put(day, 'views', num0(t.impressionCount)); put(day, 'reach', num0(t.uniqueImpressionsCount)); put(day, 'clicks', num0(t.clickCount));
+      put(day, 'likes', num0(t.likeCount)); put(day, 'comments', num0(t.commentCount)); put(day, 'shares', num0(t.shareCount));
+      put(day, 'engagement', (num0(t.likeCount) || 0) + (num0(t.commentCount) || 0) + (num0(t.shareCount) || 0) + (num0(t.clickCount) || 0));
+    }
+  } catch (e) { skipped.push('share statistics: ' + String((e as Error).message).slice(0, 80)); }
+  // page views by day
+  try {
+    const r = await li('/organizationPageStatistics?q=organization&organization=' + eurn + '&' + liIntervals(since), tok);
+    for (const el of (r.elements || [])) { const v = (((el.totalPageStatistics || {}).views || {}).allPageViews || {}); put(liDay(el), 'profile_views', num0(v.pageViews)); }
+  } catch (e) { skipped.push('page views: ' + String((e as Error).message).slice(0, 80)); }
+  const n = await putDaily(rows);
+  // the Page's name and address, once
+  if (!a.handle || !a.url || /\/company\/\d+\/$/.test(a.url)) {
+    try { const o = await li('/organizations/' + encodeURIComponent(String(a.external_id)) + '?fields=vanityName,localizedName', tok); const patch: Record<string, Any> = {}; if (o.vanityName) { patch.handle = String(o.vanityName).slice(0, 80); patch.url = 'https://www.linkedin.com/company/' + o.vanityName + '/'; } if (o.localizedName && !a.name) patch.name = String(o.localizedName).slice(0, 120); if (Object.keys(patch).length) await svc.from('social_accounts').update(patch).eq('id', a.id); }
+    catch (e) { skipped.push('page name: ' + String((e as Error).message).slice(0, 80)); }
+  }
+  // posts and their statistics
+  const posts: Post[] = [];
+  try {
+    const r = await li('/posts?author=' + eurn + '&q=author&count=50&sortBy=LAST_MODIFIED', tok);
+    const els = (r.elements || []).filter((p: Any) => p && p.id && (!p.lifecycleState || p.lifecycleState === 'PUBLISHED'));
+    const stats: Record<string, Any> = {};
+    const shares = els.map((p: Any) => String(p.id)).filter((id: string) => /^urn:li:share:/.test(id));
+    const ugc = els.map((p: Any) => String(p.id)).filter((id: string) => /^urn:li:ugcPost:/.test(id));
+    for (const [key, ids] of [['shares', shares], ['ugcPosts', ugc]] as Array<[string, string[]]>) {
+      for (let i = 0; i < ids.length; i += 20) {
+        try {
+          const sr = await li('/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=' + eurn + '&' + key + '=List(' + ids.slice(i, i + 20).map(encodeURIComponent).join(',') + ')', tok);
+          for (const el of (sr.elements || [])) { const id = el.share || el.ugcPost; if (id) stats[String(id)] = el.totalShareStatistics || {}; }
+        } catch (e) { skipped.push('post statistics: ' + String((e as Error).message).slice(0, 80)); }
+      }
+    }
+    for (const p of els) {
+      const t = stats[String(p.id)] || {};
+      const media = (p.content && p.content.media) || null; const multi = p.content && p.content.multiImage;
+      posts.push({ platform: 'linkedin', account_id: a.id, external_id: String(p.id), url: 'https://www.linkedin.com/feed/update/' + p.id + '/', kind: multi ? 'carousel' : media && /video/.test(String(media.id || '')) ? 'video' : media ? 'photo' : 'post',
+        caption: p.commentary ? String(p.commentary) : null, thumb_url: null, published_at: p.publishedAt ? new Date(Number(p.publishedAt)).toISOString() : (p.createdAt ? new Date(Number(p.createdAt)).toISOString() : null),
+        reach: num0(t.uniqueImpressionsCount), views: num0(t.impressionCount), clicks: num0(t.clickCount), likes: num0(t.likeCount) || 0, comments: num0(t.commentCount) || 0, shares: num0(t.shareCount) || 0, saves: null, raw: null });
+    }
+  } catch (e) { skipped.push('posts: ' + String((e as Error).message).slice(0, 80)); }
+  const np = await putPosts(posts);
+  if (np) await putDaily([{ platform: 'linkedin', account_id: a.id, day: until, metric: 'posts', value: posts.filter(p => p.published_at && p.published_at >= since).length }]);
+  if (!h.linkedin_api_from && n) await saveHistory(a, { ...h, linkedin_api_from: since });
+  return { rows: n, posts: np, skipped };
 }
 
 /* ---------- the note ---------- */
@@ -752,6 +854,7 @@ Deno.serve(async (req: Request) => {
     }
     if (action === 'sync') {
       const days = Math.max(2, Math.min(90, Number(body.days) || 30));
+      let adopted: Any = null; try { adopted = await adoptLinkedin(); } catch (e) { adopted = { error: String((e as Error).message).slice(0, 160) }; }   /* v1.8 */
       let q = svc.from('social_accounts').select('*').in('status', ['connected', 'error']);
       if (body.account_id) q = q.eq('id', Number(body.account_id));
       const { data } = await q;
@@ -761,7 +864,7 @@ Deno.serve(async (req: Request) => {
       try { const r = await fetch(SUPABASE_URL + '/functions/v1/social-publish', { method: 'POST', headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', days: 60 }) }); confirmed = await r.json(); } catch (_) { /* the calendar catches up on the next run */ }
       let photos: Any = null;
       try { photos = await rehost(60, 45000); } catch (e) { photos = { error: String((e as Error).message || e).slice(0, 160) }; }
-      return json({ ok: true, results, confirmed, photos });
+      return json({ ok: true, results, confirmed, photos, linkedin: adopted && adopted.error ? adopted : (adopted ? 'api' : 'csv') });
     }
     if (action === 'backfill') {
       const id = Number(body.account_id);
