@@ -98,6 +98,7 @@ const MSG: Record<string, { en: string; fr: string }> = {
   closed: { en: 'This link is no longer active. Please contact HR.', fr: 'Ce lien n\'est plus actif. Veuillez communiquer avec les RH.' },
   unavailable: { en: 'We could not reach the server. Please try again in a minute, or contact HR.', fr: 'Nous n\'avons pas pu joindre le serveur. Réessayez dans une minute, ou communiquez avec les RH.' },
   bad_availability: { en: 'Some of those hours do not work. Use times on 5-minute marks from 00:00 to 23:55, each end after its start, and a date once each. Please check and save again.', fr: 'Certaines de ces heures ne conviennent pas. Utilisez des heures par tranches de 5 minutes de 00:00 à 23:55, chaque fin après son début, et chaque date une seule fois. Vérifiez puis enregistrez de nouveau.' },
+  read_back: { en: 'Your dates are saved. The page could not read your hours back just now, so reload it to see them.', fr: 'Vos dates sont enregistrées. La page n\'a pas pu relire vos heures pour l\'instant: rechargez-la pour les voir.' },
   weekly_moved: { en: 'Your usual week is now set on the Hub\'s Home page, at hub.welfareavenue.com. Here you can only add or remove one-off dates.', fr: 'Votre semaine habituelle se règle maintenant sur la page d\'accueil du Hub, à hub.welfareavenue.com. Ici, vous pouvez seulement ajouter ou retirer des dates ponctuelles.' },
   no_manager: { en: 'This new hire has no onboarding manager yet. Please contact HR.', fr: 'Cette nouvelle recrue n\'a pas encore de gestionnaire d\'accueil. Veuillez communiquer avec les RH.' },
   not_yours: { en: 'This link is no longer yours; a new link is on its way to the right person.', fr: 'Ce lien n\'est plus le vôtre; un nouveau lien est en route vers la bonne personne.' },
@@ -472,7 +473,9 @@ async function saveAvailability(l: Link, value: unknown) {
   const at = new Date().toISOString();
   const { data, error } = await svc.from('team_members').update({ availability, availability_at: at }).eq('id', id).select('id');
   if (error || !(data as unknown[] | null)?.length) return fail('save', 500);
-  return json({ ok: true, ...(await hoursOf(Number(id))) });   // read back through the one function, so the page shows what the rules will use
+  /* read back through the one function, so the page shows what the rules will use; the dates are saved either way, so a failed read-back is a warning */
+  try { return json({ ok: true, ...(await hoursOf(Number(id))) }); }
+  catch (_) { return json({ ok: true, saved: availability, warning: MSG.read_back }); }
 }
 
 /* the proposal: onboard-run holds the rules and the save; this only checks the link and relays */

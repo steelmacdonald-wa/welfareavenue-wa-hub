@@ -2190,6 +2190,13 @@ function inBackground(p: Promise<unknown>): Promise<unknown> | void {
 /* ---------- wave275 Task 6: the card for HR and the manager ---------- */
 /* All signed in. HR and admins act on every card; the hire's manager (wa275_manager_of, as the caller, in the serve handler) on their own hires' cards, with
    these actions only (Review Focus 4). The rules for times stay propose's and book's (timesProblem, read through wa275_availability_of). */
+/* the card's own actions are for a flow on the new path only: a wave271 flow (created before onboard_v2_since, nothing proposed) keeps HR's Start, with
+   its address, preview and skip list (review fix: booking one from the card would run every step with none of them) */
+const EARLIER_PATH = 'This new hire is on the earlier onboarding path: use Choose times and preview, then Start onboarding, on their card in HR Center.';
+async function earlierPath(flowId: unknown): Promise<boolean> {
+  const { data } = await svc.from('hub_onboard_flows').select('status, proposed_at, created_at').eq('id', Number(flowId)).maybeSingle();
+  return !!data && !proposeMode(data as Row, await v2Since());
+}
 const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 'set_welcome', 'welcome', 'retry', 'task_done', 'set_canva_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out'];
 const nameFor = async (email: string) => (await membersByEmail(email).catch(() => []))[0]?.name || email;
 
@@ -2218,7 +2225,8 @@ async function timesView(b: Row): Promise<Response> {
       for (const [s, e] of await takenTimes(Number(f.id), Number(m.id), callMin, oneMin)) if (e > from && s < to) taken.push({ start: new Date(s).toISOString(), end: new Date(e).toISOString() });
     }
   } catch (e) { return no('failed', errText(e) + ' Try again.', 503); }
-  const { data: g } = await svc.from('hub_onboard_grids').select('slots').eq('flow_id', f.id).eq('who', 'hire').maybeSingle();
+  const { data: g, error: gErr } = await svc.from('hub_onboard_grids').select('slots').eq('flow_id', f.id).eq('who', 'hire').maybeSingle();
+  if (gErr) return no('failed', 'The new hire\'s times could not be read (' + gErr.message + '). Try again.', 503);   // never an empty grid on a failed read
   return json({
     manager: m ? { member_id: m.id, name: m.name } : null,
     availability: hours?.availability ?? null, availability_at: hours?.availability_at ?? null, stale: hours ? hours.stale !== false : true, no_week: hours ? hours.no_week === true : true,
@@ -2229,7 +2237,8 @@ async function timesView(b: Row): Promise<Response> {
 }
 
 /* book {flow_id, call_at, one_on_one_at} signed in: HR or the manager picks both times on the card, from the hire's grid over the manager's hours, once the
-   hire has accepted: after the hire said no, or with availability already communicated. The same rules as the hire's Yes (at least onboard_yes_lead_hours
+   hire has accepted. The card offers it after the hire said no or with availability already communicated, but it is the override the design gives HR and the
+   manager, so any accepted flow on the new path with no proposal waiting for the hire may be booked this way. The same rules as the hire's Yes (at least onboard_yes_lead_hours
    ahead, inside the manager's availability, clear of hub@ meetings and of the manager's other new hires) and then the same booking steps. Times proposed and
    still waiting for the hire's answer are theirs to answer first (proposal_open). The manager runs the call, so both invites go to them. */
 async function bookFromCard(b: Row, by: string): Promise<Response> {
@@ -2239,6 +2248,7 @@ async function bookFromCard(b: Row, by: string): Promise<Response> {
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return refuse('closed');
+  if (!proposeMode(f, await v2Since())) return no('earlier_path', EARLIER_PATH);
   if (!c.accepted_on) return refuse('not_accepted');
   const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
   const booked = (row: Row) => json({ ok: true, booked: true, repeated: true, call_at: instant(row.call_at), one_on_one_at: instant(row.one_on_one_at), status: row.status });
@@ -2283,9 +2293,10 @@ async function bookFromCard(b: Row, by: string): Promise<Response> {
 async function setAskAvailability(b: Row, by: string): Promise<Response> {
   if (typeof b.on !== 'boolean') return no('bad_value', 'Say whether to ask the new hire for their availability: on or off.', 400);
   const n = Number(b.flow_id);
-  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select('id, status, ask_availability').eq('id', n).maybeSingle() : { data: null };
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select('id, status, ask_availability, proposed_at, created_at').eq('id', n).maybeSingle() : { data: null };
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  if (!proposeMode(f, await v2Since())) return no('earlier_path', EARLIER_PATH);
   if ((f.ask_availability !== false) === b.on) return json({ ok: true, ask_availability: b.on, repeated: true });
   const { error } = await svc.from('hub_onboard_flows').update({ ask_availability: b.on, updated_at: new Date().toISOString() }).eq('id', f.id);
   if (error) return no('save', 'The switch could not be saved: ' + error.message + '. Try again.', 500);
@@ -2303,6 +2314,7 @@ async function gridFor(b: Row, by: string): Promise<Response> {
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', 'This card is closed, so no times can be entered.');
+  if (await earlierPath(f.id)) return no('earlier_path', EARLIER_PATH);
   if (f.call_at) return no('already_booked', 'The onboarding call is booked, so the new hire\'s times are no longer needed.');
   const cell = await cfgNum('onboard_grid_cell_min', 30), days = await cfgNum('onboard_grid_days', 14), now = Date.now();
   const picked = new Set<string>();
@@ -2368,6 +2380,7 @@ async function setWelcome(b: Row, by: string): Promise<Response> {
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', 'This card is closed, so the welcome email is not going out.');
+  if (await earlierPath(f.id)) return no('earlier_path', EARLIER_PATH);
   if (f.welcome_sent_at) return no('already_sent', 'The welcome email has already gone, so it cannot be changed.');
   if (!['offered', ...BEFORE_START].includes(f.status)) return no('too_late', 'The times are booked, so the welcome email is going out now and cannot be changed here.');
   if (typeof b.subject !== 'string' || typeof b.text !== 'string' || b.subject.length > 300 || b.text.length > 20000) return no('bad_welcome', 'Give the subject (up to 300 characters) and the text (up to 20,000).', 400);

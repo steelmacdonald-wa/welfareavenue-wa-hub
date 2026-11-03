@@ -11,7 +11,7 @@
     if (key === 'welcome' && WELCOME_COPY.indexOf(status) >= 0) h += welcomeHtml(f) + (status === 'done' ? '' : canvaCardHtml(f));   /* wave275: a copy stays on the card once it is sent */
     if (status === 'hr_task' && key !== 'google') h += '<div class="row"><button type="button" class="o271b" data-o271a="taskdone" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['t' + id + key] ? ' disabled' : '') + '>Done</button></div>';
     if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
-    if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
+    if (key === 'google' && (status === 'hr_task' || status === 'failed') && R.hrTools()) {   /* "I created it, continue" is HR's (google_manual) */
       h += '<div class="row"><input type="text" autocomplete="off" aria-label="The address you created" placeholder="first.last@welfareavenue.com" data-o271i="gaddr" data-f="' + E(id) + '" value="' + E(gaddrOf(f)) + '">'
         + '<button type="button" class="o271b pri" data-o271a="gmanual" data-f="' + E(id) + '"' + (S.busy['g' + id] ? ' disabled' : '') + '>I created it, continue</button></div>';
     }

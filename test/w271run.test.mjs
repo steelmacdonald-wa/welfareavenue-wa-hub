@@ -3329,3 +3329,32 @@ test('w275 Task 6 set_manager on an offered flow: allowed now; the old manager\'
   const f = s.flow();
   assert.deepEqual([f.manager_member_id, f.manager_link_member_id, f.manager_link_sent_at], [1, null, null]);
 });
+
+/* ---------- wave275 Task 6, fix round 1: the card's own actions are for the new path only ---------- */
+test('w275 Task 6 fix: on a wave271 flow (created before onboard_v2_since, nothing proposed) book, grid_for, set_welcome and set_ask_availability are refused with a plain reason, and nothing is written', async () => {
+  const OLD = { created_at: '2026-09-20T12:00:00Z' };   // before SINCE, accepted, waiting, no proposal: Start is HR's way
+  for (const [action, body] of [['book', { call_at: C_CALL, one_on_one_at: C_ONE }], ['grid_for', { who: 'hire', slots: ['2026-10-27T15:00:00Z'] }], ['set_welcome', { subject: 'a', text: 'b' }], ['set_ask_availability', { on: false }]]) {
+    for (const who of [{}, { hr: false, manager: true }]) {
+      const s = await t6({ fl: OLD, ...who });
+      const before = s.snapshot();
+      const r = await s.card(action, body);
+      assert.equal(r.status, 409, action + ' ' + JSON.stringify(r.body));
+      assert.equal(r.body.error, 'earlier_path', action);
+      assert.match(r.body.message, /earlier onboarding path: use Choose times and preview, then Start onboarding/);
+      assert.ok(noDash(r.body.message));
+      assert.deepEqual(s.snapshot(), before, action + ': nothing written');
+      assert.equal(s.rig.fetchLog.length, 0, action + ': nothing sent');
+    }
+  }
+  const v2 = await t6({ fl: { ask_availability: false } });   // the same flow made after the release: the card books it
+  await v2.acceptSetup();
+  assert.equal((await v2.bookCard()).status, 200);
+});
+
+test('w275 Task 6 fix: times answers 503 when the hire\'s grid cannot be read, never an empty grid', async () => {
+  const s = await t6({ fl: SAID_NO });
+  s.db.failOn('hub_onboard_grids', 'select', 'grids are locked');
+  const r = await s.card('times');
+  assert.equal(r.status, 503, JSON.stringify(r.body));
+  assert.match(r.body.message, /The new hire's times could not be read \(grids are locked\)/);
+});

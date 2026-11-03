@@ -6,7 +6,7 @@
 const fs = require('fs');
 const { chromium } = require('playwright');
 const { fresh } = require('./boot');
-const { fx275, rpcs275, INIT, INIT275, F, MGR, AT } = require('./w275fx');
+const { fx275, rpcs275, INIT, INIT275, NOT_HR, F, MGR, AT } = require('./w275fx');
 const { FLOW } = require('./w271fx');
 const SHOTS = process.env.SHOTS || '';
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
@@ -173,7 +173,7 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
 
   /* ---------- 3. a plain member who manages two hires: only her own cards, on Home and her team page ---------- */
   {
-    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }) });
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started', 'old'] }), init: init + '\n' + NOT_HR });
     await f.ev(RECORD);
     await open(f, '#mypage');
     await f.page.waitForTimeout(1200);
@@ -183,7 +183,9 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
     await f.ev(() => window.o271.load());   // a reload, recorded (the first load ran before the recorder)
     await f.page.waitForTimeout(400);
     let rp = await rpcsCalled(f);
-    ok('Joy: her cards come from wa275_my_cards, never the HR list', rp.indexOf('wa275_my_cards') >= 0 && rp.indexOf('wa271_ready_list') < 0, rp);
+    ok('Joy: the database refused her HR\'s list (Only HR), so her cards come from wa275_my_cards', await f.ev(() => window.o275.state().hrList) === false && rp.indexOf('wa275_my_cards') >= 0, rp);
+    t = await txtOf(f, card(F.old));
+    ok('Joy: a wave271 hire\'s card keeps HR\'s own buttons off (no availability link, no preview), and They backed out stays', /Wren Earlier/.test(t) && !(await has(f, card(F.old) + ' [data-o271a="link"]')) && !(await has(f, card(F.old) + ' [data-o271a="open"]')) && await has(f, card(F.old) + ' [data-o271a="act"][data-kind="back"]'), t);
     ok('Joy: no Set exceptions and no Change manager before booking (HR\'s)', !(await has(f, card(F.said) + ' [data-o275a="open"][data-kind="exc"]')) && !(await has(f, card(F.said) + ' [data-o275a="open"][data-kind="mgr"]')));
     ok('Joy: the started card with its rundown, 3 of 9', /3 of 9 setup steps done/.test(await txtOf(f, card(F.started) + ' [data-o275ticks]')));
     ok('Joy: no first password field', !(await has(f, '[data-o271pw]')));
@@ -218,7 +220,7 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
 
   /* ---------- 4. a leader who manages nobody, and a board viewer: nothing ---------- */
   for (const who of ['leader', 'board']) {
-    const f = await go({ who, hash: '#mypage', rpcs: rpcs275() });
+    const f = await go({ who, hash: '#mypage', rpcs: rpcs275(), init: init + '\n' + NOT_HR });
     await open(f, '#mypage');
     await f.page.waitForTimeout(800);
     ok(who + ': no "Your new hires", no card, nothing asked of onboard-run', !(await has(f, '#o275mine')) && !(await has(f, '[data-o271flow]')) && (await allCalls(f)).length === 0, await allCalls(f));
@@ -226,9 +228,36 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
     await done(f);
   }
 
+  /* ---------- 4b. review fix: the database, not the menu profile, decides who gets HR's list ----------
+     A leader is not on the hr profile (surelyHr() is false for them). In the fixture the leader cannot open HR Center > Onboarding (that page follows the
+     role's tabs), so this is checked on the loader itself, on the page: with the database giving them HR's list (as wa_is_hr does for someone in
+     wa_hr_access) the loader keeps it; with the database refusing it, they get their own hires. */
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }) });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    const s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, denied: S.denied, ready: S.ready.map((x) => x.flow_id), profileHr: window.o271.surelyHr() }; });
+    ok("a leader the database gives HR's list to (wa_hr_access, not the hr profile) keeps HR's whole list, as before wave275", s.profileHr === false && s.hrList === true && !s.mine && !s.denied && [F.said, F.offered, F.proposed, F.moved, FLOW.real].every((id) => s.ready.indexOf(id) >= 0), s);
+    ok('on Home they see their own hire as a short line, not a second card', /Nia Proposed/.test(await txtOf(f, '#o275mine')) && !(await has(f, '#o275mine [data-o271flow]')));
+    ok('wa_hr_access leader: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }), init: init + '\n' + NOT_HR });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    const s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, ready: S.ready.map((x) => x.flow_id) }; });
+    ok("the same leader refused HR's list (Only HR) gets their own hire only, as a card", s.hrList === false && s.mine && s.ready.length === 1 && s.ready[0] === F.proposed && await has(f, '#o275mine ' + card(F.proposed)), s);
+    await done(f);
+  }
+
   /* ---------- 5. 390 px ---------- */
   {
-    const f = await go({ who: 'plain', width: 390, hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }) });
+    const f = await go({ who: 'plain', width: 390, hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }), init: init + '\n' + NOT_HR });
     await open(f, '#mypage');
     await f.page.waitForTimeout(1200);
     ok('390, Joy on Home: no sideways scroll', !(await hasScroll(f)), await f.ev(() => document.documentElement.scrollWidth));

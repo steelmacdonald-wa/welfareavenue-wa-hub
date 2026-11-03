@@ -38,7 +38,8 @@
   };
   /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
      data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
-  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; } };
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; },
+    hrTools: function () { return true; } };   /* false: the person is not HR (wave275's manager view), so HR's own buttons (the link, the preview, I created it) stay off */
 
   /* ---------- style ---------- */
   var st = document.createElement('style'); st.id = 'o271css';
@@ -246,8 +247,8 @@
       + '<div class="o271ln">' + managerLine(x) + '</div>'
       + (other ? warnBox('This person has ' + other + ' other application' + (other === 1 ? '' : 's') + ' still open. Close ' + (other === 1 ? 'it' : 'them') + ' by hand so they do not get a second account.') : '')
       + noteHtml(id)
-      + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
-      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
+      + '<div class="o271btns">' + (R.hrTools() ? '<button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
+      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>' : '')
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
       + (S.act[id] ? R.panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')

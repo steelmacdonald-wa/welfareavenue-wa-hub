@@ -38,7 +38,8 @@
   };
   /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
      data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
-  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; } };
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; },
+    hrTools: function () { return true; } };   /* false: the person is not HR (wave275's manager view), so HR's own buttons (the link, the preview, I created it) stay off */
 
   /* ---------- style ---------- */
   var st = document.createElement('style'); st.id = 'o271css';
@@ -246,8 +247,8 @@
       + '<div class="o271ln">' + managerLine(x) + '</div>'
       + (other ? warnBox('This person has ' + other + ' other application' + (other === 1 ? '' : 's') + ' still open. Close ' + (other === 1 ? 'it' : 'them') + ' by hand so they do not get a second account.') : '')
       + noteHtml(id)
-      + '<div class="o271btns"><button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
-      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>'
+      + '<div class="o271btns">' + (R.hrTools() ? '<button type="button" class="o271b" data-o271a="link" data-f="' + E(id) + '" data-cand="' + E(x.candidate_id) + '"' + (S.busy['l' + id] ? ' disabled' : '') + '>Send the availability link</button>'
+      + '<button type="button" class="o271b pri" data-o271a="open" data-f="' + E(id) + '"' + (S.busy['o' + id] ? ' disabled' : '') + '>' + (P ? 'Close' : 'Choose times and preview') + '</button>' : '')
       + '<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(id) + '"' + (S.act[id] ? ' disabled' : '') + '>They backed out</button></div>'
       + (S.act[id] ? R.panelHtml(flowOf(id), S.act[id]) : '')
       + (P ? pickHtml(x, P) : '')
@@ -503,7 +504,7 @@
     if (key === 'welcome' && WELCOME_COPY.indexOf(status) >= 0) h += welcomeHtml(f) + (status === 'done' ? '' : canvaCardHtml(f));   /* wave275: a copy stays on the card once it is sent */
     if (status === 'hr_task' && key !== 'google') h += '<div class="row"><button type="button" class="o271b" data-o271a="taskdone" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['t' + id + key] ? ' disabled' : '') + '>Done</button></div>';
     if (status === 'failed' || stuck) h += '<div class="row"><button type="button" class="o271b" data-o271a="retry" data-f="' + E(id) + '" data-step="' + E(key) + '"' + (S.busy['r' + id + key] ? ' disabled' : '') + '>Retry</button></div>';
-    if (key === 'google' && (status === 'hr_task' || status === 'failed')) {
+    if (key === 'google' && (status === 'hr_task' || status === 'failed') && R.hrTools()) {   /* "I created it, continue" is HR's (google_manual) */
       h += '<div class="row"><input type="text" autocomplete="off" aria-label="The address you created" placeholder="first.last@welfareavenue.com" data-o271i="gaddr" data-f="' + E(id) + '" value="' + E(gaddrOf(f)) + '">'
         + '<button type="button" class="o271b pri" data-o271a="gmanual" data-f="' + E(id) + '"' + (S.busy['g' + id] ? ' disabled' : '') + '>I created it, continue</button></div>';
     }

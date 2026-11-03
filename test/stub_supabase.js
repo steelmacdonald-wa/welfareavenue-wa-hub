@@ -165,6 +165,9 @@
         if (fn === "get_my_role") data = role;
         var rpcs = window.__WA_RPCS || {};
         if (Object.prototype.hasOwnProperty.call(rpcs, fn)) data = rpcs[fn];
+        /* wave275: a test can have the database refuse an rpc for this person: window.__WA_RPC_ERRORS = { name: 'message' } */
+        var refused = window.__WA_RPC_ERRORS || {};
+        if (Object.prototype.hasOwnProperty.call(refused, fn)) return lag({ data: null, error: { message: String(refused[fn]) } });
         return lag({ data: data, error: null });
       },
       functions: {

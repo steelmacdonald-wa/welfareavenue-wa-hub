@@ -708,6 +708,12 @@
       S.busy = false; btn.disabled = false;
       var j = r.j;
       if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
+      if (j && j.ok && !j.availability) {   // saved, but the function could not read the hours back: keep the week shown, take the dates that were saved
+        S.avSaved = norm({ weekly: S.avSaved.weekly, except: (j.saved || body).except }); S.av = norm(S.avSaved);
+        S.avMsg = (j.warning && j.warning[lang]) || p().exSaved;
+        paintEditor(); paintPicks();
+        return;
+      }
       if (j && j.ok) {
         S.avSaved = norm(j.availability); S.av = norm(j.availability);
         S.j.availability = j.availability; S.j.availabilityAt = j.availabilityAt; S.j.availabilityStale = !!j.availabilityStale; S.j.noWeek = !!j.noWeek;   // the week is still Home's to set

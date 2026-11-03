@@ -49,7 +49,7 @@
   document.head.appendChild(st);
 
   /* ---------- who and times ---------- */
-  function hrUser() { return O.surelyHr(); }
+  function hrList() { return S.hrList === true; }   /* the database gave this person HR's list (see R.load) */
   function staffUser() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function firstOf(name) { return String(name || '').replace(/<[^>]*>/g, '').trim().split(/\s+/)[0] || 'the new hire'; }
   function clockOf(h, m) { return ((h % 12) || 12) + (m ? ':' + O.pad2(m) : '') + (h < 12 ? ' am' : ' pm'); }
@@ -81,13 +81,31 @@
   function cardEl(id) { return document.querySelector('[data-o271flow="' + id + '"]'); }
   function ticked(ticks) { var t = ticks && typeof ticks === 'object' ? ticks : {}; return RUNDOWN.filter(function (r) { var v = t['rd_' + r[0]]; return v != null && v !== false; }); }
 
-  /* ---------- the loader and painter: HR keeps wave271's list; anyone else reads their own hires (wa275_my_cards) ---------- */
+  /* ---------- the loader and painter: HR keeps wave271's list; anyone else reads their own hires (wa275_my_cards) ----------
+     Who gets HR's list is the database's call (wa271_ready_list: wa_is_hr or an admin), never the menu profile: the list is asked for first, and only its
+     refusal sends this person to their own hires. S.hrList: true (HR's list), false (refused: their own hires), null (not known yet). */
   var loadHr = R.load;
   R.load = function () {
     if (S.loading) return S.loading;
-    if (hrUser() || !staffUser()) return loadHr();
-    return loadMine();
+    if (!staffUser()) return loadHr();
+    if (S.hrList === false) return loadMine();
+    return loadHr().then(function () {
+      if (S.denied) { S.hrList = false; return loadMine(); }
+      S.hrList = true;
+    });
   };
+  R.hrTools = function () { return !S.mine; };   /* a manager's view leaves HR's own buttons off wave271's cards too */
+  /* Home asks only whether the list is theirs, so it never loads HR's whole list there; a refusal other than "Only HR" decides nothing */
+  async function probe() {
+    S.probing = true;
+    try {
+      var r = await db.rpc('wa271_ready_list');
+      if (!r || !r.error) S.hrList = true;
+      else if (/Only HR/i.test(String(r.error.message || ''))) S.hrList = false;
+    } catch (e) { /* decided on the next visit */ }
+    S.probing = false; S.probed = true;
+    mount();
+  }
   function loadMine() {
     S.mine = true;
     S.loading = (async function () {
@@ -169,12 +187,8 @@
   function stepsHtml(x) {
     var rows = x.steps || [];
     if (!rows.length) return '';
-    var f = { id: x.flow_id, steps: rows, wa_email: x.wa_email, canva_link: x.canva_link }, hr = hrUser();
-    return '<ol class="o271st">' + O.STEPS.map(function (s, i) {
-      if (!rows.some(function (r) { return r.step === s[0]; })) return '';
-      var li = O.stepHtml(f, s[0], s[1], i + 1);
-      return hr ? li : li.replace(/<div class="row"><input[^>]*data-o271i="gaddr"[\s\S]*?<\/button><\/div>/, '');   /* "I created it, continue" is HR's (google_manual) */
-    }).join('') + '</ol>'
+    var f = { id: x.flow_id, steps: rows, wa_email: x.wa_email, canva_link: x.canva_link };   /* HR's "I created it, continue" follows R.hrTools in wave271's stepHtml */
+    return '<ol class="o271st">' + O.STEPS.map(function (s, i) { return rows.some(function (r) { return r.step === s[0]; }) ? O.stepHtml(f, s[0], s[1], i + 1) : ''; }).join('') + '</ol>'
       + '<div class="o271ln">The other steps run when the times are booked.</div>';
   }
   function btn(kind, label, x, pri) {
@@ -182,7 +196,7 @@
     return '<button type="button" class="o271b' + (pri ? ' pri' : '') + '" data-o275a="open" data-kind="' + kind + '" data-f="' + E(x.flow_id) + '"' + (A && A.kind === kind ? ' disabled' : '') + '>' + E(label) + '</button>';
   }
   function buttonsHtml(x) {
-    var hr = hrUser(), booked = !!x.call_at, live = !!(x.proposed_at && !x.hire_answer), mfirst = firstOf(x.manager_name || O.nameOf(x.manager_member_id)), b = [];
+    var hr = R.hrTools(), booked = !!x.call_at, live = !!(x.proposed_at && !x.hire_answer), mfirst = firstOf(x.manager_name || O.nameOf(x.manager_member_id)), b = [];
     if (!booked && x.hire_answer !== 'yes') b.push(btn('propose', x.proposed_at ? 'Propose new times' : 'Propose times', x, !x.accepted_on || live));
     if (x.accepted_on && !booked && !live) b.push(btn('bookg', 'Book the times', x, true));
     if (x.accepted_on && !booked) b.push(btn('gridfor', 'Enter their availability', x));
@@ -406,7 +420,8 @@
     if (!staffUser()) return;
     var h = hostEl(), el = mineEl();
     if (!h) { if (el.parentNode) el.parentNode.removeChild(el); return; }
-    if (hrUser()) { if (!S.mineListLoaded) { if (!S.mineListLoading) loadMineList(); return; } }
+    if (S.hrList == null) { if (!S.probing && !S.probed) probe(); return; }   /* not known: ask the database once; still unknown after that, nothing shows */
+    if (hrList()) { if (!S.mineListLoaded) { if (!S.mineListLoading) loadMineList(); return; } }
     else if (!S.mineLoaded) { if (!S.loading) R.load(); return; }
     if (!hasMine()) { if (el.parentNode) el.parentNode.removeChild(el); return; }
     if (el.parentNode !== h) {
@@ -414,7 +429,7 @@
       paintMine();
     }
   }
-  function hasMine() { return hrUser() ? (S.mineList || []).length > 0 : !!(S.mineErr || S.ready.length || S.started.length); }
+  function hasMine() { return hrList() ? (S.mineList || []).length > 0 : !!(S.mineErr || S.ready.length || S.started.length); }
   function lineHtml(x) {
     var l = stateLines(x);
     return '<div class="o275line" data-o275line="' + E(x.flow_id) + '"><b>' + E(x.name) + '</b><span>' + E(x.role || '') + '</span><div class="o271ln">' + E(l[l.length - 1]) + '</div><a href="#hrcentre/onboarding">Open in Onboarding</a></div>';
@@ -424,7 +439,7 @@
     if (!el.parentNode) { if (hasMine()) mount(); return; }
     if (!hasMine()) { el.parentNode.removeChild(el); return; }
     var html = '<h2>Your new hires</h2>';
-    if (hrUser()) html += '<p class="o271sub">The people joining whom you manage. Their cards are in HR Center, Onboarding.</p>' + (S.mineList || []).map(lineHtml).join('');
+    if (hrList()) html += '<p class="o271sub">The people joining whom you manage. Their cards are in HR Center, Onboarding.</p>' + (S.mineList || []).map(lineHtml).join('');
     else {
       html += '<p class="o271sub">The people joining whom you manage: propose or book their times, follow their setup, and change a time when you need to.</p>'
         + (S.mineErr ? '<div class="o271err">' + E(S.mineErr) + '</div>' : '')

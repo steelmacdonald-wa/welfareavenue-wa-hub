@@ -1235,3 +1235,14 @@ test('w275 fix: GET after a second No gives secondNo (a person will be in touch,
   const booked = await hire({ fl: { ...withProposal, hire_answer: 'yes', call_at: W_CALL, one_on_one_at: W_ONE, setup_ticks: { no_again_at: '2026-10-31T16:00:00Z' } } });
   assert.equal((await booked.get(booked.offer)).body.secondNo, null, 'once booked, the closing page wins');
 });
+
+test('w275 Task 6 fix: POST availability whose read-back fails still answers ok: the dates are saved, with a warning in both languages', async () => {
+  const s = await setup({ flows: [offered()], tables: { team_members: [team[0], SAM()] } });
+  s.db.onRpc('wa275_availability_of', () => { throw new Error('read locked'); });
+  const r = await s.post({ t: s.mgr, a: 'availability', availability: { except: [{ date: '2026-11-11', free: [] }] } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.ok, true);
+  assert.deepEqual(r.body.saved, { except: [{ date: '2026-11-11', free: [] }], tz: 'America/Toronto' });
+  assert.ok(hasBoth(r.body.warning) && /Your dates are saved/.test(r.body.warning.en));
+  assert.deepEqual(s.db.rows('team_members').find((m) => m.id === 2).availability, { except: [{ date: '2026-11-11', free: [] }], tz: 'America/Toronto' });
+});

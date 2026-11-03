@@ -8,7 +8,7 @@
 const { fx271, rpcs271, INIT, FLOW, MGR, AT } = require('./w271fx');
 
 const JOY = { id: 9104, name: 'Joy Dumansi', email: 'joy.dumansi@welfareavenue.com' };   // boot.js's plain member (a member on the marketing profile)
-const F = { said: 701, offered: 702, proposed: 703, moved: 704, started: 711 };
+const F = { said: 701, offered: 702, proposed: 703, moved: 704, old: 705, started: 711 };
 const DAY = (d, h, m) => new Date(Date.UTC(2026, 8, d, h + 4, m || 0)).toISOString();   // a September day, Toronto wall clock
 
 function row(o) {
@@ -31,6 +31,7 @@ function rows275() {
     offered: row({ flow_id: F.offered, candidate_id: 7302, status: 'offered', name: 'Lina Offered', email: 'lina@example.invalid', accepted_on: null, hours_confirmed_at: null, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
     proposed: row({ flow_id: F.proposed, candidate_id: 7303, name: 'Nia Proposed', email: 'nia@example.invalid', proposed_call_at: DAY(30, 10), proposed_one_on_one_at: DAY(31, 10) /* Thursday 1 October */, proposed_by: 'samson.jules@welfareavenue.com', proposed_at: '2026-09-24T15:00:00Z' }),
     moved: row({ flow_id: F.moved, candidate_id: 7304, name: 'Kim Moved', email: 'kim@example.invalid', proposed_call_at: AT(9), proposed_one_on_one_at: AT(14), proposed_by: 'dana@example.invalid', proposed_at: '2026-09-23T15:00:00Z', hire_answer: 'no', hire_answered_at: null, manager_week_stale: true }),
+    old: row({ flow_id: F.old, candidate_id: 7305, name: 'Wren Earlier', email: 'wren@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, propose_path: false, offer_hours: null, created_at: '2026-08-20T15:00:00Z' }),   // a wave271 flow Joy manages
     started: row({ flow_id: F.started, candidate_id: 7311, status: 'running', name: 'Ola Started', email: 'ola@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, call_at: DAY(29, 10), one_on_one_at: DAY(29, 11),
       wa_email: 'ola.started@welfareavenue.com', roster_created: true, member_id: 8311, onboarding_id: 51, started_at: '2026-09-24T15:00:00Z', welcome_sent_at: '2026-09-24T16:00:00Z',
       setup_ticks: { rd_profile: '2026-09-24T17:00:00Z', rd_hub: '2026-09-24T17:05:00Z', rd_slack: '2026-09-24T17:10:00Z', hire_times_at: 'x', accept_setup_at: 'x', google_made_at: 'x', no_manager_told_at: 'x', propose_hr_reminded_at: 'x' },
@@ -67,6 +68,9 @@ function rpcs275(o) {
   base.wa275_my_cards = (o.mine || []).map((k) => R[k]);
   return base;
 }
+
+/* the database refusing HR's list for a person who is not HR (wa271_ready_list raises 'Only HR ...' for them) */
+const NOT_HR = 'window.__WA_RPC_ERRORS = { wa271_ready_list: "Only HR can see the onboarding list" };';
 
 /* in-page: the stand-in for the card's new onboard-run actions, after w271fx's INIT */
 const INIT275 = `(function(){
@@ -117,4 +121,4 @@ const INIT275 = `(function(){
   };
 })();`;
 
-module.exports = { fx275, rpcs275, INIT, INIT275, F, JOY, MGR, AT, DAY };
+module.exports = { fx275, rpcs275, INIT, INIT275, NOT_HR, F, JOY, MGR, AT, DAY };

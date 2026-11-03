@@ -559,6 +559,17 @@ async function dragFrom(p, a, b) {
     await f.page.waitForTimeout(200);
     ok('a block that ends before it starts is refused on the page, nothing posted', f.posts().length === 1 && /end after the start/.test(await f.page.locator('#averr').innerText()));
     await f.ctx.close();
+    /* Task 6 fix: saved, but the hours could not be read back: the function's warning, the week kept, the saved dates used */
+    f = await open(browser, { fn: mgr275({ postAv: { status: 200, body: { ok: true, saved: { except: [{ date: '2026-10-31', free: [['10:00', '12:00']] }], tz: 'America/Toronto' }, warning: { en: 'Your dates are saved. The page could not read your hours back just now, so reload it to see them.', fr: 'Vos dates sont enregistrées.' } } } }) });
+    await f.page.locator('button[data-act="addx"]').click();
+    await f.page.locator('input[data-x="0"]').fill('2026-10-31');
+    await f.page.locator('button[data-act="add"][data-path="x:0"]').click();
+    await f.page.locator('input[data-path="x:0"][data-k="0"]').fill('10:00');
+    await f.page.locator('input[data-path="x:0"][data-k="1"]').fill('12:00');
+    await f.page.locator('#saveav').click();
+    await f.page.waitForSelector('#avnote.saved', { timeout: 4000 });
+    ok('read-back failed: the warning shows, Saturday 10:00 is free from the saved date, and the week still shows (Monday noon)', /could not read your hours back/.test(await f.page.locator('#avnote').innerText()) && !(await st(f.page, '2026-10-31T14:00:00Z')).dis && !(await st(f.page, '2026-11-02T17:00:00Z')).dis && f.errors.length === 0, f.errors);
+    await f.ctx.close();
 
     /* refusals, the server's own words */
     f = await open(browser, { fn: mgr275({ postPropose: { status: 409, body: { ok: false, error: 'taken', which: 'one_on_one', message: { en: 'The 1-on-1 clashes with times already booked or proposed for another new hire of the same manager. Pick another time.', fr: 'La rencontre individuelle tombe en même temps que des heures déjà fixées ou proposées pour une autre nouvelle recrue du même gestionnaire. Choisissez une autre heure.' } } }, postAv: { status: 400, body: { ok: false, error: 'bad_availability', message: { en: 'Some of those hours do not work.', fr: 'Certaines de ces heures ne conviennent pas.' } } } }) });
