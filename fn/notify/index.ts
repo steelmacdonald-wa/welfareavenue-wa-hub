@@ -167,7 +167,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'onboard_propose', 'onboard_answer', 'onboard_ready'];   /* v15: the relayed kinds reach the Hub too (v18: wave275's three) */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'onboard_propose', 'onboard_answer', 'onboard_ready'];   /* v15: the relayed kinds reach the Hub too (v19: wave275's three) */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {

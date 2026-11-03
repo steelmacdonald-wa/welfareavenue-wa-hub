@@ -60,7 +60,7 @@ function makeHire(over) {
       return send(200, {
         ok: true, kind: 'offer', first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed: false, late: false, booked: !!S.bookedTimes, callBooked: !!S.bookedTimes,
         grid: gridWindow(S.minHours), slotsSaved: S.slotsSaved, offerHours: S.offerHours, hoursConfirmed: accepted && !!S.offerHours, mode: S.mode,
-        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 },
+        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 }, managerFree: S.managerFree,
         setup: accepted ? { steps: STEPS, ticks: Object.fromEntries(STEPS.map(s => [s.key, !!S.ticks[s.key]])) } : null,
       });
     }
@@ -215,6 +215,43 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     ok('no reloaded: the closing page', /will pick from your times/.test(await text(f.page)));
     await f.page.locator('#regrid').click();
     ok('no reloaded: Change my times opens the grid with the saved cells', (await f.page.locator('[data-slot][aria-pressed="true"]').count()) === 20);
+    await f.ctx.close();
+
+    /* 4b. whole-branch I3: the No grid greys the cells where the manager is not free (managerFree from the function); those cells cannot be picked */
+    const FREE = gridWindow(10).slots.filter(iso => { const p = new Date(iso); const h = (p.getUTCHours() + 24 - (iso < '2026-11-01T06:00:00Z' ? 4 : 5)) % 24; const wd = new Date(Date.parse(iso) - (iso < '2026-11-01T06:00:00Z' ? 4 : 5) * 3600000).getUTCDay(); return wd >= 1 && wd <= 5 && h >= 9 && h < 17; });
+    f = await open(browser, { fn: makeHire({ answered: 'accept', managerFree: FREE }) });
+    await f.page.locator('[data-act="no"]').click();
+    await f.page.waitForSelector('.cell', { timeout: 5000 });
+    const free29 = A29 + '13:00:00Z', busy29 = A29 + '12:00:00Z';   // Thursday 29 Oct: 9 am (free), 8 am (not free)
+    ok('greys: a free cell can be picked', (await f.page.locator('[data-slot="' + free29 + '"]').count()) === 1);
+    const grey = f.page.locator('.cell.mbusy[data-mbusy="' + busy29 + '"]');
+    ok('greys: a cell where the manager is not free is greyed, with no slot to pick', (await grey.count()) === 1 && (await f.page.locator('[data-slot="' + busy29 + '"]').count()) === 0 && (await grey.getAttribute('aria-disabled')) === 'true', await f.page.locator('[data-di="1"]').count());
+    ok('greys: its label says Marc Dubois is not free', /Marc Dubois is not free/.test(await grey.getAttribute('aria-label') || ''), await grey.getAttribute('aria-label'));
+    await grey.click({ force: true });
+    ok('greys: pressing it picks nothing', (await f.page.locator('#count').innerText()).trim() === '0 of 10 hours marked');
+    t = await text(f.page);
+    ok('greys: the legend in English', /Greyed times: Marc Dubois is not free then\./.test(t), t.slice(0, 700));
+    ok('greys: a weekend day is all greyed', (await f.page.locator('[data-d="2026-10-31"] [data-slot]').count()) === 0 && (await f.page.locator('[data-d="2026-10-31"] .cell.mbusy').count()) > 0);
+    await mark(f.page, FREE.slice(0, 20));
+    ok('greys: 20 free cells still enable Save (the 10-hour minimum stays)', await f.page.locator('#save').isEnabled());
+    await shot(f.page, 'w275-no-grid-greys');
+    await f.page.locator('#swap').click();
+    await f.page.waitForTimeout(200);
+    t = await text(f.page);
+    ok('greys: the legend in French', /Plages grisées: Marc Dubois n.est pas disponible à ces heures\./.test(t), t.slice(0, 700));
+    ok('greys: the French label', /Marc Dubois n.est pas disponible/.test(await f.page.locator('.cell.mbusy').first().getAttribute('aria-label') || ''));
+    ok('greys: no page errors', f.errors.length === 0, f.errors);
+    await f.ctx.close();
+    /* saved times that fall where the manager is not free are not kept as picked */
+    f = await open(browser, { fn: makeHire({ answered: 'accept', answer: 'no', managerFree: FREE, slotsSaved: [free29, busy29] }) });
+    await f.page.locator('#regrid').click();
+    ok('greys: a saved time on a greyed cell is not counted', (await f.page.locator('[data-slot][aria-pressed="true"]').count()) === 1 && (await f.page.locator('#count').innerText()).trim() === '0.5 of 10 hours marked', await f.page.locator('#count').innerText());
+    await f.ctx.close();
+    /* no mask (the function could not read the manager's week): no greys and no legend */
+    f = await open(browser, { fn: makeHire({ answered: 'accept', managerFree: null }) });
+    await f.page.locator('[data-act="no"]').click();
+    await f.page.waitForSelector('[data-slot]', { timeout: 5000 });
+    ok('no mask: no greyed cell, no legend', (await f.page.locator('.cell.mbusy').count()) === 0 && !/Greyed times/.test(await text(f.page)));
     await f.ctx.close();
 
     /* 5. No, with availability already communicated: the closing page at once, no grid */

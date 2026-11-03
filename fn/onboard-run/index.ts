@@ -115,8 +115,9 @@
 //               wa275_tick_set(flow, 'propose_hr_reminded_at')); neither once times were proposed (after the hire's no the manager answers from
 //               the card). With no active manager with an email, HR is told once (onboard_remind, onboard-no-manager-<flow>, setup_ticks
 //               no_manager_told_at) that the card needs one. None of the wave271 grid messages go to such a flow. wave271 flows keep their path.
-// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word).
-// The steps are the table STEPS, {key, label, needs, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
+// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word),
+//          READ_BACK_WAITS (the google step's waits before it reads a new account back again).
+// The steps are the table STEPS, {key, label, needs, waitsFor?, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
 // sentence for detail; a throw is a failed step, and the message is what HR reads.
 // Flow status: Start moves waiting or ready to running with a conditional update, so a double press runs the steps once. running becomes
@@ -131,6 +132,8 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const HUB = 'https://hub.welfareavenue.com';
+/* whole-branch fix: where a message to a manager links. Home, not HR Center (a plain member cannot open it): a manager's cards paint on Home, and HR has "Open in Onboarding" there */
+const HOME = '#mypage';
 const CAL = 'hub@welfareavenue.com';
 const DOMAIN = 'welfareavenue.com';
 const ADMIN_ACTOR = 'steel.macdonald@welfareavenue.com';   // as directory-sync
@@ -158,6 +161,7 @@ type Ctx = { flow: Row; by: string; asUser: Row; settings: Record<string, boolea
 type StepRow = { step: string; status: string; detail?: string | null; practice?: boolean; at?: string; by?: string | null };
 export type Step = {
   key: string; label: string; needs: string[];
+  waitsFor?: string[];                               // whole-branch fix: steps that must have ended (done, skipped, hr_task or failed: any end) before this one runs
   at?: 'accept' | 'booking';                         // wave275: when the step's row is made (accept_setup, or book); Start makes every row still missing
   setting?: string;                                  // the app_config switch that must be on for run to be used
   ticks?: string[];                                  // hr_setup_template ids this step finishes
@@ -180,9 +184,10 @@ export const STEPS: Step[] = [
   { key: 'manager', label: 'Tell the manager', needs: ['roster'], at: 'booking', run: runManager },
   { key: 'slack', label: 'Slack channel', needs: ['roster'], at: 'booking', setting: 'onboard_auto_slack', ticks: ['hrb4', 'hrb5'],
     task: 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.' },   // Build 3 adds run
-  /* wave275 Task 4: the welcome needs the invites (their Meet links) and nothing else, and has no switch: it goes at booking whether or not the account
-     exists (settled rule 2), and its login paragraph says which */
-  { key: 'welcome', label: 'Welcome email', needs: ['invites'], at: 'booking', ticks: ['hrb1'], run: sendWelcome,
+  /* wave275 Task 4: the welcome needs the invites (their Meet links) and has no switch: it goes at booking whether or not the account exists (settled rule
+     2), and its login paragraph says which. Whole-branch fix: so that paragraph is decided on the account step's end, it waits while google is still
+     pending or running (a Yes seconds after Accept), and goes once google ends, however it ends. */
+  { key: 'welcome', label: 'Welcome email', needs: ['invites'], waitsFor: ['google'], at: 'booking', ticks: ['hrb1'], run: sendWelcome,
     task: 'Send the welcome email to their personal address.' },
 ];
 /* a run that finds the step is HR's to do ends it as hr_task with this sentence, not as failed */
@@ -190,11 +195,15 @@ class HrTask extends Error {}
 const stepOf = (key: string) => STEPS.find((s) => s.key === key);
 const numberOf = (key: string) => STEPS.findIndex((s) => s.key === key) + 1;
 const met = (status: string | undefined) => status === 'done' || status === 'skipped';
+/* waitsFor: a step with no row has nothing to wait for; one that is pending, waiting or running has not ended */
+const ended = (status: string | undefined) => status == null || ['done', 'skipped', 'hr_task', 'failed'].includes(status);
+/* what holds s back: the steps it needs that are not done or skipped, then the ones it waits for that have not ended */
+const blockersOf = (s: Step, status: Map<string, string | undefined>) => [...s.needs.filter((n) => !met(status.get(n))), ...(s.waitsFor || []).filter((n) => !ended(status.get(n)))];
 
-/* the steps that can run now: not started or waiting, with everything they need done or skipped. No row counts as pending. */
+/* the steps that can run now: not started or waiting, with everything they need done or skipped, and everything they wait for ended. No row counts as pending. */
 export function nextSteps(steps: StepRow[]): string[] {
-  const by = new Map(steps.map((r) => [r.step, r.status]));
-  return STEPS.filter((s) => ['pending', 'waiting'].includes(by.get(s.key) ?? 'pending') && s.needs.every((n) => met(by.get(n)))).map((s) => s.key);
+  const by = new Map<string, string | undefined>(steps.map((r) => [r.step, r.status]));
+  return STEPS.filter((s) => ['pending', 'waiting'].includes(by.get(s.key) ?? 'pending') && !blockersOf(s, by).length).map((s) => s.key);
 }
 
 /* first.last from a name: accents off, apostrophes and other marks out, hyphens kept. One word, or nothing usable, suggests nothing. */
@@ -334,7 +343,7 @@ async function advance(ctx: Ctx): Promise<void> {
   const status = new Map(rows.map((r) => [r.step, r.status]));
   for (const s of STEPS) {
     if (!['pending', 'waiting'].includes(status.get(s.key) ?? '')) continue;
-    const blockers = s.needs.filter((n) => !met(status.get(n)));
+    const blockers = blockersOf(s, status);
     if (!blockers.length) continue;   // only when another request holds it
     const toHr = (!s.run || heldBack(s, ctx.settings, status)) && blockers.every((n) => status.get(n) === 'hr_task');
     const next = toHr ? 'hr_task' : 'waiting';
@@ -549,14 +558,10 @@ async function runGoogle(ctx: Ctx): Promise<string> {
     throw new HrTask('Google did not create ' + addr + ': ' + stop(said) + ' ' + GOOGLE_TASK);
   }
   password = '';
-  /* read back before done: the account is there under that address */
-  const back = await fetch(USERS_URL + '/' + encodeURIComponent(addr) + '?fields=primaryEmail,orgUnitPath,changePasswordAtNextLogin', { headers: { Authorization: 'Bearer ' + t } });
-  const bj = await back.json().catch(() => ({}));
-  if (!back.ok || String(bj?.primaryEmail || '').toLowerCase() !== addr) {
-    throw new Error('Google said it created ' + addr + ', but the Hub could not read the account back (' + back.status + '). Check it in Google Admin, then press "I created it, continue" on this card.');
-  }
+  /* whole-branch fix: Google has made the account, so it is recorded at once, before the read-back: from here the step never ends failed, because a Retry
+     would ask Google for a second account and get a 409. Anything that goes wrong now leaves it to HR ("I created it, continue"). */
   const { error } = await svc.from('hub_onboard_flows').update({ wa_email: addr, updated_at: new Date().toISOString() }).eq('id', f.id);
-  if (error) throw new Error('The account ' + addr + ' is in Google, but the Hub could not save the address: ' + error.message + '. Press "I created it, continue" with ' + addr + '.');
+  if (error) throw new HrTask('The account ' + addr + ' is in Google, but the Hub could not save the address: ' + error.message + '. Press "I created it, continue" with ' + addr + '.');
   ctx.flow.wa_email = addr;
   /* wave275 Task 4: the Hub made this account with the vault password, at this time: the welcome email gives that password only when this mark is there and
      the password has not been changed since. Best effort: without the mark the email says HR sends the login details, which is never wrong. */
@@ -565,7 +570,25 @@ async function runGoogle(ctx: Ctx): Promise<string> {
     const m = await getMember(c.member_id);
     if (m && !/@welfareavenue\.com$/i.test(String(m.email || ''))) await svc.from('team_members').update({ email: addr }).eq('id', m.id);
   }
+  /* read back before done: the account is there under that address. Google can take a few seconds to show a new account, so it is asked again after
+     each wait in READ_BACK_WAITS; still not shown, HR checks it in Admin. */
+  let seen = await seenInGoogle(addr, t);
+  for (const ms of READ_BACK_WAITS) {
+    if (seen) break;
+    await new Promise((r) => setTimeout(r, ms));
+    seen = await seenInGoogle(addr, t);
+  }
+  if (!seen) throw new HrTask('Google said it created ' + addr + ', but has not shown the account yet. Check it in Google Admin, then press "I created it, continue" on this card.');
   return 'Created ' + addr + ' in Google (the root organisational unit) with the first password from admin settings; Google will ask them to change it the first time they sign in.';
+}
+/* the waits (milliseconds) before each further read-back of a new account; exported so the tests can make them short */
+export const READ_BACK_WAITS = [1000, 2000, 4000];
+async function seenInGoogle(addr: string, t: string): Promise<boolean> {
+  try {
+    const back = await fetch(USERS_URL + '/' + encodeURIComponent(addr) + '?fields=primaryEmail,orgUnitPath,changePasswordAtNextLogin', { headers: { Authorization: 'Bearer ' + t } });
+    const bj = await back.json().catch(() => ({}));
+    return back.ok && String(bj?.primaryEmail || '').toLowerCase() === addr;
+  } catch (_) { return false; }   // not reached this time: asked again, then left to HR
 }
 
 /* ---------- step: hub (wave275) ---------- */
@@ -763,9 +786,9 @@ async function runManager(ctx: Ctx): Promise<string> {
     res = await fetch(SUPABASE_URL + '/functions/v1/notify', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY },
       body: JSON.stringify({
-        event: 'onboard_date', to_email: String(m.email).toLowerCase(), url: '#hrcentre/onboarding', tag: 'onboard-date-' + f.id,
+        event: 'onboard_date', to_email: String(m.email).toLowerCase(), url: HOME, tag: 'onboard-date-' + f.id,
         title: c.name + ' starts ' + torontoDate(f.call_at), body: c.name + ' (' + (c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day.',
-        text: '*' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day. <' + HUB + '/#hrcentre/onboarding|Open Onboarding>',
+        text: '*' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + ') has their onboarding call on ' + when + '. That is their first day. <' + HUB + '/' + HOME + '|Open the Hub>',
       }),
     });
   } catch (e) {
@@ -852,18 +875,33 @@ async function preview(b: Row, by: string): Promise<Response> {
    the part they changed); the Hub's own text is never saved, so it follows the template. Before Start or booking (facts.draft) the brackets stay as they are.
    A line whose value is empty goes, and the steps renumber. wave275 Task 4: the Meet links, the login paragraph (or, when the account step is not
    done, "HR will send your login details separately" in its place) and the setup rundown, with a link to its page for a wave275 hire. */
+/* whole-branch fix: the places say "when the times are booked or at Start", true on both paths (the new path fills them at booking, wave271's at Start).
+   OLD_SLOTS are the words before that: a text HR saved with them (wave271 is live) is read with today's words, so it still fills in. */
+const BOOKED_OR_START = { en: 'fills in when the times are booked or at Start', fr: 'rempli à la réservation des rencontres ou au démarrage', frs: 'remplies à la réservation des rencontres ou au démarrage', fre: 'remplie à la réservation des rencontres ou au démarrage' };
 const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
+  en: {
+    day: '[first day: ' + BOOKED_OR_START.en + ']', call: '[call date and time: ' + BOOKED_OR_START.en + ']', one: '[1-on-1 date and time: ' + BOOKED_OR_START.en + ']', manager: '[manager: ' + BOOKED_OR_START.en + ']',
+    group: '[group session date: ' + BOOKED_OR_START.en + ', or this line is left out]', address: '[Welfare Avenue address: ' + BOOKED_OR_START.en + ']', canva: '[Canva link: ' + BOOKED_OR_START.en + ', or this line is left out]',
+    newaddr: '[new address]', password: '[first password]', callmeet: '[call Meet link]', onemeet: '[1-on-1 Meet link]', setup: '[setup page link]',
+  },
+  fr: {
+    day: '[premier jour : ' + BOOKED_OR_START.fr + ']', call: '[date et heure de l\'appel : ' + BOOKED_OR_START.frs + ']', one: '[date et heure de la rencontre : ' + BOOKED_OR_START.frs + ']', manager: '[gestionnaire : ' + BOOKED_OR_START.fr + ']',
+    group: '[date de la séance de groupe : ' + BOOKED_OR_START.fre + ', ou cette ligne est retirée]', address: '[adresse Welfare Avenue : ' + BOOKED_OR_START.fre + ']', canva: '[lien Canva : ' + BOOKED_OR_START.fr + ', ou cette ligne est retirée]',
+    newaddr: '[nouvelle adresse]', password: '[premier mot de passe]', callmeet: '[lien Meet de l\'appel]', onemeet: '[lien Meet de la rencontre]', setup: '[lien de la page de préparation]',
+  },
+};
+const OLD_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
   en: {
     day: '[first day: fills in at Start]', call: '[call date and time: fills in at Start]', one: '[1-on-1 date and time: fills in at Start]', manager: '[manager: fills in at Start]',
     group: '[group session date: fills in at Start, or this line is left out]', address: '[Welfare Avenue address: fills in at Start]', canva: '[Canva link: fills in at Start, or this line is left out]',
-    newaddr: '[new address]', password: '[first password]', callmeet: '[call Meet link]', onemeet: '[1-on-1 Meet link]', setup: '[setup page link]',
   },
   fr: {
     day: '[premier jour : rempli au démarrage]', call: '[date et heure de l\'appel : remplies au démarrage]', one: '[date et heure de la rencontre : remplies au démarrage]', manager: '[gestionnaire : rempli au démarrage]',
     group: '[date de la séance de groupe : remplie au démarrage, ou cette ligne est retirée]', address: '[adresse Welfare Avenue : remplie au démarrage]', canva: '[lien Canva : rempli au démarrage, ou cette ligne est retirée]',
-    newaddr: '[nouvelle adresse]', password: '[premier mot de passe]', callmeet: '[lien Meet de l\'appel]', onemeet: '[lien Meet de la rencontre]', setup: '[lien de la page de préparation]',
   },
 };
+/* a saved text in today's words: each old place becomes the new one, in either language */
+const todaysWords = (text: string) => (['en', 'fr'] as const).reduce((t, l) => Object.keys(OLD_SLOTS[l]).reduce((u, k) => u.split(OLD_SLOTS[l][k]).join(WELCOME_SLOTS[l][k]), t), text);
 const PASSWORD_MARKS = [WELCOME_SLOTS.en.password, WELCOME_SLOTS.fr.password];   // either works in either language: only sendWelcome fills them
 const LOGIN_LATER = { en: 'HR will send your login details separately.', fr: 'Les RH vous enverront vos informations de connexion séparément.' };
 const REMOVABLE = ['group', 'canva', 'setup'];   // an empty value takes its line out
@@ -1011,8 +1049,8 @@ function welcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: 
 /* the email as it reads now: HR's saved subject or text where they changed it, else the Hub's own; filled in unless facts.draft */
 export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: string; text: string } {
   const own = welcomeTemplate(c, facts);
-  const subject = typeof f.welcome_subject === 'string' && f.welcome_subject ? f.welcome_subject : own.subject;
-  const text = typeof f.welcome_text === 'string' && f.welcome_text ? f.welcome_text : own.text;
+  const subject = typeof f.welcome_subject === 'string' && f.welcome_subject ? todaysWords(f.welcome_subject) : own.subject;
+  const text = typeof f.welcome_text === 'string' && f.welcome_text ? todaysWords(f.welcome_text) : own.text;
   return { subject, text: facts.draft ? text : fillWelcome(text, f, c, facts) };
 }
 /* what renderWelcome needs from the database. who: the person who signs, by email (HR who pressed Start; at the hire's Yes, the manager, who booked the
@@ -1321,6 +1359,9 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   const now = new Date().toISOString();
   const { error } = await svc.from('hub_onboard_flows').update({ wa_email: addr, updated_at: now }).eq('id', f.id);
   if (error) return no('save', 'The address could not be saved: ' + error.message + '. Try again.', 500);
+  /* whole-branch fix: the google step marks google_made_at as soon as Google makes the account, before the read-back. HR confirming that same address keeps
+     the mark (the Hub made it with the vault password); another address is an account HR made by hand, whose password the Hub does not know. */
+  if (addr !== cleanAddress(f.wa_email)) await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'google_made_at', p_value: null });
   const practice = !!(f.practice || c?.practice);   // a simulation: its own rows only, no roster write and no Google token
   if (c?.member_id && !practice) {
     const { error: e2 } = await svc.from('team_members').update({ email: addr }).eq('id', c.member_id);
@@ -1405,8 +1446,8 @@ async function tellManager(m: Row | null, title: string, body: string, tag: stri
   if (!m) return 'The manager is not on the roster, so nobody was told. Tell them yourself.';
   if (!m.email) return m.name + ' has no email on the roster, so they were not told. Tell them yourself.';
   const r = await tell({
-    event: 'onboard_date', to_email: String(m.email).toLowerCase(), url: '#hrcentre/onboarding', tag, title, body,
-    text: slackEsc(body) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>',
+    event: 'onboard_date', to_email: String(m.email).toLowerCase(), url: HOME, tag, title, body,
+    text: slackEsc(body) + ' <' + HUB + '/' + HOME + '|Open the Hub>',
   });
   return r.handled ? null : m.name + ' was not told: ' + (r.note.replace(/^[^:\s]+@[^:\s]+: /, '') || 'notify gave no answer') + '. Tell them yourself.';
 }
@@ -1818,6 +1859,10 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
   if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return refuse('closed');
+  /* whole-branch fix: signed in (HR, an admin or the flow's manager), a wave271 flow is refused before anything is written. A proposal would set proposed_at,
+     which puts the flow on the new path (proposeMode), so the hire's Yes would run every step with none of Start's address, preview or skip list. The mgr
+     link reaches here only for a flow already on the new path (the trigger-secret relay checks proposeMode first). */
+  if (!link && await earlierPath(f.id)) return no('earlier_path', EARLIER_PATH);
   if (f.hire_answer === 'yes' || f.call_at) return refuse('already_booked');
   const callAt = instant(b.call_at), oneAt = instant(b.one_on_one_at);
   if (!callAt || !oneAt || !zoned(b.call_at) || !zoned(b.one_on_one_at)) return refuse('bad_time', 400);
@@ -1880,9 +1925,9 @@ async function propose(b: Row, caller: string, link: boolean): Promise<Response>
   if (by !== mEmail) {
     const mt = 'HR proposed times for ' + c.name;
     const toldM = await tell({
-      event: 'onboard_propose', to_email: mEmail, url: '#hrcentre/onboarding', tag: 'onboard-propose-hr-' + f.id,
+      event: 'onboard_propose', to_email: mEmail, url: HOME, tag: 'onboard-propose-hr-' + f.id,
       title: mt, body: proposer + ' proposed times for ' + c.name + ' (' + (c.role || 'new hire') + '): ' + said,
-      text: ':calendar: ' + slackEsc(proposer) + ' proposed times for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + '), your new hire: ' + slackEsc(said) + ' <' + HUB + '/#mypage|Open the Hub>',
+      text: ':calendar: ' + slackEsc(proposer) + ' proposed times for *' + slackEsc(c.name) + '* (' + slackEsc(c.role || 'new hire') + '), your new hire: ' + slackEsc(said) + ' <' + HUB + '/' + HOME + '|Open the Hub>',
     });
     if (!toldM.handled) warnings.push(String(m.name || 'The manager') + ' was not told: ' + (toldM.note || 'notify gave no answer') + '.');
   }
@@ -1998,6 +2043,9 @@ async function askManagerFor(f: Row, c: Row, m: Row, again: boolean, by: string)
   const { data: won, error } = await claim.select('id');
   if (error) return { code: 'save', error: 'The link could not be recorded, so nothing was sent (' + error.message + '). Try again.', status: 500 };
   if (!(won as unknown[] | null)?.length) return { ok: true, skipped: 'already_sent', reason: 'The link to ' + m.name + ' has just gone out.' };
+  /* whole-branch fix: a default manager (the position's, nobody chosen) becomes the flow's manager, so wa275_manager_of and wa275_my_cards know them and the
+     card names them. Only while nobody is chosen: a manager HR chose is never replaced. Kept even if the send fails: they are the manager either way. */
+  if (f.manager_member_id == null) await svc.from('hub_onboard_flows').update({ manager_member_id: m.id }).eq('id', f.id).is('manager_member_id', null);
   if (!held && f.setup_ticks?.[HR_TOLD]) await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: HR_TOLD, p_value: null });   // a new manager: HR may be told about them in turn
   if (f.practice || c.practice) return { ok: true, practice: true };   // the walkthrough's link works; nothing goes anywhere
   const email = String(m.email).trim().toLowerCase();
@@ -2100,8 +2148,8 @@ async function staleTimes(f: Row, c: Row, m: Row, code: string, which: Which, le
     if (!practice && to.length) {
       const meeting = which === 'call' ? 'the onboarding call' : 'the 1-on-1';
       const said = c.name + ' (' + (c.role || 'new hire') + ') pressed Yes, but ' + meeting + ' no longer works: ' + (STALE_WHY[code] || STALE_WHY.taken)(String(m.name || 'the manager'), lead) + '. '
-        + (ask ? firstName(c.name) + ' is marking their availability now; pick new times from their card in Onboarding.' : 'Their availability was already communicated: get in touch with them about other times.');
-      await tell({ event: 'onboard_answer', to, url: '#hrcentre/onboarding', tag: 'onboard-stale-' + f.id, title: 'The times for ' + c.name + ' no longer work', body: said, text: ':warning: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
+        + (ask ? firstName(c.name) + ' is marking their availability now; pick new times from their card in the Hub.' : 'Their availability was already communicated: get in touch with them about other times.');
+      await tell({ event: 'onboard_answer', to, url: HOME, tag: 'onboard-stale-' + f.id, title: 'The times for ' + c.name + ' no longer work', body: said, text: ':warning: ' + slackEsc(said) + ' <' + HUB + '/' + HOME + '|Open the Hub>' });
     }
   }
   const messages = ask

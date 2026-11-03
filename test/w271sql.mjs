@@ -161,12 +161,18 @@ try {
     insert into public.hub_candidates (name, email, status, offer_hours, onboard_manager_id) values ('Test Person Offered Undo', 'w275.offeredundo@example.invalid', 'offer', 6, (select id from public.team_members where email = 'w275.mgrundo@example.invalid'));
     update public.hub_candidates set offer_sent_at = now() where name = 'Test Person Offered Undo';`);
   ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows where status = 'offered'`)).n === 1, 'an offered flow exists before the wa275 undo');
+  // wave276's tables are live and wa275a only reads them (wa275_week_of): the undo must leave them and their rows alone
+  await db.exec(`
+    insert into public.hub_team_avail (email, department, slots, hours) values ('w275.mgrundo@example.invalid', 'w275undo', '{18,19}', 1);
+    insert into public.hub_team_avail_ask (department, ask_date, set_by) values ('w275undo', current_date, 'w275 undo test');`);
   await db.exec(undo275);
   await db.exec(undo275);   // safe to run twice
   console.log('wa275 undo: applied twice with no error');
   ok((await one(db, `select count(*)::int as n from public.hub_onboard_flows`)).n === 1, 'wa275 undo: the offered flow is gone, the accepted flow stays');
   ok((await one(db, `select status from public.hub_onboard_flows`)).status === 'waiting', 'wa275 undo: the kept flow is still waiting');
   ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa275%'`)).n === 0, 'wa275 undo: no wa275 function left');
+  ok((await one(db, `select (to_regclass('public.hub_team_avail') is not null and to_regclass('public.hub_team_avail_ask') is not null) as k`)).k === true, 'wa275 undo: the wave276 tables (hub_team_avail, hub_team_avail_ask) are still there');
+  ok((await one(db, `select (select count(*) from public.hub_team_avail where department = 'w275undo')::int + (select count(*) from public.hub_team_avail_ask where department = 'w275undo')::int as n`)).n === 2, 'wa275 undo: their rows stay');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa275_offer_sent'`)).n === 0, 'wa275 undo: the offer-sent trigger is gone');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'wa271_cand_accepted'`)).n === 1, 'wa275 undo: the wave271 accept trigger is still there');
   ok((await one(db, `select count(*)::int as n from information_schema.columns where table_schema = 'public' and ((table_name = 'hub_candidates' and column_name in ('offer_hours', 'onboard_manager_id', 'hours_confirmed_at'))
@@ -183,7 +189,8 @@ try {
   let refused = false;
   try { await db.exec(`update public.hub_onboard_flows set status = 'offered'`); } catch (e) { refused = /status_check/.test(String(e.message)); }
   ok(refused, 'wa275 undo: the wave271 status check refuses offered again');
-  await db.exec(`delete from public.hub_candidates where name = 'Test Person Offered Undo'; delete from public.team_members where name = 'Test Person Mgr Undo';`);
+  await db.exec(`delete from public.hub_candidates where name = 'Test Person Offered Undo'; delete from public.team_members where name = 'Test Person Mgr Undo';
+    delete from public.hub_team_avail where department = 'w275undo'; delete from public.hub_team_avail_ask where department = 'w275undo';`);
   console.log('wa275 undo: every check passed');
   await runAssertions(db, 'wa271 assertions after the wa275 undo');
   await db.exec(undo);

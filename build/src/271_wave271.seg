@@ -512,13 +512,14 @@
     }
     return h + '</li>';
   }
-  /* the fresh Canva link under the welcome to-do: Canva's links last 30 days, so HR pastes or replaces it before sending */
-  function canvaCardHtml(f) {
+  /* the fresh Canva link under the welcome to-do: Canva's links last 30 days, so HR pastes or replaces it before sending. none: the sentence when there
+     is no link yet (wave275's card, before booking, says the welcome goes when the times are booked) */
+  function canvaCardHtml(f, none) {
     var id = f.id, typed = S.canva[id] != null ? S.canva[id] : (f.canva_link || '');
     return '<div data-o271canva="' + E(id) + '">' + canvaHowHtml()
       + (f.canva_link
         ? '<div class="row"><span class="o271ln"><b>Canva link:</b> ' + E(f.canva_link) + '</span><button type="button" class="o271b" data-o271a="copycanva" data-f="' + E(id) + '">Copy the link</button></div>'
-        : '<div class="o271warn">No Canva link yet. Get a fresh one before you send the welcome email.</div>')
+        : '<div class="o271warn">' + E(none || 'No Canva link yet. Get a fresh one before you send the welcome email.') + '</div>')
       + '<div class="row"><input type="text" autocomplete="off" aria-label="Fresh Canva invite link" placeholder="https://www.canva.com/..." data-o271i="ccanva" data-f="' + E(id) + '" value="' + E(typed) + '">'
       + '<button type="button" class="o271b" data-o271a="canvasave" data-f="' + E(id) + '"' + (S.busy['v' + id] ? ' disabled' : '') + '>Save the link</button></div></div>';
   }
@@ -645,7 +646,7 @@
   function flowOf(id) {
     var f = S.started.filter(function (x) { return String(x.id) === String(id); })[0]; if (f) return f;
     var x = S.ready.filter(function (r) { return String(r.flow_id) === String(id); })[0];
-    return x ? { id: x.flow_id, name: x.name, before: true } : null;
+    return x ? { id: x.flow_id, name: x.name, before: true, canva_link: x.canva_link || null } : null;   /* canva_link: wave275's card saves and copies it before booking */
   }
 
   /* ---------- the changes ---------- */
@@ -897,6 +898,6 @@
   window.o271 = { load: load, toInstant: toInstant, toLocal: toLocal, wall: wall, state: function () { return S; },
     /* wave275 Task 6: what wave275's card reuses (the same words, grid, steps and calls as this wave's) */
     E: E, run: run, whenText: whenText, dayText: dayText, dayLong: dayLong, isoOf: isoOf, pad2: pad2, newGrid: newGrid, gridHtml: gridHtml, refreshGrid: refreshGrid,
-    noteHtml: noteHtml, warnBox: warnBox, nameOf: nameOf, flowOf: flowOf, stepHtml: stepHtml, memberOptions: memberOptions, STEPS: STEPS, STALE_MS: STALE_MS, KEEP_DAYS: KEEP_DAYS,
+    noteHtml: noteHtml, warnBox: warnBox, nameOf: nameOf, flowOf: flowOf, stepHtml: stepHtml, canvaCardHtml: canvaCardHtml, memberOptions: memberOptions, STEPS: STEPS, STALE_MS: STALE_MS, KEEP_DAYS: KEEP_DAYS,
     isAdmin: isAdmin, surelyHr: surelyHr, hrPage: hrPage, readPeople: readPeople, readCfg: readCfg, readPw: readPw, readWelcomes: readWelcomes, pwHtml: pwHtml, paint: paint };
 })();

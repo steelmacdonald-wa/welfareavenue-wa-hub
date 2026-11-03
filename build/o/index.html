@@ -123,6 +123,7 @@
   .sw-one, .cell.pk-one, .cell.pk-one:hover { background: #3E8C7A; border-color: #3E8C7A; color: #fff; }
   .sw-busy, .cell.busy, .cell.busy:hover { background: repeating-linear-gradient(45deg, #efd9d2, #efd9d2 4px, #e4c6bc 4px, #e4c6bc 8px); border-color: #dcbcb1; color: #9a6a5e; }
   .sw-off { background: repeating-linear-gradient(135deg, #f1eee7, #f1eee7 4px, #e8e4da 4px, #e8e4da 8px); }
+  .sw-mbusy, .cell.mbusy, .cell.mbusy:hover { background: #e4e1d8; border-color: #d6d2c6; color: #8f8c84; cursor: not-allowed; }
   .cell[disabled] { cursor: not-allowed; }
   .cell .k { font-size: 11px; font-weight: 600; }
   .pgrid .cell { position: relative; }
@@ -350,19 +351,22 @@
     if (box) box.classList.toggle('on', hoursTicked());
   }
 
-  /* the grid: a model of the instants the function sent, laid out by Toronto wall clock */
-  function buildModel(grid) {
-    var byKey = {}, sample = {}, isoDay = {};
+  /* the grid: a model of the instants the function sent, laid out by Toronto wall clock. free (wave275, the hire's grid after a No): the cells where the
+     manager is free; any other cell is greyed (busyIso) and is neither picked nor counted. Without it (a wave271 grid, or the function could not read the
+     manager's week) every cell can be picked. */
+  function buildModel(grid, free) {
+    var byKey = {}, sample = {}, isoDay = {}, ok = Array.isArray(free) ? new Set(free) : null, any = false;
     (grid.slots || []).forEach(function (iso) {
       var p = parts(iso);
       byKey[p.date + '|' + p.hm] = iso;
       if (!sample[p.hm]) sample[p.hm] = iso;
-      isoDay[iso] = p.date;
+      if (!ok || ok.has(iso)) isoDay[iso] = p.date;
     });
     var keys = Object.keys(sample).sort();
     var days = (grid.days || []).filter(function (d) { return keys.some(function (k) { return byKey[d.date + '|' + k]; }); });
-    var cellIso = days.map(function (d) { return keys.map(function (k) { return byKey[d.date + '|' + k] || ''; }); });
-    return { byKey: byKey, sample: sample, isoDay: isoDay, keys: keys, days: days, cellIso: cellIso };
+    var cellIso = days.map(function (d) { return keys.map(function (k) { var iso = byKey[d.date + '|' + k] || ''; return iso && isoDay[iso] ? iso : ''; }); });
+    var busyIso = days.map(function (d) { return keys.map(function (k) { var iso = byKey[d.date + '|' + k] || ''; if (iso && !isoDay[iso]) { any = true; return iso; } return ''; }); });
+    return { byKey: byKey, sample: sample, isoDay: isoDay, keys: keys, days: days, cellIso: cellIso, busyIso: busyIso, greyed: any };
   }
   /* the hire's minimum: hours marked = cells x the cell length; the manager's grid has none (S.minHours is 0 for it) */
   function hoursMarked() { return Math.round(S.sel.size * S.cellMin / 6) / 10; }
@@ -385,6 +389,7 @@
     h += '<p>' + (v2 ? say(hx().gridNo, mgrWords()) : fill(j.kind === 'manager' ? tx.gridMgr : j.callBooked ? tx.gridHireOne : tx.gridHire, j)) + '</p>';
     if (j.late && j.kind === 'offer') h += '<p class="hint">' + tx.late + '</p>';
     h += '<p class="note">' + tx.how + '</p>';
+    if (v2 && m.greyed) h += '<p class="legend" id="mlegend"><span><i class="sw sw-mbusy"></i>' + say(hx().greyed, mgrWords()) + '</span></p>';   // wave275: where the manager is not free
     if (!m.days.length) { h += '<p>' + tx.nothing + '</p>'; card.innerHTML = h; return; }
     h += '<div class="chips" id="chips">' + m.days.map(function (d, i) {
       return '<button type="button" class="chip' + (i === S.active ? ' on' : '') + '" data-day="' + esc(d.date) + '" data-i="' + i + '" aria-label="' + esc(fill(tx.dayOf, { d: dayLong(d.open) })) + '">' +
@@ -395,9 +400,11 @@
       h += '<div class="day' + (i === S.active ? ' on' : '') + '" data-d="' + esc(d.date) + '"><div class="dh" data-day-head="' + esc(d.date) + '"><b>' + esc(dayLong(d.open)) + '</b><small>' +
         esc(fill(tx.range, { a: clockShort(d.open), b: clockShort(d.close) })) + '</small></div><div class="cells">';
       m.keys.forEach(function (k, r) {
-        var iso = m.cellIso[i][r], label = clock(iso || m.sample[k]);
+        var iso = m.cellIso[i][r], busy = m.busyIso[i][r], label = clock(iso || busy || m.sample[k]);
         h += iso
           ? '<button type="button" class="cell" data-slot="' + iso + '" data-di="' + i + '" data-r="' + r + '" aria-pressed="false" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))) + '"><span class="t">' + esc(label) + '</span></button>'
+          : busy
+          ? '<button type="button" class="cell off mbusy" data-mbusy="' + busy + '" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(busy))) + ': ' + say(hx().notFree, mgrWords()) + '"><span class="t">' + esc(label) + '</span></button>'
           : '<button type="button" class="cell off" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(tx.off) + '"><span class="t">' + esc(label) + '</span></button>';
       });
       h += '</div></div>';
@@ -898,6 +905,7 @@
       picked: '{Manager} will pick from your times, and you will get calendar invites.', touch: '{Manager} will be in touch with other times.',
       yourManager: 'your manager', regrid: 'Change my times',
       gridNo: 'Please mark every time that works for your onboarding call and a 1-on-1 with {manager}. They will pick from your times and send you calendar invites.',
+      greyed: 'Greyed times: {Manager} is not free then.', notFree: '{Manager} is not free',
       setupLink: 'Open your setup steps', setupNote: 'A few things to do on your own computer before your first day. You can keep that page open.',
       setupH: 'Your setup', setupIntro: 'Do these on your own computer before your onboarding call, in this order, and press Done as you go: {manager} and HR can see who is ready. Your sign-in details are in your welcome email.',
       done: 'Done', markDone: 'Mark as done', count: '{n} of {m} done', back: 'Back to your times'
@@ -912,6 +920,7 @@
       picked: '{Manager} choisira parmi vos plages, et vous recevrez des invitations.', touch: '{Manager} communiquera avec vous pour d’autres heures.',
       yourManager: 'votre gestionnaire', regrid: 'Modifier mes plages',
       gridNo: 'Indiquez toutes les plages qui vous conviennent pour votre appel d’accueil et une rencontre individuelle avec {manager}. Votre gestionnaire choisira parmi vos plages et vous enverra des invitations.',
+      greyed: 'Plages grisées: {Manager} n’est pas disponible à ces heures.', notFree: '{Manager} n’est pas disponible',
       setupLink: 'Ouvrir vos étapes d’installation', setupNote: 'Quelques étapes à faire sur votre ordinateur avant votre premier jour. Vous pouvez garder cette page ouverte.',
       setupH: 'Votre installation', setupIntro: 'Faites ces étapes sur votre ordinateur avant votre appel d’accueil, dans cet ordre, et appuyez sur Terminé au fur et à mesure: {manager} et les RH voient qui est prêt. Vos informations de connexion sont dans votre courriel de bienvenue.',
       done: 'Terminé', markDone: 'Marquer comme terminé', count: '{n} sur {m} terminées', back: 'Retour à vos heures'
@@ -1039,7 +1048,7 @@
 
   /* ---------- load and route ---------- */
   function setupGrid(j) {
-    S.model = buildModel(j.grid || { slots: [], days: [] });
+    S.model = buildModel(j.grid || { slots: [], days: [] }, isHire275(j) && Array.isArray(j.managerFree) ? j.managerFree : null);   // wave275: greyed where the manager is not free
     var gm = Number((j.grid || {}).minHours), gc = Number((j.grid || {}).cellMin);
     S.minHours = j.kind === 'manager' || !(gm > 0) ? 0 : gm;   // the manager's grid has no minimum
     S.cellMin = gc > 0 ? gc : 30;

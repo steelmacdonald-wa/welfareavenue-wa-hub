@@ -929,7 +929,7 @@ test('w275 fix: GET leaves out another hire\'s proposal once that hire has answe
 const V2CFG = { onboard_v2_since: '2026-10-01T00:00:00Z' };
 const withProposal = { proposed_call_at: W_CALL, proposed_one_on_one_at: W_ONE, proposed_by: 'sam.lee@welfareavenue.com', proposed_at: '2026-10-31T12:00:00Z' };
 async function hire({ cand = {}, fl = {}, config = {}, tables = {}, run } = {}) {
-  const s = await setup({ cand: { accepted_on: '2026-10-31', offer_hours: 6, ...cand }, flows: [offered({ status: 'waiting', ...fl })], config: { ...V2CFG, hr_notify_emails: 'ruth.owen@welfareavenue.com', ...config }, notify: false, tables: { team_members: [team[0], SAM()], ...tables } });
+  const s = await setup({ cand: { accepted_on: '2026-10-31', offer_hours: 6, ...cand }, flows: [offered({ status: 'waiting', ...fl })], config: { ...V2CFG, hr_notify_emails: 'ruth.owen@welfareavenue.com', ...config }, notify: false, tables: { team_members: [team[0], SAM()], hub_events: [], ...tables } });
   s.tells = [];
   s.rig.fetchOn(NOTIFY, (e) => { s.tells.push(e.body); return { json: { outcome: {}, hub: 'off' } }; });
   s.relays = [];
@@ -1123,6 +1123,70 @@ test('w275 after a No the hire\'s grid keeps the 10-hour minimum', async () => {
   const r20 = await s.post({ t: s.offer, a: 'grid', slots: g.grid.slots.slice(0, 20) });
   assert.equal(r20.status, 200, JSON.stringify(r20.body));
   assert.equal(r20.body.saved, 20);
+});
+
+test('w275 whole-branch I3: GET (offer link, propose path) gives managerFree, the grid cells where the manager is free (their week and one-off dates, minus hub@ meetings they are invited to), with no meeting title or detail', async () => {
+  const events = [
+    { id: 'e1', summary: 'Board meeting', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-11-03T15:00:00Z', end_at: '2026-11-03T16:00:00Z' },
+    { id: 'e2', summary: 'Called off', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'cancelled', start_at: '2026-11-03T17:00:00Z', end_at: '2026-11-03T18:00:00Z' },
+    { id: 'e3', summary: 'Not Sam', attendee_emails: ['ruth.owen@welfareavenue.com'], status: 'confirmed', start_at: '2026-11-03T18:00:00Z', end_at: '2026-11-03T19:00:00Z' },
+  ];
+  const except = [{ date: '2026-11-04', free: [] }, { date: '2026-11-07', free: [['18:00', '20:00']] }];   // not free Wednesday; free one Saturday evening
+  const said = { ...withProposal, hire_answer: 'no', hire_answered_at: '2026-11-01T11:00:00Z' };
+  const s = await hire({ fl: said, config: { onboard_grid_min_hours: '10' }, tables: { team_members: [team[0], SAM({ availability: { except, tz: 'America/Toronto' }, availability_at: '2026-10-20T12:00:00Z' })], hub_events: events } });
+  const before = s.snapshot();
+  const g = (await s.get(s.offer)).body;
+  assert.deepEqual(s.snapshot(), before, 'scanner safety');
+  assert.equal(s.rig.fetchLog.length, 0);
+  assert.ok(Array.isArray(g.managerFree), JSON.stringify(g.managerFree));
+  const free = new Set(g.managerFree), slots = new Set(g.grid.slots);
+  assert.ok(g.managerFree.every((x) => slots.has(x)), 'cells of the grid only');
+  for (const [at, want, why] of [
+    ['2026-11-02T15:00:00Z', true, 'Monday 10 am, inside 9 to 5 (no week saved on Home: the default)'],
+    ['2026-11-02T21:30:00Z', true, 'Monday 4:30 pm, the last cell before 5'],
+    ['2026-11-02T22:00:00Z', false, 'Monday 5 pm'],
+    ['2026-11-02T13:00:00Z', false, 'Monday 8 am'],
+    ['2026-11-03T15:00:00Z', false, 'Tuesday 10 am, a hub@ meeting Sam is invited to'],
+    ['2026-11-03T15:30:00Z', false, 'Tuesday 10:30 am, the same meeting'],
+    ['2026-11-03T16:00:00Z', true, 'Tuesday 11 am, after it'],
+    ['2026-11-03T17:00:00Z', true, 'a cancelled meeting does not count'],
+    ['2026-11-03T18:00:00Z', true, 'a meeting Sam is not invited to does not count'],
+    ['2026-11-04T15:00:00Z', false, 'Wednesday: a one-off date with no free time'],
+    ['2026-11-07T15:00:00Z', false, 'Saturday morning'],
+    ['2026-11-07T23:00:00Z', true, 'Saturday 6 pm: a one-off date with free time'],
+  ]) {
+    assert.ok(slots.has(at), at + ' is a cell');
+    assert.equal(free.has(at), want, at + ': ' + why);
+  }
+  assert.doesNotMatch(JSON.stringify(g), /Board meeting|Called off|Not Sam/, 'nothing about the meetings leaves over the no-login link');
+  assert.equal(g.busy, undefined);
+  assert.equal(g.grid.minHours, 10, 'the 10-hour minimum stays');
+  /* the read fails: the grid shows without greys, and the page says nothing */
+  const down = await hire({ fl: said });
+  down.db.onRpc('wa275_availability_of', () => { throw new Error('rig: availability is down'); });
+  const d = await down.get(down.offer);
+  assert.equal(d.status, 200, JSON.stringify(d.body));
+  assert.equal(d.body.managerFree, null);
+  assert.ok(d.body.grid.slots.length > 0);
+  assert.doesNotMatch(JSON.stringify(d.body), /availability is down/);
+  const ev = await hire({ fl: said });
+  ev.db.failOn('hub_events', 'select', 'events are locked');
+  assert.equal((await ev.get(ev.offer)).body.managerFree, null, 'nor when the meetings cannot be read');
+  /* a wave271 offer link (grid mode) and the manager's own link have none */
+  const old = await setup({ cand: { accepted_on: '2026-10-20' }, flows: [flow()], config: V2CFG });
+  const o = (await old.get(old.offer)).body;
+  assert.equal(o.mode, 'grid');
+  assert.equal(o.managerFree, undefined);
+  assert.equal((await s.get(s.mgr)).body.managerFree, undefined);
+});
+
+test('w275 whole-branch: the manager and HR told of a No get a link to the Hub\'s Home (a manager who is a plain member cannot open HR Center)', async () => {
+  const s = await hire({ fl: withProposal });
+  await s.post({ t: s.offer, a: 'no' });
+  assert.equal(s.tells.length, 1);
+  assert.equal(s.tells[0].url, '#mypage');
+  assert.match(s.tells[0].text, /<https:\/\/hub\.welfareavenue\.com\/#mypage\|Open the Hub>$/);
+  assert.doesNotMatch(JSON.stringify(s.tells[0]), /hrcentre/);
 });
 
 test('w275 setup_tick saves a rundown tick under its own key, is idempotent, can be undone, and refuses unknown keys and other links', async () => {

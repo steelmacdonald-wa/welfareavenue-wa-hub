@@ -324,6 +324,8 @@ async function view(l: Link) {
   }
   const grid = l.kind === 'password' ? null : await gridWindow();
   const inWindow = new Set(grid ? grid.slots : []);   // saved slots that have since started, or fell out of the window, are not shown
+  /* whole-branch fix (design section 5): the hire's grid after a No greys where the manager is not free */
+  if (l.kind === 'offer' && l.mode === 'propose' && grid && !closed && l.cand.accepted_on && l.flow && !l.flow.call_at) extra.managerFree = await managerFree(l, grid);
   const late = l.kind === 'offer' && answered !== 'decline' && lateAt(l.cand, answered === 'accept' ? String(l.cand.accepted_on).slice(0, 10) : torontoToday());
   return {
     ok: true, kind: l.kind, first, ...(hire !== undefined ? { hire } : {}), role: l.cand.role, lang: l.kind === 'manager' ? 'en' : langOf(l.cand),
@@ -415,6 +417,39 @@ async function proposeView(l: Link, m: Member | null) {
     hireAccepted: !!l.cand.accepted_on, hireAnswer: f.hire_answer ?? null,
   };
 }
+
+/* whole-branch fix (design section 5): the cells of the hire's grid where the manager is free: inside their hours for that Toronto date (wa275_availability_of:
+   the week from Home, a one-off date in its place) and clear of the hub@ meetings they are invited to. Only cell starts leave over this no-login link,
+   never a meeting's title or anything else about it. null (no greys) when there is no manager or a read fails: the hire is never held up by it, and the
+   page says nothing. The hire may still mark any cell they like on the server's side; the greys are a guide, and the 10-hour minimum is the hire's own. */
+async function managerFree(l: Link, grid: Grid): Promise<string[] | null> {
+  try {
+    const m = await managerRow(l);
+    if (!m || !grid.slots.length) return null;
+    const av = (await hoursOf(m.id)).availability as { weekly?: Record<string, Array<[string, string]>>; except?: Array<{ date: string; free: Array<[string, string]> }> } | null;
+    if (!av || typeof av !== 'object') return null;
+    const len = grid.cellMin * 60000, from = Date.parse(grid.slots[0]), to = Date.parse(grid.slots[grid.slots.length - 1]) + len;
+    const email = String(m.email || '').trim().toLowerCase();
+    let meetings: Array<[number, number]> = [];
+    if (email) {
+      const { data, error } = await svc.from('hub_events').select('start_at, end_at').contains('attendee_emails', [email]).neq('status', 'cancelled')
+        .lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
+      if (error) return null;
+      meetings = ((data || []) as Array<{ start_at: string; end_at: string }>).map((e) => [Date.parse(e.start_at), Date.parse(e.end_at)] as [number, number]).filter(([a, z]) => !Number.isNaN(a) && !Number.isNaN(z));
+    }
+    const hmOf = (v: unknown) => { const x = /^(\d{2}):(\d{2})$/.exec(String(v)); return x ? Number(x[1]) * 60 + Number(x[2]) : NaN; };   // as onboard-run reads blocks: a derived week may end at 24:00
+    return grid.slots.filter((iso) => {
+      const s0 = Date.parse(iso), s1 = s0 + len, a = torontoParts(s0), z = torontoParts(s1);
+      const date = day(a.y, a.m, a.d), endDate = day(z.y, z.m, z.d);
+      const startMin = a.h * 60 + a.min, endMin = endDate === date ? z.h * 60 + z.min : 24 * 60;
+      const ex = Array.isArray(av.except) ? av.except.find((e) => e && e.date === date) : null;
+      const blocks = ex ? ex.free : (av.weekly || {})[WEEKDAYS[new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay()]];
+      const inside = Array.isArray(blocks) && blocks.some((b) => Array.isArray(b) && hmOf(b[0]) <= startMin && endMin <= hmOf(b[1]));
+      return inside && !meetings.some(([ms, me]) => s0 < me && ms < s1);
+    });
+  } catch (_) { return null; }
+}
+const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 /* the database's own rule (wa275_availability_ok), checked here so a bad value is a plain 400, not a failed save; blocks come back in order and tz is set */
 const HM = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -614,7 +649,8 @@ async function tellAnswer(l: Link, tag: string, title: string, body: string): Pr
     await fetch(SUPABASE_URL + '/functions/v1/notify', {
       method: 'POST', signal: AbortSignal.timeout(8000),
       headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec), Authorization: 'Bearer ' + ANON_KEY },
-      body: JSON.stringify({ event: 'onboard_answer', to, title, body, url: '#hrcentre/onboarding', tag, text: esc(body) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' }),
+      /* whole-branch fix: the manager may be a plain member, who cannot open HR Center: Home has their cards, and HR's "Open in Onboarding" */
+      body: JSON.stringify({ event: 'onboard_answer', to, title, body, url: '#mypage', tag, text: esc(body) + ' <' + HUB + '/#mypage|Open the Hub>' }),
     });
   } catch (_) { /* the answer is saved; the card shows it */ }
 }

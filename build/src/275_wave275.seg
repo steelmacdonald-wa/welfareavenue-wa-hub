@@ -5,7 +5,8 @@
    card for every flow on the new path (offered, proposed, answered, accepted): the offer and the proposal as plain lines ("Offer sent 02 Nov, 6 hours a
    week; waiting for the manager's times", "Proposed by Kahkashan: Wed 4 Nov 10 am and Thu 5 Nov 10 am; waiting for James", "James said no to the
    times" or "the times moved; James is marking their availability"), the hours, the manager and their week (wave276's typical week, from Home), the
-   switch "Availability: ask the hire / already communicated", the steps that ran at Accept with Retry, the hire's setup rundown ticks, and the actions:
+   switch "Availability: ask the hire / already communicated", the steps that ran at Accept with Retry, the hire's setup rundown ticks, the fresh Canva link
+   until booking (whole-branch fix), and the actions:
    Propose times (the picker over the manager's week, hub@ meetings and other hires greyed), Book the times (from the hire's grid), Enter their
    availability, Edit the welcome email, Set <manager>'s exceptions and Change manager (HR's), They backed out. A started card gains the rundown ticks.
    A manager who is not HR sees only their own hires' cards (wa275_my_cards), as "Your new hires" on Home and on their team page; HR and admins see
@@ -195,6 +196,12 @@
     return '<ol class="o271st">' + O.STEPS.map(function (s, i) { return rows.some(function (r) { return r.step === s[0]; }) ? O.stepHtml(f, s[0], s[1], i + 1) : ''; }).join('') + '</ol>'
       + '<div class="o271ln">The other steps run when the times are booked.</div>';
   }
+  /* whole-branch fix (design decision 5 and section 6): the fresh Canva link, HR's or the manager's to paste before booking. The welcome email goes when the
+     times are booked and reads the link from the flow, so here is its only place before then (wave271's field sits under the welcome step, made at booking).
+     Canva's links last 30 days, so the note says to get a new one for each hire. Saved through set_canva_link, as on wave271's card. */
+  function canvaHtml(x) {
+    return '<div data-o275canva>' + O.canvaCardHtml({ id: x.flow_id, canva_link: x.canva_link }, 'No Canva link yet. Paste a fresh one before the times are booked: the welcome email goes then, and leaves Canva out without one.') + '</div>';
+  }
   function btn(kind, label, x, pri) {
     var A = S.act[x.flow_id];
     return '<button type="button" class="o271b' + (pri ? ' pri' : '') + '" data-o275a="open" data-kind="' + kind + '" data-f="' + E(x.flow_id) + '"' + (A && A.kind === kind ? ' disabled' : '') + '>' + E(label) + '</button>';
@@ -221,6 +228,7 @@
       + (booked ? '' : switchHtml(x))
       + (x.accepted_on ? ticksHtml(x) : '')
       + stepsHtml(x)
+      + (booked ? '' : canvaHtml(x))
       + O.noteHtml(id)
       + buttonsHtml(x)
       + (A ? (MINE_KINDS[A.kind] ? panel275(x, A) : panel271(O.flowOf(id), A)) : '')

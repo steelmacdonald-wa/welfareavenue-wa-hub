@@ -106,6 +106,17 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
     c = await calls(f, 'grid_for');
     ok('Save their times calls grid_for for the hire, with what is marked (one cell is fine: no 10-hour minimum for HR)', c.length === 1 && c[0].body.who === 'hire' && c[0].body.slots.indexOf(AT(14)) >= 0 && c[0].body.slots.indexOf(AT(10)) < 0 && c[0].body.slots.length === 5, c);
 
+    /* whole-branch I2: the fresh Canva link, on the card before booking (the welcome goes at booking and reads it from the flow) */
+    t = await txtOf(f, card(F.said) + ' [data-o275canva]');
+    ok('Canva: an accepted card before booking has the Canva field, with the 30-day note and no link yet', /Canva links last 30 days/.test(t) && /No Canva link yet/.test(t) && /before the times are booked/.test(t) && await has(f, card(F.said) + ' [data-o271i="ccanva"]'), t);
+    ok('Canva: an offered card has it too', await has(f, card(F.offered) + ' [data-o275canva] [data-o271i="ccanva"]'));
+    await fill(f, card(F.said) + ' [data-o271i="ccanva"]', 'https://www.canva.com/brand/join?token=fresh-701');
+    await press(f, card(F.said) + ' [data-o271a="canvasave"]');
+    c = await calls(f, 'set_canva_link');
+    ok('Canva: Save the link calls set_canva_link for this flow with the link', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.link === 'https://www.canva.com/brand/join?token=fresh-701', c);
+    t = await txtOf(f, card(F.said) + ' [data-o275canva]');
+    ok('Canva: the card shows the saved link and the note', /Canva link: https:\/\/www\.canva\.com\/brand\/join\?token=fresh-701/.test(t) && /The Canva link is saved/.test(await txtOf(f, card(F.said))), t);
+
     /* book from the hire's grid */
     await press(f, card(F.said) + ' [data-o275a="open"][data-kind="bookg"]');
     await f.page.waitForSelector(cell(F.said, AT(14)), { timeout: 4000 });

@@ -316,7 +316,10 @@ test('nextSteps follows the dependency table', async () => {
   assert.deepEqual(next({ roster: 'failed', google: 'waiting' }), []);
   assert.deepEqual(next({ roster: 'done' }), ['google', 'plan', 'invites', 'manager', 'slack']);
   assert.deepEqual(next({ roster: 'done', google: 'done' }), ['hub', 'plan', 'invites', 'manager', 'slack']);
-  assert.deepEqual(next({ roster: 'done', invites: 'done' }), ['google', 'plan', 'manager', 'slack', 'welcome'], 'wave275 Task 4: the welcome needs the invites, and nothing else');
+  assert.deepEqual(next({ roster: 'done', invites: 'done' }), ['google', 'plan', 'manager', 'slack'], 'whole-branch fix: the welcome needs the invites, and waits while the account step has not ended');
+  for (const g of ['pending', 'running', 'waiting']) assert.ok(!next({ roster: 'done', google: g, invites: 'done' }).includes('welcome'), 'google ' + g + ': the welcome waits');
+  for (const g of ['done', 'skipped', 'hr_task', 'failed']) assert.ok(next({ roster: 'done', google: g, invites: 'done' }).includes('welcome'), 'google ' + g + ': the welcome goes, its login paragraph decided');
+  assert.ok(s.rig.mod.nextSteps([{ step: 'roster', status: 'done' }, { step: 'invites', status: 'done' }, { step: 'welcome', status: 'pending' }]).includes('welcome'), 'no google row: nothing to wait for');
   assert.deepEqual(next({ roster: 'done', google: 'hr_task', invites: 'done' }), ['plan', 'manager', 'slack', 'welcome']);
   assert.deepEqual(next({ roster: 'done', google: 'skipped', plan: 'done', invites: 'done', manager: 'done', slack: 'skipped', hub: 'waiting', welcome: 'done' }), ['hub']);
   assert.deepEqual(next({ roster: 'done', google: 'failed', plan: 'done', invites: 'done', manager: 'done', slack: 'done', hub: 'waiting', welcome: 'done' }), []);
@@ -551,7 +554,8 @@ test('manager sends onboard_date through notify with the trigger secret', async 
   const [n] = s.notifies();
   assert.equal(n.body.event, 'onboard_date');
   assert.equal(n.body.to_email, 'sam.lee@welfareavenue.com');
-  assert.equal(n.body.url, '#hrcentre/onboarding');
+  assert.equal(n.body.url, '#mypage', 'whole-branch fix: the manager may be a plain member, so the link opens Home, where their cards are');
+  assert.match(n.body.text, /\/#mypage\|Open the Hub>/);
   assert.match(n.body.text, /Alex Tremblay/);
   assert.match(n.body.text, /November 1, 2026/);
   assert.equal(n.headers['x-wa-secret'], 'trigger-secret-for-tests');
@@ -1761,15 +1765,15 @@ test('TEMPLATE: the preview says what fills in at Start, and writes nothing', as
   const s = await setup();
   const before = s.snapshot();
   const { welcome: w } = (await s.post({ action: 'preview', flow_id: 21 })).body;
-  assert.match(w.text, /Your first day is \[first day: fills in at Start\]/);
-  assert.match(w.text, /\[Canva link: fills in at Start, or this line is left out\]/);
+  assert.match(w.text, /Your first day is \[first day: fills in when the times are booked or at Start\]/);
+  assert.match(w.text, /\[Canva link: fills in when the times are booked or at Start, or this line is left out\]/);
   assert.match(w.text, /   Email: \[new address\]\n   First password: \[first password\]\n/, 'wave275 Task 4: the login, as places to fill');
   assert.match(w.text, /Google Meet: \[call Meet link\]\n/);
   assert.match(w.text, /on this page, so your manager can see where you are: \[setup page link\]\n/);
   assert.equal(numbers(w.text), '1234567');
   assert.deepEqual(s.snapshot(), before);
   const fr = await setup({ cand: { summary: 'Français' } });
-  assert.match((await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text, /\[premier jour : rempli au démarrage\]/);
+  assert.match((await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text, /\[premier jour : rempli à la réservation des rencontres ou au démarrage\]/);
 });
 
 test('TEMPLATE: no password goes in the text, even with a password nonce on the flow: the card keeps [first password]', async () => {
@@ -1999,7 +2003,7 @@ function tickSet(a, db) {
   return true;
 }
 async function w275({ cand, fl = {}, config = {}, tables, hr = true, admin = false, manager = false, flows = [], notifyReply } = {}) {
-  const s = await setup({ cand, fl: { manager_member_id: 2, ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', ...config }, tables, hr, admin, notifyReply });
+  const s = await setup({ cand, fl: { manager_member_id: 2, created_at: '2026-10-15T12:00:00Z', ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', onboard_v2_since: '2026-10-01T00:00:00Z', ...config }, tables, hr, admin, notifyReply });   // whole-branch fix: on the new path (made after onboard_v2_since), as signed-in propose now requires
   s.db.onRpc('wa275_manager_of', (a, _d, w) => { assert.ok(w.jwt, 'the manager check runs as the caller'); assert.equal(Number(a.p_flow), 21); return manager; });
   s.db.onRpc('wa275_tick_set', (a, db, w) => { assert.equal(w.jwt, null, 'ticks are set with the service key'); return tickSet(a, db); });
   for (const f of flows) s.db.rows('hub_onboard_flows').push(f);
@@ -2032,6 +2036,8 @@ test('w275 propose (HR): saves the proposal, tells HR with onboard_answer, and e
   assert.deepEqual([n[1].body.event, n[1].body.to_email, n[1].body.title], ['onboard_propose', 'sam.lee@welfareavenue.com', 'HR proposed times for Alex Tremblay'], 'Task 6: HR proposed, so the manager hears it through their own kind');
   assert.match(n[1].body.body, /^hr\.person@welfareavenue\.com proposed times for Alex Tremblay \(Program Coordinator\): the onboarding call on Monday, October 26/);
   assert.ok(noDash(n[1].body.title + n[1].body.body + n[1].body.text));
+  assert.equal(n[1].body.url, '#mypage', "whole-branch fix: the manager's link opens Home");
+  assert.equal(n[0].body.url, '#hrcentre/onboarding', 'HR keeps Onboarding');
   assert.equal(n[0].body.event, 'onboard_answer');
   assert.deepEqual(n[0].body.to, ['ruth.owen@welfareavenue.com']);
   assert.equal(n[0].body.title, 'hr.person@welfareavenue.com proposed times for Alex Tremblay', 'HR proposing: the proposer is named (their roster name when they have one)');
@@ -2608,6 +2614,9 @@ test('w275 book re-checks both times: under 24 hours away, outside the manager\'
     assert.equal(told.length, 1, JSON.stringify(opts));
     assert.deepEqual(told[0].body.to.slice().sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
     assert.match(told[0].body.title, /no longer work/);
+    assert.equal(told[0].body.url, '#mypage', 'whole-branch fix: the manager and HR both open Home');
+    assert.match(told[0].body.text, /\/#mypage\|Open the Hub>$/);
+    assert.doesNotMatch(told[0].body.body + told[0].body.text, /hrcentre/);
   }
   const off = await t3({ fl: { ...PROPOSED, ask_availability: false }, tables: { hub_events: [meeting] } });
   const o = await off.book();
@@ -3357,4 +3366,138 @@ test('w275 Task 6 fix: times answers 503 when the hire\'s grid cannot be read, n
   const r = await s.card('times');
   assert.equal(r.status, 503, JSON.stringify(r.body));
   assert.match(r.body.message, /The new hire's times could not be read \(grids are locked\)/);
+});
+
+/* ---------- wave275 whole-branch fixes (02/11/26) ---------- */
+test('w275 whole-branch I1: propose signed in (HR, or the flow\'s own manager) on a wave271 flow is refused as the earlier path, before anything is written; a flow made after the release still proposes', async () => {
+  const OLD = { created_at: '2026-09-20T12:00:00Z' };   // before SINCE, waiting, nothing proposed: Start is HR's way
+  for (const who of [{}, { hr: false, manager: true }]) {
+    const s = await t3({ fl: OLD, ...who });
+    if (who.manager) s.db.setCaller({ email: 'sam.lee@welfareavenue.com' });
+    const before = s.snapshot();
+    const r = await s.propose();
+    assert.equal(r.status, 409, JSON.stringify(r.body));
+    assert.equal(r.body.error, 'earlier_path');
+    assert.match(r.body.message, /earlier onboarding path: use Choose times and preview, then Start onboarding/);
+    assert.ok(noDash(r.body.message));
+    assert.deepEqual(s.snapshot(), before, 'nothing written: no proposal, so the path stays wave271\'s');
+    assert.equal(s.rig.fetchLog.length, 0, 'nothing sent');
+  }
+  const v2 = await t3();
+  const r = await v2.propose();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(v2.flow().proposed_by, 'hr.person@welfareavenue.com');
+});
+
+test('w275 whole-branch I2: a Canva link HR saves on an accepted new-path card before booking goes in the welcome email at booking', async () => {
+  const s = await t4();
+  await s.acceptSetup();
+  const set = await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/brand/join?token=fresh-one' });
+  assert.equal(set.status, 200, JSON.stringify(set.body));
+  assert.equal(s.flow().canva_link, 'https://www.canva.com/brand/join?token=fresh-one');
+  await s.book();
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  const text = mail(s.welcomes()[0]).bodies[0];
+  assert.match(text, /\n4\. Join our Canva team: https:\/\/www\.canva\.com\/brand\/join\?token=fresh-one\n/);
+  assert.equal(numbers(text), '1234567', 'with the link, the Canva step stays and nothing renumbers');
+});
+
+test('w275 whole-branch I4: Google\'s read-back can lag; the address and google_made_at are kept as soon as the account is made, and a read-back that answers on a later try ends done', async () => {
+  const s = await t3({ google: (e) => ({ json: { id: 'g1', primaryEmail: e.body.primaryEmail } }) });   // made, but Google has not shown it yet
+  assert.deepEqual(s.rig.mod.READ_BACK_WAITS, [1000, 2000, 4000], 'tried again after 1, 2 and 4 seconds');
+  s.rig.mod.READ_BACK_WAITS.fill(0);   // the waits themselves, not the clock, are what this test is about
+  let gets = 0;
+  s.taken.has = (a) => { gets++; return gets >= 2 && a === 'alex.tremblay@welfareavenue.com'; };
+  const said = await quietly(() => s.acceptSetup());
+  assert.equal(s.step('google').status, 'done', s.step('google').detail);
+  assert.equal(gets, 2, 'read back twice: the first missed, the second saw it');
+  assert.equal(s.inserts().length, 1, 'one insert');
+  assert.equal(s.flow().wa_email, 'alex.tremblay@welfareavenue.com');
+  assert.ok(s.flow().setup_ticks.google_made_at, 'the Hub made it with the vault password');
+  assert.equal(s.step('hub').status, 'done');
+  s.noPw();
+  assert.ok(!said.includes(FIRST_PW));
+});
+
+test('w275 whole-branch I4: a read-back that never answers ends the step as HR\'s (never failed, so Retry cannot ask Google for a second account), with google_made_at kept; HR\'s "I created it, continue" with the same address keeps it, another address clears it', async () => {
+  const mk = async () => {
+    const s = await t3({ google: (e) => ({ json: { id: 'g1', primaryEmail: e.body.primaryEmail } }) });
+    s.rig.mod.READ_BACK_WAITS.fill(0);
+    s.taken.has = () => false;
+    return s;
+  };
+  const s = await mk();
+  const said = await quietly(() => s.acceptSetup());
+  const g = s.step('google');
+  assert.equal(g.status, 'hr_task', g.detail);
+  assert.match(g.detail, /^Google said it created alex\.tremblay@welfareavenue\.com, but has not shown the account yet\. Check it in Google Admin, then press "I created it, continue" on this card\.$/);
+  assert.ok(noDash(g.detail));
+  assert.equal(s.users().filter((e) => e.method === 'GET').length, 4, 'the read-back and three tries more');
+  assert.equal(s.inserts().length, 1);
+  assert.equal(s.flow().wa_email, 'alex.tremblay@welfareavenue.com', 'the address is kept, so the card offers it');
+  assert.ok(s.flow().setup_ticks.google_made_at);
+  s.noPw();
+  assert.ok(!said.includes(FIRST_PW) && !g.detail.includes(FIRST_PW));
+  const same = await s.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.tremblay@welfareavenue.com' });
+  assert.equal(same.status, 200, JSON.stringify(same.body));
+  assert.equal(s.step('google').status, 'done');
+  assert.ok(s.flow().setup_ticks.google_made_at, 'the same account: the Hub made it with the vault password, so the welcome may give it');
+  const other = await mk();
+  await other.acceptSetup();
+  const r = await other.post({ action: 'google_manual', flow_id: 21, wa_email: 'alex.t@welfareavenue.com' });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(other.flow().setup_ticks.google_made_at ?? null, null, 'another address: HR made that one by hand, so the Hub does not know its password');
+});
+
+test('w275 whole-branch: Yes seconds after Accept, with the account step still running, sends no welcome until that step ends; then it goes with the login paragraph', async () => {
+  let release, s;
+  const gate = new Promise((r) => { release = r; });
+  s = await t4({ google: (e) => gate.then(() => { s.taken.add(e.body.primaryEmail); return { json: { id: 'g1', primaryEmail: e.body.primaryEmail } }; }) });
+  const accepting = s.acceptSetup();   // Accept: the roster step, then the Google insert waits on Google
+  for (let i = 0; i < 100 && s.step('google')?.status !== 'running'; i++) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(s.step('google').status, 'running');
+  const r = await s.book();   // the hire presses Yes now
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.welcomes().length, 0, 'nothing sent while the account step runs');
+  assert.equal(s.flow().welcome_sent_at ?? null, null);
+  assert.equal(s.step('welcome').status, 'waiting');
+  assert.equal(s.step('welcome').detail, 'Waiting on step 2, Google account.');
+  assert.equal(s.step('invites').status, 'done', 'the rest of the booking steps ran');
+  release();
+  await accepting;
+  assert.equal(s.step('google').status, 'done', s.step('google').detail);
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  const sent = s.welcomes();
+  assert.equal(sent.length, 1, 'sent once, when the account step ended');
+  const text = mail(sent[0]).bodies[0];
+  assert.match(text, /\n2\. Sign in to your Welfare Avenue Google account at mail\.google\.com:\n   Email: alex\.tremblay@welfareavenue\.com\n   First password: Lantern-Harbour-62\n/);
+  assert.doesNotMatch(text, /HR will send your login details separately/);
+  s.noPw();
+  /* an account step that ends as HR's still lets the welcome go, with the other paragraph */
+  const hr = await t4({ pw: null });
+  await hr.acceptSetup();
+  assert.equal(hr.step('google').status, 'hr_task');
+  await hr.book();
+  assert.equal(hr.step('welcome').status, 'done');
+  assert.match(mail(hr.welcomes()[0]).bodies[0], /\n2\. HR will send your login details separately\.\n/);
+});
+
+test('w275 whole-branch: the template\'s marked places say they fill in when the times are booked or at Start, and a text saved with the old words still fills in', async () => {
+  const s = await setup();
+  const { welcome: w } = (await s.post({ action: 'preview', flow_id: 21 })).body;
+  assert.match(w.text, /Your first day is \[first day: fills in when the times are booked or at Start\]/);
+  assert.match(w.text, /\[Canva link: fills in when the times are booked or at Start, or this line is left out\]/);
+  assert.doesNotMatch(w.text, /fills in at Start\]/);
+  const fr = await setup({ cand: { summary: 'Français' } });
+  const wf = (await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text;
+  assert.match(wf, /\[premier jour : rempli à la réservation des rencontres ou au démarrage\]/);
+  assert.doesNotMatch(wf, /—/);
+  /* HR's text saved before this wording (wave271 is live): its brackets are still the Hub's to fill */
+  const old = await t4({ fl: { ...PROPOSED, welcome_text: 'Dear Alex,\n\nYour first day is [first day: fills in at Start].\nCanva: [Canva link: fills in at Start, or this line is left out]\nManager: [manager: fills in at Start]', welcome_edited: true } });
+  await old.acceptSetup();
+  await old.book();
+  const text = mail(old.welcomes()[0]).bodies[0];
+  assert.match(text, /Your first day is Monday, October 26, 2026\./);
+  assert.match(text, /\nManager: Sam Lee$/);
+  assert.doesNotMatch(text, /\[|Canva/, 'the old Canva place with no link takes its line out, as before');
 });

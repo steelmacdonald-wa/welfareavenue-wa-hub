@@ -153,7 +153,7 @@ async function runWorld({ cand = {}, fl = {}, config = {}, tables = {}, hr = tru
 }
 const mgrLink = (id) => id + '.' + createHmac('sha256', 'onboard-mgr:' + SERVICE).update(String(id)).digest('base64url').slice(0, 20);
 
-test('step manager: through notify, the manager is told the date, the time and the hire\'s name, and the Hub link opens Onboarding', async () => {
+test('step manager: through notify, the manager is told the date, the time and the hire\'s name, and the Hub link opens Home (whole-branch fix: a manager who is a plain member cannot open HR Center)', async () => {
   const notify = await notifyWorld();
   const w = await runWorld({ notify });
   const r = await w.post({ action: 'start', flow_id: 21, manager_member_id: 2, call_at: CALL, one_on_one_at: ONE, skip: ['google', 'plan', 'invites', 'hub', 'slack', 'welcome'] });
@@ -161,14 +161,15 @@ test('step manager: through notify, the manager is told the date, the time and t
   assert.equal(w.step('manager').status, 'done');
   const [n] = w.sent;
   assert.equal(n.event, 'onboard_date');
-  assert.equal(n.url, '#hrcentre/onboarding');
+  assert.equal(n.url, '#mypage');
   assert.equal(n.to_email, 'sam.lee@welfareavenue.com');
   const dm = notify.slack()[0].body.text;
+  assert.match(dm, /hub\.welfareavenue\.com\/#mypage\|Open the Hub>/);
   assert.match(dm, /Alex Tremblay/);
   assert.match(dm, /November 1, 2026/);
   assert.match(dm, /10:30/);
   assert.equal(notify.push()[0].body.kind, 'onboard_date');
-  assert.equal(notify.push()[0].body.url, '/#hrcentre/onboarding');
+  assert.equal(notify.push()[0].body.url, '/#mypage');
   assert.equal(notify.db.rows('hub_notifications_sent')[0].kind, 'onboard_date');
   assert.deepEqual(w.rig.unregistered(), []);
   assert.deepEqual(notify.unregistered(), []);
@@ -694,6 +695,19 @@ test('w275 ask_manager (the trigger secret): a Slack DM through onboard_propose 
   const bad = await ol.call(new Request(LINK_FN + '?t=' + encodeURIComponent(t.slice(0, -1) + (t.endsWith('A') ? 'B' : 'A'))));
   assert.equal(bad.status, 404, 'a changed letter is refused');
   assert.deepEqual(ol.unregistered(), []);
+});
+
+test('w275 whole-branch: a default manager (the position\'s, no one chosen) asked for times becomes the flow\'s manager too, so their cards and wa275_manager_of know them', async () => {
+  for (const how of ['ask', 'remind']) {
+    const w = await askWorld({ fl: { manager_member_id: null } });   // wa271_default_manager answers Sam (2)
+    const r = how === 'ask' ? await w.ask() : await w.remind();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(w.asks().length, 1, how);
+    assert.deepEqual([w.flow().manager_link_member_id, w.flow().manager_member_id], [2, 2], how + ': the link holder and the manager');
+    const chosen = await askWorld({ fl: { manager_member_id: 1 } });   // HR chose Ruth: she stays
+    await (how === 'ask' ? chosen.ask() : chosen.remind());
+    assert.equal(chosen.flow().manager_member_id, 1, how + ': a chosen manager is never replaced');
+  }
 });
 
 test('w275 ask_manager: sent once for the same manager by the secret; HR or an admin signed in can send it again from the card; anyone else is refused', async () => {

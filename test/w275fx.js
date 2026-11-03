@@ -86,7 +86,7 @@ const INIT275 = `(function(){
   var NEW = ['times', 'propose', 'book', 'set_ask_availability', 'grid_for', 'availability_for', 'set_welcome', 'ask_manager'];
   window.__WA_INVOKE = function (name, opts) {
     var b = (opts && opts.body) || {}, x = b.flow_id != null ? one(b.flow_id) : null;
-    var mine = name === 'onboard-run' && (NEW.indexOf(b.action) >= 0 || (x && (b.action === 'welcome' || b.action === 'set_manager')) || (b.action === 'retry' && x));
+    var mine = name === 'onboard-run' && (NEW.indexOf(b.action) >= 0 || (x && (b.action === 'welcome' || b.action === 'set_manager' || b.action === 'set_canva_link')) || (b.action === 'retry' && x));
     if (!mine) return base(name, opts);
     CALLS.push({ name: name, body: JSON.parse(JSON.stringify(b)) });
     if (window.__O271_REFUSE && window.__O271_REFUSE.action === b.action) { var z = window.__O271_REFUSE; window.__O271_REFUSE = null; return refuse(z.error, z.message); }
@@ -114,6 +114,7 @@ const INIT275 = `(function(){
       case 'set_welcome': window.__O275.welcome[b.flow_id] = { subject: b.subject, text: b.text }; return ok({ ok: true, edited: true, subject: b.subject, text: b.text });
       case 'welcome': { var w = window.__O275.welcome[b.flow_id]; return ok(w ? { subject: w.subject, text: w.text, edited: true, sent_at: null } : { subject: 'Welcome to Welfare Avenue! Your Next Steps', text: 'Dear ' + String(x.name).split(' ')[0] + ',\\n\\nYour first day is [first day: fills in at Start].\\n   First password: [first password]', edited: false, sent_at: x.welcome_sent_at || null }); }
       case 'set_manager': each(b.flow_id, function (r) { r.manager_member_id = b.member_id; r.manager_name = String(b.member_id) === '9102' ? 'Omar Fixture' : 'Dana Fixture'; }); return ok({ ok: true, cleared: true });
+      case 'set_canva_link': each(b.flow_id, function (r) { r.canva_link = b.link || null; }); return ok({ ok: true, canva_link: b.link || null });
       case 'ask_manager': return ok({ ok: true, sent: true, to: 'omar@example.invalid', manager: 'Omar Fixture', warnings: [] });
       case 'retry': each(b.flow_id, function (r) { r.steps.forEach(function (s) { if (s.step === b.step) { s.status = 'done'; s.detail = 'Done on Retry.'; } }); }); return ok({ steps: x.steps });
     }
