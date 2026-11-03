@@ -85,6 +85,12 @@ On Windows set `WA_CHROME` to `C:/Users/iolui/AppData/Local/ms-playwright/chromi
 - `npx --yes deno@2 test --allow-env fn/_shared/ fn/social-connect/ fn/social-publish/`: 33 passed, 0 failed.
 - `node --test test/w277notify.test.mjs`: 3 passed, 0 failed.
 
+## Added at release, 03/11/26: LinkedIn analytics through the API (social-pull v1.8)
+
+Steel, after the release: "analytics isn't working". The Analytics page (Content Studio > Analytics, `#socialstats`) showed LinkedIn as CSV with dashes, last numbers from the 23 September export: social-pull had no LinkedIn reader, only the CSV route. Now that the Page is connected with `r_organization_social` and `rw_organization_admin`, `fn/social-pull/index.ts` v1.8 reads it: at each sync `adoptLinkedin` makes the Studio's connected Page the Analytics account (the CSV row keeps its id and history and takes the Page id, so the old export days stay), then `syncLinkedin` writes by day followers (today's total from `networkSizes`, the series walked back with the daily gains), `new_followers`, `views` (impressions), `reach` (unique impressions), `clicks`, `likes`, `comments`, `shares`, `engagement` (likes + comments + shares + clicks) and `profile_views` (page views), and the Page's last 50 posts with their statistics (`social_posts`, kind from the content). The first API sync takes 365 days, the morning job (06:20) the usual 30. A lapsed login is stored as the account's error ("LinkedIn login lapsed: reconnect the Page on Content Studio > Connections"). The page itself did not change: the card reads Live once the account is `connected`.
+
+Deployed as platform version 22, a pinned stub importing commit 7494f8b (v1.8 is three commits: 09e75ee, 45309de the edge type name, 7494f8b the follower series). The live source before it was identical to the repo's v1.7. Checked 03/11/26: 300 daily rows and 50 posts per sync, no skips; the card shows 947 followers, reach 526, views 1.5k, engagement 85 for the last 30 days. Undo: redeploy the stub pinned to 3bb8aed `fn/social-pull/index.ts` (v1.7) and set the LinkedIn account's status back to `csv`; the API rows can stay (`source = 'api'`).
+
 ## Deferred minors
 
 - The three trailing caps updates in the registry SQL are unconditional; `updated_at` has no trigger; the RPC returns inactive rows and callers filter.
