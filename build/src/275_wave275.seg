@@ -36,7 +36,7 @@
     '.o275sw .o271md button{min-height:32px;}' +
     '.o275xd{border:1px solid ' + LINE + ';border-radius:10px;padding:8px 10px;margin:8px 0;background:' + CREAM + ';min-width:0;}' +
     '.o275xr{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0;min-width:0;}' +
-    '.o275xr input[type=date],.o275xr input[type=time]{font:inherit;font-size:14px;min-height:36px;padding:4px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:#fff;color:' + GROUND + ';min-width:0;max-width:100%;box-sizing:border-box;}' +
+    '.o275xr input[type=date],.o275xr input[type=time]{font:inherit;font-size:14px;min-height:36px;padding:4px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:#FFFAF2;color:' + GROUND + ';min-width:0;max-width:100%;box-sizing:border-box;}' +
     '.o275cnt{font-size:12.5px;color:' + MUTE + ';margin:6px 0 0;}' +
     '.o275line{border-top:1px solid #ECEBE3;padding:10px 0;min-width:0;}' +
     '.o275line:first-of-type{border-top:none;}' +
