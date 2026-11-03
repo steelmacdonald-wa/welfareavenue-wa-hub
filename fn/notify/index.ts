@@ -1,6 +1,5 @@
-// v19 (wave275, 02/11/26; on top of wave276's v18, merged at release: wave276 released its own v18 live, kinds meet_propose and meet_avail_ask): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
-// shape as v16's: onboard_propose (the manager: propose the call and the 1-on-1 for a new hire), onboard_answer (the manager and HR: times were proposed, or
-// the hire said yes or no) and onboard_ready (the manager: the hire finished their setup rundown). Nothing here is ever sent to the new hire.
+// v18 (wave276, 02/11/26): two relay kinds a team's manager sends from the Agenda tab (staff JWT, wa_avail_manager_of or 403): meet_propose
+// (a new meeting time, to the rest of the active team) and meet_avail_ask (to members with no week saved since the latest ask). Recipients are found here, never taken from the body.
 // v17 (wave274, 02/11/26): a request with no owner goes to the team's people (hub_settings.team_inbox.people), before the team's leaders.
 // team-inbox no longer posts those in the channel, so when no DM could be delivered it is asked to (request_channel). A suggestion with
 // nobody to tell no longer counts as covered.
@@ -106,6 +105,20 @@ async function hubRelay(kind: string, to: string[], title: string, body: string,
     return String((b && (b.outcome || b.error)) || ('HTTP ' + r.status));
   } catch (e) { return 'failed: ' + String(e).slice(0, 80); }
 }
+/* v15 relay kinds: the default title (the kinds registry's) and link of each */
+const RELAY_TITLE: Record<string, string> = { timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty',
+  meet_propose: 'A leader proposed a new meeting time for my team', meet_avail_ask: 'My team needs my availability' };
+const RELAY_URL: Record<string, string> = { timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding',
+  meet_avail_ask: '#mypage' };   /* meet_propose builds its own link to the team's Agenda tab */
+/* v15 (shared since v18): a relayed message to each person, the Slack DM through their switch and the log, then the Hub notification through hub-push */
+async function relaySend(event: string, toList: string[], text: string, title: string, plainBody: string, url: string, tag?: string): Promise<{ outcome: Record<string, string>; hub: string }> {
+  const to = Array.from(new Set(toList));
+  const outcome: Record<string, string> = {};
+  for (const e of to) outcome[e] = await deliver(event, null, e, text, { title, url, ref: tag });
+  let hub = 'off';
+  if (coalesceOn(await appConfig('push_on'))) hub = await hubRelay(event, to, title, String(plainBody).slice(0, 400), url.startsWith('/') ? url : '/' + url, String(tag || (event + '-' + Date.now())));
+  return { outcome, hub };
+}
 const DEPT_WORDS: Record<string, string> = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board' };
 function teamWords(d: string | null): string { return DEPT_WORDS[String(d || '')] || String(d || ''); }
 /* a due date in words: "due Fri 17 Oct (in 2 days)", "due today", "was due 3 Oct (12 days ago)" */
@@ -167,7 +180,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'onboard_propose', 'onboard_answer', 'onboard_ready'];   /* v15: the relayed kinds reach the Hub too (v19: wave275's three) */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'meet_propose', 'meet_avail_ask'];   /* v15: the relayed kinds reach the Hub too */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -603,18 +616,63 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
 
   /* v15: a kind another function composes (hr-notify, recruit-actions, checkin-post): the Slack DM through the switch and
      the log here, the Hub notification through hub-push's relay (its own switch) */
-  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind' || event === 'onboard_propose' || event === 'onboard_answer' || event === 'onboard_ready') {
+  /* v18 (wave276): a team's manager proposes a meeting time or asks for availability. The JWT path has passed wa_avail_manager_of in
+     Deno.serve; the recipients are found here from the roster, and only the trigger secret may name them itself (to). */
+  if (event === 'meet_propose' || event === 'meet_avail_ask') {
+    const dept = String(body.dept || '').trim();
+    if (!dept) return { error: 'dept required' };
+    const { data: meta } = await svc.from('dept_meta').select('label').eq('department', dept).maybeSingle();
+    const label = String(meta?.label || dept);
+    let to: string[];
+    if (!callerEmail && (Array.isArray(body.to) || body.to_email)) {
+      to = (Array.isArray(body.to) ? body.to : [body.to_email]).map((x: unknown) => String(x || '').toLowerCase()).filter((x: string) => /@/.test(x));
+    } else {
+      const me = String(callerEmail || '').toLowerCase();
+      const { data: roster } = await svc.from('team_members').select('email, active').eq('department', dept);
+      to = (roster || []).filter((m: { email: string | null; active: boolean | null }) => m.active !== false && String(m.email || '').trim() !== '')
+        .map((m: { email: string }) => String(m.email).trim().toLowerCase()).filter((e: string) => e !== me);
+      if (event === 'meet_avail_ask') {
+        /* the same rule as wa_avail_ask_set: current when the last saved grid (updated_at set; a snooze stub has none) is on or after
+           the latest ask dated today or earlier (current_date in the database is UTC); with no ask yet, everyone is asked */
+        const today = new Date().toISOString().slice(0, 10);
+        const { data: asks } = await svc.from('hub_team_avail_ask').select('ask_date').eq('department', dept).lte('ask_date', today).order('ask_date', { ascending: false }).limit(1);
+        const latest = asks && asks[0] ? new Date(String(asks[0].ask_date).slice(0, 10) + 'T00:00:00Z').getTime() : null;
+        if (latest != null) {
+          const { data: grids } = await svc.from('hub_team_avail').select('email, updated_at').eq('department', dept).not('updated_at', 'is', null);
+          const current = new Set((grids || []).filter((g: { updated_at: string }) => new Date(g.updated_at).getTime() >= latest).map((g: { email: string }) => String(g.email).toLowerCase()));
+          to = to.filter(e => !current.has(e));
+        }
+      }
+    }
+    to = Array.from(new Set(to));
+    let text: string;
+    if (event === 'meet_propose') {
+      const slot = String(body.slot_label || '').trim().slice(0, 80).replace(/\.+$/, '');   /* "5:00 p.m." ends the sentence once */
+      if (!slot) return { error: 'slot_label required' };
+      let who = String(body.by_name || '').trim();
+      if (callerEmail) {
+        const { data: me } = await svc.from('team_members').select('name').ilike('email', callerEmail).limit(1);
+        who = String((me && me[0] && me[0].name) || callerEmail);
+      }
+      const can = Math.max(0, Math.floor(Number(body.who_can) || 0));
+      text = (who || 'A team leader') + ' is proposing ' + label + ' meetings move to ' + slot + '. ' + can + ' can make it. Reply on Slack if that does not work.';
+    } else {
+      text = label + ' is planning meeting times. Add your typical week in the Hub.';
+    }
+    if (!to.length) return { event, outcome: {}, hub: 'nobody to tell', sent: 0 };
+    const url = event === 'meet_propose' ? '#team/' + dept + '/agenda' : RELAY_URL[event];
+    const out = await relaySend(event, to, slackEsc(text), RELAY_TITLE[event], text, url, event + '-' + dept + '-' + new Date().toISOString().slice(0, 10));
+    return { event, outcome: out.outcome, hub: out.hub, sent: to.length };
+  }
+
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind') {
     const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x)).slice(0, 12);
     const text = String(body.text || '').slice(0, 3000);
     if (!to.length || !text) return { error: 'to and text required' };
-    const title = String(body.title || ({ timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty', onboard_propose: 'Propose times for a new hire', onboard_answer: 'A new hire\'s times', onboard_ready: 'A new hire is set up' })[event]);
-    const url = String(body.url || ({ timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding', onboard_propose: '#hrcentre/onboarding', onboard_answer: '#hrcentre/onboarding', onboard_ready: '#hrcentre/onboarding' })[event]);
-    const plainBody = String(body.body || plainOf(text)).slice(0, 400);
-    const outs: Record<string, string> = {};
-    for (const e of Array.from(new Set(to))) outs[e] = await deliver(event, null, e, text, { title, url, ref: body.tag ? String(body.tag) : undefined });
-    let hub = 'off';
-    if (coalesceOn(await appConfig('push_on'))) hub = await hubRelay(event, Array.from(new Set(to)), title, plainBody, url.startsWith('/') ? url : '/' + url, String(body.tag || (event + '-' + Date.now())));
-    return { event, outcome: outs, hub };
+    const title = String(body.title || RELAY_TITLE[event]);
+    const url = String(body.url || RELAY_URL[event]);
+    const out = await relaySend(event, to, text, title, String(body.body || plainOf(text)), url, body.tag ? String(body.tag) : undefined);
+    return { event, outcome: out.outcome, hub: out.hub };
   }
 
   /* v15: the centre's Send me a sample: the registry's example for the kind, for real, through the switches */
@@ -660,6 +718,14 @@ Deno.serve(async (req: Request) => {
   if (!authed) {
     callerEmail = await staffEmail(req);
     if (callerEmail && (event === 'welcome_kit' || event === 'test' || event === 'decision_raised' || event === 'change_request' || event === 'change_request_text' || event === 'sample')) authed = true;
+    /* v18: a team's meeting messages, only from someone who manages that team */
+    if (callerEmail && (event === 'meet_propose' || event === 'meet_avail_ask')) {
+      const dept = String(body.dept || '').trim();
+      if (!dept) return json({ error: 'dept required' }, 400);
+      const { data: manages } = await svc.rpc('wa_avail_manager_of', { p_email: callerEmail, p_dept: dept });
+      if (manages !== true) return json({ error: 'forbidden' }, 403);
+      authed = true;
+    }
   }
   if (!authed) return json({ error: 'unauthorized' }, 401);
   const result = await handle(event, body, callerEmail);
