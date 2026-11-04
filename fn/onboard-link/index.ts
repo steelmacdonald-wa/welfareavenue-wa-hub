@@ -841,7 +841,7 @@ async function setupOf(l: Link, token: string) {
     drives: textList(t.drives_added), groups,
     weekly: wm && typeof wm.summary === 'string' && wm.summary.trim() ? { summary: wm.summary.trim(), nextAt: normal(wm.next_at) || null } : null,
     channelLink: urlOr(cfg.get('onboard_slack_channel_link')),
-    slackJoin: urlOr(cfg.get('onboard_slack_join_link')) || 'https://welfareavenue.slack.com',   // as the welcome email falls back
+    slackJoin: urlOr(cfg.get('onboard_slack_join_link')) || 'https://welfareavenue.slack.com',   // the same fallback as onboard-run's welcome (its short step 3, for a hire with no setup page)
     canva: urlOr(f.canva_link), jd,
     googleVideo: urlOr(cfg.get('onboard_google_video')), video: urlOr(cfg.get('onboard_setup_video')),
     installUrl: HUB + '/o/' + token + '?install',
