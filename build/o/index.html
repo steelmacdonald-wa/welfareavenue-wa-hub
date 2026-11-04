@@ -561,6 +561,7 @@
       exSave: 'Save these dates', exSaved: 'Saved. The times below now follow these dates.',
       avNoteInfo: 'Toronto time (Eastern). Your usual week is the one you keep on the Hub\'s Home page, shown here for information: the times you can pick below are not limited to it.',
       weekNone: 'Not set on the Hub\'s Home page yet.', exSavedInfo: 'Saved.',
+      exInfo: 'While your week is not a rule for these times, one-off dates are kept for information only: they do not limit the times you can pick.',
       pickNoteInfo: 'Choose a meeting, then click a free time. You can pick times at least {lead} hours from now, clear of your meetings.',
       lgBusyInfo: 'A hub@ meeting, or another new hire', lgOffInfo: 'Too soon',
       to: 'to', remove: 'Remove', addBlock: 'Add a block', notAvail: 'Not available',
@@ -591,6 +592,7 @@
       exSave: 'Enregistrer ces dates', exSaved: 'Enregistré. Les heures ci-dessous suivent maintenant ces dates.',
       avNoteInfo: 'Heure de Toronto (Est). Votre semaine habituelle est celle que vous gardez sur la page d’accueil du Hub, affichée ici à titre indicatif: les heures à choisir plus bas n’y sont pas limitées.',
       weekNone: 'Pas encore indiquée sur la page d’accueil du Hub.', exSavedInfo: 'Enregistré.',
+      exInfo: 'Tant que votre semaine ne limite pas ces heures, les dates ponctuelles sont gardées à titre indicatif seulement: elles ne limitent pas les heures à choisir.',
       pickNoteInfo: 'Choisissez une rencontre, puis cliquez sur une heure libre. Vous pouvez choisir des heures au moins {lead} heures plus tard, en dehors de vos rencontres.',
       lgBusyInfo: 'Une rencontre hub@, ou une autre nouvelle recrue', lgOffInfo: 'Trop tôt',
       to: 'à', remove: 'Retirer', addBlock: 'Ajouter une plage', notAvail: 'Non disponible',
@@ -671,7 +673,7 @@
   }
   function listAt(path) { return S.av.except[Number(path.slice(2))].free; }
   function editorHtml() {   // amended 02/11/26: the one-off dates only; the week above is read-only
-    var tx = p(), h = '<h3>' + tx.exH + '</h3><p class="note">' + tx.exNote + '</p>';
+    var tx = p(), h = '<h3>' + tx.exH + '</h3><p class="note">' + tx.exNote + '</p>' + (hoursRule() ? '' : '<p class="note" id="exinfo">' + tx.exInfo + '</p>');   // wave275b round 2: the dates do not limit the times while the week is not a rule
     if (!S.av.except.length) h += '<p class="note" id="exnone">' + tx.exNone + '</p>';
     S.av.except.forEach(function (x, i) {
       h += '<div class="ex"><label class="exd">' + esc(tx.exDate) + ' <input type="date" value="' + esc(x.date) + '" data-x="' + i + '"></label>' +

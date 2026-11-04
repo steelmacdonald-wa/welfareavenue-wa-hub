@@ -10,18 +10,29 @@
 -- and the one-time switch of live flows below runs only on the run that adds onboard_ask_hire_availability.
 -- Proved offline first: node test/w271sql.mjs (PGlite, with test/w275sql.sql's wave275b section). Undo: build/wa275b_undo.sql (before build/wa275a_undo.sql).
 
--- 1. live flows that have not been answered yet follow Steel's rule too (Samuel Aubrey's flow 8 on 03/11/26): offered or waiting, no hire_answer, still asking
---    the hire, become "already communicated", each logged in change_log as the card logs its switch. Once only: on the run that adds the setting. The card's
---    per-flow switch stays and still overrides.
+-- 1. live flows that have not been answered yet follow Steel's rule too (Samuel Aubrey's flow 8 on 03/11/26): on the new path (offered, times proposed, or
+--    created on or after app_config onboard_v2_since, as wa275_flow_row's propose_path; a wave271 flow never reads the flag), offered or waiting, no
+--    hire_answer, still asking the hire, become "already communicated", each logged in change_log as the card logs its switch. Once only, ever: the switch
+--    leaves its own mark in change_log (entity_type app_config, field wa275b_flow_switch), which the undo does not remove, so applying this again (even
+--    after build/wa275b_undo.sql) switches nothing back. The card's per-flow switch stays and still overrides.
 do $wa275b$
+declare v_n int;
 begin
-  if not exists (select 1 from public.app_config where key = 'onboard_ask_hire_availability') then
+  if not exists (select 1 from public.app_config where key = 'onboard_ask_hire_availability')
+     and not exists (select 1 from public.change_log where entity_type = 'app_config' and entity_id = 'onboard_ask_hire_availability' and field = 'wa275b_flow_switch') then
     with switched as (
-      update public.hub_onboard_flows set ask_availability = false, updated_at = now()
-       where status in ('offered', 'waiting') and hire_answer is null and ask_availability
-      returning id)
+      update public.hub_onboard_flows f set ask_availability = false, updated_at = now()
+       where f.status in ('offered', 'waiting') and f.hire_answer is null and f.ask_availability
+         and (f.status = 'offered' or f.proposed_at is not null
+              or coalesce(f.created_at >= (select case when trim(k.value) ~ '^\d{4}-\d{2}-\d{2}' then trim(k.value)::timestamptz end from public.app_config k where k.key = 'onboard_v2_since'), false))
+      returning f.id),
+    logged as (
+      insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+      select 'onboard_flow', s.id::text, 'ask_availability', 'ask the hire', 'already communicated', 'wa275b (Steel 03/11/26: availability optional, off by default)' from switched s
+      returning 1)
+    select count(*) into v_n from logged;
     insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
-    select 'onboard_flow', s.id::text, 'ask_availability', 'ask the hire', 'already communicated', 'wa275b (Steel 03/11/26: availability optional, off by default)' from switched s;
+    values ('app_config', 'onboard_ask_hire_availability', 'wa275b_flow_switch', null, v_n || ' unanswered new-path flows switched to already communicated', 'wa275b (Steel 03/11/26: availability optional, off by default)');
   end if;
 end $wa275b$;
 

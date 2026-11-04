@@ -615,6 +615,7 @@ async function dragFrom(p, a, b) {
     ok('hours off: the note says the times are not limited to the week', /shown here for information: the times you can pick below are not limited to it/.test(t) && /clear of your meetings/.test(t) && !/inside your hours/.test(t), t.slice(0, 900));
     ok('hours off: the legend still names hub@ meetings', /A hub@ meeting, or another new hire/.test(t) && /Too soon/.test(t) && !/Outside your hours/.test(t));
     ok('hours off: the one-off dates editor stays', (await f.page.locator('#editor').count()) === 1 && (await f.page.locator('button[data-act="addx"]').count()) === 1 && (await f.page.locator('#saveav').count()) === 1);
+    ok('hours off (round 2): the dates editor says the dates are kept for information and do not limit the times', /While your week is not a rule for these times, one-off dates are kept for information only: they do not limit the times you can pick\./.test(await f.page.locator('#exinfo').innerText()));
     a = await st(f.page, '2026-10-31T14:00:00Z'); b2 = await st(f.page, '2026-10-30T20:30:00Z'); c2 = await st(f.page, '2026-10-29T14:00:00Z'); e2 = await st(f.page, '2026-11-02T15:00:00Z'); g2 = await st(f.page, '2026-11-03T19:00:00Z');
     ok('hours off: Saturday 10:00 and Friday 4:30 pm (past 5) can be picked; too soon still cannot', !a.dis && a.cls === 'cell' && !b2.dis && c2.dis && /off/.test(c2.cls), [a, b2, c2]);
     ok('hours off: a hub@ meeting and another new hire\'s time are still greyed as busy', e2.dis && /busy/.test(e2.cls) && g2.dis && /busy/.test(g2.cls) && await f.page.locator('[data-slot="2026-11-02T15:00:00Z"]').getAttribute('title') === 'hub@ meeting', [e2, g2]);
@@ -631,10 +632,10 @@ async function dragFrom(p, a, b) {
     await f.ctx.close();
     f = await open(browser, { qs: '?l=fr', fn: mgr275({ extra: { managerHours: false } }) });
     t = await text(f.page);
-    ok('hours off (French): no gate, the note, the legend', (await f.page.locator('#stale').count()) === 0 && /Pas encore indiquée sur la page d’accueil du Hub\./.test(t) && /à titre indicatif/.test(t) && /Une rencontre hub@, ou une autre nouvelle recrue/.test(t) && /Trop tôt/.test(t), t.slice(0, 900));
+    ok('hours off (French): no gate, the note, the legend', (await f.page.locator('#stale').count()) === 0 && /Pas encore indiquée sur la page d’accueil du Hub\./.test(t) && /à titre indicatif/.test(t) && /Une rencontre hub@, ou une autre nouvelle recrue/.test(t) && /Trop tôt/.test(t) && /les dates ponctuelles sont gardées à titre indicatif seulement/.test(await f.page.locator('#exinfo').innerText()), t.slice(0, 900));
     await f.ctx.close();
     f = await open(browser, { fn: mgr275({ extra: { managerHours: true } }) });
-    ok('hours on (managerHours true): the gate and the hours rule as before', (await f.page.locator('#stale').count()) === 1 && (await st(f.page, '2026-10-31T14:00:00Z')).dis);
+    ok('hours on (managerHours true): the gate and the hours rule as before', (await f.page.locator('#stale').count()) === 1 && (await st(f.page, '2026-10-31T14:00:00Z')).dis && (await f.page.locator('#exinfo').count()) === 0);
     await f.ctx.close();
 
     /* the phone, 390 px */

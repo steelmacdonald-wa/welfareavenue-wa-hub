@@ -55,7 +55,8 @@
 //   (propose mode only), secondNo: {en, fr} | null (a second No to these times went to a person: the page says so), setup: {steps: [{key, title:
 //   {en, fr}, body: {en, fr}}], ticks: {key: boolean}} | null (once accepted)}; GET ?setup is the same answer, for the rundown page. In propose mode the
 //   link stays open after booking (the closing page and the rundown), and only the grid shuts.
-//   POST accept   with offerHours set, needs hours_ok: true (else 400 hours_required, in both languages, naming the hours) and sets hours_confirmed_at.
+//   POST accept   with offerHours set, needs hours_ok: true only when onboard_require_hours is on (else 400 hours_required, in both languages, naming
+//              the hours), and sets hours_confirmed_at only when hours_ok is true (wave275b).
 //              In propose mode the winning Accept then asks onboard-run accept_setup {flow_id} with the trigger secret, handed to EdgeRuntime.waitUntil, so
 //              the answer returns at once and the accounts are made in the background.
 //   POST yes   relays to onboard-run book {flow_id, call_at, one_on_one_at, by: 'hire'} with the proposed times: onboard-run checks both again (lead time

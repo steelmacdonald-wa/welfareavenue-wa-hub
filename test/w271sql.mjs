@@ -162,12 +162,15 @@ try {
   const lf = (row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === 'string' ? v.replace(/\r/g, '') : v]));
   const wa275aFns = lf(await one(db, FN275));
   const B_KEYS = ['onboard_ask_hire_availability', 'onboard_manager_hours', 'onboard_require_hours'];
-  // live flows before the release: unanswered offered and waiting ones are switched to already communicated, once; answered and later ones are left alone
+  // live flows before the release: unanswered offered and waiting ones on the new path are switched to already communicated, once; answered and later ones,
+  // and (round 2) a wave271 waiting flow, made before onboard_v2_since, which never reads the flag, are left alone
   await db.exec(`
     insert into public.hub_candidates (name, email, status, offer_hours) values ('Test Person B Offered', 'w275b.offered@example.invalid', 'offer', 6), ('Test Person B Waiting', 'w275b.waiting@example.invalid', 'offer', 6),
-      ('Test Person B Said No', 'w275b.saidno@example.invalid', 'offer', 6), ('Test Person B Ready', 'w275b.ready@example.invalid', 'offer', 6);
-    update public.hub_candidates set offer_sent_at = now() where email like 'w275b.%@example.invalid';
-    update public.hub_candidates set accepted_on = current_date where email in ('w275b.waiting@example.invalid', 'w275b.saidno@example.invalid', 'w275b.ready@example.invalid');
+      ('Test Person B Said No', 'w275b.saidno@example.invalid', 'offer', 6), ('Test Person B Ready', 'w275b.ready@example.invalid', 'offer', 6), ('Test Person B Old', 'w275b.old@example.invalid', 'offer', null);
+    update public.hub_candidates set offer_sent_at = now() where email like 'w275b.%@example.invalid' and email <> 'w275b.old@example.invalid';
+    update public.hub_candidates set accepted_on = current_date where email in ('w275b.waiting@example.invalid', 'w275b.saidno@example.invalid', 'w275b.ready@example.invalid', 'w275b.old@example.invalid');
+    update public.hub_onboard_flows set created_at = now() - interval '30 days' where candidate_id = (select id from public.hub_candidates where email = 'w275b.old@example.invalid');
+    insert into public.app_config (key, value) values ('onboard_v2_since', to_char((now() - interval '1 day') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
     update public.hub_onboard_flows set hire_answer = 'no', hire_answered_at = now() where candidate_id = (select id from public.hub_candidates where email = 'w275b.saidno@example.invalid');
     update public.hub_onboard_flows set status = 'ready' where candidate_id = (select id from public.hub_candidates where email = 'w275b.ready@example.invalid');`);
   const askOf = async (email) => (await one(db, `select f.ask_availability as a from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email = '${email}'`)).a;
@@ -180,6 +183,8 @@ try {
   ok((await askOf('w275b.waiting@example.invalid')) === false, 'wa275b: a waiting flow with no answer too');
   ok((await askOf('w275b.saidno@example.invalid')) === true, 'wa275b: a flow the hire answered is left alone');
   ok((await askOf('w275b.ready@example.invalid')) === true, 'wa275b: a flow past waiting is left alone');
+  ok((await askOf('w275b.old@example.invalid')) === true, 'wa275b round 2: a wave271 waiting flow (made before onboard_v2_since, nothing proposed) is left alone');
+  ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability' and entity_id = (select f.id::text from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email = 'w275b.old@example.invalid')`)).n === 0, 'wa275b round 2: and gets no change_log row');
   const logged = (await db.query(`select l.entity_id, l.old_value, l.new_value, l.changed_by from public.change_log l where l.entity_type = 'onboard_flow' and l.field = 'ask_availability'
       and l.entity_id in (select f.id::text from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email like 'w275b.%')`)).rows;
   ok(logged.length === 2 && logged.every((l) => l.old_value === 'ask the hire' && l.new_value === 'already communicated' && /wa275b/.test(l.changed_by)), 'wa275b: each switched flow is in change_log once, as the card logs its switch (' + JSON.stringify(logged) + ')');
@@ -189,7 +194,8 @@ try {
   await db.exec(optional275);
   ok((await askOf('w275b.offered@example.invalid')) === true, 'wa275b: running it again leaves a switch HR turned back on');
   ok((await one(db, `select value from public.app_config where key = 'onboard_require_hours'`)).value === 'on', 'wa275b: running it again keeps a value HR set');
-  await db.exec(`update public.app_config set value = 'off' where key = 'onboard_require_hours'`);
+  await db.exec(`update public.app_config set value = 'off' where key = 'onboard_require_hours';
+    delete from public.app_config where key = 'onboard_v2_since';`);   // the wa275 assertions expect it absent, as before release
   await runAssertions275(db, 'wa275 assertions with wa275b loaded', true);
   await runAssertions(db, 'wa271 assertions with wa275b loaded');
   // the undo: wa275a's trigger function, card row, column default and comment come back exactly; the settings go; the flows keep their switch (data, not schema)
@@ -201,7 +207,13 @@ try {
   ok((await one(db, `select count(*)::int as n from public.app_config where key in (${B_KEYS.map((k) => "'" + k + "'").join(', ')})`)).n === 0, 'wa275b undo: the three settings are gone');
   ok((await askOf('w275b.waiting@example.invalid')) === false, 'wa275b undo: a flow keeps the switch it has (the undo changes no flow)');
   await runAssertions275(db, 'wa275 assertions after the wa275b undo');
+  // round 2: after the undo HR turns a flow back to "ask the hire"; applying wa275b again (the setting key is gone) switches nothing: the switch ran once
+  await db.exec(`update public.hub_onboard_flows set ask_availability = true where candidate_id = (select id from public.hub_candidates where email = 'w275b.waiting@example.invalid');
+    insert into public.app_config (key, value) values ('onboard_v2_since', to_char((now() - interval '1 day') at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));`);
   await db.exec(optional275);   // and it goes back on after its undo
+  ok((await askOf('w275b.waiting@example.invalid')) === true && (await askOf('w275b.offered@example.invalid')) === true, 'wa275b round 2: applied again after its undo, it switches no flow back (HR\'s switches stay on)');
+  ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability' and changed_by like 'wa275b%'`)).n === 2, 'wa275b round 2: still only the first run\'s two change_log rows');
+  await db.exec(`delete from public.app_config where key = 'onboard_v2_since'`);
   await runAssertions275(db, 'wa275 assertions with wa275b re-applied', true);
   await db.exec(undo275b);
   await db.exec(`delete from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability';
