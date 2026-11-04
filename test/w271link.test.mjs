@@ -946,7 +946,7 @@ async function withBackground(fn) {
 }
 
 test('w275 GET (offer link): the hours, the proposal with the manager, the answer and the setup rundown with its ticks; nothing saved, no fetch', async () => {
-  const s = await hire({ fl: { ...withProposal, setup_ticks: { hire_times_at: '2026-10-31T12:00:00Z', rd_profile: '2026-10-31T13:00:00Z' } } });
+  const s = await hire({ fl: { ...withProposal, setup_ticks: { hire_times_at: '2026-10-31T12:00:00Z', rd_chrome: '2026-10-31T13:00:00Z' } } });
   const before = s.snapshot();
   const g = (await s.get(s.offer)).body;
   assert.deepEqual(s.snapshot(), before, 'scanner safety');
@@ -960,7 +960,7 @@ test('w275 GET (offer link): the hours, the proposal with the manager, the answe
     assert.ok(!/—|\bAI\b/.test(JSON.stringify(st)), st.key);
   }
   assert.deepEqual(Object.keys(g.setup.ticks).sort(), g.setup.steps.map((x) => x.key).sort());
-  assert.equal(g.setup.ticks.profile, true);
+  assert.equal(g.setup.ticks.chrome, true);
   assert.equal(Object.values(g.setup.ticks).filter(Boolean).length, 1, 'hire_times_at is not a rundown tick');
   const q = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.offer) + '&setup=1'));
   const qs = await q.json();
@@ -1214,31 +1214,138 @@ test('w275 whole-branch: the manager and HR told of a No get a link to the Hub\'
 
 test('w275 setup_tick saves a rundown tick under its own key, is idempotent, can be undone, and refuses unknown keys and other links', async () => {
   const s = await hire({ fl: { setup_ticks: { hire_times_at: '2026-10-31T12:00:00Z' } } });
-  const r = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: true });
+  const r = await s.post({ t: s.offer, a: 'setup_tick', key: 'chrome', done: true });
   assert.equal(r.status, 200, JSON.stringify(r.body));
   assert.equal(r.body.ok, true);
-  assert.equal(r.body.ticks.profile, true);
+  assert.equal(r.body.ticks.chrome, true);
   assert.equal(Object.values(r.body.ticks).filter(Boolean).length, 1);
-  assert.equal(s.flow().setup_ticks.rd_profile, '2026-11-01T12:00:00.000Z');
+  assert.equal(s.flow().setup_ticks.rd_chrome, '2026-11-01T12:00:00.000Z');
   assert.equal(s.flow().setup_ticks.hire_times_at, '2026-10-31T12:00:00Z', 'merged, never rewritten');
   s.rig.setNow('2026-11-01T13:00:00Z');
-  const again = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: true });
-  assert.equal(again.body.ticks.profile, true);
-  assert.equal(s.flow().setup_ticks.rd_profile, '2026-11-01T12:00:00.000Z', 'a second tick keeps the first time');
-  const off = await s.post({ t: s.offer, a: 'setup_tick', key: 'profile', done: false });
-  assert.equal(off.body.ticks.profile, false);
-  assert.equal(s.flow().setup_ticks.rd_profile, null);
-  for (const body of [{ key: 'nope', done: true }, { key: 'profile', done: 'yes' }, { key: 'hire_times_at', done: true }, { done: true }]) {
+  const again = await s.post({ t: s.offer, a: 'setup_tick', key: 'chrome', done: true });
+  assert.equal(again.body.ticks.chrome, true);
+  assert.equal(s.flow().setup_ticks.rd_chrome, '2026-11-01T12:00:00.000Z', 'a second tick keeps the first time');
+  const off = await s.post({ t: s.offer, a: 'setup_tick', key: 'chrome', done: false });
+  assert.equal(off.body.ticks.chrome, false);
+  assert.equal(s.flow().setup_ticks.rd_chrome, null);
+  for (const body of [{ key: 'nope', done: true }, { key: 'chrome', done: 'yes' }, { key: 'hire_times_at', done: true }, { done: true }]) {
     const b = await s.post({ t: s.offer, a: 'setup_tick', ...body });
     assert.equal(b.status, 400, JSON.stringify(body));
     assert.ok(hasBoth(b.body.message));
   }
-  assert.equal((await s.post({ t: s.mgr, a: 'setup_tick', key: 'profile', done: true })).body.error, 'wrong_link');
+  assert.equal((await s.post({ t: s.mgr, a: 'setup_tick', key: 'chrome', done: true })).body.error, 'wrong_link');
   const before = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' } });
-  assert.equal((await before.post({ t: before.offer, a: 'setup_tick', key: 'profile', done: true })).body.error, 'not_accepted');
+  assert.equal((await before.post({ t: before.offer, a: 'setup_tick', key: 'chrome', done: true })).body.error, 'not_accepted');
   const gone = await hire({ fl: { status: 'backed_out' } });
-  assert.equal((await gone.post({ t: gone.offer, a: 'setup_tick', key: 'profile', done: true })).body.closed, true);
+  assert.equal((await gone.post({ t: gone.offer, a: 'setup_tick', key: 'chrome', done: true })).body.closed, true);
   assert.equal(s.rig.fetchLog.length, 0);
+});
+
+/* ---------- wave278 Task 5: the twelve-step setup page, the phone install page, the Hub-signed-in tick ---------- */
+const KEYS278 = ['google', 'chrome', 'bookmarks', 'drive', 'groups', 'hub', 'slack', 'canva', 'academy', 'jd', 'weekly', 'phone'];
+const CHROME278 = ['https://www.google.com/chrome/', 'https://www.google.com/chrome/', 'https://play.google.com/store/apps/details?id=com.android.chrome', 'https://apps.apple.com/app/google-chrome/id535886823'];
+const T278 = '2026-10-31T13:00:00Z';
+const CFG278 = { onboard_slack_channel_link: 'https://join.slack.com/share/enQtChannel', onboard_slack_join_link: 'https://join.slack.com/t/welfareavenue/shared_invite/zt-join', onboard_setup_video: '', onboard_google_video: 'https://www.loom.com/share/chrome-login' };
+const TICKS278 = {
+  hire_times_at: '2026-10-31T12:00:00Z', rd_chrome: T278, rd_hub: T278, rd_profile: T278,   // rd_profile: an old key the release carried over; only the new keys count
+  groups_added: ['org@welfareavenue.com', 'fundraising@welfareavenue.com', 'Grants@welfareavenue.com', 'toronto@welfareavenue.com', 'admin@welfareavenue.com', 'directors@welfareavenue.com', 'newteam@welfareavenue.com'],
+  drives_added: ['Org\'s Files', 'Fundraising'],
+  weekly_meeting: { summary: 'Fundraising weekly', next_at: '2026-11-05T19:00:00.000Z' },
+};
+
+test('w278 GET: twelve steps in order in both languages, the drives, groups and weekly meeting from the ticks, the links and the install URL; nothing saved, no fetch', async () => {
+  const s = await hire({
+    cand: { position_id: 7 }, config: CFG278, tables: { hub_positions: [{ id: 7, jd_url: 'https://docs.google.com/document/d/jd7' }] },
+    fl: { ...withProposal, wa_email: 'alex.tremblay@welfareavenue.com', canva_link: 'https://www.canva.com/brand/join?token=abc', setup_ticks: TICKS278 },
+  });
+  const before = s.snapshot();
+  const g = (await s.get(s.offer)).body;
+  assert.deepEqual(s.snapshot(), before, 'scanner safety');
+  assert.equal(s.rig.fetchLog.length, 0);
+  const st = g.setup;
+  assert.deepEqual(st.steps.map((x) => x.key), KEYS278, 'the twelve steps, in order');
+  for (const x of st.steps) {
+    assert.ok(hasBoth(x.title) && hasBoth(x.body), x.key);
+    for (const k of x.links || []) assert.ok(hasBoth(k.label) && /^https:\/\//.test(k.url), x.key + ' ' + JSON.stringify(k));
+    assert.ok(!/—|\bAI\b/.test(JSON.stringify(x)), x.key);
+  }
+  assert.ok(!st.steps.some((x) => x.key === 'loom'), 'Loom is gone');
+  assert.deepEqual(st.steps.find((x) => x.key === 'chrome').links.map((k) => k.url), CHROME278, 'Chrome for Mac, Windows, Android and iPhone');
+  assert.deepEqual(st.steps.find((x) => x.key === 'bookmarks').links.map((k) => k.url), ['https://mail.google.com/', 'https://calendar.google.com/', 'https://hub.welfareavenue.com/']);
+  assert.deepEqual(Object.keys(st.ticks), KEYS278);
+  assert.deepEqual(Object.entries(st.ticks).filter(([, v]) => v).map(([k]) => k), ['chrome', 'hub'], 'the carried and the Hub-set ticks; the old key and the Hub\'s own keys do not count');
+  assert.deepEqual(st.drives, ['Org\'s Files', 'Fundraising']);
+  assert.deepEqual(st.groups.map((x) => [x.address, x.purpose.en]), [
+    ['org@welfareavenue.com', 'everyone at Welfare Avenue'], ['fundraising@welfareavenue.com', 'your team\'s list'], ['grants@welfareavenue.com', 'grant work'],
+    ['toronto@welfareavenue.com', 'everyone in Toronto'], ['admin@welfareavenue.com', 'the leadership team'], ['directors@welfareavenue.com', 'the directors'], ['newteam@welfareavenue.com', 'a team list'],
+  ]);
+  assert.ok(st.groups.every((x) => hasBoth(x.purpose)));
+  assert.deepEqual(st.weekly, { summary: 'Fundraising weekly', nextAt: '2026-11-05T19:00:00Z' });
+  assert.equal(st.channelLink, CFG278.onboard_slack_channel_link);
+  assert.equal(st.slackJoin, CFG278.onboard_slack_join_link);
+  assert.equal(st.googleVideo, CFG278.onboard_google_video);
+  assert.equal(st.video, null, 'no walkthrough video until Steel records it');
+  assert.equal(st.canva, 'https://www.canva.com/brand/join?token=abc');
+  assert.equal(st.jd, 'https://docs.google.com/document/d/jd7');
+  assert.equal(st.address, 'alex.tremblay@welfareavenue.com');
+  assert.equal(st.installUrl, 'https://hub.welfareavenue.com/o/' + s.offer + '?install');
+  assert.ok(!/password"\s*:/.test(JSON.stringify(g)), 'never a password');
+
+  /* before Task 3's steps have run (or with them off): empty lists, no meeting, the fallbacks */
+  const bare = await hire({ config: { onboard_setup_video: 'https://www.loom.com/share/walkthrough' }, fl: { ...withProposal } });
+  const b = (await bare.get(bare.offer)).body.setup;
+  assert.deepEqual([b.drives, b.groups, b.weekly, b.canva, b.jd, b.address, b.channelLink, b.googleVideo], [[], [], null, null, null, null, null, null]);
+  assert.equal(b.slackJoin, 'https://welfareavenue.slack.com', 'the workspace when no join link is set, as the welcome does');
+  assert.equal(b.video, 'https://www.loom.com/share/walkthrough');
+  assert.equal(Object.values(b.ticks).filter(Boolean).length, 0);
+  /* nonsense in the ticks is not a list */
+  const odd = await hire({ fl: { ...withProposal, setup_ticks: { groups_added: 'org@welfareavenue.com', drives_added: [1, null, 'Marketing & Web'], weekly_meeting: 'soon' } } });
+  const o = (await odd.get(odd.offer)).body.setup;
+  assert.deepEqual([o.groups, o.drives, o.weekly], [[], ['Marketing & Web'], null]);
+});
+
+test('w278 GET ?install (the phone page): the two app links, saves nothing, before and after the Hub sign-in; only the offer link, after Accept', async () => {
+  const s = await hire({ fl: { ...withProposal, setup_ticks: { rd_hub: T278 } } });
+  const before = s.snapshot();
+  const r = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.offer) + '&install=1'));
+  const j = await r.json();
+  assert.equal(r.status, 200);
+  assert.deepEqual(s.snapshot(), before, 'scanner safety: a phone camera opening it changes nothing');
+  assert.equal(s.rig.fetchLog.length, 0);
+  assert.equal(j.ok, true);
+  assert.deepEqual(j.install, { hub: 'https://hub.welfareavenue.com/', slack: 'https://slack.com/download' });
+  assert.equal(j.lang, 'en');
+  assert.equal(j.setup, undefined, 'the install page needs nothing personal');
+  const notYet = await hire({ fl: { ...withProposal } });   // not signed in to the Hub yet: the same page
+  const n = await (await notYet.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(notYet.offer) + '&install'))).json();
+  assert.deepEqual(n.install, j.install);
+  const m = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.mgr) + '&install=1'));
+  assert.equal(m.status, 400);
+  assert.equal((await m.json()).error, 'wrong_link');
+  const early = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' } });
+  const e = await early.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(early.offer) + '&install=1'));
+  assert.equal(e.status, 409);
+  assert.equal((await e.json()).error, 'not_accepted');
+  const bad = await s.rig.call(new Request(URL_ + '?t=12.nope&install=1'));
+  assert.equal(bad.status, 404);
+});
+
+test('w278 setup_tick: each of the eleven new keys the hire ticks; loom, the old keys and hub (the Hub sets it) are refused', async () => {
+  const s = await hire({ fl: { setup_ticks: {} } });
+  for (const key of KEYS278.filter((k) => k !== 'hub')) {
+    const r = await s.post({ t: s.offer, a: 'setup_tick', key, done: true });
+    assert.equal(r.status, 200, key + ' ' + JSON.stringify(r.body));
+    assert.equal(r.body.ticks[key], true, key);
+    assert.ok(s.flow().setup_ticks['rd_' + key], key);
+  }
+  for (const key of ['loom', 'profile', 'drives', 'hub']) {
+    const r = await s.post({ t: s.offer, a: 'setup_tick', key, done: true });
+    assert.equal(r.status, 400, key);
+    assert.equal(r.body.error, 'bad_tick', key);
+    assert.ok(hasBoth(r.body.message));
+  }
+  assert.equal(s.flow().setup_ticks.rd_hub, undefined, 'only the Hub sets rd_hub');
+  assert.equal(Object.values((await s.get(s.offer)).body.setup.ticks).filter(Boolean).length, 11);
 });
 
 test('w275 integration (practice): Accept with hours runs accept_setup, Yes runs book, on one database; onboard-run fetches nothing', async () => {

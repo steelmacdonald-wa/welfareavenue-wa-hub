@@ -39,7 +39,17 @@
      hoursRequired false (onboard_require_hours off): the hours line is an optional box, Accept is enabled without it, and hours_ok is sent as ticked
      or not. managerHours false (onboard_manager_hours off): the manager's page has no "Set your week" gate, shows a saved week read-only for
      information, and lets any cell in the window start a meeting outside hub@ meetings, other hires and the lead time; the hire's No grid legend says
-     the greys are the manager's hub@ meetings. Either field missing (a function from before wave275b): today's rule. -->
+     the greys are the manager's hub@ meetings. Either field missing (a function from before wave275b): today's rule.
+     wave278 (Task 5, 04/11/26): ?setup is twelve steps (the function's SETUP: google, chrome, bookmarks, drive, groups, hub, slack, canva, academy,
+     jd, weekly, phone) with their links (four Chrome downloads, the three bookmarks, Drive, the Academy and Home); under each, what is the hire's own
+     from the function's setup fields: the new address, the Chrome login video, the shared drives and the Google Groups (one line each with what the
+     group is for), the Slack workspace and onboarding channel links, HR's Canva link, the job description, the weekly meeting with its next time in
+     Toronto time; a plain sentence ("HR will share your Drives with you") when there is nothing yet. The walkthrough video sits at the top when
+     onboard_setup_video is set. The hub step has no Done button: the Hub ticks it when they sign in (wa278_hub_seen), and the page shows it. The
+     phone step draws the QR of setup.installUrl (/o/<token>?install) with qrcode-generator 1.4.4 from cdnjs, as build/src/225_wave225.seg loads it,
+     and prints the URL under it. ?install is the phone page the QR opens: one GET with install (the function saves nothing), "Sign in to the Hub in
+     Safari or Chrome on your phone first...", Safari's steps (Share, Add to Home Screen), Chrome's (the menu, Add to Home screen or Install app),
+     the Slack app link, then Open the Hub; a function that cannot be reached still gives the steps with the fixed links. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
   * { box-sizing: border-box; }
@@ -154,6 +164,23 @@
   .tick[disabled] { opacity: .6; cursor: default; }
   .tick:focus-visible, .hours input:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
   p.count { font-weight: 500; margin: 0; }
+  /* wave278 Task 5: the links and lists under a step, the Hub-set tick, the QR, the phone page */
+  .slinks { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .slink, .xlink { color: var(--green); font-weight: 500; font-size: 16px; overflow-wrap: anywhere; }
+  .rstep p.more { margin: 8px 0 0; font-size: 16px; }
+  .rstep p.more.small { font-size: 15px; }
+  .glist { margin: 4px 0 0; padding-left: 20px; font-size: 16px; overflow-wrap: anywhere; }
+  .glist li { margin: 2px 0; }
+  .auto { flex: 0 0 auto; max-width: 13em; font-size: 14px; color: var(--muted); border: 2px dashed var(--line); border-radius: 14px; padding: 6px 12px; }
+  .auto.on { color: var(--green); border: 2px solid var(--green); background: var(--soft); font-weight: 600; }
+  .auto.on::before { content: '\2713\00a0'; }
+  .qr { margin: 12px 0 0; }
+  .qr img { display: block; width: 184px; height: 184px; border: 1px solid var(--line); border-radius: 10px; }
+  .qrurl { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+  .qrurl a { color: var(--green); }
+  #video h2 { margin: 0 0 6px; font-size: 24px; }
+  .isteps { padding-left: 22px; margin: 0 0 8px; font-size: 17px; }
+  .isteps li { margin: 4px 0; }
   @media (max-width: 759px) {
     .card { margin-top: 20px; }
     h1 { font-size: 32px; }
@@ -175,6 +202,7 @@
     .pgrid .cell .k { display: block; font-size: 10px; line-height: 1; }
     .rstep { flex-wrap: wrap; }
     .tick { margin-left: auto; }
+    .auto { margin-left: auto; max-width: none; }
   }
 </style>
 </head>
@@ -928,7 +956,23 @@
       greyedMeet: 'Greyed times: {Manager} has a hub@ meeting then.', notFreeMeet: '{Manager} has a hub@ meeting',
       setupLink: 'Open your setup steps', setupNote: 'A few things to do on your own computer before your first day. You can keep that page open.',
       setupH: 'Your setup', setupIntro: 'Do these on your own computer before your onboarding call, in this order, and press Done as you go: {manager} and HR can see who is ready. Your sign-in details are in your welcome email.',
-      done: 'Done', markDone: 'Mark as done', count: '{n} of {m} done', back: 'Back to your times'
+      done: 'Done', markDone: 'Mark as done', count: '{n} of {m} done', back: 'Back to your times',
+      /* wave278 Task 5: what goes under the steps, and the phone page */
+      yourAddress: 'Your new address: {address}', chromeVideo: 'Watch the Chrome setup video',
+      drivesIntro: 'You have access to these shared drives:', drivesNone: 'HR will share your Drives with you.',
+      groupsIntro: 'You are in these groups:', groupsNone: 'HR will add you to your groups.',
+      slackJoin: 'Join the Welfare Avenue Slack', slackChannel: 'Open your onboarding channel',
+      canvaLink: 'Join Canva', canvaNone: 'HR will send you the Canva link.',
+      jdLink: 'Open your job description', jdNone: 'HR will share your job description with you.',
+      weeklyNext: 'next on {when} (Toronto time).', weeklyNone: 'HR will add you to your team’s weekly meeting.',
+      hubDone: 'Done: the Hub ticked this when you signed in', hubWaiting: 'This ticks itself when you sign in to the Hub.',
+      qrAlt: 'QR code that opens {url}', qrOpen: 'Or open this address on your phone:', qrFail: 'The code could not be drawn here. Open the address below on your phone instead.',
+      videoH: 'Watch the walkthrough first', videoText: 'A short video shows steps 1 to 6, your Drives and your Google Groups included.', videoLink: 'Watch the walkthrough video',
+      titleInstall: 'Welfare Avenue: the Hub on your phone', installH: 'The Hub and Slack on your phone',
+      installFirst: 'Sign in to the Hub in Safari or Chrome on your phone first, then add it to the home screen; if the installed app asks you to sign in again, do so once.',
+      safariH: 'In Safari (iPhone)', safari: ['Open the Hub with the button at the bottom of this page and press Sign in with Google, with your Welfare Avenue account.', 'Tap the Share button (the square with an arrow).', 'Tap Add to Home Screen, then Add.'],
+      chromeH: 'In Chrome (Android)', chrome: ['Open the Hub with the button at the bottom of this page and press Sign in with Google, with your Welfare Avenue account.', 'Tap the menu (the three dots at the top).', 'Tap Add to Home screen or Install app, then confirm.'],
+      slackH: 'Slack', slackText: 'Get the Slack app and sign in with your Welfare Avenue address.', slackApp: 'Get the Slack app', openHub: 'Open the Hub'
     },
     fr: {
       titleTimes: 'Welfare Avenue: vos heures', titleSetup: 'Welfare Avenue: votre installation',
@@ -944,7 +988,22 @@
       greyedMeet: 'Plages grisées: {Manager} a une rencontre hub@ à ces heures.', notFreeMeet: '{Manager} a une rencontre hub@',
       setupLink: 'Ouvrir vos étapes d’installation', setupNote: 'Quelques étapes à faire sur votre ordinateur avant votre premier jour. Vous pouvez garder cette page ouverte.',
       setupH: 'Votre installation', setupIntro: 'Faites ces étapes sur votre ordinateur avant votre appel d’accueil, dans cet ordre, et appuyez sur Terminé au fur et à mesure: {manager} et les RH voient qui est prêt. Vos informations de connexion sont dans votre courriel de bienvenue.',
-      done: 'Terminé', markDone: 'Marquer comme terminé', count: '{n} sur {m} terminées', back: 'Retour à vos heures'
+      done: 'Terminé', markDone: 'Marquer comme terminé', count: '{n} sur {m} terminées', back: 'Retour à vos heures',
+      yourAddress: 'Votre nouvelle adresse: {address}', chromeVideo: 'Regarder la vidéo pour configurer Chrome',
+      drivesIntro: 'Vous avez accès à ces Drives partagés:', drivesNone: 'Les RH partageront vos Drives avec vous.',
+      groupsIntro: 'Vous faites partie de ces groupes:', groupsNone: 'Les RH vous ajouteront à vos groupes.',
+      slackJoin: 'Se joindre au Slack de Welfare Avenue', slackChannel: 'Ouvrir votre canal d’accueil',
+      canvaLink: 'Se joindre à Canva', canvaNone: 'Les RH vous enverront le lien Canva.',
+      jdLink: 'Ouvrir votre description de poste', jdNone: 'Les RH vous transmettront votre description de poste.',
+      weeklyNext: 'prochaine fois le {when} (heure de Toronto).', weeklyNone: 'Les RH vous ajouteront à la rencontre hebdomadaire de votre équipe.',
+      hubDone: 'Terminé: le Hub l’a coché à votre connexion', hubWaiting: 'Cette étape se coche toute seule quand vous vous connectez au Hub.',
+      qrAlt: 'Code QR qui ouvre {url}', qrOpen: 'Ou ouvrez cette adresse sur votre téléphone:', qrFail: 'Le code n’a pas pu s’afficher ici. Ouvrez plutôt l’adresse ci-dessous sur votre téléphone.',
+      videoH: 'Regardez d’abord la vidéo', videoText: 'Une courte vidéo présente les étapes 1 à 6, y compris vos Drives et vos groupes Google.', videoLink: 'Regarder la vidéo explicative',
+      titleInstall: 'Welfare Avenue: le Hub sur votre téléphone', installH: 'Le Hub et Slack sur votre téléphone',
+      installFirst: 'Connectez-vous d’abord au Hub dans Safari ou Chrome sur votre téléphone, puis ajoutez-le à l’écran d’accueil; si l’application installée vous demande de vous connecter de nouveau, faites-le une fois.',
+      safariH: 'Dans Safari (iPhone)', safari: ['Ouvrez le Hub avec le bouton au bas de cette page et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.', 'Touchez le bouton Partager (le carré avec une flèche).', 'Touchez Sur l’écran d’accueil, puis Ajouter.'],
+      chromeH: 'Dans Chrome (Android)', chrome: ['Ouvrez le Hub avec le bouton au bas de cette page et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.', 'Touchez le menu (les trois points en haut).', 'Touchez Ajouter à l’écran d’accueil ou Installer l’application, puis confirmez.'],
+      slackH: 'Slack', slackText: 'Téléchargez l’application Slack et connectez-vous avec votre adresse Welfare Avenue.', slackApp: 'Télécharger l’application Slack', openHub: 'Ouvrir le Hub'
     }
   };
   function hx() { return HX[lang]; }
@@ -1032,20 +1091,90 @@
       again(serverMsg(j) || t().oops);
     }).catch(function () { again(t().oops); });
   }
-  /* the rundown (?setup): each step with Done; a press posts setup_tick, the page shows what the function saved */
+  /* the rundown (?setup): each step with Done; a press posts setup_tick, the page shows what the function saved.
+     wave278 Task 5: twelve steps; under each, what is the hire's own (the function's setup fields; absent means a plain sentence instead); the
+     hub step has no Done button: the Hub ticks it when they sign in; the phone step draws the QR of the install page. */
+  var HUB_SET = { hub: true };   // ticked by the Hub itself (wa278_hub_seen), never by a press here
+  var QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';   // as build/src/225_wave225.seg loads it
   function setupCount(st) { return say(hx().count, { n: st.steps.filter(function (s) { return st.ticks[s.key]; }).length, m: st.steps.length }); }
+  function httpsOf(u) { u = String(u || ''); return /^https:\/\//i.test(u) ? u : ''; }
+  function outLink(url, label, cls) { url = httpsOf(url); return url ? '<a class="' + (cls || 'xlink') + '" href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(label) + '</a>' : ''; }
+  function linksHtml(list) {
+    var items = (list || []).map(function (k) { return outLink(k.url, (k.label || {})[lang] || '', 'slink'); }).filter(Boolean);
+    return items.length ? '<ul class="slinks">' + items.map(function (a) { return '<li>' + a + '</li>'; }).join('') + '</ul>' : '';
+  }
+  function oneLink(url, label) { var a = outLink(url, label); return a ? '<p class="more">' + a + '</p>' : ''; }
+  function plain(s) { return '<p class="more small">' + s + '</p>'; }
+  function weeklyWhen(iso) { return dayWords(iso) + ', ' + keep(clockShort(iso)); }
+  /* what goes under each step, from the function's setup fields */
+  function extraHtml(key, st) {
+    var x = hx(), list;
+    if (key === 'google') return st.address ? plain(say(x.yourAddress, { address: st.address })) : '';
+    if (key === 'chrome') return st.googleVideo ? oneLink(st.googleVideo, x.chromeVideo) : '';
+    if (key === 'drive') {
+      list = st.drives || [];
+      return list.length ? '<p class="more small">' + x.drivesIntro + '</p><ul class="glist">' + list.map(function (d) { return '<li>' + esc(d) + '</li>'; }).join('') + '</ul>' : plain(x.drivesNone);
+    }
+    if (key === 'groups') {
+      list = st.groups || [];
+      return list.length ? '<p class="more small">' + x.groupsIntro + '</p><ul class="glist">' + list.map(function (g) { return '<li><b>' + esc(g.address) + '</b>: ' + esc((g.purpose || {})[lang] || '') + '</li>'; }).join('') + '</ul>' : plain(x.groupsNone);
+    }
+    if (key === 'slack') return oneLink(st.slackJoin, x.slackJoin) + oneLink(st.channelLink, x.slackChannel);
+    if (key === 'canva') return st.canva ? oneLink(st.canva, x.canvaLink) : plain(x.canvaNone);
+    if (key === 'jd') return st.jd ? oneLink(st.jd, x.jdLink) : plain(x.jdNone);
+    if (key === 'weekly') {
+      var w = st.weekly;
+      if (!w || !w.summary) return plain(x.weeklyNone);
+      return '<p class="more"><b>' + esc(w.summary) + '</b>' + (w.nextAt ? ', ' + say(x.weeklyNext, { when: weeklyWhen(w.nextAt) }) : '') + '</p>';
+    }
+    if (key === 'phone') {
+      var u = httpsOf(st.installUrl);
+      return u ? '<div class="qr" id="qrbox" aria-live="polite"></div><p class="more small">' + x.qrOpen + '</p><p class="qrurl"><a href="' + esc(u) + '">' + esc(u) + '</a></p>' : '';
+    }
+    return '';
+  }
+  function hubState(on) { return on ? hx().hubDone : hx().hubWaiting; }
+  function tickHtml(key, on) {
+    if (HUB_SET[key]) return '<span class="auto' + (on ? ' on' : '') + '" data-auto="' + esc(key) + '">' + hubState(on) + '</span>';
+    return '<button type="button" class="tick" data-tick="' + esc(key) + '" aria-pressed="' + on + '">' + (on ? hx().done : hx().markDone) + '</button>';
+  }
   function viewSetup() {
     titled('titleSetup');
     var st = S.j.setup, x = hx();
-    var hh = '<h1 tabindex="-1">' + x.setupH + '</h1><p>' + say(x.setupIntro, mgrWords()) + '</p><p class="count" id="setupcount" aria-live="polite">' + setupCount(st) + '</p><ol class="rundown" id="rundown">';
+    var hh = '<h1 tabindex="-1">' + x.setupH + '</h1>';
+    if (httpsOf(st.video)) hh += '<div class="ok" id="video"><h2>' + x.videoH + '</h2><p>' + x.videoText + '</p><p>' + outLink(st.video, x.videoLink) + '</p></div>';
+    hh += '<p>' + say(x.setupIntro, mgrWords()) + '</p><p class="count" id="setupcount" aria-live="polite">' + setupCount(st) + '</p><ol class="rundown" id="rundown">';
     st.steps.forEach(function (s) {
       var on = !!st.ticks[s.key];
-      hh += '<li class="rstep"><div class="rtext"><h3>' + esc((s.title || {})[lang] || '') + '</h3><p>' + esc((s.body || {})[lang] || '') + '</p></div>' +
-        '<button type="button" class="tick" data-tick="' + esc(s.key) + '" aria-pressed="' + on + '">' + (on ? x.done : x.markDone) + '</button></li>';
+      hh += '<li class="rstep" data-step="' + esc(s.key) + '"><div class="rtext"><h3>' + esc((s.title || {})[lang] || '') + '</h3><p>' + esc((s.body || {})[lang] || '') + '</p>' +
+        linksHtml(s.links) + extraHtml(s.key, st) + '</div>' + tickHtml(s.key, on) + '</li>';
     });
     hh += '</ol><p id="err" class="err hide" role="alert"></p><p><a class="link" id="back" href="' + esc(linkWith('')) + '">' + x.back + '</a></p>';
     card.innerHTML = hh;
     document.getElementById('rundown').addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('[data-tick]') : null; if (b) tick(b); });
+    drawQr(httpsOf(st.installUrl));
+  }
+  /* the QR of the install page: qrcode-generator 1.4.4 from cdnjs, loaded once and only here; drawn in our green on cream as an image */
+  function qrLib() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    if (S.qrLoading) return S.qrLoading;
+    S.qrLoading = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = QR_LIB; s.onload = function () { window.qrcode ? res(window.qrcode) : rej(new Error('no qrcode')); }; s.onerror = function () { S.qrLoading = null; rej(new Error('the QR maker did not load')); }; document.head.appendChild(s); });
+    return S.qrLoading;
+  }
+  function drawQr(url) {
+    var box = document.getElementById('qrbox');
+    if (!box || !url) return;
+    qrLib().then(function (make) {
+      var qr = make(0, 'M'); qr.addData(url); qr.make();
+      var n = qr.getModuleCount(), pad = 4, sz = n + pad * 2, cells = '';
+      for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (qr.isDark(r, c)) cells += 'M' + (c + pad) + ' ' + (r + pad) + 'h1v1h-1z';
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + sz + ' ' + sz + '" shape-rendering="crispEdges"><rect width="' + sz + '" height="' + sz + '" fill="#FFFAF2"/><path d="' + cells + '" fill="#103F39"/></svg>';
+      var b = document.getElementById('qrbox');   // the view may have been painted again (the language toggle) while the library loaded
+      if (b) b.innerHTML = '<img id="qrimg" width="184" height="184" alt="' + esc(say(hx().qrAlt, { url: url })) + '" src="data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '">';
+    }).catch(function () {
+      var b = document.getElementById('qrbox');
+      if (b) b.innerHTML = '<p class="small">' + hx().qrFail + '</p>';
+    });
   }
   function tick(b) {
     var key = b.getAttribute('data-tick'), st = S.j.setup;
@@ -1061,10 +1190,40 @@
         var on = !!st.ticks[x.getAttribute('data-tick')];
         x.setAttribute('aria-pressed', String(on)); x.textContent = on ? hx().done : hx().markDone;
       });
+      Array.prototype.forEach.call(card.querySelectorAll('[data-auto]'), function (x) {   // the Hub may have ticked its step since the page opened
+        var on = !!st.ticks[x.getAttribute('data-auto')];
+        x.className = 'auto' + (on ? ' on' : ''); x.textContent = hubState(on);
+      });
       b.disabled = false;
       document.getElementById('setupcount').innerHTML = setupCount(st);
       var e = document.getElementById('err'); if (e) e.className = 'err hide';
     }).catch(function () { again(t().oops); });
+  }
+
+  /* ---------- wave278 Task 5: the phone page (?install), which the QR opens ---------- */
+  /* One GET with install (scanner-safe: the function saves nothing), the same before and after the Hub sign-in. Sign in first, then Safari's and
+     Chrome's add-to-home-screen steps, then the Slack app, then Open the Hub. A link the function refuses says so; a function that cannot be
+     reached still gives the steps with the fixed links. */
+  var INSTALL_LINKS = { hub: 'https://hub.welfareavenue.com/', slack: 'https://slack.com/download' };
+  function viewInstall() {
+    titled('titleInstall');
+    var x = hx(), L = (S.j && S.j.install) || INSTALL_LINKS;
+    function steps(list) { return '<ol class="isteps">' + list.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ol>'; }
+    card.innerHTML = '<h1 tabindex="-1">' + x.installH + '</h1><div class="ok" id="first"><p>' + x.installFirst + '</p></div>' +
+      '<h2>' + x.safariH + '</h2>' + steps(x.safari) +
+      '<h2>' + x.chromeH + '</h2>' + steps(x.chrome) +
+      '<h2>' + x.slackH + '</h2><p>' + x.slackText + '</p><p>' + outLink(httpsOf(L.slack) || INSTALL_LINKS.slack, x.slackApp) + '</p>' +
+      '<a class="btn" id="openhub" href="' + esc(httpsOf(L.hub) || INSTALL_LINKS.hub) + '">' + x.openHub + '</a>';
+  }
+  function loadInstall() {
+    return fetch(FN + '?t=' + encodeURIComponent(token) + '&install=1')
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
+      .then(function (x) {
+        if (x.j && x.j.ok) { S.j = x.j; if (!forced) lang = pickLang(x.j.lang) || lang; S.view = 'install'; }
+        else if (x.j && x.status < 500) { S.j = x.j; S.view = 'bad'; }   // only the function saying so makes a link bad
+        else { S.j = null; S.view = 'install'; }
+      }, function () { S.j = null; S.view = 'install'; })
+      .then(function () { render('initial'); });
   }
 
   /* ---------- load and route ---------- */
@@ -1100,6 +1259,7 @@
     else if (v === 'waiting') viewWaiting();
     else if (v === 'closing') viewClosing();
     else if (v === 'setup') viewSetup();
+    else if (v === 'install') viewInstall();   // wave278: the phone page
     else if (v === 'propose') viewPropose();
     else if (v === 'declined') viewDeclined();
     else if (v === 'closed') viewClosed();
@@ -1121,6 +1281,7 @@
 
   paintLang();
   if (!token) { S.view = 'bad'; render(false); return; }
+  if (q.has('install')) { loadInstall(); return; }   // wave278: the page the setup's QR opens on the phone
   load('initial');
 })();
 </script>
