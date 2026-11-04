@@ -30,6 +30,7 @@ const optional275 = read('../build/wa275b_optional.sql');   // wave275b (03/11/2
 const undo275b = read('../build/wa275b_undo.sql');
 const onboarding278 = read('../build/wa278a_onboarding.sql');   // wave278a (04/11/26): the new-employee onboarding experience, its database
 const undo278 = read('../build/wa278a_undo.sql');
+const stepsCheck278 = read('../build/wa278b_steps_check.sql');   // wave278b (04/11/26): the step key check allows the four wave278 keys (found at the practice run)
 const assertions278 = read('w278sql.sql');
 
 let checks = 0;
@@ -273,6 +274,19 @@ try {
     const r = await carryOf(e);
     ok(sameJson(r.t, afterFirst[e].t) && r.u === afterFirst[e].u, 'wa278a: the second run leaves ' + e + ' exactly as the first left it');
   }
+  /* wave278b: before it, the wave271 check on hub_onboard_steps.step refused the four new keys (the live Accept run answered 500 on 04/11/26) */
+  const KEYS12 = ['roster', 'google', 'plan', 'invites', 'manager', 'hub', 'slack', 'welcome', 'groups', 'drives', 'meeting', 'channel'];
+  let refusedBefore = false;
+  try { await db.exec(`insert into public.hub_onboard_steps (flow_id, step, status) select id, 'groups', 'pending' from public.hub_onboard_flows limit 1`); await db.exec(`delete from public.hub_onboard_steps where step = 'groups'`); }
+  catch (e) { refusedBefore = true; }
+  ok(refusedBefore, 'wave271 check: a groups step is refused before wa278b (the practice-run bug)');
+  await db.exec(stepsCheck278);
+  await db.exec(stepsCheck278);   // safe to run twice
+  console.log('wa278b_steps_check: applied twice with no error');
+  const flowForKeys = (await one(db, `select id from public.hub_onboard_flows order by id limit 1`)).id;
+  for (const k of KEYS12) await db.exec(`insert into public.hub_onboard_steps (flow_id, step, status) values (${flowForKeys}, '${k}', 'pending') on conflict (flow_id, step) do nothing`);
+  ok((await one(db, `select count(*)::int as n from public.hub_onboard_steps where flow_id = ${flowForKeys} and step in ('groups', 'drives', 'meeting', 'channel')`)).n === 4, 'wa278b: the four wave278 step keys insert');
+  await db.exec(`delete from public.hub_onboard_steps where flow_id = ${flowForKeys} and step in ('groups', 'drives', 'meeting', 'channel') and status = 'pending' and detail is null`);
   for (const k of N_KEYS) ok((await one(db, `select count(*)::int as n from public.app_config where key = '${k}'`)).n === 1, 'wa278a: ' + k + ' is there, once');
   ok((await one(db, `select count(*)::int as n from pg_proc where proname = 'wa278_hub_seen'`)).n === 1, 'wa278a: one wa278_hub_seen after two runs');
   // running it again keeps a value HR set
