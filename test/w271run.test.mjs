@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { loadFn, accessRoutes } from './w271rig.mjs';
 import { availabilityOf, weekRows } from './w275avail.mjs';
 
@@ -69,6 +70,8 @@ async function setup({ cand = {}, fl = {}, config = {}, tables = {}, hr = true, 
   };
   rig.fetchOn('https://oauth2.googleapis.com/token', (e) => {
     const claims = JSON.parse(Buffer.from(e.body.get('assertion').split('.')[1], 'base64url').toString());
+    const refused = s.tokenReply && s.tokenReply(claims);   // wave278 Task 4: a test can make Google refuse a mailbox's token (delegation)
+    if (refused) return refused;
     return { json: { access_token: 'tok:' + claims.scope + ':' + claims.sub, expires_in: 3600 } };
   });
   rig.fetchOn(NOTIFY, (e) => (notifyReply ? notifyReply(e) : { json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } }));
@@ -1317,7 +1320,7 @@ test('after backed_out the grid and password links of onboard-link are closed', 
   tables.hub_candidates[0].status = 'hired';   // so that only the flow shuts the links
   tables.hub_candidates[0].accepted_on = '2026-10-15';
   Object.assign(tables.hub_onboard_flows[0], { pw_nonce: 'nonce1', pw_expires_at: '2026-12-01T00:00:00Z', pw_used_at: null });
-  const link = await loadFn('onboard-link', { tables: { hub_candidates: tables.hub_candidates, hub_onboard_flows: tables.hub_onboard_flows, hub_onboard_grids: [], team_members: tables.team_members, change_log: [] } });
+  const link = await loadFn('onboard-link', { tables: { hub_candidates: tables.hub_candidates, hub_onboard_flows: tables.hub_onboard_flows, hub_onboard_grids: [], team_members: tables.team_members, change_log: [], hub_positions: [] } });   // wave278 Task 5: the offer GET reads the position's jd_url
   link.setNow(NOW);
   const get = async (t) => (await link.call(new Request('https://stub.supabase.test/functions/v1/onboard-link?t=' + encodeURIComponent(t)))).json();
   const post = async (body) => (await link.call(new Request('https://stub.supabase.test/functions/v1/onboard-link', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }))).json();
@@ -1684,21 +1687,16 @@ test('TEMPLATE: after Start the Hub\'s own text reads with the real values, in t
   assert.deepEqual(s.snapshot(), before, 'reading writes nothing');
   assert.equal(w.edited, false);
   assert.equal(w.subject, 'Welcome to Welfare Avenue! Your Next Steps');
-  assert.ok(t.startsWith('Dear Alex,\n\nCongratulations and welcome to the team at Welfare Avenue!\nWe\'re excited you\'ve accepted the Program Coordinator role within our organization.'), t);
+  assert.ok(t.startsWith('Dear Alex,\n\nCongratulations and welcome to the team at Welfare Avenue!\n\nWe\'re excited you\'ve accepted the Program Coordinator role within our organization.\n\n'), t);
   assert.match(t, /Your first day is Sunday, November 1, 2026, and we can't wait/, 'the Toronto date of the call, in words');
-  assert.match(t, /Your onboarding call: Sunday, November 1, 2026.*10:30.*\. The invite is in your calendar\./);
-  assert.match(t, /with your manager, Sam Lee: Tuesday, November 3, 2026/);
-  assert.match(t, /group onboarding session with Sam Lee on November 12\. If you can't make it, let us know\. This step is crucial\./);
-  assert.match(t, /\. The invite is in your calendar\. Google Meet: the link is in your calendar invite\n/, 'no link saved yet by the calendar sync');
-  assert.match(t, /\n2\. Sign in to your Welfare Avenue Google account at mail\.google\.com:\n   Email: alex\.tremblay@welfareavenue\.com\n   First password: \[first password\]\n   Google will ask you to change it the first time you sign in\.\n   This video shows you how: https:\/\/video\.example\/g\n/, 'wave275 Task 4: the login, with the placeholder kept on the card');
-  assert.match(t, /3\. Join your Slack workspace with your new Welfare Avenue email: https:\/\/join\.slack\.example\/x/);
-  assert.match(t, /4\. Join our Canva team: https:\/\/www\.canva\.com\/brand\/join\?token=a/);
-  assert.match(t, /5\. Sign the Contract\. Sent via DocuSign to your personal email\./);
-  assert.match(t, /6\. Review your job description.*: https:\/\/docs\.example\.com\/jd/);
-  assert.match(t, /\n7\. Before your onboarding call, set up your computer on your own, step by step:\n   1\. Add your Welfare Avenue account to Chrome\./, 'the setup rundown');
-  assert.doesNotMatch(t, /You can tick each step off/, 'a wave271 hire has no rundown page: its line goes');
-  assert.ok(t.endsWith('Looking forward to seeing all the great work you\'ll do with us!\nHana Rossi'), t);
-  assert.equal(numbers(t), '1234567');
+  assert.match(t, /\n1\. Your two meetings\. Both invites are in your Welfare Avenue calendar\.\n   - Your onboarding call: Sunday, November 1, 2026.*10:30.*\. Google Meet: the link is in your calendar invite\n/, 'wave278: no link saved yet by the calendar sync');
+  assert.match(t, /   - Your 1-on-1 introduction with your manager, Sam Lee: Tuesday, November 3, 2026/);
+  assert.doesNotMatch(t, /group onboarding session|November 12|in-person|Slack workspace|Canva|DocuSign|Contract/, 'wave278: the in-person session, Slack, Canva and the contract are not in the email');
+  assert.match(t, /\n2\. Sign in to your Welfare Avenue Google account at mail\.google\.com:\n   Email: alex\.tremblay@welfareavenue\.com\n   First password: \[first password\]\n   Google will ask you to change it the first time you sign in\.\n   This video shows you how to set up your Chrome profile: https:\/\/video\.example\/g\n/, 'wave275 Task 4: the login, with the placeholder kept on the card');
+  assert.match(t, /\n\n3\. Your documents:\n   - Your job description: https:\/\/docs\.example\.com\/jd\. Have a look before the onboarding call\.\n   - HR will share your Drives\.\n\n/, 'wave278: no offer letter on the card, no drives added: HR shares them');
+  assert.doesNotMatch(t, /personal Hub link|tick each step/i, 'a wave271 hire has no setup page: that step goes, with its lines');
+  assert.ok(t.endsWith('Looking forward to seeing all the great work you\'ll do with us!\n\nHana Rossi'), t);
+  assert.equal(numbers(t), '123');
   assert.doesNotMatch(t.replace('[first password]', ''), /\[|—|\bAI\b/, 'no marked place left but the password\'s, Hub words only');
   assert.doesNotMatch(t, /\.\./, 'one full stop after a time that ends in p.m.');
 });
@@ -1707,16 +1705,16 @@ test('TEMPLATE: optional lines are left out and the steps renumber; no role read
   const s = await setup({ cand: { role: '' }, tables: { hub_positions: [{ id: 5, title: 'Program Coordinator', dept: 'progdev', jd_url: null }] } });
   await s.start({ one_on_one_at: null });
   const t = (await readWelcome(s)).text;
-  assert.equal(numbers(t), '123456', 'no Canva link: one step fewer');
+  assert.equal(numbers(t), '123', 'no setup page (a wave271 hire): one step fewer');
   assert.doesNotMatch(t, /Join our Canva team/);
   assert.doesNotMatch(t, /group onboarding session/);
-  assert.doesNotMatch(t, /video/i);
+  assert.doesNotMatch(t, /video/i, 'no video set: its line goes');
   assert.match(t, /We're excited you've accepted our offer\./);
   assert.match(t, /Sam Lee: we'll confirm the time soon\./);
-  assert.match(t, /https:\/\/welfareavenue\.slack\.com/, 'the Slack default');
-  assert.match(t, /4\. Sign the Contract/);
-  assert.match(t, /5\. Review your job description and prepare questions to ask about it with your director\./, 'no link, and the line stays');
-  assert.match(t, /\nThe Welfare Avenue team$/, 'an HR person not on the roster: the team signs');
+  assert.doesNotMatch(t, /slack/i, 'wave278: Slack is on the Hub page, not in the email');
+  assert.doesNotMatch(t, /job description|offer letter/, 'wave278: no job description link and no offer letter: their lines go');
+  assert.match(t, /\n3\. Your documents:\n   - HR will share your Drives\.\n/, 'the documents step keeps its Drives line');
+  assert.match(t, /\n\nThe Welfare Avenue team$/, 'an HR person not on the roster: the team signs');
 });
 
 test('TEMPLATE: French, in the same order, with the French role name and natural wording', async () => {
@@ -1725,27 +1723,23 @@ test('TEMPLATE: French, in the same order, with the French role name and natural
   await hubMade(s);
   const w = await readWelcome(s), t = w.text;
   assert.equal(w.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
-  assert.ok(t.startsWith('Bonjour Alex,\n\nFélicitations et bienvenue dans l\'équipe de Welfare Avenue!'), t);
+  assert.ok(t.startsWith('Bonjour Alex,\n\nFélicitations et bienvenue dans l\'équipe de Welfare Avenue!\n\n'), t);
   assert.match(t, /accepté le poste de Gestionnaire des opérations au sein/, 'ROLE_FR, as on the /o/ page');
   assert.match(t, /Votre premier jour est le dimanche 1er novembre 2026,/, '1er for the first of the month');
-  assert.match(t, /Votre appel d'accueil : dimanche 1er novembre 2026 à 22 h 30\./);
-  assert.match(t, /avec votre gestionnaire, Sam Lee : mardi 3 novembre 2026 à /);
-  assert.match(t, /avec Sam Lee, le 12 novembre\. Si vous ne pouvez pas y être, dites-le-nous\./);
+  assert.match(t, /\n1\. Vos deux rencontres\. Les deux invitations sont dans votre calendrier Welfare Avenue\.\n   - Votre appel d'accueil : dimanche 1er novembre 2026 à 22 h 30\. Google Meet : le lien est dans votre invitation\n/);
+  assert.match(t, /   - Votre rencontre individuelle de présentation avec votre gestionnaire, Sam Lee : mardi 3 novembre 2026 à /);
+  assert.doesNotMatch(t, /12 novembre|séance de groupe|Slack|Canva|DocuSign|contrat/, 'wave278: none of these in the email');
   assert.match(t, /\n2\. Connectez-vous à votre compte Google Welfare Avenue sur mail\.google\.com :\n   Adresse courriel : alex\.tremblay@welfareavenue\.com\n   Premier mot de passe : \[premier mot de passe\]\n   Google vous demandera de le changer lors de votre première connexion\.\n/);
-  assert.match(t, /L'invitation est dans votre calendrier\. Google Meet : le lien est dans votre invitation\n/);
-  assert.match(t, /\n7\. Avant votre appel d'accueil, préparez votre ordinateur vous-même, étape par étape :\n   1\. Ajoutez votre compte Welfare Avenue à Chrome\./);
-  assert.match(t, /avec votre nouvelle adresse courriel Welfare Avenue : /);
-  assert.match(t, /4\. Joignez-vous à notre équipe Canva : https:\/\/www\.canva\.com\/x/);
-  assert.match(t, /5\. Signez le contrat\. Il vous est envoyé par DocuSign à votre adresse courriel personnelle\./);
+  assert.match(t, /\n3\. Vos documents :\n   - Votre description de poste : https:\/\/docs\.example\.com\/jd\. Prenez-en connaissance avant l'appel d'accueil\.\n   - Les RH partageront vos Drives avec vous\.\n/);
   assert.match(t, /pour que votre intégration se déroule en douceur, dans un climat accueillant\./);
   assert.doesNotMatch(t, /individuellement|poste de proposé/);
-  assert.equal(numbers(t), '1234567');
+  assert.equal(numbers(t), '123');
   assert.doesNotMatch(t.replace('[premier mot de passe]', ''), /\[|—/);
   const n = await setup({ cand: { role: '', summary: 'Français' } });
   await n.start({ one_on_one_at: null });
   const u = (await readWelcome(n)).text;
   assert.match(u, /Nous sommes ravis que vous ayez accepté notre offre\./, 'no role: a sentence of its own');
-  assert.equal(numbers(u), '123456');
+  assert.equal(numbers(u), '123');
   assert.match(u, /\n2\. Les RH vous enverront vos informations de connexion séparément\.\n/, 'no account: HR sends the login');
   assert.match(u, /nous vous confirmerons l'heure bientôt/);
   assert.match(u, /L'équipe de Welfare Avenue$/);
@@ -1767,11 +1761,16 @@ test('TEMPLATE: the preview says what fills in at Start, and writes nothing', as
   const before = s.snapshot();
   const { welcome: w } = (await s.post({ action: 'preview', flow_id: 21 })).body;
   assert.match(w.text, /Your first day is \[first day: fills in when the times are booked or at Start\]/);
-  assert.match(w.text, /\[Canva link: fills in when the times are booked or at Start, or this line is left out\]/);
+  assert.doesNotMatch(w.text, /Canva link/, 'wave278: Canva is on the Hub page');
   assert.match(w.text, /   Email: \[new address\]\n   First password: \[first password\]\n/, 'wave275 Task 4: the login, as places to fill');
   assert.match(w.text, /Google Meet: \[call Meet link\]\n/);
-  assert.match(w.text, /on this page, so your manager can see where you are: \[setup page link\]\n/);
-  assert.equal(numbers(w.text), '1234567');
+  assert.match(w.text, /\n3\. Open your personal Hub link in your new Chrome profile window: \[setup page link\]\n/);
+  assert.match(w.text, /   This video shows you how to set up your Chrome profile: \[Chrome setup video: fills in when the times are booked or at Start, or this line is left out\]\n/);
+  assert.match(w.text, /   Your team's weekly meeting: \[weekly meeting: fills in when the times are booked or at Start, or this line is left out\]\. /);
+  assert.match(w.text, /   - Your job description: \[job description link: fills in when the times are booked or at Start, or this line is left out\]\. /);
+  assert.match(w.text, /   - Your offer letter, signed when you accepted: \[offer letter link: fills in when the times are booked or at Start, or this line is left out\]\n/);
+  assert.match(w.text, /   - Your Drives: \[your Drives: fills in when the times are booked or at Start\]\n/);
+  assert.equal(numbers(w.text), '1234');
   assert.deepEqual(s.snapshot(), before);
   const fr = await setup({ cand: { summary: 'Français' } });
   assert.match((await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text, /\[premier jour : rempli à la réservation des rencontres ou au démarrage\]/);
@@ -1802,7 +1801,7 @@ test('TEMPLATE: HR\'s edits are saved with their brackets, and read with the NEW
   assert.ok(w.text.startsWith('My own opening, just for Alex.\nDear Alex,'));
   assert.match(w.text, /Your first day is Sunday, November 1, 2026/);
   assert.doesNotMatch(w.text, /\[/);
-  assert.equal(numbers(w.text), '123456', 'empty Canva and group lines go from an edited text too');
+  assert.equal(numbers(w.text), '123', 'wave278: the setup step (no page for a wave271 hire) goes from an edited text too');
   await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
   w = await readWelcome(s);
   assert.ok(w.text.startsWith('My own opening, just for Alex.\n'), 'their sentence is kept');
@@ -1817,18 +1816,19 @@ test('TEMPLATE: HR\'s edits are saved with their brackets, and read with the NEW
   assert.equal(s.flow().welcome_text, text, 'what HR typed is never rewritten');
 });
 
-test('TEMPLATE: a Canva link added after Start appears in HR\'s edited text, and goes again when it is cleared', async () => {
+test('TEMPLATE: a Canva link added after Start appears in a text HR saved before wave278 (its old Canva place), and goes again when it is cleared', async () => {
   const s = await setup();
-  const p = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome;
-  await s.start({ welcome: { subject: p.subject, text: p.text.replace('Dear Alex,', 'Hello Alex!') } });
+  const old = 'Hello Alex!\n1. Your onboarding call: [call date and time: fills in at Start].\n2. Join our Canva team: [Canva link: fills in at Start, or this line is left out]\n3. Sign the Contract.';
+  await s.start({ welcome: { subject: 'Welcome to Welfare Avenue! Your Next Steps', text: old } });
   let t = (await readWelcome(s)).text;
   assert.doesNotMatch(t, /Join our Canva team/);
-  assert.equal(numbers(t), '123456');
+  assert.equal(numbers(t), '12');
   await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
   t = (await readWelcome(s)).text;
   assert.match(t, /^Hello Alex!/);
-  assert.match(t, /4\. Join our Canva team: https:\/\/www\.canva\.com\/new/);
-  assert.equal(numbers(t), '1234567');
+  assert.match(t, /\n2\. Join our Canva team: https:\/\/www\.canva\.com\/new\n/);
+  assert.match(t, /1\. Your onboarding call: Sunday, November 1, 2026/, 'the old words of the place still fill');
+  assert.equal(numbers(t), '123');
   await s.post({ action: 'set_canva_link', flow_id: 21, link: '' });
   assert.doesNotMatch((await readWelcome(s)).text, /Join our Canva team/);
 });
@@ -1846,7 +1846,7 @@ test('TEMPLATE: a subject-only edit keeps the subject and leaves the body the Hu
   assert.match(w.text, /Your first day is Wednesday, November 4, 2026/);
 });
 
-test('TEMPLATE: the Hub\'s own text follows a change of time, 1-on-1, manager and Canva link', async () => {
+test('TEMPLATE: the Hub\'s own text follows a change of time, 1-on-1 and manager; a Canva link stays out of it (wave278: it is on the Hub page)', async () => {
   const s = await started({}, { one_on_one_at: null });
   assert.match((await readWelcome(s)).text, /we'll confirm the time soon/);
   await s.post({ action: 'change_time', flow_id: 21, which: 'call', at: NEW_CALL });
@@ -1857,8 +1857,8 @@ test('TEMPLATE: the Hub\'s own text follows a change of time, 1-on-1, manager an
   assert.match((await readWelcome(s)).text, /with your manager, Ruth Owen: /);
   await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/new' });
   const t = (await readWelcome(s)).text;
-  assert.match(t, /Join our Canva team: https:\/\/www\.canva\.com\/new/);
-  assert.equal(numbers(t), '1234567');
+  assert.doesNotMatch(t, /canva\.com/);
+  assert.equal(numbers(t), '123');
 });
 
 test('TEMPLATE: a practice flow reads the same, and writes nothing to read it', async () => {
@@ -2775,7 +2775,7 @@ async function t4(o = {}) {
 }
 const count = (text, part) => text.split(part).length - 1;
 
-test('w275 welcome: sent at booking from hub@ to the personal address, with both times, both Meet links, the login, the setup rundown and its page; the password is in the outgoing message only, once', async () => {
+test('w275 welcome: sent at booking from hub@ (no offer sender, no owner) to both addresses, with both times, both Meet links, the login and the setup page; the password is in the outgoing message only, once', async () => {
   const s = await t4({ config: { onboard_slack_join_link: 'https://join.slack.example/wa' }, tables: { team_members: [...TEAM, HR_ROW] } });
   await s.acceptSetup();
   const pre = (await s.post({ action: 'preview', flow_id: 21 })).body.welcome.text;
@@ -2784,12 +2784,12 @@ test('w275 welcome: sent at booking from hub@ to the personal address, with both
   s.pwReads = 0;
   const said = await quietly(() => s.book());
   assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
-  assert.match(s.step('welcome').detail, /^Sent the welcome email to alex@example\.com from hub@welfareavenue\.com/);
+  assert.equal(s.step('welcome').detail, 'Sent the welcome email to alex@example.com and alex.tremblay@welfareavenue.com from hub@welfareavenue.com; no staff copy.');
   assert.ok(noDash(s.step('welcome').detail));
   const sent = s.welcomes();
-  assert.equal(sent.length, 1);
+  assert.equal(sent.length, 1, 'nobody to copy: one send');
   const m = mail(sent[0]);
-  assert.equal(m.to, 'alex@example.com');
+  assert.equal(m.to, 'alex@example.com, alex.tremblay@welfareavenue.com', 'wave278: the personal address and the new Welfare Avenue one');
   assert.match(m.from, /<hub@welfareavenue\.com>/);
   assert.equal(m.subject, 'Welcome to Welfare Avenue! Your Next Steps');
   assert.equal(m.bodies.length, 2, 'text and HTML');
@@ -2799,19 +2799,15 @@ test('w275 welcome: sent at booking from hub@ to the personal address, with both
   assert.equal(s.pwReads, 1, 'read once, as the email went');
   assert.ok(text.startsWith('Dear Alex,\n\nCongratulations and welcome to the team at Welfare Avenue!'), text);
   assert.match(text, /Your first day is Monday, October 26, 2026,/);
-  assert.match(text, /Your onboarding call: Monday, October 26, 2026.*10:00.*\. The invite is in your calendar\. Google Meet: https:\/\/meet\.google\.com\/aaa-bbbb-ccc\n/);
-  assert.match(text, /with your manager, Sam Lee: Monday, October 26, 2026.*11:30.*\. Google Meet: https:\/\/meet\.google\.com\/ddd-eeee-fff\n/);
+  assert.match(text, /   - Your onboarding call: Monday, October 26, 2026 at 10:00 a\.m\. Google Meet: https:\/\/meet\.google\.com\/aaa-bbbb-ccc\n/);
+  assert.match(text, /   - Your 1-on-1 introduction with your manager, Sam Lee: Monday, October 26, 2026 at 11:30 a\.m\. Google Meet: https:\/\/meet\.google\.com\/ddd-eeee-fff\n/);
   assert.match(text, /\n2\. Sign in to your Welfare Avenue Google account at mail\.google\.com:\n   Email: alex\.tremblay@welfareavenue\.com\n   First password: Lantern-Harbour-62\n   Google will ask you to change it the first time you sign in\.\n/);
-  assert.match(text, /\n3\. Join your Slack workspace with your new Welfare Avenue email: https:\/\/join\.slack\.example\/wa\n/);
-  assert.match(text, /Sign the Contract\. Sent via DocuSign to your personal email\./);
-  assert.match(text, /Review your job description.*: https:\/\/docs\.example\.com\/jd/);
-  assert.ok(text.includes('6. Before your onboarding call, set up your computer on your own, step by step:\n   You can tick each step off on this page, so your manager can see where you are: ' + SETUP_LINK + '\n'), text);
-  const sub = text.split('\n').filter((l) => /^   \d+\. /.test(l));
-  assert.deepEqual(sub.map((l) => l.trim().split('.')[0]).join(), '1,2,3,4,5,6,7,8,9', 'the rundown as numbered steps');
-  assert.ok(sub[0].startsWith('   1. Add your Welfare Avenue account to Chrome. In Chrome, add a new profile'), sub[0]);
-  assert.ok(sub[8].startsWith('   9. Find your weekly meeting. '), sub[8]);
-  assert.equal(numbers(text), '123456', 'no Canva link: that step is left out and the rest renumber');
-  assert.match(text, /\nSam Lee$/, 'signed by the manager, who booked the times with them');
+  assert.ok(text.includes('\n\n3. Open your personal Hub link in your new Chrome profile window: ' + SETUP_LINK + '\n   The Hub walks you through the rest, one step at a time: '), text);
+  assert.doesNotMatch(text, /weekly meeting:/, 'no weekly meeting recorded: that line goes');
+  assert.match(text, /\n\n4\. Your documents:\n   - Your job description: https:\/\/docs\.example\.com\/jd\. Have a look before the onboarding call\.\n   - HR will share your Drives\.\n\n/);
+  assert.doesNotMatch(text, /slack\.example|DocuSign|Canva team|   \d+\. /, 'wave278: no Slack line, no contract, no Canva step and no pasted rundown');
+  assert.equal(numbers(text), '1234');
+  assert.match(text, /\n\nSam Lee$/, 'no offer sender and no owner: signed by the manager, who booked the times with them');
   assert.ok(Buffer.from(sent[0].body.raw, 'base64url').toString().includes('\r\nReply-To: sam.lee@welfareavenue.com\r\n'), 'replies go to the manager');
   assert.doesNotMatch(text, /\[|—|\bAI\b/, 'every marked place filled, Hub words only');
   assert.match(html, /<a href="https:\/\/meet\.google\.com\/aaa-bbbb-ccc"/, 'links work in the HTML part');
@@ -2828,11 +2824,6 @@ test('w275 welcome: sent at booking from hub@ to the personal address, with both
   assert.deepEqual(s.rig.unregistered(), []);
 });
 
-test('w275 welcome: the setup rundown in the email is word for word the /o/ page\'s (onboard-link SETUP)', async () => {
-  const link = await loadFn('onboard-link', {});
-  const s = await setup();
-  assert.deepEqual(s.rig.mod.SETUP_STEPS, link.mod.SETUP);
-});
 
 test('w275 welcome: Meet links saved by the calendar sync (hub_events) are used without asking Calendar again', async () => {
   const s = await t4({ tables: { hub_events: [{ id: 'onboard21call', meet_link: 'https://meet.google.com/syn-cccc-all', status: 'confirmed', attendee_emails: [] }, { id: 'onboard21oneonone', meet_link: 'https://meet.google.com/syn-oooo-one', status: 'confirmed', attendee_emails: [] }] } });
@@ -2856,7 +2847,8 @@ test('w275 welcome: with the account step not done (an HR task, or failed), it s
     assert.match(s.step('welcome').detail, /HR will send the login details separately/);
     assert.match(s.step('welcome').detail, /send them/i, 'the detail says what HR does');
     const text = mail(s.welcomes()[0]).bodies[0];
-    assert.match(text, /\n2\. HR will send your login details separately\.\n3\. Join your Slack/);
+    assert.match(text, /\n2\. HR will send your login details separately\.\n\n3\. Open your personal Hub link/);
+    assert.equal(mail(s.welcomes()[0]).to, 'alex@example.com', 'wave278: no account yet, so only the personal address');
     assert.doesNotMatch(text, /First password|\[first password\]|mail\.google\.com:/);
     assert.ok(!text.includes(FIRST_PW));
     assert.equal(s.pwReads, 0, 'the vault is not read at all');
@@ -2872,7 +2864,7 @@ test('w275 welcome: with the account step not done (an HR task, or failed), it s
   assert.equal(m.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
   assert.match(m.bodies[0], /\n2\. Les RH vous enverront vos informations de connexion séparément\.\n/);
   assert.match(m.bodies[0], /Google Meet : https:\/\/meet\.google\.com\/aaa-bbbb-ccc/);
-  assert.match(m.bodies[0], /   1\. Ajoutez votre compte Welfare Avenue à Chrome\. Dans Chrome/);
+  assert.match(m.bodies[0], /\n3\. Ouvrez votre lien personnel du Hub dans la fenêtre de votre nouveau profil Chrome : https:\/\/hub\.welfareavenue\.com\/o\//);
   assert.doesNotMatch(m.bodies[0], /\[|—/);
 });
 
@@ -2883,11 +2875,12 @@ test('w275 welcome: renderWelcome keeps [first password] when the account is don
   const facts = { manager: 'Sam Lee', jdUrl: null, video: 'https://video.example/g', slack: 'https://welfareavenue.slack.com', hrName: 'Hana Rossi', meet: { call: null, one: null }, setupLink: null };
   const done = r(f, c, { ...facts, login: true }).text;
   assert.match(done, /First password: \[first password\]/);
-  assert.match(done, /   This video shows you how: https:\/\/video\.example\/g/);
+  assert.match(done, /   This video shows you how to set up your Chrome profile: https:\/\/video\.example\/g/);
   assert.match(done, /Google Meet: the link is in your calendar invite/, 'no link known yet');
-  assert.doesNotMatch(done, /You can tick each step off/, 'no rundown page: that line goes');
+  assert.doesNotMatch(done, /personal Hub link/, 'no setup page: that step goes');
+  assert.match(done, /   - HR will share your Drives\./, 'no drives known: HR shares them');
   const later = r(f, c, { ...facts, login: false }).text;
-  assert.match(later, /\n2\. HR will send your login details separately\.\n3\. /, 'the whole login step, its lines under it too');
+  assert.match(later, /\n2\. HR will send your login details separately\.\n\n3\. /, 'the whole login step, its lines under it too');
   assert.doesNotMatch(later, /password|video\.example/i);
   const draft = r({ ...f, status: 'waiting' }, c, { ...facts, draft: true, login: false }).text;
   assert.match(draft, /First password: \[first password\]/, 'before booking the brackets stay as they are');
@@ -2955,7 +2948,7 @@ test('w275 welcome: Gmail refusing fails the step with Google\'s reason and give
   assert.match(s.step('welcome').detail, /test mode/);
   const m = mail(s.welcomes().at(-1));
   assert.equal(m.to, 'tester@welfareavenue.com');
-  assert.equal(m.subject, '[TEST, for alex@example.com] Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(m.subject, '[TEST, for alex@example.com, alex.tremblay@welfareavenue.com] Welcome to Welfare Avenue! Your Next Steps');
   assert.equal(count(m.bodies[0], FIRST_PW), 1);
   s.noPw();
 });
@@ -3051,8 +3044,7 @@ test('w275 welcome: Start (the wave271 path) sends it once the invites are out, 
   assert.ok(sent[0].bodies[0].startsWith('Hello Alex!'));
   assert.match(sent[0].bodies[0], /\n2\. HR will send your login details separately\.\n/);
   assert.doesNotMatch(sent[0].bodies[0], /\[/);
-  assert.doesNotMatch(sent[0].bodies[0], /You can tick each step off/, 'a wave271 hire\'s link shuts at booking, so no rundown page: the steps are still listed');
-  assert.match(sent[0].bodies[0], /   1\. Add your Welfare Avenue account to Chrome\./);
+  assert.doesNotMatch(sent[0].bodies[0], /personal Hub link/, 'a wave271 hire\'s link shuts at booking, so no setup page: that step goes');
   assert.match(s.flow().welcome_text, /\[first password\]/, 'the saved text keeps the placeholder');
 });
 
@@ -3074,7 +3066,7 @@ test('w275 fix: an account HR made by hand gives no vault password: the email sa
   assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
   assert.match(s.step('welcome').detail, /made by hand, so the Hub does not know its password/);
   const text = mail(s.welcomes()[0]).bodies[0];
-  assert.match(text, /\n2\. HR will send your login details separately\.\n3\. /);
+  assert.match(text, /\n2\. HR will send your login details separately\.\n\n3\. /);
   assert.doesNotMatch(text, /First password|\[first password\]/);
   assert.ok(!text.includes(FIRST_PW));
   assert.equal(s.pwReads, 0, 'the vault is not read');
@@ -3120,12 +3112,13 @@ test('w275 fix: with the invites step skipped the email names no Meet link, and 
   await s.start({ skip: ['invites'] });
   assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
   const text = mail(s.gmail()[0]).bodies[0];
-  assert.match(text, /Your onboarding call: Sunday, November 1, 2026.*10:30.*\. The invite is in your calendar\.\n/);
+  assert.match(text, /\n1\. Your two meetings\.\n   - Your onboarding call: Sunday, November 1, 2026 at 10:30 p\.m\.\n/, 'wave278: no invite, so the sentence about them goes too');
   assert.match(text, /with your manager, Sam Lee: Tuesday, November 3, 2026.*\n/);
-  assert.doesNotMatch(text, /Google Meet|will come with the invite|\[/);
+  assert.doesNotMatch(text, /Google Meet|will come with the invite|Both invites|\[/);
   const fr = await setup({ cand: { summary: 'Français' } });
   await fr.start({ skip: ['invites'] });
-  assert.doesNotMatch(mail(fr.gmail()[0]).bodies[0], /Google Meet|viendra avec l'invitation|\[/);
+  assert.doesNotMatch(mail(fr.gmail()[0]).bodies[0], /Google Meet|viendra avec l'invitation|Les deux invitations|\[/);
+  assert.match(mail(fr.gmail()[0]).bodies[0], /\n1\. Vos deux rencontres\.\n/);
 });
 
 test('w275 fix: the login sentence takes the place of the login lines only; other lines HR wrote under that step stay', async () => {
@@ -3390,7 +3383,7 @@ test('w275 whole-branch I1: propose signed in (HR, or the flow\'s own manager) o
   assert.equal(v2.flow().proposed_by, 'hr.person@welfareavenue.com');
 });
 
-test('w275 whole-branch I2: a Canva link HR saves on an accepted new-path card before booking goes in the welcome email at booking', async () => {
+test('w275 whole-branch I2 (wave278): a Canva link HR saves on an accepted new-path card before booking is on the Hub page, not in the welcome email', async () => {
   const s = await t4();
   await s.acceptSetup();
   const set = await s.post({ action: 'set_canva_link', flow_id: 21, link: 'https://www.canva.com/brand/join?token=fresh-one' });
@@ -3399,8 +3392,8 @@ test('w275 whole-branch I2: a Canva link HR saves on an accepted new-path card b
   await s.book();
   assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
   const text = mail(s.welcomes()[0]).bodies[0];
-  assert.match(text, /\n4\. Join our Canva team: https:\/\/www\.canva\.com\/brand\/join\?token=fresh-one\n/);
-  assert.equal(numbers(text), '1234567', 'with the link, the Canva step stays and nothing renumbers');
+  assert.doesNotMatch(text, /canva\.com/, 'the Hub page shows it (onboard-link setup.canva)');
+  assert.equal(numbers(text), '1234');
 });
 
 test('w275 whole-branch I4: Google\'s read-back can lag; the address and google_made_at are kept as soon as the account is made, and a read-back that answers on a later try ends done', async () => {
@@ -3487,7 +3480,7 @@ test('w275 whole-branch: the template\'s marked places say they fill in when the
   const s = await setup();
   const { welcome: w } = (await s.post({ action: 'preview', flow_id: 21 })).body;
   assert.match(w.text, /Your first day is \[first day: fills in when the times are booked or at Start\]/);
-  assert.match(w.text, /\[Canva link: fills in when the times are booked or at Start, or this line is left out\]/);
+  assert.match(w.text, /\[offer letter link: fills in when the times are booked or at Start, or this line is left out\]/, 'wave278: the new places say the same');
   assert.doesNotMatch(w.text, /fills in at Start\]/);
   const fr = await setup({ cand: { summary: 'Français' } });
   const wf = (await fr.post({ action: 'preview', flow_id: 21 })).body.welcome.text;
@@ -4071,4 +4064,233 @@ test('wave278 fix: the meeting left to HR for want of an address runs again once
   await other.post({ action: 'google_manual', flow_id: 21, wa_email: W8_WA });
   assert.equal(other.step('meeting').status, 'hr_task');
   assert.match(other.step('meeting').detail, /no weekly meeting set for fundraising/);
+});
+
+/* ---------- wave278 Task 4: the welcome email, rewritten to the companion note (claude/04-11-26, section 1), sent as the offer's sender ---------- */
+/* Nia Okafor: the offer sent by Shima Butera, the recruitment owner Ruth Owen (a roster name), HR chose five people to copy of whom only Kai Moreau
+   is active staff not already copied (an inactive one, the owner again in capitals, the hire's own new address and an off-roster address). Three drives
+   and the Fundraising weekly were recorded at Accept (setup_ticks). The expected texts are test/w271fx.js WELCOME_278. */
+const { WELCOME_278 } = createRequire(import.meta.url)('./w271fx.js');
+const SHIMA = { id: 31, name: 'Shima Butera', email: 'shima.butera@welfareavenue.com', active: true };
+const KAI = { id: 32, name: 'Kai Moreau', email: 'kai.moreau@welfareavenue.com', active: true };
+const GONE = { id: 33, name: 'Old Staff', email: 'old.staff@welfareavenue.com', active: false };
+const NIA = { name: 'Nia Okafor', email: 'nia@example.com', offer_sent_by: 'shima.butera@welfareavenue.com', owner: 'Ruth Owen', offer_doc_url: 'https://docs.google.com/document/d/offer-nia/edit' };
+const NIA_WA = 'nia.okafor@welfareavenue.com', SHIMA_AT = 'shima.butera@welfareavenue.com', HUB_AT = 'hub@welfareavenue.com';
+const NIA_TICKS = { drives_added: ['Org\'s Files', 'Fundraising', 'Program Development'], weekly_meeting: { summary: 'Fundraising weekly', next_at: '2026-10-29T15:00:00.000Z' } };
+const NIA_CC = ['kai.moreau@welfareavenue.com', 'old.staff@welfareavenue.com', 'RUTH.OWEN@welfareavenue.com', NIA_WA, 'someone@gmail.com'];
+const NIA_NOTE = { en: '(the password is in Nia\'s copy)', fr: '(le mot de passe est dans la copie de Nia)' };
+const asMailbox = (who) => 'Bearer tok:https://www.googleapis.com/auth/gmail.send:' + who;
+const okMail = { json: { id: 'mail1' } };
+const esc278 = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+async function t9({ cand = {}, fl = {}, config = {}, ...o } = {}) {
+  const s = await t4({
+    cand: { ...NIA, ...cand }, fl: { ...PROPOSED, setup_ticks: structuredClone(NIA_TICKS), welcome_cc: [...NIA_CC], ...fl },
+    config: { onboard_google_video: 'https://video.example/chrome', ...config }, tables: { team_members: [...TEAM, SHIMA, KAI, GONE] }, ...o,
+  });
+  s.sends = () => s.welcomes().map((e) => ({ ...mail(e), auth: e.headers.authorization, raw: Buffer.from(e.body.raw, 'base64url').toString() }));
+  s.booked = async () => { assert.equal((await s.acceptSetup()).status, 200); return quietly(() => s.book()); };
+  return s;
+}
+const nia = (lang, pw) => WELCOME_278[lang].replace('<PW>', pw).replace('<SETUP>', SETUP_LINK);
+
+test('wave278 welcome: the companion note\'s text for the fixture, from the offer\'s sender to both addresses; the staff copy to the owner and the chosen staff, without the password', async () => {
+  const s = await t9();
+  assert.equal((await s.acceptSetup()).status, 200);
+  s.pwReads = 0;
+  const said = await quietly(() => s.book());
+  assert.equal(s.flow().wa_email, NIA_WA);
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  assert.equal(s.step('welcome').detail, 'Sent the welcome email to nia@example.com and nia.okafor@welfareavenue.com from shima.butera@welfareavenue.com; copied to 2 staff.');
+  assert.ok(noDash(s.step('welcome').detail));
+  const [hire, staff, ...more] = s.sends();
+  assert.equal(more.length, 0, 'two sends: the hire\'s copy and the staff copy');
+  assert.equal(hire.to, 'nia@example.com, ' + NIA_WA, 'both of the hire\'s addresses');
+  assert.equal(hire.from, 'From: "Shima Butera" <shima.butera@welfareavenue.com>');
+  assert.equal(hire.auth, asMailbox(SHIMA_AT), 'sent from Shima\'s own mailbox (domain-wide delegation)');
+  assert.ok(hire.raw.includes('\r\nReply-To: shima.butera@welfareavenue.com\r\n'), 'replies go to the sender');
+  assert.equal(hire.subject, 'Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(hire.bodies[0], nia('en', FIRST_PW));
+  for (const b of hire.bodies) assert.equal(count(b, FIRST_PW), 1, 'the password once in each part of the hire\'s copy');
+  assert.ok(!hire.raw.includes(FIRST_PW), 'only encoded in the MIME');
+  assert.equal(s.pwReads, 1);
+  assert.match(hire.bodies[1], /<a href="https:\/\/docs\.google\.com\/document\/d\/offer-nia\/edit"/, 'the offer letter is a link in the HTML part');
+  assert.match(hire.bodies[1], /<a href="https:\/\/drive\.google\.com\/drive\/shared-drives"/);
+  assert.equal(staff.to, 'ruth.owen@welfareavenue.com, kai.moreau@welfareavenue.com', 'the owner, then the chosen staff once each; inactive, off-roster and the hire\'s own addresses left out');
+  assert.equal(staff.from, hire.from);
+  assert.equal(staff.auth, asMailbox(SHIMA_AT));
+  assert.ok(staff.raw.includes('\r\nReply-To: shima.butera@welfareavenue.com\r\n'));
+  assert.equal(staff.subject, hire.subject);
+  assert.equal(staff.bodies[0], nia('en', NIA_NOTE.en), 'the same email, the password line saying where the password is');
+  for (const b of staff.bodies) assert.ok(!b.includes(FIRST_PW), 'never the password in the staff copy');
+  assert.ok(staff.bodies[1].includes(esc278(NIA_NOTE.en)));
+  const t = hire.bodies[0];
+  assert.doesNotMatch(t, /\[|—|\bAI\b|DocuSign|Contract|in-person|group onboarding|Loom|Join our Canva|Slack workspace/, 'no marked place left, no DocuSign or in-person line, Hub words only');
+  assert.equal(numbers(t), '1234');
+  assert.equal(count(t, '   - Your Drives: '), 3, 'one line per drive');
+  assert.equal(s.flow().welcome_sent_at, NOW_ISO);
+  assert.ok((await s.card()).text.includes('[first password]'), 'the card keeps the placeholder');
+  s.noPw();
+  assert.ok(!said.includes(FIRST_PW));
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('wave278 welcome: the French text for the fixture, and the French staff copy', async () => {
+  const s = await t9({ cand: { role: 'Operations Manager', summary: 'Français' } });
+  await s.booked();
+  const [hire, staff] = s.sends();
+  assert.equal(hire.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
+  assert.equal(hire.bodies[0], nia('fr', FIRST_PW));
+  assert.equal(staff.bodies[0], nia('fr', NIA_NOTE.fr));
+  assert.ok(!staff.bodies.join('').includes(FIRST_PW));
+  assert.doesNotMatch(hire.bodies[0], /\[|—|\bAI\b/);
+});
+
+test('wave278 welcomeSender: the offer\'s sender when active staff, else the recruitment owner (active, by name or email), else hub@', async () => {
+  const cases = [
+    [{}, { email: SHIMA_AT, fallback: false }],
+    [{ offer_sent_by: ' Shima.Butera@WelfareAvenue.com ' }, { email: SHIMA_AT, fallback: false }],
+    [{ offer_sent_by: null }, { email: 'ruth.owen@welfareavenue.com', fallback: false }],
+    [{ offer_sent_by: 'old.staff@welfareavenue.com' }, { email: 'ruth.owen@welfareavenue.com', fallback: false }],
+    [{ offer_sent_by: 'someone@gmail.com' }, { email: 'ruth.owen@welfareavenue.com', fallback: false }],
+    [{ offer_sent_by: null, owner: 'kai.moreau@welfareavenue.com' }, { email: 'kai.moreau@welfareavenue.com', fallback: false }],
+    [{ offer_sent_by: null, owner: ' ruth OWEN ' }, { email: 'ruth.owen@welfareavenue.com', fallback: false }],
+    [{ offer_sent_by: null, owner: 'Old Staff' }, { email: HUB_AT, fallback: true }],
+    [{ offer_sent_by: null, owner: 'Nobody Known' }, { email: HUB_AT, fallback: true }],
+    [{ offer_sent_by: null, owner: null }, { email: HUB_AT, fallback: true }],
+  ];
+  for (const [cand, want] of cases) {
+    const s = await t9({ cand });
+    assert.deepEqual(await s.rig.mod.welcomeSender(s.cand(), s.flow()), want, JSON.stringify(cand));
+  }
+  const owner = await t9({ cand: { offer_sent_by: null } });
+  await owner.booked();
+  const [m] = owner.sends();
+  assert.equal(m.auth, asMailbox('ruth.owen@welfareavenue.com'), 'no offer sender: the owner\'s mailbox');
+  assert.equal(m.from, 'From: "Ruth Owen" <ruth.owen@welfareavenue.com>');
+  assert.match(m.bodies[0], /\n\nRuth Owen$/, 'signed by the sender');
+  assert.match(owner.step('welcome').detail, / from ruth\.owen@welfareavenue\.com; copied to 2 staff\.$/);
+  const hub = await t9({ cand: { offer_sent_by: null, owner: null } });
+  await hub.booked();
+  const [h, hs, ...none] = hub.sends();
+  assert.equal(none.length, 0);
+  assert.equal(h.auth, asMailbox(HUB_AT));
+  assert.equal(h.from, 'From: Welfare Avenue Hub <hub@welfareavenue.com>');
+  assert.ok(h.raw.includes('\r\nReply-To: sam.lee@welfareavenue.com\r\n'), 'from hub@, replies go to the person who booked the times, as before');
+  assert.match(h.bodies[0], /\n\nSam Lee$/);
+  assert.equal(hs.to, 'kai.moreau@welfareavenue.com, ruth.owen@welfareavenue.com', 'no owner: the chosen staff only, in HR\'s order (Ruth is one of them)');
+  assert.equal(hub.step('welcome').detail, 'Sent the welcome email to nia@example.com and nia.okafor@welfareavenue.com from hub@welfareavenue.com; copied to 2 staff.');
+});
+
+test('wave278 welcome: the sender\'s mailbox refused (no token, or Gmail says no): both copies go from hub@, Reply-To the sender, and the detail says so', async () => {
+  const s = await t9();
+  s.tokenReply = (claims) => (claims.sub === SHIMA_AT && /gmail/.test(claims.scope) ? { status: 401, json: { error: 'unauthorized_client' } } : null);
+  await s.booked();
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  assert.equal(s.step('welcome').detail, 'Sent the welcome email to nia@example.com and nia.okafor@welfareavenue.com from hub@welfareavenue.com (the sender\'s mailbox, shima.butera@welfareavenue.com, could not send); copied to 2 staff.');
+  const [hire, staff, ...more] = s.sends();
+  assert.equal(more.length, 0);
+  for (const m of [hire, staff]) {
+    assert.equal(m.auth, asMailbox(HUB_AT));
+    assert.equal(m.from, 'From: Welfare Avenue Hub <hub@welfareavenue.com>');
+    assert.ok(m.raw.includes('\r\nReply-To: shima.butera@welfareavenue.com\r\n'), 'replies still go to the sender');
+  }
+  assert.equal(hire.bodies[0], nia('en', FIRST_PW), 'the same email, signed by the sender');
+  assert.equal(staff.bodies[0], nia('en', NIA_NOTE.en));
+
+  const g = await t9();
+  g.gmailReply = (e) => (e.headers.authorization === asMailbox(SHIMA_AT) ? { status: 403, json: { error: { message: 'Delegation denied for shima.butera@welfareavenue.com' } } } : okMail);
+  await g.booked();
+  assert.equal(g.step('welcome').status, 'done', g.step('welcome').detail);
+  assert.match(g.step('welcome').detail, /from hub@welfareavenue\.com \(the sender's mailbox, shima\.butera@welfareavenue\.com, could not send\); copied to 2 staff\.$/);
+  const went = g.sends().filter((m) => m.auth === asMailbox(HUB_AT));
+  assert.deepEqual(went.map((m) => m.to), ['nia@example.com, ' + NIA_WA, 'ruth.owen@welfareavenue.com, kai.moreau@welfareavenue.com']);
+  assert.equal(g.sends().filter((m) => m.auth === asMailbox(SHIMA_AT)).length, 1, 'Shima\'s mailbox tried once, for the hire\'s copy');
+  g.noPw();
+});
+
+test('wave278 welcome: both sends under the one welcome_sent_at claim; the hire\'s copy failing gives it back and copies nobody; a staff copy failing is a warning', async () => {
+  const s = await t9();
+  const claimAt = [];
+  s.gmailReply = (e) => { if (/Welcome to Welfare Avenue/.test(mail(e).subject)) claimAt.push(s.flow().welcome_sent_at); return okMail; };
+  await s.booked();
+  assert.deepEqual(claimAt, [NOW_ISO, NOW_ISO], 'claimed before the hire\'s copy, still held for the staff copy');
+  s.gmailReply = null;
+  Object.assign(s.step('welcome'), { status: 'failed', detail: 'cut off' });
+  const again = await s.post({ action: 'retry', flow_id: 21, step: 'welcome' });
+  assert.equal(again.status, 200, JSON.stringify(again.body));
+  assert.match(s.step('welcome').detail, /already sent/);
+  assert.equal(s.sends().length, 2, 'neither copy goes again');
+
+  const f = await t9();
+  f.gmailReply = (e) => (/Welcome to Welfare Avenue/.test(mail(e).subject) ? { status: 400, json: { error: { message: 'Invalid To header' } } } : okMail);
+  await f.booked();
+  assert.equal(f.step('welcome').status, 'failed');
+  assert.match(f.step('welcome').detail, /Invalid To header/);
+  assert.equal(f.flow().welcome_sent_at ?? null, null, 'given back, so Retry sends it');
+  assert.deepEqual(f.sends().map((m) => [m.to, m.auth]), [['nia@example.com, ' + NIA_WA, asMailbox(SHIMA_AT)], ['nia@example.com, ' + NIA_WA, asMailbox(HUB_AT)]], 'tried from Shima, then from hub@; nobody copied');
+  f.noPw();
+
+  const w = await t9();
+  w.gmailReply = (e) => (/ruth\.owen/.test(mail(e).to) ? { status: 500, json: { error: { message: 'Backend Error' } } } : okMail);
+  await w.booked();
+  assert.equal(w.step('welcome').status, 'done', w.step('welcome').detail);
+  assert.match(w.step('welcome').detail, /^Sent the welcome email to nia@example\.com and nia\.okafor@welfareavenue\.com from shima\.butera@welfareavenue\.com; the staff copy to ruth\.owen@welfareavenue\.com, kai\.moreau@welfareavenue\.com did not go: .*Backend Error/);
+  assert.ok(noDash(w.step('welcome').detail));
+  assert.ok(!w.step('welcome').detail.includes(FIRST_PW));
+  assert.equal(w.flow().welcome_sent_at, NOW_ISO, 'the hire has it: the claim stays');
+});
+
+test('wave278 welcome: nobody to copy sends one email; mail test mode sends both to the test inboxes, naming the real addresses; a practice flow sends nothing', async () => {
+  const one = await t9({ cand: { owner: null }, fl: { welcome_cc: [] } });
+  await one.booked();
+  assert.equal(one.sends().length, 1);
+  assert.equal(one.step('welcome').detail, 'Sent the welcome email to nia@example.com and nia.okafor@welfareavenue.com from shima.butera@welfareavenue.com; no staff copy.');
+
+  const t = await t9({ config: { mail_mode: 'test' } });
+  await t.booked();
+  const [hire, staff] = t.sends();
+  assert.equal(hire.to, 'tester@welfareavenue.com');
+  assert.equal(hire.subject, '[TEST, for nia@example.com, nia.okafor@welfareavenue.com] Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(staff.to, 'tester@welfareavenue.com');
+  assert.equal(staff.subject, '[TEST, for ruth.owen@welfareavenue.com, kai.moreau@welfareavenue.com] Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(count(hire.bodies[0], FIRST_PW), 1);
+  assert.ok(!staff.bodies.join('').includes(FIRST_PW));
+  assert.match(t.step('welcome').detail, /; copied to 2 staff, and email is in test mode, so it went only to tester@welfareavenue\.com\.$/);
+
+  const p = await t9({ cand: { practice: true } });
+  p.pwReads = 0;
+  await p.booked();
+  assert.equal(p.step('welcome').status, 'done');
+  assert.match(p.step('welcome').detail, /practice/i);
+  assert.equal(p.rig.fetchLog.length, 0, 'nothing fetched, no email');
+  assert.equal(p.pwReads, 0);
+  assert.equal(p.flow().welcome_sent_at ?? null, null);
+});
+
+test('wave278 welcome: a text HR saved before this release (today\'s and the older slot words, the old steps) still fills in, and empty lines still go', async () => {
+  const s = await setup();
+  const r = s.rig.mod.renderWelcome;
+  const f = flow({ status: 'running', call_at: P_CALL, one_on_one_at: P_ONE, wa_email: NIA_WA, call_event_id: 'onboard21call', one_on_one_event_id: 'onboard21oneonone', welcome_text: [
+    'Dear Nia,', 'Your first day is [first day: fills in at Start], and we can\'t wait.', 'Next Steps:',
+    '1. Your meetings:', '   - Your onboarding call: [call date and time: fills in when the times are booked or at Start]. Google Meet: [call Meet link]',
+    '   - A 1-on-1 with your manager, [manager: fills in at Start]: [1-on-1 date and time: fills in at Start]. Google Meet: [1-on-1 Meet link]',
+    '   - Your in-person group onboarding session on [group session date: fills in when the times are booked or at Start, or this line is left out].',
+    '2. Sign in to your Welfare Avenue Google account at mail.google.com:', '   Email: [new address]', '   First password: [first password]',
+    '   Google will ask you to change it the first time you sign in.', '   This video shows you how: https://video.example/old',
+    '3. Join our Canva team: [Canva link: fills in at Start, or this line is left out]',
+    '4. Before your onboarding call, set up your computer on your own, step by step:',
+    '   You can tick each step off on this page, so your manager can see where you are: [setup page link]', '   1. Add your Welfare Avenue account to Chrome.',
+    'Hana Rossi'].join('\n') }), c = candidate({ name: 'Nia Okafor' });
+  const facts = { manager: 'Sam Lee', jdUrl: null, video: null, slack: 'https://welfareavenue.slack.com', hrName: 'Hana Rossi', meet: { call: MEET_CALL, one: MEET_ONE }, setupLink: SETUP_LINK, login: true };
+  assert.equal(r(f, c, facts).text, [
+    'Dear Nia,', 'Your first day is Monday, October 26, 2026, and we can\'t wait.', 'Next Steps:',
+    '1. Your meetings:', '   - Your onboarding call: Monday, October 26, 2026 at 10:00 a.m. Google Meet: ' + MEET_CALL,
+    '   - A 1-on-1 with your manager, Sam Lee: Monday, October 26, 2026 at 11:30 a.m. Google Meet: ' + MEET_ONE,
+    '2. Sign in to your Welfare Avenue Google account at mail.google.com:', '   Email: ' + NIA_WA, '   First password: [first password]',
+    '   Google will ask you to change it the first time you sign in.', '   This video shows you how: https://video.example/old',
+    '3. Before your onboarding call, set up your computer on your own, step by step:',
+    '   You can tick each step off on this page, so your manager can see where you are: ' + SETUP_LINK, '   1. Add your Welfare Avenue account to Chrome.',
+    'Hana Rossi'].join('\n'));
+  const later = r(f, c, { ...facts, login: false }).text;
+  assert.match(later, /\n2\. HR will send your login details separately\.\n3\. Before your onboarding call/, 'the old video line is still one of the login lines');
 });

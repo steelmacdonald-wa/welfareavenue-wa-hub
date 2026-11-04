@@ -1,7 +1,18 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
 // v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on;
-// v8, 04/11/26, wave278 Task 3: the access steps, the leader decision, Re-check and the welcome copies)
+// v8, 04/11/26, wave278 Task 3: the access steps, the leader decision, Re-check and the welcome copies; v9, 04/11/26, wave278 Task 4: the welcome email
+// rewritten and sent as the offer's sender)
+// wave278 (v9), the welcome email: the companion note's text (claude/04-11-26, section 1), EN and FR: the two meetings, the login (its video on its own
+//   line), the personal Hub link (the steps live on that page now, so none are pasted), the team's weekly meeting (setup_ticks.weekly_meeting) and the
+//   documents (the job description, the signed offer letter hub_candidates.offer_doc_url, one line per drive in setup_ticks.drives_added, else "HR will
+//   share your Drives"). No Slack, Canva, DocuSign or in-person lines. Saved texts keep their slot words (todaysWords, OLD_SLOTS), so they still fill.
+//   welcomeSender(c, f): offer_sent_by when it is an active Welfare Avenue roster address, else the candidate's owner (a roster name or email, active),
+//   else hub@ (fallback; then the person who started it signs and gets the replies, as before). The hire's copy goes to the personal address and, once
+//   the google step is done, the new one, from the sender's own mailbox (gmail.send as them, domain-wide delegation), Reply-To the sender; refused (no
+//   token, or Gmail says no): from hub@, and the detail says the sender's mailbox could not send. Then the staff copy, from the same mailbox, to the owner
+//   and welcome_cc (active roster only, once each, never the hire's addresses), the password line reading "(the password is in <first>'s copy)". Both
+//   under the one welcome_sent_at claim: a failed hire's copy gives it back; a failed staff copy is a warning in the detail.
 // wave278 (v8): four steps after the existing ones, each with its app_config switch (wa278a, on) and simulated for a practice flow; the section "wave278":
 //   groups (at Accept, needs google): onboard_groups' all, the roster department's and, for a leader, leaders; Directory members.insert as Steel
 //               (admin.directory.group.member). Already a member counts; a group that does not exist is reported ("no Toronto group yet") and the step
@@ -139,7 +150,7 @@
 //               wa275_tick_set(flow, 'propose_hr_reminded_at')); neither once times were proposed (after the hire's no the manager answers from
 //               the card). With no active manager with an email, HR is told once (onboard_remind, onboard-no-manager-<flow>, setup_ticks
 //               no_manager_told_at) that the card needs one. None of the wave271 grid messages go to such a flow. wave271 flows keep their path.
-// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), SETUP_STEPS (the rundown, onboard-link's SETUP word for word),
+// Exports: STEPS, suggestAddress(name), nextSteps(steps), renderWelcome(flow, candidate, facts), welcomeSender(candidate, flow) (wave278),
 //          READ_BACK_WAITS (the google step's waits before it reads a new account back again).
 // The steps are the table STEPS, {key, label, needs, waitsFor?, setting?, ticks?, task?, run?, after?}, in order. A later task gives an entry a run and
 // the runner stays as it is. An entry with no run, or held back by its setting, ends as hr_task with its task sentence. run(ctx) returns the
@@ -684,15 +695,19 @@ async function reach(real: string[]): Promise<{ live: boolean; to: string[]; pre
   return { live: false, to, prefix: '[TEST, for ' + real.join(', ') + '] ' };
 }
 const noBreaks = (s: string) => String(s).replace(/[\r\n]+/g, ' ');
-async function deliver(m: { practice: boolean; to: string; subject: string; text: string; html: string; replyTo?: string }): Promise<{ mode: string; to: string[] }> {
+/* wave278 Task 4: to may be several people (one message to all of them), and from a staff member's own mailbox (gmail.send as them, by delegation) */
+async function deliver(m: { practice: boolean; to: string | string[]; subject: string; text: string; html: string; replyTo?: string; from?: { email: string; name: string } | null }): Promise<{ mode: string; to: string[] }> {
   if (m.practice) return { mode: 'practice', to: [] };
-  const r = await reach([noBreaks(m.to)]);
-  const t = await token(CAL, SCOPE_GMAIL);
-  if (!t) throw new Error('The email was not sent: Google refused the Hub permission to send from ' + CAL + '. Tell Steel.');
+  const r = await reach((Array.isArray(m.to) ? m.to : [m.to]).map(noBreaks));
+  const box = m.from ? noBreaks(m.from.email) : CAL;
+  const t = await token(box, SCOPE_GMAIL);
+  if (!t) throw new Error('The email was not sent: Google refused the Hub permission to send from ' + box + '. Tell Steel.');
   const boundary = 'wa' + Date.now().toString(36);
   const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+  const name = m.from ? noBreaks(m.from.name || '').replace(/["\\<>]/g, '').trim() : '';
+  const shown = !name ? '' : /^[\x20-\x7E]+$/.test(name) ? '"' + name + '" ' : '=?UTF-8?B?' + b64(name) + '?= ';
   const mime = [
-    'From: Welfare Avenue Hub <' + CAL + '>',
+    'From: ' + (m.from ? shown + '<' + box + '>' : 'Welfare Avenue Hub <' + CAL + '>'),
     'To: ' + r.to.join(', '),
     ...(m.replyTo ? ['Reply-To: ' + noBreaks(m.replyTo)] : []),
     'Subject: =?UTF-8?B?' + b64(noBreaks(r.prefix + m.subject)) + '?=',
@@ -934,20 +949,29 @@ async function preview(b: Row, by: string): Promise<Response> {
    later change of time, manager, address or Canva link always shows. HR's edits are saved as typed, brackets and all (welcome_subject, welcome_text, only
    the part they changed); the Hub's own text is never saved, so it follows the template. Before Start or booking (facts.draft) the brackets stay as they are.
    A line whose value is empty goes, and the steps renumber. wave275 Task 4: the Meet links, the login paragraph (or, when the account step is not
-   done, "HR will send your login details separately" in its place) and the setup rundown, with a link to its page for a wave275 hire. */
+   done, "HR will send your login details separately" in its place) and the setup rundown, with a link to its page for a wave275 hire. wave278 Task 4:
+   the rundown is no longer pasted: the email links to the setup page (onboard-link SETUP), and a hire with no page (wave271) has no such step. */
 /* whole-branch fix: the places say "when the times are booked or at Start", true on both paths (the new path fills them at booking, wave271's at Start).
    OLD_SLOTS are the words before that: a text HR saved with them (wave271 is live) is read with today's words, so it still fills in. */
-const BOOKED_OR_START = { en: 'fills in when the times are booked or at Start', fr: 'rempli à la réservation des rencontres ou au démarrage', frs: 'remplies à la réservation des rencontres ou au démarrage', fre: 'remplie à la réservation des rencontres ou au démarrage' };
+/* wave278 Task 4: the places of the rewritten email are added (video, weekly, jd, letter, drives); every earlier word is kept as it was, so a text HR saved
+   before this release (wave275's words, or wave271's through OLD_SLOTS) still fills in. group, canva and address are no longer in the Hub's own text. */
+const BOOKED_OR_START = { en: 'fills in when the times are booked or at Start', fr: 'rempli à la réservation des rencontres ou au démarrage', frs: 'remplies à la réservation des rencontres ou au démarrage', fre: 'remplie à la réservation des rencontres ou au démarrage', frp: 'remplis à la réservation des rencontres ou au démarrage' };
 const WELCOME_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
   en: {
     day: '[first day: ' + BOOKED_OR_START.en + ']', call: '[call date and time: ' + BOOKED_OR_START.en + ']', one: '[1-on-1 date and time: ' + BOOKED_OR_START.en + ']', manager: '[manager: ' + BOOKED_OR_START.en + ']',
     group: '[group session date: ' + BOOKED_OR_START.en + ', or this line is left out]', address: '[Welfare Avenue address: ' + BOOKED_OR_START.en + ']', canva: '[Canva link: ' + BOOKED_OR_START.en + ', or this line is left out]',
     newaddr: '[new address]', password: '[first password]', callmeet: '[call Meet link]', onemeet: '[1-on-1 Meet link]', setup: '[setup page link]',
+    video: '[Chrome setup video: ' + BOOKED_OR_START.en + ', or this line is left out]', weekly: '[weekly meeting: ' + BOOKED_OR_START.en + ', or this line is left out]',
+    jd: '[job description link: ' + BOOKED_OR_START.en + ', or this line is left out]', letter: '[offer letter link: ' + BOOKED_OR_START.en + ', or this line is left out]',
+    drives: '[your Drives: ' + BOOKED_OR_START.en + ']',
   },
   fr: {
     day: '[premier jour : ' + BOOKED_OR_START.fr + ']', call: '[date et heure de l\'appel : ' + BOOKED_OR_START.frs + ']', one: '[date et heure de la rencontre : ' + BOOKED_OR_START.frs + ']', manager: '[gestionnaire : ' + BOOKED_OR_START.fr + ']',
     group: '[date de la séance de groupe : ' + BOOKED_OR_START.fre + ', ou cette ligne est retirée]', address: '[adresse Welfare Avenue : ' + BOOKED_OR_START.fre + ']', canva: '[lien Canva : ' + BOOKED_OR_START.fr + ', ou cette ligne est retirée]',
     newaddr: '[nouvelle adresse]', password: '[premier mot de passe]', callmeet: '[lien Meet de l\'appel]', onemeet: '[lien Meet de la rencontre]', setup: '[lien de la page de préparation]',
+    video: '[vidéo de configuration de Chrome : ' + BOOKED_OR_START.fre + ', ou cette ligne est retirée]', weekly: '[rencontre hebdomadaire : ' + BOOKED_OR_START.fre + ', ou cette ligne est retirée]',
+    jd: '[lien de la description de poste : ' + BOOKED_OR_START.fr + ', ou cette ligne est retirée]', letter: '[lien de la lettre d\'offre : ' + BOOKED_OR_START.fr + ', ou cette ligne est retirée]',
+    drives: '[vos Drives : ' + BOOKED_OR_START.frp + ']',
   },
 };
 const OLD_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
@@ -964,35 +988,20 @@ const OLD_SLOTS: Record<'en' | 'fr', Record<string, string>> = {
 const todaysWords = (text: string) => (['en', 'fr'] as const).reduce((t, l) => Object.keys(OLD_SLOTS[l]).reduce((u, k) => u.split(OLD_SLOTS[l][k]).join(WELCOME_SLOTS[l][k]), t), text);
 const PASSWORD_MARKS = [WELCOME_SLOTS.en.password, WELCOME_SLOTS.fr.password];   // either works in either language: only sendWelcome fills them
 const LOGIN_LATER = { en: 'HR will send your login details separately.', fr: 'Les RH vous enverront vos informations de connexion séparément.' };
-const REMOVABLE = ['group', 'canva', 'setup'];   // an empty value takes its line out
-/* the setup rundown of the /o/ page (onboard-link SETUP), word for word: functions are single files, so this is its copy for the email. Change both together. */
-export const SETUP_STEPS: Array<{ key: string; title: { en: string; fr: string }; body: { en: string; fr: string } }> = [
-  { key: 'profile', title: { en: 'Add your Welfare Avenue account to Chrome', fr: 'Ajoutez votre compte Welfare Avenue à Chrome' },
-    body: { en: 'In Chrome, add a new profile, sign in with your Welfare Avenue address and turn on sync. Keep your Welfare Avenue work in that profile from now on.', fr: 'Dans Chrome, ajoutez un nouveau profil, connectez-vous avec votre adresse Welfare Avenue et activez la synchronisation. Gardez votre travail pour Welfare Avenue dans ce profil à partir de maintenant.' } },
-  { key: 'bookmarks', title: { en: 'Bookmark Gmail and Calendar', fr: 'Ajoutez Gmail et Agenda à vos favoris' },
-    body: { en: 'In that profile, open Gmail (mail.google.com) and Google Calendar (calendar.google.com), and bookmark both.', fr: 'Dans ce profil, ouvrez Gmail (mail.google.com) et Google Agenda (calendar.google.com), puis ajoutez-les tous les deux à vos favoris.' } },
-  { key: 'hub', title: { en: 'Sign in to the Hub', fr: 'Connectez-vous au Hub' },
-    body: { en: 'Go to hub.welfareavenue.com and press Sign in with Google, with your Welfare Avenue account.', fr: 'Allez sur hub.welfareavenue.com et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.' } },
-  { key: 'slack', title: { en: 'Join Slack', fr: 'Joignez-vous à Slack' },
-    body: { en: 'Join the Welfare Avenue Slack with your Welfare Avenue address (the link is in your welcome email), then accept the invitation to your onboarding channel.', fr: 'Joignez-vous au Slack de Welfare Avenue avec votre adresse Welfare Avenue (le lien est dans votre courriel de bienvenue), puis acceptez l\'invitation à votre canal d\'accueil.' } },
-  { key: 'academy', title: { en: 'Open the Avenue Academy and your plan', fr: 'Ouvrez l\'Avenue Academy et votre plan' },
-    body: { en: 'In the Hub, open the Avenue Academy and look through your onboarding plan, so you know what your first weeks hold.', fr: 'Dans le Hub, ouvrez l\'Avenue Academy et parcourez votre plan d\'accueil, pour savoir ce qui vous attend les premières semaines.' } },
-  { key: 'loom', title: { en: 'Accept the Loom invitation', fr: 'Acceptez l\'invitation Loom' },
-    body: { en: 'When the Loom invitation reaches your Welfare Avenue inbox, accept it.', fr: 'Quand l\'invitation Loom arrive dans votre boîte Welfare Avenue, acceptez-la.' } },
-  { key: 'canva', title: { en: 'Join Canva', fr: 'Joignez-vous à Canva' },
-    body: { en: 'If your welcome email has a Canva link, use it to join the Welfare Avenue team on Canva.', fr: 'Si votre courriel de bienvenue contient un lien Canva, utilisez-le pour vous joindre à l\'équipe Welfare Avenue sur Canva.' } },
-  { key: 'drives', title: { en: 'Find your Drives and Google Groups', fr: 'Repérez vos Drives et vos groupes Google' },
-    body: { en: 'In Google Drive, look under Shared drives for the team drives you have been added to, and check which Google Groups you are in. Nothing to do with them yet.', fr: 'Dans Google Drive, regardez sous Drives partagés les dossiers d\'équipe auxquels vous avez été ajouté, et vérifiez de quels groupes Google vous faites partie. Rien à faire pour l\'instant.' } },
-  { key: 'weekly', title: { en: 'Find your weekly meeting', fr: 'Repérez votre rencontre hebdomadaire' },
-    body: { en: 'Look in your Calendar for your team\'s weekly meeting and accept the invitation.', fr: 'Cherchez dans votre Agenda la rencontre hebdomadaire de votre équipe et acceptez l\'invitation.' } },
-];
-const rundownLines = (lang: 'en' | 'fr') => SETUP_STEPS.map((x, i) => '   ' + (i + 1) + '. ' + x.title[lang] + '. ' + x.body[lang]).join('\n');
+const REMOVABLE = ['group', 'canva', 'setup', 'video', 'weekly', 'jd', 'letter'];   // an empty value takes its line out (a numbered step, with the lines under it)
+/* wave278 Task 4: the documents' Drives line, one line per drive; none recorded: HR shares them */
+const DRIVES_PAGE = 'https://drive.google.com/drive/shared-drives';
+const DRIVES_ALL = { en: 'All your shared drives: ', fr: 'Tous vos Drives partagés : ' };
+const DRIVES_LATER = { en: 'HR will share your Drives.', fr: 'Les RH partageront vos Drives avec vous.' };
+const INVITES_SENTENCE = { en: ' Both invites are in your Welfare Avenue calendar.', fr: ' Les deux invitations sont dans votre calendrier Welfare Avenue.' };
+const PASSWORD_NOTE = { en: (first: string) => '(the password is in ' + first + '\'s copy)', fr: (first: string) => '(le mot de passe est dans la copie de ' + first + ')' };
 /* the login is not the Hub's to give: the login lines become the sentence that HR sends the details separately. The login lines are the template's own
    (its heading, Email, the placeholder, the change-it sentence and the video) and any line with the placeholder; every other line HR wrote under that
    step stays. The template's own heading (or a numbered line holding the placeholder) becomes the sentence, keeping its number; a heading HR rewrote stays,
    with the sentence in the placeholder's place. A placeholder outside a numbered step: that line alone. */
 const LOGIN_HEADS = ['Sign in to your Welfare Avenue Google account at mail.google.com:', 'Connectez-vous à votre compte Google Welfare Avenue sur mail.google.com :'];
-const LOGIN_OWN = [/\[new address\]|\[nouvelle adresse\]/, /^\s*Google will ask you to change it the first time you sign in\.\s*$/, /^\s*Google vous demandera de le changer lors de votre première connexion\.\s*$/, /^\s*This video shows you how: /, /^\s*Pour vous guider, regardez cette vidéo : /];
+const LOGIN_OWN = [/\[new address\]|\[nouvelle adresse\]/, /^\s*Google will ask you to change it the first time you sign in\.\s*$/, /^\s*Google vous demandera de le changer lors de votre première connexion\.\s*$/,
+  /^\s*This video shows you how( to set up your Chrome profile)?: /, /^\s*Pour vous guider, regardez cette vidéo : /, /^\s*Cette vidéo vous montre comment configurer votre profil Chrome : /];
 const hasPassword = (l: string) => PASSWORD_MARKS.some((p) => l.includes(p));
 function loginLater(text: string, lang: 'en' | 'fr'): string {
   const lines = text.split('\n'), later = LOGIN_LATER[lang];
@@ -1017,7 +1026,12 @@ function loginLater(text: string, lang: 'en' | 'fr'): string {
 /* the role in French, as the /o/ page names it (build/o/index.html ROLE_FR; functions are single files) */
 const ROLE_FR: Record<string, string> = { 'Operations Manager': 'Gestionnaire des opérations', 'HR Technician': 'Technicien·ne RH', 'Event Coordinator': 'Coordonnateur·rice d\'événements' };
 export type WelcomeFacts = {
-  draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; slack: string; hrName: string;
+  draft?: boolean; manager: string | null; jdUrl: string | null; video: string | null; hrName: string;   // hrName: who signs (the sender; hub@: who started it)
+  letter?: string | null;                             // wave278: the signed offer letter (hub_candidates.offer_doc_url)
+  drives?: string[];                                  // wave278: the drives the Hub shared at Accept (setup_ticks.drives_added); none: HR shares them
+  weekly?: { summary: string; next_at: string | null } | null;   // wave278: the team's weekly meeting they were added to (setup_ticks.weekly_meeting)
+  sender?: { email: string; fallback: boolean };      // wave278: welcomeSender
+  accountMade?: boolean;                              // wave278: the google step is done, so the new address can be written to
   login?: boolean;                                    // wave275: the account step is done (the login paragraph stays, [first password] and all); else HR sends the details
   meet?: { call: string | null; one: string | null }; // the Meet links of the two invites, when known
   noInvites?: boolean;                                // the invites step was skipped: no invite comes from the Hub, so the email names no Meet link
@@ -1033,10 +1047,14 @@ function dayWords(at: string, lang: 'en' | 'fr'): string {
 }
 const atWords = (at: string, lang: 'en' | 'fr') => lang === 'en' ? whenText(at, 'en')
   : dayWords(at, 'fr') + ' à ' + new Date(at).toLocaleTimeString('fr-CA', { hour: 'numeric', minute: '2-digit', timeZone: TZ });
-/* puts the flow's values in the marked places. Empty group session, Canva link or rundown page: that line goes, and the numbered steps count again. No
-   manager: "your manager" once. The account step not done: the login step says HR sends the details. [first password] is never filled here. */
+/* puts the flow's values in the marked places. An empty removable place (group session, Canva link, setup page, video, weekly meeting, job description,
+   offer letter): that line goes (a numbered step goes with the lines under it), and the numbered steps count again. The Drives place: one line per
+   drive and the shared drives page, or "HR will share your Drives". No manager: "your manager" once. The account step not done: the login step says HR
+   sends the details. [first password] is never filled here. */
 function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string {
   const lang = langOf(c), fr = lang === 'fr', slots = WELCOME_SLOTS[lang], yours = fr ? 'votre gestionnaire' : 'your manager';
+  const weekly = facts.weekly && String(facts.weekly.summary || '').trim() ? noBreaks(facts.weekly.summary).trim() + (facts.weekly.next_at ? (fr ? ', la prochaine le ' : ', next on ') + atWords(facts.weekly.next_at, lang) : '') : null;
+  const drives = (facts.drives || []).map((d) => noBreaks(String(d)).trim()).filter(Boolean);
   const address = f.wa_email || (fr ? 'nous vous la confirmerons bientôt' : 'we\'ll confirm it soon');
   const meet = (link: string | null | undefined, booked: boolean) => link || (fr ? (booked ? 'le lien est dans votre invitation' : 'le lien viendra avec l\'invitation') : (booked ? 'the link is in your calendar invite' : 'the link will come with the invite'));
   const values: Record<string, string | null> = {
@@ -1050,59 +1068,90 @@ function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string 
     callmeet: meet(facts.meet?.call, !!f.call_event_id), onemeet: meet(facts.meet?.one, !!f.one_on_one_event_id),
     setup: facts.setupLink || null,
     password: null,
+    video: facts.video || null, weekly, jd: facts.jdUrl || null, letter: facts.letter || null,
   };
   if (!facts.login) text = loginLater(text, lang);
-  if (facts.noInvites) {   // no invite will come from the Hub: the Meet part of each meeting line goes, the rest of the line stays
+  if (facts.noInvites) {   // no invite will come from the Hub: the Meet part of each meeting line goes, the rest of the line stays, and so does the sentence about the invites
     for (const k of ['callmeet', 'onemeet']) {
       for (const label of [WELCOME_SLOTS.en[k], WELCOME_SLOTS.fr[k]]) text = text.replace(new RegExp('[ \\t]*Google Meet ?: ' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
       values[k] = '';   // anywhere else HR put it
     }
+    text = text.split(INVITES_SENTENCE.en).join('').split(INVITES_SENTENCE.fr).join('');
   }
-  let removed = false;
+  let removed = false, under = false;
   const lines: string[] = [];
   for (let line of text.split('\n')) {
-    if (REMOVABLE.some((k) => !values[k] && line.includes(slots[k]))) { removed = true; continue; }
+    if (under && /^\s+\S/.test(line)) continue;   // a line under a numbered step that went
+    under = false;
+    if (REMOVABLE.some((k) => !values[k] && line.includes(slots[k]))) { removed = true; under = /^\d+\. /.test(line); continue; }
+    if (line.includes(slots.drives)) {   // one line per drive, then the page that lists them; none: HR shares them
+      const lead = /^\s*(?:- )?/.exec(line)?.[0] || '';
+      if (!drives.length) lines.push(lead + DRIVES_LATER[lang]);
+      else lines.push(...drives.map((d) => line.split(slots.drives).join(d)), lead + DRIVES_ALL[lang] + DRIVES_PAGE);
+      continue;
+    }
     if (!facts.manager) line = line.split(yours + ', ' + slots.manager).join(yours);   // never "your manager, your manager"
     const filled = Object.keys(slots).reduce((l, k) => (values[k] == null || !l.includes(slots[k]) ? l : l.split(slots[k]).join(values[k]!)), line);
     lines.push(filled === line ? line : filled.replace(/([ap]\.m\.)\./g, '$1'));   // a time ending in "p.m." before the template's full stop: one stop, not two
   }
   if (!removed) return lines.join('\n');
   let n = 0;
-  return lines.map((l) => (/^\d+\. /.test(l) ? String(++n) + l.slice(l.indexOf('.')) : l)).join('\n');
+  return lines.filter((l, i) => !(i > 0 && !l.trim() && !lines[i - 1].trim()))   // a step that went leaves one blank line, not two
+    .map((l) => (/^\d+\. /.test(l) ? String(++n) + l.slice(l.indexOf('.')) : l)).join('\n');
 }
-/* the Hub's own text, with its marked places */
+/* the Hub's own text, with its marked places. wave278 Task 4: the companion note's text (claude/04-11-26, section 1), line for line in French; the
+   opening, the closing, the sign-off and the subject are kept word for word. */
 function welcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: string } {
   const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name);
   const role = String(c.role || '').trim(), roleFr = ROLE_FR[role] || role;
-  const steps: string[] = fr ? [
-    '1. Vos rencontres :\n   - Votre appel d\'accueil : ' + s.call + '. L\'invitation est dans votre calendrier. Google Meet : ' + s.callmeet + '\n   - Une rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '. Google Meet : ' + s.onemeet + '\n   - Votre séance d\'accueil de groupe en personne avec ' + s.manager + ', le ' + s.group + '. Si vous ne pouvez pas y être, dites-le-nous. Cette étape est essentielle.',
-    '2. Connectez-vous à votre compte Google Welfare Avenue sur mail.google.com :\n   Adresse courriel : ' + s.newaddr + '\n   Premier mot de passe : ' + s.password + '\n   Google vous demandera de le changer lors de votre première connexion.' + (facts.video ? '\n   Pour vous guider, regardez cette vidéo : ' + facts.video : ''),
-    '3. Joignez-vous à notre espace Slack avec votre nouvelle adresse courriel Welfare Avenue : ' + facts.slack,
-    '4. Joignez-vous à notre équipe Canva : ' + s.canva,
-    '5. Signez le contrat. Il vous est envoyé par DocuSign à votre adresse courriel personnelle.',
-    '6. Lisez votre description de poste et préparez les questions que vous voulez aborder avec votre direction' + (facts.jdUrl ? ' : ' + facts.jdUrl : '.'),
-    '7. Avant votre appel d\'accueil, préparez votre ordinateur vous-même, étape par étape :\n   Vous pouvez cocher chaque étape sur cette page, pour que votre gestionnaire sache où vous en êtes : ' + s.setup + '\n' + rundownLines('fr'),
-  ] : [
-    '1. Your meetings:\n   - Your onboarding call: ' + s.call + '. The invite is in your calendar. Google Meet: ' + s.callmeet + '\n   - A 1-on-1 introductory meeting with your manager, ' + s.manager + ': ' + s.one + '. Google Meet: ' + s.onemeet + '\n   - Your in-person group onboarding session with ' + s.manager + ' on ' + s.group + '. If you can\'t make it, let us know. This step is crucial.',
-    '2. Sign in to your Welfare Avenue Google account at mail.google.com:\n   Email: ' + s.newaddr + '\n   First password: ' + s.password + '\n   Google will ask you to change it the first time you sign in.' + (facts.video ? '\n   This video shows you how: ' + facts.video : ''),
-    '3. Join your Slack workspace with your new Welfare Avenue email: ' + facts.slack,
-    '4. Join our Canva team: ' + s.canva,
-    '5. Sign the Contract. Sent via DocuSign to your personal email.',
-    '6. Review your job description and prepare questions to ask about it with your director' + (facts.jdUrl ? ': ' + facts.jdUrl : '.'),
-    '7. Before your onboarding call, set up your computer on your own, step by step:\n   You can tick each step off on this page, so your manager can see where you are: ' + s.setup + '\n' + rundownLines('en'),
-  ];
   const text = (fr ? [
-    'Bonjour ' + first + ',', '', 'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!',
-    roleFr ? 'Nous sommes ravis que vous ayez accepté le poste de ' + roleFr + ' au sein de notre organisme.' : 'Nous sommes ravis que vous ayez accepté notre offre.',
-    'Votre premier jour est le ' + s.day + ', et nous avons hâte de vous accueillir. Pour bien commencer, voici les prochaines étapes :', '', 'Prochaines étapes :', ...steps, '',
-    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre intégration se déroule en douceur, dans un climat accueillant.',
-    'Au plaisir de voir tout le beau travail que vous accomplirez avec nous!', facts.hrName,
+    'Bonjour ' + first + ',', '',
+    'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!', '',
+    roleFr ? 'Nous sommes ravis que vous ayez accepté le poste de ' + roleFr + ' au sein de notre organisme.' : 'Nous sommes ravis que vous ayez accepté notre offre.', '',
+    'Votre premier jour est le ' + s.day + ', et nous avons hâte de vous accueillir. Pour bien commencer, voici les prochaines étapes :', '',
+    'Prochaines étapes :', '',
+    '1. Vos deux rencontres.' + INVITES_SENTENCE.fr,
+    '   - Votre appel d\'accueil : ' + s.call + '. Google Meet : ' + s.callmeet,
+    '   - Votre rencontre individuelle de présentation avec votre gestionnaire, ' + s.manager + ' : ' + s.one + '. Google Meet : ' + s.onemeet, '',
+    '2. ' + LOGIN_HEADS[1],
+    '   Adresse courriel : ' + s.newaddr,
+    '   Premier mot de passe : ' + s.password,
+    '   Google vous demandera de le changer lors de votre première connexion.',
+    '   Cette vidéo vous montre comment configurer votre profil Chrome : ' + s.video, '',
+    '3. Ouvrez votre lien personnel du Hub dans la fenêtre de votre nouveau profil Chrome : ' + s.setup,
+    '   Le Hub vous guide pour la suite, une étape à la fois : Slack, Canva, vos Drives et vos groupes Google, l\'Avenue Academy, votre rencontre hebdomadaire et le Hub sur votre téléphone. Cochez chaque étape au fur et à mesure, pour que votre gestionnaire sache où vous en êtes.',
+    '   La rencontre hebdomadaire de votre équipe : ' + s.weekly + '. Trouvez-la dans votre calendrier Welfare Avenue et acceptez-la.', '',
+    '4. Vos documents :',
+    '   - Votre description de poste : ' + s.jd + '. Prenez-en connaissance avant l\'appel d\'accueil.',
+    '   - Votre lettre d\'offre, signée quand vous avez accepté : ' + s.letter,
+    '   - Vos Drives : ' + s.drives, '',
+    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre intégration se déroule en douceur, dans un climat accueillant.', '',
+    'Au plaisir de voir tout le beau travail que vous accomplirez avec nous!', '',
+    facts.hrName,
   ] : [
-    'Dear ' + first + ',', '', 'Congratulations and welcome to the team at Welfare Avenue!',
-    role ? 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.' : 'We\'re excited you\'ve accepted our offer.',
-    'Your first day is ' + s.day + ', and we can\'t wait to have you on board. To get started, please take the following steps:', '', 'Next Steps:', ...steps, '',
-    'If you run into any technical issues or have any questions, don\'t hesitate to reach out. We\'re here to help make your onboarding experience smooth and welcoming.',
-    'Looking forward to seeing all the great work you\'ll do with us!', facts.hrName,
+    'Dear ' + first + ',', '',
+    'Congratulations and welcome to the team at Welfare Avenue!', '',
+    role ? 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.' : 'We\'re excited you\'ve accepted our offer.', '',
+    'Your first day is ' + s.day + ', and we can\'t wait to have you on board. To get started, please take the following steps:', '',
+    'Next Steps:', '',
+    '1. Your two meetings.' + INVITES_SENTENCE.en,
+    '   - Your onboarding call: ' + s.call + '. Google Meet: ' + s.callmeet,
+    '   - Your 1-on-1 introduction with your manager, ' + s.manager + ': ' + s.one + '. Google Meet: ' + s.onemeet, '',
+    '2. ' + LOGIN_HEADS[0],
+    '   Email: ' + s.newaddr,
+    '   First password: ' + s.password,
+    '   Google will ask you to change it the first time you sign in.',
+    '   This video shows you how to set up your Chrome profile: ' + s.video, '',
+    '3. Open your personal Hub link in your new Chrome profile window: ' + s.setup,
+    '   The Hub walks you through the rest, one step at a time: Slack, Canva, your Drives and Google Groups, the Avenue Academy, your weekly meeting, and the Hub on your phone. Tick each step as you go, so your manager can see where you are.',
+    '   Your team\'s weekly meeting: ' + s.weekly + '. Find it in your Welfare Avenue calendar and accept it.', '',
+    '4. Your documents:',
+    '   - Your job description: ' + s.jd + '. Have a look before the onboarding call.',
+    '   - Your offer letter, signed when you accepted: ' + s.letter,
+    '   - Your Drives: ' + s.drives, '',
+    'If you run into any technical issues or have any questions, don\'t hesitate to reach out. We\'re here to help make your onboarding experience smooth and welcoming.', '',
+    'Looking forward to seeing all the great work you\'ll do with us!', '',
+    facts.hrName,
   ]).join('\n');
   return { subject: fr ? 'Bienvenue chez Welfare Avenue! Vos prochaines étapes' : 'Welcome to Welfare Avenue! Your Next Steps', text };
 }
@@ -1113,25 +1162,79 @@ export function renderWelcome(f: Row, c: Row, facts: WelcomeFacts): { subject: s
   const text = typeof f.welcome_text === 'string' && f.welcome_text ? todaysWords(f.welcome_text) : own.text;
   return { subject, text: facts.draft ? text : fillWelcome(text, f, c, facts) };
 }
-/* what renderWelcome needs from the database. who: the person who signs, by email (HR who pressed Start; at the hire's Yes, the manager, who booked the
-   times with them); not on the roster (or the roster cannot be read), the team signs it. Filled in (not draft), also: whether the account step is done, the
-   Meet links (hub_events, as the calendar sync saved them; live, the sender asks Calendar for any still missing) and the rundown page. */
+/* wave278 Task 4: who the welcome comes from, and who is copied. The wave278 columns are read on their own (candExtra, staffCopies), so a missing column
+   (onboard-run deployed before wa278a) leaves everything else working: no sender, no owner, no copies. Only active roster members count, and only a
+   Welfare Avenue address can be a sender (the Hub sends as them by delegation). */
+const lc = (v: unknown) => String(v ?? '').trim().toLowerCase();
+const isWa = (e: unknown) => new RegExp('@' + DOMAIN.replace(/\./g, '\\.') + '$').test(lc(e));
+const httpsOr = (v: unknown) => (typeof v === 'string' && /^https:\/\/\S+$/.test(v.trim()) ? v.trim() : null);
+async function candExtra(c: Row): Promise<Row> {
+  const { data } = await svc.from('hub_candidates').select('owner, offer_sent_by, offer_doc_url').eq('id', c.id).maybeSingle();
+  return (data || {}) as Row;
+}
+async function activeByEmail(email: unknown): Promise<Row | null> {
+  if (!lc(email)) return null;
+  try { return (await membersByEmail(lc(email))).find((m) => m.active === true && lc(m.email)) || null; } catch (_) { return null; }
+}
+/* hub_candidates.owner is a roster name or an email, as wa275_flow_row reads it (owner_email); here only an active member counts */
+async function ownerMember(owner: unknown): Promise<Row | null> {
+  const o = String(owner ?? '').trim();
+  if (!o) return null;
+  if (o.includes('@')) return activeByEmail(o);
+  const { data, error } = await svc.from('team_members').select('id, name, email, active').ilike('name', o);   // ilike for the case; the exact match is made here
+  if (error) return null;
+  return ((data || []) as Row[]).filter((m) => m.active === true && lc(m.name) === o.toLowerCase() && lc(m.email)).sort((a, b) => Number(a.id) - Number(b.id))[0] || null;
+}
+function senderOf(x: Row, by: Row | null, owner: Row | null): { email: string; fallback: boolean } {
+  if (by && isWa(by.email)) return { email: lc(by.email), fallback: false };
+  if (owner && isWa(owner.email)) return { email: lc(owner.email), fallback: false };
+  return { email: CAL, fallback: true };
+}
+/* welcomeSender(c, f): the person who sent the offer (offer_sent_by) when an active roster address, else the recruitment owner (active), else hub@
+   (fallback: true). f is the flow, for the signature's sake; nothing of it is read. */
+export async function welcomeSender(c: Row, _f: Row): Promise<{ email: string; fallback: boolean }> {
+  const x = await candExtra(c);
+  return senderOf(x, await activeByEmail(x.offer_sent_by), await ownerMember(x.owner));
+}
+/* the staff copy: the owner (active), then welcome_cc (active roster only), once each, never one of the hire's own addresses */
+async function staffCopies(c: Row, f: Row, hire: string[]): Promise<string[]> {
+  const x = await candExtra(c);
+  const { data } = await svc.from('hub_onboard_flows').select('welcome_cc').eq('id', f.id).maybeSingle();
+  const cc = Array.isArray((data as Row | null)?.welcome_cc) ? ((data as Row).welcome_cc as unknown[]) : [];
+  const owner = await ownerMember(x.owner);
+  const out: string[] = [];
+  for (const e of [owner?.email, ...cc]) {
+    const a = lc((await activeByEmail(e))?.email);
+    if (a && !out.includes(a) && !hire.includes(a)) out.push(a);
+  }
+  return out;
+}
+/* what renderWelcome needs from the database. who: the person who started it, by email (HR who pressed Start; at the hire's Yes, the manager, who booked
+   the times with them). wave278: the email is signed by its sender (welcomeSender); only when that is hub@ does who sign, as before. Not on the roster
+   (or the roster cannot be read), the team signs it. Filled in (not draft), also: whether the account step is done, the Meet links (hub_events, as the
+   calendar sync saved them; live, the sender asks Calendar for any still missing), the setup page, and (wave278) the drives and the weekly meeting. */
 async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean, live = false): Promise<WelcomeFacts> {
   const m = await getMember(f.manager_member_id);
   let jd: Row = null;
   if (c.position_id) ({ data: jd } = await svc.from('hub_positions').select('jd_url').eq('id', c.position_id).maybeSingle());
-  const hr = (await membersByEmail(who).catch(() => []))[0];
+  const x = await candExtra(c);
+  const sender = senderOf(x, await activeByEmail(x.offer_sent_by), await ownerMember(x.owner));
+  const hr = (await membersByEmail(sender.fallback ? who : sender.email).catch(() => []))[0];
   const facts: WelcomeFacts = {
-    draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null,
-    slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com',
+    draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null, letter: httpsOr(x.offer_doc_url), sender,
     hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
   };
   if (draft) return facts;
   const steps = await readSteps(f.id);
   const status = (k: string) => steps.find((r) => r.step === k)?.status;
   const { data: more } = await svc.from('hub_onboard_flows').select('created_at, proposed_at, setup_ticks').eq('id', f.id).maybeSingle();
-  const login = await loginState(f, status('google'), (more as Row | null)?.setup_ticks);
-  return { ...facts, ...login, noInvites: status('invites') === 'skipped', meet: await meetLinks(f, live && !f.practice), setupLink: await setupPage((more || {}) as Row, c) };
+  const ticks = ((more as Row | null)?.setup_ticks || {}) as Row;
+  const login = await loginState(f, status('google'), ticks);
+  const wm = ticks.weekly_meeting as Row | null;
+  const weekly = wm && typeof wm.summary === 'string' && wm.summary.trim() ? { summary: wm.summary, next_at: typeof wm.next_at === 'string' && !Number.isNaN(Date.parse(wm.next_at)) ? wm.next_at : null } : null;
+  const drives = Array.isArray(ticks.drives_added) ? (ticks.drives_added as unknown[]).filter((d): d is string => typeof d === 'string' && !!d.trim()) : [];
+  return { ...facts, ...login, noInvites: status('invites') === 'skipped', meet: await meetLinks(f, live && !f.practice), setupLink: await setupPage((more || {}) as Row, c),
+    drives, weekly, accountMade: status('google') === 'done' && !!f.wa_email };
 }
 /* the login paragraph is the Hub's to give only for an account the Hub itself made with the vault password (setup_ticks.google_made_at, set by the google
    step), and only while that password has not been changed since (app_config onboard_first_password_at, set by set_first_password). An account HR made by
@@ -1169,7 +1272,7 @@ async function meetLinks(f: Row, ask: boolean): Promise<{ call: string | null; o
   return out;
 }
 /* the rundown page is the offer link with ?setup. onboard-link keeps it open after booking for a wave275 hire only (a proposal, or a flow made on or after
-   onboard_v2_since); a wave271 hire's link shuts once the meetings are booked, so their email lists the steps without it. */
+   onboard_v2_since); a wave271 hire's link shuts once the meetings are booked, so their email has no setup step (wave278 Task 4). */
 async function setupPage(row: Row, c: Row): Promise<string | null> {   // row: the flow's created_at and proposed_at
   if (!row?.proposed_at && !(await isV2(row || {}))) return null;
   return HUB + '/o/' + await offerToken(c.id) + '?setup';
@@ -1187,12 +1290,14 @@ async function welcomeNow(b: Row, by: string): Promise<Response> {
   return json({ ...(await welcomeFor(f, c, by)), edited: !!f.welcome_edited, sent_at: f.welcome_sent_at ?? null });
 }
 
-/* ---------- step: welcome (wave275 Task 4) ---------- */
-/* The welcome email, from hub@ to the personal address, once the invites are out (at booking, or at Start). The text is the saved template (HR's edits
-   kept) filled in now. The first password is read from the vault here and nowhere else, only when the account step made the account and the text has its
-   place, and goes into this one outgoing message only: the flow keeps its bracketed text, and no row, step detail or log line ever holds the value.
-   Claimed with welcome_sent_at, so a second run says it was already sent; the claim is given back when the send fails, so Retry can send it. A practice
-   flow never gets here: the runner simulates every step for it. */
+/* ---------- step: welcome (wave275 Task 4; wave278 Task 4) ---------- */
+/* The welcome email, once the invites are out (at booking, or at Start). The text is the saved template (HR's edits kept) filled in now. wave278: the
+   hire's copy goes to the personal address and the new one (once the account step is done), from the sender's own mailbox (welcomeSender; refused: from
+   hub@, and the detail says so), Reply-To the sender; then the staff copy (staffCopies) from the same mailbox, the password line saying where the password
+   is. The first password is read from the vault here and nowhere else, only when the account step made the account and the text has its place, and goes
+   into the hire's message only: the flow keeps its bracketed text, and no row, step detail, log line or staff copy ever holds the value. Claimed with
+   welcome_sent_at for both sends, so a second run says it was already sent; the claim is given back when the hire's copy fails, so Retry can send it; a
+   failed staff copy after it is a warning in the detail. A practice flow never gets here: the runner simulates every step for it. */
 async function firstPassword(): Promise<string> {   // '' when it cannot be read or is under 8 characters, as the google step treats it
   const { data, error } = await svc.rpc('get_secret', { secret_name: 'ONBOARD_FIRST_PASSWORD' });
   return !error && typeof data === 'string' && data.length >= 8 ? data : '';
@@ -1206,8 +1311,8 @@ function welcomeHtml(text: string): string {
 async function sendWelcome(ctx: Ctx): Promise<string> {
   const f = ctx.flow, c = await getCand(f.candidate_id);
   if (!c) throw new Error('The candidate card is gone, so there is nobody to welcome.');
-  const to = String(c.email || '').trim().toLowerCase();
-  if (!to) throw new Error('The card has no personal email, so the welcome email cannot reach them. Add it, then press Retry.');
+  const personal = lc(c.email);
+  if (!personal) throw new Error('The card has no personal email, so the welcome email cannot reach them. Add it, then press Retry.');
   /* the claim: of two runs, one finds welcome_sent_at empty */
   const now = new Date().toISOString();
   const { data: won, error: claimErr } = await svc.from('hub_onboard_flows').update({ welcome_sent_at: now, updated_at: now }).eq('id', f.id).is('welcome_sent_at', null).select('id');
@@ -1221,19 +1326,40 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
   try {
     const facts = await welcomeFacts(f, c, f.started_by || ctx.by, false, true);
     const w = renderWelcome(f, c, facts);
-    let text = w.text, why = facts.login ? '' : ' ' + (facts.loginWhy || '');
-    if (facts.login && PASSWORD_MARKS.some((p) => text.includes(p))) {
+    let marked = w.text, why = facts.login ? '' : ' ' + (facts.loginWhy || '');
+    if (facts.login && PASSWORD_MARKS.some((p) => marked.includes(p))) {
       password = await firstPassword();
-      if (password) text = PASSWORD_MARKS.reduce((t, p) => t.split(p).join(password), text);
-      else {
-        text = renderWelcome(f, c, { ...facts, login: false }).text;
+      if (!password) {
+        marked = renderWelcome(f, c, { ...facts, login: false }).text;
         why = ' The first password is not set in admin settings, so it says HR will send the login details separately: send them yourself.';
       }
     }
-    const signer = String(f.started_by || '').trim().toLowerCase();
-    const sent = await deliver({ practice: false, to, subject: w.subject, text, html: welcomeHtml(text), ...(/@welfareavenue\.com$/.test(signer) ? { replyTo: signer } : {}) });
+    const put = (v: string) => PASSWORD_MARKS.reduce((t, p) => t.split(p).join(v), marked);
+    const text = password ? put(password) : marked, staffText = put(PASSWORD_NOTE[langOf(c)](firstName(c.name)));
+    const hire = [...new Set([personal, ...(facts.accountMade ? [lc(f.wa_email)] : [])])];
+    const staff = await staffCopies(c, f, hire);
+    const sender = facts.sender || { email: CAL, fallback: true };
+    const starter = lc(f.started_by);
+    const replyTo = !sender.fallback ? sender.email : isWa(starter) ? starter : '';   // from hub@ with no sender: the person who started it, as before
+    let from: { email: string; name: string } | null = sender.fallback ? null : { email: sender.email, name: facts.hrName };
+    const hireMail = { practice: false, to: hire, subject: w.subject, text, html: welcomeHtml(text), ...(replyTo ? { replyTo } : {}) };
+    let sent: { mode: string; to: string[] } | null = null, refused = false;
+    if (from) {
+      try { sent = await deliver({ ...hireMail, from }); } catch (_) { refused = true; from = null; }   // the sender's mailbox would not send: hub@ sends it
+    }
+    if (!sent) sent = await deliver(hireMail);
     password = '';
-    return 'Sent the welcome email to ' + to + ' from ' + CAL + (sent.mode === 'test' ? ', and email is in test mode, so it went only to ' + sent.to.join(', ') : '') + '.' + why;
+    let copied = 'no staff copy';
+    if (staff.length) {
+      try {
+        await deliver({ practice: false, to: staff, subject: w.subject, text: staffText, html: welcomeHtml(staffText), ...(replyTo ? { replyTo } : {}), from });
+        copied = 'copied to ' + staff.length + ' staff';
+      } catch (e) {
+        copied = 'the staff copy to ' + staff.join(', ') + ' did not go: ' + errText(e).replace(/[.\s]+$/, '');
+      }
+    }
+    const fromText = refused ? CAL + ' (the sender\'s mailbox, ' + sender.email + ', could not send)' : from ? from.email : CAL;
+    return 'Sent the welcome email to ' + hire.join(' and ') + ' from ' + fromText + '; ' + copied + (sent.mode === 'test' ? ', and email is in test mode, so it went only to ' + sent.to.join(', ') : '') + '.' + why;
   } catch (e) {
     const said = scrub(errText(e), password);
     password = '';
