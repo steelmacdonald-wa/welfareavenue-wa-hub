@@ -31,8 +31,8 @@ async function runAssertions(db, label) {
 }
 
 // the functions wave279a redefines or adds, as they stand: body, comment and ACL
-const REDEFINED = ['public.onboarding_template_propagate()'];
-const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()'];
+const REDEFINED = ['public.onboarding_template_propagate()', 'public.wa166_path_state(bigint,text)'];
+const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()', 'public.wa279_plan_manager(bigint)', 'public.wa279_can_pick(bigint)', 'public.wa279_recommended(bigint)', 'public.wa279_pick_add(bigint,text,bigint,text,boolean)', 'public.wa279_pick_remove(bigint,text)', 'public.wa279_role_options(bigint,date)', 'public.wa279_role_save(bigint,text,bigint[])', 'public.wa279_role_autopick(date)', 'public.wa279_role_state(bigint,text)'];
 async function snapshot(db) {
   const out = {};
   for (const f of REDEFINED) {
@@ -62,6 +62,8 @@ try {
   for (const f of REDEFINED) ok(afterMig[f].def !== before[f].def, f + ' was redefined by the migration');
   ok(/wa279_via_setup/.test(afterMig['public.onboarding_template_propagate()'].def), 'propagate now asks wa279_via_setup');
   ok(afterMig['public.onboarding_template_propagate()'].acl === before['public.onboarding_template_propagate()'].acl, 'propagate keeps its ACL');
+  ok(afterMig['public.wa166_path_state(bigint,text)'].acl === before['public.wa166_path_state(bigint,text)'].acl, 'path_state keeps its ACL');
+  ok(afterMig['public.wa166_path_state(bigint,text)'].cmt === before['public.wa166_path_state(bigint,text)'].cmt, 'path_state keeps its comment');
   for (const f of ADDED) ok((await one(db, `select to_regprocedure('${f}') is not null as x`)).x === true, f + ' exists');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'trg_wa279_flow_plan' and not tgisinternal`)).n === 1, 'one flow trigger after two runs');
 
@@ -86,6 +88,7 @@ try {
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'trg_wa279_flow_plan'`)).n === 0, 'the flow trigger is gone');
   ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = 'onboarding_template' and column_name = 'setup_covered'`)).n === 0, 'the column is dropped');
   ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa279%'`)).n === 0, 'no wa279 function left');
+  ok((await one(db, `select count(*)::int as n from pg_class where relname = 'onboarding_role_picks'`)).n === 0, 'the role picks table is gone');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'trg_onb_tmpl_propagate'`)).n === 1, 'the live template trigger is still there');
   await db.exec(`delete from public.team_members where email = 'w279.undo@example.invalid'`);
   console.log('wa279a undo: every check passed');

@@ -472,4 +472,188 @@ insert into public.onboarding_template (id, section, name) values
 insert into public.hr_setup_template (id, phase, name, sort, who, due_day) values
   ('h-before', 'Before day one', 'Test step before day one', 1, 'hr', 0);
 
--- 7. Task 1 (wa279a) needs nothing more. Later wave279 tasks add their sections below (policies, notification kinds, Academy assignments, the lead view).
+-- 7. Task 1 (wa279a) needed nothing more.
+
+-- 8. Task 2 (wa279a, part 2): role picks. Academy assignments, the org chart, and the live comment on wa166_path_state (copied read-only from live 04/11/26).
+comment on function public.wa166_path_state(bigint, text) is 'wave166: how far a person (team_members.id) is in a Learning Avenue: {key, title, done, total, complete, asked}. ''team'': the avenue of their team they are furthest in (any avenue besides the three everyone does when their team has none); ''any'': an avenue besides the three everyone does and besides the one that counted for ''team''. Keela, page tours, Your first week and planned trainings do not count there.';
+alter table public.training_progress add constraint training_progress_training_id_person_name_key unique (training_id, person_name);
+
+create table public.org_positions (   -- the columns the lead order reads
+  id bigint generated always as identity primary key,
+  member_id bigint references public.team_members (id),
+  title text,
+  department text,
+  reports_to bigint references public.org_positions (id)
+);
+
+create table public.academy_assignments (
+  id bigint generated always as identity primary key,
+  training_id bigint references public.trainings (id) on delete cascade,
+  path_key text references public.academy_paths (key) on update cascade on delete cascade,
+  audience text not null check (audience = any (array['everyone', 'team', 'people'])),
+  teams text[] not null default '{}'::text[],
+  people text[] not null default '{}'::text[],
+  member_ids bigint[] not null default '{}'::bigint[],
+  include_new boolean not null default true,
+  due_date date,
+  due_days integer,
+  note text,
+  assigned_by text not null,
+  assigned_by_email text,
+  created_at timestamptz not null default now(),
+  active boolean not null default true,
+  ended_at timestamptz,
+  ended_by text,
+  constraint academy_assignments_what check ((training_id is null) <> (path_key is null))
+);
+create index idx_academy_assignments_active on public.academy_assignments (active);
+alter table public.academy_assignments enable row level security;
+alter table public.training_progress add constraint training_progress_assignment_id_fkey foreign key (assignment_id) references public.academy_assignments (id) on delete set null;
+
+create or replace function public.wa_email()
+returns text language sql stable security definer set search_path to '' as $function$ select lower(coalesce(auth.jwt()->>'email','')) $function$;
+create or replace function public.is_hub_leader()
+returns boolean language sql stable security definer set search_path to '' as $function$
+  select exists (select 1 from public.hub_roles r
+                 where r.email = lower(coalesce(auth.jwt()->>'email','')) and r.role in ('admin','leader'));
+$function$;
+create or replace function public.wa169_can_assign()
+returns boolean language sql stable security definer set search_path to '' as $function$
+  select public.is_hub_leader()
+      or exists (select 1 from public.hub_roles r where r.email = public.wa_email() and r.role <> 'blocked' and r.profile = 'hr');
+$function$;
+revoke all on function public.wa169_can_assign() from public, anon;   -- live: postgres, authenticated, service_role
+
+create or replace function public.wa169_targets(p_id bigint)
+returns table(member_id bigint, name text, email text, department text)
+language sql stable security definer set search_path to '' as $function$
+  select tm.id, tm.name, lower(tm.email), tm.department
+    from public.academy_assignments a
+    join public.team_members tm on tm.active and tm.email is not null and tm.name is not null
+   where a.id = p_id
+     and (case when not a.include_new and cardinality(a.member_ids) > 0 then tm.id = any (a.member_ids)
+               when a.audience = 'everyone' then coalesce(tm.department, '') <> 'board'
+               when a.audience = 'team' then tm.department = any (a.teams)
+               else lower(tm.email) = any (a.people) end);
+$function$;
+revoke all on function public.wa169_targets(bigint) from public, anon, authenticated;   -- live: postgres, service_role
+
+create or replace function public.wa169_modules(p_id bigint)
+returns table(training_id bigint)
+language sql stable security definer set search_path to '' as $function$
+  select a.training_id from public.academy_assignments a where a.id = p_id and a.training_id is not null
+  union
+  select t.id from public.academy_assignments a join public.academy_paths p on p.key = a.path_key
+    join public.trainings t on t.path_group = p.name and coalesce(t.active, true) and coalesce(t.kind, '') <> 'tour'
+                           and not coalesce((t.body ->> 'planned')::boolean, false)
+   where a.id = p_id and a.path_key is not null;
+$function$;
+revoke all on function public.wa169_modules(bigint) from public, anon, authenticated;   -- live: postgres, service_role
+
+create or replace function public.academy_assign_apply(p_id bigint default null::bigint, p_member bigint default null::bigint)
+returns integer language plpgsql security definer set search_path to '' as $function$
+declare a record; v_n int := 0; v_k int;
+begin
+  for a in select * from public.academy_assignments x
+            where x.active and (p_id is null or x.id = p_id) and (p_member is null or x.include_new) loop
+    insert into public.training_progress as tp (training_id, person_name, email, status, assigned_by, note, assignment_id, due_date, updated_at)
+    select m.training_id, t.name, t.email, 'assigned', a.assigned_by, a.note, a.id,
+           case when p_member is not null and a.due_days is not null then current_date + a.due_days else a.due_date end, now()
+      from public.wa169_targets(a.id) t cross join public.wa169_modules(a.id) m
+     where (p_member is null or t.member_id = p_member)
+    on conflict (training_id, person_name) do update
+       set assignment_id = coalesce(tp.assignment_id, excluded.assignment_id),
+           due_date = case when tp.due_date is null then excluded.due_date
+                           when excluded.due_date is null then tp.due_date
+                           else least(tp.due_date, excluded.due_date) end,
+           assigned_by = coalesce(tp.assigned_by, excluded.assigned_by),
+           email = coalesce(tp.email, excluded.email),
+           updated_at = now()
+     where tp.status is distinct from 'done'
+       and (tp.assignment_id is null
+            or tp.due_date is distinct from (case when tp.due_date is null then excluded.due_date
+                                                  when excluded.due_date is null then tp.due_date
+                                                  else least(tp.due_date, excluded.due_date) end));
+    get diagnostics v_k = row_count;
+    v_n := v_n + v_k;
+  end loop;
+  return v_n;
+end $function$;
+revoke all on function public.academy_assign_apply(bigint, bigint) from public, anon, authenticated;   -- live: postgres, service_role
+
+-- the two live entry points, read-only copies. Their permission check is wa169_can_assign (leaders, admins, the HR access profile): a plain manager fails it, which is why wave279 writes the assignment itself.
+create or replace function public.academy_assign(p jsonb)
+returns jsonb language plpgsql security definer set search_path to '' as $function$
+declare v_id bigint; v_aud text := coalesce(p ->> 'audience', ''); v_teams text[] := '{}'; v_people text[] := '{}'; v_due date;
+        v_tid bigint := nullif(p ->> 'training_id', '')::bigint; v_path text := nullif(p ->> 'path_key', ''); v_new boolean := coalesce((p ->> 'include_new')::boolean, true);
+        v_who text; v_email text := public.wa_email(); v_rows int; v_people_n int; v_what text; v_ids bigint[] := '{}';
+begin
+  if not public.wa169_can_assign() then raise exception 'Only HR, leaders and admins can assign trainings'; end if;
+  if (v_tid is null) = (v_path is null) then raise exception 'Pick a training or a Learning Avenue'; end if;
+  if v_tid is not null and not exists (select 1 from public.trainings t where t.id = v_tid and coalesce(t.active, true)) then raise exception 'That training is not in the Academy'; end if;
+  if v_path is not null and not exists (select 1 from public.academy_paths ap where ap.key = v_path and ap.active) then raise exception 'That Learning Avenue is not in the Academy'; end if;
+  if v_aud not in ('everyone', 'team', 'people') then raise exception 'Say who it is for'; end if;
+  if v_aud = 'team' then
+    select coalesce(array_agg(distinct x), '{}') into v_teams from jsonb_array_elements_text(coalesce(p -> 'teams', '[]'::jsonb)) x
+     where exists (select 1 from public.team_members tm where tm.active and tm.department = x);
+    if cardinality(v_teams) = 0 then raise exception 'Pick at least one team'; end if;
+  end if;
+  if v_aud = 'people' then
+    select coalesce(array_agg(distinct lower(x)), '{}') into v_people from jsonb_array_elements_text(coalesce(p -> 'people', '[]'::jsonb)) x
+     where exists (select 1 from public.team_members tm where tm.active and lower(tm.email) = lower(x));
+    if cardinality(v_people) = 0 then raise exception 'Pick at least one person'; end if;
+    v_new := false;
+  end if;
+  v_due := nullif(p ->> 'due_date', '')::date;
+  if v_due is not null and v_due < current_date then raise exception 'The due date has passed'; end if;
+  select tm.name into v_who from public.team_members tm where lower(tm.email) = v_email and tm.active limit 1;
+  insert into public.academy_assignments (training_id, path_key, audience, teams, people, include_new, due_date, due_days, note, assigned_by, assigned_by_email)
+  values (v_tid, v_path, v_aud, v_teams, v_people, v_new, v_due, case when v_due is null then null else v_due - current_date end,
+          nullif(left(trim(coalesce(p ->> 'note', '')), 400), ''), coalesce(v_who, split_part(v_email, '@', 1)), v_email)
+  returning id into v_id;
+  if not v_new then
+    select coalesce(array_agg(t.member_id), '{}') into v_ids from public.wa169_targets(v_id) t;
+    update public.academy_assignments set member_ids = v_ids where id = v_id;
+  end if;
+  v_rows := public.academy_assign_apply(v_id, null);
+  select count(*) into v_people_n from public.wa169_targets(v_id);
+  select coalesce((select t.title from public.trainings t where t.id = v_tid), (select ap.title from public.academy_paths ap where ap.key = v_path)) into v_what;
+  insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+  values ('academy_assignment', v_id::text, 'assigned', null,
+          v_what || ' to ' || case v_aud when 'everyone' then 'everyone' when 'team' then array_to_string(v_teams, ', ') else v_people_n || ' people' end
+          || coalesce(', due ' || v_due::text, ''), coalesce(v_who, v_email));
+  return jsonb_build_object('id', v_id, 'people', v_people_n, 'rows', v_rows);
+end $function$;
+revoke all on function public.academy_assign(jsonb) from public, anon;   -- live: postgres, authenticated, service_role
+
+create or replace function public.academy_assign_end(p_id bigint)
+returns jsonb language plpgsql security definer set search_path to '' as $function$
+declare v_who text; v_gone int; v_kept int;
+begin
+  if not public.wa169_can_assign() then raise exception 'Only HR, leaders and admins can change assignments'; end if;
+  select coalesce((select tm.name from public.team_members tm where lower(tm.email) = public.wa_email() limit 1), public.wa_email()) into v_who;
+  update public.academy_assignments set active = false, ended_at = now(), ended_by = v_who where id = p_id and active;
+  if not found then raise exception 'That assignment is not running'; end if;
+  delete from public.training_progress where assignment_id = p_id and status = 'assigned' and started_at is null and coalesce(pct, 0) = 0;
+  get diagnostics v_gone = row_count;
+  update public.training_progress set assignment_id = null, due_date = null where assignment_id = p_id;
+  get diagnostics v_kept = row_count;
+  insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+  values ('academy_assignment', p_id::text, 'stopped', null, v_gone || ' not started removed, ' || v_kept || ' kept', v_who);
+  return jsonb_build_object('removed', v_gone, 'kept', v_kept);
+end $function$;
+revoke all on function public.academy_assign_end(bigint) from public, anon;   -- live: postgres, authenticated, service_role
+
+create or replace function public.wa166_tp_onb()
+returns trigger language plpgsql security definer set search_path to '' as $function$
+begin
+  if new.status = 'done' and (tg_op = 'INSERT' or old.status is distinct from 'done') then
+    perform public.wa166_onb_sync(o.id)
+       from public.onboardings o join public.team_members tm on tm.id = o.member_id
+      where o.status = 'active'
+        and (lower(tm.name) = lower(new.person_name) or (new.email is not null and tm.email is not null and lower(tm.email) = lower(new.email)));
+  end if;
+  return new;
+end $function$;
+create trigger trg_wa166_tp_onb after insert or update of status on public.training_progress
+  for each row execute function public.wa166_tp_onb();
