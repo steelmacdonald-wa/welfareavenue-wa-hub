@@ -12,7 +12,11 @@
    A manager who is not HR sees only their own hires' cards (wa275_my_cards), as "Your new hires" on Home and on their team page; HR and admins see
    every card in HR Center > Onboarding, and their own hires on Home as short lines. Every write goes through onboard-run, which checks who may
    (wa275_manager_of); the menu is not the lock. Wraps wave271's doors (window.o271R: load, paint, readyCard, panelHtml, startedMore, preview) and reuses
-   its words, grid and steps (window.o271). Times are America/Toronto wall clock, through Intl only. */
+   its words, grid and steps (window.o271). Times are America/Toronto wall clock, through Intl only.
+   wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): the card row's manager_hours (wa275b's wa275_flow_row, from
+   onboard_manager_hours) and the times answer's manager_hours. False: the week line is one quiet line of information ("<first> has not set their week
+   on Home; times are not limited to it"), and the picker offers every cell of the window ("Open to pick"), greying only hub@ meetings, other hires and
+   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it. */
 (function () {
   if (window.__wa275) return; window.__wa275 = true;
   var O = window.o271, R = window.o271R;
@@ -174,6 +178,11 @@
   function mgrLine(x) {
     if (!x.manager_member_id) return 'Manager: not chosen yet. Choose one with Change manager.';
     var name = x.manager_name || O.nameOf(x.manager_member_id), first = firstOf(name);
+    if (x.manager_hours === false) {   /* wave275b: the week is information, not a rule, so no prompt */
+      var info = x.manager_no_week ? first + ' has not set their week on Home; times are not limited to it'
+        : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) + '; times are not limited to it' : 'times are not limited to their week';
+      return 'Manager: ' + E(name) + ' &middot; ' + E(info);
+    }
     var week = x.manager_no_week ? first + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used'
       : x.manager_week_stale ? first + '\'s team asked for their week again' + (x.manager_availability_at ? ' since they set it on ' + day(x.manager_availability_at) : '') + ': they are asked on Home'
       : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) : '';
@@ -237,10 +246,11 @@
 
   /* ---------- the panels: open, draw, go ---------- */
   /* the picker's data in the shape wave271's grid takes: the hire's marks, the manager's free cells (their hours over the window), their hub@ meetings */
+  function hoursRule(tv) { return !(tv && tv.manager_hours === false); }   /* wave275b: onboard_manager_hours, as times says; missing means on */
   function pvOf(tv) {
-    var av = (tv && tv.availability) || { weekly: DEFAULT_WEEK, except: [] }, len = S.cfg.cell * 60000;
+    var av = (tv && tv.availability) || { weekly: DEFAULT_WEEK, except: [] }, len = S.cfg.cell * 60000, rule = hoursRule(tv);
     var g = O.newGrid('z0', { grids: {}, hub_events: [] }, 'call'), free = [];
-    g.days.forEach(function (d) { Object.keys(d.cells).forEach(function (k) { var t = d.cells[k]; if (inside(av, t, t + len)) free.push(new Date(t).toISOString()); }); });
+    g.days.forEach(function (d) { Object.keys(d.cells).forEach(function (k) { var t = d.cells[k]; if (!rule || inside(av, t, t + len)) free.push(new Date(t).toISOString()); }); });   /* off: every cell of the window */
     return { grids: { hire: (tv && tv.hire_slots) || [], manager: free }, hub_events: ((tv && tv.busy) || []).map(function (e) { return { start_at: e.start, end_at: e.end, summary: e.summary || 'A meeting', who: ['hire', 'manager'] }; }) };
   }
   function markOf(tv, kind) {
@@ -269,7 +279,8 @@
         if (kind === 'propose' || kind === 'bookg') {
           var g = O.newGrid('q' + id, pvOf(tv), 'call');
           g.both = true; g.mark = markOf(tv, kind);
-          g.words = { h: 'New hire marked', m: firstOf(A.mname) + ' is free', mTip: firstOf(A.mname) + ' is free', busy: 'A meeting, another new hire, or too soon' };
+          g.words = hoursRule(tv) ? { h: 'New hire marked', m: firstOf(A.mname) + ' is free', mTip: firstOf(A.mname) + ' is free', busy: 'A meeting, another new hire, or too soon' }
+            : { h: 'New hire marked', m: 'Open to pick', mTip: 'open to pick', busy: 'A hub@ meeting, another new hire, or too soon' };   /* wave275b: the week is not a rule */
           if (kind === 'propose' && tv.proposal && !tv.hire_answer) { g.vals.call = O.toLocal(tv.proposal.call_at); g.vals.one = O.toLocal(tv.proposal.one_on_one_at); }
           A.g = g;
         } else if (kind === 'gridfor') {
@@ -303,10 +314,11 @@
     var first = firstOf(x.name), mgr = firstOf(A.mname || x.manager_name);
     if (A.kind === 'propose' || A.kind === 'bookg') {
       var g = A.g, isBook = A.kind === 'bookg';
+      var rule = hoursRule(A.tv);   /* wave275b: off, the manager's week does not limit the times */
       h += '<div class="o271ln">' + E(isBook
-          ? 'Pick both times from ' + first + '\'s marks over ' + mgr + '\'s hours. The Hub books them at once: the invites, the plan and the welcome email follow.'
-          : 'Pick both times inside ' + mgr + '\'s hours. ' + first + ' is emailed them to say yes or no' + (x.accepted_on ? '.' : ', once they accept the offer.')) + '</div>'
-        + (A.tv && A.tv.no_week ? '<div class="o271warn">' + E(mgr + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used.') + '</div>' : '')
+          ? 'Pick both times from ' + first + '\'s marks' + (rule ? ' over ' + mgr + '\'s hours' : '') + '. The Hub books them at once: the invites, the plan and the welcome email follow.'
+          : (rule ? 'Pick both times inside ' + mgr + '\'s hours. ' : 'Pick both times; ' + mgr + '\'s week does not limit them. ') + first + ' is emailed them to say yes or no' + (x.accepted_on ? '.' : ', once they accept the offer.')) + '</div>'
+        + (rule && A.tv && A.tv.no_week ? '<div class="o271warn">' + E(mgr + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used.') + '</div>' : '')
         + '<div class="o271md" role="group" aria-label="Which meeting you are picking"><button type="button" class="' + (g.mode === 'call' ? 'on' : '') + '" data-o275a="mode" data-mode="call" data-f="' + E(id) + '">Onboarding call</button><button type="button" class="' + (g.mode === 'one' ? 'on' : '') + '" data-o275a="mode" data-mode="one" data-f="' + E(id) + '">1-on-1</button></div>'
         + O.gridHtml(g)
         + '<div class="o271two"><div><label class="o271f">Onboarding call (Toronto time)</label><input type="datetime-local" data-o275i="call" data-f="' + E(id) + '" value="' + E(g.vals.call) + '"><div class="o271said" data-o275said="call">' + E(saidOf(g, 'call')) + '</div></div>'

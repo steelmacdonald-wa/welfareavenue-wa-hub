@@ -58,7 +58,7 @@ test('a GET saves nothing and gives the page what it needs', async () => {
   assert.equal(a.status, 200);
   assert.deepEqual({ ...a.body, grid: undefined }, {
     ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [],
-    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', secondNo: null, setup: null,   // wave275: an offer from before it has no hours and keeps the grid
+    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', secondNo: null, setup: null, hoursRequired: false,   // wave275: an offer from before it has no hours and keeps the grid (wave275b: so no box is required)
   });
   assert.equal(m.body.kind, 'manager');
   assert.equal(m.body.first, 'Sam');
@@ -929,7 +929,7 @@ test('w275 fix: GET leaves out another hire\'s proposal once that hire has answe
 const V2CFG = { onboard_v2_since: '2026-10-01T00:00:00Z' };
 const withProposal = { proposed_call_at: W_CALL, proposed_one_on_one_at: W_ONE, proposed_by: 'sam.lee@welfareavenue.com', proposed_at: '2026-10-31T12:00:00Z' };
 async function hire({ cand = {}, fl = {}, config = {}, tables = {}, run } = {}) {
-  const s = await setup({ cand: { accepted_on: '2026-10-31', offer_hours: 6, ...cand }, flows: [offered({ status: 'waiting', ...fl })], config: { ...V2CFG, hr_notify_emails: 'ruth.owen@welfareavenue.com', ...config }, notify: false, tables: { team_members: [team[0], SAM()], hub_events: [], ...tables } });
+  const s = await setup({ cand: { accepted_on: '2026-10-31', offer_hours: 6, ...cand }, flows: [offered({ status: 'waiting', ...fl })], config: { ...V2CFG, hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_require_hours: 'on', onboard_manager_hours: 'on', ...config }, notify: false, tables: { team_members: [team[0], SAM()], hub_events: [], ...tables } });
   s.tells = [];
   s.rig.fetchOn(NOTIFY, (e) => { s.tells.push(e.body); return { json: { outcome: {}, hub: 'off' } }; });
   s.relays = [];
@@ -1332,4 +1332,102 @@ test('w275 Task 6 fix: POST availability whose read-back fails still answers ok:
   assert.deepEqual(r.body.saved, { except: [{ date: '2026-11-11', free: [] }], tz: 'America/Toronto' });
   assert.ok(hasBoth(r.body.warning) && /Your dates are saved/.test(r.body.warning.en));
   assert.deepEqual(s.db.rows('team_members').find((m) => m.id === 2).availability, { except: [{ date: '2026-11-11', free: [] }], tz: 'America/Toronto' });
+});
+
+/* ---------- wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): onboard_require_hours and onboard_manager_hours,
+   off by default (absent, or anything but "on", is off). The hire() rig sets both on, so the tests above are the "on" behaviour, which is today's. ---------- */
+const dropSetting = (s, key) => { const rows = s.db.rows('app_config'); const i = rows.findIndex((r) => r.key === key); if (i >= 0) rows.splice(i, 1); };
+
+test('w275b onboard_require_hours off, absent or not "on": Accept needs no box; ticked, hours_confirmed_at is set; not ticked, it stays empty; GET says hoursRequired false', async () => {
+  await withBackground(async (pending) => {
+    for (const value of ['off', 'yes', null]) {
+      const s = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' }, config: { onboard_require_hours: value ?? 'on' } });
+      if (value === null) dropSetting(s, 'onboard_require_hours');
+      const g = (await s.get(s.offer)).body;
+      assert.deepEqual([g.offerHours, g.hoursRequired], [6, false], String(value));
+      const r = await s.post({ t: s.offer, a: 'accept' });
+      assert.equal(r.status, 200, String(value) + ': ' + JSON.stringify(r.body));
+      assert.deepEqual([r.body.answer, r.body.repeated], ['accept', false]);
+      const c = s.cand();
+      assert.equal(c.accepted_on, '2026-11-01');
+      assert.equal(c.hours_confirmed_at ?? null, null, 'the box was not ticked: nothing confirmed');
+      assert.doesNotMatch(c.notes, /confirming/, 'the note does not say they confirmed the hours');
+    }
+    const ticked = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' }, config: { onboard_require_hours: 'off' } });
+    const t = await ticked.post({ t: ticked.offer, a: 'accept', hours_ok: true });
+    assert.equal(t.status, 200, JSON.stringify(t.body));
+    assert.equal(ticked.cand().hours_confirmed_at, '2026-11-01T12:00:00.000Z', 'ticked: confirmed');
+    assert.match(ticked.cand().notes, /confirming at least 6 hours a week/);
+    assert.equal((await ticked.get(ticked.offer)).body.hoursConfirmed, true);
+    const loose = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' }, config: { onboard_require_hours: 'off' } });
+    assert.equal((await loose.post({ t: loose.offer, a: 'accept', hours_ok: 'yes' })).status, 200);
+    assert.equal(loose.cand().hours_confirmed_at ?? null, null, 'only hours_ok: true confirms');
+    await Promise.all(pending);
+  });
+});
+
+test('w275b onboard_require_hours on (any case): today\'s rule, 400 hours_required without the box; GET says hoursRequired true; an offer with no hours never needs it', async () => {
+  for (const value of ['on', ' On ']) {
+    const s = await hire({ cand: { accepted_on: null }, fl: { status: 'offered' }, config: { onboard_require_hours: value } });
+    assert.equal((await s.get(s.offer)).body.hoursRequired, true);
+    const before = s.snapshot();
+    const no = await s.post({ t: s.offer, a: 'accept' });
+    assert.deepEqual([no.status, no.body.error], [400, 'hours_required']);
+    assert.ok(hasBoth(no.body.message));
+    assert.deepEqual(s.snapshot(), before);
+  }
+  const old = await setup({ flows: [], config: { onboard_require_hours: 'on' } });
+  const g = (await old.get(old.offer)).body;
+  assert.deepEqual([g.offerHours, g.hoursRequired], [null, false], 'no hours on the offer: nothing to require');
+});
+
+test('w275b onboard_manager_hours: the mgr page GET says managerHours (on true; off, absent or anything else false) and still sends the week for information', async () => {
+  for (const [value, want] of [['on', true], [' ON ', true], ['off', false], ['maybe', false], [null, false]]) {
+    const s = await setup({ flows: [offered()], config: { onboard_manager_hours: value ?? 'on' }, tables: { team_members: [team[0], SAM()] } });
+    if (value === null) dropSetting(s, 'onboard_manager_hours');
+    const g = (await s.get(s.mgr)).body;
+    assert.equal(g.mode, 'propose');
+    assert.equal(g.managerHours, want, String(value));
+    assert.deepEqual(g.availability.weekly.mon, [['09:00', '17:00']], 'the week, for information');
+    assert.equal(g.noWeek, true);
+  }
+});
+
+test('w275b onboard_manager_hours off: the hire\'s No grid greys only the hub@ meetings the manager is invited to (not their week, not their one-off dates); the minimum still decides whether there is a mask', async () => {
+  const events = [
+    { id: 'e1', summary: 'Board meeting', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-11-03T15:00:00Z', end_at: '2026-11-03T16:00:00Z' },
+    { id: 'e2', summary: 'Called off', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'cancelled', start_at: '2026-11-03T17:00:00Z', end_at: '2026-11-03T18:00:00Z' },
+  ];
+  const except = [{ date: '2026-11-04', free: [] }];
+  const said = { ...withProposal, hire_answer: 'no', hire_answered_at: '2026-11-01T11:00:00Z' };
+  const s = await hire({ fl: said, config: { onboard_grid_min_hours: '10', onboard_manager_hours: 'off' }, tables: { team_members: [team[0], SAM({ availability: { except, tz: 'America/Toronto' }, availability_at: '2026-10-20T12:00:00Z' })], hub_events: events } });
+  const g = (await s.get(s.offer)).body;
+  assert.ok(Array.isArray(g.managerFree), JSON.stringify(g.managerFree));
+  assert.equal(g.managerHours, false, 'the page words its legend from it: the greys are hub@ meetings');
+  const free = new Set(g.managerFree);
+  for (const [at, want, why] of [
+    ['2026-11-02T15:00:00Z', true, 'Monday 10 am'],
+    ['2026-11-02T13:00:00Z', true, 'Monday 8 am, before 9: the week is not a rule'],
+    ['2026-11-02T22:00:00Z', true, 'Monday 5 pm, after 5'],
+    ['2026-11-07T15:00:00Z', true, 'Saturday morning'],
+    ['2026-11-04T15:00:00Z', true, 'Wednesday, a one-off date with no free time: dates are not a rule either'],
+    ['2026-11-03T15:00:00Z', false, 'Tuesday 10 am, a hub@ meeting Sam is invited to'],
+    ['2026-11-03T15:30:00Z', false, 'the same meeting'],
+    ['2026-11-03T17:00:00Z', true, 'a cancelled meeting does not count'],
+  ]) assert.equal(free.has(at), want, at + ': ' + why);
+  assert.equal(g.managerFree.length, g.grid.slots.length - 2, 'every cell but the meeting\'s two');
+  assert.doesNotMatch(JSON.stringify(g), /Board meeting|Called off/, 'nothing about the meetings leaves over the no-login link');
+  const reads = [];
+  s.db.onRpc('wa275_availability_of', (a) => { reads.push(a); throw new Error('not a rule now'); });
+  assert.ok(Array.isArray((await s.get(s.offer)).body.managerFree), 'off, the hours are not read, so a failed read changes nothing');
+  assert.equal(reads.length, 0);
+  /* with no meetings at all, nothing is greyed: no mask, the grid shows as it always did */
+  const none = await hire({ fl: said, config: { onboard_grid_min_hours: '10', onboard_manager_hours: 'off' } });
+  const n = (await none.get(none.offer)).body;
+  assert.ok(n.managerFree === null || n.managerFree.length === n.grid.slots.length, 'nothing greyed');
+  /* on: the week greys again (today's rule) */
+  const on = await hire({ fl: said, config: { onboard_grid_min_hours: '10', onboard_manager_hours: 'on' }, tables: { team_members: [team[0], SAM()], hub_events: events } });
+  const og = (await on.get(on.offer)).body;
+  assert.equal(new Set(og.managerFree).has('2026-11-02T13:00:00Z'), false, 'on: Monday 8 am is greyed');
+  assert.equal(og.managerHours, true);
 });

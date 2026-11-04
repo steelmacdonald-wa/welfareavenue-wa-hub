@@ -1,6 +1,10 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
-// v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below)
+// v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on)
+// wave275b (v7, Steel 03/11/26: "Can we make the availability check for onboarding optional"): app_config onboard_manager_hours (wa275b, off by default;
+//   anything but "on" is off). Off: propose, the hire's Yes (book) and the card's book do not refuse outside_hours and do not read the manager's hours;
+//   every other rule stays (bad_time, lead_time, overlap, busy, taken, already_booked). times adds manager_hours (true or false) and still sends the week
+//   for information; off, a failed read of it gives availability null instead of a 503. On: exactly v6.
 // wave275 (v6): a hire's own manager (wa275_manager_of, as the caller) may use the card's actions on that hire's card: times, book, set_ask_availability, grid_for,
 //   set_welcome, welcome, retry, task_done, set_canva_link, book_one_on_one, change_time, change_manager, backed_out (and propose, as before); every other
 //   action stays HR's and admins'. New:
@@ -228,6 +232,8 @@ async function cfg(key: string): Promise<string> {
   const { data } = await svc.from('app_config').select('value').eq('key', key).maybeSingle();
   return String((data as { value?: string } | null)?.value || '');
 }
+/* wave275b: a setting that is on only when it says "on" (any case, spaces trimmed); off, absent or anything else is off */
+async function cfgOn(key: string): Promise<boolean> { return (await cfg(key)).trim().toLowerCase() === 'on'; }
 async function cfgNum(key: string, def: number): Promise<number> {
   const n = Number((await cfg(key)).trim());
   return Number.isFinite(n) && n > 0 ? n : def;
@@ -1836,12 +1842,15 @@ async function availabilityOf(memberId: number): Promise<Row> {
 }
 /* the rules both times must meet, kept once for propose and for the hire's Yes (book), in this order: at least lead hours ahead; each whole meeting inside
    one block of the manager's availability for that Toronto date; clear of hub@ meetings they are invited to; clear of their other new hires' times.
+   wave275b: the availability rule only while onboard_manager_hours is on (off, the hours are not read at all).
    null: both fine. A read that fails throws, so nothing is saved or booked on a guess. */
 async function timesProblem(flowId: number, m: Row, spans: Array<[Which, number, number]>, lead: number, callMin: number, oneMin: number): Promise<{ code: string; which: Which } | null> {
   for (const [which, s] of spans) if (s < Date.now() + lead * 3600000) return { code: 'lead_time', which };
-  const read = await availabilityOf(Number(m.id));
-  const av = read.availability && typeof read.availability === 'object' ? read.availability : DEFAULT_AVAILABILITY;
-  for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return { code: 'outside_hours', which };
+  if (await cfgOn('onboard_manager_hours')) {
+    const read = await availabilityOf(Number(m.id));
+    const av = read.availability && typeof read.availability === 'object' ? read.availability : DEFAULT_AVAILABILITY;
+    for (const [which, s, e] of spans) if (!insideHours(av, s, e)) return { code: 'outside_hours', which };
+  }
   const from = Math.min(spans[0][1], spans[1][1]), to = Math.max(spans[0][2], spans[1][2]);
   const { data: evs, error } = await svc.from('hub_events').select('id, start_at, end_at').contains('attendee_emails', [String(m.email || '').trim().toLowerCase()]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
   if (error) throw new Error('The manager\'s hub@ meetings could not be read.');
@@ -2249,7 +2258,8 @@ const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 's
 const nameFor = async (email: string) => (await membersByEmail(email).catch(() => []))[0]?.name || email;
 
 /* times {flow_id}: what the card's picker draws. The manager's availability (wa275_availability_of), the hub@ meetings they are invited to over the grid's
-   window (with titles: the card is signed in), the other new hires' booked and proposed times, the hire's own grid, the lengths and lead times. Reads only. */
+   window (with titles: the card is signed in), the other new hires' booked and proposed times, the hire's own grid, the lengths and lead times. Reads only.
+   wave275b: manager_hours (onboard_manager_hours on) says whether the week limits the times; off, the week is information, and a failed read of it is null. */
 async function timesView(b: Row): Promise<Response> {
   const n = Number(b.flow_id);
   const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(BOOK_COLS).eq('id', n).maybeSingle() : { data: null };
@@ -2260,10 +2270,10 @@ async function timesView(b: Row): Promise<Response> {
   const m = managerId != null ? await getMember(managerId) : null;
   const [callMin, oneMin, lead, yesLead, days] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_propose_lead_hours', 48), await cfgNum('onboard_yes_lead_hours', 24), await cfgNum('onboard_grid_days', 14)];
   let hours: Row = null;
-  const busy: Row[] = [], taken: Row[] = [];
+  const busy: Row[] = [], taken: Row[] = [], managerHours = await cfgOn('onboard_manager_hours');
   try {
     if (m) {
-      hours = await availabilityOf(Number(m.id));
+      hours = managerHours ? await availabilityOf(Number(m.id)) : await availabilityOf(Number(m.id)).catch(() => null);
       const email = String(m.email || '').trim().toLowerCase(), from = Date.now(), to = from + (days + 1) * 86400000;
       if (email) {
         const { data, error } = await svc.from('hub_events').select('id, summary, start_at, end_at').contains('attendee_emails', [email]).neq('status', 'cancelled').lt('start_at', new Date(to).toISOString()).gt('end_at', new Date(from).toISOString());
@@ -2280,7 +2290,7 @@ async function timesView(b: Row): Promise<Response> {
     availability: hours?.availability ?? null, availability_at: hours?.availability_at ?? null, stale: hours ? hours.stale !== false : true, no_week: hours ? hours.no_week === true : true,
     busy, taken, hire_slots: ((g as Row | null)?.slots || []) as string[], lengths: { callMin, oneMin }, lead_hours: lead, yes_lead_hours: yesLead,
     proposal: f.proposed_at ? { call_at: instant(f.proposed_call_at), one_on_one_at: instant(f.proposed_one_on_one_at), by: f.proposed_by, at: instant(f.proposed_at) } : null,
-    hire_answer: f.hire_answer ?? null, ask_availability: f.ask_availability !== false, accepted: !!c.accepted_on,
+    hire_answer: f.hire_answer ?? null, ask_availability: f.ask_availability !== false, accepted: !!c.accepted_on, manager_hours: managerHours,
   });
 }
 

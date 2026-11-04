@@ -34,7 +34,12 @@
      already communicated, the closing page at once ("<manager> will be in touch with other times"). A second No: a person will be in touch
      (after a reload too: the function's secondNo).
      No proposal yet: "We are choosing your times now; you will get an email within two days." ?setup is the rundown: each step with a Done
-     button that posts setup_tick. A wave271 hire (mode grid) keeps the grid after Accept. -->
+     button that posts setup_tick. A wave271 hire (mode grid) keeps the grid after Accept.
+     wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"), from the function's GET, never from app_config:
+     hoursRequired false (onboard_require_hours off): the hours line is an optional box, Accept is enabled without it, and hours_ok is sent as ticked
+     or not. managerHours false (onboard_manager_hours off): the manager's page has no "Set your week" gate, shows a saved week read-only for
+     information, and lets any cell in the window start a meeting outside hub@ meetings, other hires and the lead time; the hire's No grid legend says
+     the greys are the manager's hub@ meetings. Either field missing (a function from before wave275b): today's rule. -->
 <style>
   :root { --green: #103F39; --cream: #FFFAF2; --ink: #1d1d1b; --muted: #6b6a66; --soft: #E6F0EA; --line: #cdd9d2; --flag: #B3402F; }
   * { box-sizing: border-box; }
@@ -332,23 +337,25 @@
     var hrs = hoursAsked();   // wave275: the offer's hours a week, which the hire confirms before Accept
     h += '<p>' + t().ask + '</p>' +
       (hrs ? '<label class="hours" id="hoursbox" for="hours"><input type="checkbox" id="hours"><span>' + fill(t().hoursLine, { m: hrs }) + '</span></label>' : '') +
-      '<button class="btn' + (pre === 'accept' ? ' pre' : '') + '" id="accept" data-act="accept" type="button"' + (hrs ? ' disabled aria-describedby="hoursneed"' : '') + '>' + t().accept + '</button>' +
-      (hrs ? '<p class="need" id="hoursneed">' + t().hoursNeed + '</p>' : '') +
+      '<button class="btn' + (pre === 'accept' ? ' pre' : '') + '" id="accept" data-act="accept" type="button"' + (hoursNeeded() ? ' disabled aria-describedby="hoursneed"' : '') + '>' + t().accept + '</button>' +
+      (hoursNeeded() ? '<p class="need" id="hoursneed">' + t().hoursNeed + '</p>' : '') +
       '<button class="quiet' + (pre === 'decline' ? ' pre' : '') + '" id="decline" data-act="decline" type="button">' + t().decline + '</button>' +
       '<p id="err" class="err hide" role="alert"></p><p class="note">' + t().reply + '</p>';
     card.innerHTML = h;
     if (hrs) document.getElementById('hours').addEventListener('change', syncHours);
     document.getElementById('accept').addEventListener('click', function () { send('accept'); });
     document.getElementById('decline').addEventListener('click', function () { send('decline'); });
-    if (initial && pre === 'accept') { try { document.getElementById(hrs ? 'hours' : 'accept').focus({ preventScroll: true }); } catch (e) { /* fine */ } }   // Decline is highlighted only: a stray Enter must not decline
+    if (initial && pre === 'accept') { try { document.getElementById(hoursNeeded() ? 'hours' : 'accept').focus({ preventScroll: true }); } catch (e) { /* fine */ } }   // Decline is highlighted only: a stray Enter must not decline
   }
   function hoursAsked() { var n = Number(S.j && S.j.offerHours); return n > 0 ? n : 0; }
-  function hoursTicked() { var b = document.getElementById('hours'); return !hoursAsked() || !!(b && b.checked); }
-  function syncHours() {   // Accept waits for the box; the sentence under it says why
+  function hoursNeeded() { return !!hoursAsked() && !(S.j && S.j.hoursRequired === false); }   // wave275b: the function says whether the box is required
+  function boxTicked() { var b = document.getElementById('hours'); return !!(b && b.checked); }
+  function hoursTicked() { return !hoursNeeded() || boxTicked(); }
+  function syncHours() {   // Accept waits for a required box; the sentence under it says why
     var a = document.getElementById('accept'), n = document.getElementById('hoursneed'), box = document.getElementById('hoursbox');
     if (a) a.disabled = S.busy || !hoursTicked();
     if (n) n.className = hoursTicked() ? 'need hide' : 'need';
-    if (box) box.classList.toggle('on', hoursTicked());
+    if (box) box.classList.toggle('on', boxTicked());
   }
 
   /* the grid: a model of the instants the function sent, laid out by Toronto wall clock. free (wave275, the hire's grid after a No): the cells where the
@@ -389,7 +396,7 @@
     h += '<p>' + (v2 ? say(hx().gridNo, mgrWords()) : fill(j.kind === 'manager' ? tx.gridMgr : j.callBooked ? tx.gridHireOne : tx.gridHire, j)) + '</p>';
     if (j.late && j.kind === 'offer') h += '<p class="hint">' + tx.late + '</p>';
     h += '<p class="note">' + tx.how + '</p>';
-    if (v2 && m.greyed) h += '<p class="legend" id="mlegend"><span><i class="sw sw-mbusy"></i>' + say(hx().greyed, mgrWords()) + '</span></p>';   // wave275: where the manager is not free
+    if (v2 && m.greyed) h += '<p class="legend" id="mlegend"><span><i class="sw sw-mbusy"></i>' + say(hoursRule() ? hx().greyed : hx().greyedMeet, mgrWords()) + '</span></p>';   // wave275: where the manager is not free
     if (!m.days.length) { h += '<p>' + tx.nothing + '</p>'; card.innerHTML = h; return; }
     h += '<div class="chips" id="chips">' + m.days.map(function (d, i) {
       return '<button type="button" class="chip' + (i === S.active ? ' on' : '') + '" data-day="' + esc(d.date) + '" data-i="' + i + '" aria-label="' + esc(fill(tx.dayOf, { d: dayLong(d.open) })) + '">' +
@@ -404,7 +411,7 @@
         h += iso
           ? '<button type="button" class="cell" data-slot="' + iso + '" data-di="' + i + '" data-r="' + r + '" aria-pressed="false" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(iso))) + '"><span class="t">' + esc(label) + '</span></button>'
           : busy
-          ? '<button type="button" class="cell off mbusy" data-mbusy="' + busy + '" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(busy))) + ': ' + say(hx().notFree, mgrWords()) + '"><span class="t">' + esc(label) + '</span></button>'
+          ? '<button type="button" class="cell off mbusy" data-mbusy="' + busy + '" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(busy))) + ': ' + say(hoursRule() ? hx().notFree : hx().notFreeMeet, mgrWords()) + '"><span class="t">' + esc(label) + '</span></button>'
           : '<button type="button" class="cell off" data-di="' + i + '" data-r="' + r + '" aria-disabled="true" tabindex="-1" aria-label="' + esc(tx.off) + '"><span class="t">' + esc(label) + '</span></button>';
       });
       h += '</div></div>';
@@ -528,7 +535,7 @@
     if (a === 'accept' && !hoursTicked()) { S.busy = false; return; }
     b1.disabled = true; b2.disabled = true;
     function again(msg) { S.busy = false; b1.disabled = !hoursTicked(); b2.disabled = false; var e = document.getElementById('err'); e.textContent = msg; e.className = 'err'; }
-    post(Object.assign({ t: token, a: a }, a === 'accept' && hoursAsked() ? { hours_ok: true } : {})).then(function (r) {
+    post(Object.assign({ t: token, a: a }, a === 'accept' && hoursAsked() ? { hours_ok: boxTicked() } : {})).then(function (r) {
       var j = r.j;
       if (j && j.ok && j.closed) { S.busy = false; S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
       if (j && j.ok) {
@@ -552,6 +559,10 @@
       avH: 'Your availability', avNote: 'Toronto time (Eastern). Your usual week is the one you keep on the Hub\'s Home page. The times you can pick below come from it and from your one-off dates.',
       weekH: 'Your usual week', weekSet: 'Set on {date}.', weekDefault: 'Not set yet: Monday to Friday, 9 am to 5 pm, until you set it.',
       exSave: 'Save these dates', exSaved: 'Saved. The times below now follow these dates.',
+      avNoteInfo: 'Toronto time (Eastern). Your usual week is the one you keep on the Hub\'s Home page, shown here for information: the times you can pick below are not limited to it.',
+      weekNone: 'Not set on the Hub\'s Home page yet.', exSavedInfo: 'Saved.',
+      pickNoteInfo: 'Choose a meeting, then click a free time. You can pick times at least {lead} hours from now, clear of your meetings.',
+      lgBusyInfo: 'A hub@ meeting, or another new hire', lgOffInfo: 'Too soon',
       to: 'to', remove: 'Remove', addBlock: 'Add a block', notAvail: 'Not available',
       exH: 'One-off dates', exNote: 'A date that is not like your usual week: not available at all, or other hours.', exNone: 'No one-off dates.', addEx: 'Add a date', removeEx: 'Remove this date', exDate: 'Date', exOff: 'Not available that day',
       start: '{d}, block {n}, start', end: '{d}, block {n}, end',
@@ -578,6 +589,10 @@
       avH: 'Vos disponibilités', avNote: 'Heure de Toronto (Est). Votre semaine habituelle est celle que vous gardez sur la page d’accueil du Hub. Les heures à choisir plus bas viennent d’elle et de vos dates ponctuelles.',
       weekH: 'Votre semaine habituelle', weekSet: 'Indiquée le {date}.', weekDefault: 'Pas encore indiquée: du lundi au vendredi, de 9 h à 17 h, en attendant.',
       exSave: 'Enregistrer ces dates', exSaved: 'Enregistré. Les heures ci-dessous suivent maintenant ces dates.',
+      avNoteInfo: 'Heure de Toronto (Est). Votre semaine habituelle est celle que vous gardez sur la page d’accueil du Hub, affichée ici à titre indicatif: les heures à choisir plus bas n’y sont pas limitées.',
+      weekNone: 'Pas encore indiquée sur la page d’accueil du Hub.', exSavedInfo: 'Enregistré.',
+      pickNoteInfo: 'Choisissez une rencontre, puis cliquez sur une heure libre. Vous pouvez choisir des heures au moins {lead} heures plus tard, en dehors de vos rencontres.',
+      lgBusyInfo: 'Une rencontre hub@, ou une autre nouvelle recrue', lgOffInfo: 'Trop tôt',
       to: 'à', remove: 'Retirer', addBlock: 'Ajouter une plage', notAvail: 'Non disponible',
       exH: 'Dates ponctuelles', exNote: 'Une date différente de votre semaine habituelle: pas disponible du tout, ou d’autres heures.', exNone: 'Aucune date ponctuelle.', addEx: 'Ajouter une date', removeEx: 'Retirer cette date', exDate: 'Date', exOff: 'Non disponible ce jour-là',
       start: '{d}, plage {n}, début', end: '{d}, plage {n}, fin',
@@ -597,6 +612,7 @@
     }
   };
   function p() { return P[lang]; }
+  function hoursRule() { return !(S.j && S.j.managerHours === false); }   // wave275b: onboard_manager_hours, as the function says; missing means on
   function say(s, o) {   // every {key} in s, escaped
     o = o || {};
     return String(s).replace(/\{(\w+)\}/g, function (_, k) {
@@ -632,7 +648,8 @@
   function hmText(s) { var m = hmMin(s); if (isNaN(m)) return String(s || ''); var loc = lang === 'fr' ? 'fr-CA' : 'en-CA'; return new Intl.DateTimeFormat(loc, { timeZone: 'UTC', hour: 'numeric', minute: '2-digit' }).format(new Date(Date.UTC(2026, 0, 5, Math.floor(m / 60), m % 60))); }
   /* the usual week, read-only: it is set on the Hub's Home page (wave276), and the function sends it as blocks */
   function weekHtml() {
-    var tx = p(), j = S.j, w = S.avSaved.weekly, h = '<h3>' + tx.weekH + '</h3><p class="note" id="weekat">' + (j.noWeek ? tx.weekDefault : j.availabilityAt ? say(tx.weekSet, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : '') + '</p><div class="week" id="week">';
+    var tx = p(), j = S.j, w = S.avSaved.weekly, h = '<h3>' + tx.weekH + '</h3><p class="note" id="weekat">' + (j.noWeek ? (hoursRule() ? tx.weekDefault : tx.weekNone) : j.availabilityAt ? say(tx.weekSet, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : '') + '</p><div class="week" id="week">';
+    if (j.noWeek && !hoursRule()) return h.replace(/<div class="week" id="week">$/, '');   // wave275b: no week saved and none is used, so none is drawn
     WD.forEach(function (d, i) {
       var list = w[d] || [];
       h += '<div class="wd"><div class="wdn">' + esc(tx.days[i]) + '</div><div class="blocks">' + (list.length ? list.map(function (b) { return '<span class="wk">' + esc(hmText(b[0])) + ' ' + esc(tx.to) + ' ' + esc(hmText(b[1])) + '</span>'; }).join('') : '<span class="none">' + esc(tx.notAvail) + '</span>') + '</div></div>';
@@ -717,14 +734,14 @@
       if (j && j.ok && j.closed) { S.j = Object.assign({}, S.j, { closed: true, booked: !!j.booked, message: j.message }); S.view = 'closed'; render(true); return; }
       if (j && j.ok && !j.availability) {   // saved, but the function could not read the hours back: keep the week shown, take the dates that were saved
         S.avSaved = norm({ weekly: S.avSaved.weekly, except: (j.saved || body).except }); S.av = norm(S.avSaved);
-        S.avMsg = (j.warning && j.warning[lang]) || p().exSaved;
+        S.avMsg = (j.warning && j.warning[lang]) || (hoursRule() ? p().exSaved : p().exSavedInfo);
         paintEditor(); paintPicks();
         return;
       }
       if (j && j.ok) {
         S.avSaved = norm(j.availability); S.av = norm(j.availability);
         S.j.availability = j.availability; S.j.availabilityAt = j.availabilityAt; S.j.availabilityStale = !!j.availabilityStale; S.j.noWeek = !!j.noWeek;   // the week is still Home's to set
-        S.avMsg = p().exSaved;
+        S.avMsg = hoursRule() ? p().exSaved : p().exSavedInfo;
         paintEditor(); paintPicks();
         return;
       }
@@ -738,7 +755,7 @@
   function why(which, iso) {
     var sp = spanOf(which, iso), j = S.j;
     if (sp[0] < Date.now() + S.lead * 3600000) return 'off';
-    if (!insideHours(S.avSaved, sp[0], sp[1])) return 'off';
+    if (hoursRule() && !insideHours(S.avSaved, sp[0], sp[1])) return 'off';   // wave275b: off, the week is information only
     if ((j.busy || []).some(function (b) { return sp[0] < Date.parse(b.end) && Date.parse(b.start) < sp[1]; })) return 'busy';
     var other = which === 'call' ? 'one' : 'call';
     if (S.picked[other]) { var o = spanOf(other, S.picked[other]); if (sp[0] < o[1] && o[0] < sp[1]) return 'off'; }
@@ -797,13 +814,13 @@
     card.className = 'card wide';
     var h = '<div class="sec"><h1 tabindex="-1">' + fill(t().hi, j) + '</h1><p>' + say(tx.intro, { hire: j.hire, role: j.role, callMin: S.callMin, oneMin: S.oneMin }) + '</p>';
     /* amended 02/11/26: no week saved on Home, or the team asked again since: the sentence and the way there (wave276's pop-up #w276pop opens on Home when a week is due) */
-    if (j.noWeek || j.availabilityStale) h += '<p class="stale" id="stale" role="note"><b>' + tx.setWeek + '.</b> ' + (!j.noWeek && j.availabilityAt ? say(tx.staleAt, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : tx.staleNone) + ' <a id="sethub" href="https://hub.welfareavenue.com/" target="_blank" rel="noopener">' + tx.openHub + '</a></p>';   // say escapes the date; the sentences are the page's own
-    h += '<h2>' + tx.avH + '</h2><p class="note">' + tx.avNote + '</p>' + weekHtml() + '<div id="editor"></div>' +
+    if (hoursRule() && (j.noWeek || j.availabilityStale)) h += '<p class="stale" id="stale" role="note"><b>' + tx.setWeek + '.</b> ' + (!j.noWeek && j.availabilityAt ? say(tx.staleAt, { date: fmt({ year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(j.availabilityAt)) }) : tx.staleNone) + ' <a id="sethub" href="https://hub.welfareavenue.com/" target="_blank" rel="noopener">' + tx.openHub + '</a></p>';   // say escapes the date; the sentences are the page's own
+    h += '<h2>' + tx.avH + '</h2><p class="note">' + (hoursRule() ? tx.avNote : tx.avNoteInfo) + '</p>' + weekHtml() + '<div id="editor"></div>' +
       '<button class="btn inline" id="saveav" type="button">' + tx.exSave + '</button><p id="avnote" class="hide" role="status"></p><p id="averr" class="err hide" role="alert"></p>' +
-      '<h2>' + tx.pickH + '</h2>' + statusHtml() + '<p class="note">' + say(tx.pickNote, { lead: S.lead }) + '</p>' +
+      '<h2>' + tx.pickH + '</h2>' + statusHtml() + '<p class="note">' + say(hoursRule() ? tx.pickNote : tx.pickNoteInfo, { lead: S.lead }) + '</p>' +
       '<div class="picks" id="picks"><button type="button" class="pick" id="pick-call" data-pick="call" aria-pressed="false"><b><i class="sw sw-call"></i>' + esc(say(tx.call, { n: S.callMin })) + '</b><span></span></button>' +
       '<button type="button" class="pick" id="pick-one" data-pick="one" aria-pressed="false"><b><i class="sw sw-one"></i>' + esc(say(tx.one, { n: S.oneMin })) + '</b><span></span></button></div>' +
-      '<p class="legend"><span><i class="sw sw-free"></i>' + tx.lgFree + '</span><span><i class="sw sw-call"></i>' + tx.lgCall + '</span><span><i class="sw sw-one"></i>' + tx.lgOne + '</span><span><i class="sw sw-busy"></i>' + tx.lgBusy + '</span><span><i class="sw sw-off"></i>' + tx.lgOff + '</span></p></div>';
+      '<p class="legend"><span><i class="sw sw-free"></i>' + tx.lgFree + '</span><span><i class="sw sw-call"></i>' + tx.lgCall + '</span><span><i class="sw sw-one"></i>' + tx.lgOne + '</span><span><i class="sw sw-busy"></i>' + (hoursRule() ? tx.lgBusy : tx.lgBusyInfo) + '</span><span><i class="sw sw-off"></i>' + (hoursRule() ? tx.lgOff : tx.lgOffInfo) + '</span></p></div>';
     if (!m.days.length) { h += '<p>' + t().nothing + '</p>'; card.innerHTML = h; paintEditor(); wireEditor(); return; }
     h += '<div class="pickzone"><div class="chips" id="chips">' + m.days.map(function (d, i) {   // pickzone: the sticky Propose bar stays with the grid, not over the editor
       return '<button type="button" class="chip' + (i === S.active ? ' on' : '') + '" data-day="' + esc(d.date) + '" data-i="' + i + '" aria-label="' + esc(fill(t().dayOf, { d: dayLong(d.open) })) + '">' +
@@ -906,6 +923,7 @@
       yourManager: 'your manager', regrid: 'Change my times',
       gridNo: 'Please mark every time that works for your onboarding call and a 1-on-1 with {manager}. They will pick from your times and send you calendar invites.',
       greyed: 'Greyed times: {Manager} is not free then.', notFree: '{Manager} is not free',
+      greyedMeet: 'Greyed times: {Manager} has a hub@ meeting then.', notFreeMeet: '{Manager} has a hub@ meeting',
       setupLink: 'Open your setup steps', setupNote: 'A few things to do on your own computer before your first day. You can keep that page open.',
       setupH: 'Your setup', setupIntro: 'Do these on your own computer before your onboarding call, in this order, and press Done as you go: {manager} and HR can see who is ready. Your sign-in details are in your welcome email.',
       done: 'Done', markDone: 'Mark as done', count: '{n} of {m} done', back: 'Back to your times'
@@ -921,6 +939,7 @@
       yourManager: 'votre gestionnaire', regrid: 'Modifier mes plages',
       gridNo: 'Indiquez toutes les plages qui vous conviennent pour votre appel d’accueil et une rencontre individuelle avec {manager}. Votre gestionnaire choisira parmi vos plages et vous enverra des invitations.',
       greyed: 'Plages grisées: {Manager} n’est pas disponible à ces heures.', notFree: '{Manager} n’est pas disponible',
+      greyedMeet: 'Plages grisées: {Manager} a une rencontre hub@ à ces heures.', notFreeMeet: '{Manager} a une rencontre hub@',
       setupLink: 'Ouvrir vos étapes d’installation', setupNote: 'Quelques étapes à faire sur votre ordinateur avant votre premier jour. Vous pouvez garder cette page ouverte.',
       setupH: 'Votre installation', setupIntro: 'Faites ces étapes sur votre ordinateur avant votre appel d’accueil, dans cet ordre, et appuyez sur Terminé au fur et à mesure: {manager} et les RH voient qui est prêt. Vos informations de connexion sont dans votre courriel de bienvenue.',
       done: 'Terminé', markDone: 'Marquer comme terminé', count: '{n} sur {m} terminées', back: 'Retour à vos heures'

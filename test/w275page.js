@@ -59,15 +59,15 @@ function makeHire(over) {
       const accepted = S.answered === 'accept';
       return send(200, {
         ok: true, kind: 'offer', first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed: false, late: false, booked: !!S.bookedTimes, callBooked: !!S.bookedTimes,
-        grid: gridWindow(S.minHours), slotsSaved: S.slotsSaved, offerHours: S.offerHours, hoursConfirmed: accepted && !!S.offerHours, mode: S.mode,
-        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 }, managerFree: S.managerFree,
+        grid: gridWindow(S.minHours), slotsSaved: S.slotsSaved, offerHours: S.offerHours, hoursConfirmed: accepted && !!S.offerHours, mode: S.mode, hoursRequired: S.hoursRequired,
+        proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 }, managerFree: S.managerFree, managerHours: S.managerHours,
         setup: accepted ? { steps: STEPS, ticks: Object.fromEntries(STEPS.map(s => [s.key, !!S.ticks[s.key]])) } : null,
       });
     }
     const b = call.body || {};
     if (b.a === 'accept') {
       await new Promise(r => setTimeout(r, S.delay));
-      if (S.offerHours && b.hours_ok !== true) return send(400, { ok: false, error: 'hours_required', message: HOURS_REQ });
+      if (S.offerHours && S.hoursRequired !== false && b.hours_ok !== true) return send(400, { ok: false, error: 'hours_required', message: HOURS_REQ });
       const repeated = !!S.answered;
       S.answered = 'accept';
       return send(200, { ok: true, first: S.first, role: S.role, lang: S.lang, answer: 'accept', answered: 'accept', repeated, late: false });
@@ -190,6 +190,34 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     ok('old offer: Accept posts no hours_ok, and the wave271 grid follows', old.length === 1 && old[0].body.hours_ok === undefined, old);
     await f.ctx.close();
 
+    /* 3b. wave275b (03/11/26, Steel): onboard_require_hours off, so the function says hoursRequired: false. The line stays as an optional box; Accept
+       is enabled without it and posts hours_ok as ticked or not */
+    f = await open(browser, { fn: makeHire({ hoursRequired: false }) });
+    t = await text(f.page);
+    ok('optional hours: the line is still there, EN', /I confirm I can give at least 6 hours a week to Welfare Avenue/.test(t) && (await f.page.locator('#hours').count()) === 1, t.slice(0, 500));
+    ok('optional hours: Accept is enabled without the box, and no sentence says to tick it', await f.page.locator('[data-act="accept"]').isEnabled() && !(await f.page.locator('#hours').isChecked()) && !/Tick the box above to accept/.test(t) && (await f.page.locator('#hoursneed:not(.hide)').count()) === 0);
+    await shot(f.page, 'w275b-accept-optional');
+    await f.page.locator('[data-act="accept"]').dblclick();
+    await f.page.waitForSelector('[data-act="yes"]', { timeout: 5000 });
+    let opt = f.posts().filter(c => c.body.a === 'accept');
+    ok('optional hours: one POST under a double click, hours_ok false (not ticked), and the times follow', opt.length === 1 && opt[0].body.hours_ok === false, opt);
+    await f.ctx.close();
+    f = await open(browser, { fn: makeHire({ hoursRequired: false }) });
+    await f.page.locator('#hours').check();
+    await f.page.locator('[data-act="accept"]').click();
+    await f.page.waitForSelector('[data-act="yes"]', { timeout: 5000 });
+    opt = f.posts().filter(c => c.body.a === 'accept');
+    ok('optional hours: ticked, hours_ok true', opt.length === 1 && opt[0].body.hours_ok === true, opt);
+    await f.ctx.close();
+    f = await open(browser, { qs: '?l=fr', fn: makeHire({ hoursRequired: false }) });
+    t = await text(f.page);
+    ok('optional hours (French): the line, Accept enabled', /Je confirme pouvoir consacrer au moins 6 heures par semaine à Welfare Avenue/.test(t) && await f.page.locator('[data-act="accept"]').isEnabled() && !/Cochez la case ci-dessus pour accepter/.test(t), t.slice(0, 400));
+    await f.ctx.close();
+    /* hoursRequired: true, or missing (a function from before wave275b): the box is required as before */
+    f = await open(browser, { fn: makeHire({ hoursRequired: true }) });
+    ok('required hours (hoursRequired true): Accept waits for the box', await f.page.locator('[data-act="accept"]').isDisabled() && /Tick the box above to accept/.test(await text(f.page)));
+    await f.ctx.close();
+
     /* 4. No, with availability asked: the grid with the 10-hour minimum, Save shows the closing page */
     f = await open(browser, { fn: makeHire({ answered: 'accept' }) });
     await f.page.locator('[data-act="no"]').dblclick();
@@ -241,6 +269,18 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     ok('greys: the legend in French', /Plages grisées: Marc Dubois n.est pas disponible à ces heures\./.test(t), t.slice(0, 700));
     ok('greys: the French label', /Marc Dubois n.est pas disponible/.test(await f.page.locator('.cell.mbusy').first().getAttribute('aria-label') || ''));
     ok('greys: no page errors', f.errors.length === 0, f.errors);
+    await f.ctx.close();
+    /* wave275b: onboard_manager_hours off (managerHours: false): the mask greys only hub@ meetings, and the legend and labels say so */
+    const MEET = [A29 + '14:00:00Z', A29 + '14:30:00Z'];   // Thursday 29 Oct, 10 to 11 am: a hub@ meeting Marc is invited to
+    f = await open(browser, { fn: makeHire({ answered: 'accept', managerHours: false, managerFree: gridWindow(10).slots.filter(iso => MEET.indexOf(iso) < 0) }) });
+    await f.page.locator('[data-act="no"]').click();
+    await f.page.waitForSelector('.cell', { timeout: 5000 });
+    t = await text(f.page);
+    ok('hours off: the legend names the hub@ meeting', /Greyed times: Marc Dubois has a hub@ meeting then\./.test(t) && !/is not free then/.test(t), t.slice(0, 700));
+    ok('hours off: the meeting\'s cells are greyed with that label; 8 am and the weekend can be picked', /Marc Dubois has a hub@ meeting/.test(await f.page.locator('.cell.mbusy[data-mbusy="' + MEET[0] + '"]').getAttribute('aria-label') || '') && (await f.page.locator('[data-slot="' + busy29 + '"]').count()) === 1 && (await f.page.locator('[data-d="2026-10-31"] [data-slot]').count()) > 0);
+    await f.page.locator('#swap').click();
+    await f.page.waitForTimeout(200);
+    ok('hours off: the legend in French', /Plages grisées: Marc Dubois a une rencontre hub@ à ces heures\./.test(await text(f.page)));
     await f.ctx.close();
     /* saved times that fall where the manager is not free are not kept as picked */
     f = await open(browser, { fn: makeHire({ answered: 'accept', answer: 'no', managerFree: FREE, slotsSaved: [free29, busy29] }) });

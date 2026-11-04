@@ -2003,7 +2003,7 @@ function tickSet(a, db) {
   return true;
 }
 async function w275({ cand, fl = {}, config = {}, tables, hr = true, admin = false, manager = false, flows = [], notifyReply } = {}) {
-  const s = await setup({ cand, fl: { manager_member_id: 2, created_at: '2026-10-15T12:00:00Z', ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', onboard_v2_since: '2026-10-01T00:00:00Z', ...config }, tables, hr, admin, notifyReply });   // whole-branch fix: on the new path (made after onboard_v2_since), as signed-in propose now requires
+  const s = await setup({ cand, fl: { manager_member_id: 2, created_at: '2026-10-15T12:00:00Z', ...fl }, config: { hr_notify_emails: 'ruth.owen@welfareavenue.com', onboard_propose_lead_hours: '48', onboard_v2_since: '2026-10-01T00:00:00Z', onboard_manager_hours: 'on', ...config }, tables, hr, admin, notifyReply });   // whole-branch fix: on the new path (made after onboard_v2_since), as signed-in propose now requires
   s.db.onRpc('wa275_manager_of', (a, _d, w) => { assert.ok(w.jwt, 'the manager check runs as the caller'); assert.equal(Number(a.p_flow), 21); return manager; });
   s.db.onRpc('wa275_tick_set', (a, db, w) => { assert.equal(w.jwt, null, 'ticks are set with the service key'); return tickSet(a, db); });
   for (const f of flows) s.db.rows('hub_onboard_flows').push(f);
@@ -3500,4 +3500,81 @@ test('w275 whole-branch: the template\'s marked places say they fill in when the
   assert.match(text, /Your first day is Monday, October 26, 2026\./);
   assert.match(text, /\nManager: Sam Lee$/);
   assert.doesNotMatch(text, /\[|Canva/, 'the old Canva place with no link takes its line out, as before');
+});
+
+/* ---------- wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): onboard_manager_hours, off by default ----------
+   Off (or absent, or anything but on): the manager's week is information, not a rule for times. Every other rule stays. The w275() rig sets it on, so
+   the tests above are the "on" behaviour, which is today's. */
+const HOURS_OFF = { onboard_manager_hours: 'off' };
+const SAT_TIMES = { call_at: '2026-10-24T14:00:00Z', one_on_one_at: '2026-10-24T15:30:00Z' };   // Saturday 10:00 and 11:30 in Toronto: outside Monday to Friday 9 to 5
+const dropSetting = (s, key) => { const rows = s.db.rows('app_config'); const i = rows.findIndex((r) => r.key === key); if (i >= 0) rows.splice(i, 1); };
+
+test('w275b onboard_manager_hours off, absent or not "on": propose outside the manager\'s week is saved, and their hours are not even read; on (any case) refuses it, outside_hours', async () => {
+  for (const value of ['off', '', 'yes', null]) {
+    const s = await w275({ config: { onboard_manager_hours: value ?? 'on' } });
+    if (value === null) dropSetting(s, 'onboard_manager_hours');
+    const reads = [];
+    s.db.onRpc('wa275_availability_of', (a) => { reads.push(a); throw new Error('the hours are not a rule now'); });
+    const r = await s.propose(SAT_TIMES);
+    assert.equal(r.status, 200, String(value) + ': ' + JSON.stringify(r.body));
+    assert.equal(s.flow().proposed_call_at, '2026-10-24T14:00:00.000Z');
+    assert.equal(reads.length, 0, String(value) + ': the manager\'s hours are not read');
+  }
+  for (const value of ['on', ' ON ']) refused(await (await w275({ config: { onboard_manager_hours: value } })).propose(SAT_TIMES), 'outside_hours', 'call');
+  const mgr = await w275({ hr: false, config: HOURS_OFF });   // the mgr link relays to the same rules
+  assert.equal((await mgr.asLink(SAT_TIMES)).status, 200);
+});
+
+test('w275b onboard_manager_hours off: every other rule stays (lead time, overlap, a hub@ meeting the manager is invited to, another new hire\'s times, already booked)', async () => {
+  refused(await (await w275({ config: HOURS_OFF })).propose({ call_at: '2026-10-21T14:00:00Z' }), 'lead_time', 'call');
+  refused(await (await w275({ config: HOURS_OFF })).propose({ call_at: '2026-10-24T14:00:00Z', one_on_one_at: '2026-10-24T14:30:00Z' }), 'overlap');
+  const ev = { id: 'e1', summary: 'Board', attendee_emails: ['sam.lee@welfareavenue.com'], status: 'confirmed', start_at: '2026-10-24T14:30:00Z', end_at: '2026-10-24T15:00:00Z' };
+  refused(await (await w275({ config: HOURS_OFF, tables: { hub_events: [ev] } })).propose(SAT_TIMES), 'busy', 'call');
+  const other = flow({ id: 22, candidate_id: 12, manager_member_id: 2, call_at: '2026-10-24T15:00:00Z' });
+  refused(await (await w275({ config: HOURS_OFF, tables: { hub_candidates: [candidate(), candidate({ id: 12, name: 'Bo Chen' })] }, flows: [other] })).propose(SAT_TIMES), 'taken', 'one_on_one');
+  refused(await (await w275({ config: HOURS_OFF, fl: { call_at: P_CALL } })).propose(), 'already_booked');
+});
+
+test('w275b onboard_manager_hours off: the hire\'s Yes books times outside the manager\'s week; on, the same times are stale', async () => {
+  const sam = SAM_AT({ weekly: { mon: [['13:00', '17:00']] } });   // Monday 10:00 is outside 1 to 5
+  const s = await t3({ fl: PROPOSED, tables: sam, config: HOURS_OFF });
+  await s.acceptSetup();
+  const r = await s.book();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual([s.flow().call_at, s.flow().hire_answer], [P_CALL, 'yes']);
+  const on = await t3({ fl: PROPOSED, tables: sam });
+  await on.acceptSetup();
+  refused(await on.book(), 'stale', 'call');
+});
+
+test('w275b onboard_manager_hours off: HR books from the card outside the manager\'s week; on, outside_hours', async () => {
+  const s = await t6({ fl: SAID_NO, config: HOURS_OFF });
+  await s.acceptSetup();
+  const r = await s.bookCard({ call_at: '2026-10-27T22:00:00.000Z' });   // Tuesday 6 pm
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.flow().call_at, '2026-10-27T22:00:00.000Z');
+  refused(await (await t6({ fl: SAID_NO })).bookCard({ call_at: '2026-10-27T22:00:00.000Z' }), 'outside_hours', 'call');
+});
+
+test('w275b times {flow_id}: manager_hours says whether the week limits the times; the week is still sent, for information, and a failed read of it no longer stops the picker when it is off', async () => {
+  const off = await t6({ fl: SAID_NO, config: HOURS_OFF });
+  const r = await off.card('times');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.manager_hours, false);
+  assert.deepEqual(r.body.availability.weekly.mon, [['09:00', '17:00']], 'the week, for information');
+  assert.equal(r.body.no_week, true);
+  const on = await t6({ fl: SAID_NO });
+  assert.equal((await on.card('times')).body.manager_hours, true);
+  const absent = await t6({ fl: SAID_NO });
+  dropSetting(absent, 'onboard_manager_hours');
+  assert.equal((await absent.card('times')).body.manager_hours, false, 'absent is off');
+  const down = await t6({ fl: SAID_NO, config: HOURS_OFF });
+  down.db.onRpc('wa275_availability_of', () => { throw new Error('rig: availability is down'); });
+  const d = await down.card('times');
+  assert.equal(d.status, 200, JSON.stringify(d.body));
+  assert.deepEqual([d.body.availability, d.body.manager_hours], [null, false]);
+  assert.ok(Array.isArray(d.body.busy), 'the hub@ meetings still come');
+  const downOn = await t6({ fl: SAID_NO });
+  downOn.db.onRpc('wa275_availability_of', () => { throw new Error('rig: availability is down'); });
+  assert.equal((await downOn.card('times')).status, 503, 'on, the hours are a rule: a failed read is still a 503');
 });

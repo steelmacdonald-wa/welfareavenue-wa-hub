@@ -23,6 +23,8 @@ const assertions = read('w271sql.sql');
 const streamlined = read('../build/wa275a_streamlined.sql');
 const undo275 = read('../build/wa275a_undo.sql');
 const assertions275 = read('w275sql.sql');
+const optional275 = read('../build/wa275b_optional.sql');   // wave275b (03/11/26): three availability checks optional, off by default
+const undo275b = read('../build/wa275b_undo.sql');
 
 let checks = 0;
 const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
@@ -37,11 +39,11 @@ async function runAssertions(db, label) {
   console.log(label + ': ' + line);
 }
 
-async function runAssertions275(db, label) {
+async function runAssertions275(db, label, withB = false) {
   const res = await db.exec(assertions275);
   const last = res.filter((r) => r.rows && r.rows.length).pop();
   const line = last && last.rows[0] && last.rows[0].result;
-  ok(line === 'w275sql: all assertions passed', label + ': the wave275 assertion script finished');
+  ok(line === 'w275sql: all assertions passed' + (withB ? ' (with wa275b)' : ''), label + ': the wave275 assertion script finished' + (withB ? ', its wa275b section included' : '') + ' (' + line + ')');
   console.log(label + ': ' + line);
 }
 const FN271 = `select pg_get_functiondef('public.wa271_ready_list()'::regprocedure) as ready, obj_description('public.wa271_ready_list()'::regprocedure, 'pg_proc') as ready_cmt,
@@ -148,6 +150,64 @@ try {
   await db.exec(streamlined);
   ok((await one(db, `select value from public.app_config where key = 'onboard_propose_lead_hours'`)).value === '72', 'wa275: running it again keeps a value HR changed');
   await db.exec(`update public.app_config set value = '48' where key = 'onboard_propose_lead_hours'`);
+
+  // ---- wave275b (03/11/26, Steel): the three availability checks are settings, off by default. On top of wa275a, with an undo that brings wa275a back exactly.
+  const FN275 = `select pg_get_functiondef('public.wa275_offer_sent()'::regprocedure) as trig, obj_description('public.wa275_offer_sent()'::regprocedure, 'pg_proc') as trig_cmt,
+      (select proacl::text from pg_proc where oid = 'public.wa275_offer_sent()'::regprocedure) as trig_acl,
+      pg_get_functiondef('public.wa275_flow_row(bigint)'::regprocedure) as row_def, obj_description('public.wa275_flow_row(bigint)'::regprocedure, 'pg_proc') as row_cmt,
+      (select proacl::text from pg_proc where oid = 'public.wa275_flow_row(bigint)'::regprocedure) as row_acl,
+      (select column_default from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'ask_availability') as col_default,
+      col_description('public.hub_onboard_flows'::regclass, (select attnum from pg_attribute where attrelid = 'public.hub_onboard_flows'::regclass and attname = 'ask_availability')) as col_cmt`;
+  /* live applied wa275a from the release commit (LF); the working copy here may be CRLF, so bodies are compared without carriage returns */
+  const lf = (row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k, typeof v === 'string' ? v.replace(/\r/g, '') : v]));
+  const wa275aFns = lf(await one(db, FN275));
+  const B_KEYS = ['onboard_ask_hire_availability', 'onboard_manager_hours', 'onboard_require_hours'];
+  // live flows before the release: unanswered offered and waiting ones are switched to already communicated, once; answered and later ones are left alone
+  await db.exec(`
+    insert into public.hub_candidates (name, email, status, offer_hours) values ('Test Person B Offered', 'w275b.offered@example.invalid', 'offer', 6), ('Test Person B Waiting', 'w275b.waiting@example.invalid', 'offer', 6),
+      ('Test Person B Said No', 'w275b.saidno@example.invalid', 'offer', 6), ('Test Person B Ready', 'w275b.ready@example.invalid', 'offer', 6);
+    update public.hub_candidates set offer_sent_at = now() where email like 'w275b.%@example.invalid';
+    update public.hub_candidates set accepted_on = current_date where email in ('w275b.waiting@example.invalid', 'w275b.saidno@example.invalid', 'w275b.ready@example.invalid');
+    update public.hub_onboard_flows set hire_answer = 'no', hire_answered_at = now() where candidate_id = (select id from public.hub_candidates where email = 'w275b.saidno@example.invalid');
+    update public.hub_onboard_flows set status = 'ready' where candidate_id = (select id from public.hub_candidates where email = 'w275b.ready@example.invalid');`);
+  const askOf = async (email) => (await one(db, `select f.ask_availability as a from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email = '${email}'`)).a;
+  ok((await askOf('w275b.offered@example.invalid')) === true && (await askOf('w275b.waiting@example.invalid')) === true, "wa275b: before it, flows ask the hire (wa275a's default)");
+  await db.exec(optional275);
+  await db.exec(optional275);   // safe to run twice
+  console.log('wa275b_optional: applied twice with no error');
+  for (const k of B_KEYS) ok((await one(db, `select count(*)::int as n from public.app_config where key = '${k}' and value = 'off'`)).n === 1, 'wa275b: ' + k + ' is off, once');
+  ok((await askOf('w275b.offered@example.invalid')) === false, 'wa275b: an offered flow with no answer is switched to already communicated');
+  ok((await askOf('w275b.waiting@example.invalid')) === false, 'wa275b: a waiting flow with no answer too');
+  ok((await askOf('w275b.saidno@example.invalid')) === true, 'wa275b: a flow the hire answered is left alone');
+  ok((await askOf('w275b.ready@example.invalid')) === true, 'wa275b: a flow past waiting is left alone');
+  const logged = (await db.query(`select l.entity_id, l.old_value, l.new_value, l.changed_by from public.change_log l where l.entity_type = 'onboard_flow' and l.field = 'ask_availability'
+      and l.entity_id in (select f.id::text from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email like 'w275b.%')`)).rows;
+  ok(logged.length === 2 && logged.every((l) => l.old_value === 'ask the hire' && l.new_value === 'already communicated' && /wa275b/.test(l.changed_by)), 'wa275b: each switched flow is in change_log once, as the card logs its switch (' + JSON.stringify(logged) + ')');
+  // the switch is HR's from now on: a second run (the setting already there) switches nothing back, and keeps a value HR set
+  await db.exec(`update public.hub_onboard_flows set ask_availability = true where candidate_id = (select id from public.hub_candidates where email = 'w275b.offered@example.invalid');
+    update public.app_config set value = 'on' where key = 'onboard_require_hours';`);
+  await db.exec(optional275);
+  ok((await askOf('w275b.offered@example.invalid')) === true, 'wa275b: running it again leaves a switch HR turned back on');
+  ok((await one(db, `select value from public.app_config where key = 'onboard_require_hours'`)).value === 'on', 'wa275b: running it again keeps a value HR set');
+  await db.exec(`update public.app_config set value = 'off' where key = 'onboard_require_hours'`);
+  await runAssertions275(db, 'wa275 assertions with wa275b loaded', true);
+  await runAssertions(db, 'wa271 assertions with wa275b loaded');
+  // the undo: wa275a's trigger function, card row, column default and comment come back exactly; the settings go; the flows keep their switch (data, not schema)
+  await db.exec(undo275b);
+  await db.exec(undo275b);   // safe to run twice
+  console.log('wa275b undo: applied twice with no error');
+  const backFns = lf(await one(db, FN275));
+  for (const k of Object.keys(wa275aFns)) ok(backFns[k] === wa275aFns[k], 'wa275b undo: wa275a ' + k + ' is back exactly as it was');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in (${B_KEYS.map((k) => "'" + k + "'").join(', ')})`)).n === 0, 'wa275b undo: the three settings are gone');
+  ok((await askOf('w275b.waiting@example.invalid')) === false, 'wa275b undo: a flow keeps the switch it has (the undo changes no flow)');
+  await runAssertions275(db, 'wa275 assertions after the wa275b undo');
+  await db.exec(optional275);   // and it goes back on after its undo
+  await runAssertions275(db, 'wa275 assertions with wa275b re-applied', true);
+  await db.exec(undo275b);
+  await db.exec(`delete from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability';
+    delete from public.hub_onboard_flows where candidate_id in (select id from public.hub_candidates where email like 'w275b.%');
+    delete from public.hub_candidates where email like 'w275b.%';`);
+  console.log('wa275b: every check passed');
 
   // ---- the undo. Put real-looking work in first: an accepted candidate (kept) and its flow (dropped with the tables).
   await db.exec(`

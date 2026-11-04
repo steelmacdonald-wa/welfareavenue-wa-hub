@@ -286,6 +286,46 @@ const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
     await done(f);
   }
 
+  /* ---------- 4d. wave275b (03/11/26, Steel): the availability checks are settings, off by default ----------
+     A flow made after wa275b starts "already communicated" (onboard_ask_hire_availability off); with onboard_manager_hours off the card row says
+     manager_hours false, the week line is information, and the picker offers every cell of the window, greying only hub@ meetings, other hires and
+     too-soon cells; the hours line says "confirmed" only when the hire ticked the box (onboard_require_hours off makes it optional). */
+  {
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', rpcs: rpcs275({ extra: ['fresh', 'loose'] }) });
+    await open(f, '#hrcentre/overview'); await open(f);
+    ok('wave275b: a new flow\'s switch shows "already communicated" by default', /\bon\b/.test(await cls(f, card(F.fresh) + ' [data-o275a="ask"][data-on="0"]')) && !/\bon\b/.test(await cls(f, card(F.fresh) + ' [data-o275a="ask"][data-on="1"]')));
+    let t = await txtOf(f, card(F.fresh) + ' [data-o275mgr]');
+    ok('wave275b: no week saved, hours off: one quiet line, not a prompt', /Dana has not set their week on Home; times are not limited to it/.test(t) && !/Monday to Friday/.test(t) && !/asked/.test(t), t);
+    t = await txtOf(f, card(F.loose) + ' [data-o275mgr]');
+    ok('wave275b: a week saved (and asked again), hours off: when it was set, for information', /their week was set on 10 Sep; times are not limited to it/.test(t) && !/asked for their week again/.test(t), t);
+    t = await txtOf(f, card(F.loose) + ' [data-o275state]');
+    ok('wave275b: the box not ticked: "6 hours a week", not "confirmed"', /Accepted 21 Sep, 6 hours a week$/m.test(t) && !/confirmed/.test(t), t);
+    t = await txtOf(f, card(F.said) + ' [data-o275state]');
+    ok('wave275b: ticked, still "confirmed"', /6 hours a week confirmed/.test(t), t);
+    t = await txtOf(f, card(F.offered) + ' [data-o275mgr]');
+    ok('wave275b: a row from before (no manager_hours) keeps today\'s prompt', /has not set their week on the Hub's Home page yet/.test(t), t);
+
+    await click(f, card(F.fresh) + ' [data-o275a="open"][data-kind="propose"]');
+    await f.page.waitForSelector(cell(F.fresh, AT(10)), { timeout: 4000 });
+    const c = await calls(f, 'times');
+    ok('wave275b: the picker reads times', c.length === 1 && c[0].body.flow_id === F.fresh, c);
+    ok('wave275b: hours off, the picker offers cells outside the manager\'s week (8 am, 6 pm) as well as inside it', /\bm\b/.test(await cls(f, cell(F.fresh, AT(8)))) && /\bm\b/.test(await cls(f, cell(F.fresh, AT(18)))) && /\bm\b/.test(await cls(f, cell(F.fresh, AT(10)))), [await cls(f, cell(F.fresh, AT(8))), await cls(f, cell(F.fresh, AT(18)))]);
+    ok('wave275b: hub@ meetings, other hires and too-soon cells are still greyed', /\bbusy\b/.test(await cls(f, cell(F.fresh, AT(13)))) && /\bbusy\b/.test(await cls(f, cell(F.fresh, AT(15)))) && /\bbusy\b/.test(await cls(f, cell(F.fresh, new Date(Date.UTC(2026, 8, 26, 14)).toISOString()))));
+    t = await txtOf(f, card(F.fresh) + ' [data-o275pn]');
+    ok('wave275b: the panel does not say the times must be inside the manager\'s hours, and has no "no week" warning', !/inside Dana's hours/.test(t) && !/Monday to Friday/.test(t) && /Open to pick/.test(t) && !/Dana is free/.test(t), t.slice(0, 600));
+    await shot(f, 'w275b-propose-hours-off-1366');
+    await press(f, cell(F.fresh, AT(8)));
+    await press(f, card(F.fresh) + ' [data-o275a="mode"][data-mode="one"]');
+    await press(f, cell(F.fresh, AT(18)));
+    t = await txtOf(f, card(F.fresh) + ' [data-o275said="call"]');
+    ok('wave275b: a time outside the week is not flagged', /8:00/.test(t) && !/Careful/.test(t), t);
+    await press(f, card(F.fresh) + ' [data-o275a="go"]');
+    const p = await calls(f, 'propose');
+    ok('wave275b: Propose these times sends the times outside the week', p.length === 1 && p[0].body.call_at === AT(8) && p[0].body.one_on_one_at === AT(18), p);
+    ok('no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
   /* ---------- 5. 390 px ---------- */
   {
     const f = await go({ who: 'plain', width: 390, hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }), init: init + '\n' + NOT_HR });

@@ -42,7 +42,9 @@ begin
   select count(*) into n from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows'
     and column_name in ('proposed_call_at', 'proposed_one_on_one_at', 'proposed_by', 'proposed_at', 'hire_answer', 'hire_answered_at', 'setup_ticks', 'welcome_sent_at', 'accounts_at', 'ask_availability');
   assert n = 10, format('ten new flow columns, found %s', n);
-  assert (select column_default from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'ask_availability') = 'true', 'ask_availability defaults on';
+  -- wave275b (03/11/26, Steel: the availability checks are optional, off by default): with wa275b loaded the column defaults off, and the offer-sent trigger sets it from onboard_ask_hire_availability
+  assert (select column_default from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'ask_availability')
+       = case when pg_get_functiondef('public.wa275_offer_sent()'::regprocedure) like '%onboard_ask_hire_availability%' then 'false' else 'true' end, 'ask_availability defaults on (wa275a), off once wa275b is loaded';
   assert (select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'ask_availability') = 'NO', 'ask_availability is not null';
   assert (select data_type from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'setup_ticks') = 'jsonb', 'setup_ticks is jsonb';
 
@@ -120,7 +122,9 @@ begin
   assert f.id is not null, 'sending the offer made a flow';
   assert f.status = 'offered', format('the flow is offered, not %s', f.status);
   assert f.manager_member_id = (select id from public.team_members where email = 'w275.mgr1@example.invalid'), 'the flow has the offer''s manager';
-  assert f.practice = false and f.ask_availability = true and f.setup_ticks = '{}'::jsonb and f.hire_answer is null and f.proposed_call_at is null, 'the new flow starts clean';
+  assert f.practice = false and f.setup_ticks = '{}'::jsonb and f.hire_answer is null and f.proposed_call_at is null, 'the new flow starts clean';
+  -- wa275a: ask the hire (true); wave275b: from onboard_ask_hire_availability, which ships off (its own section below tries on, off and absent)
+  assert f.ask_availability = not (pg_get_functiondef('public.wa275_offer_sent()'::regprocedure) like '%onboard_ask_hire_availability%'), 'the new flow asks the hire (wa275a), or not (wa275b, the setting off)';
   assert (select practice from public.hub_onboard_flows where candidate_id = (select id from public.hub_candidates where name = 'Test Person Practice')), 'a practice offer makes a practice flow';
   assert (select manager_member_id from public.hub_onboard_flows where candidate_id = (select id from public.hub_candidates where name = 'Test Person NoManager')) is null, 'no manager chosen: the flow is still made, with none';
   assert (select count(*) from public.hub_onboard_flows where candidate_id in (select id from public.hub_candidates where name like 'Test Person %' and email like 'w275.%')) = 6, 'six offers sent, six flows (the old path candidate has none)';
@@ -677,5 +681,62 @@ begin
   exception when raise_exception then null; end;
 end $$;
 
-select 'w275sql: all assertions passed' as result;
+-- ---------------------------------------------------------------- wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): three settings, off by default
+-- Runs only once build/wa275b_optional.sql is loaded (the offer-sent trigger then reads onboard_ask_hire_availability); with wa275a alone it is skipped and the
+-- final line says so. The trigger is tried with the setting on, off, absent and nonsense; the card row's manager_hours with on, off and absent.
+create temp table w275b_ran (b boolean) on commit drop;
+insert into w275b_ran values (pg_get_functiondef('public.wa275_offer_sent()'::regprocedure) like '%onboard_ask_hire_availability%');
+do $$
+declare v_mgr bigint; v text; f record; n bigint;
+begin
+  if not (select b from w275b_ran) then return; end if;
+  v_mgr := (select id from public.team_members where email = 'w275.mgr1@example.invalid');
+
+  -- the three settings, shipped off
+  assert (select value from public.app_config where key = 'onboard_ask_hire_availability') = 'off', 'wa275b: onboard_ask_hire_availability ships off';
+  assert (select value from public.app_config where key = 'onboard_manager_hours') = 'off', 'wa275b: onboard_manager_hours ships off';
+  assert (select value from public.app_config where key = 'onboard_require_hours') = 'off', 'wa275b: onboard_require_hours ships off';
+  assert (select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'hub_onboard_flows' and column_name = 'ask_availability') = 'NO', 'wa275b: ask_availability is still not null';
+  assert col_description('public.hub_onboard_flows'::regclass, (select attnum from pg_attribute where attrelid = 'public.hub_onboard_flows'::regclass and attname = 'ask_availability')) like '%onboard_ask_hire_availability%', 'wa275b: the column comment names the setting';
+
+  -- the replaced functions keep their safety: definer, search_path '', not callable from the browser, and commented
+  assert (select prosecdef and proconfig = array['search_path=""'] from pg_proc where oid = 'public.wa275_offer_sent()'::regprocedure), 'wa275b: the trigger function is a definer with an empty search_path';
+  assert (select prosecdef and proconfig = array['search_path=""'] from pg_proc where oid = 'public.wa275_flow_row(bigint)'::regprocedure), 'wa275b: the card row is a definer with an empty search_path';
+  assert not has_function_privilege('authenticated', 'public.wa275_offer_sent()', 'execute') and not has_function_privilege('anon', 'public.wa275_offer_sent()', 'execute'), 'wa275b: the trigger function is not callable';
+  assert not has_function_privilege('authenticated', 'public.wa275_flow_row(bigint)', 'execute') and not has_function_privilege('anon', 'public.wa275_flow_row(bigint)', 'execute'), 'wa275b: the card row is not callable from the browser';
+  assert obj_description('public.wa275_offer_sent()'::regprocedure, 'pg_proc') like '%onboard_ask_hire_availability%', 'wa275b: the trigger comment names the setting';
+  assert obj_description('public.wa275_flow_row(bigint)'::regprocedure, 'pg_proc') like '%manager_hours%', 'wa275b: the card row comment names manager_hours';
+
+  -- the trigger: a new flow asks the hire only while the setting says on (any case, spaces trimmed); off, absent or anything else: already communicated
+  foreach v in array array['off', 'on', ' ON ', 'yes', null] loop
+    if v is null then delete from public.app_config where key = 'onboard_ask_hire_availability';
+    else insert into public.app_config (key, value) values ('onboard_ask_hire_availability', v) on conflict (key) do update set value = excluded.value;
+    end if;
+    insert into public.hub_candidates (name, email, status, offer_hours, onboard_manager_id) values ('Test Person B ' || coalesce(v, 'absent'), 'w275b.' || md5(coalesce(v, 'absent')) || '@example.invalid', 'offer', 4, v_mgr);
+    update public.hub_candidates set offer_sent_at = now() where name = 'Test Person B ' || coalesce(v, 'absent');
+    select * into f from public.hub_onboard_flows where candidate_id = (select id from public.hub_candidates where name = 'Test Person B ' || coalesce(v, 'absent'));
+    assert f.id is not null and f.status = 'offered' and f.manager_member_id = v_mgr, format('wa275b: the offer still makes its flow (setting %s)', coalesce(v, 'absent'));
+    assert f.ask_availability = (coalesce(lower(trim(v)), '') = 'on'), format('wa275b: setting %s gives ask_availability %s, not %s', coalesce(v, 'absent'), coalesce(lower(trim(v)), '') = 'on', f.ask_availability);
+  end loop;
+  insert into public.app_config (key, value) values ('onboard_ask_hire_availability', 'off') on conflict (key) do update set value = excluded.value;
+  -- a flow made some other way (Accept with no offer-sent flow) takes the column default: off
+  insert into public.hub_candidates (name, email, status) values ('Test Person B Accept', 'w275b.accept@example.invalid', 'offer');
+  update public.hub_candidates set accepted_on = current_date where name = 'Test Person B Accept';
+  assert (select ask_availability from public.hub_onboard_flows where candidate_id = (select id from public.hub_candidates where name = 'Test Person B Accept')) = false, 'wa275b: a flow made at Accept takes the column default, off';
+
+  -- the card row: manager_hours on, off and absent (absent and nonsense: off)
+  select id into n from public.hub_onboard_flows where candidate_id = (select id from public.hub_candidates where name = 'Test Person B off');
+  assert public.wa275_flow_row(n) -> 'manager_hours' = 'false'::jsonb, 'wa275b: manager_hours off on the card row';
+  update public.app_config set value = 'on' where key = 'onboard_manager_hours';
+  assert public.wa275_flow_row(n) -> 'manager_hours' = 'true'::jsonb, 'wa275b: manager_hours on on the card row';
+  update public.app_config set value = 'maybe' where key = 'onboard_manager_hours';
+  assert public.wa275_flow_row(n) -> 'manager_hours' = 'false'::jsonb, 'wa275b: a value that is not on is off';
+  delete from public.app_config where key = 'onboard_manager_hours';
+  assert public.wa275_flow_row(n) -> 'manager_hours' = 'false'::jsonb, 'wa275b: absent is off';
+  insert into public.app_config (key, value) values ('onboard_manager_hours', 'off');
+  -- everything else on the row is as wa275a gives it
+  assert public.wa275_flow_row(n) ->> 'status' = 'offered' and (public.wa275_flow_row(n) -> 'propose_path') = 'true'::jsonb and public.wa275_flow_row(n) ? 'manager_no_week' and public.wa275_flow_row(n) ? 'steps', 'wa275b: the rest of the card row is unchanged';
+end $$;
+
+select 'w275sql: all assertions passed' || case when (select b from w275b_ran) then ' (with wa275b)' else '' end as result;
 rollback;

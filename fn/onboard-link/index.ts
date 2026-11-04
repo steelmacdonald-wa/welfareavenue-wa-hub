@@ -1,5 +1,14 @@
 // Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability;
-// v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown)
+// v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown; v4, 03/11/26, wave275b: the hours box and the manager's
+// week are rules only while their settings are on)
+// wave275b (v4, Steel 03/11/26: "Can we make the availability check for onboarding optional"), two app_config settings (wa275b, off by default; anything
+//   but "on" is off):
+//   onboard_require_hours   on: Accept with offerHours needs hours_ok: true (400 hours_required), as in v3. Off: Accept is taken without it, and
+//              hours_confirmed_at (and the note's "confirming at least N hours a week") only when hours_ok is true. The offer GET says hoursRequired.
+//   onboard_manager_hours   on: as in v3. Off: the mgr GET says managerHours: false (the page drops "Set your week" and the hours rule for picks; the
+//              week is still sent, for information), and the hire's No grid mask (managerFree) greys only hub@ meetings the manager is invited to, without
+//              reading their hours; the offer GET sends managerHours beside managerFree so the page words its legend. onboard-run applies the same
+//              setting to the times themselves.
 // The public side of HR onboarding: the no-login links behind hub.welfareavenue.com/o/<token> (page by Task 4). One signed
 // token per purpose, <id>.<20 characters of HMAC-SHA256>, as in candidate-confirm, but the key is 'onboard-<purpose>:' + the
 // service key, so a link made for one purpose (or for candidate-confirm) opens nothing else:
@@ -316,6 +325,8 @@ async function view(l: Link) {
       /* a second No to these times went to a person (nothing recorded as a no): a reload says so instead of offering Yes and No again; new times clear it */
       secondNo: f && !f.call_at && !f.hire_answer && f.setup_ticks?.no_again_at ? MSG.answered : null,
       setup: l.cand.accepted_on && f ? setupOf(f) : null,
+      /* wave275b: whether Accept needs the hours box (onboard_require_hours on); an offer with no hours never does */
+      hoursRequired: Number(l.cand.offer_hours) > 0 && await settingOn('onboard_require_hours'),
     };
     if (l.mode === 'propose') {   // the page shows each meeting as a span ("10 to 11 am")
       const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min']);
@@ -325,7 +336,10 @@ async function view(l: Link) {
   const grid = l.kind === 'password' ? null : await gridWindow();
   const inWindow = new Set(grid ? grid.slots : []);   // saved slots that have since started, or fell out of the window, are not shown
   /* whole-branch fix (design section 5): the hire's grid after a No greys where the manager is not free */
-  if (l.kind === 'offer' && l.mode === 'propose' && grid && !closed && l.cand.accepted_on && l.flow && !l.flow.call_at) extra.managerFree = await managerFree(l, grid);
+  if (l.kind === 'offer' && l.mode === 'propose' && grid && !closed && l.cand.accepted_on && l.flow && !l.flow.call_at) {
+    extra.managerHours = await settingOn('onboard_manager_hours');   // wave275b: off, the greys are only hub@ meetings, and the page's legend says so
+    extra.managerFree = await managerFree(l, grid, extra.managerHours === true);
+  }
   const late = l.kind === 'offer' && answered !== 'decline' && lateAt(l.cand, answered === 'accept' ? String(l.cand.accepted_on).slice(0, 10) : torontoToday());
   return {
     ok: true, kind: l.kind, first, ...(hire !== undefined ? { hire } : {}), role: l.cand.role, lang: l.kind === 'manager' ? 'en' : langOf(l.cand),
@@ -372,6 +386,8 @@ async function modeOf(l: Link): Promise<'propose' | 'grid'> {
   return f.created_at && Date.parse(f.created_at) >= since ? 'propose' : 'grid';
 }
 const positive = (v: string | undefined, def: number) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? n : def; };
+/* wave275b: a setting that is on only when it says "on" (any case, spaces trimmed); off, absent or anything else is off. A failed read throws (503). */
+async function settingOn(key: string): Promise<boolean> { return String((await settings([key])).get(key) || '').toLowerCase() === 'on'; }
 async function proposeView(l: Link, m: Member | null) {
   const f = l.flow!;
   const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min', 'onboard_propose_lead_hours']);
@@ -415,18 +431,20 @@ async function proposeView(l: Link, m: Member | null) {
     ...(hours || { availability: NO_MANAGER_HOURS, availabilityAt: null, availabilityStale: true, noWeek: true, exceptAt: null }),
     busy, lengths: { callMin, oneMin }, leadHours: positive(cfg.get('onboard_propose_lead_hours'), 48),
     hireAccepted: !!l.cand.accepted_on, hireAnswer: f.hire_answer ?? null,
+    managerHours: await settingOn('onboard_manager_hours'),   // wave275b: off, the week above is information and picks are not limited to it
   };
 }
 
 /* whole-branch fix (design section 5): the cells of the hire's grid where the manager is free: inside their hours for that Toronto date (wa275_availability_of:
    the week from Home, a one-off date in its place) and clear of the hub@ meetings they are invited to. Only cell starts leave over this no-login link,
    never a meeting's title or anything else about it. null (no greys) when there is no manager or a read fails: the hire is never held up by it, and the
-   page says nothing. The hire may still mark any cell they like on the server's side; the greys are a guide, and the 10-hour minimum is the hire's own. */
-async function managerFree(l: Link, grid: Grid): Promise<string[] | null> {
+   page says nothing. The hire may still mark any cell they like on the server's side; the greys are a guide, and the 10-hour minimum is the hire's own.
+   wave275b: with onboard_manager_hours off, the manager's hours are not read and only the hub@ meetings are greyed. */
+async function managerFree(l: Link, grid: Grid, hoursRule: boolean): Promise<string[] | null> {
   try {
     const m = await managerRow(l);
     if (!m || !grid.slots.length) return null;
-    const av = (await hoursOf(m.id)).availability as { weekly?: Record<string, Array<[string, string]>>; except?: Array<{ date: string; free: Array<[string, string]> }> } | null;
+    const av = (hoursRule ? (await hoursOf(m.id)).availability : {}) as { weekly?: Record<string, Array<[string, string]>>; except?: Array<{ date: string; free: Array<[string, string]> }> } | null;
     if (!av || typeof av !== 'object') return null;
     const len = grid.cellMin * 60000, from = Date.parse(grid.slots[0]), to = Date.parse(grid.slots[grid.slots.length - 1]) + len;
     const email = String(m.email || '').trim().toLowerCase();
@@ -444,7 +462,7 @@ async function managerFree(l: Link, grid: Grid): Promise<string[] | null> {
       const startMin = a.h * 60 + a.min, endMin = endDate === date ? z.h * 60 + z.min : 24 * 60;
       const ex = Array.isArray(av.except) ? av.except.find((e) => e && e.date === date) : null;
       const blocks = ex ? ex.free : (av.weekly || {})[WEEKDAYS[new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay()]];
-      const inside = Array.isArray(blocks) && blocks.some((b) => Array.isArray(b) && hmOf(b[0]) <= startMin && endMin <= hmOf(b[1]));
+      const inside = !hoursRule || (Array.isArray(blocks) && blocks.some((b) => Array.isArray(b) && hmOf(b[0]) <= startMin && endMin <= hmOf(b[1])));
       return inside && !meetings.some(([ms, me]) => s0 < me && ms < s1);
     });
     /* round 2: greyed cells cannot be marked, so a manager free for less than the hire's minimum over the window (grid.minHours, the setting saveGrid's
@@ -573,11 +591,13 @@ async function answer(l: Link, a: 'accept' | 'decline', hoursOk?: unknown) {
   if (prior === 'accept' && !OPEN.includes(c.status)) return closedReply(false);   // they accepted, then the card closed: no "Thank you", contact HR
   if (prior) return reply(prior, true, prior === 'accept' && lateAt(c, String(c.accepted_on).slice(0, 10)));
   if (shut(l)) return closedReply(false);
-  /* wave275: an offer with hours a week is accepted only with the box ticked ("I confirm I can give at least N hours a week"); an older offer has none */
+  /* wave275: an offer with hours a week is accepted only with the box ticked ("I confirm I can give at least N hours a week"); an older offer has none.
+     wave275b: only while onboard_require_hours is on; off, the box is optional and the hours count as confirmed only when it was ticked */
   const hours = Number(c.offer_hours) > 0 ? Number(c.offer_hours) : 0;
-  if (a === 'accept' && hours && hoursOk !== true) return hoursRequired(hours);
+  if (a === 'accept' && hours && hoursOk !== true && await settingOn('onboard_require_hours')) return hoursRequired(hours);
+  const confirmed = !!hours && hoursOk === true;
   const patch = a === 'accept'
-    ? { accepted_on: today, ...(hours ? { hours_confirmed_at: now.toISOString() } : {}), notes: (String(c.notes || '') + '\nAccepted the offer, ' + when + ' (offer link)' + (hours ? ', confirming at least ' + hours + ' hours a week' : '') + '.').trim() }
+    ? { accepted_on: today, ...(confirmed ? { hours_confirmed_at: now.toISOString() } : {}), notes: (String(c.notes || '') + '\nAccepted the offer, ' + when + ' (offer link)' + (confirmed ? ', confirming at least ' + hours + ' hours a week' : '') + '.').trim() }
     : { status: 'declined', close_reason: 'Declined by link', stage_at: now.toISOString(), notes: (String(c.notes || '') + '\nDeclined the offer, ' + when + ' (offer link).').trim() };
   // the claim: only the answer that finds the card still unanswered and open changes it, so a double click or a second tab cannot answer twice
   const { data: won, error } = await svc.from('hub_candidates')

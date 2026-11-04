@@ -606,6 +606,37 @@ async function dragFrom(p, a, b) {
     ok('the language toggle rewords the page without a new GET', /Propose these times/.test(await text(f.page)) && f.gets().length === 1);
     await f.ctx.close();
 
+    /* wave275b (03/11/26, Steel): onboard_manager_hours off, so the function says managerHours: false. No "Set your week" gate, even with no week or a
+       re-ask; the week, when saved, is shown read-only for information; picks anywhere in the window outside hub@ meetings, other hires and too soon */
+    f = await open(browser, { fn: mgr275({ extra: { managerHours: false } }) });
+    t = await text(f.page);
+    ok('hours off: no "Set your week" gate, though no week is saved', (await f.page.locator('#stale, #sethub').count()) === 0 && !/Set your week/.test(t), t.slice(0, 500));
+    ok('hours off: no week saved says so, with no default week drawn', /Not set on the Hub's Home page yet\./.test(await f.page.locator('#weekat').innerText()) && (await f.page.locator('#week').count()) === 0 && !/Monday to Friday, 9 am to 5 pm/.test(t));
+    ok('hours off: the note says the times are not limited to the week', /shown here for information: the times you can pick below are not limited to it/.test(t) && /clear of your meetings/.test(t) && !/inside your hours/.test(t), t.slice(0, 900));
+    ok('hours off: the legend still names hub@ meetings', /A hub@ meeting, or another new hire/.test(t) && /Too soon/.test(t) && !/Outside your hours/.test(t));
+    ok('hours off: the one-off dates editor stays', (await f.page.locator('#editor').count()) === 1 && (await f.page.locator('button[data-act="addx"]').count()) === 1 && (await f.page.locator('#saveav').count()) === 1);
+    a = await st(f.page, '2026-10-31T14:00:00Z'); b2 = await st(f.page, '2026-10-30T20:30:00Z'); c2 = await st(f.page, '2026-10-29T14:00:00Z'); e2 = await st(f.page, '2026-11-02T15:00:00Z'); g2 = await st(f.page, '2026-11-03T19:00:00Z');
+    ok('hours off: Saturday 10:00 and Friday 4:30 pm (past 5) can be picked; too soon still cannot', !a.dis && a.cls === 'cell' && !b2.dis && c2.dis && /off/.test(c2.cls), [a, b2, c2]);
+    ok('hours off: a hub@ meeting and another new hire\'s time are still greyed as busy', e2.dis && /busy/.test(e2.cls) && g2.dis && /busy/.test(g2.cls) && await f.page.locator('[data-slot="2026-11-02T15:00:00Z"]').getAttribute('title') === 'hub@ meeting', [e2, g2]);
+    await press(f.page, '2026-10-31T14:00:00Z');
+    await press(f.page, '2026-10-31T15:30:00Z');
+    await f.page.locator('#propose').click();
+    await f.page.waitForSelector('#pmsg:not(.hide)', { timeout: 4000 });
+    pp = f.posts();
+    ok('hours off: Saturday proposes, exactly the two instants', pp.length === 1 && JSON.stringify(pp[0].body) === JSON.stringify({ t: TOK, a: 'propose', call_at: '2026-10-31T14:00:00Z', one_on_one_at: '2026-10-31T15:30:00Z' }), pp.map(c => c.body));
+    await shot(f.page, 'w275b-propose-hours-off');
+    await f.ctx.close();
+    f = await open(browser, { fn: mgr275({ extra: { managerHours: false, availabilityAt: '2026-09-01T12:00:00Z', noWeek: false, availabilityStale: true, availability: { weekly: { tue: [['18:00', '21:00']] }, except: [], tz: 'America/Toronto' } } }) });
+    ok('hours off: a saved week, even one the team asked about again, is shown read-only with its date, and no gate', (await f.page.locator('#stale').count()) === 0 && /6:00\s*p\.m\. to 9:00\s*p\.m\./.test(await f.page.locator('#week .wd').nth(1).innerText()) && /Set on September 1, 2026\./.test(await f.page.locator('#weekat').innerText()) && !(await st(f.page, '2026-10-30T14:00:00Z')).dis);
+    await f.ctx.close();
+    f = await open(browser, { qs: '?l=fr', fn: mgr275({ extra: { managerHours: false } }) });
+    t = await text(f.page);
+    ok('hours off (French): no gate, the note, the legend', (await f.page.locator('#stale').count()) === 0 && /Pas encore indiquée sur la page d’accueil du Hub\./.test(t) && /à titre indicatif/.test(t) && /Une rencontre hub@, ou une autre nouvelle recrue/.test(t) && /Trop tôt/.test(t), t.slice(0, 900));
+    await f.ctx.close();
+    f = await open(browser, { fn: mgr275({ extra: { managerHours: true } }) });
+    ok('hours on (managerHours true): the gate and the hours rule as before', (await f.page.locator('#stale').count()) === 1 && (await st(f.page, '2026-10-31T14:00:00Z')).dis);
+    await f.ctx.close();
+
     /* the phone, 390 px */
     f = await open(browser, { phone: true, fn: mgr275() });
     ok('phone: no sideways scroll, day chips', await noScroll(f.page) && (await f.page.locator('.chip').count()) > 0);

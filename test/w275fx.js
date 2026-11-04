@@ -8,7 +8,7 @@
 const { fx271, rpcs271, INIT, FLOW, MGR, AT } = require('./w271fx');
 
 const JOY = { id: 9104, name: 'Joy Dumansi', email: 'joy.dumansi@welfareavenue.com' };   // boot.js's plain member (a member on the marketing profile)
-const F = { said: 701, offered: 702, proposed: 703, moved: 704, old: 705, started: 711 };
+const F = { said: 701, offered: 702, proposed: 703, moved: 704, old: 705, fresh: 706, loose: 707, started: 711 };
 const DAY = (d, h, m) => new Date(Date.UTC(2026, 8, d, h + 4, m || 0)).toISOString();   // a September day, Toronto wall clock
 
 function row(o) {
@@ -31,6 +31,9 @@ function rows275() {
     offered: row({ flow_id: F.offered, candidate_id: 7302, status: 'offered', name: 'Lina Offered', email: 'lina@example.invalid', accepted_on: null, hours_confirmed_at: null, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
     proposed: row({ flow_id: F.proposed, candidate_id: 7303, name: 'Nia Proposed', email: 'nia@example.invalid', proposed_call_at: DAY(30, 10), proposed_one_on_one_at: DAY(31, 10) /* Thursday 1 October */, proposed_by: 'samson.jules@welfareavenue.com', proposed_at: '2026-09-24T15:00:00Z' }),
     moved: row({ flow_id: F.moved, candidate_id: 7304, name: 'Kim Moved', email: 'kim@example.invalid', proposed_call_at: AT(9), proposed_one_on_one_at: AT(14), proposed_by: 'dana@example.invalid', proposed_at: '2026-09-23T15:00:00Z', hire_answer: 'no', hire_answered_at: null, manager_week_stale: true }),
+    /* wave275b: made after wa275b (already communicated, the manager's hours off, no week saved), and an Accept without the optional hours box */
+    fresh: row({ flow_id: F.fresh, candidate_id: 7306, status: 'offered', name: 'Tess Fresh', email: 'tess@example.invalid', accepted_on: null, hours_confirmed_at: null, ask_availability: false, manager_hours: false, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
+    loose: row({ flow_id: F.loose, candidate_id: 7307, name: 'Uma Loose', email: 'uma@example.invalid', hours_confirmed_at: null, manager_hours: false, manager_week_stale: true }),
     old: row({ flow_id: F.old, candidate_id: 7305, name: 'Wren Earlier', email: 'wren@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, propose_path: false, offer_hours: null, created_at: '2026-08-20T15:00:00Z' }),   // a wave271 flow Joy manages
     started: row({ flow_id: F.started, candidate_id: 7311, status: 'running', name: 'Ola Started', email: 'ola@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, call_at: DAY(29, 10), one_on_one_at: DAY(29, 11),
       wa_email: 'ola.started@welfareavenue.com', roster_created: true, member_id: 8311, onboarding_id: 51, started_at: '2026-09-24T15:00:00Z', welcome_sent_at: '2026-09-24T16:00:00Z',
@@ -51,6 +54,8 @@ function fx275() {
     { id: 7302, name: 'Lina Offered', role: 'Writer', email: 'lina@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: null },
     { id: 7303, name: 'Nia Proposed', role: 'Writer', email: 'nia@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: '2026-09-21' },
     { id: 7304, name: 'Kim Moved', role: 'Writer', email: 'kim@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: '2026-09-21' },
+    { id: 7306, name: 'Tess Fresh', role: 'Writer', email: 'tess@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: null },
+    { id: 7307, name: 'Uma Loose', role: 'Writer', email: 'uma@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: '2026-09-21' },
     { id: 7311, name: 'Ola Started', role: 'Writer', email: 'ola@example.invalid', status: 'hired', practice: false, member_id: 8311 },
   ]);
   /* HR reads a started flow from the tables, as wave271 does */
@@ -64,7 +69,7 @@ function rpcs275(o) {
   o = o || {};
   const R = rows275();
   const base = rpcs271(o);
-  base.wa271_ready_list = base.wa271_ready_list.concat([R.said, R.offered, R.proposed, R.moved]);
+  base.wa271_ready_list = base.wa271_ready_list.concat([R.said, R.offered, R.proposed, R.moved], (o.extra || []).map((k) => R[k]));   // extra: wave275b's rows
   base.wa275_my_cards = (o.mine || []).map((k) => R[k]);
   return base;
 }
@@ -97,7 +102,7 @@ const INIT275 = `(function(){
         hire_slots: window.__O275.grids[x.flow_id] || (x.grids.hire === 'marked' ? [H(28, 10), H(28, 10, 30), H(28, 11), H(28, 11, 30), H(28, 12)] : []),
         lengths: { callMin: 60, oneMin: 30 }, lead_hours: 48, yes_lead_hours: 24,
         proposal: x.proposed_at ? { call_at: x.proposed_call_at, one_on_one_at: x.proposed_one_on_one_at, by: x.proposed_by, at: x.proposed_at } : null,
-        hire_answer: x.hire_answer, ask_availability: x.ask_availability !== false, accepted: !!x.accepted_on });
+        hire_answer: x.hire_answer, ask_availability: x.ask_availability !== false, accepted: !!x.accepted_on, manager_hours: x.manager_hours !== false });
       case 'propose': {
         var at = new Date().toISOString();
         each(b.flow_id, function (r) { r.proposed_call_at = b.call_at; r.proposed_one_on_one_at = b.one_on_one_at; r.proposed_by = window.__WA_TEST_EMAIL; r.proposed_at = at; r.hire_answer = null; });
