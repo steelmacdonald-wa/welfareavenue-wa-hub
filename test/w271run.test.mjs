@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac, generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadFn } from './w271rig.mjs';
+import { loadFn, accessRoutes } from './w271rig.mjs';
 import { availabilityOf, weekRows } from './w275avail.mjs';
 
 const URL_ = 'https://stub.supabase.test/functions/v1/onboard-run';
@@ -13,6 +13,7 @@ const NOW = '2026-10-20T12:00:00Z';
 const CALL = '2026-11-02T03:30:00.000Z';      // 22:30 on 01/11/26 in Toronto: the UTC date is the wrong one
 const ONE = '2026-11-03T15:00:00.000Z';
 const KEYS = ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'slack', 'welcome'];   // wave275: the plan's order (at Accept, then at booking)
+const ALL_KEYS = [...KEYS, 'groups', 'drives', 'meeting', 'channel'];   // wave278: the access steps, after the existing ones
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048, publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' } });
 const SA = JSON.stringify({ client_email: 'hub@stub.iam', private_key: privateKey, token_uri: 'https://oauth2.googleapis.com/token' });
 
@@ -143,7 +144,7 @@ test('preview gives the page all it needs', async () => {
   assert.deepEqual(p.manager, { member_id: 2, name: 'Sam Lee', how: 'reports_to' });
   assert.deepEqual(p.grids, { hire: ['2026-10-25T14:00:00Z'], manager: ['2026-10-26T14:00:00Z'] });
   assert.deepEqual(p.hub_events.map((e) => e.id), ['e1']);
-  assert.deepEqual(p.steps.map((x) => x.key), KEYS);
+  assert.deepEqual(p.steps.map((x) => x.key), ALL_KEYS);
   assert.equal(p.steps.find((x) => x.key === 'google').mode, 'hr_task');
   assert.equal(p.steps.find((x) => x.key === 'plan').mode, 'run');
   assert.ok(p.welcome.subject && p.welcome.text);
@@ -271,7 +272,7 @@ test('roster failing leaves every other step waiting; a retry runs them', async 
   assert.equal(again.status, 200);
   assert.deepEqual(s.statuses(), { roster: 'done', google: 'hr_task', plan: 'done', invites: 'done', manager: 'done', hub: 'hr_task', slack: 'hr_task', welcome: 'done' });
   assert.match(s.step('welcome').detail, /^Sent the welcome email/, 'wave275 Task 4: the welcome needs the invites only, and goes');
-  assert.deepEqual(again.body.steps.map((x) => x.step), KEYS);
+  assert.deepEqual(again.body.steps.map((x) => x.step), ALL_KEYS);
 });
 
 test('google failing holds hub while the rest run (the welcome needs the invites only, wave275); its retry brings hub through and patches the invites', async () => {
@@ -310,7 +311,7 @@ test('google failing holds hub while the rest run (the welcome needs the invites
 
 test('nextSteps follows the dependency table', async () => {
   const s = await setup();
-  const next = (o) => s.rig.mod.nextSteps(KEYS.map((k) => ({ step: k, status: o[k] || 'pending' })));
+  const next = (o) => s.rig.mod.nextSteps(KEYS.map((k) => ({ step: k, status: o[k] || 'pending' }))).filter((k) => KEYS.includes(k));   // wave278: the four access steps are proved on their own, below
   assert.deepEqual(next({}), ['roster']);
   assert.deepEqual(s.rig.mod.nextSteps([]), ['roster']);
   assert.deepEqual(next({ roster: 'failed', google: 'waiting' }), []);
@@ -705,7 +706,7 @@ test('practice preview asks nobody outside', async () => {
   const p = await s.post({ action: 'preview', flow_id: 21 });
   assert.equal(p.status, 200);
   assert.equal(s.rig.fetchLog.length, 0);
-  assert.deepEqual(p.body.steps.map((x) => x.mode), KEYS.map(() => 'practice'));
+  assert.deepEqual(p.body.steps.map((x) => x.mode), ALL_KEYS.map(() => 'practice'));
 });
 
 /* ---------- send_grid_link ---------- */
@@ -2459,7 +2460,7 @@ test('w275 accept_setup: two calls at once run each step once; times proposed be
   assert.equal(s.inserts().length, 1);
   assert.equal(s.invites().length, 1);
   assert.equal(s.rows('team_members').length, 3, 'one profile');
-  assert.equal(s.rows('hub_onboard_steps').length, 3);
+  assert.equal(s.rows('hub_onboard_steps').length, 5, 'the at-Accept rows once each (wave278: groups and drives too)');
   assert.deepEqual([s.step('roster').status, s.step('google').status, s.step('hub').status], ['done', 'done', 'done']);
   assert.equal(s.gmail().length, 1, 'the yes-or-no link');
   assert.equal(mail(s.gmail()[0]).to, 'alex@example.com');
@@ -3577,4 +3578,434 @@ test('w275b times {flow_id}: manager_hours says whether the week limits the time
   const downOn = await t6({ fl: SAID_NO });
   downOn.db.onRpc('wa275_availability_of', () => { throw new Error('rig: availability is down'); });
   assert.equal((await downOn.card('times')).status, 503, 'on, the hours are a rule: a failed read is still a 503');
+});
+
+/* ---------- wave278 Task 3: Google Groups and shared drives at Accept, the weekly meeting at booking, the Slack onboarding channel once they are in Slack ---------- */
+/* the settings as wa278a seeds them (onboard_groups word for word), with made-up drive ids in place of "<fill at release>" */
+const W8_GROUPS = '{"all": ["org@welfareavenue.com"], "leaders": ["admin@welfareavenue.com", "directors@welfareavenue.com"], "by_department": {"marketing": ["marketing@welfareavenue.com"], "fundraising": ["fundraising@welfareavenue.com", "grants@welfareavenue.com"], "opsmtl": ["operations@welfareavenue.com"], "opsto": ["operations@welfareavenue.com", "toronto@welfareavenue.com"], "outreach": ["outreach@welfareavenue.com"], "hr": ["job@welfareavenue.com"], "finance": ["finance@welfareavenue.com"], "progdev": []}}';
+const W8_PLACEHOLDER_DRIVES = '{"all": ["<fill at release>"], "leaders_all_except": ["<fill at release>", "<fill at release>"], "by_department": {"marketing": ["<fill at release>"], "fundraising": ["<fill at release>"], "opsmtl": ["<fill at release>"], "opsto": ["<fill at release>", "<fill at release>"], "hr": ["<fill at release>"], "progdev": ["<fill at release>"], "finance": ["<fill at release>"]}}';
+const W8_DRIVES = JSON.stringify({ all: ['d-org'], leaders_all_except: ['d-acct', 'd-board'], by_department: { marketing: ['d-mkt'], fundraising: ['d-fund'], opsmtl: ['d-ops'], opsto: ['d-ops', 'd-to'], hr: ['d-hr'], progdev: ['d-prog'], finance: ['d-acct'] } });
+const W8_LIST = [{ id: 'd-org', name: 'Org\'s Files' }, { id: 'd-acct', name: 'Accounting' }, { id: 'd-board', name: 'Board of Directors' }, { id: 'd-mkt', name: 'Marketing & Web' }, { id: 'd-fund', name: 'Fundraising' }, { id: 'd-ops', name: 'Operations' }, { id: 'd-to', name: 'Toronto Branch' }, { id: 'd-hr', name: 'Human Resources' }, { id: 'd-prog', name: 'Program Development' }];
+const W8_ON = {
+  onboard_auto_groups: 'on', onboard_auto_drives: 'on', onboard_auto_meeting: 'on', onboard_auto_channel: 'on', onboard_leader_titles: 'director, lead, head, chief, manager',
+  onboard_groups: W8_GROUPS, onboard_drives: W8_DRIVES, onboard_weekly_meetings: '{}', onboard_slack_channel_id: 'C0ONBOARD',
+};
+const W8_WA = 'alex.tremblay@welfareavenue.com', W8_NEW = ['groups', 'drives', 'meeting', 'channel'];
+const W8_FUND = ['org@welfareavenue.com', 'fundraising@welfareavenue.com', 'grants@welfareavenue.com'];
+const W8_LEAD = ['admin@welfareavenue.com', 'directors@welfareavenue.com'];
+const W8_INVITE = 'https://slack.com/api/conversations.invite';
+async function t8({ title = 'Grants Coordinator', dept = 'fundraising', config = {}, tables = {}, ...o } = {}) {
+  const s = await t6({ ...o, config: { ...W8_ON, ...config }, tables: { hub_positions: [{ id: 5, title, dept, jd_url: 'https://docs.example.com/jd' }], ...tables } });
+  s.rig.env.SLACK_BOT_TOKEN = 'xoxb-test-token';
+  s.w = accessRoutes(s.rig, { drives: structuredClone(W8_LIST) });
+  s.groupAdds = () => s.rig.fetchLog.filter((e) => e.url.includes('/admin/directory/v1/groups/'));
+  s.groupsAsked = () => s.groupAdds().map((e) => decodeURIComponent(e.url.split('/groups/')[1].split('/')[0]));
+  s.drive = () => s.rig.fetchLog.filter((e) => e.url.includes('/drive/v3/'));
+  s.perms = () => s.rig.fetchLog.filter((e) => e.url.includes('/drive/v3/files/'));
+  s.permIds = () => s.perms().map((e) => decodeURIComponent(e.url.split('/files/')[1].split('/')[0]));
+  s.lookups = () => s.rig.fetchLog.filter((e) => e.url.startsWith('https://slack.com/api/users.lookupByEmail'));
+  s.lookedUp = () => s.lookups().map((e) => new URL(e.url).searchParams.get('email'));
+  s.slackInvites = () => s.rig.fetchLog.filter((e) => e.url === W8_INVITE);
+  s.slackAll = () => s.rig.fetchLog.filter((e) => e.url.startsWith('https://slack.com/'));
+  s.ticks = () => s.flow().setup_ticks || {};
+  s.remind = async () => { const r = await s.post({ action: 'remind' }, SECRET); assert.equal(r.status, 200, JSON.stringify(r.body)); return r.body; };
+  s.booked = async () => {
+    assert.equal((await s.acceptSetup()).status, 200);
+    const r = await s.book();
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    return r;
+  };
+  return s;
+}
+
+test('wave278 leaderOf: a word of onboard_leader_titles, whole and in any case, makes the title a leader\'s', async () => {
+  const s = await setup();
+  const L = (t) => s.rig.mod.leaderOf(t, 'director, lead, head, chief, manager');
+  assert.equal(L('Fundraising Director'), true);
+  assert.equal(L('Community Manager'), true, 'Review Focus 1: a leader by the rule; HR changes it on the card');
+  assert.equal(L('Coordinator'), false);
+  assert.equal(L('Head of Grants'), true);
+  assert.equal(L('Program Coordinator'), false);
+  assert.equal(L('Team LEAD'), true);
+  assert.equal(L('Managerial Assistant'), false, 'a whole word only');
+  assert.equal(L('Leadership Intern'), false);
+  assert.equal(L(null), false);
+  assert.equal(L(''), false);
+  assert.equal(s.rig.mod.leaderOf('Director', ''), false, 'no titles, no leader');
+});
+
+test('wave278 STEPS: the four access steps follow the existing ones; groups and drives at Accept (need google), the meeting at booking, the channel later; the welcome waits for the meeting', async () => {
+  const s = await setup();
+  assert.deepEqual(s.rig.mod.STEPS.map((e) => e.key), ALL_KEYS);
+  assert.deepEqual(W8_NEW.map((k) => [s.entry(k).at, s.entry(k).setting, s.entry(k).needs]), [
+    ['accept', 'onboard_auto_groups', ['google']], ['accept', 'onboard_auto_drives', ['google']], ['booking', 'onboard_auto_meeting', ['roster']], ['later', 'onboard_auto_channel', ['roster']],
+  ]);
+  for (const k of W8_NEW) assert.ok(s.entry(k).task && noDash(s.entry(k).task), k);
+  const all = (o) => s.rig.mod.nextSteps(ALL_KEYS.map((k) => ({ step: k, status: o[k] || 'pending' }))).filter((k) => W8_NEW.includes(k));
+  assert.deepEqual(all({ roster: 'done' }), ['channel'], 'groups and drives need the account; the meeting waits while it has not ended');
+  assert.deepEqual(all({ roster: 'done', google: 'done' }), W8_NEW);
+  assert.deepEqual(all({ roster: 'done', google: 'hr_task' }), ['meeting', 'channel']);
+  const next = (o) => s.rig.mod.nextSteps(ALL_KEYS.map((k) => ({ step: k, status: o[k] || 'pending' })));
+  assert.ok(!next({ roster: 'done', google: 'done', invites: 'done' }).includes('welcome'), 'the meeting has not ended: the welcome waits for it');
+  for (const m of ['done', 'hr_task', 'failed', 'skipped']) assert.ok(next({ roster: 'done', google: 'done', invites: 'done', meeting: m }).includes('welcome'), 'meeting ' + m);
+});
+
+test('wave278 groups at Accept: a fundraising member joins org@, fundraising@ and grants@ as MEMBER, as Steel with the group member scope, after the account exists; no leaders\' group', async () => {
+  const s = await t8();
+  const r = await s.acceptSetup();
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(s.groupsAsked(), W8_FUND);
+  s.groupAdds().forEach((e, i) => {
+    assert.equal(e.method, 'POST');
+    assert.equal(e.url, 'https://admin.googleapis.com/admin/directory/v1/groups/' + encodeURIComponent(W8_FUND[i]) + '/members');
+    assert.deepEqual(e.body, { email: W8_WA, role: 'MEMBER' });
+    assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/admin.directory.group.member:steel.macdonald@welfareavenue.com');
+  });
+  assert.ok(s.rig.fetchLog.indexOf(s.groupAdds()[0]) > s.rig.fetchLog.indexOf(s.inserts()[0]), 'after the account is made');
+  assert.equal(s.step('groups').status, 'done');
+  assert.match(s.step('groups').detail, /^Joining as a member\./);
+  for (const g of W8_FUND) assert.ok(s.step('groups').detail.includes(g), g);
+  assert.deepEqual(s.ticks().groups_added, W8_FUND, 'the rundown lists them');
+  assert.equal(s.flow().leader, false);
+  assert.ok(s.rows('change_log').some((l) => l.field === 'leader' && l.old_value === null && l.new_value === 'member'));
+  assert.ok(noDash(s.step('groups').detail));
+  assert.ok(s.flow().accounts_at, 'the account steps alone decide accounts_at');
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('wave278 groups: a leader (the position\'s title) also joins admin@ and directors@; the card says so', async () => {
+  const s = await t8({ title: 'Fundraising Director' });
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.deepEqual(s.groupsAsked(), [...W8_FUND, ...W8_LEAD]);
+  assert.equal(s.flow().leader, true);
+  assert.equal(s.step('groups').status, 'done');
+  assert.match(s.step('groups').detail, /^Joining as a leader\./);
+  assert.deepEqual(s.ticks().groups_added, [...W8_FUND, ...W8_LEAD]);
+  const none = await t8({ tables: { hub_positions: [] } });
+  assert.equal((await none.acceptSetup()).status, 200);
+  assert.equal(none.flow().leader, false, 'no position: a member');
+  const set = await t8({ title: 'Fundraising Director', fl: { leader: false } });
+  assert.equal((await set.acceptSetup()).status, 200);
+  assert.equal(set.flow().leader, false, 'a decision already made is kept');
+  assert.ok(!set.groupsAsked().includes('admin@welfareavenue.com'));
+});
+
+test('wave278 groups: a group that does not exist (404, toronto@) is reported and the step is still done; already a member (409) counts as done', async () => {
+  const s = await t8({ dept: 'opsto', title: 'Operations Coordinator' });
+  s.w.groups['toronto@welfareavenue.com'] = { status: 404, json: { error: { code: 404, message: 'Resource Not Found: groupKey' } } };
+  s.w.groups['org@welfareavenue.com'] = { status: 409, json: { error: { code: 409, message: 'Member already exists.' } } };
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.deepEqual(s.groupsAsked(), ['org@welfareavenue.com', 'operations@welfareavenue.com', 'toronto@welfareavenue.com'], 'asked once each, no loop');
+  assert.equal(s.step('groups').status, 'done', s.step('groups').detail);
+  assert.match(s.step('groups').detail, /no Toronto group yet/);
+  assert.deepEqual(s.ticks().groups_added, ['org@welfareavenue.com', 'operations@welfareavenue.com']);
+  const m = await t8({ dept: 'marketing', title: 'Marketing Coordinator' });
+  m.w.groups['marketing@welfareavenue.com'] = { status: 404, json: { error: { code: 404, message: 'Resource Not Found: groupKey' } } };
+  assert.equal((await m.acceptSetup()).status, 200);
+  assert.equal(m.step('groups').status, 'done');
+  assert.match(m.step('groups').detail, /marketing@welfareavenue\.com does not exist/);
+});
+
+test('wave278 groups: any other refusal (403 on one group) ends the step as HR\'s, naming the group and Google\'s reason; the other groups are still added, once', async () => {
+  const s = await t8();
+  s.w.groups['grants@welfareavenue.com'] = { status: 403, json: { error: { code: 403, message: 'Not Authorized to access this resource/api' } } };
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.deepEqual(s.groupsAsked(), W8_FUND);
+  const g = s.step('groups');
+  assert.equal(g.status, 'hr_task');
+  assert.match(g.detail, /grants@welfareavenue\.com/);
+  assert.match(g.detail, /Not Authorized/);
+  assert.match(g.detail, /^Joining as a member\./);
+  assert.ok(noDash(g.detail));
+  assert.deepEqual(s.ticks().groups_added, ['org@welfareavenue.com', 'fundraising@welfareavenue.com']);
+});
+
+test('wave278 drives at Accept: a member gets Org\'s Files and the department\'s drive as writer, as Steel with the drive scope, with no Drive email; the names are kept for the rundown', async () => {
+  const s = await t8();
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.deepEqual(s.permIds(), ['d-org', 'd-fund']);
+  for (const e of s.perms()) {
+    assert.equal(e.method, 'POST');
+    assert.ok(e.url.includes('/permissions?supportsAllDrives=true&sendNotificationEmail=false'), e.url);
+    assert.deepEqual(e.body, { type: 'user', role: 'writer', emailAddress: W8_WA });
+    assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/drive:steel.macdonald@welfareavenue.com');
+  }
+  assert.equal(s.step('drives').status, 'done', s.step('drives').detail);
+  assert.match(s.step('drives').detail, /Org's Files and Fundraising/);
+  assert.deepEqual(s.ticks().drives_added, ['Org\'s Files', 'Fundraising']);
+  assert.ok(noDash(s.step('drives').detail));
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('wave278 drives: a leader gets every shared drive Google lists (as a domain admin) but Accounting and Board of Directors', async () => {
+  const s = await t8({ title: 'Fundraising Director' });
+  assert.equal((await s.acceptSetup()).status, 200);
+  const list = s.drive().filter((e) => e.method === 'GET');
+  assert.equal(list.length, 1);
+  assert.ok(list[0].url.startsWith('https://www.googleapis.com/drive/v3/drives?pageSize=100'));
+  assert.ok(list[0].url.includes('useDomainAdminAccess=true'), 'the plain list shows only the drives Steel is in');
+  assert.deepEqual([...s.permIds()].sort(), ['d-fund', 'd-hr', 'd-mkt', 'd-ops', 'd-org', 'd-prog', 'd-to']);
+  assert.equal(s.step('drives').status, 'done', s.step('drives').detail);
+  assert.ok(!s.ticks().drives_added.includes('Accounting') && !s.ticks().drives_added.includes('Board of Directors'));
+  assert.equal(s.ticks().drives_added.length, 7);
+});
+
+test('wave278 drives: "already has access" counts as done; another refusal is HR\'s with the drive\'s name; the placeholder ids are never sent to Drive ("Drives not set up yet")', async () => {
+  const s = await t8();
+  s.w.permission = (id) => (id === 'd-org' ? { status: 400, json: { error: { code: 400, message: 'The user already has access to this shared drive.' } } } : null);
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.equal(s.step('drives').status, 'done', s.step('drives').detail);
+  assert.deepEqual(s.ticks().drives_added, ['Org\'s Files', 'Fundraising']);
+  const f = await t8();
+  f.w.permission = (id) => (id === 'd-fund' ? { status: 403, json: { error: { code: 403, message: 'Insufficient permissions for this file.' } } } : null);
+  assert.equal((await f.acceptSetup()).status, 200);
+  assert.equal(f.step('drives').status, 'hr_task');
+  assert.match(f.step('drives').detail, /Fundraising/);
+  assert.match(f.step('drives').detail, /Insufficient permissions/);
+  assert.deepEqual(f.ticks().drives_added, ['Org\'s Files']);
+  for (const title of ['Grants Coordinator', 'Fundraising Director']) {
+    const p = await t8({ title, config: { onboard_drives: W8_PLACEHOLDER_DRIVES } });
+    assert.equal((await p.acceptSetup()).status, 200);
+    assert.equal(p.step('drives').status, 'hr_task', title);
+    assert.match(p.step('drives').detail, /Drives not set up yet/, title);
+    assert.equal(p.drive().length, 0, 'nothing went to Drive');
+    assert.ok(!JSON.stringify(p.rig.fetchLog.map((e) => e.url)).includes('fill'), title);
+    assert.equal(p.step('groups').status, 'done', 'the groups do not wait on the drives');
+  }
+});
+
+const W8_EVENTS = [
+  { id: 'recfund_20261015T150000Z', recurring_event_id: 'recfund', calendar_id: 'hub@welfareavenue.com', organizer: 'ruth.owen@welfareavenue.com', summary: 'Fundraising weekly', start_at: '2026-10-15T15:00:00Z', end_at: '2026-10-15T16:00:00Z', status: 'confirmed', attendee_emails: ['ruth.owen@welfareavenue.com'] },
+  { id: 'recfund_20261029T150000Z', recurring_event_id: 'recfund', calendar_id: 'hub@welfareavenue.com', organizer: 'ruth.owen@welfareavenue.com', summary: 'Fundraising weekly', start_at: '2026-10-29T15:00:00Z', end_at: '2026-10-29T16:00:00Z', status: 'confirmed', attendee_emails: ['ruth.owen@welfareavenue.com'] },
+  { id: 'recfund_20261022T150000Z', recurring_event_id: 'recfund', calendar_id: 'hub@welfareavenue.com', organizer: 'ruth.owen@welfareavenue.com', summary: 'Fundraising weekly', start_at: '2026-10-22T15:00:00Z', end_at: '2026-10-22T16:00:00Z', status: 'confirmed', attendee_emails: ['ruth.owen@welfareavenue.com'] },
+];
+const W8_GUESTS = [{ email: 'ruth.owen@welfareavenue.com', organizer: true, responseStatus: 'accepted' }, { email: 'sam.lee@welfareavenue.com', responseStatus: 'accepted' }];
+function w8Master(s, guests = W8_GUESTS) {
+  s.calReply = (e) => {
+    if (!e.url.includes('/events/recfund')) return null;
+    if (e.method === 'GET') return { json: { id: 'recfund', summary: 'Fundraising weekly', recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=TH'], start: { dateTime: '2026-09-03T11:00:00-04:00' }, attendees: structuredClone(guests) } };
+    return { json: { id: 'recfund', summary: 'Fundraising weekly', attendees: e.body.attendees } };
+  };
+  s.master = () => s.cal().filter((e) => e.url.includes('/events/recfund'));
+}
+const W8_MAPPED = { onboard_weekly_meetings: '{"fundraising": "recfund"}' };
+
+test('wave278 meeting at booking: the hire\'s address is added to their department\'s weekly meeting on the organizer\'s calendar, as the organizer, keeping every guest; Google sends the invite', async () => {
+  const s = await t8({ fl: PROPOSED, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS) } });
+  w8Master(s);
+  await s.booked();
+  const [get, patch, ...rest] = s.master();
+  assert.equal(rest.length, 0);
+  assert.equal(get.method, 'GET');
+  assert.equal(get.url, 'https://www.googleapis.com/calendar/v3/calendars/ruth.owen%40welfareavenue.com/events/recfund');
+  assert.equal(patch.method, 'PATCH');
+  assert.equal(patch.url, 'https://www.googleapis.com/calendar/v3/calendars/ruth.owen%40welfareavenue.com/events/recfund?sendUpdates=all');
+  assert.deepEqual(patch.body, { attendees: [...W8_GUESTS, { email: W8_WA }] }, 'the other guests are kept as they were');
+  for (const e of [get, patch]) assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/calendar.events:ruth.owen@welfareavenue.com');
+  assert.equal(s.step('meeting').status, 'done', s.step('meeting').detail);
+  assert.match(s.step('meeting').detail, /Fundraising weekly/);
+  assert.ok(noDash(s.step('meeting').detail));
+  assert.deepEqual(s.ticks().weekly_meeting, { summary: 'Fundraising weekly', next_at: '2026-10-22T15:00:00.000Z' }, 'the next one from now');
+  const sent = s.gmail().find((e) => /Welcome to Welfare Avenue/.test(mail(e).subject));
+  assert.ok(sent && s.rig.fetchLog.indexOf(sent) > s.rig.fetchLog.indexOf(patch), 'the welcome goes once the meeting step has ended');
+  assert.deepEqual(s.rig.unregistered(), []);
+
+  const already = await t8({ fl: PROPOSED, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS) } });
+  w8Master(already, [...W8_GUESTS, { email: 'Alex.Tremblay@welfareavenue.com', responseStatus: 'needsAction' }]);
+  await already.booked();
+  assert.deepEqual(already.master().map((e) => e.method), ['GET'], 'already a guest: nothing to change');
+  assert.equal(already.step('meeting').status, 'done');
+
+  const outside = await t8({ fl: PROPOSED, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS).map((e) => ({ ...e, organizer: 'someone@gmail.com' })) } });
+  w8Master(outside);
+  await outside.booked();
+  assert.equal(outside.master()[0].url, 'https://www.googleapis.com/calendar/v3/calendars/hub%40welfareavenue.com/events/recfund', 'an organizer outside Welfare Avenue: hub@\'s calendar');
+  assert.equal(outside.master()[0].headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/calendar.events:hub@welfareavenue.com');
+});
+
+test('wave278 meeting: no weekly meeting set for the department is HR\'s, in a plain sentence; the welcome still goes', async () => {
+  const s = await t8({ fl: PROPOSED });
+  w8Master(s);
+  await s.booked();
+  assert.equal(s.step('meeting').status, 'hr_task');
+  assert.match(s.step('meeting').detail, /no weekly meeting set for fundraising/);
+  assert.ok(noDash(s.step('meeting').detail));
+  assert.equal(s.master().length, 0);
+  assert.equal(s.step('welcome').status, 'done');
+});
+
+test('wave278 channel: not run at booking; the hourly job looks for them by their Welfare Avenue address, then their personal one, and waits (no error) while they are not in Slack', async () => {
+  const s = await t8({ fl: PROPOSED });
+  await s.booked();
+  assert.equal(s.step('channel').status, 'pending');
+  assert.equal(s.slackAll().length, 0, 'the channel step runs from the hourly job only');
+  assert.equal(s.flow().status, 'started', 'a channel step waiting for Slack leaves nothing for HR');
+  await s.remind();
+  assert.deepEqual(s.lookedUp(), [W8_WA, 'alex@example.com']);
+  for (const e of s.lookups()) assert.equal(e.headers.authorization, 'Bearer xoxb-test-token');
+  assert.equal(s.slackInvites().length, 0);
+  assert.equal(s.step('channel').status, 'pending');
+  assert.match(s.step('channel').detail, /waiting for them to join Slack/i);
+  assert.ok(noDash(s.step('channel').detail));
+  s.w.slack[W8_WA] = 'U0WA';
+  await s.remind();
+  const [inv] = s.slackInvites();
+  assert.equal(inv.method, 'POST');
+  assert.deepEqual(inv.body, { channel: 'C0ONBOARD', users: 'U0WA' });
+  assert.equal(inv.headers.authorization, 'Bearer xoxb-test-token');
+  assert.equal(s.step('channel').status, 'done', s.step('channel').detail);
+  assert.ok(s.rows('wa_slack_ids').some((r) => r.email === W8_WA && r.slack_id === 'U0WA'), 'kept for notify, as notify keeps it');
+  await s.remind();
+  assert.equal(s.slackInvites().length, 1, 'done is done');
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('wave278 channel (Review Focus 3): someone in Slack with their personal address is found by it and invited; one already in the channel is done; a saved Slack id needs no lookup', async () => {
+  const p = await t8({ fl: PROPOSED });
+  p.w.slack['alex@example.com'] = 'U0ME';
+  await p.booked();
+  await p.remind();
+  assert.deepEqual(p.lookedUp(), [W8_WA, 'alex@example.com']);
+  assert.deepEqual(p.slackInvites()[0].body, { channel: 'C0ONBOARD', users: 'U0ME' });
+  assert.equal(p.step('channel').status, 'done');
+  const a = await t8({ fl: PROPOSED });
+  a.w.slack[W8_WA] = 'U0WA';
+  a.w.invite = () => ({ json: { ok: false, error: 'already_in_channel' } });
+  await a.booked();
+  await a.remind();
+  assert.equal(a.step('channel').status, 'done', a.step('channel').detail);
+  const k = await t8({ fl: PROPOSED, tables: { wa_slack_ids: [{ email: 'alex@example.com', slack_id: 'U0SAVED' }] } });
+  await k.booked();
+  await k.remind();
+  assert.equal(k.lookups().length, 0);
+  assert.deepEqual(k.slackInvites()[0].body, { channel: 'C0ONBOARD', users: 'U0SAVED' });
+});
+
+test('wave278 channel: after 14 days from Accept it is HR\'s ("has not joined Slack yet"); missing_scope names the scope; no channel id is HR\'s and asks Slack nothing', async () => {
+  const s = await t8({ fl: PROPOSED });
+  await s.booked();
+  s.rig.setNow('2026-11-02T12:00:00Z');   // 13 days after Accept
+  await s.remind();
+  assert.equal(s.step('channel').status, 'pending');
+  s.rig.setNow('2026-11-03T12:30:00Z');   // past 14 days
+  await s.remind();
+  assert.equal(s.step('channel').status, 'hr_task');
+  assert.match(s.step('channel').detail, /has not joined Slack yet/);
+  assert.ok(noDash(s.step('channel').detail));
+  const n = s.lookups().length;
+  await s.remind();
+  assert.equal(s.lookups().length, n, 'HR\'s now: the hourly job stops looking');
+  const m = await t8({ fl: PROPOSED });
+  m.w.slack[W8_WA] = 'U0WA';
+  m.w.invite = () => ({ json: { ok: false, error: 'missing_scope', needed: 'channels:manage', provided: 'chat:write,users:read,users:read.email' } });
+  await m.booked();
+  await m.remind();
+  assert.equal(m.step('channel').status, 'hr_task');
+  assert.match(m.step('channel').detail, /channels:manage/);
+  const e = await t8({ fl: PROPOSED, config: { onboard_slack_channel_id: '' } });
+  e.w.slack[W8_WA] = 'U0WA';
+  await e.booked();
+  await e.remind();
+  assert.equal(e.step('channel').status, 'hr_task');
+  assert.match(e.step('channel').detail, /no channel id/);
+  assert.equal(e.slackAll().length, 0);
+});
+
+test('wave278: each new step with its switch off is HR\'s with its own sentence, and nothing is asked of Google or Slack', async () => {
+  const off = { onboard_auto_groups: 'off', onboard_auto_drives: 'off', onboard_auto_meeting: 'off', onboard_auto_channel: 'off', ...W8_MAPPED };
+  const s = await t8({ fl: PROPOSED, config: off, tables: { hub_events: structuredClone(W8_EVENTS) } });
+  w8Master(s);
+  await s.booked();
+  await s.remind();
+  for (const k of W8_NEW) {
+    assert.equal(s.step(k).status, 'hr_task', k);
+    assert.equal(s.step(k).detail, s.entry(k).task, k);
+  }
+  assert.equal(s.groupAdds().length + s.drive().length + s.slackAll().length + s.master().length, 0);
+  assert.equal(s.flow().status, 'started');
+});
+
+test('wave278 practice: all four steps simulate at Accept and booking, and nothing is fetched', async () => {
+  const s = await t8({ cand: { practice: true }, fl: PROPOSED, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS) } });
+  await s.booked();
+  await s.remind();
+  for (const k of W8_NEW) {
+    assert.equal(s.step(k).status, 'done', k);
+    assert.match(s.step(k).detail, /practice/i, k);
+  }
+  assert.equal(s.rig.fetchLog.length, 0);
+  assert.equal(s.flow().status, 'started');
+});
+
+test('wave278 set_leader {flow_id, leader}: the hire\'s manager may change it; the column is written and logged, and groups and drives run again (adding, never removing)', async () => {
+  const s = await t8({ hr: false, manager: true });
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.equal(s.flow().leader, false);
+  const r = await s.card('set_leader', { leader: true });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.leader, true);
+  assert.equal(s.flow().leader, true);
+  assert.deepEqual(s.groupsAsked(), [...W8_FUND, ...W8_FUND, ...W8_LEAD], 'the groups ran again, with the leaders\' two');
+  assert.match(s.step('groups').detail, /^Joining as a leader\./);
+  assert.equal(s.step('drives').status, 'done');
+  assert.equal(s.permIds().length, 2 + 7, 'the drives ran again, as a leader\'s');
+  assert.ok(s.rows('change_log').some((l) => l.field === 'leader' && l.old_value === 'member' && l.new_value === 'leader'));
+  assert.ok(Array.isArray(r.body.steps));
+  const again = await s.card('set_leader', { leader: true });
+  assert.equal(again.body.repeated, true);
+  assert.equal(s.groupsAsked().length, 8, 'a repeat runs nothing');
+  const back = await s.card('set_leader', { leader: false });
+  assert.equal(back.status, 200);
+  assert.ok(back.body.warnings.some((w) => /never removes/.test(w) && /admin@welfareavenue\.com/.test(w)), JSON.stringify(back.body.warnings));
+  for (const w of back.body.warnings) assert.ok(noDash(w));
+  assert.equal(s.rig.fetchLog.filter((e) => e.method === 'DELETE').length, 0, 'nothing is removed');
+  assert.equal((await s.card('set_leader', { leader: 'yes' })).status, 400);
+  assert.deepEqual(s.rig.unregistered(), []);
+});
+
+test('wave278 recheck_access {flow_id}: groups and drives run again for HR; a plain member on another hire\'s card is refused set_leader, recheck_access and set_welcome_cc, and nothing changes', async () => {
+  const s = await t8();
+  assert.equal((await s.acceptSetup()).status, 200);
+  s.w.groups['org@welfareavenue.com'] = { status: 409, json: { error: { code: 409, message: 'Member already exists.' } } };
+  const r = await s.card('recheck_access');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(s.groupsAsked(), [...W8_FUND, ...W8_FUND]);
+  assert.deepEqual(s.permIds(), ['d-org', 'd-fund', 'd-org', 'd-fund']);
+  assert.deepEqual([s.step('groups').status, s.step('drives').status], ['done', 'done']);
+  const x = await t8({ hr: false, manager: false });
+  assert.equal((await x.acceptSetup()).status, 200);
+  const before = x.snapshot(), n = x.rig.fetchLog.length;
+  for (const [action, body] of [['set_leader', { leader: true }], ['recheck_access', {}], ['set_welcome_cc', { emails: ['ruth.owen@welfareavenue.com'] }]]) {
+    const out = await x.card(action, body);
+    assert.equal(out.status, 403, action);
+    assert.ok(noDash(out.body.message));
+  }
+  assert.deepEqual(x.snapshot(), before);
+  assert.equal(x.rig.fetchLog.length, n);
+});
+
+test('wave278 set_welcome_cc {flow_id, emails}: active staff only (lower-cased, once each), logged; anyone else is refused with nothing saved; refused once the welcome has gone', async () => {
+  const s = await t8({ hr: false, manager: true });
+  s.db.rows('team_members').push({ id: 9, name: 'Old Timer', email: 'old.timer@welfareavenue.com', active: false });
+  const before = s.snapshot();
+  for (const bad of [['alex@example.com'], ['ruth.owen@welfareavenue.com', 'nobody@welfareavenue.com'], ['old.timer@welfareavenue.com']]) {
+    const r = await s.card('set_welcome_cc', { emails: bad });
+    assert.equal(r.status, 400, JSON.stringify(bad));
+    assert.equal(r.body.error, 'not_staff');
+    assert.ok(noDash(r.body.message));
+  }
+  assert.equal((await s.card('set_welcome_cc', { emails: 'ruth.owen@welfareavenue.com' })).status, 400);
+  assert.deepEqual(s.snapshot(), before);
+  const ok = await s.card('set_welcome_cc', { emails: [' Ruth.Owen@WelfareAvenue.com ', 'sam.lee@welfareavenue.com', 'ruth.owen@welfareavenue.com'] });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.deepEqual(ok.body.welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  assert.deepEqual(s.flow().welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  assert.ok(s.rows('change_log').some((l) => l.field === 'welcome_cc' && l.new_value === 'ruth.owen@welfareavenue.com, sam.lee@welfareavenue.com'));
+  assert.equal((await s.card('set_welcome_cc', { emails: ['sam.lee@welfareavenue.com', 'ruth.owen@welfareavenue.com'] })).body.repeated, true, 'the same people: nothing changes');
+  s.flow().welcome_sent_at = NOW_ISO;
+  const late = await s.card('set_welcome_cc', { emails: [] });
+  assert.equal(late.status, 409);
+  assert.equal(late.body.error, 'already_sent');
+  assert.deepEqual(s.flow().welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  assert.equal(s.rig.fetchLog.length, 0);
 });

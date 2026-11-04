@@ -222,3 +222,33 @@ export async function loadFn(name, { secrets = {}, config = {}, tables = {}, ser
     },
   };
 }
+
+/* ---------- wave278: the access steps' Google and Slack routes ---------- */
+// accessRoutes(rig, w?) registers stand-ins for what onboard-run's groups, drives and channel steps call (the weekly meeting goes through a test's
+// own /calendar/v3/ route). Nothing here reaches the network. w holds what a test changes, and the same object comes back:
+//   w.groups[address] = {status, json}   the reply for POST admin/directory/v1/groups/<address>/members (default: 200, the member)
+//   w.drives = [{id, name}]              what GET drive/v3/drives?pageSize=100... lists (one page)
+//   w.listReply = {status, json}         replaces that list's reply
+//   w.permission(id, entry) -> reply?    the reply for POST drive/v3/files/<id>/permissions?supportsAllDrives=true... (default: 200, the permission)
+//   w.slack[email] = 'U...'              who users.lookupByEmail finds (anyone else: users_not_found); w.lookupReply(email) -> json? replaces it
+//   w.invite(entry) -> reply?            the reply for POST conversations.invite (default: ok)
+export function accessRoutes(rig, w = {}) {
+  w.groups ||= {}; w.drives ||= []; w.slack ||= {};
+  rig.fetchOn((u, m) => m === 'POST' && /^https:\/\/admin\.googleapis\.com\/admin\/directory\/v1\/groups\/[^/?]+\/members$/.test(u), (e) => {
+    const group = decodeURIComponent(e.url.split('/groups/')[1].split('/')[0]);
+    return w.groups[group] || { json: { kind: 'admin#directory#member', email: e.body && e.body.email, role: e.body && e.body.role } };
+  });
+  rig.fetchOn((u, m) => m === 'GET' && u.startsWith('https://www.googleapis.com/drive/v3/drives?pageSize=100'), () => w.listReply || { json: { drives: w.drives } });
+  rig.fetchOn((u, m) => m === 'POST' && /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/[^/?]+\/permissions\?supportsAllDrives=true/.test(u), (e) => {
+    const id = decodeURIComponent(e.url.split('/files/')[1].split('/')[0]);
+    return (w.permission && w.permission(id, e)) || { json: { kind: 'drive#permission', id: 'perm-' + id, type: 'user', role: 'writer' } };
+  });
+  rig.fetchOn((u, m) => m === 'GET' && u.startsWith('https://slack.com/api/users.lookupByEmail?'), (e) => {
+    const email = new URL(e.url).searchParams.get('email');
+    const custom = w.lookupReply && w.lookupReply(email);
+    if (custom) return { json: custom };
+    return { json: w.slack[email] ? { ok: true, user: { id: w.slack[email] } } : { ok: false, error: 'users_not_found' } };
+  });
+  rig.fetchOn((u, m) => m === 'POST' && u === 'https://slack.com/api/conversations.invite', (e) => (w.invite && w.invite(e)) || { json: { ok: true, channel: { id: e.body && e.body.channel } } });
+  return w;
+}

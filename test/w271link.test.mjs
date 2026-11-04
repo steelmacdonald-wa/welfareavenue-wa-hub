@@ -1254,14 +1254,14 @@ test('w275 integration (practice): Accept with hours runs accept_setup, Yes runs
     assert.equal(a.status, 200, JSON.stringify(a.body));
     await Promise.all(pending);
     const steps = () => Object.fromEntries(s.db.rows('hub_onboard_steps').map((r) => [r.step, r.status]));
-    assert.deepEqual(steps(), { roster: 'done', google: 'done', hub: 'done' });
+    assert.deepEqual(steps(), { roster: 'done', google: 'done', hub: 'done', groups: 'done', drives: 'done' });   // wave278: groups and drives at Accept too
     const y = await s.post({ t: s.offer, a: 'yes' });
     assert.equal(y.status, 200, JSON.stringify(y.body));
     assert.equal(y.body.answer, 'yes');
     await Promise.all(pending);   // fix round 1: book runs its steps after its answer
     const f = s.flow();
     assert.deepEqual([f.call_at, f.hire_answer, f.status], [W_CALL, 'yes', 'started']);
-    assert.equal(Object.values(steps()).filter((x) => x === 'done').length, 8);
+    assert.equal(Object.values(steps()).filter((x) => x === 'done').length, 12, 'wave278: the four access steps simulate too');
     assert.equal(run.fetchLog.length, 0);
     assert.deepEqual(s.rig.fetchLog.map((e) => e.body.action), ['accept_setup', 'book'], 'the two relays, and nothing else');
     const g = (await s.get(s.offer)).body;

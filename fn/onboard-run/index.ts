@@ -1,6 +1,24 @@
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
-// v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on)
+// v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on;
+// v8, 04/11/26, wave278 Task 3: the access steps, the leader decision, Re-check and the welcome copies)
+// wave278 (v8): four steps after the existing ones, each with its app_config switch (wa278a, on) and simulated for a practice flow; the section "wave278":
+//   groups (at Accept, needs google): onboard_groups' all, the roster department's and, for a leader, leaders; Directory members.insert as Steel
+//               (admin.directory.group.member). Already a member counts; a group that does not exist is reported ("no Toronto group yet") and the step
+//               is still done; any other refusal is HR's, naming the group. The detail starts "Joining as a leader." or "Joining as a member.".
+//   drives (at Accept, needs google): writer on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a domain
+//               admin but leaders_all_except (scope drive, no Drive email). An id still "<fill at release>" is never sent ("Drives not set up yet").
+//   meeting (at booking, needs roster, waits for google; the welcome waits for it): onboard_weekly_meetings[department] is a recurring event id; its
+//               series (hub_events says whose calendar) gets the hire's address beside every guest it has, as the organizer, sendUpdates=all.
+//   channel ('later', needs roster): only the hourly job (remind) runs it, while the switch is on: the hire's Slack id by their WA address, then their
+//               personal one (wa_slack_ids, then users.lookupByEmail), then conversations.invite to onboard_slack_channel_id. Not in Slack yet: pending
+//               ("Waiting for them to join Slack"), for 14 days from Accept, then HR's. A pending channel step does not keep the flow from started.
+//   setup_ticks written: groups_added [addresses], drives_added [drive names], weekly_meeting {summary, next_at}. leader is decided at Accept
+//               (flows.leader while null, from the position's title against onboard_leader_titles, whole words; no position: a member).
+//   set_leader {flow_id, leader}   {ok, leader, steps, warnings, repeated?}. Written, logged, then groups and drives run again (nothing is ever removed).
+//   recheck_access {flow_id}       {ok, steps, warnings}. groups and drives run again, done or not.
+//   set_welcome_cc {flow_id, emails}   {ok, welcome_cc, repeated?}. Active roster emails only (lower-cased, once each), else 400 not_staff with nothing
+//               saved; 409 already_sent once welcome_sent_at is set. Logged. All three are card actions the hire's own manager may use too.
 // wave275b (v7, Steel 03/11/26: "Can we make the availability check for onboarding optional"): app_config onboard_manager_hours (wa275b, off by default;
 //   anything but "on" is off). Off: propose, the hire's Yes (book) and the card's book do not refuse outside_hours and do not read the manager's hours;
 //   every other rule stays (bad_time, lead_time, overlap, busy, taken, already_booked). times adds manager_hours (true or false) and still sends the week
@@ -147,6 +165,11 @@ const SCOPE_GMAIL = 'https://www.googleapis.com/auth/gmail.send';
 const SCOPE_DIR = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
 const SCOPE_USER = 'https://www.googleapis.com/auth/admin.directory.user';   // wave275: users.insert and its read-back
 const USERS_URL = 'https://admin.googleapis.com/admin/directory/v1/users';
+const SCOPE_GROUP_MEMBER = 'https://www.googleapis.com/auth/admin.directory.group.member';   // wave278: the groups step adds a member
+const SCOPE_DRIVE = 'https://www.googleapis.com/auth/drive';                                  // wave278: the drives step lists the shared drives and shares them
+const GROUPS_URL = 'https://admin.googleapis.com/admin/directory/v1/groups';
+const DRIVE_URL = 'https://www.googleapis.com/drive/v3';
+const SLACK_API = 'https://slack.com/api';
 const TZ = 'America/Toronto';
 const STALE_MS = 10 * 60 * 1000;   // a step left pending or running this long was cut off (the function died), so Retry may take it
 
@@ -166,7 +189,9 @@ type StepRow = { step: string; status: string; detail?: string | null; practice?
 export type Step = {
   key: string; label: string; needs: string[];
   waitsFor?: string[];                               // whole-branch fix: steps that must have ended (done, skipped, hr_task or failed: any end) before this one runs
-  at?: 'accept' | 'booking';                         // wave275: when the step's row is made (accept_setup, or book); Start makes every row still missing
+  at?: 'accept' | 'booking' | 'later';               // wave275: when the step's row is made (accept_setup, or book); Start makes every row still missing.
+                                                     // wave278: 'later' (the channel): its row is made at booking or Start, but only the hourly job (remind) runs it,
+                                                     // unless it is held back by its switch, the flow is practice, or HR presses Retry on it
   setting?: string;                                  // the app_config switch that must be on for run to be used
   ticks?: string[];                                  // hr_setup_template ids this step finishes
   task?: string;                                     // what HR does when this step is left to them
@@ -179,6 +204,11 @@ export type Step = {
    manager keep needing roster only, as in wave271, so a plan that fails never holds the invites back. */
 const GOOGLE_TASK = 'Create the account in Google, then press "I created it, continue" on this card.';
 const HUB_TASK = 'Invite them to the Hub at member level, from Roster.';
+const GROUPS_TASK = 'Add them to their Google Groups in Google Admin.';
+const DRIVES_TASK = 'Share their shared drives with them in Google Drive, as Content manager.';
+const MEETING_TASK = 'Add them to their team\'s weekly meeting from the organizer\'s calendar.';
+const CHANNEL_TASK = 'Add them to the Slack onboarding channel once they have joined Slack.';
+const W278_SWITCHES = ['onboard_auto_groups', 'onboard_auto_drives', 'onboard_auto_meeting', 'onboard_auto_channel'];
 export const STEPS: Step[] = [
   { key: 'roster', label: 'Roster profile', needs: [], at: 'accept', run: runRoster },
   { key: 'google', label: 'Google account', needs: ['roster'], at: 'accept', setting: 'onboard_auto_google', ticks: ['hrb2'], run: runGoogle, after: addAddressToInvites, task: GOOGLE_TASK },
@@ -191,11 +221,20 @@ export const STEPS: Step[] = [
   /* wave275 Task 4: the welcome needs the invites (their Meet links) and has no switch: it goes at booking whether or not the account exists (settled rule
      2), and its login paragraph says which. Whole-branch fix: so that paragraph is decided on the account step's end, it waits while google is still
      pending or running (a Yes seconds after Accept), and goes once google ends, however it ends. */
-  { key: 'welcome', label: 'Welcome email', needs: ['invites'], waitsFor: ['google'], at: 'booking', ticks: ['hrb1'], run: sendWelcome,
+  /* wave278: it also waits for the weekly meeting step to end, so the email can name the meeting it added them to (setup_ticks.weekly_meeting) */
+  { key: 'welcome', label: 'Welcome email', needs: ['invites'], waitsFor: ['google', 'meeting'], at: 'booking', ticks: ['hrb1'], run: sendWelcome,
     task: 'Send the welcome email to their personal address.' },
+  /* wave278, after the existing ones (the section "wave278" below): Google Groups and shared drives at Accept, once the account exists; the team's weekly
+     meeting at booking; the Slack onboarding channel from the hourly job once the hire is in Slack. Each has its switch (default on in wa278a). */
+  { key: 'groups', label: 'Google Groups', needs: ['google'], at: 'accept', setting: 'onboard_auto_groups', run: runGroups, task: GROUPS_TASK },
+  { key: 'drives', label: 'Shared drives', needs: ['google'], at: 'accept', setting: 'onboard_auto_drives', run: runDrives, task: DRIVES_TASK },
+  { key: 'meeting', label: 'Weekly meeting', needs: ['roster'], waitsFor: ['google'], at: 'booking', setting: 'onboard_auto_meeting', run: runMeeting, task: MEETING_TASK },
+  { key: 'channel', label: 'Slack onboarding channel', needs: ['roster'], at: 'later', setting: 'onboard_auto_channel', run: runChannel, task: CHANNEL_TASK },
 ];
 /* a run that finds the step is HR's to do ends it as hr_task with this sentence, not as failed */
 class HrTask extends Error {}
+/* wave278: a run that has to wait for something outside the Hub (the hire joining Slack) leaves the step pending with this sentence, for the hourly job */
+class Later extends Error {}
 const stepOf = (key: string) => STEPS.find((s) => s.key === key);
 const numberOf = (key: string) => STEPS.findIndex((s) => s.key === key) + 1;
 const met = (status: string | undefined) => status === 'done' || status === 'skipped';
@@ -293,7 +332,7 @@ async function setStep(ctx: Ctx, key: string, status: string, detail: string): P
 }
 async function makeCtx(flow: Row, by: string, asUser: Row): Promise<Ctx> {
   const settings: Record<string, boolean> = {};
-  for (const k of ['onboard_auto_google', 'onboard_auto_slack', 'onboard_auto_hub']) settings[k] = (await cfg(k)).trim().toLowerCase() === 'on';
+  for (const k of ['onboard_auto_google', 'onboard_auto_slack', 'onboard_auto_hub', ...W278_SWITCHES]) settings[k] = (await cfg(k)).trim().toLowerCase() === 'on';
   return { flow, by, asUser, settings };
 }
 
@@ -301,7 +340,14 @@ async function makeCtx(flow: Row, by: string, asUser: Row): Promise<Ctx> {
 /* a setting that is off leaves the step to HR, until the account it hangs on exists: then what waited on google runs */
 function heldBack(s: Step, settings: Record<string, boolean>, status: Map<string, string>): boolean {
   if (!s.setting || settings[s.setting]) return false;
-  return !(s.needs.includes('google') && met(status.get('google')));
+  /* wave278: only a step behind the account's own switch (hub) is let through once the account exists; the access steps keep their switches */
+  return !(s.setting === 'onboard_auto_google' && s.needs.includes('google') && met(status.get('google')));
+}
+/* wave278: a 'later' step (the channel) runs from the hourly job; anywhere else only when it has nothing to ask outside (its switch off, or practice),
+   or when the caller names it (Retry on it, the hourly job) */
+function runsHere(s: Step, ctx: Ctx, status: Map<string, string>, also: string[]): boolean {
+  if (s.at !== 'later' || also.includes(s.key) || ctx.flow.practice) return true;
+  return !s.run || heldBack(s, ctx.settings, status);
 }
 async function tickSetup(ctx: Ctx): Promise<void> {   // a checklist that cannot be ticked is not a failed step: HR can tick it by hand
   try {
@@ -330,17 +376,19 @@ async function execute(ctx: Ctx, s: Step): Promise<void> {
   try {
     detail = await s.run(ctx);
   } catch (e) {
-    return setStep(ctx, s.key, e instanceof HrTask ? 'hr_task' : 'failed', errText(e));
+    return setStep(ctx, s.key, e instanceof HrTask ? 'hr_task' : e instanceof Later ? 'pending' : 'failed', errText(e));
   }
   await completed(ctx, s, detail);
 }
 /* runs everything that can run, in table order, then says why the rest cannot. A step only moves here from pending or waiting, and only a step
-   that has its row: wave275 makes the rows at Accept and at booking, so the steps of the other group wait for theirs. */
-async function advance(ctx: Ctx): Promise<void> {
+   that has its row: wave275 makes the rows at Accept and at booking, so the steps of the other group wait for theirs. wave278: also names the 'later'
+   steps this caller may run (runsHere). */
+async function advance(ctx: Ctx, also: string[] = []): Promise<void> {
   const tried = new Set<string>();
   for (;;) {
     const rows = await readSteps(ctx.flow.id), have = new Set(rows.map((r) => r.step));
-    const key = nextSteps(rows).find((k) => have.has(k) && !tried.has(k));
+    const now = new Map(rows.map((r) => [r.step, r.status]));
+    const key = nextSteps(rows).find((k) => have.has(k) && !tried.has(k) && runsHere(stepOf(k)!, ctx, now, also));
     if (!key) break;
     tried.add(key);
     await execute(ctx, stepOf(key)!);
@@ -361,7 +409,9 @@ async function advance(ctx: Ctx): Promise<void> {
 async function finish(ctx: Ctx): Promise<void> {
   const rows = await readSteps(ctx.flow.id);
   await accountsDone(ctx.flow.id, rows);
-  const settled = rows.every((r) => ['done', 'skipped', 'hr_task'].includes(r.status)) && !rows.some((r) => r.step === 'google' && r.status === 'hr_task');
+  /* wave278: a 'later' step still pending (the channel, waiting for the hire to join Slack) leaves nothing for HR, so it does not hold the flow back */
+  const settled = rows.every((r) => ['done', 'skipped', 'hr_task'].includes(r.status) || (r.status === 'pending' && stepOf(r.step)?.at === 'later'))
+    && !rows.some((r) => r.step === 'google' && r.status === 'hr_task');
   if (!settled) return;
   const now = new Date().toISOString();
   await svc.from('hub_onboard_flows').update({ status: 'started', started_at: now, updated_at: now }).eq('id', ctx.flow.id).eq('status', 'running');
@@ -369,8 +419,9 @@ async function finish(ctx: Ctx): Promise<void> {
 /* wave275: accounts_at, once, when the at-Accept steps of a flow that accept_setup ran are all done or skipped (however they got there: the run, a
    Retry or HR). A wave271 flow keeps it empty. Best effort: the card shows the steps themselves. */
 const ACCEPT_KEYS = STEPS.filter((s) => s.at === 'accept').map((s) => s.key);
+const ACCOUNT_KEYS = ['roster', 'google', 'hub'];   // wave278: the groups and drives are made at Accept too, but accounts_at stays the three account steps'
 async function accountsDone(flowId: number, rows: StepRow[]): Promise<void> {
-  if (!ACCEPT_KEYS.every((k) => met(rows.find((r) => r.step === k)?.status))) return;
+  if (!ACCOUNT_KEYS.every((k) => met(rows.find((r) => r.step === k)?.status))) return;
   try {
     const { data } = await svc.from('hub_onboard_flows').select('setup_ticks, accounts_at').eq('id', flowId).maybeSingle();
     if (!(data as Row)?.setup_ticks?.accept_setup_at || (data as Row)?.accounts_at) return;
@@ -1345,7 +1396,7 @@ async function retry(b: Row, by: string, asUser: Row): Promise<Response> {
   /* the claim: of two presses, only one finds the step as it was read */
   const { data: won } = await svc.from('hub_onboard_steps').update({ status: 'pending', detail: null, at: new Date().toISOString(), by }).eq('flow_id', f.id).eq('step', s.key).eq('status', row.status).select('step');
   if (!(won as unknown[] | null)?.length) return no('in_progress', 'That step is running now. Give it a minute, then reload.');
-  await advance(await makeCtx(f, by, asUser));
+  await advance(await makeCtx(f, by, asUser), [s.key]);   // wave278: Retry on the channel runs it now, not at the next hourly job
   return reply(f.id);
 }
 
@@ -2133,7 +2184,10 @@ async function acceptSetup(b: Row): Promise<Response> {
     await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: 'accept_setup_at', p_value: null });   // give the claim back so a retry can seed
     return no('save', 'The setup steps could not be made: ' + seedErr + '. Try again.', 500);
   }
-  await advance(await makeCtx(await getFlow(f.id), AT_ACCEPT_BY, null));
+  const flowNow = await getFlow(f.id);
+  /* wave278: member or leader is decided here, at Accept, whatever the groups and drives switches say (the card shows it, and a practice flow gets it too) */
+  try { await decideLeader(flowNow, AT_ACCEPT_BY); } catch (e) { warnings.push(errText(e)); }
+  await advance(await makeCtx(flowNow, AT_ACCEPT_BY, null));
   return json({ ok: true, steps: await readSteps(f.id), warnings });
 }
 
@@ -2254,7 +2308,8 @@ async function earlierPath(flowId: unknown): Promise<boolean> {
   const { data } = await svc.from('hub_onboard_flows').select('status, proposed_at, created_at').eq('id', Number(flowId)).maybeSingle();
   return !!data && !proposeMode(data as Row, await v2Since());
 }
-const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 'set_welcome', 'welcome', 'retry', 'task_done', 'set_canva_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out'];
+const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 'set_welcome', 'welcome', 'retry', 'task_done', 'set_canva_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out',
+  'set_leader', 'recheck_access', 'set_welcome_cc'];   // wave278
 const nameFor = async (email: string) => (await membersByEmail(email).catch(() => []))[0]?.name || email;
 
 /* times {flow_id}: what the card's picker draws. The manager's availability (wa275_availability_of), the hub@ meetings they are invited to over the grid's
@@ -2484,7 +2539,7 @@ async function otherOpenPlan(f: Row, c: Row): Promise<boolean> {
 }
 
 async function remind(): Promise<Response> {
-  const out = { ok: true, grid_links: 0, propose_links: 0, reminded_hr: 0, reminded_managers: 0, skipped: [] as string[] };
+  const out = { ok: true, grid_links: 0, propose_links: 0, reminded_hr: 0, reminded_managers: 0, channel_checked: 0, channel_added: 0, skipped: [] as string[] };
   const hours = await cfgNum('onboard_remind_hours', 48);
   const waited = (since: unknown) => !!since && Date.now() - Date.parse(String(since)) >= hours * 3600000;
   const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
@@ -2622,7 +2677,358 @@ async function remind(): Promise<Response> {
       out.skipped.push('flow ' + f.id + ': ' + errText(e));
     }
   }
+  await channelRound(out);   // wave278: the Slack onboarding channel, for hires who have joined Slack since the last hour
   return json(out);
+}
+
+/* ---------- wave278: Google Groups, shared drives, the weekly meeting and the Slack onboarding channel ---------- */
+/* Every rule is an app_config setting HR can change (wa278a): onboard_leader_titles, onboard_groups, onboard_drives, onboard_weekly_meetings,
+   onboard_slack_channel_id, and a switch for each step. The Hub only ever adds the flow's own hire: it never removes anyone from a group, a drive, a
+   meeting or a channel, and never touches another member. Each step writes what it added to setup_ticks for the hire's rundown and the welcome:
+   groups_added (addresses), drives_added (drive names), weekly_meeting ({summary, next_at}). */
+const NOT_SET = '<fill at release>';   // wa278a's drive ids until the release fills them in: never sent to Drive
+const DEFAULT_LEADER_TITLES = 'director, lead, head, chief, manager';
+const SLACK_WAIT_DAYS = 14;
+const CHANNEL_BY = 'hub (hourly)';
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/* leaderOf(title, titles): one of the comma-separated words, whole (letters or digits on neither side) and in any case */
+export function leaderOf(title: string | null, titles: string): boolean {
+  const t = String(title ?? '').trim();
+  if (!t) return false;
+  return String(titles ?? '').split(',').map((w) => w.trim()).filter(Boolean)
+    .some((w) => new RegExp('(^|[^\\p{L}\\p{N}])' + reEsc(w) + '($|[^\\p{L}\\p{N}])', 'iu').test(t));
+}
+async function cfgJson(key: string): Promise<Row | null> {
+  const v = (await cfg(key)).trim();
+  if (!v) return null;
+  try { const j = JSON.parse(v); return j && typeof j === 'object' && !Array.isArray(j) ? j : null; } catch (_) { return null; }
+}
+const addrList = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim().toLowerCase()).filter(Boolean);
+const idList = (v: unknown): string[] => (Array.isArray(v) ? v : []).map((x) => String(x ?? '').trim()).filter(Boolean);
+const usableId = (id: string) => !!id && id !== NOT_SET && !/[<>\s]/.test(id);
+const andList = (xs: string[]) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
+const googleSaid = (j: Row, status: number) => stop(String(j?.error?.message || 'status ' + status).replace(/\s+/g, ' ').trim().slice(0, 160));
+async function tickJson(flowId: number, key: string, value: unknown): Promise<void> {   // best effort, like google_made_at: the step itself is the record
+  try { await svc.rpc('wa275_tick_set', { p_flow: flowId, p_key: key, p_value: value }); } catch (_) { /* see above */ }
+}
+/* the roster profile's department (the position's when the profile has none), as the settings name it: marketing, fundraising, opsmtl, ... */
+async function departmentOf(f: Row): Promise<string | null> {
+  const c = await getCand(f.candidate_id);
+  let d: unknown = null;
+  if (c?.member_id) { const { data } = await svc.from('team_members').select('department').eq('id', c.member_id).maybeSingle(); d = (data as Row)?.department; }
+  if (!d && c?.position_id) { const { data } = await svc.from('hub_positions').select('dept').eq('id', c.position_id).maybeSingle(); d = (data as Row)?.dept; }
+  const s = String(d ?? '').trim().toLowerCase();
+  return s || null;
+}
+/* decideLeader: flows.leader, once, while it is null: the position's title against onboard_leader_titles (no position, or no title: a member). Kept
+   after that: set_leader on the card changes it. Returns the decision. */
+async function decideLeader(f: Row, by: string): Promise<boolean> {
+  const { data: now, error } = await svc.from('hub_onboard_flows').select('leader').eq('id', f.id).maybeSingle();
+  if (error) throw new Error('The Hub could not read whether they join as a leader: ' + error.message + '. Press Retry.');
+  if (typeof (now as Row)?.leader === 'boolean') return (now as Row).leader;
+  const c = await getCand(f.candidate_id);
+  let title: string | null = null;
+  if (c?.position_id) { const { data } = await svc.from('hub_positions').select('title').eq('id', c.position_id).maybeSingle(); title = (data as Row)?.title ?? null; }
+  const leader = leaderOf(title, (await cfg('onboard_leader_titles')).trim() || DEFAULT_LEADER_TITLES);
+  const { data: won } = await svc.from('hub_onboard_flows').update({ leader, updated_at: new Date().toISOString() }).eq('id', f.id).is('leader', null).select('leader');
+  if (!(won as Row[] | null)?.length) {   // someone decided it first (the card, or another run): theirs stands
+    const { data: again } = await svc.from('hub_onboard_flows').select('leader').eq('id', f.id).maybeSingle();
+    return (again as Row)?.leader === true;
+  }
+  if (!f.practice) await log('onboard_flow', f.id, 'leader', null, leader ? 'leader' : 'member', by + (title ? ' (title: ' + noBreaks(title).slice(0, 80) + ')' : ' (no position title)'));
+  return leader;
+}
+const leaderHead = (leader: boolean) => (leader ? 'Joining as a leader.' : 'Joining as a member.');
+
+/* ---------- step: groups ---------- */
+/* runGroups: onboard_groups' all, the department's, and leaders for a leader; one members.insert each, as Steel (runGoogle's subject). 409 (already a
+   member) counts; 404 (the group does not exist) is reported and the rest carries on; any other refusal leaves the step to HR, naming the group. Each
+   group is asked once a run: nothing loops. */
+async function runGroups(ctx: Ctx): Promise<string> {
+  const f = ctx.flow;
+  const leader = await decideLeader(f, ctx.by);
+  const head = leaderHead(leader);
+  const wa = cleanAddress(f.wa_email);
+  if (!wa) throw new HrTask(head + ' There is no Welfare Avenue address on this card yet, so nobody was added to a group. ' + GROUPS_TASK);
+  const rule = await cfgJson('onboard_groups');
+  if (!rule) throw new HrTask(head + ' The groups setting (onboard_groups) could not be read, so nobody was added to a group. ' + GROUPS_TASK);
+  const dept = await departmentOf(f);
+  const want = Array.from(new Set([...addrList(rule.all), ...(dept ? addrList(rule.by_department?.[dept]) : []), ...(leader ? addrList(rule.leaders) : [])]));
+  const deptNote = dept ? '' : ' The roster profile has no department, so only the groups for everyone' + (leader ? ' and for leaders' : '') + ' apply.';
+  if (!want.length) { await tickJson(f.id, 'groups_added', []); return head + ' No group applies to them.' + deptNote; }
+  const t = await token(ADMIN_ACTOR, SCOPE_GROUP_MEMBER);
+  if (!t) throw new HrTask(head + ' Google refused the Hub permission to add group members as ' + ADMIN_ACTOR + ', so nobody was added to ' + andList(want) + '. Tell Steel, or ' + lower(GROUPS_TASK));
+  const added: string[] = [], already: string[] = [], missing: string[] = [], failed: string[] = [];
+  for (const g of want) {
+    let res: Response;
+    try {
+      res = await fetch(GROUPS_URL + '/' + encodeURIComponent(g) + '/members', { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: wa, role: 'MEMBER' }) });
+    } catch (e) { failed.push(g + ' (the Hub could not reach Google: ' + errText(e).slice(0, 120) + ')'); continue; }
+    if (res.ok) { added.push(g); continue; }
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 409) { already.push(g); continue; }
+    if (res.status === 404 && !/memberKey/i.test(String(j?.error?.message || ''))) { missing.push(g === 'toronto@' + DOMAIN ? 'no Toronto group yet' : g + ' does not exist'); continue; }
+    failed.push(g + ' (Google said: ' + googleSaid(j, res.status) + ')');
+  }
+  await tickJson(f.id, 'groups_added', want.filter((g) => added.includes(g) || already.includes(g)));
+  let said = head;
+  if (added.length) said += ' Added ' + wa + ' to ' + andList(added) + '.';
+  if (already.length) said += ' Already in ' + andList(already) + '.';
+  if (missing.length) said += ' Not added: ' + andList(missing) + '.';
+  said += deptNote;
+  if (failed.length) throw new HrTask(said + ' Google did not add them to ' + andList(failed) + ' ' + GROUPS_TASK);
+  return said;
+}
+
+/* ---------- step: drives ---------- */
+/* runDrives: writer (Drive's Content manager) on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a
+   domain admin except leaders_all_except (their own department's are added back). No Drive email (sendNotificationEmail=false): the welcome names the
+   drives. An id still "<fill at release>" is never sent: "Drives not set up yet". The drive names come from the same list. */
+async function listDrives(t: string): Promise<{ ok: true; drives: Array<{ id: string; name: string }> } | { ok: false; why: string }> {
+  const drives: Array<{ id: string; name: string }> = [];
+  let page = '';
+  for (let i = 0; i < 20; i++) {
+    let res: Response;
+    try { res = await fetch(DRIVE_URL + '/drives?pageSize=100&useDomainAdminAccess=true' + (page ? '&pageToken=' + encodeURIComponent(page) : ''), { headers: { Authorization: 'Bearer ' + t } }); }
+    catch (e) { return { ok: false, why: 'the Hub could not reach Google: ' + errText(e).slice(0, 120) }; }
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, why: 'Google said: ' + googleSaid(j, res.status) };
+    for (const d of (Array.isArray(j.drives) ? j.drives : []) as Row[]) if (d?.id) drives.push({ id: String(d.id), name: String(d.name || d.id) });
+    page = String(j.nextPageToken || '');
+    if (!page) break;
+  }
+  return { ok: true, drives };
+}
+async function runDrives(ctx: Ctx): Promise<string> {
+  const f = ctx.flow;
+  const leader = await decideLeader(f, ctx.by);
+  const wa = cleanAddress(f.wa_email);
+  if (!wa) throw new HrTask('There is no Welfare Avenue address on this card yet, so no drive was shared. ' + DRIVES_TASK);
+  const rule = await cfgJson('onboard_drives');
+  if (!rule) throw new HrTask('The drives setting (onboard_drives) could not be read, so no drive was shared. ' + DRIVES_TASK);
+  const dept = await departmentOf(f);
+  const base = [...idList(rule.all), ...(dept ? idList(rule.by_department?.[dept]) : [])];
+  const except = idList(rule.leaders_all_except);
+  let unset = base.filter((id) => !usableId(id)).length;
+  const leaderReady = leader && except.length > 0 && except.every(usableId);   // without the two ids the Hub cannot tell what to leave out
+  if (leader && !leaderReady) unset++;
+  const own = Array.from(new Set(base.filter(usableId)));
+  const notSetUp = unset ? ' Drives not set up yet: ' + (leader && !leaderReady ? 'the leaders\' drives and ' : '') + 'some drive ids in the settings (onboard_drives) are still "' + NOT_SET + '", so those were not shared.' : '';
+  if (!own.length && !leaderReady) throw new HrTask('Drives not set up yet: the settings (onboard_drives) have no drive id for ' + (dept || 'them') + ', so no drive was shared. ' + DRIVES_TASK);
+  const t = await token(ADMIN_ACTOR, SCOPE_DRIVE);
+  if (!t) throw new HrTask('Google refused the Hub permission to share drives as ' + ADMIN_ACTOR + ', so no drive was shared. Tell Steel, or ' + lower(DRIVES_TASK));
+  const listed = await listDrives(t);
+  if (leaderReady && !listed.ok) throw new HrTask('Google did not list the shared drives (' + listed.why + '), so no drive was shared. ' + DRIVES_TASK);
+  const names = new Map((listed.ok ? listed.drives : []).map((d) => [d.id, d.name]));
+  const ids = leaderReady && listed.ok ? Array.from(new Set([...listed.drives.map((d) => d.id).filter((id) => !except.includes(id)), ...own])) : own;
+  const shared: string[] = [], failed: string[] = [];
+  for (const id of ids) {
+    const name = names.get(id) || id;
+    let res: Response;
+    try {
+      res = await fetch(DRIVE_URL + '/files/' + encodeURIComponent(id) + '/permissions?supportsAllDrives=true&sendNotificationEmail=false&useDomainAdminAccess=true', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: wa }),
+      });
+    } catch (e) { failed.push(name + ' (the Hub could not reach Google: ' + errText(e).slice(0, 120) + ')'); continue; }
+    if (res.ok) { shared.push(name); continue; }
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 409 || /already/i.test(String(j?.error?.message || ''))) { shared.push(name); continue; }   // they already have access
+    failed.push(name + ' (Google said: ' + googleSaid(j, res.status) + ')');
+  }
+  await tickJson(f.id, 'drives_added', shared);
+  let said = shared.length ? 'Shared ' + andList(shared) + ' with ' + wa + ' as Content manager' + (leaderReady ? ' (a leader: every shared drive but ' + andList(except.map((id) => names.get(id) || id)) + ').' : '.') : 'No drive was shared.';
+  said += notSetUp;
+  if (failed.length) said += ' Google did not share ' + andList(failed);
+  if (failed.length || unset) throw new HrTask(stop(said) + ' ' + DRIVES_TASK);
+  return said;
+}
+
+/* ---------- step: meeting ---------- */
+/* runMeeting: the department's recurring event (onboard_weekly_meetings) as the Hub's calendar copy knows it (hub_events: whose calendar, who
+   organizes it); the series is read on the organizer's calendar and patched with every guest it has plus the hire's address, as the organizer when
+   that is a Welfare Avenue address (else hub@ on the calendar it was synced from). sendUpdates=all: Google sends the hire the invite. */
+async function runMeeting(ctx: Ctx): Promise<string> {
+  const f = ctx.flow;
+  const dept = await departmentOf(f);
+  const map = (await cfgJson('onboard_weekly_meetings')) || {};
+  const rid = dept ? String(map[dept] ?? '').trim() : '';
+  if (!rid) throw new HrTask('There is no weekly meeting set for ' + (dept || 'their department (the roster profile has none)') + ' in the settings (onboard_weekly_meetings), so they were not added to one. ' + MEETING_TASK);
+  const wa = cleanAddress(f.wa_email);
+  if (!wa) throw new HrTask('There is no Welfare Avenue address on this card yet, so they were not added to the weekly meeting. ' + MEETING_TASK);
+  const { data: evs, error } = await svc.from('hub_events').select('id, summary, organizer, calendar_id, start_at, status').eq('recurring_event_id', rid);
+  if (error) throw new Error('The Hub could not read its copy of the calendar: ' + error.message + '. Press Retry.');
+  const rows = ((evs || []) as Row[]).filter((e) => e.status !== 'cancelled');
+  const one = rows.find((e) => e.organizer) || rows[0];
+  if (!one) throw new HrTask('The weekly meeting set for ' + dept + ' is not in the Hub\'s copy of the calendar, so the Hub cannot tell whose calendar it is on. ' + MEETING_TASK);
+  const organizer = String(one.organizer || '').trim().toLowerCase();
+  const ours = /^[^@\s]+@welfareavenue\.com$/.test(organizer);
+  const sub = ours ? organizer : CAL, calId = ours ? organizer : String(one.calendar_id || CAL);
+  const t = await token(sub, SCOPE_CAL);
+  if (!t) throw new HrTask('Google refused the Hub permission to use the calendar of ' + sub + ', so they were not added to the weekly meeting. Tell Steel, or ' + lower(MEETING_TASK));
+  const path = '/calendars/' + encodeURIComponent(calId) + '/events/' + encodeURIComponent(rid);
+  const got = await gcal(t, 'GET', path);
+  if (!got.ok) {
+    const why = 'Google did not find the weekly meeting for ' + dept + ' on the calendar of ' + calId + ' (Google said: ' + googleSaid(got.j, got.status) + ')';
+    if (got.status === 404 || got.status === 403) throw new HrTask(why + ' ' + MEETING_TASK);
+    throw new Error(why + ' Press Retry.');
+  }
+  const guests = Array.isArray(got.j?.attendees) ? got.j.attendees as Row[] : [];
+  const summary = String(got.j?.summary || one.summary || 'the weekly meeting');
+  const soonest = rows.map((e) => String(e.start_at || '')).filter((s) => s && Date.parse(s) >= Date.now()).sort((a, b) => Date.parse(a) - Date.parse(b))[0] || got.j?.start?.dateTime || null;
+  const nextAt = soonest && !Number.isNaN(Date.parse(soonest)) ? new Date(soonest).toISOString() : null;
+  const had = guests.some((g) => String(g?.email || '').trim().toLowerCase() === wa);
+  if (!had) {
+    const out = await gcal(t, 'PATCH', path + '?sendUpdates=all', { attendees: [...guests, { email: wa }] });
+    if (!out.ok) throw new Error('Google refused to add ' + wa + ' to ' + summary + ' (Google said: ' + googleSaid(out.j, out.status) + ') Press Retry.');
+  }
+  await tickJson(f.id, 'weekly_meeting', { summary, next_at: nextAt });
+  return (had ? wa + ' was already a guest of ' : 'Added ' + wa + ' to ') + summary + ', the weekly meeting for ' + dept + (nextAt ? ' (next on ' + whenText(nextAt) + ')' : '') + (had ? '.' : '; Google sent them the invite.');
+}
+
+/* ---------- step: channel ---------- */
+/* runChannel: the hire's Slack id by their Welfare Avenue address, then their personal one (wa_slack_ids first, then users.lookupByEmail with the hub@
+   bot token, as notify finds people), then conversations.invite to onboard_slack_channel_id. Not in Slack yet: the step stays pending (Later) and the
+   hourly job looks again, for SLACK_WAIT_DAYS from Accept; then it is HR's. */
+async function slackIdOf(emails: string[], tok: string): Promise<{ id: string; email: string } | null> {
+  for (const email of emails) {
+    const { data } = await svc.from('wa_slack_ids').select('slack_id').eq('email', email).maybeSingle();
+    if ((data as Row)?.slack_id) return { id: String((data as Row).slack_id), email };
+  }
+  for (const email of emails) {
+    let j: Row;
+    try {
+      const res = await fetch(SLACK_API + '/users.lookupByEmail?email=' + encodeURIComponent(email), { headers: { Authorization: 'Bearer ' + tok } });
+      j = await res.json().catch(() => ({}));
+    } catch (e) { throw new Later('Waiting for them to join Slack: Slack could not be asked this time (' + errText(e).slice(0, 120) + '), so the Hub looks again within the hour.'); }
+    if (j?.ok && j.user?.id) {
+      try { await svc.from('wa_slack_ids').upsert({ email, slack_id: String(j.user.id), source: 'lookupByEmail', updated_at: new Date().toISOString() }, { onConflict: 'email' }); } catch (_) { /* notify finds it again */ }
+      return { id: String(j.user.id), email };
+    }
+    const err = String(j?.error || 'no answer');
+    if (err === 'users_not_found') continue;
+    if (err === 'missing_scope') throw new HrTask('The Hub\'s Slack app is missing the scope ' + String(j?.needed || 'users:read.email') + ', so it cannot look them up. Add it to the app, then press Retry, or ' + lower(CHANNEL_TASK));
+    if (['invalid_auth', 'not_authed', 'account_inactive', 'token_revoked'].includes(err)) throw new HrTask('Slack refused the Hub\'s token (' + err + '), so it cannot look them up. Tell Steel, or ' + lower(CHANNEL_TASK));
+    throw new Later('Waiting for them to join Slack: Slack answered ' + err.slice(0, 60) + ' this time, so the Hub looks again within the hour.');
+  }
+  return null;
+}
+async function runChannel(ctx: Ctx): Promise<string> {
+  const f = ctx.flow;
+  const channel = (await cfg('onboard_slack_channel_id')).trim();
+  if (!channel) throw new HrTask('There is no channel id in the settings (onboard_slack_channel_id), so the Hub cannot add them to the onboarding channel. Paste it there, then press Retry, or ' + lower(CHANNEL_TASK));
+  const c = await getCand(f.candidate_id);
+  const emails = Array.from(new Set([cleanAddress(f.wa_email), String(c?.email || '').trim().toLowerCase()].filter((x): x is string => !!x && /@/.test(x))));
+  if (!emails.length) throw new HrTask('The card has no email the Hub could look up in Slack. ' + CHANNEL_TASK);
+  const tok = await getSecret('SLACK_BOT_TOKEN');
+  const found = await slackIdOf(emails, tok);
+  if (!found) {
+    const { data } = await svc.from('hub_onboard_flows').select('setup_ticks').eq('id', f.id).maybeSingle();
+    const since = Date.parse(String((data as Row)?.setup_ticks?.accept_setup_at || c?.accepted_on || ''));
+    if (!Number.isNaN(since) && Date.now() - since >= SLACK_WAIT_DAYS * 86400000) {
+      throw new HrTask(noBreaks(c?.name || 'This new hire') + ' has not joined Slack yet, ' + SLACK_WAIT_DAYS + ' days after accepting, so the Hub stopped looking (it looked for ' + andList(emails) + '). ' + CHANNEL_TASK);
+    }
+    throw new Later('Waiting for them to join Slack: nobody in Slack has ' + andList(emails) + ' yet. The Hub looks again every hour, for ' + SLACK_WAIT_DAYS + ' days from Accept.');
+  }
+  let j: Row;
+  try {
+    const res = await fetch(SLACK_API + '/conversations.invite', { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify({ channel, users: found.id }) });
+    j = await res.json().catch(() => ({}));
+  } catch (e) { throw new Error('The Hub could not reach Slack to add them to the onboarding channel (' + errText(e).slice(0, 120) + '). Press Retry.'); }
+  if (j?.ok) return 'Added them to the Slack onboarding channel (found in Slack by ' + found.email + ').';
+  const err = String(j?.error || 'no answer');
+  if (err === 'already_in_channel') return 'They are already in the Slack onboarding channel (found in Slack by ' + found.email + ').';
+  if (err === 'missing_scope') throw new HrTask('The Hub\'s Slack app is missing the scope ' + String(j?.needed || 'channels:manage or groups:write') + ', so it could not add them to the onboarding channel. Add it to the app, then press Retry, or ' + lower(CHANNEL_TASK));
+  if (err === 'not_in_channel') throw new HrTask('The Hub\'s Slack app is not in the onboarding channel, so it could not add them. Add the app to the channel, then press Retry, or ' + lower(CHANNEL_TASK));
+  if (err === 'channel_not_found') throw new HrTask('Slack has no channel ' + channel + ' (onboard_slack_channel_id), so they were not added. Check the channel id, then press Retry, or ' + lower(CHANNEL_TASK));
+  throw new Error('Slack did not add them to the onboarding channel (Slack said ' + err.slice(0, 80) + '). Press Retry.');
+}
+/* the hourly job's part: each flow whose channel step is pending or waiting with nothing in its way, on a live, non-practice flow with an open card */
+async function channelRound(out: Row): Promise<void> {
+  if (!(await cfgOn('onboard_auto_channel'))) return;
+  const { data, error } = await svc.from('hub_onboard_steps').select('flow_id, status').eq('step', 'channel').in('status', ['pending', 'waiting']);
+  if (error) { out.skipped.push('the Slack channel steps could not be read: ' + error.message); return; }
+  for (const r of (data || []) as Row[]) {
+    try {
+      const f = await getFlow(r.flow_id);
+      if (!f || f.practice || !LIVE_FLOW.includes(f.status)) continue;
+      const c = await getCand(f.candidate_id);
+      if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
+      if (!nextSteps(await readSteps(f.id)).includes('channel')) continue;
+      const ctx = await makeCtx(f, CHANNEL_BY, null);
+      await execute(ctx, stepOf('channel')!);
+      await finish(ctx);
+      out.channel_checked++;
+      if ((await readSteps(f.id)).find((x) => x.step === 'channel')?.status === 'done') out.channel_added++;
+    } catch (e) { out.skipped.push('flow ' + r.flow_id + ' (Slack channel): ' + errText(e)); }
+  }
+}
+
+/* ---------- wave278: the card's actions (HR, admins, or the hire's own manager: CARD_BY_MANAGER) ---------- */
+/* groups and drives again, as Retry would, also when they are done: each is set back to pending (a claim on the status read) and the runner takes them.
+   A step running right now is left to finish; one waiting on the account runs when the account exists; one HR skipped stays skipped. */
+const ACCESS_KEYS = ['groups', 'drives'];
+async function rerunAccess(f: Row, by: string, asUser: Row): Promise<string[]> {
+  const warnings: string[] = [];
+  const rows = await readSteps(f.id);
+  if (!rows.some((r) => ACCESS_KEYS.includes(r.step))) return ['The groups and drives steps are made when the offer is accepted, so there is nothing to run yet.'];
+  for (const key of ACCESS_KEYS) {
+    const row = rows.find((r) => r.step === key);
+    if (!row || row.status === 'skipped' || row.status === 'waiting') continue;
+    if (['pending', 'running'].includes(row.status) && Date.now() - Date.parse(String(row.at)) < STALE_MS) { warnings.push(stepOf(key)!.label + ' is running now, so it was not started again. Press Re-check in a minute.'); continue; }
+    await svc.from('hub_onboard_steps').update({ status: 'pending', detail: null, at: new Date().toISOString(), by }).eq('flow_id', f.id).eq('step', key).eq('status', row.status);
+  }
+  await advance(await makeCtx(f, by, asUser));
+  return warnings;
+}
+/* set_leader {flow_id, leader}: the card's "Change". Written, logged, then groups and drives run again. The Hub never removes: from leader to member,
+   HR takes them out of the leaders' groups and drives by hand (the answer says which groups). */
+async function setLeader(b: Row, by: string, asUser: Row): Promise<Response> {
+  if (typeof b.leader !== 'boolean') return no('bad_value', 'Say whether they join as a leader: true or false.', 400);
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  const { data: cur, error: readErr } = await svc.from('hub_onboard_flows').select('leader').eq('id', f.id).maybeSingle();
+  if (readErr) return no('save', 'The Hub could not read whether they join as a leader: ' + readErr.message + '. Try again.', 500);
+  const old = typeof (cur as Row)?.leader === 'boolean' ? (cur as Row).leader : null;
+  if (old === b.leader) return json({ ok: true, leader: b.leader, repeated: true, steps: await readSteps(f.id), warnings: [] });
+  const { error } = await svc.from('hub_onboard_flows').update({ leader: b.leader, updated_at: new Date().toISOString() }).eq('id', f.id);
+  if (error) return no('save', 'The change could not be saved: ' + error.message + '. Try again.', 500);
+  await log('onboard_flow', f.id, 'leader', old == null ? null : old ? 'leader' : 'member', b.leader ? 'leader' : 'member', by);
+  const warnings = await rerunAccess(f, by, asUser);
+  if (old === true && !b.leader) {
+    const lead = addrList((await cfgJson('onboard_groups'))?.leaders);
+    warnings.push('The Hub never removes anyone: if they should not be in ' + (lead.length ? andList(lead) : 'the leaders\' groups') + ' or the leaders\' drives, take them out by hand.');
+  }
+  return json({ ok: true, leader: b.leader, steps: await readSteps(f.id), warnings });
+}
+/* recheck_access {flow_id}: the card's "Re-check Drives and Groups" (a group made since, a drive id filled in, a scope granted) */
+async function recheckAccess(b: Row, by: string, asUser: Row): Promise<Response> {
+  const f = await getFlow(b.flow_id);
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  const warnings = await rerunAccess(f, by, asUser);
+  return json({ ok: true, steps: await readSteps(f.id), warnings });
+}
+/* set_welcome_cc {flow_id, emails}: who gets the staff copy of the welcome (besides the card's owner). Active roster emails only, lower-cased, once each;
+   anything else is refused and nothing is saved. Once the welcome has gone the copies cannot change. Logged. */
+async function setWelcomeCc(b: Row, by: string): Promise<Response> {
+  if (!Array.isArray(b.emails) || b.emails.some((e: unknown) => typeof e !== 'string')) return no('bad_value', 'Send the people to copy as a list of email addresses.', 400);
+  const emails: string[] = Array.from(new Set((b.emails as string[]).map((e) => e.trim().toLowerCase()).filter(Boolean)));
+  if (emails.length > 20) return no('too_many', 'That is more than 20 people. Choose fewer.', 400);
+  const n = Number(b.flow_id);
+  const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select('id, status, welcome_cc, welcome_sent_at').eq('id', n).maybeSingle() : { data: null };
+  if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
+  if ((f as Row).status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
+  if ((f as Row).welcome_sent_at) return no('already_sent', 'The welcome email has already gone, so the people copied on it cannot change.');
+  const bad: string[] = [];
+  for (const e of emails) if (!(await membersByEmail(e)).some((m) => m.active === true)) bad.push(e);
+  if (bad.length) return no('not_staff', andList(bad) + (bad.length === 1 ? ' is not the email of anyone' : ' are not the emails of anyone') + ' active on the roster, so nothing was saved. Copies go to staff only.', 400);
+  const old = addrList((f as Row).welcome_cc);
+  if (old.length === emails.length && emails.every((e) => old.includes(e))) return json({ ok: true, welcome_cc: old, repeated: true });
+  const { error } = await svc.from('hub_onboard_flows').update({ welcome_cc: emails, updated_at: new Date().toISOString() }).eq('id', (f as Row).id).is('welcome_sent_at', null);
+  if (error) return no('save', 'The copies could not be saved: ' + error.message + '. Try again.', 500);
+  await log('onboard_flow', (f as Row).id, 'welcome_cc', old.join(', ') || null, emails.join(', ') || null, by);
+  return json({ ok: true, welcome_cc: emails });
 }
 
 function sameText(a: string, b: string): boolean {   // the trigger secret is compared without stopping at the first difference
@@ -2678,6 +3084,9 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'set_ask_availability') return await setAskAvailability(b, by);
     if (b.action === 'grid_for') return await gridFor(b, by);
     if (b.action === 'set_welcome') return await setWelcome(b, by);
+    if (b.action === 'set_leader') return await setLeader(b, by, asUser);           // wave278
+    if (b.action === 'recheck_access') return await recheckAccess(b, by, asUser);   // wave278
+    if (b.action === 'set_welcome_cc') return await setWelcomeCc(b, by);           // wave278
     if (b.action === 'availability_for') return await availabilityFor(b, by);   // HR and admins only (not a card action of the manager's)
     if (b.action === 'preview') return await preview(b, by);
     if (b.action === 'ask_manager') return await askManagerNow(b, by, false);   // wave275 Task 5: HR sends the manager their link again from the card
