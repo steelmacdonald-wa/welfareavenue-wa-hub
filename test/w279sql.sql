@@ -358,5 +358,156 @@ begin
   assert (select count(*) from pg_proc where proname like 'wa279%' and obj_description(oid, 'pg_proc') is null) = 0, 'every wa279 function has a comment';
 end $$;
 
+-- ---------------------------------------------------------------- Task 3: policies open 10 minutes before they can be signed
+do $$
+declare
+  v_m bigint; v_onb bigint; v_msg text; v_o jsonb; v_s jsonb; v_def text; v_step bigint; v_open timestamptz;
+  c_pol constant text := '{"role":"authenticated","email":"W279.Pol@example.invalid"}';
+  c_svc constant text := '{"role":"service_role"}';
+begin
+  insert into public.wa_policies (key, title, url, required, active) values
+    ('w279-a', 'Test policy A', 'https://example.invalid/a', true, true),
+    ('w279-b', 'Test policy B', 'https://example.invalid/b', true, true),
+    ('w279-opt', 'Test optional policy', 'https://example.invalid/o', false, true),
+    ('w279-off', 'Test inactive policy', 'https://example.invalid/x', true, false),
+    ('w279-old', 'Test old policy', 'https://example.invalid/old', false, true);
+  -- the Policies step is on the plan from the start
+  insert into public.onboarding_template (id, section, name, academy_path) values ('t-pol', 'WEEK 1', 'Test Policies step', 'policies');
+  insert into public.team_members (name, email, department, role) values ('Test Policy Person', 'w279.pol@example.invalid', 'w279test', 'Analyst');
+  v_m := (select id from public.team_members where email = 'w279.pol@example.invalid');
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w279.staff@example.invalid"}', true);
+  v_onb := public.onboarding_assign(v_m, 'test');
+  v_step := (select id from public.onboarding_steps where onboarding_id = v_onb and template_id = 't-pol');
+  assert v_step is not null, 'the plan carries the Policies step';
+
+  -- a sign-off from before the rule stays: inserted while the rule is off, untouched after
+  alter table public.wa_policy_signoffs disable trigger trg_wa279_policy_read;
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-old');
+  alter table public.wa_policy_signoffs enable trigger trg_wa279_policy_read;
+  assert exists (select 1 from public.wa_policy_signoffs where email = 'w279.pol@example.invalid' and policy_key = 'w279-old'), 'a sign-off from before stays';
+
+  -- no setting: 10 minutes. The caller's email comes in capitals in the token and is judged lower-cased.
+  assert not exists (select 1 from public.app_config where key = 'policy_read_minutes'), 'no setting in the test data';
+  perform set_config('request.jwt.claims', c_pol, true);
+
+  -- sign without opening: refused
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 10 more minutes first', 'sign without opening is refused: ' || coalesce(v_msg, 'no error');
+
+  -- an unknown or inactive policy cannot be opened
+  v_msg := null;
+  begin perform public.wa279_policy_open('w279-nothing'); exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'That policy was not found', 'an unknown policy cannot be opened: ' || coalesce(v_msg, 'no error');
+  v_msg := null;
+  begin perform public.wa279_policy_open('w279-off'); exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'That policy was not found', 'an inactive policy cannot be opened';
+
+  -- open, then sign at once: refused with the minutes left
+  v_o := public.wa279_policy_open('w279-a');
+  assert (v_o ->> 'minutes')::int = 10 and (v_o ->> 'opened_at') is not null and (v_o ->> 'unlock_at') is not null, 'open returns opened_at, unlock_at and minutes';
+  assert (v_o ->> 'unlock_at')::timestamptz = (v_o ->> 'opened_at')::timestamptz + interval '10 minutes', 'unlock_at is ten minutes after opened_at';
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 10 more minutes first', 'open then sign at once is refused: ' || coalesce(v_msg, 'no error');
+
+  -- a second open keeps the first time; one row; the email is lower case; minutes left round up
+  update public.wa_policy_opens set opened_at = now() - interval '3 minutes 30 seconds' where policy_key = 'w279-a';
+  v_open := (select opened_at from public.wa_policy_opens where policy_key = 'w279-a');
+  v_o := public.wa279_policy_open('w279-a');
+  assert (v_o ->> 'opened_at')::timestamptz = v_open, 'a second open keeps the first opened_at';
+  assert (select count(*) from public.wa_policy_opens where policy_key = 'w279-a') = 1 and (select email from public.wa_policy_opens where policy_key = 'w279-a') = 'w279.pol@example.invalid', 'one row, lower case email';
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 7 more minutes first', 'minutes left are rounded up (6.5 becomes 7): ' || coalesce(v_msg, 'no error');
+
+  -- the state shows the caller's opens only
+  v_s := public.wa279_policy_state();
+  assert v_s ? 'w279-a' and (v_s -> 'w279-a') ? 'opened_at' and (v_s -> 'w279-a') ? 'unlock_at' and not (v_s ? 'w279-b'), 'the state lists what the caller opened';
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w279.other@example.invalid"}', true);
+  assert public.wa279_policy_state() = '{}'::jsonb, 'someone else sees none of it';
+  perform set_config('request.jwt.claims', c_pol, true);
+
+  -- opened 11 minutes ago: signed; one of two required does not tick the step
+  update public.wa_policy_opens set opened_at = now() - interval '11 minutes' where policy_key = 'w279-a';
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
+  assert exists (select 1 from public.wa_policy_signoffs where policy_key = 'w279-a' and email = 'w279.pol@example.invalid'), 'an open back-dated 11 minutes can be signed';
+  assert not (select done from public.onboarding_steps where id = v_step), 'one of two required policies does not tick the step';
+  assert (public.wa166_path_state(v_m, 'policies') ->> 'done')::int = 1 and (public.wa166_path_state(v_m, 'policies') ->> 'total')::int = 2, 'path state counts the required, active policies (1 of 2)';
+  assert not (public.wa166_path_state(v_m, 'policies') ->> 'complete')::boolean, 'not complete at 1 of 2';
+
+  -- a policy that is not required is signed at once and does not count
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-opt');
+  assert exists (select 1 from public.wa_policy_signoffs where policy_key = 'w279-opt'), 'a policy that is not required is signed at once';
+  assert not (public.wa166_path_state(v_m, 'policies') ->> 'complete')::boolean, 'an optional sign-off does not complete the path';
+
+  -- the service role signs at once; the last required one ticks the Policies step by itself
+  perform set_config('request.jwt.claims', c_svc, true);
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-b');
+  assert exists (select 1 from public.wa_policy_signoffs where policy_key = 'w279-b'), 'the service role signs at once';
+  assert (select done and done_by = 'Avenue Academy' from public.onboarding_steps where id = v_step), 'the Policies step ticks itself once both required policies are signed';
+  assert (public.wa166_path_state(v_m, 'policies') ->> 'complete')::boolean, 'path state is complete';
+  assert (public.wa166_path_state(v_m, 'role60') ->> 'key') = 'role60', 'the role keys still answer';
+  assert (public.wa166_path_state(v_m, 'nothing-here') ->> 'complete')::boolean = false, 'other keys still run the live body';
+
+  -- a row for another email is not this rule's business; a sign-off with no team member behind it still goes in
+  perform set_config('request.jwt.claims', c_pol, true);
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.nobody@example.invalid', 'Test Nobody', 'w279-a');
+  perform set_config('request.jwt.claims', c_svc, true);
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.nobody@example.invalid', 'Test Nobody', 'w279-b');
+  assert (select count(*) from public.wa_policy_signoffs where email = 'w279.nobody@example.invalid') = 2, 'no member behind a sign-off, no problem';
+
+  -- the setting: 0 is off, 25 is 25, text falls back to 10, never less than 1 minute
+  insert into public.app_config (key, value) values ('policy_read_minutes', '0');
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w279.zero@example.invalid"}', true);
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.zero@example.invalid', 'Test Zero', 'w279-a');
+  assert exists (select 1 from public.wa_policy_signoffs where email = 'w279.zero@example.invalid'), 'policy_read_minutes 0: signed at once, nothing opened';
+  update public.app_config set value = '25' where key = 'policy_read_minutes';
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w279.long@example.invalid"}', true);
+  assert (public.wa279_policy_open('w279-a') ->> 'minutes')::int = 25, 'the setting is read';
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 25 more minutes first', 'a longer rule is used: ' || coalesce(v_msg, 'no error');
+  update public.app_config set value = 'ten' where key = 'policy_read_minutes';
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 10 more minutes first', 'a setting that is not a number falls back to 10: ' || coalesce(v_msg, 'no error');
+  update public.app_config set value = '1' where key = 'policy_read_minutes';
+  update public.wa_policy_opens set opened_at = now() - interval '1 second' where email = 'w279.long@example.invalid';
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Read it for 1 more minutes first', 'never less than 1 minute: ' || coalesce(v_msg, 'no error');
+  delete from public.app_config where key = 'policy_read_minutes';
+
+  -- a sync that blows up never fails a sign-off
+  perform set_config('request.jwt.claims', c_svc, true);
+  insert into public.team_members (name, email, department, role) values ('Test Policy Two', 'w279.pol2@example.invalid', 'w279test', 'Analyst');
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w279.staff@example.invalid"}', true);
+  perform public.onboarding_assign((select id from public.team_members where email = 'w279.pol2@example.invalid'), 'test');
+  perform set_config('request.jwt.claims', c_svc, true);
+  v_def := pg_get_functiondef('public.wa166_onb_sync(bigint)'::regprocedure);
+  create or replace function public.wa166_onb_sync(p_onb bigint) returns integer language plpgsql security definer set search_path to '' as $f$ begin raise exception 'sync is broken'; end $f$;
+  insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol2@example.invalid', 'Test Policy Two', 'w279-a');
+  assert exists (select 1 from public.wa_policy_signoffs where email = 'w279.pol2@example.invalid'), 'a broken sync does not fail the sign-off';
+  execute v_def;
+  assert public.wa166_onb_sync(v_onb) is not null, 'the real sync is back';
+
+  -- who can reach what
+  assert not has_table_privilege('authenticated', 'public.wa_policy_opens', 'select') and not has_table_privilege('authenticated', 'public.wa_policy_opens', 'insert') and not has_table_privilege('anon', 'public.wa_policy_opens', 'select'), 'opens have no direct grants';
+  assert (select relrowsecurity from pg_class where oid = 'public.wa_policy_opens'::regclass), 'with row level security on';
+  assert has_function_privilege('authenticated', 'public.wa279_policy_open(text)', 'execute') and not has_function_privilege('anon', 'public.wa279_policy_open(text)', 'execute'), 'open is for signed-in people only';
+  assert has_function_privilege('authenticated', 'public.wa279_policy_state()', 'execute') and not has_function_privilege('anon', 'public.wa279_policy_state()', 'execute'), 'and so is state';
+  assert not has_function_privilege('authenticated', 'public.wa279_policy_rule()', 'execute') and not has_function_privilege('authenticated', 'public.wa279_policy_sync()', 'execute'), 'the trigger functions are closed';
+  assert not has_function_privilege('authenticated', 'public.wa279_policies_state(bigint)', 'execute'), 'the path helper is closed';
+  assert (select count(*) from pg_trigger where tgrelid = 'public.wa_policy_signoffs'::regclass and not tgisinternal and tgname in ('trg_wa279_policy_read', 'trg_wa279_policy_sync')) = 2, 'both triggers are on the sign-offs once';
+  assert (select count(*) from pg_proc where proname like 'wa279%' and obj_description(oid, 'pg_proc') is null) = 0, 'every wa279 function still has a comment';
+end $$;
+
 select 'w279sql: all assertions passed' as result;
 rollback;

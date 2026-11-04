@@ -376,10 +376,25 @@ $function$;
 revoke all on function public.wa279_role_state(bigint, text) from public, anon, authenticated;
 comment on function public.wa279_role_state(bigint, text) is 'wave279: role60 / role90 for wa166_path_state: complete when the member''s active plan has at least one pick in that section and every pick is done.';
 
--- wa166_path_state: the live body, with role60 and role90 in front
+-- Part 3 (Task 3): the path state behind the Policies step. Complete when every required, active policy is signed by the member's email.
+create or replace function public.wa279_policies_state(p_member bigint)
+returns jsonb language sql stable security definer set search_path to '' as $function$
+  with me as (select lower(tm.email) as email from public.team_members tm where tm.id = p_member),
+  req as (
+    select p.key, exists (select 1 from public.wa_policy_signoffs s, me where lower(s.email) = me.email and s.policy_key = p.key) as signed
+      from public.wa_policies p where p.required and p.active
+  )
+  select jsonb_build_object('key', 'policies', 'title', 'Policies', 'done', (select count(*) filter (where signed) from req)::int, 'total', (select count(*) from req)::int,
+                            'complete', (select count(*) > 0 and count(*) = count(*) filter (where signed) from req), 'asked', 'policies')
+$function$;
+revoke all on function public.wa279_policies_state(bigint) from public, anon, authenticated;
+comment on function public.wa279_policies_state(bigint) is 'wave279: policies for wa166_path_state: complete when every required, active policy has a sign-off from the member''s email.';
+
+-- wa166_path_state: the live body, with role60, role90 and policies in front
 create or replace function public.wa166_path_state(p_member bigint, p_key text)
 returns jsonb language sql stable security definer set search_path to '' as $function$
-  select case when p_key in ('role60', 'role90') then public.wa279_role_state(p_member, p_key) else (
+  select case when p_key in ('role60', 'role90') then public.wa279_role_state(p_member, p_key)
+              when p_key = 'policies' then public.wa279_policies_state(p_member) else (
   with me as (select tm.name, tm.email, tm.department from public.team_members tm where tm.id = p_member),
   st as (
     select p.key, p.title, p.dept, coalesce(p.required, false) as required, p.sort,
@@ -410,3 +425,100 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
     jsonb_build_object('key', p_key, 'title', null, 'done', 0, 'total', 0, 'complete', false, 'asked', p_key))
   ) end;
 $function$;
+
+-- ====================================================================================================================================================
+-- Part 3 (Task 3): a required policy must have been open for policy_read_minutes (default 10) before the person can sign it; the Policies step ticks itself
+-- ====================================================================================================================================================
+-- Rules:
+--   wa_policy_opens (email, policy_key, opened_at) records the first time a person opened a policy. No direct grants: people reach it only through
+--     wa279_policy_open(key) (records the first open, returns {opened_at, unlock_at, minutes}) and wa279_policy_state() (the caller's own opens).
+--   BEFORE INSERT on wa_policy_signoffs raises 'Read it for N more minutes first' when the insert is by the authenticated role, the row's email is the caller's
+--     (compared lower-cased), the policy is required and active, policy_read_minutes is above 0, and there is no open or it is younger than the rule.
+--     N is the whole minutes left, rounded up, at least 1. The service role and every other insert pass. Existing sign-offs are never looked at again.
+--   policy_read_minutes (app_config, text): missing or not a whole number = 10; 0 = off.
+--   AFTER INSERT on wa_policy_signoffs runs wa166_onb_sync for the signer's active plan(s) (found by team_members.email, lower-cased). It never fails a sign-off.
+--   wa166_path_state(member, 'policies') (above, in the wrapper) is complete when every required, active policy is signed by the member's email.
+
+create table if not exists public.wa_policy_opens (
+  email text not null,
+  policy_key text not null,
+  opened_at timestamptz not null default now(),
+  primary key (email, policy_key)
+);
+alter table public.wa_policy_opens enable row level security;   -- no policies: only the two functions below (security definer) reach it
+revoke all on table public.wa_policy_opens from public, anon, authenticated;
+comment on table public.wa_policy_opens is 'wave279: the first time each person opened each policy (lower-case email). Written only by wa279_policy_open; read by the sign-off rule.';
+
+-- the rule in minutes
+create or replace function public.wa279_policy_minutes()
+returns int language sql stable security definer set search_path to '' as $function$
+  select coalesce((select case when btrim(c.value) ~ '^\d{1,4}$' then btrim(c.value)::int end from public.app_config c where c.key = 'policy_read_minutes'), 10)
+$function$;
+revoke all on function public.wa279_policy_minutes() from public, anon, authenticated;
+comment on function public.wa279_policy_minutes() is 'wave279: app_config policy_read_minutes as whole minutes. Missing or not a number = 10. 0 = the rule is off.';
+
+create or replace function public.wa279_policy_open(p_key text)
+returns jsonb language plpgsql security definer set search_path to '' as $function$
+declare v_email text := lower(coalesce(auth.jwt() ->> 'email', '')); v_min int := public.wa279_policy_minutes(); v_at timestamptz;
+begin
+  if v_email = '' then raise exception 'Sign in first'; end if;
+  if not exists (select 1 from public.wa_policies p where p.key = p_key and p.active) then raise exception 'That policy was not found'; end if;
+  insert into public.wa_policy_opens (email, policy_key) values (v_email, p_key) on conflict (email, policy_key) do nothing;
+  select o.opened_at into v_at from public.wa_policy_opens o where o.email = v_email and o.policy_key = p_key;
+  return jsonb_build_object('opened_at', v_at, 'unlock_at', v_at + make_interval(mins => v_min), 'minutes', v_min);
+end $function$;
+revoke all on function public.wa279_policy_open(text) from public, anon;
+grant execute on function public.wa279_policy_open(text) to authenticated, service_role;
+comment on function public.wa279_policy_open(text) is 'wave279: records the first time the caller opened an active policy and returns {opened_at, unlock_at, minutes}. A second open keeps the first time. Unknown or inactive policy: refused.';
+
+create or replace function public.wa279_policy_state()
+returns jsonb language sql stable security definer set search_path to '' as $function$
+  select coalesce(jsonb_object_agg(o.policy_key, jsonb_build_object('opened_at', o.opened_at, 'unlock_at', o.opened_at + make_interval(mins => public.wa279_policy_minutes()))), '{}'::jsonb)
+    from public.wa_policy_opens o where o.email = lower(coalesce(auth.jwt() ->> 'email', ''))
+$function$;
+revoke all on function public.wa279_policy_state() from public, anon;
+grant execute on function public.wa279_policy_state() to authenticated, service_role;
+comment on function public.wa279_policy_state() is 'wave279: the caller''s own policy opens as {policy_key: {opened_at, unlock_at}}.';
+
+-- the 10 minute rule
+create or replace function public.wa279_policy_rule()
+returns trigger language plpgsql security definer set search_path to '' as $function$
+declare v_me text := lower(coalesce(auth.jwt() ->> 'email', '')); v_min int; v_at timestamptz; v_left int;
+begin
+  if coalesce(auth.role(), '') <> 'authenticated' or v_me = '' or lower(new.email) <> v_me then return new; end if;
+  if not exists (select 1 from public.wa_policies p where p.key = new.policy_key and p.required and p.active) then return new; end if;
+  v_min := public.wa279_policy_minutes();
+  if v_min <= 0 then return new; end if;
+  select o.opened_at into v_at from public.wa_policy_opens o where o.email = v_me and o.policy_key = new.policy_key;
+  if v_at is null then raise exception 'Read it for % more minutes first', v_min; end if;
+  if now() < v_at + make_interval(mins => v_min) then
+    v_left := greatest(1, ceil(extract(epoch from (v_at + make_interval(mins => v_min) - now())) / 60)::int);
+    raise exception 'Read it for % more minutes first', v_left;
+  end if;
+  return new;
+end $function$;
+revoke all on function public.wa279_policy_rule() from public, anon, authenticated;
+comment on function public.wa279_policy_rule() is 'wave279: BEFORE INSERT on wa_policy_signoffs. A signed-in person signing a required, active policy for themselves must have had it open for policy_read_minutes (default 10, 0 = off). The service role and other inserts pass.';
+drop trigger if exists trg_wa279_policy_read on public.wa_policy_signoffs;
+create trigger trg_wa279_policy_read before insert on public.wa_policy_signoffs for each row execute function public.wa279_policy_rule();
+
+-- a new sign-off ticks the Policies step
+create or replace function public.wa279_policy_sync()
+returns trigger language plpgsql security definer set search_path to '' as $function$
+declare r record;
+begin
+  begin
+    for r in select ob.id from public.onboardings ob join public.team_members tm on tm.id = ob.member_id
+              where lower(tm.email) = lower(new.email) and ob.status = 'active' loop
+      perform public.wa166_onb_sync(r.id);
+    end loop;
+  exception when others then
+    null;   -- a sign-off never fails because the plan could not be updated
+  end;
+  return new;
+end $function$;
+revoke all on function public.wa279_policy_sync() from public, anon, authenticated;
+comment on function public.wa279_policy_sync() is 'wave279: AFTER INSERT on wa_policy_signoffs. Runs wa166_onb_sync for the signer''s active plan(s), found by team_members.email. Swallows any error so a sign-off never fails.';
+drop trigger if exists trg_wa279_policy_sync on public.wa_policy_signoffs;
+create trigger trg_wa279_policy_sync after insert on public.wa_policy_signoffs for each row execute function public.wa279_policy_sync();
+

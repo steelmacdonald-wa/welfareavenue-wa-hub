@@ -657,3 +657,31 @@ begin
 end $function$;
 create trigger trg_wa166_tp_onb after insert or update of status on public.training_progress
   for each row execute function public.wa166_tp_onb();
+
+-- 9. Task 3 (wa279a, part 3): the policy tables (columns, constraints, RLS policies and ACLs copied read-only from live 04/11/26; no triggers live on either).
+--    is_board_viewer() is a stand-in (live looks at the board viewer list); the sign-off rule only needs the insert policy.
+create or replace function public.is_board_viewer() returns boolean language sql stable as $$ select false $$;
+create table public.wa_policies (
+  key text primary key,
+  title text not null,
+  url text not null,
+  required boolean not null default true,
+  active boolean not null default true,
+  sort integer not null default 100
+);
+create table public.wa_policy_signoffs (
+  id bigint generated always as identity primary key,
+  email text not null,
+  name text not null,
+  policy_key text not null references public.wa_policies (key),
+  signed_at timestamptz not null default now(),
+  unique (email, policy_key)
+);
+create index idx_wa_policy_signoffs_policy_key on public.wa_policy_signoffs (policy_key);
+alter table public.wa_policies enable row level security;
+alter table public.wa_policy_signoffs enable row level security;
+create policy policies_hr_write on public.wa_policies for all to authenticated using (public.wa_is_hr()) with check (public.wa_is_hr());
+create policy policies_read on public.wa_policies for select to authenticated using ((select public.is_wa_staff()) or (select public.is_board_viewer()));
+create policy signoff_own_insert on public.wa_policy_signoffs for insert to authenticated with check (email = lower(coalesce(auth.jwt() ->> 'email', '')));
+create policy signoff_read on public.wa_policy_signoffs for select to authenticated using (email = lower(coalesce(auth.jwt() ->> 'email', '')) or public.wa_is_hr());
+revoke all on public.wa_policies, public.wa_policy_signoffs from anon;   -- live: postgres, authenticated, service_role

@@ -6,7 +6,18 @@
 -- Steps already deleted from plans by the flow trigger are not put back (they were covered by the setup page). Safe to run twice.
 -- Later parts of wa279a (Tasks 3 and 4) add their undo here, ABOVE this part 2 block where they depend on it.
 
--- Part 2, 1. wa166_path_state back to the live body (before wa279_role_state goes, which the wave279 body reads)
+-- Part 3 (Task 3): the policy rule. The two triggers, the functions and wa_policy_opens go (its rows with it). Sign-offs already made are never touched.
+--   wa_policies and wa_policy_signoffs are live tables and stay exactly as they are. The path_state 'policies' key goes with the Part 2 restore below.
+drop trigger if exists trg_wa279_policy_sync on public.wa_policy_signoffs;
+drop trigger if exists trg_wa279_policy_read on public.wa_policy_signoffs;
+drop function if exists public.wa279_policy_sync();
+drop function if exists public.wa279_policy_rule();
+drop function if exists public.wa279_policy_state();
+drop function if exists public.wa279_policy_open(text);
+drop table if exists public.wa_policy_opens;
+drop function if exists public.wa279_policy_minutes();
+
+-- Part 2, 1. wa166_path_state back to the live body (before wa279_role_state and wa279_policies_state go, which the wave279 body reads)
 create or replace function public.wa166_path_state(p_member bigint, p_key text)
 returns jsonb language sql stable security definer set search_path to '' as $function$
   with me as (select tm.name, tm.email, tm.department from public.team_members tm where tm.id = p_member),
@@ -40,6 +51,7 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
 $function$;
 
 -- Part 2, 2. the role functions and the table (the picks table goes with its rows)
+drop function if exists public.wa279_policies_state(bigint);
 drop function if exists public.wa279_role_autopick(date);
 drop function if exists public.wa279_role_save(bigint, text, bigint[]);
 drop function if exists public.wa279_role_options(bigint, date);
