@@ -9,7 +9,9 @@
 //   drives (at Accept, needs google): writer on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a domain
 //               admin but leaders_all_except (scope drive, no Drive email). An id still "<fill at release>" is never sent ("Drives not set up yet").
 //   meeting (at booking, needs roster, waits for google; the welcome waits for it): onboard_weekly_meetings[department] is a recurring event id; its
-//               series (hub_events says whose calendar) gets the hire's address beside every guest it has, as the organizer, sendUpdates=all.
+//               series (hub_events says whose calendar) gets the hire's address beside every guest it has, as the organizer, sendUpdates=none: nobody is
+//               emailed; it shows in the hire's Welfare Avenue calendar and the rundown's weekly step tells them to accept it. HR's "I created it,
+//               continue" runs it again when it was left to HR for want of an address.
 //   channel ('later', needs roster): only the hourly job (remind) runs it, while the switch is on: the hire's Slack id by their WA address, then their
 //               personal one (wa_slack_ids, then users.lookupByEmail), then conversations.invite to onboard_slack_channel_id. Not in Slack yet: pending
 //               ("Waiting for them to join Slack"), for 14 days from Accept, then HR's. A pending channel step does not keep the flow from started.
@@ -207,6 +209,7 @@ const HUB_TASK = 'Invite them to the Hub at member level, from Roster.';
 const GROUPS_TASK = 'Add them to their Google Groups in Google Admin.';
 const DRIVES_TASK = 'Share their shared drives with them in Google Drive, as Content manager.';
 const MEETING_TASK = 'Add them to their team\'s weekly meeting from the organizer\'s calendar.';
+const MEETING_NO_ADDRESS = 'There is no Welfare Avenue address on this card yet, so they were not added to the weekly meeting.';   // googleManual runs it again
 const CHANNEL_TASK = 'Add them to the Slack onboarding channel once they have joined Slack.';
 const W278_SWITCHES = ['onboard_auto_groups', 'onboard_auto_drives', 'onboard_auto_meeting', 'onboard_auto_channel'];
 export const STEPS: Step[] = [
@@ -1431,7 +1434,9 @@ async function googleManual(b: Row, by: string, asUser: Row): Promise<Response> 
   if (practice) await setStep(ctx, 'google', 'done', 'Practice: nothing real was changed by this step (Google account).');
   else await completed(ctx, stepOf('google')!, 'HR created ' + addr + ' in Google.');
   /* what was left to HR only because the account was missing can now run; an entry with no run stays with HR */
-  const held = (await readSteps(f.id)).filter((r) => r.status === 'hr_task' && stepOf(r.step)?.needs.includes('google') && stepOf(r.step)?.run);
+  /* wave278 fix round 1: the meeting needs only the roster, but was left to HR because there was no address yet: that one runs again too */
+  const held = (await readSteps(f.id)).filter((r) => r.status === 'hr_task' && stepOf(r.step)?.run
+    && (stepOf(r.step)?.needs.includes('google') || (r.step === 'meeting' && String(r.detail || '').startsWith(MEETING_NO_ADDRESS))));
   for (const r of held) await svc.from('hub_onboard_steps').update({ status: 'waiting', at: now, by }).eq('flow_id', f.id).eq('step', r.step).eq('status', 'hr_task');
   await advance(ctx);
   return reply(f.id);
@@ -2832,7 +2837,8 @@ async function runDrives(ctx: Ctx): Promise<string> {
     } catch (e) { failed.push(name + ' (the Hub could not reach Google: ' + errText(e).slice(0, 120) + ')'); continue; }
     if (res.ok) { shared.push(name); continue; }
     const j = await res.json().catch(() => ({}));
-    if (res.status === 409 || /already/i.test(String(j?.error?.message || ''))) { shared.push(name); continue; }   // they already have access
+    const said = String(j?.error?.message || '');   // they already have access: a 409, a 400 that says "already", or Drive's own words at any status
+    if (res.status === 409 || (res.status === 400 && /already/i.test(said)) || /already has access/i.test(said)) { shared.push(name); continue; }
     failed.push(name + ' (Google said: ' + googleSaid(j, res.status) + ')');
   }
   await tickJson(f.id, 'drives_added', shared);
@@ -2846,7 +2852,9 @@ async function runDrives(ctx: Ctx): Promise<string> {
 /* ---------- step: meeting ---------- */
 /* runMeeting: the department's recurring event (onboard_weekly_meetings) as the Hub's calendar copy knows it (hub_events: whose calendar, who
    organizes it); the series is read on the organizer's calendar and patched with every guest it has plus the hire's address, as the organizer when
-   that is a Welfare Avenue address (else hub@ on the calendar it was synced from). sendUpdates=all: Google sends the hire the invite. */
+   that is a Welfare Avenue address (else hub@ on the calendar it was synced from). sendUpdates=none (controller's ruling, fix round 1): nobody is
+   emailed, the other guests are not touched; the series shows in the hire's Welfare Avenue calendar, and the rundown's weekly step tells them to
+   find it and accept it. */
 async function runMeeting(ctx: Ctx): Promise<string> {
   const f = ctx.flow;
   const dept = await departmentOf(f);
@@ -2854,7 +2862,7 @@ async function runMeeting(ctx: Ctx): Promise<string> {
   const rid = dept ? String(map[dept] ?? '').trim() : '';
   if (!rid) throw new HrTask('There is no weekly meeting set for ' + (dept || 'their department (the roster profile has none)') + ' in the settings (onboard_weekly_meetings), so they were not added to one. ' + MEETING_TASK);
   const wa = cleanAddress(f.wa_email);
-  if (!wa) throw new HrTask('There is no Welfare Avenue address on this card yet, so they were not added to the weekly meeting. ' + MEETING_TASK);
+  if (!wa) throw new HrTask(MEETING_NO_ADDRESS + ' ' + MEETING_TASK);
   const { data: evs, error } = await svc.from('hub_events').select('id, summary, organizer, calendar_id, start_at, status').eq('recurring_event_id', rid);
   if (error) throw new Error('The Hub could not read its copy of the calendar: ' + error.message + '. Press Retry.');
   const rows = ((evs || []) as Row[]).filter((e) => e.status !== 'cancelled');
@@ -2878,11 +2886,11 @@ async function runMeeting(ctx: Ctx): Promise<string> {
   const nextAt = soonest && !Number.isNaN(Date.parse(soonest)) ? new Date(soonest).toISOString() : null;
   const had = guests.some((g) => String(g?.email || '').trim().toLowerCase() === wa);
   if (!had) {
-    const out = await gcal(t, 'PATCH', path + '?sendUpdates=all', { attendees: [...guests, { email: wa }] });
+    const out = await gcal(t, 'PATCH', path + '?sendUpdates=none', { attendees: [...guests, { email: wa }] });
     if (!out.ok) throw new Error('Google refused to add ' + wa + ' to ' + summary + ' (Google said: ' + googleSaid(out.j, out.status) + ') Press Retry.');
   }
   await tickJson(f.id, 'weekly_meeting', { summary, next_at: nextAt });
-  return (had ? wa + ' was already a guest of ' : 'Added ' + wa + ' to ') + summary + ', the weekly meeting for ' + dept + (nextAt ? ' (next on ' + whenText(nextAt) + ')' : '') + (had ? '.' : '; Google sent them the invite.');
+  return (had ? wa + ' was already a guest of ' : 'Added ' + wa + ' to ') + summary + ', the weekly meeting for ' + dept + (nextAt ? ' (next on ' + whenText(nextAt) + ')' : '') + (had ? '.' : '; added to the series; it shows in their Welfare Avenue calendar.');
 }
 
 /* ---------- step: channel ---------- */
@@ -2942,17 +2950,25 @@ async function runChannel(ctx: Ctx): Promise<string> {
   if (err === 'channel_not_found') throw new HrTask('Slack has no channel ' + channel + ' (onboard_slack_channel_id), so they were not added. Check the channel id, then press Retry, or ' + lower(CHANNEL_TASK));
   throw new Error('Slack did not add them to the onboarding channel (Slack said ' + err.slice(0, 80) + '). Press Retry.');
 }
-/* the hourly job's part: each flow whose channel step is pending or waiting with nothing in its way, on a live, non-practice flow with an open card */
+/* the hourly job's part: each flow whose channel step is pending or waiting with nothing in its way, on a live, non-practice flow with an open card.
+   Fix round 1: a step left running longer than STALE_MS (the run died) is claimed back to pending, on its status and time as read, and run too, so the
+   14-day rule still fires; one running for less is someone else's. */
 async function channelRound(out: Row): Promise<void> {
   if (!(await cfgOn('onboard_auto_channel'))) return;
-  const { data, error } = await svc.from('hub_onboard_steps').select('flow_id, status').eq('step', 'channel').in('status', ['pending', 'waiting']);
+  const { data, error } = await svc.from('hub_onboard_steps').select('flow_id, status, at').eq('step', 'channel').in('status', ['pending', 'waiting', 'running']);
   if (error) { out.skipped.push('the Slack channel steps could not be read: ' + error.message); return; }
   for (const r of (data || []) as Row[]) {
     try {
+      if (r.status === 'running' && !(Date.now() - Date.parse(String(r.at)) >= STALE_MS)) continue;
       const f = await getFlow(r.flow_id);
       if (!f || f.practice || !LIVE_FLOW.includes(f.status)) continue;
       const c = await getCand(f.candidate_id);
       if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
+      if (r.status === 'running') {
+        const { data: back } = await svc.from('hub_onboard_steps').update({ status: 'pending', at: new Date().toISOString(), by: CHANNEL_BY })
+          .eq('flow_id', f.id).eq('step', 'channel').eq('status', 'running').eq('at', r.at).select('step');
+        if (!(back as unknown[] | null)?.length) continue;   // it moved since it was read
+      }
       if (!nextSteps(await readSteps(f.id)).includes('channel')) continue;
       const ctx = await makeCtx(f, CHANNEL_BY, null);
       await execute(ctx, stepOf('channel')!);
@@ -3025,8 +3041,9 @@ async function setWelcomeCc(b: Row, by: string): Promise<Response> {
   if (bad.length) return no('not_staff', andList(bad) + (bad.length === 1 ? ' is not the email of anyone' : ' are not the emails of anyone') + ' active on the roster, so nothing was saved. Copies go to staff only.', 400);
   const old = addrList((f as Row).welcome_cc);
   if (old.length === emails.length && emails.every((e) => old.includes(e))) return json({ ok: true, welcome_cc: old, repeated: true });
-  const { error } = await svc.from('hub_onboard_flows').update({ welcome_cc: emails, updated_at: new Date().toISOString() }).eq('id', (f as Row).id).is('welcome_sent_at', null);
+  const { data: won, error } = await svc.from('hub_onboard_flows').update({ welcome_cc: emails, updated_at: new Date().toISOString() }).eq('id', (f as Row).id).is('welcome_sent_at', null).select('id');
   if (error) return no('save', 'The copies could not be saved: ' + error.message + '. Try again.', 500);
+  if (!(won as unknown[] | null)?.length) return no('already_sent', 'The welcome email has just gone, so the people copied on it cannot change.');   // fix round 1: it went between the read and the write
   await log('onboard_flow', (f as Row).id, 'welcome_cc', old.join(', ') || null, emails.join(', ') || null, by);
   return json({ ok: true, welcome_cc: emails });
 }

@@ -3726,7 +3726,7 @@ test('wave278 drives at Accept: a member gets Org\'s Files and the department\'s
   assert.deepEqual(s.permIds(), ['d-org', 'd-fund']);
   for (const e of s.perms()) {
     assert.equal(e.method, 'POST');
-    assert.ok(e.url.includes('/permissions?supportsAllDrives=true&sendNotificationEmail=false'), e.url);
+    assert.equal(e.url, 'https://www.googleapis.com/drive/v3/files/' + s.permIds()[s.perms().indexOf(e)] + '/permissions?supportsAllDrives=true&sendNotificationEmail=false&useDomainAdminAccess=true', 'Steel shares as a domain admin');
     assert.deepEqual(e.body, { type: 'user', role: 'writer', emailAddress: W8_WA });
     assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/drive:steel.macdonald@welfareavenue.com');
   }
@@ -3763,6 +3763,15 @@ test('wave278 drives: "already has access" counts as done; another refusal is HR
   assert.match(f.step('drives').detail, /Fundraising/);
   assert.match(f.step('drives').detail, /Insufficient permissions/);
   assert.deepEqual(f.ticks().drives_added, ['Org\'s Files']);
+  const word = await t8();   // fix round 1: "already" in another refusal is not access
+  word.w.permission = (id) => (id === 'd-fund' ? { status: 403, json: { error: { code: 403, message: 'This shared drive already has the most members it can have.' } } } : null);
+  assert.equal((await word.acceptSetup()).status, 200);
+  assert.equal(word.step('drives').status, 'hr_task', word.step('drives').detail);
+  assert.deepEqual(word.ticks().drives_added, ['Org\'s Files']);
+  const has = await t8();   // the words Drive uses, whatever the status
+  has.w.permission = (id) => (id === 'd-fund' ? { status: 403, json: { error: { code: 403, message: 'The user already has access to this shared drive.' } } } : null);
+  assert.equal((await has.acceptSetup()).status, 200);
+  assert.equal(has.step('drives').status, 'done', has.step('drives').detail);
   for (const title of ['Grants Coordinator', 'Fundraising Director']) {
     const p = await t8({ title, config: { onboard_drives: W8_PLACEHOLDER_DRIVES } });
     assert.equal((await p.acceptSetup()).status, 200);
@@ -3799,11 +3808,13 @@ test('wave278 meeting at booking: the hire\'s address is added to their departme
   assert.equal(get.method, 'GET');
   assert.equal(get.url, 'https://www.googleapis.com/calendar/v3/calendars/ruth.owen%40welfareavenue.com/events/recfund');
   assert.equal(patch.method, 'PATCH');
-  assert.equal(patch.url, 'https://www.googleapis.com/calendar/v3/calendars/ruth.owen%40welfareavenue.com/events/recfund?sendUpdates=all');
+  assert.equal(patch.url, 'https://www.googleapis.com/calendar/v3/calendars/ruth.owen%40welfareavenue.com/events/recfund?sendUpdates=none', 'nobody is emailed: the other guests are not touched');
   assert.deepEqual(patch.body, { attendees: [...W8_GUESTS, { email: W8_WA }] }, 'the other guests are kept as they were');
   for (const e of [get, patch]) assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/calendar.events:ruth.owen@welfareavenue.com');
   assert.equal(s.step('meeting').status, 'done', s.step('meeting').detail);
   assert.match(s.step('meeting').detail, /Fundraising weekly/);
+  assert.match(s.step('meeting').detail, /added to the series; it shows in their Welfare Avenue calendar/);
+  assert.doesNotMatch(s.step('meeting').detail, /sent them the invite/);
   assert.ok(noDash(s.step('meeting').detail));
   assert.deepEqual(s.ticks().weekly_meeting, { summary: 'Fundraising weekly', next_at: '2026-10-22T15:00:00.000Z' }, 'the next one from now');
   const sent = s.gmail().find((e) => /Welcome to Welfare Avenue/.test(mail(e).subject));
@@ -4002,10 +4013,62 @@ test('wave278 set_welcome_cc {flow_id, emails}: active staff only (lower-cased, 
   assert.deepEqual(s.flow().welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
   assert.ok(s.rows('change_log').some((l) => l.field === 'welcome_cc' && l.new_value === 'ruth.owen@welfareavenue.com, sam.lee@welfareavenue.com'));
   assert.equal((await s.card('set_welcome_cc', { emails: ['sam.lee@welfareavenue.com', 'ruth.owen@welfareavenue.com'] })).body.repeated, true, 'the same people: nothing changes');
-  s.flow().welcome_sent_at = NOW_ISO;
+  /* fix round 1: the welcome goes out between the read and the write (here: while the roster is checked); the write finds nothing and says so */
+  const rows = s.db.rows.bind(s.db);
+  s.db.rows = (t) => { if (t === 'team_members') rows('hub_onboard_flows')[0].welcome_sent_at = NOW_ISO; return rows(t); };
+  const race = await s.card('set_welcome_cc', { emails: ['ruth.owen@welfareavenue.com'] });
+  s.db.rows = rows;
+  assert.deepEqual([race.status, race.body.error], [409, 'already_sent'], JSON.stringify(race.body));
+  assert.deepEqual(s.flow().welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
+  assert.equal(s.rows('change_log').filter((l) => l.field === 'welcome_cc').length, 1, 'nothing logged for a change that did not happen');
   const late = await s.card('set_welcome_cc', { emails: [] });
   assert.equal(late.status, 409);
   assert.equal(late.body.error, 'already_sent');
   assert.deepEqual(s.flow().welcome_cc, ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com']);
   assert.equal(s.rig.fetchLog.length, 0);
+});
+
+/* ---------- wave278 Task 3, fix round 1 ---------- */
+test('wave278 fix: a channel step left running by a run that died (older than 10 minutes) is taken back and run by the hourly job; a fresh running one is left alone', async () => {
+  const s = await t8({ fl: PROPOSED });
+  await s.booked();
+  const row = s.step('channel');
+  Object.assign(row, { status: 'running', at: '2026-10-20T11:49:00.000Z' });   // 11 minutes before NOW
+  await s.remind();
+  assert.deepEqual(s.lookedUp(), [W8_WA, 'alex@example.com'], 'run again');
+  assert.equal(s.step('channel').status, 'pending');
+  assert.match(s.step('channel').detail, /waiting for them to join Slack/i);
+  const fresh = await t8({ fl: PROPOSED });
+  await fresh.booked();
+  Object.assign(fresh.step('channel'), { status: 'running', at: '2026-10-20T11:55:00.000Z' });   // 5 minutes: still running somewhere
+  await fresh.remind();
+  assert.equal(fresh.lookups().length, 0);
+  assert.equal(fresh.step('channel').status, 'running');
+  const late = await t8({ fl: PROPOSED });   // the 14-day rule is reached through a stuck row too
+  await late.booked();
+  Object.assign(late.step('channel'), { status: 'running', at: '2026-10-20T12:00:00.000Z' });
+  late.rig.setNow('2026-11-04T12:00:00Z');
+  await late.remind();
+  assert.equal(late.step('channel').status, 'hr_task');
+  assert.match(late.step('channel').detail, /has not joined Slack yet/);
+});
+
+test('wave278 fix: the meeting left to HR for want of an address runs again once HR presses "I created it, continue"', async () => {
+  const s = await t8({ fl: PROPOSED, pw: null, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS) } });   // no first password: the account step is HR's
+  w8Master(s);
+  await s.booked();
+  assert.equal(s.step('google').status, 'hr_task');
+  assert.equal(s.step('meeting').status, 'hr_task');
+  assert.match(s.step('meeting').detail, /no Welfare Avenue address/);
+  assert.equal(s.master().length, 0);
+  const r = await s.post({ action: 'google_manual', flow_id: 21, wa_email: W8_WA });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(s.step('meeting').status, 'done', s.step('meeting').detail);
+  assert.deepEqual(s.master().map((e) => e.method), ['GET', 'PATCH']);
+  assert.deepEqual([s.step('groups').status, s.step('drives').status], ['done', 'done'], 'as the groups and drives do');
+  const other = await t8({ fl: PROPOSED, pw: null });   // no meeting set: still HR's, for that reason, after the account
+  await other.booked();
+  await other.post({ action: 'google_manual', flow_id: 21, wa_email: W8_WA });
+  assert.equal(other.step('meeting').status, 'hr_task');
+  assert.match(other.step('meeting').detail, /no weekly meeting set for fundraising/);
 });
