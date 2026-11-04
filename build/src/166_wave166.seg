@@ -230,7 +230,8 @@
     }
     return null;
   }
-  function chipHtml(t, ls) {
+  function chipHtml(t, ls, onb) {
+    if (/^role(60|90)$/.test(t.academy_path || '') && window.w279 && typeof window.w279.roleStep === 'function') return window.w279.roleStep(t, onb);   /* wave279: the role step lists the manager's picks */
     if (!t.training_id && !t.academy_path) return '';
     if (!ls) return '<div><span class="w166acad">Avenue Academy</span></div>';
     var open = (ls.asked === 'team' || ls.asked === 'any') && !ls.n && !ls.done;   /* nothing started yet: they choose */
@@ -273,7 +274,7 @@
           + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
           + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
           + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
-          + chipHtml(t, ls)
+          + chipHtml(t, ls, onb)
           + (t.description ? '<div class="ds">' + ((typeof wa37Md === 'function') ? wa37Md(t.description) : E(t.description)) + '</div>' : '')
           + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + E(s.done_by) + '</div>' : (done && !s.done ? '<div class="ds" style="opacity:.6">done in the Avenue Academy</div>' : ''))
           + '</div></div>';
