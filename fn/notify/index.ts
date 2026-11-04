@@ -1,3 +1,4 @@
+// v21 (wave279, 04/11/26): three relayed onboarding kinds from the daily onboarding job (SQL, through call_edge, the trigger secret only), handled exactly like onboard_remind: onboard_behind (the hire: your plan is behind), onboard_behind_lead (the manager and HR: a hire is behind) and onboard_role_pick (the manager: pick the hire's role trainings). Each follows the person's own wa_notify_prefs; on top of v20.
 // v20 (wave275, 02/11/26, released on top of wave277's v19): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
 // shape as v16's: onboard_propose (the manager: propose the call and the 1-on-1 for a new hire), onboard_answer (the manager and HR: times were proposed, or
 // the hire said yes or no) and onboard_ready (the manager: the hire finished their setup rundown; reserved, not yet sent). Nothing here is ever sent to the new hire.
@@ -112,10 +113,12 @@ async function hubRelay(kind: string, to: string[], title: string, body: string,
 /* v15 relay kinds: the default title (the kinds registry's) and link of each */
 const RELAY_TITLE: Record<string, string> = { timeoff_request: 'Time off requested', applicant: 'An applicant you handle moved', loop_still: 'Still in the Loop?', onboard_date: 'A new hire starts', onboard_grid: 'Mark your availability', onboard_remind: 'An availability grid is still empty',
   meet_propose: 'A leader proposed a new meeting time for my team', meet_avail_ask: 'My team needs my availability', connection_expiring: 'A social connection is about to expire',
-  onboard_propose: 'Propose times for a new hire', onboard_answer: 'A new hire\'s times', onboard_ready: 'A new hire is set up' };
+  onboard_propose: 'Propose times for a new hire', onboard_answer: 'A new hire\'s times', onboard_ready: 'A new hire is set up',
+  onboard_behind: 'Onboarding: you\'re behind', onboard_behind_lead: 'Onboarding: a hire is behind', onboard_role_pick: 'Onboarding: pick role trainings' };
 const RELAY_URL: Record<string, string> = { timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding',
   meet_avail_ask: '#mypage', connection_expiring: '#studio/connections',
-  onboard_propose: '#hrcentre/onboarding', onboard_answer: '#hrcentre/onboarding', onboard_ready: '#hrcentre/onboarding' };   /* meet_propose builds its own link to the team's Agenda tab; onboard-run passes its own url for managers (Home) */
+  onboard_propose: '#hrcentre/onboarding', onboard_answer: '#hrcentre/onboarding', onboard_ready: '#hrcentre/onboarding',
+  onboard_behind: '#mypage', onboard_behind_lead: '#hrcentre/onboarding', onboard_role_pick: '#hrcentre/onboarding' };   /* meet_propose builds its own link to the team's Agenda tab; onboard-run passes its own url for managers (Home) */
 /* v15 (shared since v18): a relayed message to each person, the Slack DM through their switch and the log, then the Hub notification through hub-push */
 async function relaySend(event: string, toList: string[], text: string, title: string, plainBody: string, url: string, tag?: string): Promise<{ outcome: Record<string, string>; hub: string }> {
   const to = Array.from(new Set(toList));
@@ -186,7 +189,7 @@ async function optedOut(email: string, event: string): Promise<boolean> {
 }
 
 /* v12 (wave219): Hub notifications instead of Slack, when the person chose that and a device of theirs is on */
-const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'meet_propose', 'meet_avail_ask', 'connection_expiring', 'onboard_propose', 'onboard_answer', 'onboard_ready'];   /* v15: the relayed kinds reach the Hub too (v20: wave275's three) */
+const HUB_EVENTS = ['comment_mention', 'mentioned', 'task_reassigned', 'request_filed', 'suggestion_accepted', 'volunteer_applied', 'task_due', 'timeoff_request', 'applicant', 'loop_still', 'onboard_date', 'onboard_grid', 'onboard_remind', 'meet_propose', 'meet_avail_ask', 'connection_expiring', 'onboard_propose', 'onboard_answer', 'onboard_ready', 'onboard_behind', 'onboard_behind_lead', 'onboard_role_pick'];   /* v15: the relayed kinds reach the Hub too (v20: wave275's three) */
 async function hubOnly(email: string, event: string): Promise<boolean> {
   if (!email || HUB_EVENTS.indexOf(event) < 0) return false;
   try {
@@ -671,7 +674,7 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     return { event, outcome: out.outcome, hub: out.hub, sent: to.length };
   }
 
-  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind' || event === 'connection_expiring' || event === 'onboard_propose' || event === 'onboard_answer' || event === 'onboard_ready') {
+  if (event === 'timeoff_request' || event === 'applicant' || event === 'loop_still' || event === 'onboard_date' || event === 'onboard_grid' || event === 'onboard_remind' || event === 'connection_expiring' || event === 'onboard_propose' || event === 'onboard_answer' || event === 'onboard_ready' || event === 'onboard_behind' || event === 'onboard_behind_lead' || event === 'onboard_role_pick') {
     /* v19: connection_expiring goes to welfareavenue.com staff only (or Steel's own address, as staffEmail allows) */
     const staffOnly = (x: string) => event !== 'connection_expiring' || x.endsWith('@welfareavenue.com') || x === 'steelmacdonald@gmail.com';
     const to = (Array.isArray(body.to) ? body.to : [body.to_email]).map(x => String(x || '').toLowerCase()).filter(x => /@/.test(x) && staffOnly(x)).slice(0, 12);

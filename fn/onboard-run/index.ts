@@ -616,11 +616,14 @@ async function runGoogle(ctx: Ctx): Promise<string> {
   const t = await token(ADMIN_ACTOR, SCOPE_USER);
   if (!t) { password = ''; throw new HrTask('Google refused the Hub permission to create accounts as ' + ADMIN_ACTOR + ', so the account was not made. Tell Steel, or ' + lower(GOOGLE_TASK)); }
   const words = String(c.name || '').trim().split(/\s+/);
+  /* wave279: the position's title becomes the Google job title (organizations[0].title), only when there is one */
+  let posTitle = '';
+  if (c.position_id) { const { data: p } = await svc.from('hub_positions').select('title').eq('id', c.position_id).maybeSingle(); posTitle = String(p?.title || '').trim(); }
   let res: Response;
   try {
     res = await fetch(USERS_URL, {
       method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ primaryEmail: addr, name: { givenName: words[0], familyName: words.slice(1).join(' ') || words[0] }, password, changePasswordAtNextLogin: true, orgUnitPath: '/' }),
+      body: JSON.stringify({ primaryEmail: addr, name: { givenName: words[0], familyName: words.slice(1).join(' ') || words[0] }, password, changePasswordAtNextLogin: true, orgUnitPath: '/', ...(posTitle ? { organizations: [{ title: posTitle, primary: true }] } : {}) }),
     });
   } catch (e) {
     const why = scrub(errText(e), password);

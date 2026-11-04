@@ -2425,7 +2425,7 @@ test('w275 accept_setup: roster, google and hub run at Accept; the profile is ac
   assert.equal(ins.length, 1);
   assert.equal(ins[0].url, USERS);
   assert.equal(ins[0].headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/admin.directory.user:steel.macdonald@welfareavenue.com', 'acting as Steel, with the user scope');
-  assert.deepEqual(ins[0].body, { primaryEmail: 'alex.tremblay@welfareavenue.com', name: { givenName: 'Alex', familyName: 'Tremblay' }, password: FIRST_PW, changePasswordAtNextLogin: true, orgUnitPath: '/' });
+  assert.deepEqual(ins[0].body, { primaryEmail: 'alex.tremblay@welfareavenue.com', name: { givenName: 'Alex', familyName: 'Tremblay' }, password: FIRST_PW, changePasswordAtNextLogin: true, orgUnitPath: '/', organizations: [{ title: 'Program Coordinator', primary: true }] });
   const back = s.users().filter((e) => e.method === 'GET');
   assert.equal(back.length, 1, 'read back before done');
   assert.ok(back[0].url.startsWith(USERS + '/alex.tremblay%40welfareavenue.com'));
@@ -2445,6 +2445,19 @@ test('w275 accept_setup: roster, google and hub run at Accept; the profile is ac
   assert.deepEqual(s.rig.unregistered(), []);
 });
 
+
+test('w279 accept_setup: the Google account carries the position title as the job title (organizations[0]), and none when the position has no title', async () => {
+  const s = await t3({ tables: { hub_positions: [{ id: 5, title: ' Event Coordinator ', dept: 'progdev', jd_url: null }] } });
+  assert.equal((await s.acceptSetup()).status, 200);
+  assert.deepEqual(s.inserts()[0].body.organizations, [{ title: 'Event Coordinator', primary: true }]);
+  const none = await t3({ tables: { hub_positions: [{ id: 5, title: '  ', dept: 'progdev', jd_url: null }] } });
+  assert.equal((await none.acceptSetup()).status, 200);
+  assert.ok(!('organizations' in none.inserts()[0].body), 'a blank title sends no organizations');
+  const noPos = await t3({ cand: { position_id: null } });
+  assert.equal((await noPos.acceptSetup()).status, 200);
+  assert.ok(!('organizations' in noPos.inserts()[0].body), 'no position sends no organizations');
+  s.noPw(); none.noPw();
+});
 test('w275 accept_setup does nothing for a wave271 flow: created before onboard_v2_since, or while it is unset (James MacDonald\'s card keeps its path)', async () => {
   for (const [fl, config] of [[{ created_at: '2026-09-20T12:00:00Z' }, {}], [{}, { onboard_v2_since: '' }]]) {
     const s = await t3({ fl, config });
