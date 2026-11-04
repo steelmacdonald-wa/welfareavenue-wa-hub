@@ -830,8 +830,8 @@ async function setupOf(l: Link, token: string) {
   let jd: string | null = null;
   if (l.cand.position_id) {
     const { data, error } = await svc.from('hub_positions').select('jd_url').eq('id', l.cand.position_id).maybeSingle();
-    if (error) throw new Error('position: ' + error.message);
-    jd = urlOr((data as { jd_url?: string } | null)?.jd_url);
+    if (error) console.error('onboard-link setup: the position could not be read, so the job description is left out: ' + error.message);   // fix wave (M3): the page still loads
+    else jd = urlOr((data as { jd_url?: string } | null)?.jd_url);
   }
   const wm = t.weekly_meeting && typeof t.weekly_meeting === 'object' ? t.weekly_meeting as Record<string, unknown> : null;
   const groups = textList(t.groups_added).map((a) => a.toLowerCase()).map((address) => ({ address, purpose: GROUP_PURPOSE[address] || A_TEAM_LIST }));

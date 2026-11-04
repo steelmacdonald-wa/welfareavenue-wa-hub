@@ -21,7 +21,7 @@
 //   groups (at Accept, needs google): onboard_groups' all, the roster department's and, for a leader, leaders; Directory members.insert as Steel
 //               (admin.directory.group.member). Already a member counts; a group that does not exist is reported ("no Toronto group yet") and the step
 //               is still done; any other refusal is HR's, naming the group. The detail starts "Joining as a leader." or "Joining as a member.".
-//   drives (at Accept, needs google): writer on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a domain
+//   drives (at Accept, needs google): fileOrganizer (Content manager) on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a domain
 //               admin but leaders_all_except (scope drive, no Drive email). An id still "<fill at release>" is never sent ("Drives not set up yet").
 //   meeting (at booking, needs roster, waits for google; the welcome waits for it): onboard_weekly_meetings[department] is a recurring event id; its
 //               series (hub_events says whose calendar) gets the hire's address beside every guest it has, as the organizer, sendUpdates=none: nobody is
@@ -33,7 +33,8 @@
 //   setup_ticks written: groups_added [addresses], drives_added [drive names], weekly_meeting {summary, next_at}. leader is decided at Accept
 //               (flows.leader while null, from the position's title against onboard_leader_titles, whole words; no position: a member).
 //   set_leader {flow_id, leader}   {ok, leader, steps, warnings, repeated?}. Written, logged, then groups and drives run again (nothing is ever removed).
-//   recheck_access {flow_id}       {ok, steps, warnings}. groups and drives run again, done or not.
+//                                  leader true is HR's or an admin's only (fix wave I3); the hire's manager may set false.
+//   recheck_access {flow_id}       {ok, steps, warnings}. groups and drives run again, done or not; an accepted flow without their rows gets them (I2).
 //   set_welcome_cc {flow_id, emails}   {ok, welcome_cc, repeated?}. Active roster emails only (lower-cased, once each), else 400 not_staff with nothing
 //               saved; 409 already_sent once welcome_sent_at is set. Logged. All three are card actions the hire's own manager may use too.
 // wave275b (v7, Steel 03/11/26: "Can we make the availability check for onboarding optional"): app_config onboard_manager_hours (wa275b, off by default;
@@ -45,7 +46,8 @@
 //   action stays HR's and admins'. New:
 //   times {flow_id}   the picker's data: {manager, availability (wa275_availability_of), availability_at, stale, no_week, busy [{start, end, summary}] (the manager's
 //               hub@ meetings over the grid window), taken [{start, end}] (their other hires' times), hire_slots, lengths, lead_hours, yes_lead_hours, proposal,
-//               hire_answer, ask_availability, accepted}. Reads only.
+//               hire_answer, ask_availability, accepted, welcome_from (fix wave M2: who the welcome comes from, welcomeSender's rule; null when the roster
+//               cannot be read)}. Reads only. {flow_id, only: 'welcome_from'} answers {welcome_from} alone (the card's welcome line).
 //   book {flow_id, call_at, one_on_one_at} signed in: HR or the manager books both times from the card once the hire accepted, after a no or with
 //               availability already communicated (a live proposal waits for the hire: proposal_open). The hire's Yes rules (onboard_yes_lead_hours, the
 //               manager's hours, hub@ meetings, other hires, overlap) and the same booking steps; the hire's own answer is left as it was; by = the caller.
@@ -1005,6 +1007,9 @@ const DRIVES_ALL = { en: 'All your shared drives: ', fr: 'Tous vos Drives partag
 const DRIVES_LATER = { en: 'HR will share your Drives.', fr: 'Les RH partageront vos Drives avec vous.' };
 const INVITES_SENTENCE = { en: ' Both invites are in your Welfare Avenue calendar.', fr: ' Les deux invitations sont dans votre calendrier Welfare Avenue.' };
 const PASSWORD_NOTE = { en: (first: string) => '(the password is in ' + first + '\'s copy)', fr: (first: string) => '(le mot de passe est dans la copie de ' + first + ')' };
+/* fix wave (M5, Steel's ruling): the staff copy is marked as a copy, and the hire's personal setup link (their offer token) never goes in it */
+const SETUP_NOTE = { en: (first: string) => '(the setup link is in ' + first + '\'s copy)', fr: (first: string) => '(le lien de préparation est dans la copie de ' + first + ')' };
+const COPY_PREFIX = { en: 'Copy: ', fr: 'Copie : ' };
 /* the login is not the Hub's to give: the login lines become the sentence that HR sends the details separately. The login lines are the template's own
    (its heading, Email, the placeholder, the change-it sentence and the video) and any line with the placeholder; every other line HR wrote under that
    step stays. The template's own heading (or a numbered line holding the placeholder) becomes the sentence, keeping its number; a heading HR rewrote stays,
@@ -1221,6 +1226,16 @@ export async function welcomeSender(c: Row, _f: Row): Promise<{ email: string; f
   const x = await candExtra(c);
   return senderOf(x, await activeByEmail(x.offer_sent_by), await ownerMember(x.owner));
 }
+/* fix wave (M2): the card's "Welcome email: from ..." line, by welcomeSender's rule. The candidate and the roster are read strictly here: a read that
+   fails gives null (the card then says "from the offer's sender or hub@" and names nobody), never hub@ by mistake. */
+async function welcomeFrom(c: Row): Promise<string | null> {
+  try {
+    const { data, error } = await svc.from('hub_candidates').select('owner, offer_sent_by').eq('id', c.id).maybeSingle();
+    if (error) return null;
+    const x = (data || {}) as Row;
+    return senderOf(x, await activeByEmail(x.offer_sent_by, true), await ownerMember(x.owner, true)).email;
+  } catch (_) { return null; }
+}
 /* the staff copy: the owner (active), then welcome_cc (active roster only), once each, never one of the hire's own addresses (hire: the personal one and
    the Welfare Avenue one, whether or not that one is written to yet). The send path only, so the roster is read strictly. */
 async function staffCopies(c: Row, f: Row, hire: string[]): Promise<string[]> {
@@ -1365,7 +1380,13 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
       }
     }
     const put = (v: string) => PASSWORD_MARKS.reduce((t, p) => t.split(p).join(v), marked);
-    const text = password ? put(password) : marked, staffText = put(PASSWORD_NOTE[langOf(c)](firstName(c.name)));
+    const lang = langOf(c), first = firstName(c.name);
+    const text = password ? put(password) : marked;
+    let staffText = put(PASSWORD_NOTE[lang](first));
+    if (facts.setupLink) {   // the link, and any other link with the hire's offer token in it (HR may have pasted it elsewhere in the text)
+      const base = facts.setupLink.split('?')[0];
+      staffText = staffText.split('\n').map((l) => l.split(' ').map((w) => (w.includes(base) ? SETUP_NOTE[lang](first) : w)).join(' ')).join('\n');   // the word that holds it
+    }
     const hire = [...new Set([personal, ...(facts.accountMade ? [lc(f.wa_email)] : [])])];
     const staff = await staffCopies(c, f, [...hire, lc(f.wa_email)].filter(Boolean));   // before any send: a roster it cannot read stops here, the claim given back
     const sender = facts.sender || { email: CAL, fallback: true };
@@ -1387,7 +1408,7 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
     let copied = 'no staff copy';
     if (staff.length) {
       try {
-        await deliver({ practice: false, to: staff, subject: w.subject, text: staffText, html: welcomeHtml(staffText), ...(replyTo ? { replyTo } : {}), from });
+        await deliver({ practice: false, to: staff, subject: COPY_PREFIX[lang] + w.subject, text: staffText, html: welcomeHtml(staffText), ...(replyTo ? { replyTo } : {}), from });
         copied = 'copied to ' + staff.length + ' staff';
       } catch (e) {
         copied = 'the staff copy to ' + staff.join(', ') + ' did not go: ' + errText(e).replace(/[.\s]+$/, '');
@@ -2487,6 +2508,8 @@ async function timesView(b: Row): Promise<Response> {
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   const c = await getCand(f.candidate_id);
   if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  const welcome_from = await welcomeFrom(c);   // fix wave (M2)
+  if (b.only === 'welcome_from') return json({ welcome_from });   // the card's welcome line asks for this alone, once per card
   const managerId = f.manager_member_id ?? f.manager_link_member_id;
   const m = managerId != null ? await getMember(managerId) : null;
   const [callMin, oneMin, lead, yesLead, days] = [await cfgNum('onboard_call_min', 60), await cfgNum('onboard_one_on_one_min', 30), await cfgNum('onboard_propose_lead_hours', 48), await cfgNum('onboard_yes_lead_hours', 24), await cfgNum('onboard_grid_days', 14)];
@@ -2511,7 +2534,7 @@ async function timesView(b: Row): Promise<Response> {
     availability: hours?.availability ?? null, availability_at: hours?.availability_at ?? null, stale: hours ? hours.stale !== false : true, no_week: hours ? hours.no_week === true : true,
     busy, taken, hire_slots: ((g as Row | null)?.slots || []) as string[], lengths: { callMin, oneMin }, lead_hours: lead, yes_lead_hours: yesLead,
     proposal: f.proposed_at ? { call_at: instant(f.proposed_call_at), one_on_one_at: instant(f.proposed_one_on_one_at), by: f.proposed_by, at: instant(f.proposed_at) } : null,
-    hire_answer: f.hire_answer ?? null, ask_availability: f.ask_availability !== false, accepted: !!c.accepted_on, manager_hours: managerHours,
+    hire_answer: f.hire_answer ?? null, ask_availability: f.ask_availability !== false, accepted: !!c.accepted_on, manager_hours: managerHours, welcome_from,
   });
 }
 
@@ -2947,7 +2970,7 @@ async function runGroups(ctx: Ctx): Promise<string> {
 }
 
 /* ---------- step: drives ---------- */
-/* runDrives: writer (Drive's Content manager) on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a
+/* runDrives: fileOrganizer (Drive's Content manager on a shared drive; writer would be Contributor) on onboard_drives' all and the department's; a leader gets every shared drive Google lists to Steel as a
    domain admin except leaders_all_except (their own department's are added back). No Drive email (sendNotificationEmail=false): the welcome names the
    drives. An id still "<fill at release>" is never sent: "Drives not set up yet". The drive names come from the same list. */
 async function listDrives(t: string): Promise<{ ok: true; drives: Array<{ id: string; name: string }> } | { ok: false; why: string }> {
@@ -2993,7 +3016,7 @@ async function runDrives(ctx: Ctx): Promise<string> {
     let res: Response;
     try {
       res = await fetch(DRIVE_URL + '/files/' + encodeURIComponent(id) + '/permissions?supportsAllDrives=true&sendNotificationEmail=false&useDomainAdminAccess=true', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: 'writer', emailAddress: wa }),
+        method: 'POST', headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'user', role: 'fileOrganizer', emailAddress: wa }),
       });
     } catch (e) { failed.push(name + ' (the Hub could not reach Google: ' + errText(e).slice(0, 120) + ')'); continue; }
     if (res.ok) { shared.push(name); continue; }
@@ -3142,15 +3165,30 @@ async function channelRound(out: Row): Promise<void> {
 
 /* ---------- wave278: the card's actions (HR, admins, or the hire's own manager: CARD_BY_MANAGER) ---------- */
 /* groups and drives again, as Retry would, also when they are done: each is set back to pending (a claim on the status read) and the runner takes them.
-   A step running right now is left to finish; one waiting on the account runs when the account exists; one HR skipped stays skipped. */
+   A step running right now is left to finish; one waiting on the account runs when the account exists; one HR skipped stays skipped.
+   Fix wave (I2): a flow whose offer was accepted before wave278's release has no groups or drives rows (accept_setup made the others): the missing rows
+   are made here, pending (seedMissing, as afterBooking does for the booking steps), and run. Before Accept, and on the earlier path before Start, nothing
+   is made. */
 const ACCESS_KEYS = ['groups', 'drives'];
+const NOTHING_YET = 'The groups and drives steps are made when the offer is accepted, so there is nothing to run yet.';
 async function rerunAccess(f: Row, by: string, asUser: Row): Promise<string[]> {
   const warnings: string[] = [];
-  const rows = await readSteps(f.id);
-  if (!rows.some((r) => ACCESS_KEYS.includes(r.step))) return ['The groups and drives steps are made when the offer is accepted, so there is nothing to run yet.'];
+  let rows = await readSteps(f.id);
+  const made = new Set<string>();
+  if (!ACCESS_KEYS.every((k) => rows.some((r) => r.step === k))) {
+    const c = await getCand(f.candidate_id);
+    const before = !c?.accepted_on || (BEFORE_START.includes(f.status) && await earlierPath(f.id));
+    if (before) { if (!rows.some((r) => ACCESS_KEYS.includes(r.step))) return [NOTHING_YET]; }
+    else {
+      for (const k of ACCESS_KEYS) if (!rows.some((r) => r.step === k)) made.add(k);
+      const seedErr = await seedMissing(f, ACCESS_KEYS, by, !!(f.practice || c?.practice));
+      if (seedErr) return ['The groups and drives steps could not be made: ' + seedErr + '. Press Re-check again.'];
+      rows = await readSteps(f.id);
+    }
+  }
   for (const key of ACCESS_KEYS) {
     const row = rows.find((r) => r.step === key);
-    if (!row || row.status === 'skipped' || row.status === 'waiting') continue;
+    if (!row || made.has(key) || row.status === 'skipped' || row.status === 'waiting') continue;   // just made: pending already
     if (['pending', 'running'].includes(row.status) && Date.now() - Date.parse(String(row.at)) < STALE_MS) { warnings.push(stepOf(key)!.label + ' is running now, so it was not started again. Press Re-check in a minute.'); continue; }
     await svc.from('hub_onboard_steps').update({ status: 'pending', detail: null, at: new Date().toISOString(), by }).eq('flow_id', f.id).eq('step', key).eq('status', row.status);
   }
@@ -3159,8 +3197,11 @@ async function rerunAccess(f: Row, by: string, asUser: Row): Promise<string[]> {
 }
 /* set_leader {flow_id, leader}: the card's "Change". Written, logged, then groups and drives run again. The Hub never removes: from leader to member,
    HR takes them out of the leaders' groups and drives by hand (the answer says which groups). */
-async function setLeader(b: Row, by: string, asUser: Row): Promise<Response> {
+async function setLeader(b: Row, by: string, asUser: Row, staff: boolean): Promise<Response> {
   if (typeof b.leader !== 'boolean') return no('bad_value', 'Say whether they join as a leader: true or false.', 400);
+  /* fix wave (I3, Steel's ruling): a leader gets every shared drive and the leaders' groups, so only HR and admins may say true; the hire's manager may
+     say false (and press Re-check) */
+  if (b.leader === true && !staff) return no('not_allowed', 'Only HR or an admin can make a hire a leader.', 403);
   const f = await getFlow(b.flow_id);
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
   if (f.status === 'backed_out') return no('backed_out', BACKED_OUT_NOW);
@@ -3262,7 +3303,7 @@ Deno.serve(async (req: Request) => {
     if (b.action === 'set_ask_availability') return await setAskAvailability(b, by);
     if (b.action === 'grid_for') return await gridFor(b, by);
     if (b.action === 'set_welcome') return await setWelcome(b, by);
-    if (b.action === 'set_leader') return await setLeader(b, by, asUser);           // wave278
+    if (b.action === 'set_leader') return await setLeader(b, by, asUser, hr.data === true || admin.data === true);   // wave278; true is HR's or an admin's (I3)
     if (b.action === 'recheck_access') return await recheckAccess(b, by, asUser);   // wave278
     if (b.action === 'set_welcome_cc') return await setWelcomeCc(b, by);           // wave278
     if (b.action === 'availability_for') return await availabilityFor(b, by);   // HR and admins only (not a card action of the manager's)

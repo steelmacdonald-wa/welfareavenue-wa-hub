@@ -1304,6 +1304,17 @@ test('w278 GET: twelve steps in order in both languages, the drives, groups and 
   assert.deepEqual([o.groups, o.drives, o.weekly], [[], ['Marketing & Web'], null]);
 });
 
+test('w278 fix M3: a position read that fails leaves the job description out (jd null); the hire page still loads', async () => {
+  const s = await hire({ cand: { position_id: 7 }, config: CFG278, tables: { hub_positions: [{ id: 7, jd_url: 'https://docs.google.com/document/d/jd7' }] }, fl: { ...withProposal } });
+  s.db.failOn('hub_positions', 'select', 'rig: positions are down');
+  const r = await s.get(s.offer);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.setup.jd, null);
+  assert.deepEqual(r.body.setup.steps.map((x) => x.key), KEYS278, 'the rest of the page as usual');
+  const again = (await s.get(s.offer)).body.setup;
+  assert.equal(again.jd, 'https://docs.google.com/document/d/jd7', 'the next read has it');
+});
+
 test('w278 GET ?install (the phone page): the two app links, saves nothing, before and after the Hub sign-in; only the offer link, after Accept', async () => {
   const s = await hire({ fl: { ...withProposal, setup_ticks: { rd_hub: T278 } } });
   const before = s.snapshot();

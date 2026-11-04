@@ -3721,14 +3721,14 @@ test('wave278 groups: any other refusal (403 on one group) ends the step as HR\'
   assert.deepEqual(s.ticks().groups_added, ['org@welfareavenue.com', 'fundraising@welfareavenue.com']);
 });
 
-test('wave278 drives at Accept: a member gets Org\'s Files and the department\'s drive as writer, as Steel with the drive scope, with no Drive email; the names are kept for the rundown', async () => {
+test('wave278 drives at Accept: a member gets Org\'s Files and the department\'s drive as Content manager (fileOrganizer), as Steel with the drive scope, with no Drive email; the names are kept for the rundown', async () => {
   const s = await t8();
   assert.equal((await s.acceptSetup()).status, 200);
   assert.deepEqual(s.permIds(), ['d-org', 'd-fund']);
   for (const e of s.perms()) {
     assert.equal(e.method, 'POST');
     assert.equal(e.url, 'https://www.googleapis.com/drive/v3/files/' + s.permIds()[s.perms().indexOf(e)] + '/permissions?supportsAllDrives=true&sendNotificationEmail=false&useDomainAdminAccess=true', 'Steel shares as a domain admin');
-    assert.deepEqual(e.body, { type: 'user', role: 'writer', emailAddress: W8_WA });
+    assert.deepEqual(e.body, { type: 'user', role: 'fileOrganizer', emailAddress: W8_WA }, 'Content manager on a shared drive is fileOrganizer (writer is Contributor)');
     assert.equal(e.headers.authorization, 'Bearer tok:https://www.googleapis.com/auth/drive:steel.macdonald@welfareavenue.com');
   }
   assert.equal(s.step('drives').status, 'done', s.step('drives').detail);
@@ -3800,7 +3800,7 @@ function w8Master(s, guests = W8_GUESTS) {
 }
 const W8_MAPPED = { onboard_weekly_meetings: '{"fundraising": "recfund"}' };
 
-test('wave278 meeting at booking: the hire\'s address is added to their department\'s weekly meeting on the organizer\'s calendar, as the organizer, keeping every guest; Google sends the invite', async () => {
+test('wave278 meeting at booking: the hire\'s address is added to their department\'s weekly meeting on the organizer\'s calendar, as the organizer, keeping every guest; sendUpdates=none, so nobody is emailed', async () => {
   const s = await t8({ fl: PROPOSED, config: W8_MAPPED, tables: { hub_events: structuredClone(W8_EVENTS) } });
   w8Master(s);
   await s.booked();
@@ -3949,8 +3949,8 @@ test('wave278 practice: all four steps simulate at Accept and booking, and nothi
   assert.equal(s.flow().status, 'started');
 });
 
-test('wave278 set_leader {flow_id, leader}: the hire\'s manager may change it; the column is written and logged, and groups and drives run again (adding, never removing)', async () => {
-  const s = await t8({ hr: false, manager: true });
+test('wave278 set_leader {flow_id, leader}: HR may change it; the column is written and logged, and groups and drives run again (adding, never removing)', async () => {
+  const s = await t8();
   assert.equal((await s.acceptSetup()).status, 200);
   assert.equal(s.flow().leader, false);
   const r = await s.card('set_leader', { leader: true });
@@ -3994,6 +3994,63 @@ test('wave278 recheck_access {flow_id}: groups and drives run again for HR; a pl
   }
   assert.deepEqual(x.snapshot(), before);
   assert.equal(x.rig.fetchLog.length, n);
+});
+
+test('wave278 fix I3: only HR or an admin may make a hire a leader; the hire\'s manager (not HR) is refused true with a plain sentence and nothing changes, and may set false and press Re-check', async () => {
+  const m = await t8({ hr: false, manager: true });
+  assert.equal((await m.acceptSetup()).status, 200);
+  const before = m.snapshot(), n = m.rig.fetchLog.length;
+  const no = await m.card('set_leader', { leader: true });
+  assert.equal(no.status, 403, JSON.stringify(no.body));
+  assert.equal(no.body.message, 'Only HR or an admin can make a hire a leader.');
+  assert.ok(noDash(no.body.message));
+  assert.deepEqual(m.snapshot(), before, 'nothing written, nothing logged');
+  assert.equal(m.rig.fetchLog.length, n, 'nothing asked of Google');
+  m.db.rows('hub_onboard_flows').find((x) => x.id === 21).leader = true;   // HR made them a leader
+  const back = await m.card('set_leader', { leader: false });
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  assert.equal(m.flow().leader, false);
+  assert.ok(m.rows('change_log').some((l) => l.field === 'leader' && l.old_value === 'leader' && l.new_value === 'member' && l.changed_by), 'logged');
+  const again = await m.card('recheck_access');
+  assert.equal(again.status, 200, JSON.stringify(again.body));
+  assert.deepEqual([m.step('groups').status, m.step('drives').status], ['done', 'done']);
+  const admin = await t8({ hr: false, admin: true });
+  assert.equal((await admin.acceptSetup()).status, 200);
+  const yes = await admin.card('set_leader', { leader: true });
+  assert.equal(yes.status, 200, JSON.stringify(yes.body));
+  assert.equal(admin.flow().leader, true, 'an admin may');
+});
+
+test('wave278 fix I2: a flow accepted before the access steps existed (no groups or drives rows): Re-check makes the two rows and runs them; before Accept it still says there is nothing to run', async () => {
+  const s = await t8();
+  assert.equal((await s.acceptSetup()).status, 200);
+  const steps = s.db.rows('hub_onboard_steps');
+  for (let i = steps.length - 1; i >= 0; i--) if (['groups', 'drives'].includes(steps[i].step)) steps.splice(i, 1);   // as a flow accepted before wave278's release
+  s.db.rows('hub_onboard_flows').find((x) => x.id === 21).leader = null;
+  const g = s.groupAdds().length, p = s.perms().length;
+  const r = await s.card('recheck_access');
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.warnings, [], 'no "nothing to run yet", no "running now"');
+  assert.deepEqual(s.groupsAsked().slice(g), W8_FUND, 'the groups ran');
+  assert.deepEqual(s.permIds().slice(p), ['d-org', 'd-fund'], 'the drives ran');
+  assert.deepEqual([s.step('groups').status, s.step('drives').status], ['done', 'done']);
+  assert.ok(['groups', 'drives'].every((k) => r.body.steps.some((x) => x.step === k)), 'the answer carries the new rows');
+  assert.equal(s.flow().leader, false, 'member or leader is decided as the groups run');
+  const rows = s.db.rows('hub_onboard_steps').filter((x) => x.flow_id === 21 && ['groups', 'drives'].includes(x.step));
+  assert.equal(rows.length, 2, 'one row each');
+  const lead = await t8();
+  assert.equal((await lead.acceptSetup()).status, 200);
+  lead.db.rows('hub_onboard_steps').splice(0, lead.db.rows('hub_onboard_steps').length, ...lead.db.rows('hub_onboard_steps').filter((x) => !['groups', 'drives'].includes(x.step)));
+  const sl = await lead.card('set_leader', { leader: true });
+  assert.equal(sl.status, 200, JSON.stringify(sl.body));
+  assert.equal(lead.step('drives').status, 'done', 'set_leader makes the rows too');
+  const early = await t8({ cand: { accepted_on: null } });
+  const before = early.snapshot();
+  const e = await early.card('recheck_access');
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.deepEqual(e.body.warnings, ['The groups and drives steps are made when the offer is accepted, so there is nothing to run yet.']);
+  assert.deepEqual(early.snapshot(), before, 'before Accept nothing is made');
+  assert.equal(early.groupAdds().length + early.drive().length, 0);
 });
 
 test('wave278 set_welcome_cc {flow_id, emails}: active staff only (lower-cased, once each), logged; anyone else is refused with nothing saved; refused once the welcome has gone', async () => {
@@ -4087,6 +4144,7 @@ const NIA_WA = 'nia.okafor@welfareavenue.com', SHIMA_AT = 'shima.butera@welfarea
 const NIA_TICKS = { drives_added: ['Org\'s Files', 'Fundraising', 'Program Development'], weekly_meeting: { summary: 'Fundraising weekly', next_at: '2026-10-29T15:00:00.000Z' } };
 const NIA_CC = ['kai.moreau@welfareavenue.com', 'old.staff@welfareavenue.com', 'RUTH.OWEN@welfareavenue.com', NIA_WA, 'someone@gmail.com'];
 const NIA_NOTE = { en: '(the password is in Nia\'s copy)', fr: '(le mot de passe est dans la copie de Nia)' };
+const NIA_SETUP = { en: '(the setup link is in Nia\'s copy)', fr: '(le lien de préparation est dans la copie de Nia)' };   // fix wave (M5): the staff copy never carries her link
 const asMailbox = (who) => 'Bearer tok:https://www.googleapis.com/auth/gmail.send:' + who;
 const okMail = { json: { id: 'mail1' } };
 const esc278 = (x) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -4100,6 +4158,7 @@ async function t9({ cand = {}, fl = {}, config = {}, ...o } = {}) {
   return s;
 }
 const nia = (lang, pw) => WELCOME_278[lang].replace('<PW>', pw).replace('<SETUP>', SETUP_LINK);
+const niaStaff = (lang) => WELCOME_278[lang].replace('<PW>', NIA_NOTE[lang]).replace('<SETUP>', NIA_SETUP[lang]);
 
 test('wave278 welcome: the companion note\'s text for the fixture, from the offer\'s sender to both addresses; the staff copy to the owner and the chosen staff, without the password', async () => {
   const s = await t9();
@@ -4127,9 +4186,11 @@ test('wave278 welcome: the companion note\'s text for the fixture, from the offe
   assert.equal(staff.from, hire.from);
   assert.equal(staff.auth, asMailbox(SHIMA_AT));
   assert.ok(staff.raw.includes('\r\nReply-To: shima.butera@welfareavenue.com\r\n'));
-  assert.equal(staff.subject, hire.subject);
-  assert.equal(staff.bodies[0], nia('en', NIA_NOTE.en), 'the same email, the password line saying where the password is');
+  assert.equal(staff.subject, 'Copy: ' + hire.subject, 'fix wave: the staff copy says it is a copy');
+  assert.equal(staff.bodies[0], niaStaff('en'), 'the same email, the password and setup link lines saying where they are');
   for (const b of staff.bodies) assert.ok(!b.includes(FIRST_PW), 'never the password in the staff copy');
+  for (const b of staff.bodies) assert.ok(!b.includes(SETUP_LINK) && !b.includes(expectedToken(11)), 'fix wave (M5): never the hire\'s personal setup link in the staff copy');
+  assert.ok(staff.bodies[1].includes(esc278(NIA_SETUP.en)));
   assert.ok(staff.bodies[1].includes(esc278(NIA_NOTE.en)));
   const t = hire.bodies[0];
   assert.doesNotMatch(t, /\[|—|\bAI\b|DocuSign|Contract|in-person|group onboarding|Loom|Join our Canva|Slack workspace/, 'no marked place left, no DocuSign or in-person line, Hub words only');
@@ -4148,8 +4209,10 @@ test('wave278 welcome: the French text for the fixture, and the French staff cop
   const [hire, staff] = s.sends();
   assert.equal(hire.subject, 'Bienvenue chez Welfare Avenue! Vos prochaines étapes');
   assert.equal(hire.bodies[0], nia('fr', FIRST_PW));
-  assert.equal(staff.bodies[0], nia('fr', NIA_NOTE.fr));
+  assert.equal(staff.bodies[0], niaStaff('fr'));
+  assert.equal(staff.subject, 'Copie : ' + hire.subject);
   assert.ok(!staff.bodies.join('').includes(FIRST_PW));
+  assert.ok(!staff.bodies.join('').includes(SETUP_LINK));
   assert.doesNotMatch(hire.bodies[0], /\[|—|\bAI\b/);
 });
 
@@ -4189,6 +4252,27 @@ test('wave278 welcomeSender: the offer\'s sender when active staff, else the rec
   assert.equal(hub.step('welcome').detail, 'Sent the welcome email to nia@example.com and nia.okafor@welfareavenue.com from hub@welfareavenue.com; copied to 2 staff.');
 });
 
+test('wave278 fix M2: times answers welcome_from by welcomeSender\'s rule (active Welfare Avenue sender, else the active owner, else hub@); times {only: welcome_from} answers that alone; a roster that cannot be read gives null', async () => {
+  const cases = [[{}, SHIMA_AT], [{ offer_sent_by: 'old.staff@welfareavenue.com' }, 'ruth.owen@welfareavenue.com'], [{ offer_sent_by: 'someone@gmail.com', owner: null }, HUB_AT], [{ offer_sent_by: null, owner: 'Old Staff' }, HUB_AT]];
+  for (const [cand, want] of cases) {
+    const s = await t9({ cand });
+    const r = await s.post({ action: 'times', flow_id: 21 });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(r.body.welcome_from, want, JSON.stringify(cand));
+    assert.ok(Array.isArray(r.body.busy), 'the full answer');
+    const only = await s.post({ action: 'times', flow_id: 21, only: 'welcome_from' });
+    assert.equal(only.status, 200, JSON.stringify(only.body));
+    assert.deepEqual(only.body, { welcome_from: want }, 'the light answer carries nothing else');
+  }
+  const down = await t9();
+  down.db.failOn('team_members', 'select');
+  const d = await down.post({ action: 'times', flow_id: 21, only: 'welcome_from' });
+  assert.equal(d.status, 200, JSON.stringify(d.body));
+  assert.deepEqual(d.body, { welcome_from: null }, 'never hub@ on a failed read');
+  const gone = await t9();
+  assert.equal((await gone.post({ action: 'times', flow_id: 999, only: 'welcome_from' })).status, 404);
+});
+
 test('wave278 welcome: the sender\'s mailbox refused (no token, or Gmail says no): both copies go from hub@, Reply-To the sender, and the detail says so', async () => {
   const s = await t9();
   s.tokenReply = (claims) => (claims.sub === SHIMA_AT && /gmail/.test(claims.scope) ? { status: 401, json: { error: 'unauthorized_client' } } : null);
@@ -4203,7 +4287,7 @@ test('wave278 welcome: the sender\'s mailbox refused (no token, or Gmail says no
     assert.ok(m.raw.includes('\r\nReply-To: shima.butera@welfareavenue.com\r\n'), 'replies still go to the sender');
   }
   assert.equal(hire.bodies[0], nia('en', FIRST_PW), 'the same email, signed by the sender');
-  assert.equal(staff.bodies[0], nia('en', NIA_NOTE.en));
+  assert.equal(staff.bodies[0], niaStaff('en'));
 
   const g = await t9();
   g.gmailReply = (e) => (e.headers.authorization === asMailbox(SHIMA_AT) ? { status: 403, json: { error: { message: 'Delegation denied for shima.butera@welfareavenue.com' } } } : okMail);
@@ -4260,7 +4344,7 @@ test('wave278 welcome: nobody to copy sends one email; mail test mode sends both
   assert.equal(hire.to, 'tester@welfareavenue.com');
   assert.equal(hire.subject, '[TEST, for nia@example.com, nia.okafor@welfareavenue.com] Welcome to Welfare Avenue! Your Next Steps');
   assert.equal(staff.to, 'tester@welfareavenue.com');
-  assert.equal(staff.subject, '[TEST, for ruth.owen@welfareavenue.com, kai.moreau@welfareavenue.com] Welcome to Welfare Avenue! Your Next Steps');
+  assert.equal(staff.subject, '[TEST, for ruth.owen@welfareavenue.com, kai.moreau@welfareavenue.com] Copy: Welcome to Welfare Avenue! Your Next Steps');
   assert.equal(count(hire.bodies[0], FIRST_PW), 1);
   assert.ok(!staff.bodies.join('').includes(FIRST_PW));
   assert.match(t.step('welcome').detail, /; copied to 2 staff, and email is in test mode, so it went only to tester@welfareavenue\.com\.$/);

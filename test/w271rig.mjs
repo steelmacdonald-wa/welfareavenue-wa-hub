@@ -241,7 +241,7 @@ export function accessRoutes(rig, w = {}) {
   rig.fetchOn((u, m) => m === 'GET' && u.startsWith('https://www.googleapis.com/drive/v3/drives?pageSize=100'), () => w.listReply || { json: { drives: w.drives } });
   rig.fetchOn((u, m) => m === 'POST' && /^https:\/\/www\.googleapis\.com\/drive\/v3\/files\/[^/?]+\/permissions\?supportsAllDrives=true/.test(u), (e) => {
     const id = decodeURIComponent(e.url.split('/files/')[1].split('/')[0]);
-    return (w.permission && w.permission(id, e)) || { json: { kind: 'drive#permission', id: 'perm-' + id, type: 'user', role: 'writer' } };
+    return (w.permission && w.permission(id, e)) || { json: { kind: 'drive#permission', id: 'perm-' + id, type: 'user', role: (e.body && e.body.role) || 'fileOrganizer' } };
   });
   rig.fetchOn((u, m) => m === 'GET' && u.startsWith('https://slack.com/api/users.lookupByEmail?'), (e) => {
     const email = new URL(e.url).searchParams.get('email');
