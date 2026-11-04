@@ -7,7 +7,10 @@
    will see you on <date>") with the rundown link; Yes on times that moved (stale): the sentence and the grid; No with availability asked: the grid
    with the 10-hour minimum, and Save shows the closing page ("<manager> will pick from your times"); No with availability already communicated:
    the closing page at once ("<manager> will be in touch with other times") and no grid; a second No: a person will be in touch; no proposal yet:
-   "We are choosing your times now"; the rundown (?setup): every step, Done ticks that post setup_tick; French; 390 px; no "AI" and no em dash. */
+   "We are choosing your times now"; the rundown (?setup): every step, Done ticks that post setup_tick; French; 390 px; no "AI" and no em dash.
+   wave278 Task 5: the twelve steps with their links (four Chrome downloads), the groups with their purposes, the drives, the weekly meeting, the
+   Hub-set tick (no Done button), the QR of the install URL (the QR maker served from test/qrcode-generator-1.4.4.js at its cdnjs address) with the
+   URL under it, the walkthrough video when set, the plain sentences when Task 3 has added nothing; the phone page (?install), EN and FR, 390 px. */
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -39,7 +42,25 @@ function gridWindow(minHours) {
   }
   return out;
 }
-const STEPS = ['profile', 'bookmarks', 'hub', 'slack', 'academy', 'loom', 'canva', 'drives', 'weekly'].map((key, i) => ({ key, title: { en: 'Step ' + (i + 1) + ' in English', fr: 'Étape ' + (i + 1) + ' en français' }, body: { en: 'What to do for ' + key + '.', fr: 'Quoi faire pour ' + key + '.' } }));
+/* wave278 Task 5: the twelve steps, shaped as onboard-link's SETUP (links where the function has them) */
+const KEYS = ['google', 'chrome', 'bookmarks', 'drive', 'groups', 'hub', 'slack', 'canva', 'academy', 'jd', 'weekly', 'phone'];
+const CHROME = [['Mac', 'https://www.google.com/chrome/'], ['Windows', 'https://www.google.com/chrome/'], ['Android', 'https://play.google.com/store/apps/details?id=com.android.chrome'], ['iPhone', 'https://apps.apple.com/app/google-chrome/id535886823']];
+const LINKS = {
+  chrome: CHROME.map(([n, url]) => ({ label: { en: 'Chrome for ' + n, fr: 'Chrome pour ' + n }, url })),
+  bookmarks: [['Gmail', 'https://mail.google.com/'], ['Google Calendar', 'https://calendar.google.com/'], ['The Hub', 'https://hub.welfareavenue.com/']].map(([n, url]) => ({ label: { en: n, fr: n }, url })),
+  academy: [['The Avenue Academy', 'https://hub.welfareavenue.com/#training'], ['The Hub home page', 'https://hub.welfareavenue.com/']].map(([n, url]) => ({ label: { en: n, fr: n }, url })),
+};
+const STEPS = KEYS.map((key, i) => Object.assign({ key, title: { en: 'Step ' + (i + 1) + ' in English', fr: 'Étape ' + (i + 1) + ' en français' }, body: { en: 'What to do for ' + key + '.', fr: 'Quoi faire pour ' + key + '.' } }, LINKS[key] ? { links: LINKS[key] } : {}));
+const INSTALL_URL = 'https://hub.welfareavenue.com/o/' + TOK + '?install';
+const EXTRA = {
+  address: 'amina.diallo@welfareavenue.com', drives: ['Org\'s Files', 'Operations'],
+  groups: [{ address: 'org@welfareavenue.com', purpose: { en: 'everyone at Welfare Avenue', fr: 'toute l’équipe de Welfare Avenue' } }, { address: 'operations@welfareavenue.com', purpose: { en: 'your team’s list', fr: 'la liste de votre équipe' } }],
+  weekly: { summary: 'Operations weekly', nextAt: '2026-11-03T18:00:00Z' },   // Tuesday 03/11/26, 1 pm in Toronto
+  channelLink: 'https://join.slack.com/share/enQtChannel', slackJoin: 'https://join.slack.com/t/welfareavenue/shared_invite/zt-join',
+  canva: 'https://www.canva.com/brand/join?token=abc', jd: 'https://docs.google.com/document/d/jd7', googleVideo: 'https://www.loom.com/share/chrome-login', video: null, installUrl: INSTALL_URL,
+};
+const QRLIB = fs.readFileSync(path.join(__dirname, 'qrcode-generator-1.4.4.js'), 'utf8');
+const QR_URL = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 const STALE = { en: 'Sorry, those times no longer work for your manager. Please mark when you are free below, and they will pick from your times.', fr: 'Désolés, ces heures ne conviennent plus à votre gestionnaire. Indiquez ci-dessous quand vous êtes disponible, et votre gestionnaire choisira parmi vos plages.' };
 const ANSWERED = { en: 'Thank you. A person from Welfare Avenue will be in touch with you about the times.', fr: 'Merci. Une personne de Welfare Avenue communiquera avec vous au sujet des heures.' };
 const HOURS_REQ = { en: 'Please tick the box to confirm you can give at least 6 hours a week to Welfare Avenue, then press Accept.', fr: 'Veuillez cocher la case pour confirmer que vous pouvez consacrer au moins 6 heures par semaine à Welfare Avenue, puis appuyer sur Accepter.' };
@@ -55,13 +76,17 @@ function makeHire(over) {
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors, body: '' });
     const call = { method: req.method(), url: req.url(), body: req.postData() ? JSON.parse(req.postData()) : null };
     calls.push(call);
+    if (req.method() === 'GET' && new URL(req.url()).searchParams.has('install')) {   // wave278: the phone page
+      if (S.installStatus) return send(S.installStatus, S.installBody || { ok: false });
+      return send(200, { ok: true, kind: 'offer', first: S.first, lang: S.lang, install: { hub: 'https://hub.welfareavenue.com/', slack: 'https://slack.com/download' } });
+    }
     if (req.method() === 'GET') {
       const accepted = S.answered === 'accept';
       return send(200, {
         ok: true, kind: 'offer', first: S.first, role: S.role, lang: S.lang, answered: S.answered, closed: false, late: false, booked: !!S.bookedTimes, callBooked: !!S.bookedTimes,
         grid: gridWindow(S.minHours), slotsSaved: S.slotsSaved, offerHours: S.offerHours, hoursConfirmed: accepted && !!S.offerHours, mode: S.mode, hoursRequired: S.hoursRequired,
         proposal: S.proposal, bookedTimes: S.bookedTimes, answer: S.answer, askAvailability: S.askAvailability, manager: S.manager, secondNo: S.secondNo, lengths: { callMin: 60, oneMin: 30 }, managerFree: S.managerFree, managerHours: S.managerHours,
-        setup: accepted ? { steps: STEPS, ticks: Object.fromEntries(STEPS.map(s => [s.key, !!S.ticks[s.key]])) } : null,
+        setup: accepted ? Object.assign({ steps: STEPS, ticks: Object.fromEntries(STEPS.map(s => [s.key, !!S.ticks[s.key]])) }, EXTRA, S.extra || {}) : null,
       });
     }
     const b = call.body || {};
@@ -120,6 +145,7 @@ async function open(browser, opts) {
   await page.route('**/*', route => {
     const url = route.request().url();
     if (url.startsWith(FN)) return fx.handler(route);
+    if (url === QR_URL) { fx.qrLoads = (fx.qrLoads || 0) + 1; return route.fulfill({ contentType: 'application/javascript', body: QRLIB }); }   // wave278: the QR maker, from cdnjs as 225 loads it
     if (url.startsWith('https://hub.welfareavenue.com/o/')) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: PAGE });
     if (url.indexOf('fonts.googleapis.com/css2') >= 0) return route.fulfill({ contentType: 'text/css', body: '' });
     if (url.startsWith('https://fonts.gstatic.com/s/')) { const fp = path.join(__dirname, 'fonts', url.split('/').pop()); if (fs.existsSync(fp)) return route.fulfill({ contentType: 'font/woff2', body: fs.readFileSync(fp) }); }
@@ -338,20 +364,20 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     await f.ctx.close();
 
     /* 9. the rundown */
-    f = await open(browser, { qs: '?setup', fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE }, ticks: { profile: true } }) });
+    f = await open(browser, { qs: '?setup', fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE }, ticks: { chrome: true } }) });
     t = await text(f.page);
     ok('rundown: every step in order', STEPS.every((s, i) => t.indexOf(s.title.en) >= 0 && (i === 0 || t.indexOf(STEPS[i - 1].title.en) < t.indexOf(s.title.en))), t.slice(0, 800));
-    ok('rundown: the saved tick shows, and the count', (await f.page.locator('[data-tick="profile"]').getAttribute('aria-pressed')) === 'true' && /1 of 9 done/.test(t), t.slice(0, 400));
+    ok('rundown: the saved tick shows, and the count', (await f.page.locator('[data-tick="chrome"]').getAttribute('aria-pressed')) === 'true' && /1 of 12 done/.test(t), t.slice(0, 400));
     ok('rundown: opening posts nothing', f.posts().length === 0);
-    await f.page.locator('[data-tick="hub"]').click();
-    await f.page.waitForFunction(() => document.querySelector('[data-tick="hub"]').getAttribute('aria-pressed') === 'true', null, { timeout: 4000 });
+    await f.page.locator('[data-tick="slack"]').click();
+    await f.page.waitForFunction(() => document.querySelector('[data-tick="slack"]').getAttribute('aria-pressed') === 'true', null, { timeout: 4000 });
     let ticks = f.posts().filter(c => c.body.a === 'setup_tick');
-    ok('rundown: Done posts setup_tick {key, done: true}', ticks.length === 1 && ticks[0].body.key === 'hub' && ticks[0].body.done === true, ticks.map(c => c.body));
-    ok('rundown: the count follows', /2 of 9 done/.test(await text(f.page)));
-    await f.page.locator('[data-tick="profile"]').click();
-    await f.page.waitForFunction(() => document.querySelector('[data-tick="profile"]').getAttribute('aria-pressed') === 'false', null, { timeout: 4000 });
+    ok('rundown: Done posts setup_tick {key, done: true}', ticks.length === 1 && ticks[0].body.key === 'slack' && ticks[0].body.done === true, ticks.map(c => c.body));
+    ok('rundown: the count follows', /2 of 12 done/.test(await text(f.page)));
+    await f.page.locator('[data-tick="chrome"]').click();
+    await f.page.waitForFunction(() => document.querySelector('[data-tick="chrome"]').getAttribute('aria-pressed') === 'false', null, { timeout: 4000 });
     ticks = f.posts().filter(c => c.body.a === 'setup_tick');
-    ok('rundown: a second press undoes it (done: false)', ticks.length === 2 && ticks[1].body.key === 'profile' && ticks[1].body.done === false, ticks.map(c => c.body));
+    ok('rundown: a second press undoes it (done: false)', ticks.length === 2 && ticks[1].body.key === 'chrome' && ticks[1].body.done === false, ticks.map(c => c.body));
     ok('rundown: no page errors', f.errors.length === 0, f.errors);
     await shot(f.page, 'w275-rundown-desktop');
     await f.ctx.close();
@@ -372,16 +398,100 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     await f.ctx.close();
     f = await open(browser, { qs: '?setup&l=fr', fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }) });
     t = await text(f.page);
-    ok('French: the rundown', /Étape 1 en français/.test(t) && /0 sur 9 terminées/.test(t), t.slice(0, 400));
+    ok('French: the rundown', /Étape 1 en français/.test(t) && /0 sur 12 terminées/.test(t), t.slice(0, 400));
     await f.ctx.close();
     f = await open(browser, { qs: '?l=fr', fn: makeHire({ answered: 'accept', proposal: null }) });
     ok('French: waiting', /Nous choisissons vos heures en ce moment; vous recevrez un courriel d.ici deux jours\./.test(await text(f.page)));
     await f.ctx.close();
 
+    /* 12. wave278 Task 5: the twelve-step page, its lists and links, the Hub-set tick, the QR of the install page */
+    f = await open(browser, { qs: '?setup', wait: 900, fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE }, ticks: { hub: true } }) });
+    t = await text(f.page);
+    ok('w278: the twelve steps in order', STEPS.every((s, i) => t.indexOf(s.title.en) >= 0 && (i === 0 || t.indexOf(STEPS[i - 1].title.en) < t.indexOf(s.title.en))) && (await f.page.locator('.rstep').count()) === 12, t.slice(0, 900));
+    ok('w278: the count is of twelve, the Hub-set tick counted', /1 of 12 done/.test(t), t.slice(0, 400));
+    ok('w278: the hub step has no Done button, it shows the Hub ticked it', (await f.page.locator('[data-tick="hub"]').count()) === 0 && (await f.page.locator('[data-auto="hub"]').count()) === 1 && /Done/.test(await f.page.locator('[data-auto="hub"]').innerText()), await f.page.locator('[data-step="hub"]').innerText());
+    ok('w278: every other step has its Done button', (await f.page.locator('[data-tick]').count()) === 11);
+    const chromeHrefs = await f.page.locator('[data-step="chrome"] a.slink').evaluateAll(a => a.map(x => x.getAttribute('href')));
+    ok('w278: the Chrome step shows four download links', chromeHrefs.length === 4 && CHROME.every(([, u], i) => chromeHrefs[i] === u) && /Chrome for Mac/.test(t) && /Chrome for iPhone/.test(t), chromeHrefs);
+    ok('w278: the Chrome login video when set', (await f.page.locator('[data-step="chrome"] a[href="https://www.loom.com/share/chrome-login"]').count()) === 1);
+    ok('w278: the google step names the new address, never a password', /amina\.diallo@welfareavenue\.com/.test(await f.page.locator('[data-step="google"]').innerText()) && !/password:/i.test(t));
+    ok('w278: the bookmarks', (await f.page.locator('[data-step="bookmarks"] a.slink').count()) === 3);
+    const glines = await f.page.locator('[data-step="groups"] .glist li').allInnerTexts();
+    ok('w278: the groups step, one line per group with its purpose', glines.length === 2 && /org@welfareavenue\.com/.test(glines[0]) && /everyone at Welfare Avenue/.test(glines[0]) && /operations@welfareavenue\.com/.test(glines[1]) && /your team.s list/.test(glines[1]), glines);
+    const dlines = await f.page.locator('[data-step="drive"] .glist li').allInnerTexts();
+    ok('w278: the drive step lists the shared drives by name', dlines.length === 2 && dlines[0] === 'Org\'s Files' && dlines[1] === 'Operations', dlines);
+    const wk = await f.page.locator('[data-step="weekly"]').innerText();
+    ok('w278: the weekly meeting by name and its next time, in Toronto time', /Operations weekly/.test(wk) && /Tuesday, November 3/.test(wk) && /1(:00)?\sp\.m\./.test(wk), wk);
+    ok('w278: Slack: the workspace link and the onboarding channel', (await f.page.locator('[data-step="slack"] a[href="https://join.slack.com/t/welfareavenue/shared_invite/zt-join"]').count()) === 1 && (await f.page.locator('[data-step="slack"] a[href="https://join.slack.com/share/enQtChannel"]').count()) === 1);
+    ok('w278: Canva and the job description links', (await f.page.locator('[data-step="canva"] a[href="https://www.canva.com/brand/join?token=abc"]').count()) === 1 && (await f.page.locator('[data-step="jd"] a[href="https://docs.google.com/document/d/jd7"]').count()) === 1);
+    ok('w278: the Academy and Home links', (await f.page.locator('[data-step="academy"] a[href="https://hub.welfareavenue.com/#training"]').count()) === 1 && (await f.page.locator('[data-step="academy"] a[href="https://hub.welfareavenue.com/"]').count()) === 1);
+    await f.page.waitForFunction(() => { const i = document.getElementById('qrimg'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 }).catch(() => {});
+    const qr = await f.page.evaluate(() => { const i = document.getElementById('qrimg'); return i ? { src: i.getAttribute('src').slice(0, 40), w: i.naturalWidth, alt: i.getAttribute('alt') } : null; });
+    ok('w278: the phone step draws a QR image', !!qr && /^data:image\/svg\+xml/.test(qr.src) && qr.w > 0 && !!qr.alt, qr);
+    ok('w278: the QR maker came from cdnjs, once', f.fx.qrLoads === 1, f.fx.qrLoads);
+    ok('w278: the install URL is printed under the QR', (await f.page.locator('[data-step="phone"]').innerText()).indexOf(INSTALL_URL) >= 0);
+    ok('w278: no walkthrough video while none is set', (await f.page.locator('#video').count()) === 0);
+    ok('w278: opening posts nothing', f.posts().length === 0);
+    ok('w278: no page errors', f.errors.length === 0, f.errors);
+    await shot(f.page, 'w278-setup-desktop');
+    await f.ctx.close();
+
+    /* nothing from Task 3 yet: the plain sentences instead of the lists; the walkthrough video when Steel has recorded it */
+    f = await open(browser, { qs: '?setup', fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE }, extra: { drives: [], groups: [], weekly: null, canva: null, jd: null, googleVideo: null, address: null, channelLink: null, video: 'https://www.loom.com/share/walkthrough' } }) });
+    t = await text(f.page);
+    ok('w278 empty: HR will share your Drives', /HR will share your Drives with you/.test(await f.page.locator('[data-step="drive"]').innerText()));
+    ok('w278 empty: HR will add your groups', /HR will add you to your groups/.test(await f.page.locator('[data-step="groups"]').innerText()));
+    ok('w278 empty: no meeting yet', /HR will add you to your team.s weekly meeting/.test(await f.page.locator('[data-step="weekly"]').innerText()));
+    ok('w278 empty: HR will send the Canva link', /HR will send you the Canva link/.test(await f.page.locator('[data-step="canva"]').innerText()));
+    ok('w278 empty: HR will share the job description', /HR will share your job description/.test(await f.page.locator('[data-step="jd"]').innerText()));
+    ok('w278 empty: the hub step not ticked yet says it ticks itself', /ticks itself/i.test(await f.page.locator('[data-auto="hub"]').innerText()));
+    ok('w278 video: the walkthrough at the top', (await f.page.locator('#video a[href="https://www.loom.com/share/walkthrough"]').count()) === 1 && t.indexOf('walkthrough') < t.indexOf(STEPS[0].title.en), t.slice(0, 300));
+    ok('w278 empty: no page errors', f.errors.length === 0, f.errors);
+    await f.ctx.close();
+
+    /* French, at 390 px */
+    f = await open(browser, { phone: true, qs: '?setup&l=fr', wait: 900, fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }) });
+    t = await text(f.page);
+    ok('w278 French: the twelve steps and the count', STEPS.every(s => t.indexOf(s.title.fr) >= 0) && /0 sur 12 terminées/.test(t), t.slice(0, 600));
+    ok('w278 French: the groups and their purposes', /toute l.équipe de Welfare Avenue/.test(t) && /la liste de votre équipe/.test(t));
+    ok('w278 French: Chrome pour Mac, the meeting in French', /Chrome pour Mac/.test(t) && /mardi 3 novembre/.test(await f.page.locator('[data-step="weekly"]').innerText()), await f.page.locator('[data-step="weekly"]').innerText());
+    ok('w278 French: the hub step ticks itself', /se coche/.test(await f.page.locator('[data-auto="hub"]').innerText()));
+    ok('w278 French at 390 px: no sideways scroll, Hub words, no errors', await noScroll(f.page) && clean(await allWords(f.page)) && f.errors.length === 0, f.errors);
+    await shot(f.page, 'w278-setup-phone-fr');
+    await f.ctx.close();
+    f = await open(browser, { phone: true, qs: '?setup', wait: 900, fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }) });
+    ok('w278 at 390 px: the twelve steps, the QR, no sideways scroll', (await f.page.locator('.rstep').count()) === 12 && (await f.page.locator('#qrimg').count()) === 1 && await noScroll(f.page) && f.errors.length === 0, f.errors);
+    await shot(f.page, 'w278-setup-phone');
+    await f.ctx.close();
+
+    /* the phone page (?install): sign in first, Safari, Chrome, Slack, Open the Hub; one GET with install, nothing posted */
+    for (const l of ['', 'fr']) {
+      f = await open(browser, { phone: true, qs: '?install' + (l ? '&l=fr' : ''), fn: makeHire({ answered: 'accept' }) });
+      t = await text(f.page);
+      const fr = !!l;
+      const first = fr ? /Connectez-vous d.abord au Hub dans Safari ou Chrome sur votre téléphone, puis ajoutez-le à l.écran d.accueil; si l.application installée vous demande de vous connecter de nouveau, faites-le une fois\./ : /Sign in to the Hub in Safari or Chrome on your phone first, then add it to the home screen; if the installed app asks you to sign in again, do so once\./;
+      const m1 = t.match(first), end1 = m1 ? m1.index + m1[0].length : 0;
+      const iSafari = t.indexOf('Safari', end1), iChrome = t.indexOf('Chrome', iSafari), iSlack = t.indexOf('Slack', iChrome);
+      ok('w278 install' + (fr ? ' (French)' : '') + ': the sign-in sentence first', first.test(t) && t.search(first) < iSafari, t.slice(0, 500));
+      ok('w278 install' + (fr ? ' (French)' : '') + ': the Safari steps, then the Chrome steps, then Slack', iSafari > 0 && iChrome > iSafari && iSlack > iChrome && (fr ? /Partager/.test(t) && /Sur l.écran d.accueil/.test(t) && /Installer l.application/.test(t) : /Share/.test(t) && /Add to Home Screen/.test(t) && /Add to Home screen/.test(t) && /Install app/.test(t)), t);
+      ok('w278 install' + (fr ? ' (French)' : '') + ': the Slack app link and Open the Hub, in that order', (await f.page.locator('a[href="https://slack.com/download"]').count()) === 1 && (await f.page.locator('a.btn[href="https://hub.welfareavenue.com/"]').count()) === 1 && await f.page.evaluate(() => { const a = document.querySelector('a[href="https://slack.com/download"]'), b = document.querySelector('a.btn[href="https://hub.welfareavenue.com/"]'); return !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING); }));
+      ok('w278 install' + (fr ? ' (French)' : '') + ': one GET with install, no POST, no QR maker', f.gets().length === 1 && /[?&]install/.test(f.gets()[0].url) && f.posts().length === 0 && !f.fx.qrLoads, f.fx.calls.map(c => c.url));
+      ok('w278 install' + (fr ? ' (French)' : '') + ' at 390 px: no sideways scroll, Hub words, no errors', await noScroll(f.page) && clean(await allWords(f.page)) && f.errors.length === 0, f.errors);
+      await shot(f.page, 'w278-install-phone' + (fr ? '-fr' : ''));
+      await f.ctx.close();
+    }
+    /* a link the function refuses says so; a function that cannot be reached still gives the fixed steps and links */
+    f = await open(browser, { phone: true, qs: '?install', fn: makeHire({ answered: 'accept', installStatus: 404, installBody: { ok: false, error: 'bad_link', message: { en: 'This link does not work.', fr: 'Ce lien ne fonctionne pas.' } } }) });
+    ok('w278 install: a bad link says so', /This link does not work/.test(await text(f.page)) && (await f.page.locator('a[href="https://slack.com/download"]').count()) === 0);
+    await f.ctx.close();
+    f = await open(browser, { phone: true, qs: '?install', fn: makeHire({ answered: 'accept', installStatus: 503, installBody: { ok: false, error: 'unavailable' } }) });
+    ok('w278 install: the server down still shows the steps and the two links', /Add to Home Screen/.test(await text(f.page)) && (await f.page.locator('a[href="https://slack.com/download"]').count()) === 1 && (await f.page.locator('a.btn[href="https://hub.welfareavenue.com/"]').count()) === 1);
+    await f.ctx.close();
+
     /* 11. the phone at 390 px, and the Hub words on every view, in both languages */
     const views = [
       ['ask', {}, ''], ['times', { answered: 'accept' }, ''], ['closing', { answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }, ''],
-      ['touch', { answered: 'accept', answer: 'no', askAvailability: false }, ''], ['waiting', { answered: 'accept', proposal: null }, ''], ['rundown', { answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }, '?setup'],
+      ['touch', { answered: 'accept', answer: 'no', askAvailability: false }, ''], ['waiting', { answered: 'accept', proposal: null }, ''], ['rundown', { answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }, '?setup'], ['install', { answered: 'accept' }, '?install'],
     ];
     for (const [name, over, qs] of views) {
       for (const l of ['', 'fr']) {

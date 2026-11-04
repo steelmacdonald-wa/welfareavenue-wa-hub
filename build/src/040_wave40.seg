@@ -141,5 +141,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       await wa40Load();
       wa40Enforce();
     } catch (e) { /* non-fatal */ }
+    /* wave278 (04/11/26): the "Sign in to the Hub" tick of a new hire's setup page (/o/<token>?setup). Once per page load, after the role is
+       known (WA40_MINE); wa278_hub_seen() ticks rd_hub only on the onboarding flow whose wa_email is this sign-in, so for everyone else it does
+       nothing. Not awaited, errors ignored, the result unused. */
+    if (!window.__wa278Seen) {
+      window.__wa278Seen = true;
+      try { db.rpc('wa278_hub_seen').then(function () {}, function () {}); } catch (e) { /* fine */ }
+    }
   };
 })();

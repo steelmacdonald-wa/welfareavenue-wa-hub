@@ -1,6 +1,6 @@
 // Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability;
 // v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown; v4, 03/11/26, wave275b: the hours box and the manager's
-// week are rules only while their settings are on)
+// week are rules only while their settings are on; v5, 04/11/26, wave278 Task 5: the twelve setup steps and the phone install page)
 // wave275b (v4, Steel 03/11/26: "Can we make the availability check for onboarding optional"), two app_config settings (wa275b, off by default; anything
 //   but "on" is off):
 //   onboard_require_hours   on: Accept with offerHours needs hours_ok: true (400 hours_required), as in v3. Off: Accept is taken without it, and
@@ -68,6 +68,14 @@
 //              manager and HR are told once (setup_ticks.no_again_at).
 //   POST setup_tick {key, done}   one rundown tick, kept in setup_ticks as rd_<key> (the time it was ticked; a second tick keeps the first time; done
 //              false clears it), merged through wa275_tick_set. {ok, ticks}. Refused: bad_tick, not_accepted.
+// wave278 (v5, 04/11/26, Task 5): the rundown is twelve steps (SETUP: google, chrome, bookmarks, drive, groups, hub, slack, canva, academy, jd, weekly,
+//   phone; each {key, title, body, links?: [{label, url}]}, in both languages). The offer GET's setup adds address (wa_email), drives (setup_ticks.drives_added),
+//   groups [{address, purpose: {en, fr}}] (setup_ticks.groups_added, the purpose from a fixed map by address), weekly {summary, nextAt} | null
+//   (setup_ticks.weekly_meeting), channelLink (onboard_slack_channel_link), slackJoin (onboard_slack_join_link, else the workspace), canva (canva_link),
+//   jd (the position's jd_url), googleVideo (onboard_google_video), video (onboard_setup_video; null while empty), installUrl (/o/<token>?install);
+//   whatever is absent is an empty list or null. setup_tick takes the eleven keys the hire ticks: hub is set only by the Hub (wa278_hub_seen at sign-in),
+//   and loom and the old keys are bad_tick. GET ?install (the page the QR opens): {ok, kind, first, lang, install: {hub, slack}}, fixed links, nothing
+//   saved; the offer link after Accept only (wrong_link, not_accepted).
 //   yes, no and setup_tick need the offer link (wrong_link otherwise) after Accept (not_accepted); yes and no need propose mode and a proposal (no_proposal).
 // A slot is the start of one cell of the window, as a UTC instant. The window is onboard_grid_days days from today in
 // Toronto, onboard_grid_start to onboard_grid_end o'clock, onboard_grid_cell_min minutes a cell, onboard_grid_min_hours the hire's minimum (app_config). The wall-clock
@@ -231,16 +239,17 @@ function onCellBoundary(ms: number, g: Grid): boolean {
 const OPEN = ['new', 'reviewing', 'interview', 'offer', 'hired'];   // a card in any other stage is closed to this link
 type Cand = {
   id: number; name: string; role: string; status: string; summary: string; notes: string; owner: string | null; accepted_on: string | null; offer_respond_by: string | null; close_reason: string | null;
-  offer_hours?: number | null; hours_confirmed_at?: string | null; practice?: boolean | null;
+  offer_hours?: number | null; hours_confirmed_at?: string | null; practice?: boolean | null; position_id?: number | null;
 };
 type Flow = {
   id: number; candidate_id: number; status: string; manager_member_id: number | null; manager_link_member_id: number | null; call_at: string | null; one_on_one_at: string | null;
   pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null;
   created_at?: string | null; proposed_call_at?: string | null; proposed_one_on_one_at?: string | null; proposed_by?: string | null; proposed_at?: string | null; hire_answer?: string | null;
   hire_answered_at?: string | null; setup_ticks?: Record<string, unknown> | null; ask_availability?: boolean | null; practice?: boolean | null;
+  wa_email?: string | null; canva_link?: string | null;   // wave278: the rundown shows the new address and HR's Canva link
 };
-const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason, offer_hours, hours_confirmed_at, practice';
-const FLOW_COLS = 'id, candidate_id, status, practice, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, hire_answered_at, setup_ticks, ask_availability';
+const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason, offer_hours, hours_confirmed_at, practice, position_id';
+const FLOW_COLS = 'id, candidate_id, status, practice, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, hire_answered_at, setup_ticks, ask_availability, wa_email, canva_link';
 type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null; mode?: 'propose' | 'grid' };
 
 /* a read that fails is not a link that fails: it throws, and the handler answers 503 */
@@ -303,7 +312,7 @@ async function savedSlots(l: Link): Promise<string[]> {
   return (((data as { slots?: string[] } | null)?.slots) || []).map((s) => normal(s)).filter((s): s is string => !!s).sort();
 }
 
-async function view(l: Link) {
+async function view(l: Link, token: string) {
   const answered = answerOf(l.cand);
   const closed = shut(l);
   let first = firstName(l.cand.name), hire: string | undefined;
@@ -325,7 +334,7 @@ async function view(l: Link) {
       answer: f?.hire_answer ?? null, askAvailability: f ? f.ask_availability !== false : true, manager: m?.name || null,
       /* a second No to these times went to a person (nothing recorded as a no): a reload says so instead of offering Yes and No again; new times clear it */
       secondNo: f && !f.call_at && !f.hire_answer && f.setup_ticks?.no_again_at ? MSG.answered : null,
-      setup: l.cand.accepted_on && f ? setupOf(f) : null,
+      setup: l.cand.accepted_on && f ? await setupOf(l, token) : null,
       /* wave275b: whether Accept needs the hours box (onboard_require_hours on); an offer with no hours never does */
       hoursRequired: Number(l.cand.offer_hours) > 0 && await settingOn('onboard_require_hours'),
     };
@@ -743,34 +752,112 @@ async function sayYes(l: Link) {
 
 /* ---------- wave275: the setup rundown (/o/<token>?setup), from the SOP's onboarding-call checklist, for the hire to do alone ---------- */
 /* Ticks live in setup_ticks as rd_<key>, so they never mix with the Hub's own keys there (hire_times_at, accept_setup_at, no_again_at). The welcome email
-   (wave275 Task 4) lists the same steps; functions are single files, so it keeps its own copy of these words. */
-export const SETUP: Array<{ key: string; title: { en: string; fr: string }; body: { en: string; fr: string } }> = [
-  { key: 'profile', title: { en: 'Add your Welfare Avenue account to Chrome', fr: 'Ajoutez votre compte Welfare Avenue à Chrome' },
-    body: { en: 'In Chrome, add a new profile, sign in with your Welfare Avenue address and turn on sync. Keep your Welfare Avenue work in that profile from now on.', fr: 'Dans Chrome, ajoutez un nouveau profil, connectez-vous avec votre adresse Welfare Avenue et activez la synchronisation. Gardez votre travail pour Welfare Avenue dans ce profil à partir de maintenant.' } },
-  { key: 'bookmarks', title: { en: 'Bookmark Gmail and Calendar', fr: 'Ajoutez Gmail et Agenda à vos favoris' },
-    body: { en: 'In that profile, open Gmail (mail.google.com) and Google Calendar (calendar.google.com), and bookmark both.', fr: 'Dans ce profil, ouvrez Gmail (mail.google.com) et Google Agenda (calendar.google.com), puis ajoutez-les tous les deux à vos favoris.' } },
+   (wave275 Task 4) lists the same steps; functions are single files, so it keeps its own copy of these words.
+   wave278 Task 5 (04/11/26): twelve steps, from the companion note "Onboarding email rewrite and the Hub setup flow", section 2. The old keys were carried
+   over at release by wa278a (profile to chrome, drives to drive; loom dropped), so only these keys count. The page adds what is the hire's own under the
+   step with the same key: the new address (google), the Chrome login video (chrome), the drives and the groups Task 3 added (drive, groups), the Slack
+   links (slack), HR's Canva link (canva), the job description (jd), the weekly meeting (weekly), the QR of the install page (phone). hub is ticked by
+   the Hub itself (wa278_hub_seen at sign-in), never by the hire. */
+type Words = { en: string; fr: string };
+export const SETUP: Array<{ key: string; title: Words; body: Words; links?: Array<{ label: Words; url: string }> }> = [
+  { key: 'google', title: { en: 'Sign in to your Welfare Avenue Google account', fr: 'Connectez-vous à votre compte Google Welfare Avenue' },
+    body: { en: 'Sign in to Google with your new Welfare Avenue address. The password is in your welcome email; Google asks you to choose a new one the first time.', fr: 'Connectez-vous à Google avec votre nouvelle adresse Welfare Avenue. Le mot de passe est dans votre courriel de bienvenue; Google vous demande d\'en choisir un nouveau la première fois.' },
+    links: [{ label: { en: 'Sign in to Google', fr: 'Se connecter à Google' }, url: 'https://accounts.google.com/' }] },
+  { key: 'chrome', title: { en: 'Add the account to Chrome', fr: 'Ajoutez le compte à Chrome' },
+    body: { en: 'Download Chrome if you do not have it. In Chrome, add a new profile, sign in with your Welfare Avenue address and turn on sync. Keep your Welfare Avenue work in that profile from now on.', fr: 'Téléchargez Chrome si vous ne l\'avez pas. Dans Chrome, ajoutez un nouveau profil, connectez-vous avec votre adresse Welfare Avenue et activez la synchronisation. Gardez votre travail pour Welfare Avenue dans ce profil à partir de maintenant.' },
+    links: [
+      { label: { en: 'Chrome for Mac', fr: 'Chrome pour Mac' }, url: 'https://www.google.com/chrome/' },
+      { label: { en: 'Chrome for Windows', fr: 'Chrome pour Windows' }, url: 'https://www.google.com/chrome/' },
+      { label: { en: 'Chrome for Android', fr: 'Chrome pour Android' }, url: 'https://play.google.com/store/apps/details?id=com.android.chrome' },
+      { label: { en: 'Chrome for iPhone', fr: 'Chrome pour iPhone' }, url: 'https://apps.apple.com/app/google-chrome/id535886823' },
+    ] },
+  { key: 'bookmarks', title: { en: 'Bookmark Gmail, Calendar and the Hub', fr: 'Ajoutez Gmail, Agenda et le Hub à vos favoris' },
+    body: { en: 'In your Welfare Avenue profile, open each of these three and bookmark it.', fr: 'Dans votre profil Welfare Avenue, ouvrez chacun de ces trois liens et ajoutez-le à vos favoris.' },
+    links: [
+      { label: { en: 'Gmail', fr: 'Gmail' }, url: 'https://mail.google.com/' },
+      { label: { en: 'Google Calendar', fr: 'Google Agenda' }, url: 'https://calendar.google.com/' },
+      { label: { en: 'The Hub', fr: 'Le Hub' }, url: HUB + '/' },
+    ] },
+  { key: 'drive', title: { en: 'Bookmark Google Drive and find your shared drives', fr: 'Ajoutez Google Drive à vos favoris et repérez vos Drives partagés' },
+    body: { en: 'Open Google Drive and bookmark it. Your team\'s files are under Shared drives, on the left.', fr: 'Ouvrez Google Drive et ajoutez-le à vos favoris. Les fichiers de votre équipe sont sous Drives partagés, à gauche.' },
+    links: [
+      { label: { en: 'Google Drive', fr: 'Google Drive' }, url: 'https://drive.google.com/' },
+      { label: { en: 'Your shared drives', fr: 'Vos Drives partagés' }, url: 'https://drive.google.com/drive/shared-drives' },
+    ] },
+  { key: 'groups', title: { en: 'Your Google Groups', fr: 'Vos groupes Google' },
+    body: { en: 'A Google Group is one address for a whole team: an email sent to the group reaches everyone in it, you included. Nothing to do but read.', fr: 'Un groupe Google est une seule adresse pour toute une équipe: un courriel envoyé au groupe joint tout le monde dans le groupe, vous compris. Rien à faire, sauf lire.' } },
   { key: 'hub', title: { en: 'Sign in to the Hub', fr: 'Connectez-vous au Hub' },
-    body: { en: 'Go to hub.welfareavenue.com and press Sign in with Google, with your Welfare Avenue account.', fr: 'Allez sur hub.welfareavenue.com et appuyez sur Sign in with Google, avec votre compte Welfare Avenue.' } },
-  { key: 'slack', title: { en: 'Join Slack', fr: 'Joignez-vous à Slack' },
-    body: { en: 'Join the Welfare Avenue Slack with your Welfare Avenue address (the link is in your welcome email), then accept the invitation to your onboarding channel.', fr: 'Joignez-vous au Slack de Welfare Avenue avec votre adresse Welfare Avenue (le lien est dans votre courriel de bienvenue), puis acceptez l\'invitation à votre canal d\'accueil.' } },
-  { key: 'academy', title: { en: 'Open the Avenue Academy and your plan', fr: 'Ouvrez l\'Avenue Academy et votre plan' },
-    body: { en: 'In the Hub, open the Avenue Academy and look through your onboarding plan, so you know what your first weeks hold.', fr: 'Dans le Hub, ouvrez l\'Avenue Academy et parcourez votre plan d\'accueil, pour savoir ce qui vous attend les premières semaines.' } },
-  { key: 'loom', title: { en: 'Accept the Loom invitation', fr: 'Acceptez l\'invitation Loom' },
-    body: { en: 'When the Loom invitation reaches your Welfare Avenue inbox, accept it.', fr: 'Quand l\'invitation Loom arrive dans votre boîte Welfare Avenue, acceptez-la.' } },
+    body: { en: 'Open the Hub and press Sign in with Google, with your Welfare Avenue account. This step ticks itself when you sign in.', fr: 'Ouvrez le Hub et appuyez sur Sign in with Google, avec votre compte Welfare Avenue. Cette étape se coche toute seule quand vous vous connectez.' },
+    links: [{ label: { en: 'Open the Hub', fr: 'Ouvrir le Hub' }, url: HUB + '/' }] },
+  { key: 'slack', title: { en: 'Join Slack and your onboarding channel', fr: 'Joignez-vous à Slack et à votre canal d\'accueil' },
+    body: { en: 'Join the Welfare Avenue Slack with your Welfare Avenue address, then join your onboarding channel.', fr: 'Joignez-vous au Slack de Welfare Avenue avec votre adresse Welfare Avenue, puis joignez-vous à votre canal d\'accueil.' } },
   { key: 'canva', title: { en: 'Join Canva', fr: 'Joignez-vous à Canva' },
-    body: { en: 'If your welcome email has a Canva link, use it to join the Welfare Avenue team on Canva.', fr: 'Si votre courriel de bienvenue contient un lien Canva, utilisez-le pour vous joindre à l\'équipe Welfare Avenue sur Canva.' } },
-  { key: 'drives', title: { en: 'Find your Drives and Google Groups', fr: 'Repérez vos Drives et vos groupes Google' },
-    body: { en: 'In Google Drive, look under Shared drives for the team drives you have been added to, and check which Google Groups you are in. Nothing to do with them yet.', fr: 'Dans Google Drive, regardez sous Drives partagés les dossiers d\'équipe auxquels vous avez été ajouté, et vérifiez de quels groupes Google vous faites partie. Rien à faire pour l\'instant.' } },
-  { key: 'weekly', title: { en: 'Find your weekly meeting', fr: 'Repérez votre rencontre hebdomadaire' },
-    body: { en: 'Look in your Calendar for your team\'s weekly meeting and accept the invitation.', fr: 'Cherchez dans votre Agenda la rencontre hebdomadaire de votre équipe et acceptez l\'invitation.' } },
+    body: { en: 'Join the Welfare Avenue team on Canva with your Welfare Avenue address.', fr: 'Joignez-vous à l\'équipe Welfare Avenue sur Canva avec votre adresse Welfare Avenue.' } },
+  { key: 'academy', title: { en: 'Open the Avenue Academy', fr: 'Ouvrez l\'Avenue Academy' },
+    body: { en: 'In the Hub, open the Avenue Academy and your onboarding plan, and look through week one.', fr: 'Dans le Hub, ouvrez l\'Avenue Academy et votre plan d\'accueil, et parcourez la première semaine.' },
+    links: [
+      { label: { en: 'The Avenue Academy', fr: 'L\'Avenue Academy' }, url: HUB + '/#training' },
+      { label: { en: 'The Hub\'s Home page', fr: 'La page d\'accueil du Hub' }, url: HUB + '/' },
+    ] },
+  { key: 'jd', title: { en: 'Your job description', fr: 'Votre description de poste' },
+    body: { en: 'Read it before your onboarding call.', fr: 'Lisez-la avant votre appel d\'accueil.' } },
+  { key: 'weekly', title: { en: 'Your team\'s weekly meeting', fr: 'La rencontre hebdomadaire de votre équipe' },
+    body: { en: 'Find it in your Calendar and accept the invitation.', fr: 'Trouvez-la dans votre Agenda et acceptez l\'invitation.' } },
+  { key: 'phone', title: { en: 'The Hub and Slack on your phone', fr: 'Le Hub et Slack sur votre téléphone' },
+    body: { en: 'Scan this code with your phone\'s camera. It opens a page with the steps to add the Hub to your home screen, then the Slack app.', fr: 'Balayez ce code avec l\'appareil photo de votre téléphone. Il ouvre une page avec les étapes pour ajouter le Hub à votre écran d\'accueil, puis l\'application Slack.' } },
 ];
 const SETUP_KEYS = SETUP.map((s) => s.key);
+const HUB_TICKED = ['hub'];   // set by the Hub page at sign-in (wa278_hub_seen), never by setup_tick
 const ticksOf = (f: Flow | null) => Object.fromEntries(SETUP_KEYS.map((k) => [k, !!f?.setup_ticks && f.setup_ticks['rd_' + k] != null && f.setup_ticks['rd_' + k] !== false]));
-const setupOf = (f: Flow) => ({ steps: SETUP, ticks: ticksOf(f) });
+/* what each group Task 3 added is for, by address (fixed); an address not here is "a team list" */
+const TEAM_LIST: Words = { en: 'your team\'s list', fr: 'la liste de votre équipe' };
+const GROUP_PURPOSE: Record<string, Words> = {
+  'org@welfareavenue.com': { en: 'everyone at Welfare Avenue', fr: 'toute l\'équipe de Welfare Avenue' },
+  'grants@welfareavenue.com': { en: 'grant work', fr: 'le travail sur les subventions' },
+  'admin@welfareavenue.com': { en: 'the leadership team', fr: 'l\'équipe de direction' },
+  'directors@welfareavenue.com': { en: 'the directors', fr: 'les directeurs et directrices' },
+  'toronto@welfareavenue.com': { en: 'everyone in Toronto', fr: 'toute l\'équipe de Toronto' },
+  'marketing@welfareavenue.com': TEAM_LIST, 'fundraising@welfareavenue.com': TEAM_LIST, 'operations@welfareavenue.com': TEAM_LIST,
+  'outreach@welfareavenue.com': TEAM_LIST, 'job@welfareavenue.com': TEAM_LIST, 'finance@welfareavenue.com': TEAM_LIST,
+};
+const A_TEAM_LIST: Words = { en: 'a team list', fr: 'une liste d\'équipe' };
+const textList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()).map((x) => x.trim()) : []);
+const urlOr = (v: unknown): string | null => { const s = String(v ?? '').trim(); return /^https:\/\//i.test(s) ? s : null; };
+/* the rundown for the hire's offer link: the steps, the ticks, and what Task 3's steps and HR put on the flow (absent: empty, null). Reads only. */
+async function setupOf(l: Link, token: string) {
+  const f = l.flow!, t = (f.setup_ticks || {}) as Record<string, unknown>;
+  const cfg = await settings(['onboard_slack_channel_link', 'onboard_slack_join_link', 'onboard_setup_video', 'onboard_google_video']);
+  let jd: string | null = null;
+  if (l.cand.position_id) {
+    const { data, error } = await svc.from('hub_positions').select('jd_url').eq('id', l.cand.position_id).maybeSingle();
+    if (error) throw new Error('position: ' + error.message);
+    jd = urlOr((data as { jd_url?: string } | null)?.jd_url);
+  }
+  const wm = t.weekly_meeting && typeof t.weekly_meeting === 'object' ? t.weekly_meeting as Record<string, unknown> : null;
+  const groups = textList(t.groups_added).map((a) => a.toLowerCase()).map((address) => ({ address, purpose: GROUP_PURPOSE[address] || A_TEAM_LIST }));
+  return {
+    steps: SETUP, ticks: ticksOf(f),
+    address: String(f.wa_email || '').trim().toLowerCase() || null,
+    drives: textList(t.drives_added), groups,
+    weekly: wm && typeof wm.summary === 'string' && wm.summary.trim() ? { summary: wm.summary.trim(), nextAt: normal(wm.next_at) || null } : null,
+    channelLink: urlOr(cfg.get('onboard_slack_channel_link')),
+    slackJoin: urlOr(cfg.get('onboard_slack_join_link')) || 'https://welfareavenue.slack.com',   // as the welcome email falls back
+    canva: urlOr(f.canva_link), jd,
+    googleVideo: urlOr(cfg.get('onboard_google_video')), video: urlOr(cfg.get('onboard_setup_video')),
+    installUrl: HUB + '/o/' + token + '?install',
+  };
+}
+/* GET ?install: the phone page the QR opens. Fixed links only, nothing saved, nothing personal; the same before and after the Hub sign-in. */
+const INSTALL = { hub: HUB + '/', slack: 'https://slack.com/download' };
+function installView(l: Link) {
+  if (l.kind !== 'offer') return fail('wrong_link', 400);
+  if (!l.cand.accepted_on) return fail('not_accepted', 409);
+  return json({ ok: true, kind: l.kind, first: firstName(l.cand.name), lang: langOf(l.cand), install: INSTALL });
+}
 async function setupTick(l: Link, key: unknown, done: unknown) {
   const stop = answerGuard(l);
   if (stop) return stop;
-  if (typeof key !== 'string' || !SETUP_KEYS.includes(key) || typeof done !== 'boolean') return fail('bad_tick', 400);
+  if (typeof key !== 'string' || !SETUP_KEYS.includes(key) || HUB_TICKED.includes(key) || typeof done !== 'boolean') return fail('bad_tick', 400);
   /* merged into setup_ticks, one key: a tick keeps the first time it was ticked (claimed while empty); undone clears it */
   const { error } = await svc.rpc('wa275_tick_set', { p_flow: l.flow!.id, p_key: 'rd_' + key, p_value: done ? new Date().toISOString() : null, p_if_unset: done });
   if (error) return fail('save', 500);
@@ -819,7 +906,8 @@ Deno.serve(async (req: Request) => {
   try {
     const link = await openLink(token);
     if (!link) return fail('bad_link', 404);
-    if (req.method === 'GET') return json(await view(link));
+    if (req.method === 'GET' && url.searchParams.has('install')) return installView(link);   // wave278: the phone page, scanner-safe
+    if (req.method === 'GET') return json(await view(link, String(token).trim()));
 
     if (!['accept', 'decline', 'grid', 'password', 'availability', 'propose', 'yes', 'no', 'setup_tick'].includes(a)) return fail('answer', 400);
     if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
