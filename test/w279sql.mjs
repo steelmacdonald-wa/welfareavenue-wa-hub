@@ -32,7 +32,7 @@ async function runAssertions(db, label) {
 
 // the functions wave279a redefines or adds, as they stand: body, comment and ACL
 const REDEFINED = ['public.onboarding_template_propagate()', 'public.wa166_path_state(bigint,text)'];
-const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()', 'public.wa279_plan_manager(bigint)', 'public.wa279_can_pick(bigint)', 'public.wa279_recommended(bigint)', 'public.wa279_pick_add(bigint,text,bigint,text,boolean)', 'public.wa279_pick_remove(bigint,text)', 'public.wa279_role_options(bigint,date)', 'public.wa279_role_save(bigint,text,bigint[])', 'public.wa279_role_autopick(date)', 'public.wa279_role_state(bigint,text)', 'public.wa279_policies_state(bigint)', 'public.wa279_policy_minutes()', 'public.wa279_policy_open(text)', 'public.wa279_policy_state()', 'public.wa279_policy_rule()', 'public.wa279_policy_sync()'];
+const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()', 'public.wa279_plan_manager(bigint)', 'public.wa279_can_pick(bigint)', 'public.wa279_recommended(bigint)', 'public.wa279_pick_add(bigint,text,bigint,text,boolean)', 'public.wa279_pick_remove(bigint,text)', 'public.wa279_role_options(bigint,date)', 'public.wa279_role_save(bigint,text,bigint[])', 'public.wa279_role_autopick(date)', 'public.wa279_role_state(bigint,text)', 'public.wa279_policies_state(bigint)', 'public.wa279_policy_minutes()', 'public.wa279_policy_open(text)', 'public.wa279_policy_state()', 'public.wa279_policy_rule()', 'public.wa279_policy_sync()', 'public.wa279_behind_list(bigint)', 'public.wa279_tell(text,text,text,text,text,text)', 'public.wa279_onboard_tick(boolean)'];
 async function snapshot(db) {
   const out = {};
   for (const f of REDEFINED) {
@@ -94,6 +94,10 @@ try {
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname like 'trg_wa279_policy%'`)).n === 0, 'both policy triggers are gone');
   ok((await one(db, `select count(*)::int as n from pg_class where relname in ('wa_policies', 'wa_policy_signoffs') and relkind = 'r'`)).n === 2, 'the live policy tables are untouched');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgrelid = 'public.wa_policy_signoffs'::regclass and not tgisinternal`)).n === 0, 'no trigger is left on the sign-offs (live has none)');
+  ok((await one(db, `select count(*)::int as n from pg_class where relname = 'onboarding_behind_log'`)).n === 0, 'the behind log table is gone');
+  ok((await one(db, `select count(*)::int as n from cron.job where jobname = 'wa-onboard-behind'`)).n === 0, 'the behind cron entry is gone');
+  ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key in ('onboard_behind', 'onboard_behind_lead', 'onboard_role_pick')`)).n === 0, 'the three notification kinds are gone');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in ('onboard_behind_on', 'onboard_behind_since', 'onboard_role_picks_since')`)).n === 0, 'the three settings are gone');
   await db.exec(`delete from public.team_members where email = 'w279.undo@example.invalid'`);
   console.log('wa279a undo: every check passed');
 

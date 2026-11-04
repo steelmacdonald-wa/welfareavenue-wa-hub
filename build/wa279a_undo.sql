@@ -4,7 +4,20 @@
 -- Part 1: onboarding_template_propagate() comes back exactly as live had it before wave279 (same body, comment and grants), the flow trigger and the two new
 -- functions go, and onboarding_template.setup_covered is dropped.
 -- Steps already deleted from plans by the flow trigger are not put back (they were covered by the setup page). Safe to run twice.
--- Later parts of wa279a (Tasks 3 and 4) add their undo here, ABOVE this part 2 block where they depend on it.
+-- Later parts of wa279a add their undo here, ABOVE this part 2 block where they depend on it.
+
+-- Part 4 (Task 4): the behind job. The cron entry, the three notification kinds, the three settings, the functions and the log table go.
+--   Messages already sent stay sent. The hardening of wa279_recommended, wa279_role_options and wa279_role_autopick goes with part 2 below (those functions are dropped).
+do $cron$
+begin
+  if exists (select 1 from cron.job where jobname = 'wa-onboard-behind') then perform cron.unschedule('wa-onboard-behind'); end if;
+end $cron$;
+delete from public.hub_notification_kinds where key in ('onboard_behind', 'onboard_behind_lead', 'onboard_role_pick');
+delete from public.app_config where key in ('onboard_behind_on', 'onboard_behind_since', 'onboard_role_picks_since');
+drop function if exists public.wa279_onboard_tick(boolean);
+drop function if exists public.wa279_tell(text, text, text, text, text, text);
+drop function if exists public.wa279_behind_list(bigint);
+drop table if exists public.onboarding_behind_log;
 
 -- Part 3 (Task 3): the policy rule. The two triggers, the functions and wa_policy_opens go (its rows with it). Sign-offs already made are never touched.
 --   wa_policies and wa_policy_signoffs are live tables and stay exactly as they are. The path_state 'policies' key goes with the Part 2 restore below.

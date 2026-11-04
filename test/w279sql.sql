@@ -509,5 +509,318 @@ begin
   assert (select count(*) from pg_proc where proname like 'wa279%' and obj_description(oid, 'pg_proc') is null) = 0, 'every wa279 function still has a comment';
 end $$;
 
+-- ---------------------------------------------------------------- Task 4: the behind check, the pick reminders, and the Task 2 hardening
+do $$
+declare
+  v_today date := (now() at time zone 'America/Toronto')::date;
+  v_m1 bigint; v_l2 bigint; v_a bigint; v_b bigint; v_c bigint; v_d bigint; v_e bigint; v_f bigint; v_g bigint; v_h bigint; v_i bigint;
+  pa bigint; pb bigint; pc bigint; pd bigint; pe bigint; pf bigint; pg bigint; ph bigint; pi bigint;
+  t bigint[] := '{}'; v_id bigint; v_n int; v_r jsonb; v_p jsonb; v_def text; v_msg text; v_cnt int;
+  c_staff constant text := '{"role":"authenticated","email":"w279.staff@example.invalid"}';
+begin
+  perform set_config('request.jwt.claims', c_staff, true);
+  -- every plan the earlier sections left is finished, so this section sees only its own
+  update public.onboardings set status = 'completed';
+  -- and so are the extra template rows they left, so a new plan has only the ordinary Week 1, Week 2 and 30 days rows and the two role steps
+  update public.onboarding_template set active = false where id not in ('t-w1', 't-w2', 't-d30', 'wa279role60', 'wa279role90');
+  delete from public.w279_edge_calls;
+
+  -- ---- fixtures: two leaders of the hires' team (the first one by id is the manager), HR's list, nine hires, three modules
+  insert into public.team_members (name, email, department, role) values
+    ('Test Lead One', 'w279.lead1@example.invalid', 'w279beh', 'Lead'),
+    ('Test Lead Two', 'w279.lead2@example.invalid', 'w279beh', 'Lead');
+  select id into v_m1 from public.team_members where email = 'w279.lead1@example.invalid';
+  select id into v_l2 from public.team_members where email = 'w279.lead2@example.invalid';
+  insert into public.hub_roles (email, role) values ('w279.lead1@example.invalid', 'leader'), ('w279.lead2@example.invalid', 'leader');
+  -- the people the earlier sections made leaders or admins of other teams cannot be the manager of these plans (a different team), but the admins are the last resort:
+  -- keep them for now, and switch them off in the no-manager case below
+  insert into public.team_members (name, email, department, role) values
+    ('Test Behind A', 'w279.beha@example.invalid', 'w279beh', 'Analyst'), ('Test Behind B', 'w279.behb@example.invalid', 'w279beh', 'Analyst'),
+    ('Test Behind C', 'w279.behc@example.invalid', 'w279beh', 'Analyst'), ('Test Behind D', 'w279.behd@example.invalid', 'w279beh', 'Analyst'),
+    ('Test Behind E', 'w279.behe@example.invalid', 'w279beh', 'Analyst'), ('Test Behind F', 'w279.behf@example.invalid', 'w279beh', 'Analyst'),
+    ('Test Behind G', 'w279.behg@example.invalid', 'w279beh', 'Analyst'), ('Test Behind H', 'w279.behh@example.invalid', 'w279beh', 'Analyst'),
+    ('Test Behind I', 'w279.behi@example.invalid', 'w279beh', 'Analyst');
+  select id into v_a from public.team_members where email = 'w279.beha@example.invalid';
+  select id into v_b from public.team_members where email = 'w279.behb@example.invalid';
+  select id into v_c from public.team_members where email = 'w279.behc@example.invalid';
+  select id into v_d from public.team_members where email = 'w279.behd@example.invalid';
+  select id into v_e from public.team_members where email = 'w279.behe@example.invalid';
+  select id into v_f from public.team_members where email = 'w279.behf@example.invalid';
+  select id into v_g from public.team_members where email = 'w279.behg@example.invalid';
+  select id into v_h from public.team_members where email = 'w279.behh@example.invalid';
+  select id into v_i from public.team_members where email = 'w279.behi@example.invalid';
+  for v_n in 1..4 loop
+    insert into public.trainings (category, title, path_group, sort, active) values ('w279', 'Behind module ' || v_n, null, v_n, true) returning id into v_id;
+    t := t || v_id;
+  end loop;
+  insert into public.app_config (key, value) values
+    ('hr_notify_emails', 'w279.hr1@example.invalid, W279.HR2@example.invalid'), ('push_on', 'on'),
+    ('onboard_role_recommend', jsonb_build_object('by_department', jsonb_build_object('w279beh', jsonb_build_object('trainings', jsonb_build_array(t[3], t[1], t[2], t[4]))))::text)
+  on conflict (key) do update set value = excluded.value;
+  update public.app_config set value = 'off' where key = 'onboard_behind_on';
+  update public.app_config set value = (v_today - 30)::text where key = 'onboard_behind_since';
+  update public.app_config set value = '' where key = 'onboard_role_picks_since';
+
+  -- ---- the settings, the kinds, the cron entry and the grants the migration made
+  assert (select value from public.app_config where key = 'onboard_behind_on') = 'off', 'the switch is off';
+  assert (select count(*) from public.hub_notification_kinds where key in ('onboard_behind', 'onboard_behind_lead', 'onboard_role_pick') and hub and slack and not email and not channel_only and active) = 3,
+    'the three notification kinds are there, Hub and Slack on';
+  assert (select title from public.hub_notification_kinds where key = 'onboard_behind') = 'Onboarding: you''re behind', 'the hire''s kind is titled as designed';
+  assert (select schedule from cron.job where jobname = 'wa-onboard-behind') = '35 12 * * 1-5', 'the cron entry is weekdays at 12:35';
+  assert (select command from cron.job where jobname = 'wa-onboard-behind') = 'select public.wa279_onboard_tick()', 'and calls the job';
+  assert has_function_privilege('service_role', 'public.wa279_onboard_tick(boolean)', 'execute') and not has_function_privilege('authenticated', 'public.wa279_onboard_tick(boolean)', 'execute')
+         and not has_function_privilege('anon', 'public.wa279_onboard_tick(boolean)', 'execute'), 'only the service role runs the job';
+  assert not has_function_privilege('authenticated', 'public.wa279_behind_list(bigint)', 'execute') and not has_function_privilege('authenticated', 'public.wa279_tell(text,text,text,text,text,text)', 'execute'), 'the helpers are closed';
+  assert not has_table_privilege('authenticated', 'public.onboarding_behind_log', 'select') and (select relrowsecurity from pg_class where oid = 'public.onboarding_behind_log'::regclass), 'the log is closed';
+
+  -- ---- plan A: started 10 days ago, its Week 1 step is open and more than 2 days late
+  pa := public.onboarding_assign(v_a, 'test', v_today - 10);
+  assert jsonb_array_length(public.wa279_behind_list(pa)) = 1, 'one late step';
+  v_r := public.wa279_behind_list(pa) -> 0;
+  assert v_r ->> 'template_id' = 't-w1' and v_r ->> 'name' = 'Test step in week 1' and v_r ->> 'section' = 'WEEK 1' and (v_r ->> 'due_date')::date = v_today - 3, 'the late step: id, name, section, due date';
+  update public.onboarding_steps set due_date = v_today - 2 where onboarding_id = pa and template_id = 't-w1';
+  assert public.wa279_behind_list(pa) = '[]'::jsonb, 'two days late is not late yet';
+  update public.onboarding_steps set due_date = v_today - 3 where onboarding_id = pa and template_id = 't-w1';
+
+  -- off: nothing is sent, but the dry run still lists the plan
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'off')::boolean and (v_r ->> 'sent')::int = 0, 'off: nothing sent';
+  assert (select count(*) from public.w279_edge_calls) = 0 and (select count(*) from public.onboarding_behind_log) = 0, 'off: no call, no log';
+  v_r := public.wa279_onboard_tick(true);
+  assert (v_r ->> 'dry')::boolean and jsonb_array_length(v_r -> 'plan') = 1 and (v_r -> 'plan' -> 0 ->> 'onboarding_id')::bigint = pa, 'the dry run lists plan A even when the switch is off';
+  assert (select count(*) from public.w279_edge_calls) = 0 and (select count(*) from public.onboarding_behind_log) = 0, 'and sends and records nothing';
+  assert (v_r -> 'plan' -> 0 -> 'to') = '["w279.beha@example.invalid", "w279.lead1@example.invalid"]'::jsonb, 'the plan names the hire and the first leader only';
+
+  -- on: one message to the hire, one to the manager
+  update public.app_config set value = 'on' where key = 'onboard_behind_on';
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'behind')::int = 1 and (v_r ->> 'sent')::int = 1 and v_r -> 'failed' = '[]'::jsonb, 'on: one plan messaged';
+  assert (select count(*) from public.w279_edge_calls where fn = 'notify') = 2 and (select count(*) from public.w279_edge_calls) = 2, 'one notify to the hire and one to the manager, no device so no hub-push';
+  v_p := (select payload from public.w279_edge_calls where payload ->> 'to_email' = 'w279.beha@example.invalid');
+  assert v_p ->> 'event' = 'onboard_behind' and v_p ->> 'url' = '#mypage' and v_p ->> 'title' = 'You''re behind on onboarding', 'the hire: event, url, title';
+  assert v_p ->> 'body' = 'You''re behind on 1 onboarding step from Week 1: Test step in week 1.', 'the hire: body (' || (v_p ->> 'body') || ')';
+  assert v_p ->> 'tag' = 'onboard-behind-' || pa || '-' || v_today, 'the hire: a tag that is stable for the plan and the day';
+  assert v_p ->> 'text' = 'You''re behind on 1 onboarding step from Week 1: Test step in week 1. <https://hub.welfareavenue.com/#mypage|Open the Hub>', 'the hire: the Slack text';
+  assert (select array_agg(k order by k) from jsonb_object_keys(v_p) k) = array['body', 'event', 'tag', 'text', 'title', 'to_email', 'url'], 'exactly the fields notify reads';
+  v_p := (select payload from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead1@example.invalid');
+  assert v_p ->> 'event' = 'onboard_behind_lead' and v_p ->> 'url' = '#hrcentre/onboarding' and v_p ->> 'title' = 'Test Behind A is behind on onboarding', 'the manager: event, url, title';
+  assert v_p ->> 'body' = 'Test Behind A is behind on 1 onboarding step from Week 1: Test step in week 1.', 'the manager: body';
+  assert v_p ->> 'text' like '% <https://hub.welfareavenue.com/#hrcentre/onboarding|Open the Hub>', 'the manager: the Slack text links to Onboarding';
+  assert not exists (select 1 from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead2@example.invalid'), 'only the first leader is messaged';
+  assert (select count(*) from public.onboarding_behind_log where onboarding_id = pa and kind = 'onboard_behind' and late = 1) = 1, 'one log row';
+
+  -- the pause: the same day, 6 days later: nothing; 7 days later: again
+  delete from public.w279_edge_calls;
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0, 'a second run the same day sends nothing';
+  update public.onboarding_behind_log set sent_at = now() - interval '6 days';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0, 'six days later it sends nothing';
+  update public.onboarding_behind_log set sent_at = now() - interval '7 days';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 2, 'seven days later it sends again (hire and manager, not HR yet)';
+  assert (select count(*) from public.onboarding_behind_log where onboarding_id = pa and kind = 'onboard_behind') = 2, 'a second log row';
+
+  -- the third message adds HR (split on commas and spaces, lower-cased)
+  delete from public.w279_edge_calls;
+  update public.onboarding_behind_log set sent_at = now() - interval '8 days';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 4, 'the third message goes to the hire, the manager and both HR addresses';
+  assert (select array_agg(payload ->> 'to_email' order by payload ->> 'to_email') from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind_lead')
+         = array['w279.hr1@example.invalid', 'w279.hr2@example.invalid', 'w279.lead1@example.invalid'], 'HR hears as onboard_behind_lead';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind') = 1, 'and the hire once';
+  assert (select (detail ->> 'hr')::boolean from public.onboarding_behind_log where onboarding_id = pa order by id desc limit 1), 'the log says HR was added';
+
+  -- a device: hub-push goes too, with the relay fields; push_on off stops it
+  delete from public.w279_edge_calls;
+  insert into public.hub_push_subs (email, endpoint, p256dh, auth) values ('W279.BEHA@example.invalid', 'https://example.invalid/push/a', 'k', 'a');
+  update public.onboarding_behind_log set sent_at = now() - interval '8 days';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls where fn = 'hub-push') = 1, 'one hub-push, to the hire who has a device';
+  v_p := (select payload from public.w279_edge_calls where fn = 'hub-push');
+  assert v_p ->> 'event' = 'relay' and v_p ->> 'kind' = 'onboard_behind' and v_p ->> 'to_email' = 'w279.beha@example.invalid' and v_p ->> 'url' = '#mypage'
+         and v_p ->> 'tag' = 'onboard-behind-' || pa || '-' || v_today and v_p ->> 'title' = 'You''re behind on onboarding' and v_p ? 'body', 'the hub-push relay fields';
+  delete from public.w279_edge_calls;
+  update public.app_config set value = 'off' where key = 'push_on';
+  update public.onboarding_behind_log set sent_at = now() - interval '8 days';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls where fn = 'hub-push') = 0 and (select count(*) from public.w279_edge_calls where fn = 'notify') = 4, 'push_on off: notify only';
+  update public.app_config set value = 'on' where key = 'push_on';
+  delete from public.hub_push_subs;
+  update public.onboardings set status = 'completed' where id = pa;
+  delete from public.w279_edge_calls;
+
+  -- ---- a plan started before onboard_behind_since sends nothing
+  pb := public.onboarding_assign(v_b, 'test', v_today - 40);
+  assert jsonb_array_length(public.wa279_behind_list(pb)) >= 1, 'plan B has late steps';
+  v_r := public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0 and (v_r ->> 'behind')::int = 0, 'a plan started before onboard_behind_since sends nothing';
+  assert jsonb_array_length(public.wa279_onboard_tick(true) -> 'plan') = 0, 'and is not in the dry run';
+  update public.app_config set value = '' where key = 'onboard_behind_since';
+  assert (public.wa279_onboard_tick() ->> 'behind')::int = 0, 'with no since date no plan counts';
+  update public.onboardings set status = 'completed' where id = pb;
+
+  -- ---- an unpicked role step does not make the hire late; once the section has a pick it counts
+  update public.app_config set value = (v_today - 200)::text where key = 'onboard_behind_since';
+  pc := public.onboarding_assign(v_c, 'test', v_today - 70);
+  update public.onboarding_steps set done = true where onboarding_id = pc and template_id <> 'wa279role60';
+  assert exists (select 1 from public.onboarding_steps where onboarding_id = pc and template_id = 'wa279role60' and not done and due_date < v_today - 2), 'the 60 days role step is open and past due';
+  assert public.wa279_behind_list(pc) = '[]'::jsonb, 'with no picks the role step is not late';
+  v_r := public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0 and (v_r ->> 'behind')::int = 0, 'so nobody is messaged';
+  insert into public.onboarding_role_picks (onboarding_id, section, training_id, picked_by) values (pc, '60 DAYS', t[1], 'test');
+  assert (select array_agg(x ->> 'template_id') from jsonb_array_elements(public.wa279_behind_list(pc)) x) = array['wa279role60'], 'with a pick in its section the role step counts';
+  insert into public.onboarding_steps (onboarding_id, template_id, due_date) values (pc, 'wa279role90', v_today - 10) on conflict (onboarding_id, template_id) do update set due_date = excluded.due_date, done = false;
+  assert (select count(*) from jsonb_array_elements(public.wa279_behind_list(pc))) = 1, 'a pick in the other section does not bring the 90 days step in';
+  update public.onboardings set status = 'completed' where id = pc;
+  delete from public.onboarding_role_picks where onboarding_id = pc;
+  update public.app_config set value = (v_today - 30)::text where key = 'onboard_behind_since';
+
+  -- ---- the list: oldest first, five names, the first section; several late steps in one message
+  pd := public.onboarding_assign(v_d, 'test', v_today - 25);   -- WEEK 1 (due day 7) and WEEK 2 (due day 14) are late; 30 DAYS is not
+  insert into public.onboarding_template (id, section, name, sort) values
+    ('t-x1', 'WEEK 1', 'Extra one', 1), ('t-x2', 'WEEK 1', 'Extra two', 2), ('t-x3', 'WEEK 1', 'Extra three', 3), ('t-x4', 'WEEK 1', 'Extra four', 4), ('t-x5', 'WEEK 1', 'Extra five', 5);
+  assert (select count(*) from jsonb_array_elements(public.wa279_behind_list(pd))) = 7, 'seven late steps';
+  assert public.wa279_behind_list(pd) -> 0 ->> 'section' = 'WEEK 1' and public.wa279_behind_list(pd) -> 6 ->> 'section' = 'WEEK 2', 'oldest first';
+  perform public.wa279_onboard_tick();
+  v_p := (select payload from public.w279_edge_calls where payload ->> 'to_email' = 'w279.behd@example.invalid');
+  assert v_p ->> 'body' = 'You''re behind on 7 onboarding steps from Week 1: Test step in week 1, Extra one, Extra two, Extra three, Extra four.', 'N steps, the section of the oldest, the first five names (' || (v_p ->> 'body') || ')';
+  update public.onboarding_template set active = false where id in ('t-x1', 't-x2', 't-x3', 't-x4', 't-x5');
+  update public.onboardings set status = 'completed' where id = pd;
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+
+  -- ---- the manager gets onboard_role_pick on day 21, and not again for 7 days
+  update public.app_config set value = (v_today - 60)::text where key = 'onboard_role_picks_since';
+  pe := public.onboarding_assign(v_e, 'test', v_today - 20);
+  update public.onboarding_steps set done = true where onboarding_id = pe and template_id <> 't-d30';   -- one step stays open so the plan stays active
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0, 'day 20: no reminder yet';
+  update public.onboardings set started_at = v_today - 21 where id = pe;
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'role_pick')::int = 1 and (select count(*) from public.w279_edge_calls) = 1, 'day 21: one reminder ' || v_r::text;
+  v_p := (select payload from public.w279_edge_calls);
+  assert v_p ->> 'event' = 'onboard_role_pick' and v_p ->> 'to_email' = 'w279.lead1@example.invalid' and v_p ->> 'url' = '#hrcentre/onboarding', 'to the manager, as onboard_role_pick';
+  assert v_p ->> 'title' = 'Pick Test Behind E''s role trainings', 'the title names the hire';
+  assert v_p ->> 'body' = 'Pick 2 or 3 trainings for Test Behind E''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', 'the body';
+  assert v_p ->> 'tag' = 'onboard-role-pick-' || pe || '-' || v_today and v_p ->> 'text' like '%|Open the Hub>', 'the tag and the Slack text';
+  delete from public.w279_edge_calls;
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0, 'not again the same day';
+  update public.onboarding_behind_log set sent_at = now() - interval '6 days' where kind = 'onboard_role_pick';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 0, 'not 6 days later';
+  update public.onboarding_behind_log set sent_at = now() - interval '7 days' where kind = 'onboard_role_pick';
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls) = 1, '7 days later it is sent again';
+  -- both lists full: no reminder
+  delete from public.w279_edge_calls;
+  update public.onboarding_behind_log set sent_at = now() - interval '8 days' where kind = 'onboard_role_pick';
+  insert into public.trainings (category, title, active) select 'w279', 'Filler ' || g, true from generate_series(1, 7) g;
+  insert into public.onboarding_role_picks (onboarding_id, section, training_id, picked_by)
+    select pe, case when n <= 2 then '60 DAYS' else '90 DAYS' end, tr.id, 'test'
+      from (select id, row_number() over (order by id) as n from public.trainings where title like 'Filler %') tr(id, n);
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick') = 0, 'with 2 and 5 picked there is no reminder';
+  delete from public.onboarding_role_picks where onboarding_id = pe;
+  update public.onboardings set status = 'completed' where id = pe;
+  update public.app_config set value = '' where key = 'onboard_role_picks_since';
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+
+  -- ---- the tick runs the Hub's own pick first (day 29, three recommended modules in config order)
+  update public.app_config set value = (v_today - 60)::text where key = 'onboard_role_picks_since';
+  pf := public.onboarding_assign(v_f, 'test', v_today - 29);
+  update public.onboarding_steps set done = true where onboarding_id = pf and template_id <> 't-d30';   -- one step stays open so the plan stays active
+  v_r := public.wa279_onboard_tick();
+  assert (v_r -> 'autopick' ->> 'picked')::int = 3, 'the job ran the autopick: three picks';
+  assert (select array_agg(training_id order by id) from public.onboarding_role_picks where onboarding_id = pf and section = '60 DAYS') = array[t[3], t[1], t[2]] and (select bool_and(auto) from public.onboarding_role_picks where onboarding_id = pf), 'in the configured order, auto';
+  assert (public.wa279_onboard_tick(true) -> 'autopick' ->> 'skipped') = 'dry run', 'a dry run does not pick';
+  delete from public.onboarding_role_picks where onboarding_id = pf;
+  assert (public.wa279_onboard_tick(true) ->> 'dry')::boolean and (select count(*) from public.onboarding_role_picks where onboarding_id = pf) = 0, 'the dry run left no picks';
+  update public.onboardings set status = 'completed' where id = pf;
+  update public.app_config set value = '' where key = 'onboard_role_picks_since';
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+
+  -- ---- a manager who left: the message goes to the next in order, and the other plans are still processed
+  pg := public.onboarding_assign(v_g, 'test', v_today - 10);
+  ph := public.onboarding_assign(v_h, 'test', v_today - 10);
+  update public.team_members set active = false where id = v_m1;
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'behind')::int = 2 and v_r -> 'failed' = '[]'::jsonb, 'both plans are processed';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead2@example.invalid') = 2 and not exists (select 1 from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead1@example.invalid'),
+    'the next leader is told for both plans, the one who left is not';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind') = 2, 'and both hires';
+
+  -- one plan fails: it is listed, nothing of it was sent, the other plan is still done
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  create function public.w279_boom() returns trigger language plpgsql as $f$ begin if new.onboarding_id = (select max(id) from public.onboardings where member_id = (select id from public.team_members where email = 'w279.behg@example.invalid')) then raise exception 'boom'; end if; return new; end $f$;
+  create trigger w279_boom before insert on public.onboarding_behind_log for each row execute function public.w279_boom();
+  v_r := public.wa279_onboard_tick();
+  assert jsonb_array_length(v_r -> 'failed') = 1 and (v_r -> 'failed' -> 0 ->> 'onboarding_id')::bigint = pg and v_r -> 'failed' -> 0 ->> 'error' = 'boom', 'the failing plan is listed';
+  assert (v_r ->> 'behind')::int = 1 and exists (select 1 from public.w279_edge_calls where payload ->> 'to_email' = 'w279.behh@example.invalid') and not exists (select 1 from public.w279_edge_calls where payload ->> 'to_email' = 'w279.behg@example.invalid'),
+    'plan H was done, plan G sent nothing';
+  drop trigger w279_boom on public.onboarding_behind_log;
+  drop function public.w279_boom();
+
+  -- no manager at all: the hire is still messaged, and other plans are unaffected
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  update public.team_members set active = false where lower(email) in (select lower(email) from public.hub_roles where role in ('leader', 'admin'));
+  assert (select count(*) from public.wa279_plan_manager(pg)) = 0, 'nobody can be asked to manage plan G';
+  pi := public.onboarding_assign(v_i, 'test', v_today - 10);
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'behind')::int = 3 and v_r -> 'failed' = '[]'::jsonb, 'no manager is not an error: all three plans are processed';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind') = 3 and (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind_lead') = 0, 'three hires told, no manager to tell';
+  update public.team_members set active = true where lower(email) in (select lower(email) from public.hub_roles where role in ('leader', 'admin'));
+  update public.onboardings set status = 'completed' where id in (pg, ph, pi);
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+
+  -- ---- the Task 2 hardening
+  -- 1. the recommended list is ordered by its ordinal, in the options too
+  select pg_get_functiondef('public.wa279_role_options(bigint,date)'::regprocedure) into v_def;
+  assert v_def ~ 'order by r\.ord\)', 'role_options orders the recommended list by its ordinal';
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
+  assert (select array_agg((x ->> 'training_id')::bigint) from jsonb_array_elements(public.wa279_role_options(pa) -> 'recommended') x) = array[t[3], t[1], t[2], t[4]], 'the options list the recommended modules in the configured order';
+
+  -- 2. the autopick: each plan on its own, under the same row lock the manager's save takes
+  select pg_get_functiondef('public.wa279_role_autopick(date)'::regprocedure) into v_def;
+  assert v_def ~ 'for update of ob' and v_def ~ 'exception when others', 'the autopick locks the plan row and catches a failure per plan';
+  assert (select pg_get_functiondef('public.wa279_role_save(bigint,text,bigint[])'::regprocedure)) ~ 'for update of ob', 'the manager''s save takes the same lock';
+  update public.app_config set value = (v_today - 60)::text where key = 'onboard_role_picks_since';
+  update public.team_members set active = true where id in (v_m1, v_l2);
+  perform set_config('request.jwt.claims', c_staff, true);
+  pf := public.onboarding_assign(v_f, 'test', v_today - 30);
+  pg := public.onboarding_assign(v_g, 'test', v_today - 30);
+  perform set_config('request.jwt.claims', '{"role":"service_role"}', true);   -- the options are for the manager, HR, an admin or the hire: the service role may look
+  create function public.w279_boom2() returns trigger language plpgsql as $f$ begin if new.onboarding_id = (select max(id) from public.onboardings where member_id = (select id from public.team_members where email = 'w279.behf@example.invalid')) then raise exception 'pick boom'; end if; return new; end $f$;
+  create trigger w279_boom2 before insert on public.onboarding_role_picks for each row execute function public.w279_boom2();
+  v_r := public.wa279_role_autopick();
+  assert jsonb_array_length(v_r -> 'failed') = 1 and (v_r -> 'failed' -> 0 ->> 'onboarding_id')::bigint = pf and v_r -> 'failed' -> 0 ->> 'error' = 'pick boom', 'the autopick lists the plan that failed';
+  assert (select count(*) from public.onboarding_role_picks where onboarding_id = pf) = 0, 'nothing of the failed plan is kept';
+  assert (select count(*) from public.onboarding_role_picks where onboarding_id = pg and section = '60 DAYS') = 3 and (v_r ->> 'picked')::int = 3 and (v_r ->> 'plans')::int = 1, 'the other plan still got its picks';
+  drop trigger w279_boom2 on public.onboarding_role_picks;
+  drop function public.w279_boom2();
+  v_r := public.wa279_role_autopick();
+  assert v_r -> 'failed' = '[]'::jsonb and (select count(*) from public.onboarding_role_picks where onboarding_id = pf and section = '60 DAYS') = 3, 'without the fault the same run picks for the plan';
+  v_r := public.wa279_role_autopick();
+  assert (v_r ->> 'picked')::int = 0, 'and a second run picks nothing more';
+
+  -- 3. a malformed recommend setting never raises: it means no recommendations
+  delete from public.onboarding_role_picks where onboarding_id in (pf, pg);
+  foreach v_msg in array array['{not json', '[1,2', 'null', '5', '"text"', '{"by_department": 5}', '{"by_department": {"w279beh": {"trainings": ["abc", 5.5, {"a": 1}, null, true, "99999999999999999999999"], "paths": "x"}}, "leaders": {"paths": 7}}',
+                               '{"by_department": {"w279beh": {"trainings": "12", "paths": {"a": 1}}}}'] loop
+    update public.app_config set value = v_msg where key = 'onboard_role_recommend';
+    assert (select count(*) from public.wa279_recommended(pf)) = 0, 'recommended gives nothing for: ' || v_msg;
+    assert public.wa279_role_options(pf) -> 'recommended' = '[]'::jsonb, 'the options give nothing for: ' || v_msg;
+    v_r := public.wa279_role_autopick();
+    assert (v_r ->> 'picked')::int = 0 and v_r -> 'failed' = '[]'::jsonb, 'the autopick picks nothing and does not fail for: ' || v_msg;
+  end loop;
+  -- one good id among bad ones is still used
+  update public.app_config set value = jsonb_build_object('by_department', jsonb_build_object('w279beh', jsonb_build_object('trainings', jsonb_build_array('abc', t[2], null, 'x1'))))::text where key = 'onboard_role_recommend';
+  assert (select array_agg(training_id) from public.wa279_recommended(pf)) = array[t[2]], 'a good id among bad ones is kept';
+  -- a blank setting is no setting
+  update public.app_config set value = '   ' where key = 'onboard_role_recommend';
+  assert (select count(*) from public.wa279_recommended(pf)) = 0, 'a blank setting gives nothing';
+  update public.onboardings set status = 'completed' where id in (pf, pg);
+end $$;
+
 select 'w279sql: all assertions passed' as result;
 rollback;
