@@ -1,3 +1,4 @@
+// wave278, 04/11/26: the offer records who pressed Send (hub_candidates.offer_sent_by, set only when empty, in the same update as offer_sent_at), so the welcome email can go out as them.
 // wave275, 02/11/26: the offer asks for the onboarding manager and the hours. offer_send refuses, in a plain sentence and before anything is made, an
 // offer with no f.manager_member_id (an active roster member with an email) or with f.hours other than 4, 6 or 8 (400 {error, code}). It stores
 // hub_candidates.offer_hours and onboard_manager_id in the same update as offer_sent_at, so the trigger wa275_offer_sent makes the offered flow with
@@ -715,7 +716,7 @@ async function offerSend(id: number, f0: OfferF, sendEmail: boolean, who: Who) {
   }
   const now = new Date();
   const warnings: string[] = [];
-  const card = { offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
+  const card = { offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to, offer_sent_by: c.offer_sent_by || who.email,
     notes: (String(c.notes || '') + '\nOffer letter (signed by ' + s.name + ') ' + (emailed ? (emailed.mode === 'live' || emailed.mode === 'practice' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
     updated_at: now.toISOString(), updated_by: who.name };
   /* wave275: the hours and the onboarding manager in the same statement as offer_sent_at, so the trigger copies this manager to the offered flow it makes.

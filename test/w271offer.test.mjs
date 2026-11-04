@@ -467,3 +467,20 @@ test('w275 integration: the offer, the trigger and the real onboard-run on one d
   assert.deepEqual(s.rig.unregistered(), []);
   assert.deepEqual(run.unregistered(), []);
 });
+
+test('w278 offer_send records the Hub user who pressed Send in offer_sent_by, in the same update as offer_sent_at; a re-send by someone else keeps the first', async () => {
+  const s = await setup();
+  s.rig.db.setCaller({ email: 'shima.butera@welfareavenue.com', id: 'u2' });
+  const updates = updatesOf(s.rig);
+  const out = await s.send(FORM);
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(s.cand0().offer_sent_by, 'shima.butera@welfareavenue.com');
+  const one = updates.find((keys) => keys.includes('offer_sent_at'));
+  assert.ok(one && one.includes('offer_sent_by') && one.includes('offer_hours') && one.includes('onboard_manager_id'), 'one statement: ' + JSON.stringify(updates));
+  /* sent again by someone else: the first sender stays */
+  s.rig.db.setCaller({ email: 'ruth.owen@welfareavenue.com', id: 'u1' });
+  const again = await s.send(FORM);
+  assert.equal(again.status, 200, JSON.stringify(again.body));
+  assert.equal(s.cand0().offer_sent_by, 'shima.butera@welfareavenue.com', 'set only when empty');
+  assert.deepEqual(s.rig.unregistered(), []);
+});
