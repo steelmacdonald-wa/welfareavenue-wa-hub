@@ -11,6 +11,10 @@
 
 -- 1. steps the setup page covers (left off the plans of people who went through setup)
 update public.onboarding_template set setup_covered = true where id in ('86e1cj9gj', '86e1cj9gp', '86e1cj9gy', '86e1cj9h3');
+-- Steel, 04/11/26: "Move them too". Plans already running that went through setup (a flow is linked) lose the OPEN covered steps now. Done steps stay. Plans with no flow keep all four.
+delete from public.onboarding_steps s using public.onboardings o
+ where o.id = s.onboarding_id and o.status = 'active' and s.template_id in ('86e1cj9gj', '86e1cj9gp', '86e1cj9gy', '86e1cj9h3')
+   and not coalesce(s.done, false) and public.wa279_via_setup(o.id);
 
 -- 2. steps switched off (kept, so HR can switch them back on)
 update public.onboarding_template set active = false where id in ('86e1cj9gx', 'wa166team', '86e1cj9j0');

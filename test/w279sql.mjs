@@ -81,15 +81,38 @@ try {
   const countRows = async () => (await one(db, `select count(*)::int as n from public.onboarding_template`)).n;
   const rowsBefore = await countRows();
   ok((await one(db, `select count(*)::int as n from public.app_config where key = 'onboard_role_recommend'`)).n === 0, 'the recommend setting is absent before wa279b');
+  const COVERED = `('86e1cj9gj', '86e1cj9gp', '86e1cj9gy', '86e1cj9h3')`;
+  const covered = async (who) => (await db.query(`select s.template_id, s.done from public.onboarding_steps s join public.onboardings o on o.id = s.onboarding_id
+    where o.person_name = '${who}' and s.template_id in ${COVERED} order by 1`)).rows.map((r) => r.template_id + (r.done ? ':done' : ':open')).join(',');
   for (let pass = 1; pass <= 2; pass++) {
+    // two RUNNING plans before wa279b: one with a setup flow, one without; each has one covered step done (Chrome) and the rest open
+    await db.exec(`select set_config('request.jwt.claims', '{"role":"authenticated","email":"w279b.run@example.invalid"}', false);
+      insert into public.hub_roles (email, role) values ('w279b.run@example.invalid', 'member');
+      insert into public.team_members (name, email, department, role) values ('Run Flow', 'w279b.runflow@example.invalid', 'w279test', 'Analyst'), ('Run NoFlow', 'w279b.runnoflow@example.invalid', 'w279test', 'Analyst');
+      insert into public.hub_candidates (name) values ('Run Flow Candidate');
+      select public.onboarding_assign(id, 'test') from public.team_members where email in ('w279b.runflow@example.invalid', 'w279b.runnoflow@example.invalid');
+      update public.onboarding_steps set done = true, done_at = now(), done_by = 'test' where template_id = '86e1cj9gj' and onboarding_id in (select id from public.onboardings where person_name like 'Run %');
+      insert into public.hub_onboard_flows (candidate_id, onboarding_id) select c.id, o.id from public.hub_candidates c, public.onboardings o where c.name = 'Run Flow Candidate' and o.person_name = 'Run Flow';`);
+    ok((await covered('Run Flow')) === '86e1cj9gj:done,86e1cj9gp:open,86e1cj9gy:open,86e1cj9h3:open', 'before wa279b the running plan with a flow still has the covered steps');
     await db.exec(migrationB);
     await db.exec(migrationB);
+    ok((await covered('Run Flow')) === '86e1cj9gj:done', 'after wa279b the running plan with a flow lost its open covered steps and kept the done one');
+    ok((await covered('Run NoFlow')) === '86e1cj9gj:done,86e1cj9gp:open,86e1cj9gy:open,86e1cj9h3:open', 'a running plan with no flow keeps all four');
     ok((await countRows()) === rowsBefore + 18, 'wa279b adds eighteen rows and no more, even when run twice');
     ok(JSON.stringify((await db.query(TEMPLATE)).rows) !== beforeB, 'wa279b changed the template');
     await runAssertions(db, 'wa279b assertions (pass ' + pass + ')', assertionsB, 'w279b: all assertions passed');
     await runAssertions(db, 'wa279b assertions again (pass ' + pass + ')', assertionsB, 'w279b: all assertions passed');
     await db.exec(undoB);
     await db.exec(undoB);
+    ok((await covered('Run Flow')) === '86e1cj9gj:done,86e1cj9gp:open,86e1cj9gy:open,86e1cj9h3:open', 'after the undo the open covered steps are back on the running plan with a flow, the done one still done');
+    ok((await covered('Run NoFlow')) === '86e1cj9gj:done,86e1cj9gp:open,86e1cj9gy:open,86e1cj9h3:open', 'and the plan with no flow is unchanged');
+    await db.exec(`delete from public.hub_onboard_flows where candidate_id in (select id from public.hub_candidates where name = 'Run Flow Candidate');
+      delete from public.hub_candidates where name = 'Run Flow Candidate';
+      delete from public.hr_setup_steps where onboarding_id in (select id from public.onboardings where person_name like 'Run %');
+      delete from public.onboarding_steps where onboarding_id in (select id from public.onboardings where person_name like 'Run %');
+      delete from public.onboardings where person_name like 'Run %';
+      delete from public.team_members where email like 'w279b.run%@example.invalid';
+      delete from public.hub_roles where email = 'w279b.run@example.invalid'`);
     ok(JSON.stringify((await db.query(TEMPLATE)).rows) === beforeB, 'the wa279b undo puts every template row back exactly (name, description, section, parent, sort, priority, active, path, training, setup_covered)');
     ok((await countRows()) === rowsBefore, 'the undo deletes the eighteen inserted rows');
     ok((await one(db, `select count(*)::int as n from public.app_config where key = 'onboard_role_recommend'`)).n === 0, 'the undo deletes the recommend setting');

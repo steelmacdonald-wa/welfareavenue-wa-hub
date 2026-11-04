@@ -5,6 +5,7 @@
 begin;
 
 -- the generic fixture rows (t-w1, t-w2, t-d30) are not part of the live template; take them out so the counts are the live plan's
+delete from public.onboarding_steps where template_id like 't-%';
 delete from public.onboarding_template where id like 't-%';
 
 insert into public.team_members (name, email, department, role) values

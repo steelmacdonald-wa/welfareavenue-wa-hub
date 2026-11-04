@@ -5,6 +5,17 @@
 -- Note: switching Gmail signature, Your team's Learning Avenue and Pick a Learning Avenue back on adds them to the active plans as open steps (the trigger),
 -- and steps that were removed or deleted from plans by wa279b come back open, not done.
 
+-- 0. the covered steps wa279b took off running plans that went through setup come back, open, where missing (due date from the plan's start)
+do $$
+begin
+  if to_regprocedure('public.wa279_via_setup(bigint)') is not null then
+    execute $e$insert into public.onboarding_steps (onboarding_id, template_id, due_date)
+      select o.id, t.id, public.onb_due(t.section, o.started_at) from public.onboardings o cross join public.onboarding_template t
+       where o.status = 'active' and t.id in ('86e1cj9gj', '86e1cj9gp', '86e1cj9gy', '86e1cj9h3') and t.active and public.wa279_via_setup(o.id)
+      on conflict (onboarding_id, template_id) do nothing$e$;
+  end if;
+end $$;
+
 -- 1. the setup_covered flags off again (only if wa279a's column is still there)
 do $$
 begin
