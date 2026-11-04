@@ -1,4 +1,5 @@
-/* w279drive.js: wave279 Task 7, the manager's role-pick pop-up and the plan's role steps. Offline against the candidate (CAND=<file>.html), with test/boot.js
+/* w279drive.js: wave279 Task 7, the manager's role-pick pop-up and the plan's role steps; Task 8 (sections 5 to 8), the policy reading timer on Home and in
+   the Academy, the HR board's Academy trainings count and pace, and "Up to 90 days" on the manager's card. Offline against the candidate (CAND=<file>.html), with test/boot.js
    (stubbed Supabase, clock 25/09/26 16:00 Toronto) and test/w279fx.js (stand-ins for wa279_role_options and wa279_role_save; every network call is stubbed
    or blocked). Identities: Joy (boot.js's plain member) manages Lina, a marketing hire at day 22, and Omar at day 10; an admin opens Lina's checklist in
    the HR centre; Samson (boot.js's member) reads his own plan. Phone width 375. SHOTS=<dir> saves screenshots. */
@@ -35,8 +36,8 @@ const noDash = (t) => !/—/.test(t);
   const b = await launch();
   const allErrs = [], allCons = [];
   const go = async (o) => {
-    const fx = fx279();
-    const rpcs = Object.assign({ onboarding_lead_view: lead279() }, o.rpcs || {});
+    const fx = fx279(o.fxo);
+    const rpcs = Object.assign({ onboarding_lead_view: lead279(o.lead) }, o.rpcs || {});
     const f = await fresh({ newContext: (x) => b.newContext(Object.assign({ timezoneId: 'America/Toronto' }, x)) }, Object.assign({ fixture: fx, rpcs, wait: 5000 }, o, { init: INIT279(o.fx279 || {}) }));
     f.cons = consoleErrs(f);
     return f;
@@ -211,6 +212,135 @@ const noDash = (t) => !/—/.test(t);
     ok('the hire\'s plan never calls wa279_role_save, and asks for options for his own plan only', c.every((x) => x.fn === 'wa279_role_options' && x.args.p_onb === ONB.sam) && c.length >= 1, c);
     ok('Samson: no Home card (he manages nobody)', !(await has(f, '#w279home')));
     ok('Samson: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- Task 8 helpers: the policy rows on Home and in the Academy ---------- */
+  const FIXED = Date.parse('2026-09-25T20:00:00Z');   /* boot.js's clock */
+  const UNLOCKED = { 'expense-policy': { opened_at: '2026-09-25T19:40:00Z', unlock_at: '2026-09-25T19:50:00Z' } };
+  const signBtn = (f, sel) => f.ev((s) => { const b = document.querySelector(s); return b ? { dis: b.disabled, txt: b.textContent.trim() } : null; }, sel);
+  const openLink = async (f, sel) => { await f.ev((s) => { const a = document.querySelector(s); a.addEventListener('click', (e) => e.preventDefault(), { once: true }); a.click(); }, sel); await f.page.waitForTimeout(500); };
+  const clockAt = (f, min) => f.ev((t) => { Date.now = function () { return t; }; if (window.wa279Pol) window.wa279Pol.refresh(); }, FIXED + min * 60000);
+  const toastTxt = (f) => f.ev(() => (document.getElementById('toast') || {}).textContent || '');
+  const ticking = (f) => f.ev(() => !!(window.wa279Pol && window.wa279Pol.ticking()));
+
+  /* ---------- 5. Home: Set up your Hub, the policies wait for the reading time ---------- */
+  {
+    const f = await go({ who: 'member', hash: '#mypage', fx279: { pol: { state: JSON.parse(JSON.stringify(UNLOCKED)) } } });
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w272setup [data-w272pol="sign"]', { timeout: 8000 }).catch(() => {});
+    const H = (k) => '#w272setup [data-w272pol="sign"][data-key="' + k + '"]', O = (k) => '#w272setup [data-w272pol="open"][data-key="' + k + '"]';
+    ok('Home: the two policies to sign show', await has(f, H('agency-handbook')) && await has(f, H('expense-policy')));
+    ok('Home: wa279_policy_state is read once', (await calls(f, 'wa279_policy_state')).length === 1, await calls(f));
+    let b = await signBtn(f, H('agency-handbook'));
+    ok('Home: before Open, Sign is off', b && b.dis && b.txt === 'Sign', b);
+    b = await signBtn(f, H('expense-policy'));
+    ok('Home: a policy whose unlock_at is past can be signed at once', b && !b.dis && b.txt === 'Sign', b);
+    await openLink(f, O('agency-handbook'));
+    const oc = await calls(f, 'wa279_policy_open');
+    ok('Home: Open calls wa279_policy_open with the key', oc.length === 1 && oc[0].args.p_key === 'agency-handbook', oc);
+    b = await signBtn(f, H('agency-handbook'));
+    ok('Home: after Open, Sign is off and says "Sign in 10 min"', b && b.dis && b.txt === 'Sign in 10 min', b);
+    ok('Home: the countdown timer runs while the row shows', await ticking(f));
+    await shot(f, 'w279-pol-home-1366');
+    await clockAt(f, 6.5);
+    b = await signBtn(f, H('agency-handbook'));
+    ok('Home: 6 and a half minutes later it says "Sign in 4 min" (rounded up)', b && b.dis && b.txt === 'Sign in 4 min', b);
+    await f.hash('#calendar', 900);
+    ok('Home: away from Home, no timer is left running', !(await ticking(f)));
+    await f.hash('#mypage', 1200);
+    ok('Home: back on Home, the timer runs again', await ticking(f));
+    await clockAt(f, 10);
+    b = await signBtn(f, H('agency-handbook'));
+    ok('Home: at unlock_at, Sign is on and says Sign', b && !b.dis && b.txt === 'Sign', b);
+    ok('Home: nothing left to count, so the timer stops', !(await ticking(f)));
+    await f.ev(() => { window.__W279.polRefuse = 'Read it for 3 more minutes first'; });
+    await press(f, H('expense-policy'));
+    await f.page.waitForTimeout(300);
+    ok('Home: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Read it for 3 more minutes first', await toastTxt(f));
+    ok('Home: after a refusal the opens are read again', (await calls(f, 'wa279_policy_state')).length === 2, await calls(f, 'wa279_policy_state'));
+    b = await signBtn(f, H('expense-policy'));
+    ok('Home: the refused policy stays, its Sign on again', b && !b.dis, b);
+    await press(f, H('agency-handbook'));
+    await f.page.waitForTimeout(300);
+    const sg = await f.ev(() => window.__W279.signs.map((s) => s.policy_key));
+    ok('Home: Sign records the sign-off', JSON.stringify(sg) === JSON.stringify(['expense-policy', 'agency-handbook']) && /Sign-off recorded/.test(await toastTxt(f)), sg);
+    ok('Home: the policy copy has no em dash', noDash(await textOf(f, '#w272setup')));
+    ok('Home policies: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 5b. Home at phone width, with the database silent (the old rule stands) ---------- */
+  {
+    const f = await go({ who: 'member', hash: '#mypage', width: 375 });
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w272setup [data-w272pol="sign"]', { timeout: 8000 }).catch(() => {});
+    const H = '#w272setup [data-w272pol="sign"][data-key="agency-handbook"]';
+    let b = await signBtn(f, H);
+    ok('375, no answer from the database: Sign is off before Open', b && b.dis && b.txt === 'Sign', b);
+    await openLink(f, '#w272setup [data-w272pol="open"][data-key="agency-handbook"]');
+    b = await signBtn(f, H);
+    ok('375, no answer from the database: Sign is on after Open, as before', b && !b.dis && b.txt === 'Sign', b);
+    ok('375: Home has no sideways scroll', !(await hasScroll(f)));
+    await done(f);
+  }
+
+  /* ---------- 6. the Academy: Onboarding, Policies to sign ---------- */
+  {
+    const f = await go({ who: 'member', hash: '#training', fx279: { pol: { state: JSON.parse(JSON.stringify(UNLOCKED)) } } });
+    await f.hash('#training', 1500);
+    const H = (k) => '#w122 [data-trk="policies"] [data-w122sign="' + k + '"]', O = (k) => '#w122 [data-trk="policies"] [data-w279polopen="' + k + '"]';
+    await f.page.waitForSelector(H('agency-handbook'), { timeout: 8000 }).catch(() => {});
+    let b = await signBtn(f, H('agency-handbook'));
+    ok('Academy: before Open, "I have read it" is off', b && b.dis && b.txt === 'I have read it', b);
+    b = await signBtn(f, H('expense-policy'));
+    ok('Academy: a policy whose unlock_at is past can be signed at once', b && !b.dis && b.txt === 'I have read it', b);
+    await openLink(f, O('agency-handbook'));
+    ok('Academy: Open and read calls wa279_policy_open', (await calls(f, 'wa279_policy_open')).some((c) => c.args.p_key === 'agency-handbook'));
+    b = await signBtn(f, H('agency-handbook'));
+    ok('Academy: after Open, the button is off and says "Sign in 10 min"', b && b.dis && b.txt === 'Sign in 10 min', b);
+    await shot(f, 'w279-pol-academy-1366');
+    await clockAt(f, 10);
+    b = await signBtn(f, H('agency-handbook'));
+    ok('Academy: at unlock_at it is on again', b && !b.dis && b.txt === 'I have read it', b);
+    await f.ev(() => { window.__W279.polRefuse = 'Read it for 2 more minutes first'; });
+    await press(f, H('expense-policy'));
+    await f.page.waitForTimeout(300);
+    ok('Academy: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Read it for 2 more minutes first', await toastTxt(f));
+    b = await signBtn(f, H('expense-policy'));
+    ok('Academy: after a refusal the button is usable again', b && !b.dis, b);
+    ok('Academy policies: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 7. the HR centre's onboarding board: Academy trainings d of t, and the 90-day pace ---------- */
+  {
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', fxo: { acad: true }, fx279: { pol: {} } });
+    await f.hash('#hrcentre/onboarding', 1500);
+    await f.page.waitForSelector('[data-w37open="' + ONB.lina + '"]', { timeout: 8000 }).catch(() => {});
+    await f.page.waitForTimeout(600);
+    const row = (id) => f.ev((i) => { const e = document.querySelector('[data-w37open="' + i + '"]'); const r = e && e.closest('.w46row'); return r ? r.textContent : null; }, id);
+    const acad = (id) => textOf(f, '[data-w279acad="' + id + '"]');
+    ok('HR board: Lina\'s row says "Academy trainings 2 of 5"', (await acad(ONB.lina)) === 'Academy trainings 2 of 5', await row(ONB.lina));
+    ok('HR board: Omar (role steps with no picks yet, nothing else from the Academy) shows no count', (await acad(ONB.omar)) === '', await acad(ONB.omar));
+    const q = await f.ev(() => window.__W279.froms.filter((t) => t === 'academy_assignments').length);
+    ok('HR board: one query for every plan\'s picks', q === 1, q);
+    const pr = await row(ONB.pace);
+    ok('HR board: day 45 with 50% done is not behind pace (90 days)', !!pr && /50%/.test(pr) && /day 45/.test(pr) && !/behind pace/.test(pr), pr);
+    ok('HR board: Pace Person counts "Academy trainings 2 of 2" (the policies step once, no picks)', (await acad(ONB.pace)) === 'Academy trainings 2 of 2', await acad(ONB.pace));
+    await shot(f, 'w279-hrboard-1366');
+    ok('HR board: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 8. the manager's card: a hire at day 70 is "Up to 90 days" ---------- */
+  {
+    const f = await go({ who: 'plain', hash: '#mypage', lead: { late: true } });
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w166lead .w166day', { timeout: 8000 }).catch(() => {});
+    const days = await f.ev(() => [...document.querySelectorAll('#w166lead .w166day')].map((e) => e.textContent));
+    ok('the manager\'s card: day 70 says "Up to 90 days"', days.some((t) => /Day 70/.test(t) && /Up to 90 days/.test(t)), days);
+    ok('the manager\'s card: day 23 still says "Week 4 of 4"', days.some((t) => /Day 23/.test(t) && /Week 4 of 4/.test(t)), days);
     await done(f);
   }
 

@@ -450,7 +450,9 @@
         if (mine[p.key]) {
           html += '<div class="w105sign"><b>' + esc(p.title) + '</b> <span class="w105ok">signed ' + esc(String(mine[p.key]).slice(0, 10)) + '</span> <a class="w105mut" href="' + esc(p.url) + '" target="_blank" rel="noopener">read again</a></div>';
         } else {
-          html += '<div class="w105sign"><b>' + esc(p.title) + '</b><div style="margin-top:6px"><a class="btn ghost mini" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="text-decoration:none">Open and read</a> <button class="btn mini" data-w105sk="' + esc(p.key) + '">I have read and reviewed this</button></div></div>';
+          /* wave279: the button waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then the old label */
+          var W = window.wa279Pol, OK = 'I have read and reviewed this', v = W ? W.view(p.key, OK, true) : { dis: false, txt: OK };
+          html += '<div class="w105sign"><b>' + esc(p.title) + '</b><div style="margin-top:6px"><a class="btn ghost mini" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="text-decoration:none" data-w279polopen="' + esc(p.key) + '">Open and read</a> <button class="btn mini" data-w105sk="' + esc(p.key) + '"' + (W ? W.attrs(p.key, OK, true) : '') + (v.dis ? ' disabled' : '') + '>' + esc(v.txt) + '</button></div></div>';
         }
       });
       card.innerHTML = html;
@@ -458,9 +460,10 @@
       else panel.appendChild(card);
       card.querySelectorAll('[data-w105sk]').forEach(function (b) {
         b.addEventListener('click', async function () {
-          this.disabled = true;
+          this.disabled = true; this.setAttribute('aria-busy', 'true');
           var ins = await db.from('wa_policy_signoffs').insert({ email: me.email, name: me.name, policy_key: this.getAttribute('data-w105sk') });
-          if (ins.error) { this.disabled = false; toast('Could not record the sign-off'); return; }
+          /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is */
+          if (ins.error) { this.disabled = false; this.removeAttribute('aria-busy'); toast(String(ins.error.message || '') || 'Could not record the sign-off'); if (window.wa279Pol) { window.wa279Pol.reload(); window.wa279Pol.refresh(); } return; }
           toast('Sign-off recorded, thank you');
           card.remove();
           w105SignCard(panel, id, prepend);

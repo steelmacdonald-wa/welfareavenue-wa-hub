@@ -199,7 +199,8 @@
     var btns = document.querySelectorAll('[data-w105sk],[data-w122sign]'); if (!btns.length) return;
     var o = polOpened();
     for (var i = 0; i < btns.length; i++) {
-      var b = btns[i], k = polKeyOf(b), lock = !!(k && !o[k] && !POL_MEM[k] && polLink(b));
+      /* wave279: when the database keeps the opens (wa279Pol, parts279/b_hooks.js), its Sign button rule stands and this lock steps aside */
+      var b = btns[i], k = polKeyOf(b), W = window.wa279Pol, known = !!(k && W && W.left(k) !== 'unknown'), lock = !!(k && !known && !o[k] && !POL_MEM[k] && polLink(b));
       if (lock && !b.hasAttribute('data-w130lock')) { b.setAttribute('data-w130lock', '1'); b.setAttribute('title', 'Open and read it first'); b.setAttribute('aria-disabled', 'true'); }
       else if (!lock && b.hasAttribute('data-w130lock')) { b.removeAttribute('data-w130lock'); b.removeAttribute('title'); b.removeAttribute('aria-disabled'); }
     }

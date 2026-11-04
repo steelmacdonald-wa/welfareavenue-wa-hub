@@ -192,7 +192,7 @@
     act.forEach(function (o) {
       var p = wa37Pct(o.id).pct;
       pctSum += p;
-      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 90 * 100));   /* wave279: the plan runs 90 days */
       if (p < expected - 15) late++;
     });
     var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
@@ -212,7 +212,7 @@
     if (!act.length) html += '<p class="m-sub">Nobody is mid-onboarding right now.</p>';
     act.forEach(function (o) {
       var p = wa37Pct(o.id);
-      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 90 * 100));   /* wave279: the plan runs 90 days */
       var isLate = p.pct < expected - 15;
       var helpN = (typeof WA39_HELP !== 'undefined' ? WA39_HELP : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); }).length;
       var hrMine = (typeof WA39_HRS !== 'undefined' ? WA39_HRS : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); });
@@ -221,6 +221,7 @@
         + '<span class="w37bar" style="max-width:150px"><i style="width:' + p.pct + '%"></i></span>'
         + '<span style="font-size:12px;color:#103F39;font-weight:700">' + p.pct + '%</span>'
         + '<span class="w46days' + (isLate ? ' late' : '') + '">day ' + wa46Days(o.started_at) + (isLate ? ' &middot; behind pace' : '') + '</span>'
+        + '<span class="w46days" data-w279acad="' + o.id + '">' + esc(window.wa279Acad ? window.wa279Acad.text(o.id) : '') + '</span>'   /* wave279: Academy trainings d of t (parts279/b_hooks.js) */
         + (helpN ? '<span class="w46stage" style="background:#b3402f;color:#FFFAF2">' + helpN + ' asking for help</span>' : '')
         + '<a class="w37edit" data-w37open="' + o.id + '">checklist</a>'
         + (hrMine.length ? '<a class="w37edit" data-w39hr="' + o.id + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>' : '')

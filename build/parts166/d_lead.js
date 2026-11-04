@@ -15,7 +15,7 @@
     return S.loading;
   }
   var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
-  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; if (day <= 90) return 'Up to 90 days'; return 'Past 90 days'; }   /* wave279: day is day one = 1, so 0 to 27 days in is Week n of 4, then 60 and 90 days */
   function leadStepsHtml(p) {
     var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     var steps = (p.lead_steps || []).slice();

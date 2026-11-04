@@ -2,7 +2,7 @@
 """Assemble build/parts279/*.js into build/src/279_wave279.seg (non-ASCII escaped, LF)."""
 import os
 D = os.path.dirname(os.path.abspath(__file__))
-parts = ["a_picks.js"]   # wave279 Task 8 adds b_hooks.js
+parts = ["a_picks.js", "b_hooks.js"]
 src = ''.join(open(os.path.join(D, f), encoding='utf8').read().replace('\r\n', '\n') for f in parts)
 out = []
 for ch in src:
