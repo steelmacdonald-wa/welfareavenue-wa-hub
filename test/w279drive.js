@@ -84,6 +84,10 @@ const noDash = (t) => !/—/.test(t);
     await search(f, '60 DAYS', 'zebra');
     ok('search leaves planned modules out', !(await has(f, pick('60 DAYS', 9410))) && /No module matches that/.test(await txtOf(f, '#w279sheet .w279sec[data-w279sec="60 DAYS"] [data-w279part="res"]')));
     await search(f, '60 DAYS', 'photo');
+    const found = await f.ev((sel) => { const i = document.querySelector(sel); return i ? { dis: i.disabled, off: i.closest('label').classList.contains('off'), txt: i.closest('label').textContent } : null; }, pick('60 DAYS', 9411));
+    ok('fix round 1: a module Lina finished that only the search finds is greyed and cannot be ticked', found && found.dis && found.off && /finished it already/.test(found.txt), found);
+    await f.page.click(pick('60 DAYS', 9411), { force: true }).catch(() => {});
+    ok('fix round 1: clicking it picks nothing', !(await f.ev((sel) => document.querySelector(sel).checked, pick('60 DAYS', 9411))));
     await tick(f, '60 DAYS', 9408);
     ok('a module ticked from the search stays in the list and counts', /3 picked\./.test(await txtOf(f, '#w279sheet .w279sec[data-w279sec="60 DAYS"] .w279foot')) && !(await saveOff(f, '60 DAYS')));
 
@@ -166,6 +170,30 @@ const noDash = (t) => !/—/.test(t);
     ok('after saving, the checklist behind shows the new picks, picked by the person who saved', /Marketing basics: the content calendar/.test(s60b) && /Picked by Steel MacDonald/.test(s60b), s60b);
     await shot(f, 'w279-hr-1366');
     ok('admin: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 3b. fix round 1: a list whose picks are all finished is read only in the pop-up ---------- */
+  {
+    const picks = { [ONB.lina]: { '60 DAYS': [{ training_id: 9401, auto: true, picked_by: 'the Hub' }], '90 DAYS': [{ training_id: 9411, auto: false, picked_by: 'Joy Dumansi' }] } };
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', fx279: { picks } });
+    await f.hash('#hrcentre/onboarding', 1500);
+    await f.page.waitForSelector('[data-w37open="' + ONB.lina + '"]', { timeout: 8000 }).catch(() => {});
+    await press(f, '[data-w37open="' + ONB.lina + '"]');
+    await f.page.waitForSelector('[data-w279hr] [data-w279open]', { timeout: 4000 }).catch(() => {});
+    await press(f, '[data-w279hr] [data-w279open="' + ONB.lina + '"]');
+    await f.page.waitForSelector('#w279sheet .w279sec', { timeout: 4000 }).catch(() => {});
+    const s = await f.ev(() => {
+      const box = (k) => document.querySelector('#w279sheet .w279sec[data-w279sec="' + k + '"]');
+      const one = (k) => { const b = box(k); const q = b.querySelector('.w279q'); return { badge: (b.querySelector('[data-w279part="state"]') || {}).textContent, save: !!b.querySelector('[data-w279save]'), search: !!q && getComputedStyle(q).display !== 'none', boxes: [...b.querySelectorAll('[data-w279part="list"] input')].map((i) => i.disabled), foot: b.querySelector('.w279foot').textContent }; };
+      return { s60: one('60 DAYS'), s90: one('90 DAYS') };
+    });
+    ok('the done 90-day list says Done, with no Save and no search', s.s90.badge === 'Done' && !s.s90.save && !s.s90.search, s.s90);
+    ok('every box in the done list is locked, and the foot says why', s.s90.boxes.length > 0 && s.s90.boxes.every(Boolean) && /It is finished, so this list can.t change now\./.test(s.s90.foot), s.s90);
+    ok('the 60-day list, not all done, keeps its Save and search', s.s60.badge === '' && s.s60.save && s.s60.search && s.s60.boxes.some((x) => !x), s.s60);
+    ok('the pop-up copy has no em dash (done list)', noDash(await textOf(f, '#w279sheet')));
+    await shot(f, 'w279-done-1366');
+    ok('done list: no console errors', f.cons.length === 0, f.cons);
     await done(f);
   }
 

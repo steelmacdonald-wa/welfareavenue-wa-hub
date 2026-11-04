@@ -3,7 +3,7 @@
    page must not ask about him), Samson's own plan (boot.js's member, for the hire's view of the plan), the 60 DAYS and 90 DAYS role steps
    (academy_path role60 / role90, as wave279b's template rows wa279role60 / wa279role90) and the modules the pop-up offers, one of them finished by Lina.
    lead279(): what onboarding_lead_view returns for the manager (Lina and Omar).
-   INIT279(o): stands in for wa279_role_options and wa279_role_save (the same shape and refusals as build/wa279a_rules.sql), records every wa279_* call in
+   INIT279(o): stands in for wa279_role_options and wa279_role_save (the same shape and refusals as build/wa279a_rules.sql, sections' done and done_ids included), records every wa279_* call in
    window.__W279.calls, and keeps the picks in window.__W279.picks. o.picks presets picks; o.canPick false makes the person a viewer; o.by is the name
    the database writes as picked_by. window.__W279.refuse = '<text>' makes the next save fail with that text. */
 const { loadFixture } = require('./boot');
@@ -21,11 +21,12 @@ const TR = [
   { id: 9407, title: 'The Content Studio: drafts', path_group: 'The Content Studio', sort: 7 },
   { id: 9408, title: 'Photo library: finding a picture', path_group: 'Using the Hub', sort: 8 },
   { id: 9409, title: 'Grant writing: the first draft', path_group: 'Fundraising and grants', sort: 9 },
-  { id: 9410, title: 'Zebra planned module', path_group: 'Using the Hub', sort: 10, body: { planned: true } }
+  { id: 9410, title: 'Zebra planned module', path_group: 'Using the Hub', sort: 10, body: { planned: true } },
+  { id: 9411, title: 'Photo library: tagging', path_group: 'Using the Hub', sort: 11 }   // fix round 1: finished by Lina, not recommended (found by search)
 ];
 const REC = [9401, 9402, 9403, 9404, 9405, 9406, 9407];   // the recommended order for marketing
 const PATH = { 9401: 'Marketing basics', 9402: 'Marketing basics', 9403: 'Campaigns and storytelling', 9405: 'Marketing strategy', 9406: 'Marketing strategy', 9407: 'The Content Studio' };
-const DONE = [9403];   // Lina finished this one
+const DONE = [9403, 9411];   // Lina finished these (9411 is not recommended)
 
 function fx279() {
   const f = loadFixture();
@@ -75,9 +76,11 @@ function INIT279(o) {
     ['60 DAYS', '90 DAYS'].forEach(function (s) {
       sec[s] = { min: s === '60 DAYS' ? 2 : 5, max: s === '60 DAYS' ? 3 : 6, due: s === '60 DAYS' ? '2026-11-02' : '2026-12-02',
         picked: p[s].map(function (k) { return { training_id: k.training_id, title: title(k.training_id), done: done(onb, k.training_id), auto: !!k.auto, picked_by: k.picked_by }; }) };
+      sec[s].done = sec[s].picked.length > 0 && sec[s].picked.every(function (k) { return k.done; });   /* fix round 1: as wa279_role_options */
     });
     return { data: { member: w.name, member_id: w.mid, department: 'marketing', leader: false, day: w.day, sections: sec,
-      recommended: REC.map(function (id) { return { training_id: id, title: title(id), path: PATH[id] || null, done: done(onb, id) }; }), can_pick: CAN }, error: null };
+      recommended: REC.map(function (id) { return { training_id: id, title: title(id), path: PATH[id] || null, done: done(onb, id) }; }),
+      done_ids: String(onb) === '${ONB.lina}' ? DONE.slice() : [], can_pick: CAN }, error: null };
   }
   function save(a) {
     var onb = a.p_onb, s = a.p_section, w = WHO[onb];
@@ -85,6 +88,8 @@ function INIT279(o) {
     if (!w) return { error: { message: 'That onboarding plan was not found' } };
     if (!CAN) return { error: { message: 'Only the manager, HR or an admin can pick role trainings' } };
     if (W.refuse) { var m = W.refuse; W.refuse = null; return { error: { message: m } }; }
+    var cur = picks(onb)[s];
+    if (cur.length && cur.every(function (k) { return done(onb, k.training_id); })) return { error: { message: "These trainings are all done, so the list can't change now." } };
     var ids = []; (a.p_training_ids || []).forEach(function (x) { x = Number(x); if (ids.indexOf(x) < 0) ids.push(x); });
     var mn = s === '60 DAYS' ? 2 : 5, mx = s === '60 DAYS' ? 3 : 6, oth = s === '60 DAYS' ? '90 DAYS' : '60 DAYS', p = picks(onb);
     if (ids.length < mn || ids.length > mx) return { error: { message: 'Pick ' + mn + ' or ' + mx + ' role trainings for ' + s.toLowerCase() } };

@@ -8,9 +8,10 @@
      asked only for the hires at day 21 or later, and the card shows only where the database says this person may pick.
    - The pop-up (its own layer, so it opens over HR's checklist too): two lists, 60 days and 90 days. Recommended modules first, in
      the database's order, then the ones already picked; a search over every active Academy module (the trainings table, as the
-     Academy reads it; planned ones left out). Modules the hire finished are greyed and cannot be picked; a module picked in the
-     other list cannot be picked here. Save is on only inside 2 to 3 and 5 to 6, and sends one wa279_role_save per list. The
-     database's refusal shows as it is.
+     Academy reads it; planned ones left out). Modules the hire finished (done_ids, search results included) are greyed and cannot
+     be picked; a module picked in the other list cannot be picked here. Save is on only inside 2 to 3 and 5 to 6, and sends one
+     wa279_role_save per list. The database's refusal shows as it is. A list whose picks are all finished (the section's done) is
+     read only: "Done", no search, no Save.
    - HR centre: the person's checklist (wa37OpenModal) gets a Role trainings button that opens the same pop-up.
    - The plan: wave166's checklist hands the role60 / role90 steps to roleStep (one call-site line in parts166/c_plan.js): the
      picked modules with a tick each and who picked them, or "Your manager picks these in week 3."
@@ -47,6 +48,8 @@
     '#w279sheet .w279lead{font-size:13.5px;color:#4a5551;margin:6px 0 4px;}' +
     '#w279sheet .w279sec{border-top:1px solid ' + LINE + ';margin-top:14px;padding-top:12px;min-width:0;}' +
     '#w279sheet h4{margin:0;font-size:16px;color:' + GREEN + ';}' +
+    '#w279sheet .w279sh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
+    '#w279sheet .w279badge{font-size:12px;font-weight:700;color:' + CREAM + ';background:' + GREEN + ';border-radius:999px;padding:2px 10px;}' +
     '#w279sheet .w279due{font-size:12.5px;color:' + MUTE + ';margin:2px 0 8px;}' +
     '#w279sheet .w279opt{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-radius:8px;cursor:pointer;min-width:0;}' +
     '#w279sheet .w279opt input{margin:3px 0 0;flex:0 0 auto;width:18px;height:18px;accent-color:' + GREEN + ';}' +
@@ -130,12 +133,17 @@
   function sheetEl() { return document.getElementById('w279sheet'); }
   function close() { var el = sheetEl(); if (el) el.remove(); SH = null; }
   function other(key) { return key === '60 DAYS' ? '90 DAYS' : '60 DAYS'; }
+  /* fix round 1: done_ids (every module the hire finished) covers what the search finds too */
   function doneOf(id) {
     var d = SH.d, hit = null;
+    if ((d.done_ids || []).some(function (x) { return Number(x) === id; })) return true;
     (d.recommended || []).forEach(function (r) { if (Number(r.training_id) === id) hit = r; });
     SECS.forEach(function (s) { (secOf(d, s.key).picked || []).forEach(function (p) { if (Number(p.training_id) === id) hit = hit || p; }); });
     return !!(hit && hit.done);
   }
+  /* fix round 1: a section is done when it has picks and every one is finished (wa279_role_save refuses a change then) */
+  function secDone(key) { return !!secOf(SH.d, key).done; }
+  function canEdit(key) { return !!SH.d.can_pick && !secDone(key); }
   function optHtml(key, m, can) {
     var id = Number(m.training_id != null ? m.training_id : m.id), on = SH.sel[key].indexOf(id) >= 0;
     var done = doneOf(id), there = SH.sel[other(key)].indexOf(id) >= 0;
@@ -145,7 +153,8 @@
       + '<span>' + E(m.title) + (note ? '<small>' + E(note) + '</small>' : '') + '</span></label>';
   }
   function listHtml(key) {
-    var d = SH.d, can = !!d.can_pick, seen = {}, h = '';
+    var d = SH.d, can = canEdit(key), seen = {}, h = '';
+    if (secDone(key)) return (secOf(d, key).picked || []).map(function (p) { return optHtml(key, p, false); }).join('');   /* a done list shows only its picks */
     var rec = (d.recommended || []).filter(function (r) { var k = Number(r.training_id); if (seen[k]) return false; seen[k] = 1; return true; });
     if (rec.length) h += '<div class="w279grp">Recommended</div>' + rec.map(function (r) { return optHtml(key, r, can); }).join('');
     /* what is picked, or ticked from the search, and not in the recommended list */
@@ -168,11 +177,12 @@
     SH.sel[key].forEach(function (id) { shown[id] = 1; });
     var hits = MODS.filter(function (m) { return !shown[Number(m.id)] && String(m.title).toLowerCase().indexOf(q) >= 0; });
     if (!hits.length) return '<div class="w279due">No module matches that.</div>';
-    return hits.slice(0, 8).map(function (m) { return optHtml(key, m, !!SH.d.can_pick); }).join('')
+    return hits.slice(0, 8).map(function (m) { return optHtml(key, m, canEdit(key)); }).join('')
       + (hits.length > 8 ? '<div class="w279due">' + (hits.length - 8) + ' more. Type more of the name.</div>' : '');
   }
   function footHtml(key) {
     var x = secOf(SH.d, key), n = SH.sel[key].length, inRange = n >= x.min && n <= x.max;
+    if (secDone(key)) return '<span class="w279cnt">' + (n === 1 ? 'It is' : 'All ' + n + ' are') + ' finished, so this list can&rsquo;t change now.</span>';
     if (!SH.d.can_pick) return '<span class="w279cnt">' + n + ' picked</span>';
     var cnt = n + ' picked' + (n < x.min ? '. Pick ' + x.min + ' or ' + x.max + '.' : (n > x.max ? '. That is too many: pick ' + x.min + ' or ' + x.max + '.' : '.'));
     return '<span class="w279cnt' + (inRange ? '' : ' bad') + '">' + cnt + '</span>'
@@ -183,8 +193,11 @@
   function paintSec(key) {
     var el = sheetEl(); if (!el || !SH) return;
     var box = el.querySelector('.w279sec[data-w279sec="' + key + '"]'); if (!box) return;
+    var done = secDone(key);
+    box.querySelector('[data-w279part="state"]').innerHTML = done ? '<span class="w279badge">Done</span>' : '';
     box.querySelector('[data-w279part="list"]').innerHTML = listHtml(key);
-    var r = box.querySelector('[data-w279part="res"]'); if (r) r.innerHTML = resHtml(key);
+    var q = box.querySelector('.w279q'); if (q) q.style.display = done ? 'none' : '';
+    var r = box.querySelector('[data-w279part="res"]'); if (r) r.innerHTML = done ? '' : resHtml(key);
     box.querySelector('[data-w279part="foot"]').innerHTML = footHtml(key);
   }
   function paintAll() { SECS.forEach(function (s) { paintSec(s.key); }); }
@@ -197,7 +210,7 @@
         : 'Only their manager, HR or an admin can pick these.') + '</p>'
       + SECS.map(function (s) {
         var x = secOf(d, s.key);
-        return '<div class="w279sec" data-w279sec="' + E(s.key) + '"><h4>' + E(s.head) + '</h4>'
+        return '<div class="w279sec" data-w279sec="' + E(s.key) + '"><div class="w279sh"><h4>' + E(s.head) + '</h4><span data-w279part="state"></span></div>'
           + (x.due ? '<div class="w279due">Due ' + E(fmtDay(x.due)) + '</div>' : '')
           + '<div data-w279part="list"></div>'
           + (d.can_pick ? '<label class="w279q">Search all modules<input type="search" data-w279q="' + E(s.key) + '" placeholder="Type a module name" autocomplete="off" /></label><div data-w279part="res"></div>' : '')

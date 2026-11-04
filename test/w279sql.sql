@@ -210,6 +210,13 @@ begin
   -- someone who has already finished a module sees it marked
   insert into public.training_progress (training_id, person_name, email, status, done_at) values (t[1], 'Test Role Hire', 'w279.rolehire@example.invalid', 'done', now());
   assert (select (x ->> 'done')::boolean from jsonb_array_elements(public.wa279_role_options(v_ph) -> 'recommended') x where (x ->> 'training_id')::bigint = t[1]), 'a finished module is marked done';
+  -- fix round 1: done_ids lists every module the hire finished (by name or by email, as wa166_training_done), recommended or not, and nobody else's
+  insert into public.training_progress (training_id, person_name, email, status, done_at) values (t[6], 'Someone Else', 'w279.rolehire@example.invalid', 'done', now());
+  insert into public.training_progress (training_id, person_name, email, status, done_at) values (t[7], 'Another Person', 'w279.another@example.invalid', 'done', now());
+  insert into public.training_progress (training_id, person_name, email, status) values (t[12], 'Test Role Hire', 'w279.rolehire@example.invalid', 'in_progress');
+  assert public.wa279_role_options(v_ph) -> 'done_ids' = jsonb_build_array(t[1], t[6]), 'done_ids: the finished modules by name and by email, not someone else''s, not one in progress: ' || (public.wa279_role_options(v_ph) ->> 'done_ids');
+  delete from public.training_progress where training_id in (t[6], t[7], t[12]) and person_name in ('Someone Else', 'Another Person', 'Test Role Hire');
+  assert (public.wa279_role_options(v_ph) #>> '{sections,60 DAYS,done}')::boolean = false and (public.wa279_role_options(v_ph) #>> '{sections,90 DAYS,done}')::boolean = false, 'a section with nothing picked is not done';
 
   -- ---- refusals
   v_err := null; begin perform public.wa279_role_save(v_ph, '60 DAYS', array[t[2], t[3], t[4], t[9]]); exception when others then v_err := sqlerrm; end;
@@ -307,10 +314,24 @@ begin
   assert (public.wa166_path_state(v_h, 'role60') ->> 'complete')::boolean, 'the path state says complete';
   assert not (select done from public.onboarding_steps where onboarding_id = v_ph and template_id = 'wa279role90'), 'role90 stays open: its modules are not done';
   assert not (select done from public.onboarding_steps where onboarding_id = v_ph2 and template_id = 'wa279role60'), 'a plan with an empty list is never ticked';
-  -- a finished pick can stay when the list is saved again
-  perform public.wa279_role_save(v_ph, '60 DAYS', array[t[2], t[3]]);
-  assert (select count(*) from public.onboarding_role_picks where onboarding_id = v_ph and section = '60 DAYS') = 2, 'saving the list again with its finished modules is allowed';
+  -- fix round 1: a section whose picks are all finished is done, and its list can't change any more (not even saved as it is)
+  v_o := public.wa279_role_options(v_ph);
+  assert (v_o #>> '{sections,60 DAYS,done}')::boolean and not (v_o #>> '{sections,90 DAYS,done}')::boolean, 'options: 60 days is done, 90 days is not';
+  v_err := null; begin perform public.wa279_role_save(v_ph, '60 DAYS', array[t[2], t[3], t[4]]); exception when others then v_err := sqlerrm; end;
+  assert v_err = 'These trainings are all done, so the list can''t change now.', 'a done section refuses a change: ' || coalesce(v_err, 'no error');
+  v_err := null; begin perform public.wa279_role_save(v_ph, '60 DAYS', array[t[2], t[3]]); exception when others then v_err := sqlerrm; end;
+  assert v_err = 'These trainings are all done, so the list can''t change now.', 'and the same list saved again';
+  perform set_config('request.jwt.claims', c_hr, true);
+  v_err := null; begin perform public.wa279_role_save(v_ph, '60 DAYS', array[t[2], t[3], t[4]]); exception when others then v_err := sqlerrm; end;
+  assert v_err like 'These trainings are all done%', 'HR is refused too';
+  perform set_config('request.jwt.claims', c_mgr, true);
+  assert (select array_agg(training_id order by training_id) from public.onboarding_role_picks where onboarding_id = v_ph and section = '60 DAYS') = array[t[2], t[3]], 'the done list is as it was';
   assert (select done from public.onboarding_steps where onboarding_id = v_ph and template_id = 'wa279role60'), 'and the step stays ticked';
+  -- a finished pick can stay in a list that is not all done, and that list can still change
+  update public.training_progress set status = 'done', done_at = now() where training_id = t[10] and person_name = 'Test Role Hire';
+  assert not (public.wa279_role_options(v_ph) #>> '{sections,90 DAYS,done}')::boolean, 'one of five finished: 90 days is not done';
+  perform public.wa279_role_save(v_ph, '90 DAYS', array[t[10], t[11], t[12], t[13], t[9]]);
+  assert (select array_agg(training_id order by training_id) from public.onboarding_role_picks where onboarding_id = v_ph and section = '90 DAYS') = array[t[9], t[10], t[11], t[12], t[13]], 'a list that is not all done can change, its finished pick kept';
 
   -- ---- the Hub's own pick
   perform set_config('request.jwt.claims', c_staff, true);

@@ -250,7 +250,7 @@ comment on function public.wa279_pick_remove(bigint, text) is 'wave279: removes 
 -- what the pop-up and the plan need
 create or replace function public.wa279_role_options(p_onb bigint, p_today date default current_date)
 returns jsonb language plpgsql stable security definer set search_path to '' as $function$
-declare o record; v_me text := lower(coalesce(auth.jwt() ->> 'email', '')); v_can boolean; v_leader boolean; s text; v_pk jsonb; v_sec jsonb := '{}'::jsonb; v_rec jsonb;
+declare o record; v_me text := lower(coalesce(auth.jwt() ->> 'email', '')); v_can boolean; v_leader boolean; s text; v_pk jsonb; v_sec jsonb := '{}'::jsonb; v_rec jsonb; v_done jsonb;
 begin
   select ob.id, ob.started_at, ob.status, tm.name, tm.email, tm.department, tm.id as mid into o
     from public.onboardings ob join public.team_members tm on tm.id = ob.member_id where ob.id = p_onb;
@@ -265,16 +265,23 @@ begin
                                                  'auto', k.auto, 'picked_by', k.picked_by) order by k.picked_at, k.id), '[]'::jsonb)
       into v_pk from public.onboarding_role_picks k join public.trainings t on t.id = k.training_id where k.onboarding_id = p_onb and k.section = s;
     v_sec := v_sec || jsonb_build_object(s, jsonb_build_object('min', case when s = '60 DAYS' then 2 else 5 end, 'max', case when s = '60 DAYS' then 3 else 6 end,
-                                                                'due', public.onb_due(s, o.started_at), 'picked', v_pk));
+                                                                'due', public.onb_due(s, o.started_at), 'picked', v_pk,
+                                                                -- done: picked and every pick finished (wa279_role_state's rule); the list can't change then
+                                                                'done', jsonb_array_length(v_pk) > 0 and not exists (select 1 from jsonb_array_elements(v_pk) e where not (e ->> 'done')::boolean)));
   end loop;
   select coalesce(jsonb_agg(jsonb_build_object('training_id', r.training_id, 'title', r.title, 'path', r.path, 'done', r.done) order by r.ord), '[]'::jsonb)
     into v_rec from public.wa279_recommended(p_onb) with ordinality r(training_id, title, path, done, ord);
+  -- every module the hire finished (wa166_training_done's match: their name or their email), so a module found by search shows done too
+  select coalesce(jsonb_agg(distinct tp.training_id order by tp.training_id), '[]'::jsonb) into v_done
+    from public.training_progress tp
+   where tp.status = 'done' and tp.training_id is not null
+     and (lower(tp.person_name) = lower(o.name) or (o.email is not null and lower(coalesce(tp.email, '')) = lower(o.email)));
   return jsonb_build_object('member', o.name, 'member_id', o.mid, 'department', o.department, 'leader', coalesce(v_leader, false),
-                            'day', p_today - o.started_at, 'sections', v_sec, 'recommended', v_rec, 'can_pick', v_can and o.status = 'active');
+                            'day', p_today - o.started_at, 'sections', v_sec, 'recommended', v_rec, 'done_ids', v_done, 'can_pick', v_can and o.status = 'active');
 end $function$;
 revoke all on function public.wa279_role_options(bigint, date) from public, anon;
 grant execute on function public.wa279_role_options(bigint, date) to authenticated, service_role;
-comment on function public.wa279_role_options(bigint, date) is 'wave279: the role-training picture for a plan: {member, department, leader, day, sections {60 DAYS, 90 DAYS: min, max, due, picked}, recommended [{training_id, title, path, done}], can_pick}. For the plan''s manager, HR, an admin or the hire.';
+comment on function public.wa279_role_options(bigint, date) is 'wave279: the role-training picture for a plan: {member, department, leader, day, sections {60 DAYS, 90 DAYS: min, max, due, picked, done}, recommended [{training_id, title, path, done}], done_ids (every module the hire finished), can_pick}. A section is done when it has picks and every pick is finished. For the plan''s manager, HR, an admin or the hire.';
 
 -- replace one section's picks
 create or replace function public.wa279_role_save(p_onb bigint, p_section text, p_training_ids bigint[])
@@ -286,6 +293,11 @@ begin
   if o.id is null then raise exception 'That onboarding plan was not found'; end if;
   if not public.wa279_can_pick(p_onb) then raise exception 'Only the manager, HR or an admin can pick role trainings'; end if;
   if o.status <> 'active' then raise exception 'This onboarding plan is finished'; end if;
+  -- a section whose picks are all finished (wa279_role_state's complete) is closed: its step is done
+  if exists (select 1 from public.onboarding_role_picks k where k.onboarding_id = p_onb and k.section = p_section)
+     and not exists (select 1 from public.onboarding_role_picks k where k.onboarding_id = p_onb and k.section = p_section and not public.wa166_training_done(o.member_id, k.training_id)) then
+    raise exception 'These trainings are all done, so the list can''t change now.';
+  end if;
   v_min := case when p_section = '60 DAYS' then 2 else 5 end;
   v_max := case when p_section = '60 DAYS' then 3 else 6 end;
   v_other := case when p_section = '60 DAYS' then '90 DAYS' else '60 DAYS' end;
@@ -323,7 +335,7 @@ begin
 end $function$;
 revoke all on function public.wa279_role_save(bigint, text, bigint[]) from public, anon;
 grant execute on function public.wa279_role_save(bigint, text, bigint[]) to authenticated, service_role;
-comment on function public.wa279_role_save(bigint, text, bigint[]) is 'wave279: replaces the role trainings picked for one section (60 DAYS: 2 to 3, 90 DAYS: 5 to 6) of a plan. For the plan''s manager, HR or an admin. Refuses a finished module and a module already in the other section. Each pick gets a people-only Academy assignment due on the section''s due date; unpicked ones are ended.';
+comment on function public.wa279_role_save(bigint, text, bigint[]) is 'wave279: replaces the role trainings picked for one section (60 DAYS: 2 to 3, 90 DAYS: 5 to 6) of a plan. For the plan''s manager, HR or an admin. Refuses a finished module, a module already in the other section, and any change to a section whose picks are all finished. Each pick gets a people-only Academy assignment due on the section''s due date; unpicked ones are ended.';
 
 -- the Hub fills a short list itself
 create or replace function public.wa279_role_autopick(p_today date default current_date)
