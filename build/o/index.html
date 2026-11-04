@@ -174,8 +174,11 @@
   .auto { flex: 0 0 auto; max-width: 13em; font-size: 14px; color: var(--muted); border: 2px dashed var(--line); border-radius: 14px; padding: 6px 12px; }
   .auto.on { color: var(--green); border: 2px solid var(--green); background: var(--soft); font-weight: 600; }
   .auto.on::before { content: '\2713\00a0'; }
-  .qr { margin: 12px 0 0; }
-  .qr img { display: block; width: 184px; height: 184px; border: 1px solid var(--line); border-radius: 10px; }
+  .qrs { display: flex; gap: 16px 20px; margin: 12px 0 0; }
+  .qrcell { flex: 1 1 0; min-width: 0; margin: 0; }
+  .qrlabel { margin: 0 0 6px; font-weight: 600; font-size: 16px; }
+  .qr { margin: 0; }
+  .qr img { display: block; width: 100%; max-width: 184px; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 10px; }
   .qrurl { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }
   .qrurl a { color: var(--green); }
   #video h2 { margin: 0 0 6px; font-size: 24px; }
@@ -201,6 +204,7 @@
     .blk input { width: 100%; font-size: 15px; padding: 7px 6px; }
     .pgrid .cell .k { display: block; font-size: 10px; line-height: 1; }
     .rstep { flex-wrap: wrap; }
+    .qrs { flex-direction: column; }   /* the two codes stack on a phone */
     .tick { margin-left: auto; }
     .auto { margin-left: auto; max-width: none; }
   }
@@ -966,7 +970,7 @@
       jdLink: 'Open your job description', jdNone: 'HR will share your job description with you.',
       weeklyNext: 'next on {when} (Toronto time).', weeklyNone: 'HR will add you to your team’s weekly meeting.',
       hubDone: 'Done: the Hub ticked this when you signed in', hubWaiting: 'This ticks itself when you sign in to the Hub.',
-      qrAlt: 'QR code that opens {url}', qrOpen: 'Or open this address on your phone:', qrFail: 'The code could not be drawn here. Open the address below on your phone instead.',
+      qrAlt: 'QR code that opens {url}', qrInstallL: 'Steps to install', qrHubL: 'Open the Hub', qrIntro: 'Scan the first code with your phone’s camera for the steps to add the Hub to your home screen and get the Slack app; scan the second to open the Hub itself.', qrFail: 'The code could not be drawn here. Open the address below on your phone instead.',
       videoH: 'Watch the walkthrough first', videoText: 'A short video shows steps 1 to 6, your Drives and your Google Groups included.', videoLink: 'Watch the walkthrough video',
       titleInstall: 'Welfare Avenue: the Hub on your phone', installH: 'The Hub and Slack on your phone',
       installFirst: 'Sign in to the Hub in Safari or Chrome on your phone first, then add it to the home screen; if the installed app asks you to sign in again, do so once.',
@@ -997,7 +1001,7 @@
       jdLink: 'Ouvrir votre description de poste', jdNone: 'Les RH vous transmettront votre description de poste.',
       weeklyNext: 'prochaine fois le {when} (heure de Toronto).', weeklyNone: 'Les RH vous ajouteront à la rencontre hebdomadaire de votre équipe.',
       hubDone: 'Terminé: le Hub l’a coché à votre connexion', hubWaiting: 'Cette étape se coche toute seule quand vous vous connectez au Hub.',
-      qrAlt: 'Code QR qui ouvre {url}', qrOpen: 'Ou ouvrez cette adresse sur votre téléphone:', qrFail: 'Le code n’a pas pu s’afficher ici. Ouvrez plutôt l’adresse ci-dessous sur votre téléphone.',
+      qrAlt: 'Code QR qui ouvre {url}', qrInstallL: 'Les étapes pour installer', qrHubL: 'Ouvrir le Hub', qrIntro: 'Scannez le premier code avec l’appareil photo de votre téléphone pour voir les étapes qui ajoutent le Hub à votre écran d’accueil et installent l’application Slack; scannez le second pour ouvrir le Hub lui-même.', qrFail: 'Le code n’a pas pu s’afficher ici. Ouvrez plutôt l’adresse ci-dessous sur votre téléphone.',
       videoH: 'Regardez d’abord la vidéo', videoText: 'Une courte vidéo présente les étapes 1 à 6, y compris vos Drives et vos groupes Google.', videoLink: 'Regarder la vidéo explicative',
       titleInstall: 'Welfare Avenue: le Hub sur votre téléphone', installH: 'Le Hub et Slack sur votre téléphone',
       installFirst: 'Connectez-vous d’abord au Hub dans Safari ou Chrome sur votre téléphone, puis ajoutez-le à l’écran d’accueil; si l’application installée vous demande de vous connecter de nouveau, faites-le une fois.',
@@ -1095,6 +1099,7 @@
      wave278 Task 5: twelve steps; under each, what is the hire's own (the function's setup fields; absent means a plain sentence instead); the
      hub step has no Done button: the Hub ticks it when they sign in; the phone step draws the QR of the install page. */
   var HUB_SET = { hub: true };   // ticked by the Hub itself (wa278_hub_seen), never by a press here
+  var HUB_URL = 'https://hub.welfareavenue.com/';   // the second code opens the Hub itself
   var QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';   // as build/src/225_wave225.seg loads it
   function setupCount(st) { return say(hx().count, { n: st.steps.filter(function (s) { return st.ticks[s.key]; }).length, m: st.steps.length }); }
   function httpsOf(u) { u = String(u || ''); return /^https:\/\//i.test(u) ? u : ''; }
@@ -1129,9 +1134,13 @@
     }
     if (key === 'phone') {
       var u = httpsOf(st.installUrl);
-      return u ? '<div class="qr" id="qrbox" aria-live="polite"></div><p class="more small">' + x.qrOpen + '</p><p class="qrurl"><a href="' + esc(u) + '">' + esc(u) + '</a></p>' : '';
+      return u ? '<div class="qrs">' + qrCell('qrbox', x.qrInstallL, u) + qrCell('qrbox2', x.qrHubL, HUB_URL) + '</div>' : '';
     }
     return '';
+  }
+  /* one code: the label above, the box the image is drawn into, the address under it as a link */
+  function qrCell(id, label, url) {
+    return '<div class="qrcell"><p class="qrlabel">' + label + '</p><div class="qr" id="' + id + '" aria-live="polite"></div><p class="qrurl"><a href="' + esc(url) + '">' + esc(url) + '</a></p></div>';
   }
   function hubState(on) { return on ? hx().hubDone : hx().hubWaiting; }
   function tickHtml(key, on) {
@@ -1146,13 +1155,14 @@
     hh += '<p>' + say(x.setupIntro, mgrWords()) + '</p><p class="count" id="setupcount" aria-live="polite">' + setupCount(st) + '</p><ol class="rundown" id="rundown">';
     st.steps.forEach(function (s) {
       var on = !!st.ticks[s.key];
-      hh += '<li class="rstep" data-step="' + esc(s.key) + '"><div class="rtext"><h3>' + esc((s.title || {})[lang] || '') + '</h3><p>' + esc((s.body || {})[lang] || '') + '</p>' +
+      hh += '<li class="rstep" data-step="' + esc(s.key) + '"><div class="rtext"><h3>' + esc((s.title || {})[lang] || '') + '</h3><p>' + (s.key === 'phone' && httpsOf(st.installUrl) ? x.qrIntro : esc((s.body || {})[lang] || '')) + '</p>' +
         linksHtml(s.links) + extraHtml(s.key, st) + '</div>' + tickHtml(s.key, on) + '</li>';
     });
     hh += '</ol><p id="err" class="err hide" role="alert"></p><p><a class="link" id="back" href="' + esc(linkWith('')) + '">' + x.back + '</a></p>';
     card.innerHTML = hh;
     document.getElementById('rundown').addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('[data-tick]') : null; if (b) tick(b); });
-    drawQr(httpsOf(st.installUrl));
+    drawQr('qrbox', 'qrimg', httpsOf(st.installUrl));
+    drawQr('qrbox2', 'qrimg2', HUB_URL);   // one library load: the second draw waits on the same promise
   }
   /* the QR of the install page: qrcode-generator 1.4.4 from cdnjs, loaded once and only here; drawn in our green on cream as an image */
   function qrLib() {
@@ -1161,18 +1171,18 @@
     S.qrLoading = new Promise(function (res, rej) { var s = document.createElement('script'); s.src = QR_LIB; s.onload = function () { window.qrcode ? res(window.qrcode) : rej(new Error('no qrcode')); }; s.onerror = function () { S.qrLoading = null; rej(new Error('the QR maker did not load')); }; document.head.appendChild(s); });
     return S.qrLoading;
   }
-  function drawQr(url) {
-    var box = document.getElementById('qrbox');
+  function drawQr(boxId, imgId, url) {
+    var box = document.getElementById(boxId);
     if (!box || !url) return;
     qrLib().then(function (make) {
       var qr = make(0, 'M'); qr.addData(url); qr.make();
       var n = qr.getModuleCount(), pad = 4, sz = n + pad * 2, cells = '';
       for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (qr.isDark(r, c)) cells += 'M' + (c + pad) + ' ' + (r + pad) + 'h1v1h-1z';
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + sz + ' ' + sz + '" shape-rendering="crispEdges"><rect width="' + sz + '" height="' + sz + '" fill="#FFFAF2"/><path d="' + cells + '" fill="#103F39"/></svg>';
-      var b = document.getElementById('qrbox');   // the view may have been painted again (the language toggle) while the library loaded
-      if (b) b.innerHTML = '<img id="qrimg" width="184" height="184" alt="' + esc(say(hx().qrAlt, { url: url })) + '" src="data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '">';
+      var b = document.getElementById(boxId);   // the view may have been painted again (the language toggle) while the library loaded
+      if (b) b.innerHTML = '<img id="' + imgId + '" width="184" height="184" alt="' + esc(say(hx().qrAlt, { url: url })) + '" src="data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '">';
     }).catch(function () {
-      var b = document.getElementById('qrbox');
+      var b = document.getElementById(boxId);
       if (b) b.innerHTML = '<p class="small">' + hx().qrFail + '</p>';
     });
   }
