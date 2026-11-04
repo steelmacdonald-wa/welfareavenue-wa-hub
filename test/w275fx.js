@@ -34,7 +34,8 @@ function rows275() {
       leader: false, offer_sent_by: 'samson.jules@welfareavenue.com', owner_email: 'dana@example.invalid', welcome_cc: ['omar@example.invalid'],   // wave278
       steps: [STEP(F.said, 'google', 'hr_task', 'The first password is not set in admin settings, so the Hub did not make the account.'), STEP(F.said, 'hub', 'waiting', null), STEP(F.said, 'roster', 'done', 'Created the roster profile.')].concat(ACCESS(F.said)) }),
     offered: row({ flow_id: F.offered, candidate_id: 7302, status: 'offered', name: 'Lina Offered', email: 'lina@example.invalid', accepted_on: null, hours_confirmed_at: null, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
-    proposed: row({ flow_id: F.proposed, candidate_id: 7303, name: 'Nia Proposed', email: 'nia@example.invalid', proposed_call_at: DAY(30, 10), proposed_one_on_one_at: DAY(31, 10) /* Thursday 1 October */, proposed_by: 'samson.jules@welfareavenue.com', proposed_at: '2026-09-24T15:00:00Z' }),
+    proposed: row({ flow_id: F.proposed, candidate_id: 7303, name: 'Nia Proposed', email: 'nia@example.invalid', proposed_call_at: DAY(30, 10), proposed_one_on_one_at: DAY(31, 10) /* Thursday 1 October */, proposed_by: 'samson.jules@welfareavenue.com', proposed_at: '2026-09-24T15:00:00Z',
+      offer_sent_by: 'lee.gone@welfareavenue.com' /* fix wave (M2): the offer's sender has left the roster, so the welcome comes from hub@ */ }),
     moved: row({ flow_id: F.moved, candidate_id: 7304, name: 'Kim Moved', email: 'kim@example.invalid', proposed_call_at: AT(9), proposed_one_on_one_at: AT(14), proposed_by: 'dana@example.invalid', proposed_at: '2026-09-23T15:00:00Z', hire_answer: 'no', hire_answered_at: null, manager_week_stale: true }),
     /* wave275b: made after wa275b (already communicated, the manager's hours off, no week saved), and an Accept without the optional hours box */
     fresh: row({ flow_id: F.fresh, candidate_id: 7306, status: 'offered', name: 'Tess Fresh', email: 'tess@example.invalid', accepted_on: null, hours_confirmed_at: null, ask_availability: false, manager_hours: false, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
@@ -102,8 +103,23 @@ const INIT275 = `(function(){
   var tables = function (name, id) { return ((window.__WAFIX || {})[name] || []).filter(function (r) { return String(name === 'hub_onboard_flows' ? r.id : r.flow_id) === String(id); }); };
   var stepsOf = function (id) { var a = []; each(id, function (r) { a = a.concat(r.steps || []); }); return a.concat(tables('hub_onboard_steps', id)); };
   var again = function (id, groups, drives) { stepsOf(id).forEach(function (s) { if (s.step === 'groups') { s.detail = groups; s.at = new Date().toISOString(); } if (s.step === 'drives') { s.detail = drives; s.at = new Date().toISOString(); } }); };
-  var nothing = function (id) { return !stepsOf(id).some(function (s) { return s.step === 'groups' || s.step === 'drives'; }); };
-  var NOTHING = 'There is nothing to run yet: Groups and Drives run once the offer is accepted.';
+  /* fix wave (I2): onboard-run makes the groups and drives rows of an accepted flow that has none (accepted before wave278's release) and runs them;
+     before Accept it runs nothing and says so, in its own sentence */
+  var accepted = function (id) { var x = one(id); return x ? !!x.accepted_on : tables('hub_onboard_flows', id).length > 0; };
+  var nothing = function (id) {
+    if (stepsOf(id).some(function (s) { return s.step === 'groups' || s.step === 'drives'; })) return false;
+    if (!accepted(id)) return true;
+    var made = function (fid) { return ['groups', 'drives'].map(function (k) { return { flow_id: fid, step: k, status: 'done', detail: null, practice: false, at: new Date().toISOString() }; }); };
+    if (one(id)) each(id, function (r) { r.steps = (r.steps || []).concat(made(r.flow_id)); });
+    else window.__WAFIX.hub_onboard_steps = window.__WAFIX.hub_onboard_steps.concat(made(Number(id)));
+    return false;
+  };
+  var NOTHING = 'The groups and drives steps are made when the offer is accepted, so there is nothing to run yet.';
+  var notHr = function () { return !!(window.__WA_RPC_ERRORS && window.__WA_RPC_ERRORS.wa271_ready_list); };   /* the NOT_HR person (a manager) */
+  /* fix wave (M2): times' welcome_from, as onboard-run works it out (the offer's sender when active staff, else the owner, else hub@); 703's sender has left
+     the roster, so hub@; 704's roster could not be read, so null */
+  var FROM = { 701: 'samson.jules@welfareavenue.com', 703: 'hub@welfareavenue.com', 704: null };
+  var fromOf = function (id) { return String(id) in FROM ? FROM[id] : 'hub@welfareavenue.com'; };
   window.__WA_INVOKE = function (name, opts) {
     var b = (opts && opts.body) || {}, x = b.flow_id != null ? one(b.flow_id) : null;
     var mine = name === 'onboard-run' && (NEW.indexOf(b.action) >= 0 || (x && (b.action === 'welcome' || b.action === 'set_manager' || b.action === 'set_canva_link')) || (b.action === 'retry' && x));
@@ -111,7 +127,7 @@ const INIT275 = `(function(){
     CALLS.push({ name: name, body: JSON.parse(JSON.stringify(b)) });
     if (window.__O271_REFUSE && window.__O271_REFUSE.action === b.action) { var z = window.__O271_REFUSE; window.__O271_REFUSE = null; return refuse(z.error, z.message); }
     switch (b.action) {
-      case 'times': return ok({ manager: { member_id: x.manager_member_id, name: x.manager_name }, availability: { weekly: DEF, except: window.__O275.except[x.manager_member_id] || [], tz: 'America/Toronto' },
+      case 'times': if (b.only === 'welcome_from') return ok({ welcome_from: fromOf(b.flow_id) }); return ok({ welcome_from: fromOf(b.flow_id), manager: { member_id: x.manager_member_id, name: x.manager_name }, availability: { weekly: DEF, except: window.__O275.except[x.manager_member_id] || [], tz: 'America/Toronto' },
         availability_at: x.manager_availability_at, stale: !!x.manager_week_stale, no_week: !!x.manager_no_week, except_at: null,
         busy: [{ start: H(28, 13), end: H(28, 14), summary: 'Team <i>sync</i>' }], taken: [{ start: H(28, 15), end: H(28, 16) }],
         hire_slots: window.__O275.grids[x.flow_id] || (x.grids.hire === 'marked' ? [H(28, 10), H(28, 10, 30), H(28, 11), H(28, 11, 30), H(28, 12)] : []),
@@ -136,7 +152,7 @@ const INIT275 = `(function(){
       case 'set_manager': each(b.flow_id, function (r) { r.manager_member_id = b.member_id; r.manager_name = String(b.member_id) === '9102' ? 'Omar Fixture' : 'Dana Fixture'; }); return ok({ ok: true, cleared: true });
       case 'set_canva_link': each(b.flow_id, function (r) { r.canva_link = b.link || null; }); return ok({ ok: true, canva_link: b.link || null });
       case 'ask_manager': return ok({ ok: true, sent: true, to: 'omar@example.invalid', manager: 'Omar Fixture', warnings: [] });
-      case 'set_leader': return later(900, function () {
+      case 'set_leader': if (b.leader === true && notHr()) return refuse('not_allowed', 'Only HR or an admin can make a hire a leader.', 403); return later(900, function () {   /* fix wave (I3) */
         var was = x ? x.leader : (tables('hub_onboard_flows', b.flow_id)[0] || {}).leader, warnings = [];
         each(b.flow_id, function (r) { r.leader = b.leader; });
         tables('hub_onboard_flows', b.flow_id).forEach(function (r) { r.leader = b.leader; });

@@ -23,7 +23,7 @@ const init = INIT + '\n' + INIT275;
 const open = (f, h) => f.hash(h || '#hrcentre/onboarding', 1500);
 const card = (id) => '[data-o271flow="' + id + '"]';
 const txtOf = (f, sel) => f.ev((s) => { const e = document.querySelector(s); return e ? e.innerText : ''; }, sel);
-const calls = (f, action) => f.ev((a) => window.__O271_CALLS.filter((c) => c.name === 'onboard-run' && c.body.action === a), action);
+const calls = (f, action) => f.ev((a) => window.__O271_CALLS.filter((c) => c.name === 'onboard-run' && c.body.action === a && !c.body.only), action);   // fix wave: times {only: welcome_from} (the welcome line) is counted on its own
 const allCalls = (f) => f.ev(() => window.__O271_CALLS.filter((c) => c.name === 'onboard-run').map((c) => c.body.action));
 const click = async (f, sel) => { await f.page.click(sel); await f.page.waitForTimeout(400); };
 const press = async (f, sel) => { await f.ev((s) => document.querySelector(s).click(), sel); await f.page.waitForTimeout(400); };   // a click that a sticky header cannot catch
@@ -382,14 +382,23 @@ const warns = (f, sel) => f.ev((s) => Array.prototype.map.call(document.querySel
     t = await txtOf(f, acc(F.said));
     ok('wave278: after it, "Joining as a leader" and the rows re-painted from the answer', /Joining as a leader/.test(t) && /admin@welfareavenue\.com and directors@welfareavenue\.com/.test(t) && /every drive but Accounting and Board of Directors/.test(t) && !/Re-running/.test(t), t);
     ok('wave278: the note says they join as a leader now', /as a leader now/.test(await txtOf(f, card(F.said))));
+    ok('wave278 fix wave (I2): an accepted card with no Groups or Drives rows yet (accepted before the release) has Re-check', await has(f, acc(F.proposed) + ' [data-o278a="recheck"]'));
     await press(f, acc(F.proposed) + ' [data-o278a="leader"][data-on="0"]');
     await f.page.waitForTimeout(1100);
     c = await calls(f, 'set_leader');
     ok('wave278: undecided, "As a member" calls set_leader false', c.length === 2 && c[1].body.flow_id === F.proposed && c[1].body.leader === false && /Joining as a member/.test(await txtOf(f, acc(F.proposed) + ' [data-o278lead]')), c);
-    ok('wave278: to member, the note says the Hub never removes access', /never removes/.test(await txtOf(f, card(F.proposed))));
-    t = await warns(f, card(F.proposed));
-    ok('wave278 fix: the server\'s warning shows ("nothing to run yet"), and the note does not claim Groups and Drives ran again', /nothing to run yet/.test(t) && !/ran Groups and Drives again/.test(await txtOf(f, card(F.proposed))), await txtOf(f, card(F.proposed)));
-    ok('wave278: no Re-check on a card with no Groups or Drives rows yet', !(await has(f, acc(F.proposed) + ' [data-o278a="recheck"]')));
+    t = await txtOf(f, card(F.proposed));
+    ok('wave278 fix wave (I2): onboard-run made the Groups and Drives rows and ran them; the note says so', /Google Groups/.test(t) && /Shared drives/.test(t) && /ran Groups and Drives again/.test(t) && await has(f, acc(F.proposed) + ' [data-o278a="recheck"]'), t);
+    ok('wave278 fix wave (M4): undecided to member, no "never removes" sentence (the server warns only from leader to member)', !/never removes/.test(t), t);
+    ok('wave278 fix wave (M2): the sender line is the server\'s (the offer\'s sender left the roster: hub@), not the offer\'s sender', /Welcome email: from hub@welfareavenue\.com/.test(await txtOf(f, acc(F.proposed) + ' [data-o278wel]')) && !/Lee Gone/.test(t), await txtOf(f, acc(F.proposed) + ' [data-o278wel]'));
+    ok('wave278 fix wave (M2): a sender the server could not work out names nobody', /Welcome email: from the offer's sender or hub@welfareavenue\.com/.test(await txtOf(f, acc(F.moved) + ' [data-o278wel]')), await txtOf(f, acc(F.moved) + ' [data-o278wel]'));
+    const light = await f.ev(() => window.__O271_CALLS.filter((c) => c.body.action === 'times' && c.body.only === 'welcome_from').map((c) => c.body.flow_id));
+    ok('wave278 fix wave (M2): the card asks times {only: welcome_from} once per card, not on every repaint', light.length > 0 && light.length === new Set(light).size && light.indexOf(F.said) >= 0 && light.indexOf(F.started) < 0, light);
+    ok('wave278 fix wave (I2): no Re-check on a card before Accept', !(await has(f, acc(F.offered) + ' [data-o278a="recheck"]')));
+    await press(f, acc(F.offered) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    t = await warns(f, card(F.offered));
+    ok('wave278 fix: before Accept, the server\'s own sentence shows ("nothing to run yet"), and the note does not claim Groups and Drives ran again', /The groups and drives steps are made when the offer is accepted, so there is nothing to run yet\./.test(t) && !/ran Groups and Drives again/.test(await txtOf(f, card(F.offered))), await txtOf(f, card(F.offered)));
     await press(f, acc(F.said) + ' [data-o278a="recheck"]');
     c = await calls(f, 'recheck_access');
     ok('wave278: Re-check Drives and Groups calls recheck_access', c.length === 1 && c[0].body.flow_id === F.said && /Re-check Drives and Groups/.test(await txtOf(f, acc(F.said) + ' [data-o278a="recheck"]')), c);
@@ -399,6 +408,8 @@ const warns = (f, sel) => f.ev((s) => Array.prototype.map.call(document.querySel
     await f.page.waitForTimeout(1100);
     t = await warns(f, card(F.said));
     ok('wave278 fix: leader to member, the groups to take them out of by hand show as a warning', /Take them out of admin@welfareavenue\.com and directors@welfareavenue\.com by hand/.test(t) && /Joining as a member/.test(await txtOf(f, acc(F.said) + ' [data-o278lead]')), await txtOf(f, card(F.said)));
+    t = await txtOf(f, card(F.said));
+    ok('wave278 fix wave (M4): "never removes" is said once, by the server\'s warning, not again by the note', (t.match(/never removes/g) || []).length === 1, t);
 
     /* the welcome's copies */
     t = await txtOf(f, acc(F.said) + ' [data-o278wel]');
@@ -444,17 +455,23 @@ const warns = (f, sel) => f.ev((s) => Array.prototype.map.call(document.querySel
     await done(f);
   }
   {
-    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started', 'old'] }), init: init + '\n' + NOT_HR });
+    const rp = rpcs275({ mine: ['said', 'started', 'old'] });
+    rp.wa275_my_cards.filter((r) => r.flow_id === F.started).forEach((r) => { r.leader = true; });   // HR made Ola a leader
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rp, init: init + '\n' + NOT_HR });
     await open(f, '#mypage');
     await f.page.waitForTimeout(1200);
-    ok('wave278 Joy: her own hire\'s card has the leader line and Re-check, and no other card shows', await has(f, acc(F.said) + ' [data-o278a="leader"]') && await has(f, acc(F.said) + ' [data-o278a="recheck"]') && !(await has(f, card(F.offered))) && !(await has(f, card(F.proposed))) && !(await has(f, card(F.moved))));
-    await press(f, acc(F.said) + ' [data-o278a="leader"]');
+    ok('wave278 Joy: her own hire\'s card has the leader line and Re-check, and no other card shows', await has(f, acc(F.said) + ' [data-o278lead]') && await has(f, acc(F.said) + ' [data-o278a="recheck"]') && !(await has(f, card(F.offered))) && !(await has(f, card(F.proposed))) && !(await has(f, card(F.moved))));
+    let t = await txtOf(f, acc(F.said) + ' [data-o278lead]');
+    ok('wave278 fix wave (I3): Joy (not HR) is not offered "make a leader": a member stays a member on her card, with a line saying HR decides', /^Joining as a member/.test(t) && !(await has(f, acc(F.said) + ' [data-o278a="leader"][data-on="1"]')) && /HR/.test(t) && !/Change/.test(t), t);
+    t = await txtOf(f, acc(F.started) + ' [data-o278lead]');
+    ok('wave278 fix wave (I3): on her leader hire she may change them to a member', /^Joining as a leader/.test(t) && await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="0"]') && !(await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]')), t);
+    await press(f, acc(F.started) + ' [data-o278a="leader"][data-on="0"]');
     await f.page.waitForTimeout(1100);
     await press(f, acc(F.said) + ' [data-o278a="recheck"]');
     await f.page.waitForTimeout(1100);
     const sl = await calls(f, 'set_leader'), rc = await calls(f, 'recheck_access');
-    ok('wave278 Joy: Change and Re-check on her own hire call set_leader and recheck_access', sl.length === 1 && sl[0].body.flow_id === F.said && sl[0].body.leader === true && rc.length === 1 && rc[0].body.flow_id === F.said, [sl, rc]);
-    ok('wave278 Joy: the line now says leader', /Joining as a leader/.test(await txtOf(f, acc(F.said) + ' [data-o278lead]')));
+    ok('wave278 Joy: Change (to member) and Re-check on her own hires call set_leader false and recheck_access', sl.length === 1 && sl[0].body.flow_id === F.started && sl[0].body.leader === false && rc.length === 1 && rc[0].body.flow_id === F.said, [sl, rc]);
+    ok('wave278 Joy: the line now says member', /Joining as a member/.test(await txtOf(f, acc(F.started) + ' [data-o278lead]')));
     ok('wave278 Joy: the started card from her list has the leader line, and no Add people (sent)', await has(f, acc(F.started) + ' [data-o278lead]') && !(await has(f, acc(F.started) + ' [data-o278a="ccopen"]')));
     ok('wave278 Joy: no console errors', f.cons.length === 0, f.cons);
     await done(f);
