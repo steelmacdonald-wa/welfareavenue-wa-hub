@@ -804,7 +804,7 @@ export const SETUP: Array<{ key: string; title: Words; body: Words; links?: Arra
   { key: 'weekly', title: { en: 'Your team\'s weekly meeting', fr: 'La rencontre hebdomadaire de votre équipe' },
     body: { en: 'Find it in your Calendar and accept the invitation.', fr: 'Trouvez-la dans votre Agenda et acceptez l\'invitation.' } },
   { key: 'phone', title: { en: 'The Hub and Slack on your phone', fr: 'Le Hub et Slack sur votre téléphone' },
-    body: { en: 'Scan this code with your phone\'s camera. It opens a page with the steps to add the Hub to your home screen, then the Slack app.', fr: 'Balayez ce code avec l\'appareil photo de votre téléphone. Il ouvre une page avec les étapes pour ajouter le Hub à votre écran d\'accueil, puis l\'application Slack.' } },
+    body: { en: 'Scan the first code with your phone\'s camera for the steps to add the Hub to your home screen and get the Slack app; scan the second to open the Hub itself.', fr: 'Scannez le premier code avec l\'appareil photo de votre téléphone pour voir les étapes qui ajoutent le Hub à votre écran d\'accueil et installent l\'application Slack; scannez le second pour ouvrir le Hub lui-même.' } },
 ];
 const SETUP_KEYS = SETUP.map((s) => s.key);
 const HUB_TICKED = ['hub'];   // set by the Hub page at sign-in (wa278_hub_seen), never by setup_tick

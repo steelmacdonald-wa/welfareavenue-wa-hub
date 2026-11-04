@@ -51,6 +51,7 @@ const LINKS = {
   academy: [['The Avenue Academy', 'https://hub.welfareavenue.com/#training'], ['The Hub home page', 'https://hub.welfareavenue.com/']].map(([n, url]) => ({ label: { en: n, fr: n }, url })),
 };
 const STEPS = KEYS.map((key, i) => Object.assign({ key, title: { en: 'Step ' + (i + 1) + ' in English', fr: 'Étape ' + (i + 1) + ' en français' }, body: { en: 'What to do for ' + key + '.', fr: 'Quoi faire pour ' + key + '.' } }, LINKS[key] ? { links: LINKS[key] } : {}));
+const HUB_URL = 'https://hub.welfareavenue.com/';
 const INSTALL_URL = 'https://hub.welfareavenue.com/o/' + TOK + '?install';
 const EXTRA = {
   address: 'amina.diallo@welfareavenue.com', drives: ['Org\'s Files', 'Operations'],
@@ -430,6 +431,17 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     ok('w278: the phone step draws a QR image', !!qr && /^data:image\/svg\+xml/.test(qr.src) && qr.w > 0 && !!qr.alt, qr);
     ok('w278: the QR maker came from cdnjs, once', f.fx.qrLoads === 1, f.fx.qrLoads);
     ok('w278: the install URL is printed under the QR', (await f.page.locator('[data-step="phone"]').innerText()).indexOf(INSTALL_URL) >= 0);
+    /* wave278 t5b: a second QR opens the Hub itself */
+    await f.page.waitForFunction(() => { const i = document.getElementById('qrimg2'); return i && i.complete && i.naturalWidth > 0; }, null, { timeout: 5000 }).catch(() => {});
+    const qrs = await f.page.evaluate(() => Array.from(document.querySelectorAll('[data-step="phone"] .qr img')).map(i => ({ id: i.id, w: i.naturalWidth, alt: i.getAttribute('alt'), src: i.getAttribute('src').slice(0, 26) })));
+    ok('w278 t5b: two QR images in the phone step', qrs.length === 2 && qrs.every(q => q.w > 0 && /^data:image\/svg\+xml/.test(q.src)) && qrs[0].alt.indexOf(INSTALL_URL) >= 0 && qrs[1].alt.indexOf(HUB_URL) >= 0, qrs);
+    const qpos = await f.page.evaluate(() => Array.from(document.querySelectorAll('[data-step="phone"] .qr img')).map(i => { const r = i.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; }));
+    ok('w278 t5b: on a wide screen the two codes sit on one row', qpos.length === 2 && qpos[0][1] === qpos[1][1] && qpos[1][0] > qpos[0][0], qpos);
+    ok('w278 t5b: the two labels (English) sit above the codes', await f.page.evaluate(() => { const l = Array.from(document.querySelectorAll('[data-step="phone"] .qrlabel')); const im = Array.from(document.querySelectorAll('[data-step="phone"] .qr img')); return l.length === 2 && im.length === 2 && l[0].textContent === 'Steps to install' && l[1].textContent === 'Open the Hub' && l.every((e, i) => e.getBoundingClientRect().bottom <= im[i].getBoundingClientRect().top); }));
+    const phoneHrefs = await f.page.locator('[data-step="phone"] .qrurl a').evaluateAll(as => as.map(a => [a.getAttribute('href'), a.textContent]));
+    ok('w278 t5b: both addresses are printed under their codes as links', phoneHrefs.length === 2 && phoneHrefs[0][0] === INSTALL_URL && phoneHrefs[0][1] === INSTALL_URL && phoneHrefs[1][0] === HUB_URL && phoneHrefs[1][1] === HUB_URL, phoneHrefs);
+    const enp = await f.page.locator('[data-step="phone"]').innerText();
+    ok('w278 t5b: the step sentence names both codes, plain words', enp.indexOf('Scan the first code with your phone\u2019s camera for the steps to add the Hub to your home screen and get the Slack app; scan the second to open the Hub itself.') >= 0 && clean(enp), enp);
     ok('w278: no walkthrough video while none is set', (await f.page.locator('#video').count()) === 0);
     ok('w278: opening posts nothing', f.posts().length === 0);
     ok('w278: no page errors', f.errors.length === 0, f.errors);
@@ -455,12 +467,18 @@ const mark = (p, list) => p.evaluate(l => l.forEach(i => document.querySelector(
     ok('w278 French: the twelve steps and the count', STEPS.every(s => t.indexOf(s.title.fr) >= 0) && /0 sur 12 terminées/.test(t), t.slice(0, 600));
     ok('w278 French: the groups and their purposes', /toute l.équipe de Welfare Avenue/.test(t) && /la liste de votre équipe/.test(t));
     ok('w278 French: Chrome pour Mac, the meeting in French', /Chrome pour Mac/.test(t) && /mardi 3 novembre/.test(await f.page.locator('[data-step="weekly"]').innerText()), await f.page.locator('[data-step="weekly"]').innerText());
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-step="phone"] .qr img').length === 2, null, { timeout: 5000 }).catch(() => {});
+    const frp = await f.page.locator('[data-step="phone"]').innerText();
+    ok('w278 t5b French: the two labels, the two addresses and the sentence', /Les étapes pour installer/.test(frp) && /Ouvrir le Hub/.test(frp) && frp.indexOf(INSTALL_URL) >= 0 && frp.indexOf(HUB_URL) >= 0 && /Scannez le premier code avec l.appareil photo de votre téléphone pour voir les étapes qui ajoutent le Hub à votre écran d.accueil et installent l.application Slack; scannez le second pour ouvrir le Hub lui-même\./.test(frp) && clean(frp), frp);
     ok('w278 French: the hub step ticks itself', /se coche/.test(await f.page.locator('[data-auto="hub"]').innerText()));
     ok('w278 French at 390 px: no sideways scroll, Hub words, no errors', await noScroll(f.page) && clean(await allWords(f.page)) && f.errors.length === 0, f.errors);
     await shot(f.page, 'w278-setup-phone-fr');
     await f.ctx.close();
     f = await open(browser, { phone: true, qs: '?setup', wait: 900, fn: makeHire({ answered: 'accept', answer: 'yes', bookedTimes: { call_at: CALL, one_on_one_at: ONE } }) });
-    ok('w278 at 390 px: the twelve steps, the QR, no sideways scroll', (await f.page.locator('.rstep').count()) === 12 && (await f.page.locator('#qrimg').count()) === 1 && await noScroll(f.page) && f.errors.length === 0, f.errors);
+    await f.page.waitForFunction(() => document.querySelectorAll('[data-step="phone"] .qr img').length === 2, null, { timeout: 5000 }).catch(() => {});
+    ok('w278 at 390 px: the twelve steps, both QR codes, no sideways scroll', (await f.page.locator('.rstep').count()) === 12 && (await f.page.locator('#qrimg').count()) === 1 && (await f.page.locator('#qrimg2').count()) === 1 && await noScroll(f.page) && f.errors.length === 0, f.errors);
+    const qp = await f.page.evaluate(() => Array.from(document.querySelectorAll('[data-step="phone"] .qr img')).map(i => { const r = i.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.right)]; }));
+    ok('w278 t5b at 390 px: the codes are stacked, inside the screen', qp.length === 2 && qp[1][1] > qp[0][1] && qp.every(q => q[0] >= 0 && q[2] <= 390), qp);
     await shot(f.page, 'w278-setup-phone');
     await f.ctx.close();
 
