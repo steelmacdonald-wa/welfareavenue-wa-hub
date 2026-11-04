@@ -6,6 +6,9 @@
 // and the migration and the assertions still pass after an undo. Touches no live database. Exits non-zero on any failure.
 // wave275 (Task 1): build/wa275a_streamlined.sql is loaded after wave271 (twice), test/w275sql.sql runs against it, test/w271sql.sql runs again with it loaded,
 // and the undo round trip takes wa275a_undo.sql first (the wave271 ready list and accept trigger come back exactly), then the wave271 undo as before.
+// wave278 (Task 1): build/wa278a_onboarding.sql is loaded on top of wa275b (twice; flows with old rundown ticks are put in first, to prove the carry-over and
+// that a second run changes nothing), test/w278sql.sql runs twice, the wave275 and wave271 scripts run with it loaded, and build/wa278a_undo.sql (twice)
+// brings wa275b's card row back exactly before wa275b's own undo runs.
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +28,9 @@ const undo275 = read('../build/wa275a_undo.sql');
 const assertions275 = read('w275sql.sql');
 const optional275 = read('../build/wa275b_optional.sql');   // wave275b (03/11/26): three availability checks optional, off by default
 const undo275b = read('../build/wa275b_undo.sql');
+const onboarding278 = read('../build/wa278a_onboarding.sql');   // wave278a (04/11/26): the new-employee onboarding experience, its database
+const undo278 = read('../build/wa278a_undo.sql');
+const assertions278 = read('w278sql.sql');
 
 let checks = 0;
 const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
@@ -215,6 +221,103 @@ try {
   ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability' and changed_by like 'wa275b%'`)).n === 2, 'wa275b round 2: still only the first run\'s two change_log rows');
   await db.exec(`delete from public.app_config where key = 'onboard_v2_since'`);
   await runAssertions275(db, 'wa275 assertions with wa275b re-applied', true);
+
+  // ---- wave278a (04/11/26): settings, the welcome sender and copies, the leader decision, the Hub-signed-in tick and the rundown key carry-over, on top of
+  //      wa275b; its undo brings wa275b's card row back exactly. The carry-over is a one-time update in the migration, so its cases are put in here, before it.
+  const FN278 = `select pg_get_functiondef('public.wa275_flow_row(bigint)'::regprocedure) as row_def, obj_description('public.wa275_flow_row(bigint)'::regprocedure, 'pg_proc') as row_cmt,
+      (select proacl::text from pg_proc where oid = 'public.wa275_flow_row(bigint)'::regprocedure) as row_acl`;
+  const wa275bRow = lf(await one(db, FN278));
+  const N_KEYS = ['onboard_auto_groups', 'onboard_auto_drives', 'onboard_auto_meeting', 'onboard_auto_channel', 'onboard_leader_titles', 'onboard_groups', 'onboard_drives',
+    'onboard_weekly_meetings', 'onboard_slack_channel_link', 'onboard_slack_channel_id', 'onboard_setup_video'];
+  const CARRY = {   // email -> [ticks before, ticks after the carry-over]
+    'w278.cold@example.invalid': [{ rd_profile: 't1', rd_loom: 't2', rd_hub: 't3' }, { rd_chrome: 't1', rd_hub: 't3' }],
+    'w278.cnew@example.invalid': [{ rd_chrome: 't9', rd_hub: 't3' }, { rd_chrome: 't9', rd_hub: 't3' }],
+    'w278.cmix@example.invalid': [{ rd_chrome: 't9', rd_profile: 't1', rd_drive: 't8', rd_drives: 't7' }, { rd_chrome: 't9', rd_drive: 't8' }],
+    'w278.cdrv@example.invalid': [{ rd_drives: 't4', rd_bookmarks: 't5', hire_times_at: 'x' }, { rd_drive: 't4', rd_bookmarks: 't5', hire_times_at: 'x' }],
+    'w278.cnul@example.invalid': [{ rd_chrome: null, rd_profile: 't1' }, { rd_chrome: 't1' }],
+    'w278.cold0@example.invalid': [{ rd_profile: null, rd_slack: 't6' }, { rd_slack: 't6' }],
+    'w278.cclean@example.invalid': [{}, {}],
+  };
+  const CARRY_EMAILS = Object.keys(CARRY);
+  await db.exec(`insert into public.hub_candidates (name, email, status, offer_hours) values ${CARRY_EMAILS.map((e, i) => `('Test Person C${i}', '${e}', 'offer', 6)`).join(', ')};
+    update public.hub_candidates set offer_sent_at = now() where email like 'w278.c%@example.invalid';`);
+  for (const e of CARRY_EMAILS) {
+    await db.query(`update public.hub_onboard_flows set setup_ticks = $1::jsonb, updated_at = timestamptz '2026-11-01 12:00:00+00' where candidate_id = (select id from public.hub_candidates where email = $2)`, [JSON.stringify(CARRY[e][0]), e]);
+  }
+  const carryOf = async (e) => one(db, `select f.setup_ticks as t, f.updated_at::text as u from public.hub_onboard_flows f join public.hub_candidates c on c.id = f.candidate_id where c.email = '${e}'`);
+  const sameJson = (a, b) => JSON.stringify(Object.keys(a).sort().map((k) => [k, a[k]])) === JSON.stringify(Object.keys(b).sort().map((k) => [k, b[k]]));
+  async function runAssertions278(db, label) {
+    const res = await db.exec(assertions278);
+    const last = res.filter((r) => r.rows && r.rows.length).pop();
+    const line = last && last.rows[0] && last.rows[0].result;
+    ok(line === 'w278sql: all assertions passed', label + ': the wave278 assertion script finished (' + line + ')');
+    console.log(label + ': ' + line);
+  }
+  async function checkCarry(label, untouched = true) {
+    for (const e of CARRY_EMAILS) {
+      const r = await carryOf(e);
+      ok(sameJson(r.t, CARRY[e][1]), label + ': ' + e + ' ticks ' + JSON.stringify(CARRY[e][0]) + ' became ' + JSON.stringify(r.t) + ', expected ' + JSON.stringify(CARRY[e][1]));
+    }
+    if (untouched) for (const e of ['w278.cnew@example.invalid', 'w278.cclean@example.invalid']) {
+      ok((await carryOf(e)).u.startsWith('2026-11-01 12:00:00'), label + ': ' + e + ' (no old key) is not written at all');
+    }
+  }
+  await db.exec(onboarding278);
+  console.log('wa278a_onboarding: applied once with no error');
+  await checkCarry('wa278a carry-over');
+  const afterFirst = {};
+  for (const e of CARRY_EMAILS) afterFirst[e] = await carryOf(e);
+  await db.exec(onboarding278);   // safe to run twice: the second run changes no tick and writes no row
+  console.log('wa278a_onboarding: applied twice with no error');
+  for (const e of CARRY_EMAILS) {
+    const r = await carryOf(e);
+    ok(sameJson(r.t, afterFirst[e].t) && r.u === afterFirst[e].u, 'wa278a: the second run leaves ' + e + ' exactly as the first left it');
+  }
+  for (const k of N_KEYS) ok((await one(db, `select count(*)::int as n from public.app_config where key = '${k}'`)).n === 1, 'wa278a: ' + k + ' is there, once');
+  ok((await one(db, `select count(*)::int as n from pg_proc where proname = 'wa278_hub_seen'`)).n === 1, 'wa278a: one wa278_hub_seen after two runs');
+  // running it again keeps a value HR set
+  await db.exec(`update public.app_config set value = 'director, head' where key = 'onboard_leader_titles'; update public.app_config set value = 'C0TESTCHAN' where key = 'onboard_slack_channel_id';`);
+  await db.exec(onboarding278);
+  ok((await one(db, `select value from public.app_config where key = 'onboard_leader_titles'`)).value === 'director, head', 'wa278a: running it again keeps the titles HR set');
+  ok((await one(db, `select value from public.app_config where key = 'onboard_slack_channel_id'`)).value === 'C0TESTCHAN', 'wa278a: running it again keeps the channel id HR pasted');
+  await db.exec(`update public.app_config set value = 'director, lead, head, chief, manager' where key = 'onboard_leader_titles'; update public.app_config set value = '' where key = 'onboard_slack_channel_id';`);
+  await runAssertions278(db, 'wa278 assertions');
+  await runAssertions278(db, 'wa278 assertions (second run; the first rolled back)');
+  await runAssertions275(db, 'wa275 assertions with wa278a loaded', true);
+  await runAssertions(db, 'wa271 assertions with wa278a loaded');
+  console.log('wa278a: every check passed');
+  // the undo: twice, then wa275b's card row is back exactly, the columns, keys and function are gone, and the wave275 page's keys are back beside the new ones
+  await db.exec(undo278);
+  await db.exec(undo278);   // safe to run twice
+  console.log('wa278a undo: applied twice with no error');
+  const backRow = lf(await one(db, FN278));
+  for (const k of Object.keys(wa275bRow)) ok(backRow[k] === wa275bRow[k], 'wa278a undo: wa275b ' + k + ' is back exactly as it was');
+  ok((await one(db, `select count(*)::int as n from information_schema.columns where table_schema = 'public' and ((table_name = 'hub_candidates' and column_name = 'offer_sent_by')
+      or (table_name = 'hub_onboard_flows' and column_name in ('leader', 'welcome_cc')))`)).n === 0, 'wa278a undo: the three columns are gone');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in (${N_KEYS.map((k) => "'" + k + "'").join(', ')})`)).n === 0, 'wa278a undo: the eleven settings are gone');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key in ('onboard_ask_hire_availability', 'onboard_manager_hours', 'onboard_require_hours', 'onboard_auto_hub')`)).n === 4, 'wa278a undo: the wave275 settings stay');
+  ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa278%'`)).n === 0, 'wa278a undo: no wa278 function left');
+  const UNDO_TICKS = {   // the wave275 page reads rd_profile and rd_drives: the undo puts them back from the new keys, never over one that is set
+    'w278.cold@example.invalid': { rd_chrome: 't1', rd_profile: 't1', rd_hub: 't3' },
+    'w278.cmix@example.invalid': { rd_chrome: 't9', rd_profile: 't9', rd_drive: 't8', rd_drives: 't8' },
+    'w278.cdrv@example.invalid': { rd_drive: 't4', rd_drives: 't4', rd_bookmarks: 't5', hire_times_at: 'x' },
+    'w278.cclean@example.invalid': {},
+  };
+  for (const [e, want] of Object.entries(UNDO_TICKS)) {
+    const r = await carryOf(e);
+    ok(sameJson(r.t, want), 'wa278a undo: ' + e + ' ticks are ' + JSON.stringify(r.t) + ', expected ' + JSON.stringify(want));
+  }
+  await runAssertions275(db, 'wa275 assertions after the wa278a undo', true);
+  // and it goes back on after its undo: the carry-over drops the old keys again and keeps the new ones (a tick is never counted twice)
+  await db.exec(onboarding278);
+  await checkCarry('wa278a re-applied after its undo', false);   // the undo gave cnew an rd_profile, so the re-run writes that row
+  await runAssertions278(db, 'wa278 assertions with wa278a re-applied');
+  await db.exec(undo278);
+  for (const k of Object.keys(wa275bRow)) ok(lf(await one(db, FN278))[k] === wa275bRow[k], 'wa278a undo (second round): wa275b ' + k + ' is back exactly as it was');
+  await db.exec(`delete from public.hub_onboard_flows where candidate_id in (select id from public.hub_candidates where email like 'w278.c%@example.invalid');
+    delete from public.hub_candidates where email like 'w278.c%@example.invalid';`);
+  console.log('wa278a undo: every check passed');
+
   await db.exec(undo275b);
   await db.exec(`delete from public.change_log where entity_type = 'onboard_flow' and field = 'ask_availability';
     delete from public.hub_onboard_flows where candidate_id in (select id from public.hub_candidates where email like 'w275b.%');
