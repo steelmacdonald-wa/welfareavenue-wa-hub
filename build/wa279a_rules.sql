@@ -545,10 +545,10 @@ create trigger trg_wa279_policy_sync after insert on public.wa_policy_signoffs f
 --   wa279_onboard_tick (cron wa-onboard-behind, weekdays 12:35 UTC): 1. wa279_role_autopick() (its own switch is onboard_role_picks_since); 2. for each counting
 --     plan with late steps and no onboard_behind row in the last 7 days (by Toronto date): onboard_behind to the hire, onboard_behind_lead to the manager (the first
 --     of wa279_plan_manager by member id; none = only the hire hears), and from the third onboard_behind row on a plan the hr_notify_emails as well;
---     3. for each plan at day 21 or more (started_at >= onboard_role_picks_since) with a section under its minimum (60 DAYS 2, 90 DAYS 5) and no onboard_role_pick
+--     3. for each plan at day 21 or more (started_at >= onboard_role_picks_since) with a section under its minimum (60 DAYS 2, 90 DAYS 5) whose auto-pick day (29, 59) is still ahead and no onboard_role_pick
 --     row in the last 7 days: onboard_role_pick to the manager. app_config onboard_behind_on must be 'on' to send anything; a dry run still returns the plan.
 --   Each plan runs in its own sub-block: a plan that fails is listed in failed and the others go on. The log row is written before the messages go.
---   Sending is as wa242_due_reminders: notify for everyone, hub-push too when the person has a device and push_on is not off, each wrapped so it never raises.
+--   Sending goes through notify only (its relay branch sends the Hub notification too, honouring push_on), wrapped so it never raises.
 --   onboarding_behind_log is the memory (one row per plan, kind and send); nothing reads it but this function.
 
 create table if not exists public.onboarding_behind_log (
@@ -580,7 +580,7 @@ $function$;
 revoke all on function public.wa279_behind_list(bigint) from public, anon, authenticated;
 comment on function public.wa279_behind_list(bigint) is 'wave279: the late steps of an onboarding plan, [{template_id, name, section, due_date}], oldest first: open, due more than 2 days ago (Toronto date). A role step (role60, role90) with no picks in its section never counts.';
 
--- one message to one person: notify, and hub-push when they have a device (as wa242_due_reminders); neither can raise
+-- one message to one person through notify (its relay branch sends the Hub notification too, through hub-push, so there is no direct hub-push call); never raises
 create or replace function public.wa279_tell(p_event text, p_to text, p_url text, p_tag text, p_title text, p_body text)
 returns void language plpgsql security definer set search_path to '' as $function$
 declare
@@ -591,16 +591,9 @@ begin
   begin
     perform public.call_edge('notify', jsonb_build_object('event', p_event, 'to_email', v_to, 'url', p_url, 'tag', p_tag, 'title', p_title, 'body', p_body, 'text', v_text));
   exception when others then null; end;
-  if coalesce((select c.value from public.app_config c where c.key = 'push_on'), 'on') = 'on'
-     and exists (select 1 from public.hub_push_subs s where lower(s.email) = v_to) then
-    -- hub-push takes a relayed message as event relay with the kind named
-    begin
-      perform public.call_edge('hub-push', jsonb_build_object('event', 'relay', 'kind', p_event, 'to_email', v_to, 'url', p_url, 'tag', p_tag, 'title', p_title, 'body', p_body));
-    exception when others then null; end;
-  end if;
 end $function$;
 revoke all on function public.wa279_tell(text, text, text, text, text, text) from public, anon, authenticated;
-comment on function public.wa279_tell(text, text, text, text, text, text) is 'wave279: sends one onboarding message to one person through notify, and through hub-push when they have a device. Internal; never raises.';
+comment on function public.wa279_tell(text, text, text, text, text, text) is 'wave279: sends one onboarding message to one person through notify (which also sends the Hub notification). Internal; never raises.';
 
 -- the daily job
 create or replace function public.wa279_onboard_tick(p_dry boolean default false)
@@ -676,13 +669,17 @@ begin
       -- 3. the manager is asked to pick role trainings (day 21 on, while a list is under its minimum)
       v_day := v_today - o.started_at;
       if v_pick_since is not null and o.started_at >= v_pick_since and v_day >= 21 and v_mgr is not null then
+        -- a section is asked about while it is short and its auto-pick day (29, 59) is still ahead; after that day the Hub has had its go
         select array_agg(s.sec order by s.sec) into v_short
-          from (values ('60 DAYS', 2), ('90 DAYS', 5)) s(sec, mn)
-         where (select count(*) from public.onboarding_role_picks k where k.onboarding_id = o.id and k.section = s.sec) < s.mn;
+          from (values ('60 DAYS', 2, 29), ('90 DAYS', 5, 59)) s(sec, mn, gate)
+         where v_day < s.gate and (select count(*) from public.onboarding_role_picks k where k.onboarding_id = o.id and k.section = s.sec) < s.mn;
         if v_short is not null and not exists (select 1 from public.onboarding_behind_log l
                                                 where l.onboarding_id = o.id and l.kind = 'onboard_role_pick' and (l.sent_at at time zone 'America/Toronto')::date > v_today - 7) then
           v_title := 'Pick ' || o.hire_name || '''s role trainings';
-          v_body := 'Pick 2 or 3 trainings for ' || o.hire_name || '''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.';
+          v_body := case
+            when v_short = array['60 DAYS'] then 'Pick 2 or 3 trainings for ' || o.hire_name || '''s 60 days. The Hub picks for you on day 29 if you don''t.'
+            when v_short = array['90 DAYS'] then 'Pick 5 or 6 trainings for ' || o.hire_name || '''s 90 days. The Hub picks for you on day 59 if you don''t.'
+            else 'Pick 2 or 3 trainings for ' || o.hire_name || '''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.' end;
           if not p_dry then
             insert into public.onboarding_behind_log (onboarding_id, kind, late, detail)
             values (o.id, 'onboard_role_pick', cardinality(v_short), jsonb_build_object('to', v_mgr, 'short', to_jsonb(v_short), 'day', v_day));
@@ -709,17 +706,17 @@ insert into public.hub_notification_kinds (key, grp, grp_title, sort, title, blu
    'When steps on your onboarding plan are more than 2 days past their due date. At most once a week while you are behind.',
    'How many steps are late, the section they are in and the first five, with a link to My page.',
    'You''re behind on onboarding', 'You''re behind on 3 onboarding steps from Week 1: Meet your buddy, Set up your calendar, Read the handbook.', '#mypage',
-   true, true, false, false, 'a new hire', 'wa279_onboard_tick, notify, hub-push', true),
+   true, true, false, false, 'a new hire', 'wa279_onboard_tick, notify', true),
   ('onboard_behind_lead', 'people', 'People and HR', 82, 'Onboarding: a hire is behind',
    'When steps on the onboarding plan of someone you manage are more than 2 days past their due date. At most once a week. HR hears too from the third message on a plan.',
    'Who is behind, how many steps and the first five, with a link to Onboarding in the HR centre.',
    'Alex Tremblay is behind on onboarding', 'Alex Tremblay is behind on 3 onboarding steps from Week 1: Meet your buddy, Set up your calendar, Read the handbook.', '#hrcentre/onboarding',
-   true, true, false, false, 'the new hire''s manager and the HR notify list (from the third message)', 'wa279_onboard_tick, notify, hub-push', true),
+   true, true, false, false, 'the new hire''s manager and the HR notify list (from the third message)', 'wa279_onboard_tick, notify', true),
   ('onboard_role_pick', 'people', 'People and HR', 83, 'Onboarding: pick role trainings',
    'From day 21 of a new hire''s plan, every 7 days while their 60 days or 90 days list of role trainings is short. The Hub picks for you on day 29 and day 59 if you don''t.',
    'Who needs role trainings picked and how many, with a link to Onboarding in the HR centre.',
    'Pick Alex Tremblay''s role trainings', 'Pick 2 or 3 trainings for Alex Tremblay''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', '#hrcentre/onboarding',
-   true, true, false, false, 'the new hire''s manager', 'wa279_onboard_tick, notify, hub-push', true)
+   true, true, false, false, 'the new hire''s manager', 'wa279_onboard_tick, notify', true)
 on conflict (key) do update set grp = excluded.grp, grp_title = excluded.grp_title, sort = excluded.sort, title = excluded.title, blurb = excluded.blurb, says = excluded.says,
   example_title = excluded.example_title, example_body = excluded.example_body, example_url = excluded.example_url, hub = excluded.hub, slack = excluded.slack, email = excluded.email,
   channel_only = excluded.channel_only, audience = excluded.audience, sender = excluded.sender, active = excluded.active, updated_at = now();

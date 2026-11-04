@@ -554,7 +554,7 @@ begin
     t := t || v_id;
   end loop;
   insert into public.app_config (key, value) values
-    ('hr_notify_emails', 'w279.hr1@example.invalid, W279.HR2@example.invalid'), ('push_on', 'on'),
+    ('hr_notify_emails', 'w279.hr1@example.invalid, W279.HR2@example.invalid'),
     ('onboard_role_recommend', jsonb_build_object('by_department', jsonb_build_object('w279beh', jsonb_build_object('trainings', jsonb_build_array(t[3], t[1], t[2], t[4]))))::text)
   on conflict (key) do update set value = excluded.value;
   update public.app_config set value = 'off' where key = 'onboard_behind_on';
@@ -631,22 +631,11 @@ begin
   assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind') = 1, 'and the hire once';
   assert (select (detail ->> 'hr')::boolean from public.onboarding_behind_log where onboarding_id = pa order by id desc limit 1), 'the log says HR was added';
 
-  -- a device: hub-push goes too, with the relay fields; push_on off stops it
+  -- notify carries the Hub notification itself: the job never calls hub-push, so no one gets two
   delete from public.w279_edge_calls;
-  insert into public.hub_push_subs (email, endpoint, p256dh, auth) values ('W279.BEHA@example.invalid', 'https://example.invalid/push/a', 'k', 'a');
   update public.onboarding_behind_log set sent_at = now() - interval '8 days';
   perform public.wa279_onboard_tick();
-  assert (select count(*) from public.w279_edge_calls where fn = 'hub-push') = 1, 'one hub-push, to the hire who has a device';
-  v_p := (select payload from public.w279_edge_calls where fn = 'hub-push');
-  assert v_p ->> 'event' = 'relay' and v_p ->> 'kind' = 'onboard_behind' and v_p ->> 'to_email' = 'w279.beha@example.invalid' and v_p ->> 'url' = '#mypage'
-         and v_p ->> 'tag' = 'onboard-behind-' || pa || '-' || v_today and v_p ->> 'title' = 'You''re behind on onboarding' and v_p ? 'body', 'the hub-push relay fields';
-  delete from public.w279_edge_calls;
-  update public.app_config set value = 'off' where key = 'push_on';
-  update public.onboarding_behind_log set sent_at = now() - interval '8 days';
-  perform public.wa279_onboard_tick();
-  assert (select count(*) from public.w279_edge_calls where fn = 'hub-push') = 0 and (select count(*) from public.w279_edge_calls where fn = 'notify') = 4, 'push_on off: notify only';
-  update public.app_config set value = 'on' where key = 'push_on';
-  delete from public.hub_push_subs;
+  assert (select count(*) from public.w279_edge_calls where fn = 'notify') = 4 and (select count(*) from public.w279_edge_calls where fn = 'hub-push') = 0, 'four notify calls and no hub-push call';
   update public.onboardings set status = 'completed' where id = pa;
   delete from public.w279_edge_calls;
 
@@ -701,7 +690,7 @@ begin
   v_p := (select payload from public.w279_edge_calls);
   assert v_p ->> 'event' = 'onboard_role_pick' and v_p ->> 'to_email' = 'w279.lead1@example.invalid' and v_p ->> 'url' = '#hrcentre/onboarding', 'to the manager, as onboard_role_pick';
   assert v_p ->> 'title' = 'Pick Test Behind E''s role trainings', 'the title names the hire';
-  assert v_p ->> 'body' = 'Pick 2 or 3 trainings for Test Behind E''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', 'the body';
+  assert v_p ->> 'body' = 'Pick 2 or 3 trainings for Test Behind E''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', 'both short: the body names both';
   assert v_p ->> 'tag' = 'onboard-role-pick-' || pe || '-' || v_today and v_p ->> 'text' like '%|Open the Hub>', 'the tag and the Slack text';
   delete from public.w279_edge_calls;
   perform public.wa279_onboard_tick();
@@ -712,10 +701,36 @@ begin
   update public.onboarding_behind_log set sent_at = now() - interval '7 days' where kind = 'onboard_role_pick';
   perform public.wa279_onboard_tick();
   assert (select count(*) from public.w279_edge_calls) = 1, '7 days later it is sent again';
+  -- only the short section is named, and only while its auto-pick day is ahead
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  insert into public.trainings (category, title, active) select 'w279', 'Filler ' || g, true from generate_series(1, 7) g;
+  insert into public.trainings (category, title, active) select 'w279', 'Part ' || g, true from generate_series(1, 2) g;
+  insert into public.onboarding_role_picks (onboarding_id, section, training_id, picked_by)
+    select pe, '60 DAYS', id, 'test' from public.trainings where title like 'Part %';
+  perform public.wa279_onboard_tick();
+  assert (select payload ->> 'body' from public.w279_edge_calls) = 'Pick 5 or 6 trainings for Test Behind E''s 90 days. The Hub picks for you on day 59 if you don''t.', '60 days full: only the 90 days is asked, with its own day';
+  delete from public.onboarding_role_picks where onboarding_id = pe;
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  insert into public.onboarding_role_picks (onboarding_id, section, training_id, picked_by)
+    select pe, '90 DAYS', id, 'test' from public.trainings where title like 'Filler %' limit 5;
+  perform public.wa279_onboard_tick();
+  assert (select payload ->> 'body' from public.w279_edge_calls) = 'Pick 2 or 3 trainings for Test Behind E''s 60 days. The Hub picks for you on day 29 if you don''t.', '90 days full: only the 60 days is asked, with its own day';
+  -- day 29: the 60 days auto-pick day has passed, so only the 90 days is asked; day 59: nothing is asked any more
+  delete from public.onboarding_role_picks where onboarding_id = pe;
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  update public.onboardings set started_at = v_today - 29 where id = pe;
+  perform public.wa279_onboard_tick();
+  assert (select payload ->> 'body' from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick') = 'Pick 5 or 6 trainings for Test Behind E''s 90 days. The Hub picks for you on day 59 if you don''t.', 'day 29: the 60 days is no longer asked';
+  delete from public.onboarding_role_picks where onboarding_id = pe;
+  delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
+  update public.onboardings set started_at = v_today - 59 where id = pe;
+  perform public.wa279_onboard_tick();
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick') = 0, 'day 59: both auto-pick days have passed, no reminder';
+  delete from public.onboarding_role_picks where onboarding_id = pe;
+  update public.onboardings set started_at = v_today - 21 where id = pe;
   -- both lists full: no reminder
   delete from public.w279_edge_calls;
   update public.onboarding_behind_log set sent_at = now() - interval '8 days' where kind = 'onboard_role_pick';
-  insert into public.trainings (category, title, active) select 'w279', 'Filler ' || g, true from generate_series(1, 7) g;
   insert into public.onboarding_role_picks (onboarding_id, section, training_id, picked_by)
     select pe, case when n <= 2 then '60 DAYS' else '90 DAYS' end, tr.id, 'test'
       from (select id, row_number() over (order by id) as n from public.trainings where title like 'Filler %') tr(id, n);
