@@ -285,6 +285,64 @@ const noDash = (t) => !/—/.test(t);
     await done(f);
   }
 
+  /* ---------- 5c. fix round 1: no timer runs away, and opens from another device show without a reload ---------- */
+  {
+    const PRIV = { key: 'privacy-policy', title: 'Privacy Policy', url: 'https://docs.google.com/document/d/z/edit', required: true, active: true, sort: 3 };
+    const f = await go({ who: 'member', hash: '#mypage', fxo: { pols: [PRIV] }, fx279: { pol: { state: {} } } });
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w272setup [data-w272pol="sign"]', { timeout: 8000 }).catch(() => {});
+    const H = (k) => '#w272setup [data-w272pol="sign"][data-key="' + k + '"]';
+    /* count every timeout the page asks for from here on, and keep the 30 second intervals still running */
+    await f.ev(() => {
+      const T = window.__T279 = { to: 0, live: new Set() }, st = window.setTimeout, si = window.setInterval, ci = window.clearInterval;
+      window.setTimeout = function () { T.to++; return st.apply(this, arguments); };
+      window.setInterval = function (fn, ms) { const id = si.apply(this, arguments); if (ms === 30000) T.live.add(id); return id; };
+      window.clearInterval = function (id) { T.live.delete(id); return ci.apply(this, arguments); };
+    });
+    const nState = async () => (await calls(f, 'wa279_policy_state')).length;
+    const live = () => f.ev(() => window.__T279.live.size);
+    let b = await signBtn(f, H('privacy-policy'));
+    ok('fix round 1: three policies, no open anywhere yet, Sign is off', b && b.dis && b.txt === 'Sign', b);
+
+    /* 1. a counting Sign on screen and nothing else happening: the page asks for almost no timers */
+    await openLink(f, '#w272setup [data-w272pol="open"][data-key="agency-handbook"]');
+    b = await signBtn(f, H('agency-handbook'));
+    ok('fix round 1: after Open the handbook counts down', b && b.dis && b.txt === 'Sign in 10 min', b);
+    await f.page.waitForTimeout(300);
+    const to0 = await f.ev(() => window.__T279.to);
+    await f.page.waitForTimeout(2000);
+    const toN = (await f.ev(() => window.__T279.to)) - to0;
+    ok('fix round 1: idle with a counting Sign, fewer than 3 timeouts in 2 seconds', toN < 3, toN);
+    ok('fix round 1: one 30 second tick runs while it shows', (await live()) === 1 && await ticking(f), await live());
+    await f.hash('#calendar', 900);
+    ok('fix round 1: away from Home, the 30 second tick is cleared', (await live()) === 0 && !(await ticking(f)), await live());
+    const to1 = await f.ev(() => window.__T279.to);
+    await f.page.waitForTimeout(2000);
+    const toM = (await f.ev(() => window.__T279.to)) - to1;
+    ok('fix round 1: and nothing keeps scheduling after leaving', toM < 3, toM);
+    await f.hash('#mypage', 1200);
+    ok('fix round 1: back on Home, one tick again (not two)', (await live()) === 1, await live());
+
+    /* 2. the expense policy is opened on a phone: a Sign with no open reads the opens again once they are over a minute old */
+    const n0 = await nState();
+    await f.ev((t) => { window.__W279.pol.state['expense-policy'] = { opened_at: t, unlock_at: t }; }, new Date(FIXED - 60000).toISOString());
+    await f.ev(() => window.wa279Pol.refresh()); await f.page.waitForTimeout(200);
+    ok('fix round 1: opens read under a minute ago are not read again', (await nState()) === n0 && (await signBtn(f, H('expense-policy'))).dis, await nState());
+    await clockAt(f, 1.1); await f.page.waitForTimeout(300);
+    b = await signBtn(f, H('expense-policy'));
+    ok('fix round 1: over a minute old, they are read again and the other device\'s open shows', (await nState()) === n0 + 1 && b && !b.dis && b.txt === 'Sign', { n: await nState(), b });
+
+    /* 3. the privacy policy is opened on the phone too; this tab comes back into view */
+    await f.ev((t) => { window.__W279.pol.state['privacy-policy'] = { opened_at: t, unlock_at: new Date(Date.parse(t) + 600000).toISOString() }; }, new Date(FIXED - 300000).toISOString());
+    const n1 = await nState();
+    await f.ev(() => document.dispatchEvent(new Event('visibilitychange'))); await f.page.waitForTimeout(300);
+    b = await signBtn(f, H('privacy-policy'));
+    ok('fix round 1: back in view, the opens are read again and the button counts down', (await nState()) === n1 + 1 && b && b.dis && b.txt === 'Sign in 4 min', { n: await nState(), b });
+    ok('fix round 1: still one 30 second tick', (await live()) === 1, await live());
+    ok('fix round 1: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
   /* ---------- 6. the Academy: Onboarding, Policies to sign ---------- */
   {
     const f = await go({ who: 'member', hash: '#training', fx279: { pol: { state: JSON.parse(JSON.stringify(UNLOCKED)) } } });

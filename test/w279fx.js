@@ -12,7 +12,7 @@
    that text (as trg_wa279_policy_read does). window.__W279.froms lists every table read.
    fx279({ acad: true }): Lina's plan also gets a done training step (WEEK 1), an open Policies step, a done step outside the Academy, and three
    60 DAYS picks as the database writes them (academy_assignments with the note "Role training (60 days)", one finished), plus Pace Person, a
-   plan at day 45 with 2 of 4 steps done. lead279({ late: true }) adds Nadia Later, a hire at day 70, to the manager's card. */
+   plan at day 45 with 2 of 4 steps done. fx279({ pols: [...] }) adds policies to sign. lead279({ late: true }) adds Nadia Later, a hire at day 70, to the manager's card. */
 const { loadFixture } = require('./boot');
 
 const ONB = { lina: 9301, omar: 9302, sam: 9303, pace: 9304 };
@@ -58,6 +58,7 @@ function fx279(o) {
   [ONB.lina, ONB.omar, ONB.sam].forEach((o) => tpl.forEach((t) => steps.push({ id: sid++, onboarding_id: o, template_id: t.id, done: false, done_at: null, done_by: null, due_date: t.section === '60 DAYS' ? '2026-11-02' : '2026-12-02' })));
   f.onboarding_steps = (f.onboarding_steps || []).concat(steps);
   f.trainings = (f.trainings || []).concat(TR.map((t) => Object.assign({ active: true, kind: 'video', category: 'Role', minutes: 5, body: null, source: 'hub' }, t)));
+  if (o.pols) f.wa_policies = (f.wa_policies || []).concat(o.pols);   /* fix round 1: more policies to sign */
   if (o.acad) {
     const more = [
       { id: 'wa279tr1', name: 'Marketing basics: our voice', section: 'WEEK 1', sort: 9002, training_id: 9401, academy_path: null },
