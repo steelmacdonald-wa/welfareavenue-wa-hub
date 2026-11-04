@@ -484,3 +484,21 @@ test('w278 offer_send records the Hub user who pressed Send in offer_sent_by, in
   assert.equal(s.cand0().offer_sent_by, 'shima.butera@welfareavenue.com', 'set only when empty');
   assert.deepEqual(s.rig.unregistered(), []);
 });
+
+test('w278 offer_send with no email (the letter only) does not record a sender; the first emailed send does, and a later letter-only run keeps it', async () => {
+  const s = await setup();
+  s.rig.db.setCaller({ email: 'shima.butera@welfareavenue.com', id: 'u2' });
+  const made = await s.send(FORM, false);
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  assert.equal(made.body.emailed, null);
+  assert.equal(s.cand0().offer_sent_at, null);
+  assert.equal(s.cand0().offer_sent_by ?? null, null, 'nothing was sent, so nobody is the sender');
+  s.rig.db.setCaller({ email: 'ruth.owen@welfareavenue.com', id: 'u1' });
+  const sent = await s.send(FORM);
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal(s.cand0().offer_sent_by, 'ruth.owen@welfareavenue.com');
+  s.rig.db.setCaller({ email: 'shima.butera@welfareavenue.com', id: 'u2' });
+  await s.send(FORM, false);
+  assert.equal(s.cand0().offer_sent_by, 'ruth.owen@welfareavenue.com', 'a later letter-only run leaves the sender');
+  assert.deepEqual(s.rig.unregistered(), []);
+});
