@@ -13,7 +13,7 @@
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: the last five, for the rundown ticks on a started card */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at, leader';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: setup_ticks to proposed_at, for the rundown ticks on a started card. wave278 Task 6: leader (wa278a grants it), for the leader line on HR's started cards */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
   var CAND_COLS = 'id, name, role, email, member_id';
   var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
@@ -38,7 +38,7 @@
   };
   /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
      data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
-  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; },
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; }, startedAfter: function () { return ''; },   /* wave278: startedAfter, under a started card's steps */
     hrTools: function () { return true; } };   /* false: the person is not HR (wave275's manager view), so HR's own buttons (the link, the preview, I created it) stay off */
 
   /* ---------- style ---------- */
@@ -632,6 +632,7 @@
       + R.startedMore(f)   /* wave275: the setup rundown ticks */
       + noteHtml(id)
       + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
+      + R.startedAfter(f)   /* wave278: the access steps, the leader line and Re-check, after these eight */
       + '<div class="o271btns">'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="time" data-f="' + E(id) + '"' + (acting === 'time' ? ' disabled' : '') + '>Change time</button>'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="manager" data-f="' + E(id) + '"' + (acting === 'manager' ? ' disabled' : '') + '>Change manager</button>'

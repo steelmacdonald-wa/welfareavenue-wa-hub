@@ -16,7 +16,9 @@
    wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): the card row's manager_hours (wa275b's wa275_flow_row, from
    onboard_manager_hours) and the times answer's manager_hours. False: the week line is one quiet line of information ("<first> has not set their week
    on Home; times are not limited to it"), and the picker offers every cell of the window ("Open to pick"), greying only hub@ meetings, other hires and
-   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it. */
+   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it.
+   wave278 (04/11/26, Task 6): the rundown counts twelve steps, and the card gains the access block (c_access.js): the groups, drives, meeting and channel
+   steps, the leader decision with Change, Re-check Drives and Groups, and the welcome's copies with Add people. c_access.js closes this wrapper. */
 (function () {
   if (window.__wa275) return; window.__wa275 = true;
   var O = window.o271, R = window.o271R;
@@ -25,8 +27,10 @@
   var GREEN = '#103F39', GROUND = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2';
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], WDN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], WDK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   var DEFAULT_WEEK = { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] };
-  /* the hire's setup rundown (onboard-link SETUP, 9 steps); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
-  var RUNDOWN = [['profile', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['hub', 'the Hub'], ['slack', 'Slack'], ['academy', 'the Academy'], ['loom', 'Loom'], ['canva', 'Canva'], ['drives', 'Drives and Groups'], ['weekly', 'the weekly meeting']];
+  /* the hire's setup rundown (onboard-link SETUP, 12 steps since wave278; wa278a carried the old ticks over: profile to chrome, drives to drive, loom
+     dropped); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
+  var RUNDOWN = [['google', 'their Google account'], ['chrome', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['drive', 'Drive'], ['groups', 'Groups'], ['hub', 'the Hub'], ['slack', 'Slack'],
+    ['canva', 'Canva'], ['academy', 'the Academy'], ['jd', 'the job description'], ['weekly', 'the weekly meeting'], ['phone', 'the phone apps']];
   var MINE_KINDS = { propose: 1, bookg: 1, gridfor: 1, exc: 1, welcome: 1, mgr: 1 };
   R.readyStatuses.push('offered');   /* a card runs from the offer (wa271_ready_list lists offered flows since wa275a) */
 
@@ -237,6 +241,7 @@
       + (booked ? '' : switchHtml(x))
       + (x.accepted_on ? ticksHtml(x) : '')
       + stepsHtml(x)
+      + accessHtml(x, id)   /* wave278: c_access.js */
       + (booked ? '' : canvaHtml(x))
       + O.noteHtml(id)
       + buttonsHtml(x)
@@ -595,4 +600,156 @@
     return '';
   }
   function excClean(list) { return list.map(function (d) { return { date: d.date, free: d.free.map(function (b) { return [b[0], b[1]]; }) }; }); }
+
+  /* ---------- wave278 (04/11/26, Task 6): the access steps, the leader decision, Re-check, and the welcome copies ----------
+     Steel (04/11/26): the Hub itself adds a new hire to their Google Groups, shared drives, weekly meeting and Slack onboarding channel (onboard-run's steps
+     groups, drives, meeting, channel). The card shows those four rows through wave271's own step row (O.stepHtml: Retry, and Done for an HR task), numbered
+     after wave271's eight; the channel step while pending reads "Waiting for them to join Slack" (the hourly job tries again, so nothing to retry). Above
+     them the leader decision from the card row (wa278a's wa275_flow_row: leader true, false or null): "Joining as a member" / "Joining as a leader" with
+     Change (set_leader with the other value), "Joining as: not decided yet" with both; while set_leader or recheck_access runs, the Groups and Drives rows
+     say "Re-running", then the card reloads and the rows re-paint from onboard-run's answer. Re-check Drives and Groups (recheck_access) shows once either
+     row exists. Under them, until the welcome is sent: "Welcome email: from <sender>, copied to <owner> and <n> others" (the sender as Task 4 picks it: who
+     pressed Send on the offer, then the candidate's owner, then hub@) and Add people, a picker of active staff from the roster (never the hire, never
+     someone who left; the owner always gets a copy), saved by set_welcome_cc. onboard-run checks who may (HR, admins, or the hire's own manager through
+     wa275_manager_of) and refuses copies once the welcome is sent; the card only shows. What onboard-run answers is kept: its warnings ("nothing to run
+     yet", a step already running, the leaders' groups to take them out of by hand) show under the note, and a refusal shows as the error.
+     A started card gets the block under its eight steps (wave271's R.startedAfter), the rundown ticks staying above them. HR reads its started flows
+     from the table (wave271's FLOW_COLS, which carries leader since wave278), without offer_sent_by and owner_email, so the copies line stays off there:
+     without them it would name hub@ as the sender wrongly (the welcome has normally gone by then anyway). */
+  var ACCESS = [['groups', 'Google Groups'], ['drives', 'Shared drives'], ['meeting', 'Weekly meeting'], ['channel', 'Slack onboarding channel']];
+  var HUB_FROM = 'hub@welfareavenue.com';
+  var st278 = document.createElement('style'); st278.id = 'o278css';
+  st278.textContent =
+    '.o278acc{min-width:0;margin:4px 0;}' +
+    '.o278ln{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;color:' + GROUND + ';margin:8px 0 4px;min-width:0;overflow-wrap:anywhere;}' +
+    '.o278ln > span{min-width:0;}' +
+    '.o278ln .o271b{min-height:32px;}' +
+    '.o278pk{border:1px solid ' + LINE + ';border-radius:10px;padding:8px 10px;margin:6px 0;background:' + CREAM + ';min-width:0;}' +
+    '.o278pk label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:4px 0;color:' + GROUND + ';min-width:0;cursor:pointer;}' +
+    '.o278pk label > div{min-width:0;overflow-wrap:anywhere;}' +
+    '.o278pk label span{color:' + MUTE + ';font-size:12.5px;}' +
+    '.o278pk input{margin-top:3px;flex:none;}';
+  document.head.appendChild(st278);
+  var CC = {};   /* the open copies pickers: flow id -> { sel: { email: true } } */
+
+  function lower(e) { return String(e || '').trim().toLowerCase(); }
+  function hasAccess(x) { return (x.steps || []).some(function (r) { return ACCESS.some(function (a) { return a[0] === r.step; }); }); }
+  function rerunning(id) { return !!(S.busy['w278l' + id] || S.busy['w278c' + id]); }
+  function accessRow(f, key, label, n) {
+    var r = (f.steps || []).filter(function (s) { return s.step === key; })[0];
+    if (!r) return '';
+    var shown = r;
+    /* wave271's row prints a status it has no word for as it is, and offers Retry only for failed or stuck running rows: so neither of these offers one */
+    if (rerunning(f.id) && (key === 'groups' || key === 'drives')) shown = Object.assign({}, r, { status: 'Re-running', detail: null });
+    else if (key === 'channel' && r.status === 'pending') shown = Object.assign({}, r, { status: 'waiting', detail: 'Waiting for them to join Slack' });
+    return O.stepHtml(Object.assign({}, f, { steps: [shown] }), key, label, n);
+  }
+  function leaderHtml(x, id) {
+    if (x.leader === undefined) return '';   /* a row without the decision (HR's started cards): nothing to say */
+    var busy = S.busy['w278l' + id] ? ' disabled' : '';
+    function b(on, label) { return '<button type="button" class="o271b" data-o278a="leader" data-on="' + on + '" data-f="' + E(id) + '"' + busy + '>' + E(label) + '</button>'; }
+    var line = x.leader === true ? 'Joining as a leader' : x.leader === false ? 'Joining as a member' : 'Joining as: not decided yet';
+    return '<div class="o278ln" data-o278lead><span>' + E(line) + '</span>' + (x.leader == null ? b(0, 'As a member') + b(1, 'As a leader') : b(x.leader ? 0 : 1, 'Change')) + '</div>';
+  }
+  /* the staff who may get a copy: active roster rows with an email (active true, as onboard-run requires), never the hire's own row, and not the owner (who always gets one) */
+  function staffFor(x) {
+    var owner = lower(x.owner_email), hire = lower(x.wa_email);
+    return S.people.filter(function (p) {
+      var e = lower(p.email);
+      return p.active === true && e && e.indexOf('@') > 0 && e !== owner && e !== hire && !(x.member_id != null && String(p.id) === String(x.member_id));
+    });
+  }
+  function welcomeHtml(x, id) {
+    /* sent (its copy is under the welcome step), or a row without the copies or without the owner (HR's started cards: see the top) */
+    if (x.welcome_sent_at || !Array.isArray(x.welcome_cc) || x.owner_email === undefined) return '';
+    var owner = lower(x.owner_email), from = x.offer_sent_by || x.owner_email || HUB_FROM;
+    var cc = x.welcome_cc.map(lower).filter(function (e) { return e && e !== owner; });
+    var all = (owner ? [owner] : []).concat(cc);
+    var to = !all.length ? ', with no copies' : ', copied to ' + personName(all[0]) + (all.length > 1 ? ' and ' + (all.length - 1) + (all.length === 2 ? ' other' : ' others') : '');
+    var P = CC[id];
+    return '<div class="o278ln" data-o278wel><span>' + E('Welcome email: from ' + personName(from) + to) + '</span>'
+      + (P ? '' : '<button type="button" class="o271b" data-o278a="ccopen" data-f="' + E(id) + '">Add people</button>') + '</div>'
+      + (P ? pickerHtml(x, id, P) : '');
+  }
+  function pickerHtml(x, id, P) {
+    var list = staffFor(x), owner = lower(x.owner_email), busy = S.busy['w278w' + id];
+    return '<div class="o278pk" data-o278pk>'
+      + '<div class="o271ln">' + E('Tick the staff who get a copy of the welcome email. ' + (owner ? personName(owner) + ' always gets a copy. ' : '') + 'Their copy has no password in it. Someone who has left the roster is taken off the copies when you save.') + '</div>'
+      + (list.length ? list.map(function (p) {
+          var e = lower(p.email);
+          return '<label><input type="checkbox" data-o278cc="' + E(e) + '" data-f="' + E(id) + '"' + (P.sel[e] ? ' checked' : '') + '><div>' + E(p.name) + ' <span>' + E(p.email) + '</span></div></label>';
+        }).join('') : '<div class="o271ln">No one else on the roster.</div>')
+      + '<div class="o271btns"><button type="button" class="o271b pri" data-o278a="ccsave" data-f="' + E(id) + '"' + (busy ? ' disabled' : '') + '>' + E(busy ? 'Working...' : 'Save the copies') + '</button>'
+      + '<button type="button" class="o271b" data-o278a="ccshut" data-f="' + E(id) + '">Cancel</button></div></div>';
+  }
+  function accessHtml(x, id) {
+    var f = { id: id, steps: x.steps || [], wa_email: x.wa_email, canva_link: x.canva_link };
+    var rows = ACCESS.map(function (a, i) { return accessRow(f, a[0], a[1], O.STEPS.length + i + 1); }).join('');
+    var again = (x.steps || []).some(function (r) { return r.step === 'groups' || r.step === 'drives'; });
+    return '<div class="o278acc" data-o278acc="' + E(id) + '">' + leaderHtml(x, id)
+      + (rows ? '<ol class="o271st o278st">' + rows + '</ol>' : '')
+      + (again ? '<div class="o271btns"><button type="button" class="o271b" data-o278a="recheck" data-f="' + E(id) + '"' + (rerunning(id) ? ' disabled' : '') + '>Re-check Drives and Groups</button></div>' : '')
+      + welcomeHtml(x, id) + '</div>';
+  }
+  /* a started card on the new path gets the same block under its eight steps: one whose access steps ran, or whose leader is decided (an older flow
+     has leader null, and nothing to run) */
+  R.startedAfter = function (f) { return hasAccess(f) || f.leader != null ? accessHtml(f, f.id) : ''; };
+
+  /* ---------- the calls: each one reloads the card, so what shows is onboard-run's answer, with its warnings ---------- */
+  function warningsOf(r) { return ((r && r.warnings) || []).map(String).filter(Boolean); }
+  function idle(w) { return w.some(function (m) { return /nothing to run/i.test(m); }); }   /* onboard-run ran nothing (before Accept, or an older flow) */
+  async function setLeader(id, on) {
+    var key = 'w278l' + id, x = rowOf(id); if (!x || S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('set_leader', { flow_id: Number(id), leader: on })), ran = !idle(w);
+      delete S.busy[key];
+      S.note[id] = { ok: firstOf(x.name) + (on ? ' joins as a leader now.' + (ran ? ' The Hub ran Groups and Drives again: the rows say what was added.' : '')
+        : ' joins as a member now.' + (ran ? ' The Hub ran Groups and Drives again.' : '') + ' The Hub never removes access: take them out of any leaders\' group or drive by hand.'), warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+  }
+  async function recheck(id) {
+    var key = 'w278c' + id; if (!rowOf(id) || S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('recheck_access', { flow_id: Number(id) }));
+      delete S.busy[key];
+      S.note[id] = { ok: idle(w) ? '' : 'Drives and Groups were checked again: the rows say what changed.', warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+  }
+  async function openCc(id) {
+    var x = rowOf(id); if (!x) return;
+    var sel = {}, owner = lower(x.owner_email);
+    (x.welcome_cc || []).forEach(function (e) { e = lower(e); if (e && e !== owner) sel[e] = true; });
+    CC[id] = { sel: sel }; delete S.note[id];
+    await O.readPeople();
+    R.paint();
+  }
+  async function saveCc(id) {
+    var P = CC[id], key = 'w278w' + id; if (!P || !rowOf(id) || S.busy[key]) return;
+    var emails = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('set_welcome_cc', { flow_id: Number(id), emails: emails }));
+      delete CC[id]; delete S.busy[key];
+      S.note[id] = { ok: emails.length ? 'Saved: ' + emails.length + (emails.length === 1 ? ' person gets' : ' people get') + ' a copy of the welcome email.' : 'Saved: no copies besides the owner\'s.', warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; try { toast(e.message); } catch (x2) { /* no toast */ } R.paint(); }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-o278a]'); if (!b || b.disabled) return;
+    var a = b.getAttribute('data-o278a'), id = b.getAttribute('data-f');
+    if (a === 'leader') setLeader(id, b.getAttribute('data-on') === '1');
+    else if (a === 'recheck') recheck(id);
+    else if (a === 'ccopen') openCc(id);
+    else if (a === 'ccsave') saveCc(id);
+    else if (a === 'ccshut') { delete CC[id]; R.paint(); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute || !t.hasAttribute('data-o278cc')) return;
+    var P = CC[t.getAttribute('data-f')]; if (P) P.sel[t.getAttribute('data-o278cc')] = !!t.checked;
+  });
 })();

@@ -50,4 +50,3 @@
     return '';
   }
   function excClean(list) { return list.map(function (d) { return { date: d.date, free: d.free.map(function (b) { return [b[0], b[1]]; }) }; }); }
-})();

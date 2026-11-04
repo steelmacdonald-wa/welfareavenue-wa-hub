@@ -2,7 +2,7 @@
 """Assemble build/parts275/*.js into build/src/275_wave275.seg (non-ASCII escaped)."""
 import os
 D = os.path.dirname(os.path.abspath(__file__))
-parts = ["a_card.js", "b_avail.js"]
+parts = ["a_card.js", "b_avail.js", "c_access.js"]   # wave278: c_access.js closes the wrapper that a_card.js opens
 src = ''.join(open(os.path.join(D, f), encoding='utf8').read() for f in parts)
 out = []
 for ch in src:

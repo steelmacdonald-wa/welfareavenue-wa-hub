@@ -3,7 +3,7 @@
    Joy Dumansi (boot.js's plain member) on the roster as the manager of two of them.
    rpcs275(o): wa271_ready_list (HR's list: wave271's rows and the new ones) and wa275_my_cards (o.mine: the rows the signed-in person manages).
    INIT275: runs after w271fx's INIT and answers the card's new onboard-run actions (times, propose, book, set_ask_availability, grid_for, availability_for,
-   set_welcome, ask_manager, welcome on the new path, set_manager on an offered flow), recording each in window.__O271_CALLS and changing
+   set_welcome, ask_manager, welcome on the new path, set_manager on an offered flow; wave278: set_leader, recheck_access, set_welcome_cc), recording each in window.__O271_CALLS and changing
    window.__WA_RPCS the way the function changes the tables. Toronto is UTC-4 on these dates; the page's clock is fixed at Friday 25/09/26 16:00. */
 const { fx271, rpcs271, INIT, FLOW, MGR, AT } = require('./w271fx');
 
@@ -19,15 +19,20 @@ function row(o) {
     ask_availability: true, setup_ticks: {}, welcome_sent_at: null, accounts_at: null, manager_availability_at: '2026-09-10T12:00:00Z', manager_no_week: false, manager_week_stale: false,
     offer_sent_at: '2026-09-20T15:00:00Z', created_at: '2026-09-20T15:00:00Z', propose_path: true, member_id: null, wa_email: null, canva_link: null, roster_created: null, slack_channel_id: null,
     onboarding_id: null, group_session: null, started_at: null, updated_at: '2026-09-21T14:00:00Z', steps: [],
+    leader: null, welcome_cc: [], offer_sent_by: null, owner_email: null,   // wave278 (wa278a's wa275_flow_row)
   }, o);
 }
 const STEP = (flow, step, status, detail) => ({ flow_id: flow, step, status, detail, practice: false, at: '2026-09-25T18:00:00Z' });
+/* wave278 (Task 3's step rows): groups and drives at Accept, the weekly meeting at booking, the Slack channel once they join (pending until then) */
+const ACCESS = (flow) => [STEP(flow, 'groups', 'done', 'Added to org@welfareavenue.com and marketing@welfareavenue.com.'), STEP(flow, 'drives', 'done', "Shared Org's Files and Marketing & Web."),
+  STEP(flow, 'meeting', 'hr_task', 'No weekly meeting set for marketing.'), STEP(flow, 'channel', 'pending', 'waiting for them to join Slack')];
 function rows275() {
   return {
     said: row({ flow_id: F.said, candidate_id: 7301, name: 'James <b>Hire</b>', role: 'Driver', email: 'james@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name,
       proposed_call_at: AT(10), proposed_one_on_one_at: AT(11, 30), proposed_by: JOY.email, proposed_at: '2026-09-21T15:00:00Z', hire_answer: 'no', hire_answered_at: '2026-09-22T15:00:00Z',
-      grids: { hire: 'marked', manager: 'none' }, setup_ticks: { accept_setup_at: '2026-09-21T14:00:00Z', hire_times_at: '2026-09-21T15:00:00Z', rd_profile: '2026-09-22T12:00:00Z' },
-      steps: [STEP(F.said, 'google', 'hr_task', 'The first password is not set in admin settings, so the Hub did not make the account.'), STEP(F.said, 'hub', 'waiting', null), STEP(F.said, 'roster', 'done', 'Created the roster profile.')] }),
+      grids: { hire: 'marked', manager: 'none' }, setup_ticks: { accept_setup_at: '2026-09-21T14:00:00Z', hire_times_at: '2026-09-21T15:00:00Z', rd_chrome: '2026-09-22T12:00:00Z' },
+      leader: false, offer_sent_by: 'samson.jules@welfareavenue.com', owner_email: 'dana@example.invalid', welcome_cc: ['omar@example.invalid'],   // wave278
+      steps: [STEP(F.said, 'google', 'hr_task', 'The first password is not set in admin settings, so the Hub did not make the account.'), STEP(F.said, 'hub', 'waiting', null), STEP(F.said, 'roster', 'done', 'Created the roster profile.')].concat(ACCESS(F.said)) }),
     offered: row({ flow_id: F.offered, candidate_id: 7302, status: 'offered', name: 'Lina Offered', email: 'lina@example.invalid', accepted_on: null, hours_confirmed_at: null, manager_no_week: true, manager_week_stale: true, manager_availability_at: null }),
     proposed: row({ flow_id: F.proposed, candidate_id: 7303, name: 'Nia Proposed', email: 'nia@example.invalid', proposed_call_at: DAY(30, 10), proposed_one_on_one_at: DAY(31, 10) /* Thursday 1 October */, proposed_by: 'samson.jules@welfareavenue.com', proposed_at: '2026-09-24T15:00:00Z' }),
     moved: row({ flow_id: F.moved, candidate_id: 7304, name: 'Kim Moved', email: 'kim@example.invalid', proposed_call_at: AT(9), proposed_one_on_one_at: AT(14), proposed_by: 'dana@example.invalid', proposed_at: '2026-09-23T15:00:00Z', hire_answer: 'no', hire_answered_at: null, manager_week_stale: true }),
@@ -37,8 +42,9 @@ function rows275() {
     old: row({ flow_id: F.old, candidate_id: 7305, name: 'Wren Earlier', email: 'wren@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, propose_path: false, offer_hours: null, created_at: '2026-08-20T15:00:00Z' }),   // a wave271 flow Joy manages
     started: row({ flow_id: F.started, candidate_id: 7311, status: 'running', name: 'Ola Started', email: 'ola@example.invalid', manager_member_id: JOY.id, manager_name: JOY.name, call_at: DAY(29, 10), one_on_one_at: DAY(29, 11),
       wa_email: 'ola.started@welfareavenue.com', roster_created: true, member_id: 8311, onboarding_id: 51, started_at: '2026-09-24T15:00:00Z', welcome_sent_at: '2026-09-24T16:00:00Z',
-      setup_ticks: { rd_profile: '2026-09-24T17:00:00Z', rd_hub: '2026-09-24T17:05:00Z', rd_slack: '2026-09-24T17:10:00Z', hire_times_at: 'x', accept_setup_at: 'x', google_made_at: 'x', no_manager_told_at: 'x', propose_hr_reminded_at: 'x' },
-      steps: ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'welcome'].map((k) => STEP(F.started, k, 'done', 'Done: ' + k + '.')).concat([STEP(F.started, 'slack', 'hr_task', 'Create their onboarding channel in Slack.')]) }),
+      setup_ticks: { rd_chrome: '2026-09-24T17:00:00Z', rd_hub: '2026-09-24T17:05:00Z', rd_slack: '2026-09-24T17:10:00Z', rd_loom: 'x', hire_times_at: 'x', accept_setup_at: 'x', google_made_at: 'x', no_manager_told_at: 'x', propose_hr_reminded_at: 'x' },
+      leader: false, offer_sent_by: 'samson.jules@welfareavenue.com', owner_email: 'dana@example.invalid',
+      steps: ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'welcome'].map((k) => STEP(F.started, k, 'done', 'Done: ' + k + '.')).concat([STEP(F.started, 'slack', 'hr_task', 'Create their onboarding channel in Slack.')], ACCESS(F.started)) }),
   };
 }
 
@@ -48,6 +54,8 @@ function fx275() {
   fx.team_members.push({ id: JOY.id, name: JOY.name, email: JOY.email, active: true, department: 'marketing', role: 'Coordinator', responsibilities: [] });
   fx.team_members = fx.team_members.filter((m) => String(m.email || '').toLowerCase() !== 'samson.jules@welfareavenue.com');
   fx.team_members.push({ id: 9105, name: 'Samson Jules', email: 'samson.jules@welfareavenue.com', active: true, department: 'hr', role: 'HR', responsibilities: [] });   // boot.js's HR member, who proposed Nia's times
+  fx.team_members.push({ id: 9106, name: 'Lee Gone', email: 'lee.gone@welfareavenue.com', active: false, department: 'hr', role: 'HR', responsibilities: [] });   // wave278: left, so never offered a copy of the welcome
+  fx.team_members.push({ id: 9107, name: 'Rae Unset', email: 'rae.unset@welfareavenue.com', active: null, department: 'hr', role: 'HR', responsibilities: [] });   // wave278: active not set, so not offered either (onboard-run needs active true)
   const R = rows275();
   fx.hub_candidates = fx.hub_candidates.concat([
     { id: 7301, name: 'James <b>Hire</b>', role: 'Driver', email: 'james@example.invalid', status: 'offer', practice: false, offer_sent_at: '2026-09-20T15:00:00Z', accepted_on: '2026-09-21' },
@@ -61,7 +69,7 @@ function fx275() {
   /* HR reads a started flow from the tables, as wave271 does */
   const st = R.started;
   fx.hub_onboard_flows.push({ id: st.flow_id, candidate_id: st.candidate_id, practice: false, status: 'running', manager_member_id: JOY.id, wa_email: st.wa_email, call_at: st.call_at, one_on_one_at: st.one_on_one_at,
-    group_session: null, onboarding_id: 51, started_at: st.started_at, roster_created: true, created_at: st.created_at, setup_ticks: st.setup_ticks, welcome_sent_at: st.welcome_sent_at, proposed_at: '2026-09-21T15:00:00Z' });
+    group_session: null, onboarding_id: 51, started_at: st.started_at, roster_created: true, created_at: st.created_at, setup_ticks: st.setup_ticks, welcome_sent_at: st.welcome_sent_at, proposed_at: '2026-09-21T15:00:00Z', leader: st.leader });   // wave278: leader, in FLOW_COLS
   fx.hub_onboard_steps = fx.hub_onboard_steps.concat(st.steps.map((r) => Object.assign({ by: 'hr@example.invalid' }, r)));
   return fx;
 }
@@ -88,7 +96,14 @@ const INIT275 = `(function(){
   function one(id) { return rows().filter(function (r) { return String(r.flow_id) === String(id); })[0]; }
   function ok(d) { return { data: d, error: null }; }
   function refuse(error, message, status) { return { data: null, error: { name: 'FunctionsHttpError', message: 'Edge Function returned a non-2xx status code', context: new Response(JSON.stringify({ error: error, message: message }), { status: status || 409, headers: { 'Content-Type': 'application/json' } }) } }; }
-  var NEW = ['times', 'propose', 'book', 'set_ask_availability', 'grid_for', 'availability_for', 'set_welcome', 'ask_manager'];
+  var NEW = ['times', 'propose', 'book', 'set_ask_availability', 'grid_for', 'availability_for', 'set_welcome', 'ask_manager', 'set_leader', 'recheck_access', 'set_welcome_cc'];
+  var later = function (ms, fn) { return new Promise(function (res) { setTimeout(function () { res(fn()); }, ms); }); };   /* wave278: an answer that takes a moment, so the card's "Re-running" shows */
+  /* wave278: the card rows and, for HR's started cards, the tables (window.__WAFIX) change together */
+  var tables = function (name, id) { return ((window.__WAFIX || {})[name] || []).filter(function (r) { return String(name === 'hub_onboard_flows' ? r.id : r.flow_id) === String(id); }); };
+  var stepsOf = function (id) { var a = []; each(id, function (r) { a = a.concat(r.steps || []); }); return a.concat(tables('hub_onboard_steps', id)); };
+  var again = function (id, groups, drives) { stepsOf(id).forEach(function (s) { if (s.step === 'groups') { s.detail = groups; s.at = new Date().toISOString(); } if (s.step === 'drives') { s.detail = drives; s.at = new Date().toISOString(); } }); };
+  var nothing = function (id) { return !stepsOf(id).some(function (s) { return s.step === 'groups' || s.step === 'drives'; }); };
+  var NOTHING = 'There is nothing to run yet: Groups and Drives run once the offer is accepted.';
   window.__WA_INVOKE = function (name, opts) {
     var b = (opts && opts.body) || {}, x = b.flow_id != null ? one(b.flow_id) : null;
     var mine = name === 'onboard-run' && (NEW.indexOf(b.action) >= 0 || (x && (b.action === 'welcome' || b.action === 'set_manager' || b.action === 'set_canva_link')) || (b.action === 'retry' && x));
@@ -121,6 +136,22 @@ const INIT275 = `(function(){
       case 'set_manager': each(b.flow_id, function (r) { r.manager_member_id = b.member_id; r.manager_name = String(b.member_id) === '9102' ? 'Omar Fixture' : 'Dana Fixture'; }); return ok({ ok: true, cleared: true });
       case 'set_canva_link': each(b.flow_id, function (r) { r.canva_link = b.link || null; }); return ok({ ok: true, canva_link: b.link || null });
       case 'ask_manager': return ok({ ok: true, sent: true, to: 'omar@example.invalid', manager: 'Omar Fixture', warnings: [] });
+      case 'set_leader': return later(900, function () {
+        var was = x ? x.leader : (tables('hub_onboard_flows', b.flow_id)[0] || {}).leader, warnings = [];
+        each(b.flow_id, function (r) { r.leader = b.leader; });
+        tables('hub_onboard_flows', b.flow_id).forEach(function (r) { r.leader = b.leader; });
+        if (nothing(b.flow_id)) warnings.push(NOTHING);
+        else again(b.flow_id, b.leader ? 'Added to org@welfareavenue.com, marketing@welfareavenue.com, admin@welfareavenue.com and directors@welfareavenue.com.' : 'Already in org@welfareavenue.com and marketing@welfareavenue.com.', b.leader ? 'Shared every drive but Accounting and Board of Directors.' : "Shared Org's Files and Marketing & Web.");
+        if (was === true && b.leader === false && !nothing(b.flow_id)) warnings.push('Take them out of admin@welfareavenue.com and directors@welfareavenue.com by hand: the Hub never removes anyone.');
+        return ok({ ok: true, leader: b.leader, warnings: warnings });
+      });
+      case 'recheck_access': return later(900, function () {
+        if (nothing(b.flow_id)) return ok({ ok: true, warnings: [NOTHING] });
+        again(b.flow_id, 'Checked again: in org@welfareavenue.com and marketing@welfareavenue.com.', "Checked again: Org's Files and Marketing & Web."); return ok({ ok: true, warnings: [] });
+      });
+      case 'set_welcome_cc':
+        if (x.welcome_sent_at) return refuse('welcome_sent', 'The welcome email has gone, so no copies can be added.');
+        each(b.flow_id, function (r) { r.welcome_cc = b.emails.slice(); }); return ok({ ok: true, welcome_cc: b.emails });
       case 'retry': each(b.flow_id, function (r) { r.steps.forEach(function (s) { if (s.step === b.step) { s.status = 'done'; s.detail = 'Done on Retry.'; } }); }); return ok({ steps: x.steps });
     }
     return refuse('unknown_action', 'The Hub does not know that action. Reload the page.', 400);
