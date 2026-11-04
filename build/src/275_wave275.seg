@@ -611,8 +611,11 @@
      row exists. Under them, until the welcome is sent: "Welcome email: from <sender>, copied to <owner> and <n> others" (the sender as Task 4 picks it: who
      pressed Send on the offer, then the candidate's owner, then hub@) and Add people, a picker of active staff from the roster (never the hire, never
      someone who left; the owner always gets a copy), saved by set_welcome_cc. onboard-run checks who may (HR, admins, or the hire's own manager through
-     wa275_manager_of) and refuses copies once the welcome is sent; the card only shows. HR's started cards read the flow from the table (wave271's
-     columns), without the leader decision or the copies, so they show the rows and Re-check only. */
+     wa275_manager_of) and refuses copies once the welcome is sent; the card only shows. What onboard-run answers is kept: its warnings ("nothing to run
+     yet", a step already running, the leaders' groups to take them out of by hand) show under the note, and a refusal shows as the error.
+     A started card gets the block under its eight steps (wave271's R.startedAfter), the rundown ticks staying above them. HR reads its started flows
+     from the table (wave271's FLOW_COLS, which carries leader since wave278), without offer_sent_by and owner_email, so the copies line stays off there:
+     without them it would name hub@ as the sender wrongly (the welcome has normally gone by then anyway). */
   var ACCESS = [['groups', 'Google Groups'], ['drives', 'Shared drives'], ['meeting', 'Weekly meeting'], ['channel', 'Slack onboarding channel']];
   var HUB_FROM = 'hub@welfareavenue.com';
   var st278 = document.createElement('style'); st278.id = 'o278css';
@@ -648,16 +651,17 @@
     var line = x.leader === true ? 'Joining as a leader' : x.leader === false ? 'Joining as a member' : 'Joining as: not decided yet';
     return '<div class="o278ln" data-o278lead><span>' + E(line) + '</span>' + (x.leader == null ? b(0, 'As a member') + b(1, 'As a leader') : b(x.leader ? 0 : 1, 'Change')) + '</div>';
   }
-  /* the staff who may get a copy: active roster rows with an email, never the hire's own row, and not the owner (who always gets one) */
+  /* the staff who may get a copy: active roster rows with an email (active true, as onboard-run requires), never the hire's own row, and not the owner (who always gets one) */
   function staffFor(x) {
     var owner = lower(x.owner_email), hire = lower(x.wa_email);
     return S.people.filter(function (p) {
       var e = lower(p.email);
-      return p.active !== false && e && e.indexOf('@') > 0 && e !== owner && e !== hire && !(x.member_id != null && String(p.id) === String(x.member_id));
+      return p.active === true && e && e.indexOf('@') > 0 && e !== owner && e !== hire && !(x.member_id != null && String(p.id) === String(x.member_id));
     });
   }
   function welcomeHtml(x, id) {
-    if (x.welcome_sent_at || !Array.isArray(x.welcome_cc)) return '';   /* sent (its copy is under the welcome step), or a row without the copies */
+    /* sent (its copy is under the welcome step), or a row without the copies or without the owner (HR's started cards: see the top) */
+    if (x.welcome_sent_at || !Array.isArray(x.welcome_cc) || x.owner_email === undefined) return '';
     var owner = lower(x.owner_email), from = x.offer_sent_by || x.owner_email || HUB_FROM;
     var cc = x.welcome_cc.map(lower).filter(function (e) { return e && e !== owner; });
     var all = (owner ? [owner] : []).concat(cc);
@@ -670,7 +674,7 @@
   function pickerHtml(x, id, P) {
     var list = staffFor(x), owner = lower(x.owner_email), busy = S.busy['w278w' + id];
     return '<div class="o278pk" data-o278pk>'
-      + '<div class="o271ln">' + E('Tick the staff who get a copy of the welcome email. ' + (owner ? personName(owner) + ' always gets a copy. ' : '') + 'Their copy has no password in it.') + '</div>'
+      + '<div class="o271ln">' + E('Tick the staff who get a copy of the welcome email. ' + (owner ? personName(owner) + ' always gets a copy. ' : '') + 'Their copy has no password in it. Someone who has left the roster is taken off the copies when you save.') + '</div>'
       + (list.length ? list.map(function (p) {
           var e = lower(p.email);
           return '<label><input type="checkbox" data-o278cc="' + E(e) + '" data-f="' + E(id) + '"' + (P.sel[e] ? ' checked' : '') + '><div>' + E(p.name) + ' <span>' + E(p.email) + '</span></div></label>';
@@ -687,27 +691,33 @@
       + (again ? '<div class="o271btns"><button type="button" class="o271b" data-o278a="recheck" data-f="' + E(id) + '"' + (rerunning(id) ? ' disabled' : '') + '>Re-check Drives and Groups</button></div>' : '')
       + welcomeHtml(x, id) + '</div>';
   }
-  /* a started card on the new path gets the same block, after its rundown ticks */
-  var startedMore275 = R.startedMore;
-  R.startedMore = function (f) { return startedMore275(f) + (hasAccess(f) || (f.propose_path && f.leader !== undefined) ? accessHtml(f, f.id) : ''); };
+  /* a started card on the new path gets the same block under its eight steps: one whose access steps ran, or whose leader is decided (an older flow
+     has leader null, and nothing to run) */
+  R.startedAfter = function (f) { return hasAccess(f) || f.leader != null ? accessHtml(f, f.id) : ''; };
 
-  /* ---------- the calls: each one reloads the card, so what shows is onboard-run's answer ---------- */
+  /* ---------- the calls: each one reloads the card, so what shows is onboard-run's answer, with its warnings ---------- */
+  function warningsOf(r) { return ((r && r.warnings) || []).map(String).filter(Boolean); }
+  function idle(w) { return w.some(function (m) { return /nothing to run/i.test(m); }); }   /* onboard-run ran nothing (before Accept, or an older flow) */
   async function setLeader(id, on) {
     var key = 'w278l' + id, x = rowOf(id); if (!x || S.busy[key]) return;
     S.busy[key] = true; delete S.note[id]; R.paint();
     try {
-      await run('set_leader', { flow_id: Number(id), leader: on });
+      var w = warningsOf(await run('set_leader', { flow_id: Number(id), leader: on })), ran = !idle(w);
       delete S.busy[key];
-      S.note[id] = { ok: on ? firstOf(x.name) + ' joins as a leader now. The Hub ran Groups and Drives again: the rows say what was added.'
-        : firstOf(x.name) + ' joins as a member now. The Hub ran Groups and Drives again, and it never removes access: take them out of any leaders\' group or drive by hand.' };
+      S.note[id] = { ok: firstOf(x.name) + (on ? ' joins as a leader now.' + (ran ? ' The Hub ran Groups and Drives again: the rows say what was added.' : '')
+        : ' joins as a member now.' + (ran ? ' The Hub ran Groups and Drives again.' : '') + ' The Hub never removes access: take them out of any leaders\' group or drive by hand.'), warnings: w };
       await R.load();
     } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
   }
   async function recheck(id) {
     var key = 'w278c' + id; if (!rowOf(id) || S.busy[key]) return;
     S.busy[key] = true; delete S.note[id]; R.paint();
-    try { await run('recheck_access', { flow_id: Number(id) }); delete S.busy[key]; S.note[id] = { ok: 'Drives and Groups were checked again: the rows say what changed.' }; await R.load(); }
-    catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+    try {
+      var w = warningsOf(await run('recheck_access', { flow_id: Number(id) }));
+      delete S.busy[key];
+      S.note[id] = { ok: idle(w) ? '' : 'Drives and Groups were checked again: the rows say what changed.', warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
   }
   async function openCc(id) {
     var x = rowOf(id); if (!x) return;
@@ -722,9 +732,9 @@
     var emails = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
     S.busy[key] = true; delete S.note[id]; R.paint();
     try {
-      await run('set_welcome_cc', { flow_id: Number(id), emails: emails });
+      var w = warningsOf(await run('set_welcome_cc', { flow_id: Number(id), emails: emails }));
       delete CC[id]; delete S.busy[key];
-      S.note[id] = { ok: emails.length ? 'Saved: ' + emails.length + (emails.length === 1 ? ' person gets' : ' people get') + ' a copy of the welcome email.' : 'Saved: no copies besides the owner\'s.' };
+      S.note[id] = { ok: emails.length ? 'Saved: ' + emails.length + (emails.length === 1 ? ' person gets' : ' people get') + ' a copy of the welcome email.' : 'Saved: no copies besides the owner\'s.', warnings: w };
       await R.load();
     } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; try { toast(e.message); } catch (x2) { /* no toast */ } R.paint(); }
   }

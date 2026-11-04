@@ -37,6 +37,7 @@ const rpcsCalled = (f) => f.ev(() => window.__O275_RPC || []);
 const cell = (id, iso) => card(id) + ' [data-o271cell="' + iso + '"]';
 const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
 const acc = (id) => card(id) + ' [data-o278acc]';
+const warns = (f, sel) => f.ev((s) => Array.prototype.map.call(document.querySelectorAll(s + ' .o271warn'), (e) => e.innerText).join(' | '), sel);   // every warning box in a card (the Canva one too)
 
 (async () => {
   const b = await launch();
@@ -386,12 +387,18 @@ const acc = (id) => card(id) + ' [data-o278acc]';
     c = await calls(f, 'set_leader');
     ok('wave278: undecided, "As a member" calls set_leader false', c.length === 2 && c[1].body.flow_id === F.proposed && c[1].body.leader === false && /Joining as a member/.test(await txtOf(f, acc(F.proposed) + ' [data-o278lead]')), c);
     ok('wave278: to member, the note says the Hub never removes access', /never removes/.test(await txtOf(f, card(F.proposed))));
+    t = await warns(f, card(F.proposed));
+    ok('wave278 fix: the server\'s warning shows ("nothing to run yet"), and the note does not claim Groups and Drives ran again', /nothing to run yet/.test(t) && !/ran Groups and Drives again/.test(await txtOf(f, card(F.proposed))), await txtOf(f, card(F.proposed)));
     ok('wave278: no Re-check on a card with no Groups or Drives rows yet', !(await has(f, acc(F.proposed) + ' [data-o278a="recheck"]')));
     await press(f, acc(F.said) + ' [data-o278a="recheck"]');
     c = await calls(f, 'recheck_access');
     ok('wave278: Re-check Drives and Groups calls recheck_access', c.length === 1 && c[0].body.flow_id === F.said && /Re-check Drives and Groups/.test(await txtOf(f, acc(F.said) + ' [data-o278a="recheck"]')), c);
     await f.page.waitForTimeout(1100);
     ok('wave278: after Re-check the rows show the answer', /Checked again: in org@/.test(await txtOf(f, acc(F.said))));
+    await press(f, acc(F.said) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    t = await warns(f, card(F.said));
+    ok('wave278 fix: leader to member, the groups to take them out of by hand show as a warning', /Take them out of admin@welfareavenue\.com and directors@welfareavenue\.com by hand/.test(t) && /Joining as a member/.test(await txtOf(f, acc(F.said) + ' [data-o278lead]')), await txtOf(f, card(F.said)));
 
     /* the welcome's copies */
     t = await txtOf(f, acc(F.said) + ' [data-o278wel]');
@@ -402,13 +409,33 @@ const acc = (id) => card(id) + ' [data-o278acc]';
     await f.page.waitForSelector(acc(F.said) + ' [data-o278cc]', { timeout: 4000 });
     const list = await f.ev((s) => Array.prototype.map.call(document.querySelectorAll(s + ' [data-o278cc]'), (i) => ({ e: i.getAttribute('data-o278cc'), on: i.checked })), acc(F.said));
     const emails = list.map((x) => x.e);
-    ok('wave278: Add people lists active staff only (no one who left, not the owner, who always gets one), Omar ticked', emails.indexOf('omar@example.invalid') >= 0 && list.filter((x) => x.e === 'omar@example.invalid')[0].on && emails.indexOf('joy.dumansi@welfareavenue.com') >= 0 && emails.indexOf('lee.gone@welfareavenue.com') < 0 && emails.indexOf('dana@example.invalid') < 0 && emails.every((e) => /@/.test(e)) && /Dana Fixture always gets a copy/.test(await txtOf(f, acc(F.said))), list);
+    ok('wave278: Add people lists active staff only (no one who left, not the owner, who always gets one), Omar ticked', emails.indexOf('omar@example.invalid') >= 0 && list.filter((x) => x.e === 'omar@example.invalid')[0].on && emails.indexOf('joy.dumansi@welfareavenue.com') >= 0 && emails.indexOf('lee.gone@welfareavenue.com') < 0 && emails.indexOf('rae.unset@welfareavenue.com') < 0 && emails.indexOf('dana@example.invalid') < 0 && emails.every((e) => /@/.test(e)) && /Dana Fixture always gets a copy/.test(await txtOf(f, acc(F.said))), list);
     await press(f, acc(F.said) + ' [data-o278cc="joy.dumansi@welfareavenue.com"]');
     await press(f, acc(F.said) + ' [data-o278a="ccsave"]');
     c = await calls(f, 'set_welcome_cc');
     ok('wave278: Save calls set_welcome_cc with the ticked staff', c.length === 1 && c[0].body.flow_id === F.said && JSON.stringify(c[0].body.emails.slice().sort()) === JSON.stringify(['joy.dumansi@welfareavenue.com', 'omar@example.invalid']), c);
     t = await txtOf(f, acc(F.said) + ' [data-o278wel]');
     ok('wave278: after Save the line counts them, and the picker closes', /copied to Dana Fixture and 2 others/.test(t) && !(await has(f, acc(F.said) + ' [data-o278cc]')), t);
+    /* fix round: HR's started card (read from the tables) has the leader line under its eight steps, and Change works. The stub hands back every fixture
+       column whatever the select names, so the column list itself is checked in the candidate's source */
+    const pageSrc = fs.readFileSync(process.env.CAND || require('path').join(__dirname, '../build/candidate.html'), 'utf8');
+    ok('wave278 fix: wave271\'s FLOW_COLS selects leader (HR\'s started cards read it from the table)', /var FLOW_COLS = '[^']*\bleader\b[^']*'/.test(pageSrc) && !/var FLOW_COLS = '[^']*\bwelcome_cc\b/.test(pageSrc));
+    t = await txtOf(f, acc(F.started) + ' [data-o278lead]');
+    ok('wave278 fix: HR\'s started new-path card shows the leader line with Change', /^Joining as a member/.test(t) && await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]'), t);
+    ok('wave278 fix: on a started card the access block is under the eight steps, the rundown above them', await f.ev((s) => { const c = document.querySelector(s), ol = c.querySelector(':scope > ol.o271st'), a = c.querySelector(':scope > [data-o278acc]'), k = c.querySelector('[data-o275ticks]'); return !!(ol && a && k) && !!(ol.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(k.compareDocumentPosition(ol) & Node.DOCUMENT_POSITION_FOLLOWING) && /^1\. Roster profile/.test(ol.innerText); }, card(F.started)));
+    await press(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]');
+    await f.page.waitForTimeout(1100);
+    c = await calls(f, 'set_leader');
+    ok('wave278 fix: Change on HR\'s started card calls set_leader and the line follows the table', c.some((x) => x.body.flow_id === F.started && x.body.leader === true) && /Joining as a leader/.test(await txtOf(f, acc(F.started) + ' [data-o278lead]')), c);
+    /* fix round: a refused set_welcome_cc shows its error */
+    await press(f, acc(F.offered) + ' [data-o278a="ccopen"]');
+    await f.page.waitForSelector(acc(F.offered) + ' [data-o278cc]', { timeout: 4000 });
+    await f.ev(() => { window.__O271_REFUSE = { action: 'set_welcome_cc', error: 'not_staff', message: 'Only active staff can get a copy of the welcome email.' }; });
+    await press(f, acc(F.offered) + ' [data-o278cc="joy.dumansi@welfareavenue.com"]');
+    await press(f, acc(F.offered) + ' [data-o278a="ccsave"]');
+    t = await txtOf(f, card(F.offered) + ' .o271err');
+    ok('wave278 fix: a refused set_welcome_cc shows its error in the note, and the picker stays open', /Only active staff can get a copy of the welcome email/.test(t) && await has(f, acc(F.offered) + ' [data-o278cc]'), t);
+    ok('wave278 fix: the picker says someone who left is taken off on Save', /taken off the copies when you save/.test(await txtOf(f, acc(F.offered) + ' [data-o278pk]')));
     ok('wave278: the started card (welcome sent) has the steps and Re-check but no Add people', await has(f, acc(F.started) + ' [data-o278a="recheck"]') && /Slack onboarding channel/.test(await txtOf(f, acc(F.started))) && !(await has(f, acc(F.started) + ' [data-o278a="ccopen"]')));
     t = await f.ev(() => document.getElementById('o271').innerText);
     ok('wave278: Hub words: no em dash, no "AI"', noDashNoAI(t));

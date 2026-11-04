@@ -137,6 +137,7 @@
       + R.startedMore(f)   /* wave275: the setup rundown ticks */
       + noteHtml(id)
       + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
+      + R.startedAfter(f)   /* wave278: the access steps, the leader line and Re-check, after these eight */
       + '<div class="o271btns">'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="time" data-f="' + E(id) + '"' + (acting === 'time' ? ' disabled' : '') + '>Change time</button>'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="manager" data-f="' + E(id) + '"' + (acting === 'manager' ? ' disabled' : '') + '>Change manager</button>'
