@@ -16,17 +16,21 @@ const schema = read('w279schema.sql');
 const migration = read('../build/wa279a_rules.sql');
 const undo = read('../build/wa279a_undo.sql');
 const assertions = read('w279sql.sql');
+const liveTemplate = read('w279live_template.sql');
+const migrationB = read('../build/wa279b_template.sql');
+const undoB = read('../build/wa279b_undo.sql');
+const assertionsB = read('w279b.sql');
 
 let checks = 0;
 const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
 const ok = (cond, msg) => { checks++; if (!cond) fail(msg); };
 const one = async (db, sql) => (await db.query(sql)).rows[0];
 
-async function runAssertions(db, label) {
-  const res = await db.exec(assertions);
+async function runAssertions(db, label, sql = assertions, expected = 'w279sql: all assertions passed') {
+  const res = await db.exec(sql);
   const last = res.filter((r) => r.rows && r.rows.length).pop();
   const line = last && last.rows[0] && last.rows[0].result;
-  ok(line === 'w279sql: all assertions passed', label + ': the assertion script finished (' + line + ')');
+  ok(line === expected, label + ': the assertion script finished (' + line + ')');
   console.log(label + ': ' + line);
 }
 
@@ -69,6 +73,30 @@ try {
 
   await runAssertions(db, 'assertions');
   await runAssertions(db, 'assertions (second run)');
+
+  // ---- wa279b: the content, on a copy of the live template rows (04/11/26). Applied twice, asserted twice, undone twice (before the wa279a undo), and re-applied.
+  await db.exec(liveTemplate);
+  const TEMPLATE = `select id, section, parent_id, name, description, sort, priority, active, academy_path, training_id, setup_covered from public.onboarding_template order by id`;
+  const beforeB = JSON.stringify((await db.query(TEMPLATE)).rows);
+  const countRows = async () => (await one(db, `select count(*)::int as n from public.onboarding_template`)).n;
+  const rowsBefore = await countRows();
+  ok((await one(db, `select count(*)::int as n from public.app_config where key = 'onboard_role_recommend'`)).n === 0, 'the recommend setting is absent before wa279b');
+  for (let pass = 1; pass <= 2; pass++) {
+    await db.exec(migrationB);
+    await db.exec(migrationB);
+    ok((await countRows()) === rowsBefore + 18, 'wa279b adds eighteen rows and no more, even when run twice');
+    ok(JSON.stringify((await db.query(TEMPLATE)).rows) !== beforeB, 'wa279b changed the template');
+    await runAssertions(db, 'wa279b assertions (pass ' + pass + ')', assertionsB, 'w279b: all assertions passed');
+    await runAssertions(db, 'wa279b assertions again (pass ' + pass + ')', assertionsB, 'w279b: all assertions passed');
+    await db.exec(undoB);
+    await db.exec(undoB);
+    ok(JSON.stringify((await db.query(TEMPLATE)).rows) === beforeB, 'the wa279b undo puts every template row back exactly (name, description, section, parent, sort, priority, active, path, training, setup_covered)');
+    ok((await countRows()) === rowsBefore, 'the undo deletes the eighteen inserted rows');
+    ok((await one(db, `select count(*)::int as n from public.app_config where key = 'onboard_role_recommend'`)).n === 0, 'the undo deletes the recommend setting');
+    console.log('wa279b: applied twice, asserted, undone twice, template back exactly (pass ' + pass + ')');
+  }
+  // the live rows are only test data: take them out again so the wa279a undo meets the generic fixtures only
+  await db.exec(`delete from public.onboarding_template where id not like 't-%'; delete from public.academy_paths where key in ('hub', 'foundations', 'branding', 'team', 'any'); delete from public.trainings where category = 'live'`);
 
   // ---- the undo, twice, with a plan and a flow in place first so the undo meets real rows
   await db.exec(`insert into public.team_members (name, email) values ('Test Undo Member', 'w279.undo@example.invalid');
