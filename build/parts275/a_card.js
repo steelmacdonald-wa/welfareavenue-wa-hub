@@ -16,7 +16,9 @@
    wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): the card row's manager_hours (wa275b's wa275_flow_row, from
    onboard_manager_hours) and the times answer's manager_hours. False: the week line is one quiet line of information ("<first> has not set their week
    on Home; times are not limited to it"), and the picker offers every cell of the window ("Open to pick"), greying only hub@ meetings, other hires and
-   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it. */
+   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it.
+   wave278 (04/11/26, Task 6): the rundown counts twelve steps, and the card gains the access block (c_access.js): the groups, drives, meeting and channel
+   steps, the leader decision with Change, Re-check Drives and Groups, and the welcome's copies with Add people. c_access.js closes this wrapper. */
 (function () {
   if (window.__wa275) return; window.__wa275 = true;
   var O = window.o271, R = window.o271R;
@@ -25,8 +27,10 @@
   var GREEN = '#103F39', GROUND = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2';
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], WDN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], WDK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   var DEFAULT_WEEK = { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] };
-  /* the hire's setup rundown (onboard-link SETUP, 9 steps); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
-  var RUNDOWN = [['profile', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['hub', 'the Hub'], ['slack', 'Slack'], ['academy', 'the Academy'], ['loom', 'Loom'], ['canva', 'Canva'], ['drives', 'Drives and Groups'], ['weekly', 'the weekly meeting']];
+  /* the hire's setup rundown (onboard-link SETUP, 12 steps since wave278; wa278a carried the old ticks over: profile to chrome, drives to drive, loom
+     dropped); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
+  var RUNDOWN = [['google', 'their Google account'], ['chrome', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['drive', 'Drive'], ['groups', 'Groups'], ['hub', 'the Hub'], ['slack', 'Slack'],
+    ['canva', 'Canva'], ['academy', 'the Academy'], ['jd', 'the job description'], ['weekly', 'the weekly meeting'], ['phone', 'the phone apps']];
   var MINE_KINDS = { propose: 1, bookg: 1, gridfor: 1, exc: 1, welcome: 1, mgr: 1 };
   R.readyStatuses.push('offered');   /* a card runs from the offer (wa271_ready_list lists offered flows since wa275a) */
 
@@ -237,6 +241,7 @@
       + (booked ? '' : switchHtml(x))
       + (x.accepted_on ? ticksHtml(x) : '')
       + stepsHtml(x)
+      + accessHtml(x, id)   /* wave278: c_access.js */
       + (booked ? '' : canvaHtml(x))
       + O.noteHtml(id)
       + buttonsHtml(x)
