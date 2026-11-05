@@ -16,7 +16,12 @@
     closeMenu(true);
     try { if (window.w272 && window.w272.closeTip) window.w272.closeTip(); } catch (e) { /* fine */ }   /* wave272's corner note never sits over a window */
     if (!S.snackFn) hideSnack();   /* a plain note (saved, copied) makes way for the sheet; an Undo stays its 5 seconds */
-    if (!sheetOpen()) { SH.opener = o.opener || document.activeElement; SH.openerSel = selOf(SH.opener); }
+    /* break274: Safari does not focus a button on a tap, so focus can still sit on an older control (the opener of the last
+       sheet): the control just tapped or pressed is the opener, then whatever has focus */
+    if (!sheetOpen()) {
+      var ae = document.activeElement, tapped = S.tapEl && document.contains(S.tapEl) && !el.contains(S.tapEl) && performance.now() - (S.tapAt || 0) < 1500 ? S.tapEl : null;
+      SH.opener = o.opener || tapped || (ae && ae !== document.body && !el.contains(ae) ? ae : null) || ae; SH.openerSel = selOf(SH.opener);
+    }
     SH.kind = kind; SH.ctx = o.ctx || null;
     pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '">' +   /* no grab handle: there is no drag to dismiss */
       '<div class="w274shd"><div><h2 id="w274sht">' + E(o.title) + '</h2>' + (o.sub ? '<p>' + E(o.sub) + '</p>' : '') + '</div><button type="button" class="w274ib" data-w274x="1" aria-label="Close">' + ic('x') + '</button></div>' +
@@ -25,6 +30,7 @@
     el.removeAttribute('aria-hidden');
     void pane.offsetWidth;
     still(el, function () { el.classList.add('open'); });
+    placeSnack();
     /* on a touch screen the sheet itself takes focus: a keyboard or date wheel rising during the slide covers the list and the action */
     var touch = !S.kbd && matchMedia('(pointer: coarse)').matches;
     var f = o.focus ? pane.querySelector(o.focus) : null;
@@ -34,12 +40,16 @@
   }
   function closeSheet(noReturn) {
     var el = document.getElementById('w274sheet'); if (!el || !el.classList.contains('open')) return;
-    still(el, function () { el.classList.remove('open'); }); el.setAttribute('aria-hidden', 'true');
-    SH.kind = null; SH.ctx = null;
+    still(el, function () { el.classList.remove('open'); });
+    SH.kind = null; SH.ctx = null; placeSnack();
     var op = SH.opener, sel = SH.openerSel; SH.opener = null; SH.openerSel = null;
-    if (noReturn) return;
-    if (!op || !document.contains(op) || op.offsetParent === null) op = sel ? document.querySelector(sel) : null;
-    if (op) { try { op.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    if (!noReturn) {
+      if (!op || !document.contains(op) || op.offsetParent === null) op = sel ? document.querySelector(sel) : null;
+      if (op) { try { op.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    }
+    /* break274: focus leaves the sheet before it is hidden from assistive tech (never focus inside aria-hidden) */
+    if (el.contains(document.activeElement)) { try { document.activeElement.blur(); } catch (e) { /* fine */ } }
+    el.setAttribute('aria-hidden', 'true');
   }
   /* a keyboard action changes at once (no slide, no fade); a pointer gets the motion */
   function still(el, fn) {
@@ -75,7 +85,7 @@
     m.classList.toggle('up', up);
     void m.offsetWidth; still(m, function () { m.classList.add('on'); });
     trigger.setAttribute('aria-expanded', 'true');
-    MN.trigger = trigger; MN.sel = selOf(trigger); MN.fn = fn;
+    MN.trigger = trigger; MN.sel = selOf(trigger); MN.fn = fn; MN.top = r.top;   /* break274: where its button was, for the scroll rule */
     var first = kbd ? m.querySelector('.w274mi') : m; if (first) { try { first.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
   }
   function menuOpen() { var m = document.getElementById('w274menu'); return !!m && m.classList.contains('on'); }
@@ -94,11 +104,23 @@
     s.querySelector('span').textContent = msg;
     s.querySelector('button').textContent = act || '';
     S.snackFn = fn || null;
+    placeSnack();
     s.classList.add('on');
     clearTimeout(S.snackT); S.snackT = setTimeout(hideSnack, act ? 5000 : 3200);
   }
   function hideSnack() { var s = document.getElementById('w274snack'); if (s) s.classList.remove('on'); S.snackFn = null; clearTimeout(S.snackT); }
-
+  /* break274: a note shown while a sheet is open (an Undo keeps its 5 seconds; a partial add says who was added) sits clear of
+     the sheet: above its footer on a phone, centred in the page beside it on a computer, never over Cancel or the primary.
+     It moves there on its transform (200 ms, with the sheet), at once on a keyboard action, without moving with reduced motion. */
+  function placeSnack() {
+    var s = document.getElementById('w274snack'); if (!s) return;
+    var pane = document.getElementById('w274pane'), ft = pane && pane.querySelector('.w274sft'), x = 0, y = 0, mw = '';
+    if (pane && sheetOpen()) {
+      if (window.innerWidth <= 900) y = Math.max(0, Math.round((ft ? ft.offsetHeight : 0) + 12 - (parseFloat(getComputedStyle(s).bottom) || 0)));
+      else { var free = window.innerWidth - pane.offsetWidth; x = Math.round(free / 2 - window.innerWidth / 2); mw = Math.max(200, free - 32) + 'px'; }
+    }
+    still(s, function () { s.style.setProperty('--w274sx', x + 'px'); s.style.setProperty('--w274sy', y + 'px'); s.style.maxWidth = mw; });
+  }
   /* ---------- New event and Edit (one sheet) ---------- */
   function kitchens() {
     var o = ['Ralph Thornton Community Centre'];
@@ -269,11 +291,13 @@
       if (r.ok) delete k.sel[p.id];
     }
     reindexPool(); repaintCrew();
-    var said = added.length ? 'Added ' + andJoin(added) + ' to ' + roleIn(k.role) + '.' : already.length ? andJoin(already) + (already.length === 1 ? ' is' : ' are') + ' already on this event.' : '';
+    /* break274: up to three names are said; more are counted, so the note at the foot stays one line or two */
+    var who = function (l) { return l.length > 3 ? plural(l.length, 'person', 'people') : andJoin(l); };
+    var said = added.length ? 'Added ' + who(added) + ' to ' + roleIn(k.role) + '.' : already.length ? who(already) + (already.length === 1 ? ' is' : ' are') + ' already on this event.' : '';
     if (!needs.length && !errs.length) { closeSheet(); if (said) snack(said); return; }
     busy(false); paintPick();
-    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the Toronto database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
-      errs.length ? 'Couldn’t add ' + andJoin(errs) + '. Try again.' : ''].filter(Boolean).join(' '));
+    setErr('sheet', [needs.length ? who(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the Toronto database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
+      errs.length ? 'Couldn’t add ' + who(errs) + '. Try again.' : ''].filter(Boolean).join(' '));
     if (said) snack(said);
   }
 

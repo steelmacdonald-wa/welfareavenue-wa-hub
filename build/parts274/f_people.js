@@ -68,11 +68,11 @@
     return '<article class="w274row" data-w274cid="' + E(p.id) + '"><div><div class="a"><span class="w274pn">' + E(p.name) + '</span>' + whoChip(p) + '</div>' +
       '<div class="b"><span>' + E(p.area || 'Area not given') + '</span>' + daysDots(p.days) + '</div></div>' +
       '<div class="ev">' + evs + '</div>' +
-      '<div class="x">' + (p.email ? '<button type="button" class="w274ib" data-w274cpe="' + E(p.id) + '" aria-label="' + E('Copy ' + p.name + '’s email') + '" title="Copy the email">' + ic('copy') + '</button>' : '') +
+      '<div class="x">' + (p.email ? '<button type="button" class="w274ib" data-w274cpe="' + E(p.id) + '" aria-label="' + E('Copy ' + p.name + '’s email') + '" title="Copy the email">' + ic('copy') + '</button>' : '<span class="w274ib w274ph" aria-hidden="true"></span>') +   /* break274: no email, the columns still line up */
       '<a class="w274btn sm" href="#crm/c/' + E(p.id) + '" data-w274crm="' + E(p.id) + '">Open in the CRM</a>' +
       '<button type="button" class="w274btn sm" data-w274to="' + E(p.id) + '">' + ic('plus') + 'Add to an event</button></div></article>';
   }
-  function countLine(n, all) { return n === all ? plural(all, 'person', 'people') : n + ' of ' + plural(all, 'person', 'people'); }
+  function countLine(n, all) { return n === all ? plural(all, 'person', 'people') : nf(n) + ' of ' + plural(all, 'person', 'people'); }
   function paintList(fresh) {
     var rows = document.getElementById('w274rows'), cnt = document.getElementById('w274pcount'); if (!rows) return;
     var pool = S.pool || [], list = sortPeople(filterPeople(pool, S.f), S.f.sort);
@@ -87,10 +87,11 @@
     if (!S.pool) { setMast('Toronto volunteers', 'Everyone in the CRM who volunteers with us in Toronto.', {}); root.innerHTML = '<p class="w274quiet" role="status">Loading the Toronto volunteers…</p>'; return; }
     setMast('Toronto volunteers', 'Everyone in the CRM who volunteers with us in Toronto: students and general volunteers.', { count: S.pool.length });
     var sig = S.pool.length + '|' + schoolsOf(S.pool).length;
-    if (!root.querySelector('[data-w274tools="p"]') || S.toolsSig !== sig) {
+    if (!root.querySelector('#w274rows') || S.toolsSig !== sig) {
       keepFocus(function () {
         root.innerHTML = (S.poolErr ? '<p class="w274err" role="alert">Some of the CRM didn’t load. The list may be missing people: reload the page to try again.</p>' : '') +
-          '<div class="w274tools" data-w274tools="p">' + toolsHtml(S.f, 'p') + '</div><p class="w274count" id="w274pcount" aria-live="polite"></p><div class="w274rows" id="w274rows"></div>';
+          (S.pool.length ? '<div class="w274tools" data-w274tools="p">' + toolsHtml(S.f, 'p') + '</div>' : '') +   /* break274: no one in the pool: the empty state first, no search over nobody */
+          '<p class="w274count" id="w274pcount" aria-live="polite"></p><div class="w274rows" id="w274rows"></div>';
       });
       S.toolsSig = sig;
     }

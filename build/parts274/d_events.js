@@ -22,7 +22,13 @@
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
   function ratio(a, b) { if (!b) return a > 0 ? 1 : 0; return Math.max(0, Math.min(1, a / b)); }
   function barHtml(c) { return '<span class="w274bar" aria-hidden="true"><i class="w" data-x="' + ratio(c.yes + c.wait, c.target).toFixed(3) + '"></i><i class="c" data-x="' + ratio(c.yes, c.target).toFixed(3) + '"></i></span>'; }
-  function barRow(c) { return '<div class="w274br"><span class="l">' + E(c.label) + '</span>' + barHtml(c) + '<span class="n">' + (c.yes + c.wait) + ' of ' + c.target + '</span></div>'; }
+  /* break274: "3 of 4"; a crew with no target and someone on it reads "1", not "1 of 0" */
+  function ofT(n, t) { return t ? nf(n) + ' of ' + nf(t) : nf(n); }
+  function barRow(c) { return '<div class="w274br"><span class="l">' + E(c.label) + '</span>' + barHtml(c) + '<span class="n">' + ofT(c.yes + c.wait, c.target) + '</span></div>'; }
+  /* break274: one grid for a card's bars, so they keep one length when a number is wide ("1,200 of 1,200") */
+  function barRows(crews) { return crews.length ? '<div class="w274brs">' + crews.map(barRow).join('') + '</div>' : ''; }
+  /* break274: no crew places and no one confirmed is said in words, not "0 of 0 confirmed" */
+  function confLine(t, cls) { return t.target ? '<p class="' + cls + '"><b>' + nf(t.yes) + '</b> of ' + nf(t.target) + ' confirmed</p>' : t.yes ? '<p class="' + cls + '"><b>' + nf(t.yes) + '</b> confirmed</p>' : '<p class="' + cls + ' none">No crew places set yet</p>'; }
   /* the bars: they fill from the left on a page's first draw, and otherwise just stand at their value */
   function bars(scope, grow) {
     if (!scope) return;
@@ -33,15 +39,19 @@
     var bs = Array.prototype.slice.call(scope.querySelectorAll('.w274bar'));
     bs.forEach(function (b) { b.classList.add('w274now'); }); set(); void scope.offsetWidth; bs.forEach(function (b) { b.classList.remove('w274now'); });
   }
-  /* a list rises in, 40 ms apart, on a page's first draw only */
+  /* a list rises in, 40 ms apart, on a page's first draw only.
+     break274: only the rows on screen rise, and the stagger stops at 280 ms (the 8th row), so 300 rows settle as fast as 8;
+     the rows below the fold are simply there, never invisible when someone scrolls to them. */
   function rise(scope, sel) {
     if (!scope) return;
-    var items = Array.prototype.slice.call(scope.querySelectorAll(sel)); if (!items.length) return;
+    var vh = window.innerHeight || 800;
+    var items = Array.prototype.slice.call(scope.querySelectorAll(sel)).filter(function (el) { var r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < vh; });
+    if (!items.length) return;
     var still = reduced();
     items.forEach(function (el) { el.classList.add('w274st', 'w274pre'); });
     void scope.offsetWidth;
-    items.forEach(function (el, i) { el.style.transitionDelay = still ? '0ms' : Math.min(i, 10) * 40 + 'ms'; el.classList.remove('w274pre'); });
-    setTimeout(function () { items.forEach(function (el) { el.classList.remove('w274st'); el.style.transitionDelay = ''; }); }, 760);
+    items.forEach(function (el, i) { el.style.transitionDelay = still ? '0ms' : Math.min(i, 7) * 40 + 'ms'; el.classList.remove('w274pre'); });
+    setTimeout(function () { items.forEach(function (el) { el.classList.remove('w274st'); el.style.transitionDelay = ''; }); }, 600);
   }
   function errLine(key, text) { return '<p class="w274err" data-w274err="' + E(key) + '" aria-live="polite">' + E(text || S.err[key] || '') + '</p>'; }
   function setErr(key, text) {
@@ -55,9 +65,12 @@
     if (!S.recOk) return planned ? plural(planned, 'meal') + ' planned' : '';
     var rs = recsOf(e.id);
     if (!rs.length) return (planned ? plural(planned, 'meal') + ' planned. ' : '') + 'Who the meals go to is not set yet.';
-    var parts = rs.filter(function (r) { return !r.private; }).map(function (r) { return String(r.name || '') + (r.meals != null ? ' (' + r.meals + ')' : ''); });
-    var priv = rs.filter(function (r) { return r.private; });
-    if (priv.length) { var pm = priv.reduce(function (s, r) { return s + num(r.meals, 0); }, 0); parts.push(plural(priv.length, 'organization') + ', not named publicly' + (pm ? ' (' + pm + ')' : '')); }
+    var named = rs.filter(function (r) { return !r.private; }), priv = rs.filter(function (r) { return r.private; });
+    var one = function (r) { return String(r.name || '') + (r.meals != null ? ' (' + nf(r.meals) + ')' : ''); };
+    /* break274: more than three organizations: the first two by name and how many more (the event page lists them all) */
+    if (rs.length > 3) { var shown = named.slice(0, 2); return 'Meals for: ' + shown.map(one).join(', ') + (shown.length ? ' and ' : '') + plural(rs.length - shown.length, shown.length ? 'more organization' : 'organization', shown.length ? 'more organizations' : 'organizations'); }
+    var parts = named.map(one);
+    if (priv.length) { var pm = priv.reduce(function (s, r) { return s + num(r.meals, 0); }, 0); parts.push(plural(priv.length, 'organization') + ', not named publicly' + (pm ? ' (' + nf(pm) + ')' : '')); }
     return 'Meals for: ' + andJoin(parts);
   }
   function delivered(e) { var rs = recsOf(e.id).filter(function (r) { return r.meals_delivered != null && r.meals_delivered !== ''; }); return rs.length ? rs.reduce(function (s, r) { return s + num(r.meals_delivered, 0); }, 0) : null; }
@@ -76,7 +89,7 @@
     o = o || {};
     var m = mastEl(); if (!m) return;
     var h1 = m.querySelector('h1'), p = m.querySelector(':scope > p');
-    var hh = E(title) + (o.count != null ? ' <span class="w274cnt">' + E(o.count) + '</span>' : ''), want = title + (o.count != null ? ' ' + o.count : '');
+    var hh = E(title) + (o.count != null ? ' <span class="w274cnt">' + E(nf(o.count)) + '</span>' : ''), want = title + (o.count != null ? ' ' + nf(o.count) : '');
     if (h1 && h1.textContent !== want) h1.innerHTML = hh;   /* the live text, so a rename by another wave is put right */
     if (p && p.textContent !== blurb) p.textContent = blurb;
     var b = m.querySelector(':scope > .w274back');
@@ -93,8 +106,8 @@
       '<h3>' + E(titleOf(e)) + '</h3>' +
       '<p class="w274meta">' + E(kitchenLine(e)) + '</p>' +
       '<p class="w274meta">' + E(mealsFor(e)) + '</p></div>' +
-      '<div class="w274hr"><p class="w274conf"><b>' + t.yes + '</b> of ' + t.target + ' confirmed</p>' + crews.map(barRow).join('') +
-      '<p class="w274leg" aria-hidden="true"><span><i></i>Confirmed</span><span><i class="w"></i>Waiting</span></p></div></a>';
+      '<div class="w274hr">' + confLine(t, 'w274conf') + barRows(crews) +
+      (crews.length ? '<p class="w274leg" aria-hidden="true"><span><i></i>Confirmed</span><span><i class="w"></i>Waiting</span></p>' : '') + '</div></a>';
   }
   function cardHtml(e) {
     var off = lower(e.status) === 'cancelled', st = stageOf(e), crews = crewOf(e), t = totals(crews);
@@ -104,7 +117,7 @@
       '<h3>' + E(titleOf(e)) + '</h3>' +
       '<p class="w274meta">' + E(kitchenLine(e)) + '</p>' +
       '<p class="w274meta">' + E(mealsFor(e)) + '</p>' +
-      (off ? '' : '<p class="w274cf"><b>' + t.yes + '</b> of ' + t.target + ' confirmed</p>' + crews.map(barRow).join('')) + '</a>';
+      (off ? '' : confLine(t, 'w274cf') + barRows(crews)) + '</a>';
   }
   function pastRow(e) {
     var s = lower(e.status), d = delivered(e);

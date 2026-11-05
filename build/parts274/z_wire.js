@@ -238,9 +238,13 @@
   }, true);
   window.addEventListener('hashchange', function () { closeMenu(true); if (sheetOpen()) closeSheet(true); hideSnack(); });
   document.addEventListener('pointerdown', function () { S.kbd = false; }, true);
+  /* break274: what was tapped, for a sheet to give focus back to (a visible control: a proxy that clicks a hidden one keeps itself) */
+  document.addEventListener('click', function (ev) { var t = ev.target, c = t && t.closest ? t.closest('button, a[href], [tabindex]:not([tabindex="-1"])') : null; if (c && c.offsetParent === null && getComputedStyle(c).position !== 'fixed') return; S.tapEl = c; S.tapAt = performance.now(); }, true);
   document.addEventListener('touchstart', function () {}, { passive: true });   /* iOS Safari applies :active only with a touch listener */
-  window.addEventListener('resize', function () { closeMenu(true); });
-  window.addEventListener('scroll', function () { if (menuOpen()) closeMenu(false); }, { passive: true });   /* the menu belongs to its button */
+  window.addEventListener('resize', function () { closeMenu(true); placeSnack(); });
+  /* the menu belongs to its button. break274: it closes once its button has moved away, not on the last scroll event of a
+     scroll that ended before the tap (a wheel's smooth scroll or a flick still settling would close it the moment it opened) */
+  window.addEventListener('scroll', function () { if (!menuOpen()) return; var t = MN.trigger; if (!t || !document.contains(t) || Math.abs(t.getBoundingClientRect().top - (MN.top || 0)) > 8) closeMenu(false); }, { passive: true });
   window.addEventListener('pagehide', flushOff);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushOff(); });
 

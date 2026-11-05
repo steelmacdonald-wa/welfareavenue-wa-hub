@@ -78,6 +78,46 @@ Not done here, outside this wave's selectors:
 - The phone's app rail shows "TORONTO VOLUNTEERS" in capitals and a filled New event next to the page's own primary.
 - `000_head_base.seg` has no `viewport-fit=cover`, so the sheet's safe-area padding is 0 on an iPhone.
 
+## Break-UI pass
+
+`test/w274break.js` renders the real screens with worst-case data from `test/w274breakfx.js`. It runs four datasets, worst, empty, one and huge, at 390 and 1366 px, with 238 checks. The worst-case data includes:
+
+- long and one-letter names, and names in Arabic, Chinese and with emoji
+- 60-character emails and missing fields
+- a 300-person pool, 120 events, a crew of 60 and 2,000 meals
+
+It also stresses the motion: rapid sheets, menus at the screen edge, stagger with 300 rows and reduced motion. Twenty of its 26 findings are fixed in parts274:
+
+- **Layout and overflow:**
+  - Long school chips are cut with an ellipsis and keep the full name in their title; they had pushed the page 1,544 px wide.
+  - A long dietary "other" wraps instead of being cut off.
+  - Crew columns no longer stretch to the longest one.
+  - A card's bars share one grid.
+  - A missing email keeps its place in the row.
+- **Motion and focus:**
+  - Only rows on screen rise, the stagger stops at the eighth row, and rows below the fold are there at once.
+  - The note at the foot moves clear of an open sheet, lists at most three names and can wrap a long email.
+  - Focus returns to the control just tapped.
+  - Focus leaves a sheet before it is hidden.
+  - A menu closes only when its button has moved more than 8 px.
+  - Keyboard status changes don't slide the bars.
+- **Words and numbers:**
+  - Numbers have Canadian separators (1,999), and "1 meal" is singular.
+  - A target of 0 reads "1", not "1 of 0".
+  - "No crew places set yet" replaces "0 of 0".
+  - More than three organizations read "and 6 more organizations".
+  - A contact with no name shows their email or phone.
+  - No search over an empty pool.
+
+`w274drive.js` now checks for sideways scrolling against the device width, because a phone viewport zooms out when something overflows.
+
+Left for Steel:
+
+- a cue for an overbooked crew or over-placed meals
+- whether notes queue
+- folding the picker's filters on a phone
+- length limits on the event title and kitchen
+
 ## Left for later waves (the plan, section 5)
 
 - wave274c: the Toronto sign-up forms in the Hub (general and student) and Sign-ups.

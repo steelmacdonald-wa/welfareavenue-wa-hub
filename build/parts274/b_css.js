@@ -56,6 +56,8 @@
     + '#toronto .w274chip.no,#w274sheet .w274chip.no,#toronto .w274chip.st-cancelled{background:var(--t-flagt);color:var(--t-flag);}'
     + '#toronto .w274chip.sch,#w274sheet .w274chip.sch{background:var(--t-act);color:var(--t-ink);}'
     + '#toronto .w274chip.gen,#w274sheet .w274chip.gen{background:none;box-shadow:inset 0 0 0 1px var(--t-line2);color:var(--t-mut);}'
+    + '#toronto .w274chip.sch,#w274sheet .w274chip.sch{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;line-height:20px;vertical-align:middle;}'   /* break274: a school's long name is cut to the row, never past it (full name in its title) */
+    + '#toronto .w274diet .w274chip{white-space:normal;overflow-wrap:anywhere;max-width:100%;}'   /* break274: a long dietary "other" wraps: it is read in full, never cut */
     + '#toronto .w274chip.stg,#w274sheet .w274chip.stg{background:var(--t-ac);color:var(--t-card);}'
     + '#toronto .w274chip.st-completed{background:rgba(16,63,57,.12);}'
     + '#toronto .w274sw{display:inline-grid;justify-items:start;align-items:center;}'
@@ -74,6 +76,7 @@
     + '#toronto .w274conf b{font:500 46px/1 ' + HEAD + ';letter-spacing:-.01em;color:var(--t-card);font-variant-numeric:tabular-nums;}'
     + '#toronto .w274br{display:grid;grid-template-columns:100px minmax(0,1fr) 48px;align-items:center;gap:10px;margin:9px 0;font-size:13.5px;}'
     + '#toronto .w274br .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}'
+    + '#toronto .w274brs{display:grid;grid-template-columns:100px minmax(0,1fr) minmax(48px,auto);align-items:center;gap:9px 10px;margin:9px 0;font-size:13.5px;}#toronto .w274brs > .w274br{display:contents;}'   /* break274: a card's bars share one grid: one length, whatever the numbers */
     + '#toronto .w274hero .w274bar{background:rgba(255,250,242,.2);}'
     + '#toronto .w274hero .w274bar .c{background:var(--t-card);}#toronto .w274hero .w274bar .w{background:var(--wa-gold);}'
     + '#toronto .w274leg{display:flex;gap:14px;margin:12px 0 0;font-size:12.5px;color:rgba(255,250,242,.86);}'
@@ -95,6 +98,7 @@
     + '#toronto .w274cf{margin:12px 0 2px;font-size:13.5px;color:var(--t-mut);}#toronto .w274cf b{font:500 24px/1 ' + HEAD + ';color:var(--t-green);margin-right:4px;font-variant-numeric:tabular-nums;}'
     + '#toronto .w274card .w274br{grid-template-columns:88px minmax(0,1fr) 40px;margin:6px 0;font-size:12.5px;color:var(--t-mut);}'
     + '#toronto .w274card .w274bar{height:6px;}'
+    + '#toronto .w274card .w274brs{grid-template-columns:88px minmax(0,1fr) minmax(40px,auto);gap:14px 10px;margin:6px 0;font-size:12.5px;color:var(--t-mut);}'
     /* past events */
     + '#toronto .w274fold{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px 0 0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;border-radius:8px;' + TAP + 'transition:transform 160ms ' + OUT + ';}'
     + '#toronto .w274fold svg{width:22px;height:22px;transition:transform 200ms ' + OUT + ';}'
@@ -145,7 +149,7 @@
     + '#toronto .w274cfm span{flex:1 1 180px;}'
     + '#toronto .w274placed{margin:12px 0 0;font-size:14px;color:var(--t-mut);}#toronto .w274placed b{color:var(--t-green);}'
     /* the crews */
-    + '#toronto .w274crews{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}'
+    + '#toronto .w274crews{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;}'   /* break274: a crew of 60 does not stretch the short crews beside it */
     + '@media (min-width:760px){#toronto .w274crews{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}}'
     + '#toronto .w274col{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;border-radius:16px;background:var(--t-surf);}'
     + '#toronto .w274colh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}'
@@ -218,7 +222,8 @@
     + '#toronto .w274row .b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;font-size:13.5px;color:var(--t-mut);}'
     + '#toronto .w274row .ev{font-size:13.5px;color:var(--t-mut);}#toronto .w274row .ev b{display:block;font:600 14.5px/1.3 ' + BODY + ';color:var(--t-ink);}'
     + '#toronto .w274row .x{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px;}'
-    + '@media (max-width:900px){#toronto .w274row{grid-template-columns:minmax(0,1fr);gap:8px;padding:14px;}#toronto .w274row .x{justify-content:flex-start;}#toronto .w274row .x .w274btn{flex:1 1 auto;}}'
+    + '#toronto .w274row .w274ph{visibility:hidden;}'   /* break274: holds Copy email's place in a row without an email */
+    + '@media (max-width:900px){#toronto .w274row{grid-template-columns:minmax(0,1fr);gap:8px;padding:14px;}#toronto .w274row .x{justify-content:flex-start;}#toronto .w274row .x .w274btn{flex:1 1 auto;}#toronto .w274row .w274ph{display:none;}}'
     + '#toronto .w274d7,#w274sheet .w274d7{display:inline-flex;gap:3px;vertical-align:middle;}'
     + '#toronto .w274d7 i,#w274sheet .w274d7 i{width:8px;height:8px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(16,63,57,.55);}'
     + '#toronto .w274d7 i.on,#w274sheet .w274d7 i.on{background:var(--t-ac);box-shadow:none;}'
@@ -266,10 +271,12 @@
     + '#w274menu .w274mi.dng,#w274menu .w274mi.dng svg{color:var(--wa-flag);}'
     + '#w274menu hr{margin:4px 6px;border:0;border-top:1px solid rgba(16,63,57,.12);}'
     /* the note at the foot of the screen (saved, copied, undo) */
-    + '#w274snack{position:fixed;left:50%;bottom:24px;z-index:340;display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);min-height:48px;padding:6px 8px 6px 16px;border-radius:12px;background:var(--wa-text);color:var(--wa-card);font:500 14.5px/1.3 ' + BODY + ';box-shadow:0 10px 30px rgba(31,32,30,.24);opacity:0;visibility:hidden;transform:translate(-50%,8px);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 200ms;}'
-    + '#w274snack.on{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 0s;}'
+    + '#w274snack{position:fixed;left:50%;bottom:24px;z-index:340;display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);min-height:48px;padding:6px 8px 6px 16px;border-radius:12px;background:var(--wa-text);color:var(--wa-card);font:500 14.5px/1.3 ' + BODY + ';box-shadow:0 10px 30px rgba(31,32,30,.24);opacity:0;visibility:hidden;transform:translate(calc(-50% + var(--w274sx,0px)),calc(8px - var(--w274sy,0px)));transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 200ms;}'
+    + '#w274snack.on{opacity:1;visibility:visible;transform:translate(calc(-50% + var(--w274sx,0px)),calc(0px - var(--w274sy,0px)));transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 0s;}'
     + '#w274snack button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:none;color:var(--wa-card);font:700 14.5px/1 ' + BODY + ';text-decoration:underline;text-underline-offset:3px;cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ';}'
+    + '#w274snack span{min-width:0;overflow-wrap:anywhere;}'   /* break274: a long email in the note wraps inside it */
     + '#w274snack button:empty{display:none;}'
+    + '#w274snack.w274inst{transition:none !important;}'   /* break274: moved clear of a sheet opened with the keyboard: at once */
     + '@media (max-width:900px){#w274snack{bottom:calc(84px + env(safe-area-inset-bottom));}#w274snack button{min-height:44px;}}'
     /* press feedback on everything pressable; hover only with a real pointer */
     + PRESS.map(function (s) { return s + ':active:not(:disabled)'; }).join(',') + '{transform:scale(.97);}'
@@ -297,7 +304,7 @@
     + '#toronto .w274st.w274pre{transform:none;}'
     + '#toronto .w274bar i,#toronto .w274steps.w274go .w274mk,#toronto .w274fold svg{transition:none;}'
     + '#w274menu,#w274menu.on,#w274menu.up{transform:none;}'
-    + '#w274snack,#w274snack.on{transform:translate(-50%,0);}'
+    + '#w274snack,#w274snack.on{transform:translate(calc(-50% + var(--w274sx,0px)),calc(0px - var(--w274sy,0px)));transition:opacity 200ms ' + OUT + ',visibility 0s linear 200ms;}#w274snack.on{transition:opacity 200ms ' + OUT + ',visibility 0s linear 0s;}'   /* break274: clear of a sheet without moving */
     + '}';
   if (!document.getElementById('wa274css')) {
     var st274 = document.createElement('style'); st274.id = 'wa274css'; st274.textContent = css274; document.head.appendChild(st274);

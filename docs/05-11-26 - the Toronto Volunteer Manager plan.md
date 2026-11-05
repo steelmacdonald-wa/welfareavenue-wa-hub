@@ -209,3 +209,5 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 | 05/11/26 | Steel decided Toronto is its own app, approved the SQL and publishing, and asked for the anticipated spend on the shared calendar and a break-UI pass | Sections 5 and 7 |
 | 05/11/26 | The live Hub is built from `wave279-onboarding-plan` (index.html bcf0c01b), not `main` (other sessions released 271, 273, 275 to 279 from their branches). This branch merges it, so Toronto goes on top of what is live | Deploy only on top of the live md5 |
 | 05/11/26 | Waves 275 to 279 are taken; Toronto's later waves renumbered 274b to 274g (briefs renamed) | Section 5 |
+| 05/11/26 | Break-UI pass: 26 findings, 20 fixed (the worst was a long school chip making the page 1,544 px wide); `test/w274break.js` 238 passed stays as the regression test | The release note's Break-UI section |
+| 05/11/26 | For Steel: a cue when a crew or the meals go over, whether notes queue, folding the picker's filters on a phone, length limits on the event title and kitchen | From the break-UI pass |

@@ -70,7 +70,7 @@ const INSTALL = (o) => {
 };
 const writes = (f, table, op) => f.ev(o => window.__REC.writes.filter(w => w.table === o.t && (!o.op || w.op === o.op)), { t: table, op: op || null });
 const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), fn);
-const flat = (f) => f.ev(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+const flat = (f) => f.ev(() => { const w = Math.min(window.innerWidth, screen.width); return document.documentElement.scrollWidth <= w + 1 && window.innerWidth <= screen.width + 1; });   /* a phone viewport zooms out when something overflows, so innerWidth alone hides it */
 const tap = (f, sel) => f.ev(s => { const e = document.querySelector(s); if (!e) return false; e.click(); return true; }, sel);
 const txt = (f, sel) => f.ev(s => { const e = document.querySelector(s); return e ? e.innerText : null; }, sel);
 const rail = (f) => f.ev(() => Array.from(document.querySelectorAll('#w153rail .w153it')).map(a => a.innerText.trim().split('\n')[0] + (a.classList.contains('on') ? '*' : '')));

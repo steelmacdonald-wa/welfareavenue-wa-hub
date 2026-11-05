@@ -36,7 +36,9 @@
   function fold(s) { try { return lower(s).normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) { return lower(s); } }
   function num(v, d) { if (v === null || v === undefined || v === '') return d; var n = Number(v); return isFinite(n) ? n : d; }
   function msgOf(e) { return String((e && (e.message || e.details || e.hint)) || e || 'unknown error'); }
-  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  var NF = null;
+  function nf(n) { try { NF = NF || new Intl.NumberFormat('en-CA'); var v = Number(n); return isFinite(v) ? NF.format(v) : String(n); } catch (e) { return String(n); } }   /* break274: 1,999 and 2,000, not 1999 */
+  function plural(n, one, many) { return nf(n) + ' ' + (Number(n) === 1 ? one : (many || one + 's')); }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function me() {

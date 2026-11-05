@@ -48,7 +48,8 @@ const INSTALL = () => {
 /* ---------- what is checked on every screen ---------- */
 const CARDS = ['#toronto > .w118mast', '#toronto .w274hero', '#toronto .w274card', '#toronto .w274prow', '#toronto .w274eh', '#toronto .w274steps', '#toronto .w274box', '#toronto .w274col', '#toronto .w274pc',
   '#toronto .w274wr', '#toronto .w274md', '#toronto .w274row', '#toronto .w274empty', '#toronto .w274tools', '#w274pane', '#w274pane .w274pk', '#w274pane .w274evp', '#w274menu.on', '#w274snack.on'].join(',');
-const flat = (f) => f.ev(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+/* against the device's width: on a phone, content wider than the screen makes the page zoom out, so innerWidth grows with it */
+const flat = (f) => f.ev((w) => document.documentElement.scrollWidth <= w + 1 && window.innerWidth <= w + 1, f.W);
 /* text (and buttons, fields, chips) that runs out of its card: each text line's box, against the card's box */
 const spill = (f) => f.ev((sel) => {
   const out = [], vis = el => !!el && (el.offsetParent !== null || getComputedStyle(el).position === 'fixed') && getComputedStyle(el).visibility !== 'hidden';
@@ -108,7 +109,7 @@ const pointer = (f) => f.ev(() => { document.dispatchEvent(new PointerEvent('poi
 /* ---------- the worst case ---------- */
 async function worst(browser, who, width) {
   const tag = 'worst ' + who + '@' + width, phone = width < 900;
-  const f = await fresh(browser, { who, width, hash: '#toronto', fixture: BX.worst(), rpcs: RPCS(who), init: INIT(who), wait: 5200 });
+  const f = await fresh(browser, { who, width, hash: '#toronto', fixture: BX.worst(), rpcs: RPCS(who), init: INIT(who), wait: 5200 }); f.W = width;
   await f.ev(INSTALL);
   await f.page.waitForTimeout(600);
 
@@ -140,7 +141,7 @@ async function worst(browser, who, width) {
     }, { hash, sel: rowSel });
     const tr = (await trGet(f)).filter(x => new RegExp(rowSel.split(' ').pop().replace('.', '')).test(x.cls));
     const late = tr.length ? Math.max.apply(null, tr.map(x => x.delay)) : 0, end = tr.length ? Math.max.apply(null, tr.map(x => x.delay + x.dur)) : 0;
-    ok(tag + ': ' + label + ': the first draw rises, the last row starting within 300 ms and settled by about 560 ms (' + r.n + ' rows, ' + tr.length / 2 + ' moving)', tr.length > 0 && late <= 300 && end <= 600, { late, end, r });
+    ok(tag + ': ' + label + ': the first draw rises, the last row starting within 300 ms and settled by about 560 ms (' + r.n + ' rows, ' + r.onScreen + ' on screen, ' + tr.length + ' transitions)', tr.length > 0 && late <= 300 && end <= 600, { late, end, r });
     ok(tag + ': ' + label + ': rows below the fold are there at once (none invisible when scrolled to)', r.belowHidden === 0 && r.hidden630 === 0, r);
     return r;
   };
@@ -233,11 +234,11 @@ async function worst(browser, who, width) {
     const wait = (ms) => new Promise(r => setTimeout(r, ms));
     edit(); await wait(140); close(); await wait(70); edit(); await wait(60); x(); await wait(40); edit(); await wait(30); close(); await wait(25); edit(); await wait(520);
     run = false;
-    let jump = 0; for (let i = 1; i < frames.length; i++) jump = Math.max(jump, Math.abs(frames[i][1] - frames[i - 1][1]));
+    let jump = 0; for (let i = 1; i < frames.length; i++) if (frames[i][0] - frames[i - 1][0] <= 40) jump = Math.max(jump, Math.abs(frames[i][1] - frames[i - 1][1]));   /* a dropped frame is not a jump */
     return { jump: Math.round(jump * 100) / 100, end: Math.round(frames[frames.length - 1][1] * 100) / 100, frames: frames.length };
   }, phone);
   let ss = await sheetState(f);
-  ok(tag + ': a sheet opened, closed and reopened while closing, five times fast: no jump (largest step ' + fast.jump + ' of the way per frame), open at the end', fast.jump <= 0.3 && fast.end >= 0.99 && ss.open && ss.vis === 'visible' && ss.hidden === null, [fast, ss]);
+  ok(tag + ': a sheet opened, closed and reopened while closing, five times fast: no jump (largest step ' + fast.jump + ' of the way in a frame; the drawer curve alone moves about 0.33 on the way out), open at the end', fast.jump <= 0.45 && fast.end >= 0.99 && ss.open && ss.vis === 'visible' && ss.hidden === null, [fast, ss]);
   ok(tag + ': ...and focus is in the sheet (' + (phone ? 'the sheet itself on a touch screen' : 'the date') + ')', ss.inPane && ss.focus === (phone ? 'w274pane' : 'w274fd'), ss);
   await screen(f, tag, 'sheet edit the event', { numbers: false });
   await tap(f, '#w274sheet .w274bd'); await f.page.waitForTimeout(400);
@@ -250,18 +251,41 @@ async function worst(browser, who, width) {
   ss = await sheetState(f); tr = (await trGet(f)).filter(x => x.id === 'w274pane' || /w274bd/.test(x.cls));
   ok(tag + ': Enter and Escape three times fast: nothing moves, the sheet is closed, focus on Edit', !tr.length && !ss.open && ss.vis === 'hidden' && ss.focus === 'edit', [tr.slice(0, 3), ss]);
 
+  /* the Undo note keeps its 5 seconds when a sheet opens: it must not sit over the sheet's Cancel or primary, and Undo still works */
+  const n0 = await f.ev(() => document.querySelectorAll('#w274root .w274col[data-w274role="cook"] .w274pc').length);
+  await f.ev(async () => {
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    const b = document.querySelectorAll('#w274root .w274col[data-w274role="cook"] [data-w274pm]')[2]; b.scrollIntoView({ block: 'center' }); await new Promise(r => setTimeout(r, 200));
+    b.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })); await new Promise(r => setTimeout(r, 120));
+    document.querySelector('#w274menu [data-w274mk="off"]').click(); await new Promise(r => setTimeout(r, 350));
+    document.querySelector('[data-w274edit]').click(); await new Promise(r => setTimeout(r, 450));
+  });
+  const un = await f.ev(() => {
+    const s = document.getElementById('w274snack'), q = s.getBoundingClientRect();
+    const hit = Array.from(document.querySelectorAll('#w274pane .w274sft .w274btn')).filter(x => { const r = x.getBoundingClientRect(); return !(r.right <= q.left || r.left >= q.right || r.bottom <= q.top || r.top >= q.bottom); }).map(x => x.textContent);
+    return { on: s.classList.contains('on'), undo: s.querySelector('button').textContent, hit, inView: q.left >= 0 && q.right <= innerWidth && q.top >= 0 && q.bottom <= innerHeight, n: document.querySelectorAll('#w274root .w274col[data-w274role="cook"] .w274pc').length };
+  });
+  ok(tag + ': taken off the crew, then a sheet opened: the Undo note stays, on screen, clear of Cancel and the primary', un.on && un.undo === 'Undo' && !un.hit.length && un.inView && un.n === n0 - 1, [un, n0]);
+  await shot(f, 'undo-over-sheet-' + tag.replace(/[ @]/g, '-'));
+  await tap(f, '#w274snack button'); await f.page.waitForTimeout(300);
+  const un2 = await f.ev(() => ({ n: document.querySelectorAll('#w274root .w274col[data-w274role="cook"] .w274pc').length, open: document.getElementById('w274sheet').classList.contains('open'), t: document.getElementById('w274snack').innerText }));
+  ok(tag + ': ...and Undo from over the sheet puts them back, the sheet still open', un2.n === n0 && un2.open && /back on the crew/.test(un2.t), un2);
+  await tap(f, '#w274sheet .w274bd'); await f.page.waitForTimeout(400);
+  const un3 = await f.ev(() => { const s = document.getElementById('w274snack'); return { x: s.style.getPropertyValue('--w274sx'), y: s.style.getPropertyValue('--w274sy'), mw: s.style.maxWidth }; });
+  ok(tag + ': ...and with the sheet closed the note is back in its own place', un3.x === '0px' && un3.y === '0px' && un3.mw === '', un3);
+
   /* a menu near the bottom and the right edge of the screen */
+  await f.page.waitForFunction(() => !document.getElementById('w274snack').classList.contains('on'), null, { timeout: 8000 });   /* the note at the foot would sit over the button */
   const mb = await f.ev(() => {
     const bar = Array.from(document.querySelectorAll('body *')).filter(e => { const s = getComputedStyle(e); if (s.position !== 'fixed' || s.visibility === 'hidden' || e.closest('#w274sheet, #w274menu, #w274snack')) return false; const r = e.getBoundingClientRect(); return r.width > innerWidth * 0.6 && r.bottom >= innerHeight - 2 && r.height < 160 && r.height > 20; }).map(e => e.getBoundingClientRect().top);
     return bar.length ? Math.min.apply(null, bar) : innerHeight;
   });
-  const btnSel = '[data-w274r="' + (BX.CB ? '' : '') + '"]';
   const trig = await f.ev((barTop) => {
     const bs = Array.from(document.querySelectorAll('#w274root .w274col[data-w274role="cook"] [data-w274pm]')); const b = bs[30];
-    const r0 = b.getBoundingClientRect(); window.scrollBy(0, r0.bottom - (barTop - 6));
+    const r0 = b.getBoundingClientRect(); window.scrollTo({ top: window.scrollY + r0.bottom - (barTop - 6), behavior: 'instant' });
     const r = b.getBoundingClientRect(); b.setAttribute('data-test-trig', '1'); return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, barTop, ih: innerHeight, iw: innerWidth };
   }, mb);
-  await f.page.waitForTimeout(150); await trClear(f);
+  await f.page.waitForTimeout(300); await trClear(f);
   if (phone) await f.page.tap('[data-test-trig="1"]'); else await f.page.click('[data-test-trig="1"]');
   await f.page.waitForTimeout(260);
   const mn = await f.ev(() => { const m = document.getElementById('w274menu'), r = m.getBoundingClientRect(), o = getComputedStyle(m).transformOrigin.split(' ').map(parseFloat), t = document.querySelector('[data-test-trig="1"]').getBoundingClientRect(); return { on: m.classList.contains('on'), up: m.classList.contains('up'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, ox: r.left + o[0], oy: r.top + o[1], tx: (t.left + t.right) / 2, ttop: t.top, tbottom: t.bottom, iw: innerWidth, ih: innerHeight }; });
@@ -278,6 +302,18 @@ async function worst(browser, who, width) {
   const mm = await f.ev(() => { const m = document.getElementById('w274menu'), r = m.getBoundingClientRect(), o = getComputedStyle(m).transformOrigin.split(' ').map(parseFloat), t = document.querySelector('[data-w274more]').getBoundingClientRect(); return { on: m.classList.contains('on'), up: m.classList.contains('up'), left: r.left, right: r.right, top: r.top, ox: r.left + o[0], oy: r.top + o[1], tx: (t.left + t.right) / 2, tbottom: t.bottom, iw: innerWidth }; });
   ok(tag + ': More opens below its button, on screen, growing from it', mm.on && !mm.up && mm.left >= 0 && mm.right <= mm.iw && mm.top >= mm.tbottom - 1 && Math.abs(mm.ox - mm.tx) <= 24 && Math.abs(mm.oy - mm.top) <= 2, mm);
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(150);
+  /* a menu tapped while the last scroll event of a finished scroll is still to come stays open; scrolling its button away closes it */
+  const mr = await f.ev(async () => {
+    window.scrollTo({ top: 0, behavior: 'instant' }); await new Promise(r => setTimeout(r, 200));
+    const b = document.querySelectorAll('#w274root .w274col[data-w274role="cook"] [data-w274pm]')[12];
+    b.scrollIntoView({ block: 'center' }); window.scrollBy(0, -16);
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); b.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
+    await new Promise(r => setTimeout(r, 300)); const stay = document.getElementById('w274menu').classList.contains('on');
+    window.scrollBy(0, 200); await new Promise(r => setTimeout(r, 300));
+    return { stay, gone: !document.getElementById('w274menu').classList.contains('on') };
+  });
+  ok(tag + ': a menu opened just after a scroll stays open; scrolling its button away closes it', mr.stay && mr.gone, mr);
+  await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(150);
 
   /* statuses changed and Called toggled fast: the chips crossfade, the bars move from where they are (never from empty) */
   await at(f, '#w274s-crew'); await trClear(f);
@@ -293,6 +329,15 @@ async function worst(browser, who, width) {
   const rose = tr.filter(x => /w274st/.test(x.cls));
   const long = tr.filter(x => x.dur > 300 && x.id !== 'w274pane' && !/w274bd/.test(x.cls));
   ok(tag + ': statuses and Called changed fast: no bar refills from empty, nothing rises, nothing over 300 ms', !fromZero.length && !rose.length && !long.length, { fromZero: fromZero.slice(0, 3), rose: rose.length, long: long.slice(0, 3) });
+  /* with the keyboard: Enter on a person's button, an arrow, Enter: the status changes and nothing moves */
+  await f.ev(() => { const b = document.querySelectorAll('#w274root .w274col[data-w274role="cook"] [data-w274pm]')[8]; b.scrollIntoView({ block: 'center' }); b.setAttribute('data-test-kb', '1'); });
+  await f.page.waitForTimeout(150); await f.page.focus('[data-test-kb="1"]'); await trClear(f);
+  await f.page.keyboard.press('Enter'); await f.page.waitForTimeout(120);
+  await f.page.keyboard.press('ArrowDown'); await f.page.keyboard.press('Enter'); await f.page.waitForTimeout(450);
+  tr = await trGet(f);
+  const kb = tr.filter(x => (/^(c|w)$/.test(x.cls) && x.prop === 'transform') || x.id === 'w274menu' || /w274chip/.test(x.cls));
+  const kbSt = await f.ev(() => { const b = document.querySelector('[data-test-kb="1"]'), c = b.closest('.w274pc'); return { st: c.getAttribute('data-st'), focus: document.activeElement === b }; });
+  ok(tag + ': a status changed with the keyboard: Can’t come at once, the menu, the chip and the bar never move, focus back on the button', !kb.length && kbSt.st === 'no' && kbSt.focus, [kb.slice(0, 4), kbSt]);
   ok(tag + ': no page errors (worst case)', !f.errs.length, f.errs);
 
   /* reduced motion, all of it again */
@@ -327,7 +372,7 @@ async function worst(browser, who, width) {
 /* ---------- plain (the opsto profile) at 390 on the worst case: the screens hold for a team member too ---------- */
 async function plainPhone(browser) {
   const tag = 'worst plain@390';
-  const f = await fresh(browser, { who: 'plain', width: 390, hash: '#toronto', fixture: BX.worst(), rpcs: RPCS('plain'), init: INIT('plain'), wait: 5200 });
+  const f = await fresh(browser, { who: 'plain', width: 390, hash: '#toronto', fixture: BX.worst(), rpcs: RPCS('plain'), init: INIT('plain'), wait: 5200 }); f.W = 390;
   await f.ev(INSTALL); await f.page.waitForTimeout(500);
   ok(tag + ': the app opens for a member on the Toronto team', !!(await f.ev(() => document.querySelector('#toronto .w274hero'))));
   await screen(f, tag, 'events hero');
@@ -340,14 +385,14 @@ async function plainPhone(browser) {
 /* ---------- 0 of everything, 1 of everything, and the huge numbers ---------- */
 async function empty(browser, width) {
   const tag = 'empty admin@' + width;
-  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.empty(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 });
+  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.empty(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 }); f.W = width;
   await f.ev(INSTALL); await f.page.waitForTimeout(400);
   const e = await f.ev(() => ({ t: (document.querySelector('#w274root .w274empty') || {}).innerText || '', h: Array.from(document.querySelectorAll('#w274root h2')).map(h => h.textContent) }));
   ok(tag + ': Events: "No Toronto events yet." with New event', /No Toronto events yet\./.test(e.t) && /New event/.test(e.t), e);
   await screen(f, tag, 'events', { numbers: false });
   await f.hash('#toronto/people', 2600);
   const p = await f.ev(() => ({ t: (document.querySelector('#w274root .w274empty') || {}).innerText || '', cnt: (document.querySelector('#toronto > .w118mast .w274cnt') || {}).textContent || null, tools: !!document.querySelector('#w274root [data-w274tools="p"]') }));
-  ok(tag + ': Volunteers: says the CRM has no Toronto volunteers yet', /No Toronto volunteers in the CRM yet\./.test(p.t), p);
+  ok(tag + ': Volunteers: says the CRM has no Toronto volunteers yet, first (no search over nobody)', /No Toronto volunteers in the CRM yet\./.test(p.t) && !p.tools, p);
   await screen(f, tag, 'people', { numbers: false });
   await f.hash('#toronto/e/123456', 1600);
   ok(tag + ': an event that is not there says so, with the way back', /isn’t here/.test(await f.ev(() => document.querySelector('#toronto > .w118mast h1').textContent)));
@@ -356,7 +401,7 @@ async function empty(browser, width) {
 }
 async function one(browser, width) {
   const tag = 'one admin@' + width;
-  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.one(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 });
+  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.one(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 }); f.W = width;
   await f.ev(INSTALL); await f.page.waitForTimeout(400);
   const h = await f.ev(() => ({ t: (document.querySelector('#toronto .w274hero') || {}).innerText || '', up: !!document.querySelector('#w274hup'), past: !!document.querySelector('#w274hpast') }));
   ok(tag + ': one event: the hero only, with its year (Sat 30 Oct 2027), in 400 days, 1 of 1 confirmed', /Sat 30 Oct 2027/.test(h.t) && /In 400 days/.test(h.t) && /1\s+of 1 confirmed/.test(h.t) && /Sistering \(1\)/.test(h.t) && !h.up && !h.past, h);
@@ -373,10 +418,12 @@ async function one(browser, width) {
 }
 async function huge(browser, width) {
   const tag = 'huge admin@' + width;
-  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.huge(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 });
+  const f = await fresh(browser, { who: 'admin', width, hash: '#toronto', fixture: BX.huge(), rpcs: RPCS('admin'), init: INIT('admin'), wait: 5200 }); f.W = width;
   await f.ev(INSTALL); await f.page.waitForTimeout(400);
   const h = await f.ev(() => (document.querySelector('#toronto .w274hero') || {}).innerText || '');
   ok(tag + ': 1999 confirmed of 2000, with thousands separators', /1,999\s+of 2,000 confirmed/.test(h) && /1,200 of 1,200/.test(h) && /Fred Victor \(2,000\)/.test(h), h);
+  const bw = await f.ev(() => Array.from(document.querySelectorAll('#toronto .w274hero .w274bar')).map(b => Math.round(b.getBoundingClientRect().width)));
+  ok(tag + ': the hero’s bars keep one length although their numbers differ in width (' + bw.join(', ') + ' px)', bw.length === 3 && Math.max.apply(null, bw) - Math.min.apply(null, bw) <= 1, bw);
   await screen(f, tag, 'events');
   await tap(f, '[data-w274past]'); await at(f, '#w274hpast');
   ok(tag + ': 2000 meals delivered reads 2,000', /2,000 meals delivered/.test(await f.ev(() => (document.querySelector('#w274pastl') || {}).innerText || '')));

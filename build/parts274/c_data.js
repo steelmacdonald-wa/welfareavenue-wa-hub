@@ -129,8 +129,9 @@
   function person(c, a) {
     var tags = (c.tags || []).map(lower), org = c.org_id != null ? S.orgs[c.org_id] : null;
     var student = c.org_id != null || tags.indexOf('toronto student') >= 0;
-    var name = String(c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'No name').trim();
     var emails = [c.primary_email].concat(c.emails || []).filter(function (x, i, l) { return x && l.indexOf(x) === i; });
+    /* break274: a contact with no name is shown by its email (or phone), so two of them in a list can be told apart */
+    var name = String(String(c.full_name || '').trim() || [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || emails[0] || (c.phones || [])[0] || 'No name').trim();
     return {
       id: c.id, c: c, name: name, email: emails[0] || '', phone: (c.phones || [])[0] || '',
       student: student, school: org ? String(org.short || org.name || '') : '', schoolName: org ? String(org.name || org.short || '') : '', schoolId: org ? org.id : null,
