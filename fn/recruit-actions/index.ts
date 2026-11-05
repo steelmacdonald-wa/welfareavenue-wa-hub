@@ -1,3 +1,14 @@
+// wave278, 04/11/26: the offer records who pressed Send (hub_candidates.offer_sent_by, set only when empty and only when the offer was emailed, in the same update as offer_sent_at), so the welcome email can go out as them.
+// wave275, 02/11/26: the offer asks for the onboarding manager and the hours. offer_send refuses, in a plain sentence and before anything is made, an
+// offer with no f.manager_member_id (an active roster member with an email) or with f.hours other than 4, 6 or 8 (400 {error, code}). It stores
+// hub_candidates.offer_hours and onboard_manager_id in the same update as offer_sent_at, so the trigger wa275_offer_sent makes the offered flow with
+// that manager; then (emailed only) it asks onboard-run ask_manager {flow_id} with the trigger secret, which sends the manager their mgr link. An offer
+// sent again with another manager moves the flow to them while nothing is proposed. The manager not being asked is a warning, never a failed offer
+// (the hourly job tries again). offer_preview also gives manager {default: wa271_default_manager, choices: the active roster}. The letter, its PDF,
+// the buttons, the email and the "just reply to this email" line are unchanged.
+// wave271, 01/11/26: the offer email gets Accept and Decline buttons (hub.welfareavenue.com/o/<token>, the page and function of onboard-link; the
+// token is its 'offer' token, copied here as offerToken), and offer_send saves the letter's reply-by and start dates on the card
+// (hub_candidates.offer_respond_by, offer_start). The letter, its PDF and the "just reply to this email" line are unchanged.
 // Welfare Avenue: recruit-actions (v7, 15/10/26, wave245: the stage_moved DM to the person handling an applicant goes through
 // notify (event applicant): their own switch for that kind in the notification centre, the Hub notification on their devices,
 // and the log the centre shows them; the direct DM from here is the fallback when notify cannot be reached. Steel: "The
@@ -18,7 +29,8 @@
 //                                             Nobody is texted twice in 7 days unless force; answered cards are skipped.
 //   offer_preview {id, f}                     the offer letter, as it will read (HTML), whether email is in test mode, the signers
 //   offer_send {id, f, email?}                the signed letter as a PDF in Recruitment > Offer Letters and (email) an email to
-//                                             them with the PDF and the note. mail_mode test sends it to the test inboxes.
+//                                             them with the PDF and the note, and Accept and Decline buttons (wave271). mail_mode test
+//                                             sends it to the test inboxes. The reply-by and start dates are saved on the card.
 //   offer_signer_set {email}                  who signs offer letters by default (HR or an admin)
 //   stage_moved {id, old, new, by}            (trigger) a card moved to Interview, Offer or Hired, or closed after an interview:
 //                                             a line in the HR channel and a DM to the person handling it
@@ -340,7 +352,7 @@ async function trash(id: string) { try { await gfetch(DRIVE + '/files/' + encode
    their name, title and signature come from volunteer_signers (Volunteer Manager > Sign-offs > My signature, bucket signoffs).
    The letter is a PDF drawn here (the green band and lockup of the sign-off letters), kept in Recruitment > Offer Letters; the
    email is the CRM's layout (mail-send) with the signer's sign-off, a blind copy to the signer, and replies going to them. */
-type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; signer_email?: string; note?: string; email?: string };
+type OfferF = { lang?: string; reports_to?: string; hours?: number | string; start?: string; respond_by?: string; signer?: string; signer_title?: string; signer_email?: string; note?: string; email?: string; manager_member_id?: number | string };
 type Signer = { email: string; name: string; title: string; title_fr: string; sig: Uint8Array | null; has_sig: boolean };
 function esc(s: unknown): string { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] as string)); }
 function dLong(iso: string | undefined, fr: boolean): string {
@@ -509,10 +521,28 @@ async function letterPdf(name: string, role: string, f: OfferF, s: Signer, pract
   if (pages.length > 1) pages.forEach((p, i) => { const pt = (i + 1) + ' / ' + pages.length; p.drawText(pt, { x: R - F.body.widthOfTextAtSize(pt, 7.5), y: 46, size: 7.5, font: F.body, color: MUTED }); });
   return await pdf.save();
 }
+/* wave271: the Accept and Decline links. The token is onboard-link's 'offer' token (its wa271Token): <candidate id>.<first 20 characters of the
+   base64url HMAC-SHA256 of the id>, keyed 'onboard-offer:' + the service key. Functions are single files, so it is copied here; the test
+   proves the two agree. The page opens on the token and saves nothing; a ?a= hint says which button was pressed in the email, and ?l=fr
+   opens it in French. */
+async function offerToken(id: number): Promise<string> {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('onboard-offer:' + SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return id + '.' + b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(String(id))))).slice(0, 20);
+}
+type OfferLinks = { accept: string; decline: string; acceptLabel: string; declineLabel: string; lead: string };
+async function offerLinks(id: number, fr: boolean): Promise<OfferLinks> {
+  const base = HUB + '/o/' + await offerToken(id), tail = fr ? '&l=fr' : '';
+  return { accept: base + '?a=accept' + tail, decline: base + '?a=decline' + tail, acceptLabel: fr ? 'Accepter' : 'Accept', declineLabel: fr ? 'Refuser' : 'Decline', lead: fr ? 'Ou répondez d’un clic :' : 'Or answer with one click:' };
+}
+/* a date column takes a real YYYY-MM-DD or nothing (the form sends '' for no start date) */
+function isoDay(v: unknown): string | null {
+  const m = String(v == null ? '' : v).match(/^\d{4}-\d{2}-\d{2}/);
+  return m && new Date(m[0] + 'T12:00:00Z').toISOString().slice(0, 10) === m[0] ? m[0] : null;
+}
 /* the email: the CRM's layout (mail-send), the signer's sign-off */
 const E_CREAM = '#FFFAF2', E_GREEN = '#103F39', E_INK = '#1F201E', E_GOLD = '#DCA527';
 const E_HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", E_BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
-function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preheader: string): string {
+function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preheader: string, links: OfferLinks): string {
   const fr = f.lang === 'fr';
   const P = (x: string) => `<p style="margin:0 0 16px;font-family:${E_BODY};font-size:16px;line-height:26px;color:${E_INK};">${x}</p>`;
   const B = (x: string) => `<strong style="color:${E_GREEN};font-weight:700;">${x}</strong>`;
@@ -524,6 +554,12 @@ function offerEmailHtml(first0: string, role: string, f: OfferF, s: Signer, preh
     (note ? note.split(/\n{2,}/).map(p => P(esc(p.trim()).replace(/\n/g, '<br>'))).join('') : '') +
     P(fr ? 'Nous serions ravis de vous accueillir comme ' + B(esc(role)) + '. Votre lettre d’offre est jointe à ce courriel (PDF).' : 'We would love to welcome you as our ' + B(esc(role)) + '. Your offer letter is attached to this email as a PDF.') +
     P(fr ? 'Merci de nous donner votre réponse d’ici le ' + B(esc(dLong(f.respond_by, true))) + ' : il suffit de répondre à ce courriel.' : 'Please let us know your answer by ' + B(esc(dLong(f.respond_by, false))) + ': just reply to this email.') +
+    P(esc(links.lead)) +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;"><tr>` +
+    `<td style="background-color:${E_GREEN};border:2px solid ${E_GREEN};border-radius:6px;"><a href="${esc(links.accept)}" style="display:inline-block;padding:12px 28px;font-family:${E_BODY};font-size:16px;line-height:20px;font-weight:700;color:${E_CREAM};text-decoration:none;">${esc(links.acceptLabel)}</a></td>` +
+    `<td style="width:12px;font-size:0;line-height:0;">&nbsp;</td>` +
+    `<td style="background-color:${E_CREAM};border:2px solid ${E_GREEN};border-radius:6px;"><a href="${esc(links.decline)}" style="display:inline-block;padding:12px 28px;font-family:${E_BODY};font-size:16px;line-height:20px;font-weight:700;color:${E_GREEN};text-decoration:none;">${esc(links.declineLabel)}</a></td>` +
+    `</tr></table>` +
     `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;"><tr><td style="width:40px;height:3px;background-color:${E_GOLD};font-size:0;line-height:0;">&nbsp;</td></tr></table>` +
     P((fr ? 'Au plaisir,' : 'Warmly,') + '<br>' + B(esc(s.name)) + (t ? '<br>' + esc(t) : '') + '<br>Welfare Avenue');
   const small = `font-family:${E_BODY};font-size:13px;line-height:20px;color:${E_CREAM};`;
@@ -558,7 +594,84 @@ async function uploadPdf(name: string, parent: string, bytes: Uint8Array): Promi
   const j = await r.json(); if (!r.ok) throw new Error('Drive upload ' + r.status + ': ' + JSON.stringify(j).slice(0, 200));
   return j;
 }
-async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
+/* ---------- wave275: the onboarding manager and the hours ---------- */
+/* a refusal the panel shows as it is: 400 {error: <the sentence>, code} */
+class Refused extends Error { code: string; constructor(code: string, message: string) { super(message); this.code = code; } }
+const OFFER_HOURS = [4, 6, 8];
+type Mgr = { id: number; name: string; email: string };
+/* checked before anything is made: no letter, no Drive file, no email for an offer that cannot go out */
+async function offerCheck(f: OfferF): Promise<{ hours: number; mgr: Mgr }> {
+  const raw = f.hours, hours = typeof raw === 'number' ? raw : /^\s*\d+\s*$/.test(String(raw ?? '')) ? Number(raw) : NaN;
+  if (!OFFER_HOURS.includes(hours)) throw new Refused('bad_hours', 'Hours a week must be 4, 6 or 8.');
+  const mid = Number(f.manager_member_id);
+  if (f.manager_member_id == null || String(f.manager_member_id).trim() === '' || !Number.isInteger(mid)) throw new Refused('no_manager', 'Choose the onboarding manager first: they are asked for the onboarding call and 1-on-1 times as soon as the offer goes out.');
+  const { data: m } = await svc.from('team_members').select('id, name, email, active').eq('id', mid).maybeSingle();
+  if (!m) throw new Refused('no_manager', 'That onboarding manager is not on the roster. Choose another one.');
+  const name = String((m as any).name || 'That person');
+  if ((m as any).active === false) throw new Refused('manager_inactive', name + ' is no longer active on the roster. Choose another onboarding manager.');
+  const email = String((m as any).email || '').trim().toLowerCase();
+  if (!email) throw new Refused('manager_no_email', name + ' has no email on the roster, so the Hub cannot ask them for times. Add it on their roster profile, or choose another onboarding manager.');
+  return { hours, mgr: { id: mid, name, email } };
+}
+/* the panel's "Onboarding manager": the position's manager as wa271_default_manager tells it (and how), and the roster to choose from: active, named and
+   with an email, the same test offerCheck makes, so the panel never offers someone the send refuses. A default who fails it is available: false, with why
+   ('inactive' | 'no_email'), and the panel leaves the choice to HR. */
+async function managerChoices(id: number) {
+  let def: { member_id: number | null; name: string | null; how: string; available: boolean; why: string | null } = { member_id: null, name: null, how: 'none', available: false, why: null };
+  try {
+    const { data, error } = await svc.rpc('wa271_default_manager', { p_candidate: id });
+    if (!error && data) def = { member_id: (data as any).member_id ?? null, name: (data as any).name ?? null, how: String((data as any).how || 'none'), available: false, why: null };
+  } catch (_) { /* none: HR chooses */ }
+  const { data: tm } = await svc.from('team_members').select('id, name, email, active');
+  const all = (tm || []) as any[];
+  const ok = (m: any) => m.active !== false && !!String(m.name || '').trim() && !!String(m.email || '').trim();
+  const choices = all.filter(ok).map((m) => ({ id: m.id, name: String(m.name).trim() })).sort((a, b) => a.name.localeCompare(b.name));
+  if (def.member_id != null) {
+    const m = all.find((x) => String(x.id) === String(def.member_id));
+    def.available = !!m && ok(m);
+    def.why = def.available ? null : !m || m.active === false ? 'inactive' : 'no_email';
+  }
+  return { default: def, choices };
+}
+/* the manager is asked for times: wa275_offer_sent made the offered flow with the card's manager (a flow already there keeps its row); an offer sent again
+   with another manager moves the flow to them while nothing is proposed. Then onboard-run ask_manager {flow_id}, with the trigger secret. Never fails the offer. */
+const LATER = ' The Hub\'s hourly job tries again, or HR can send the link from the card.';
+const endStop = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : s.trim() + '.');
+async function askManager(id: number, m: Mgr, warnings: string[]): Promise<{ asked: boolean; name: string; skipped?: string; already?: boolean }> {
+  const out = { asked: false, name: m.name };
+  const { data: f, error } = await svc.from('hub_onboard_flows').select('id, status, manager_member_id, proposed_at, hire_answer, call_at').eq('candidate_id', id).order('id', { ascending: false }).limit(1).maybeSingle();
+  if (error || !f) { warnings.push('The onboarding card for this offer was not found' + (error ? ' (' + error.message + ')' : '') + ', so ' + m.name + ' was not asked for times yet. Tell Steel.'); return out; }
+  if (String((f as any).manager_member_id ?? '') !== String(m.id)) {
+    /* moved only before anyone acted on it: an offered flow (or a waiting one with no manager yet) with nothing proposed and nothing booked */
+    if ((f as any).proposed_at || (f as any).call_at) {
+      warnings.push('The manager on the onboarding card has already proposed times, or the times are booked, so it stays with them. Use Change manager on the card to move it to ' + m.name + '.');
+      return out;
+    }
+    if (!((f as any).status === 'offered' || ((f as any).status === 'waiting' && (f as any).manager_member_id == null))) {
+      warnings.push('The onboarding card keeps its manager now that the offer is accepted. Use Change manager on the card to move it to ' + m.name + '.');
+      return out;
+    }
+    const { data: moved, error: mErr } = await svc.from('hub_onboard_flows').update({ manager_member_id: m.id, updated_at: new Date().toISOString() }).eq('id', (f as any).id).eq('status', (f as any).status).is('proposed_at', null).is('call_at', null).select('id');
+    if (mErr || !(moved as unknown[] | null)?.length) { warnings.push('The onboarding card could not be moved to ' + m.name + (mErr ? ' (' + mErr.message + ')' : '') + '. Set the manager on the card.'); return out; }
+  }
+  try {
+    const secret = await getSecret('WA_TRIGGER_SECRET');
+    const r = await fetch(SUPABASE_URL + '/functions/v1/onboard-run', { method: 'POST', signal: AbortSignal.timeout(25000), headers: { 'Content-Type': 'application/json', 'x-wa-secret': secret, Authorization: 'Bearer ' + ANON_KEY }, body: JSON.stringify({ action: 'ask_manager', flow_id: (f as any).id }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { warnings.push(m.name + ' was not asked for times yet: ' + endStop(String(j?.message || j?.error || 'onboard-run said ' + r.status)) + LATER); return out; }
+    for (const w of (Array.isArray(j?.warnings) ? j.warnings : [])) warnings.push(String(w));
+    if (j?.skipped === 'already_sent') return { asked: true, already: true, name: m.name, skipped: 'already_sent' };   // asked before: nothing sent this time
+    if (j?.skipped) { warnings.push(m.name + ' was not asked for times: ' + endStop(String(j.reason || j.skipped))); return { ...out, skipped: String(j.skipped) }; }
+    return { asked: true, name: m.name };
+  } catch (e) {
+    warnings.push(m.name + ' was not asked for times yet: ' + endStop(String((e as Error).message || e)) + LATER);
+    return out;
+  }
+}
+
+async function offerSend(id: number, f0: OfferF, sendEmail: boolean, who: Who) {
+  const { hours, mgr } = await offerCheck(f0);   // wave275: before anything is made
+  const f: OfferF = { ...f0, hours };
   const { c, role } = await offerFor(id);
   const fr = f.lang === 'fr';
   const s = await signerFor(f);
@@ -586,10 +699,12 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     const subject = (own ? '[PRACTICE] ' : mode === 'live' ? '' : '[TEST, for ' + to + '] ') + (fr ? 'Votre offre de Welfare Avenue : ' : 'Your offer from Welfare Avenue: ') + role;
     const note = String(f.note || '').trim();
     const t = fr ? s.title_fr : s.title;
+    const links = await offerLinks(id, fr);
+    const answer = '\n\n' + links.lead + '\n' + links.acceptLabel + (fr ? ' : ' : ': ') + links.accept + '\n' + links.declineLabel + (fr ? ' : ' : ': ') + links.decline;
     const text = fr
-      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Nous serions ravis de vous accueillir comme ' + role + '. Votre lettre d’offre est jointe à ce courriel (PDF).\n\nMerci de nous donner votre réponse d’ici le ' + dLong(f.respond_by, true) + ' : il suffit de répondre à ce courriel.\n\nAu plaisir,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com'
-      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'We would love to welcome you as our ' + role + '. Your offer letter is attached to this email as a PDF.\n\nPlease let us know your answer by ' + dLong(f.respond_by, false) + ': just reply to this email.\n\nWarmly,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com';
-    const html = offerEmailHtml(first(c.name), role, f, s, fr ? 'Votre lettre d’offre pour le poste de ' + role : 'Your offer letter for the ' + role + ' position');
+      ? 'Bonjour ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'Nous serions ravis de vous accueillir comme ' + role + '. Votre lettre d’offre est jointe à ce courriel (PDF).\n\nMerci de nous donner votre réponse d’ici le ' + dLong(f.respond_by, true) + ' : il suffit de répondre à ce courriel.' + answer + '\n\nAu plaisir,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com'
+      : 'Hi ' + first(c.name) + ',\n\n' + (note ? note + '\n\n' : '') + 'We would love to welcome you as our ' + role + '. Your offer letter is attached to this email as a PDF.\n\nPlease let us know your answer by ' + dLong(f.respond_by, false) + ': just reply to this email.' + answer + '\n\nWarmly,\n' + s.name + (t ? '\n' + t : '') + '\nWelfare Avenue\nwelfareavenue.com';
+    const html = offerEmailHtml(first(c.name), role, f, s, fr ? 'Votre lettre d’offre pour le poste de ' + role : 'Your offer letter for the ' + role + ' position', links);
     const key = Deno.env.get('RESEND_API_KEY') || await getSecret('RESEND_API_KEY');
     const r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify({
       from: fromName + ' <' + fromEmail + '>', to: rcpt, ...(bcc.length ? { bcc } : {}), reply_to: replyTo, subject, html, text,
@@ -600,11 +715,28 @@ async function offerSend(id: number, f: OfferF, sendEmail: boolean, who: Who) {
     emailed = { mode: own ? 'practice' : mode, to: rcpt, copy_to: s.email, id: j?.id || null };
   }
   const now = new Date();
-  await svc.from('hub_candidates').update({ offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to,
+  const warnings: string[] = [];
+  const card = { offer_doc_id: doc.id, offer_doc_url: docUrl, offer_sent_at: emailed ? now.toISOString() : c.offer_sent_at, offer_email_to: emailed ? to : c.offer_email_to, offer_sent_by: emailed ? (c.offer_sent_by || who.email) : c.offer_sent_by,
     notes: (String(c.notes || '') + '\nOffer letter (signed by ' + s.name + ') ' + (emailed ? (emailed.mode === 'live' || emailed.mode === 'practice' ? 'emailed to ' + to : 'emailed in test mode (to the test inboxes, not ' + to + ')') : 'created') + ' ' + now.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }) + ' by ' + who.name + ': ' + docUrl).trim(),
-    updated_at: now.toISOString(), updated_by: who.name }).eq('id', id);
+    updated_at: now.toISOString(), updated_by: who.name };
+  /* wave275: the hours and the onboarding manager in the same statement as offer_sent_at, so the trigger copies this manager to the offered flow it makes.
+     If that fails (wa275a not applied yet), the bookkeeping is saved without them, as before. */
+  const saved = await svc.from('hub_candidates').update({ ...card, offer_hours: hours, onboard_manager_id: mgr.id }).eq('id', id);
+  if (saved.error) {
+    console.warn('offer hours and manager', saved.error.message);
+    const fallback = await svc.from('hub_candidates').update(card).eq('id', id);
+    warnings.push('The hours and the onboarding manager could not be saved on the card (' + saved.error.message + '). Tell Steel.');
+    if (fallback.error) {   // the email has gone, but the card does not say so: HR must know what is missing
+      console.warn('offer bookkeeping', fallback.error.message);
+      warnings.push('The card could not record the offer either (' + fallback.error.message + '). ' + (emailed ? 'The email went out, but the card does not show when it was sent, to whom, the letter\'s link or the note.' : 'The card does not show the letter\'s link or the note.') + ' Tell Steel. The letter is in Offer Letters: ' + docUrl);
+    }
+  }
+  /* wave271: the reply-by and start dates the letter carries, for the Ready to onboard list; its own update, so the bookkeeping above never depends on the columns */
+  const dated = await svc.from('hub_candidates').update({ offer_respond_by: isoDay(f.respond_by), offer_start: isoDay(f.start) }).eq('id', id);
+  if (dated.error) console.warn('offer dates', dated.error.message);
   await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: 'offer_letter', old_value: null, new_value: (emailed ? 'emailed (' + emailed.mode + ')' : 'created') + ', signed by ' + s.name + ': ' + docUrl, changed_by: who.name });
-  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig };
+  const manager = emailed && !saved.error ? await askManager(id, mgr, warnings) : null;   // wave275: only an offer that went out asks for times
+  return { ok: true, doc_id: doc.id, doc_url: docUrl, emailed, signer: s.name, signed: s.has_sig, manager, warnings };
 }
 /* the offer signer setting: HR (the Time off access) or an admin */
 async function signerSet(email: string, who: Who, auth: string) {
@@ -794,7 +926,7 @@ Deno.serve(async (req) => {
       const { c, role } = await offerFor(Number(b.id));
       const s = await signerFor(b.f || {});
       return json({ ok: true, html: letterHtml(c.name, role, b.f || {}, s, !!c.practice), role, email: c.email, practice: !!c.practice, mail_mode: (await cfg('mail_mode')) || 'test', test_to: await cfg('mail_test_recipients'),
-        signer: s.name, signer_title: s.title, signer_email: s.email, signer_has_sig: s.has_sig, default_signer: ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase(), signers: await signerList() });
+        signer: s.name, signer_title: s.title, signer_email: s.email, signer_has_sig: s.has_sig, default_signer: ((await cfg('offer_signer_email')) || DEFAULT_SIGNER).toLowerCase(), signers: await signerList(), manager: await managerChoices(Number(b.id)) });
     }
     if (action === 'offer_send') return json(await offerSend(Number(b.id), b.f || {}, !!b.email, who));
     if (action === 'offer_signer_set') { if (bySecret) return json({ error: 'staff only' }, 403); return json(await signerSet(String(b.email || ''), who, req.headers.get('Authorization') || '')); }
@@ -808,6 +940,7 @@ Deno.serve(async (req) => {
     if (action === 'jd_publish') return json(await jdPublish(!!b.force));
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
+    if (e instanceof Refused) return json({ error: e.message, code: e.code }, 400);   // wave275: the panel shows the sentence
     return json({ error: String((e as Error).message || e) }, 500);
   }
 });

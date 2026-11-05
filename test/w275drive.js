@@ -1,0 +1,497 @@
+/* w275drive.js: wave275 Task 6, the card for HR and the manager. Offline against the candidate (CAND=<file>.html), with test/boot.js (stubbed Supabase,
+   clock 25/09/26 16:00 Toronto), test/w271fx.js and test/w275fx.js (stand-ins for onboard-run; every network call is stubbed or blocked). The browser runs in
+   Pacific/Auckland, so only Intl with America/Toronto gives the right labels and instants.
+   Identities: admin and a member on the HR profile (every card, in HR Center > Onboarding), a plain member who manages two hires (Joy: only her own cards,
+   on Home and on her team page, Review Focus 4), a leader who manages nobody, and a board viewer; 390 px. SHOTS=<dir> saves screenshots. */
+const fs = require('fs');
+const { chromium } = require('playwright');
+const { fresh } = require('./boot');
+const { fx275, rpcs275, INIT, INIT275, NOT_HR, F, MGR, AT } = require('./w275fx');
+const { FLOW } = require('./w271fx');
+const SHOTS = process.env.SHOTS || '';
+if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
+let pass = 0, fail = 0;
+function ok(name, cond, info) { if (cond) { pass++; console.log('PASS ' + name); } else { fail++; console.log('FAIL ' + name + (info !== undefined ? '  ' + JSON.stringify(info).slice(0, 700) : '')); } }
+const shot = async (f, n, full) => { if (SHOTS) await f.page.screenshot({ path: SHOTS + '/' + n + '.png', fullPage: full !== false }); };
+async function launch() {
+  const args = ['--disable-gpu'];
+  let last;
+  for (const t of [{ args }, { channel: 'chrome', args }, { channel: 'msedge', args }]) { try { return await chromium.launch(t); } catch (e) { last = e; } }
+  throw last;
+}
+const init = INIT + '\n' + INIT275;
+const open = (f, h) => f.hash(h || '#hrcentre/onboarding', 1500);
+const card = (id) => '[data-o271flow="' + id + '"]';
+const txtOf = (f, sel) => f.ev((s) => { const e = document.querySelector(s); return e ? e.innerText : ''; }, sel);
+const calls = (f, action) => f.ev((a) => window.__O271_CALLS.filter((c) => c.name === 'onboard-run' && c.body.action === a && !c.body.only), action);   // fix wave: times {only: welcome_from} (the welcome line) is counted on its own
+const allCalls = (f) => f.ev(() => window.__O271_CALLS.filter((c) => c.name === 'onboard-run').map((c) => c.body.action));
+const click = async (f, sel) => { await f.page.click(sel); await f.page.waitForTimeout(400); };
+const press = async (f, sel) => { await f.ev((s) => document.querySelector(s).click(), sel); await f.page.waitForTimeout(400); };   // a click that a sticky header cannot catch
+const fill = async (f, sel, v) => { await f.page.fill(sel, v); await f.page.waitForTimeout(80); };
+const has = (f, sel) => f.ev((s) => !!document.querySelector(s), sel);
+const cls = (f, sel) => f.ev((s) => { const e = document.querySelector(s); return e ? e.className : null; }, sel);
+const hasScroll = (f) => f.ev(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+const consoleErrs = (f) => { const out = []; f.page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) out.push(m.text().slice(0, 240)); }); return out; };
+const RECORD = () => { window.__O275_RPC = []; const r0 = db.rpc.bind(db); db.rpc = function (fn, a) { window.__O275_RPC.push(fn); return r0(fn, a); }; };
+const rpcsCalled = (f) => f.ev(() => window.__O275_RPC || []);
+const cell = (id, iso) => card(id) + ' [data-o271cell="' + iso + '"]';
+const noDashNoAI = (t) => !/\u2014/.test(t) && !/\bAI\b/.test(t);
+const acc = (id) => card(id) + ' [data-o278acc]';
+const warns = (f, sel) => f.ev((s) => Array.prototype.map.call(document.querySelectorAll(s + ' .o271warn'), (e) => e.innerText).join(' | '), sel);   // every warning box in a card (the Canva one too)
+
+(async () => {
+  const b = await launch();
+  const allErrs = [], allCons = [];
+  const go = async (o) => {
+    const f = await fresh({ newContext: (x) => b.newContext(Object.assign({ timezoneId: 'Pacific/Auckland' }, x)) }, Object.assign({ fixture: fx275(), init, wait: 5000 }, o));
+    f.cons = consoleErrs(f);
+    return f;
+  };
+  const done = async (f) => { allErrs.push(...f.errs); allCons.push(...f.cons); await f.close(); };
+
+  /* ---------- 1. an admin: every card on the new path, in HR Center > Onboarding ---------- */
+  {
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', rpcs: rpcs275() });
+    await open(f, '#hrcentre/overview'); await open(f);
+    ok('admin: the four cards on the new path show, with the wave271 cards', await has(f, card(F.said)) && await has(f, card(F.offered)) && await has(f, card(F.proposed)) && await has(f, card(F.moved)) && await has(f, card(FLOW.real)));
+    ok('admin: a wave271 card keeps its own buttons', /Choose times and preview/.test(await txtOf(f, card(FLOW.real))));
+    ok('admin: an offered flow is a card, not also an offer waiting for an answer', !(await has(f, '[data-o271offer="7302"]')));
+    let t = await txtOf(f, card(F.offered) + ' [data-o275state]');
+    ok('offered: "Offer sent 20 Sep, 6 hours a week; waiting for the manager\'s times"', t === 'Offer sent 20 Sep, 6 hours a week; waiting for the manager\'s times', t);
+    t = await txtOf(f, card(F.proposed) + ' [data-o275state]');
+    ok('proposed: "Proposed by Samson Jules: Wed 30 Sep 10 am and Thu 1 Oct 10 am; waiting for Nia"', /^Proposed by Samson Jules: Wed 30 Sep 10 am and Thu 1 Oct 10 am; waiting for Nia$/.test(t.split('\n').pop()), t);
+    t = await txtOf(f, card(F.said) + ' [data-o275state]');
+    ok('said no: "James said no to the times", and the grid is theirs to book from', /James said no to the times/.test(t) && /their times are on their grid/.test(t), t);
+    t = await txtOf(f, card(F.moved) + ' [data-o275state]');
+    ok('a stale Yes: "the times moved; Kim is marking their availability" (not "said no")', /The times moved; Kim is marking their availability/.test(t) && !/said no/.test(t), t);
+    t = await txtOf(f, card(F.said));
+    ok('accepted: the hours confirmed, the manager, the steps with their results and reasons', /Accepted 21 Sep, 6 hours a week confirmed/.test(t) && /Manager: Joy Dumansi/.test(t) && /The first password is not set in admin settings/.test(t) && /Roster profile/.test(t), t.slice(0, 900));
+    ok('the rundown: "1 of 12 setup steps done" (only rd_ ticks count)', /1 of 12 setup steps done/.test(await txtOf(f, card(F.said) + ' [data-o275ticks]')));
+    ok('the name is escaped', await f.ev((s) => !document.querySelector(s + ' b b') && /<b>Hire<\/b>/.test(document.querySelector(s).textContent), card(F.said)));
+    t = await txtOf(f, card(F.offered) + ' [data-o275mgr]');
+    ok('no week saved: the card says the manager has not set their week on Home', /has not set their week on the Hub's Home page yet/.test(t) && /Monday to Friday, 9 to 5/.test(t), t);
+    ok('the switch shows "ask the hire" on', /\bon\b/.test(await cls(f, card(F.said) + ' [data-o275a="ask"][data-on="1"]')));
+    ok('the started card on the new path shows the rundown: 3 of 12 (the Hub\'s own ticks and the dropped rd_loom do not count)', /3 of 12 setup steps done/.test(await txtOf(f, card(F.started) + ' [data-o275ticks]')));
+    ok('admin: the first password field is still there', await has(f, '[data-o271pw]'));
+    await shot(f, 'w275-admin-cards-1366');
+
+    /* propose from the card: the manager's week over the window, hub@ meetings greyed */
+    await click(f, card(F.offered) + ' [data-o275a="open"][data-kind="propose"]');
+    await f.page.waitForSelector(cell(F.offered, AT(10)), { timeout: 4000 });
+    let c = await calls(f, 'times');
+    ok('Propose times reads the picker\'s data through times (not preview)', c.length === 1 && c[0].body.flow_id === F.offered && (await calls(f, 'preview')).length === 0, c);
+    ok('the picker: the manager\'s hours are shaded in the call pick, the hub@ meeting is greyed and named', /\bm\b/.test(await cls(f, cell(F.offered, AT(10)))) && !/\bm\b/.test(await cls(f, cell(F.offered, AT(8)))) && /\bbusy\b/.test(await cls(f, cell(F.offered, AT(13)))) && (await f.ev((s) => document.querySelector(s).title, cell(F.offered, AT(13)))).indexOf('Team <i>sync</i>') >= 0);
+    ok('the picker: another new hire\'s time and a time too soon are greyed', /\bbusy\b/.test(await cls(f, cell(F.offered, AT(15)))) && /\bbusy\b/.test(await cls(f, cell(F.offered, new Date(Date.UTC(2026, 8, 26, 14)).toISOString()))));
+    await press(f, cell(F.offered, AT(10)));
+    ok('a cell fills the call time, read in Toronto', await f.page.inputValue(card(F.offered) + ' [data-o275i="call"]') === '2026-09-28T10:00' && /Mon.*Sep.*28.*10:00/.test(await txtOf(f, card(F.offered) + ' [data-o275said="call"]')));
+    await press(f, card(F.offered) + ' [data-o275a="mode"][data-mode="one"]');
+    await press(f, cell(F.offered, AT(11, 30)));
+    ok('the 1-on-1 pick', await f.page.inputValue(card(F.offered) + ' [data-o275i="one"]') === '2026-09-28T11:30');
+    await shot(f, 'w275-propose-1366');
+    await press(f, card(F.offered) + ' [data-o275a="go"]');
+    c = await calls(f, 'propose');
+    ok('Propose these times calls propose with both instants', c.length === 1 && c[0].body.flow_id === F.offered && c[0].body.call_at === AT(10) && c[0].body.one_on_one_at === AT(11, 30), c);
+    t = await txtOf(f, card(F.offered));
+    ok('after it: the card says it was proposed, and by whom', /The times are proposed/.test(t) && /Proposed by Steel: Mon 28 Sep 10 am and Mon 28 Sep 11:30 am; waiting for Lina to accept the offer/.test(t), t.slice(0, 900));
+
+    /* already communicated: the switch, then HR enters the hire's times */
+    await press(f, card(F.said) + ' [data-o275a="ask"][data-on="0"]');
+    c = await calls(f, 'set_ask_availability');
+    ok('the switch calls set_ask_availability off', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.on === false, c);
+    ok('the switch now shows already communicated', /\bon\b/.test(await cls(f, card(F.said) + ' [data-o275a="ask"][data-on="0"]')) && /already communicated/.test(await txtOf(f, card(F.said) + ' [data-o275state]')));
+    await press(f, card(F.said) + ' [data-o275a="open"][data-kind="gridfor"]');
+    await f.page.waitForSelector(card(F.said) + ' [data-o275cell="' + AT(10) + '"]', { timeout: 4000 });
+    ok('Enter their availability: the hire\'s marks so far are on', /\bon\b/.test(await cls(f, card(F.said) + ' [data-o275cell="' + AT(10) + '"]')));
+    await press(f, card(F.said) + ' [data-o275cell="' + AT(14) + '"]');
+    await press(f, card(F.said) + ' [data-o275cell="' + AT(10) + '"]');
+    await press(f, card(F.said) + ' [data-o275a="go"]');
+    c = await calls(f, 'grid_for');
+    ok('Save their times calls grid_for for the hire, with what is marked (one cell is fine: no 10-hour minimum for HR)', c.length === 1 && c[0].body.who === 'hire' && c[0].body.slots.indexOf(AT(14)) >= 0 && c[0].body.slots.indexOf(AT(10)) < 0 && c[0].body.slots.length === 5, c);
+
+    /* whole-branch I2: the fresh Canva link, on the card before booking (the welcome goes at booking and reads it from the flow) */
+    t = await txtOf(f, card(F.said) + ' [data-o275canva]');
+    ok('Canva: an accepted card before booking has the Canva field, with the 30-day note and no link yet', /Canva links last 30 days/.test(t) && /No Canva link yet/.test(t) && /before the times are booked/.test(t) && await has(f, card(F.said) + ' [data-o271i="ccanva"]'), t);
+    ok('Canva: an offered card has it too', await has(f, card(F.offered) + ' [data-o275canva] [data-o271i="ccanva"]'));
+    await fill(f, card(F.said) + ' [data-o271i="ccanva"]', 'https://www.canva.com/brand/join?token=fresh-701');
+    await press(f, card(F.said) + ' [data-o271a="canvasave"]');
+    c = await calls(f, 'set_canva_link');
+    ok('Canva: Save the link calls set_canva_link for this flow with the link', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.link === 'https://www.canva.com/brand/join?token=fresh-701', c);
+    t = await txtOf(f, card(F.said) + ' [data-o275canva]');
+    ok('Canva: the card shows the saved link and the note', /Canva link: https:\/\/www\.canva\.com\/brand\/join\?token=fresh-701/.test(t) && /The Canva link is saved/.test(await txtOf(f, card(F.said))), t);
+
+    /* book from the hire's grid */
+    await press(f, card(F.said) + ' [data-o275a="open"][data-kind="bookg"]');
+    await f.page.waitForSelector(cell(F.said, AT(14)), { timeout: 4000 });
+    ok('Book: the hire\'s times are marked over the manager\'s hours', /\bh\b/.test(await cls(f, cell(F.said, AT(14)))) && /\bm\b/.test(await cls(f, cell(F.said, AT(14)))));
+    await press(f, cell(F.said, AT(14)));
+    await press(f, card(F.said) + ' [data-o275a="mode"][data-mode="one"]');
+    await press(f, cell(F.said, AT(11)));
+    await press(f, card(F.said) + ' [data-o275a="go"]');
+    c = await calls(f, 'book');
+    ok('Book these times calls book with both instants', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.call_at === AT(14) && c[0].body.one_on_one_at === AT(11), c);
+    ok('after booking the card leaves the list of cards to answer', !(await has(f, '[data-o271flow="' + F.said + '"] [data-o275state]')));
+
+    /* the manager's exceptions, set by HR */
+    await press(f, card(F.offered) + ' [data-o275a="open"][data-kind="exc"]');
+    await f.page.waitForSelector(card(F.offered) + ' [data-o275x="adddate"]', { timeout: 4000 });
+    await press(f, card(F.offered) + ' [data-o275x="adddate"]');
+    await fill(f, card(F.offered) + ' [data-o275xi="date"][data-x="0"]', '2026-09-30');
+    await press(f, card(F.offered) + ' [data-o275x="adddate"]');
+    await fill(f, card(F.offered) + ' [data-o275xi="date"][data-x="1"]', '2026-10-01');
+    await press(f, card(F.offered) + ' [data-o275x="addblk"][data-x="1"]');
+    await fill(f, card(F.offered) + ' [data-o275xi="from"][data-x="1"][data-b="0"]', '13:00');
+    await fill(f, card(F.offered) + ' [data-o275xi="to"][data-x="1"][data-b="0"]', '15:30');
+    await shot(f, 'w275-exceptions-1366');
+    await press(f, card(F.offered) + ' [data-o275a="go"]');
+    c = await calls(f, 'availability_for');
+    ok('Set Dana\'s exceptions calls availability_for with the dates, and no week', c.length === 1 && c[0].body.member_id === MGR.first && JSON.stringify(c[0].body.except) === JSON.stringify([{ date: '2026-09-30', free: [] }, { date: '2026-10-01', free: [['13:00', '15:30']] }]) && !('weekly' in c[0].body), c);
+    ok('the panel names the manager', /Dana/.test(await txtOf(f, card(F.offered))));
+
+    /* the welcome editor, before booking */
+    await press(f, card(F.offered) + ' [data-o275a="open"][data-kind="welcome"]');
+    await f.page.waitForSelector(card(F.offered) + ' [data-o275i="wtext"]', { timeout: 4000 });
+    ok('the editor opens on the email as it reads now, brackets kept', /\[first password\]/.test(await f.page.inputValue(card(F.offered) + ' [data-o275i="wtext"]')) && /square brackets/.test(await txtOf(f, card(F.offered))));
+    await fill(f, card(F.offered) + ' [data-o275i="wtext"]', 'Dear Lina,\n\nA warm welcome. Your first day is [first day: fills in at Start].\n   First password: [first password]');
+    await press(f, card(F.offered) + ' [data-o275a="go"]');
+    c = await calls(f, 'set_welcome');
+    ok('Save the email calls set_welcome with the text as typed', c.length === 1 && c[0].body.flow_id === F.offered && /A warm welcome/.test(c[0].body.text) && /\[first password\]/.test(c[0].body.text) && c[0].body.subject === 'Welcome to Welfare Avenue! Your Next Steps', c);
+    ok('it says it is saved', /The welcome email is saved/.test(await txtOf(f, card(F.offered))));
+
+    /* change the manager of an offered flow, and ask the new one */
+    await press(f, card(F.proposed) + ' [data-o275a="open"][data-kind="mgr"]');
+    await f.page.selectOption(card(F.proposed) + ' [data-o275i="member"]', String(MGR.second));
+    await press(f, card(F.proposed) + ' [data-o275a="go"]');
+    ok('Change manager on a card before booking: set_manager, then the new manager is asked for times', (await calls(f, 'set_manager')).some((x) => x.body.flow_id === F.proposed && x.body.member_id === MGR.second) && (await calls(f, 'ask_manager')).some((x) => x.body.flow_id === F.proposed));
+
+    t = await f.ev(() => document.getElementById('o271').innerText);
+    ok('Hub words in the section: no em dash, no "AI"', noDashNoAI(t));
+    ok('admin: no sideways scroll at 1366', !(await hasScroll(f)));
+    ok('admin: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 2. a member on the HR profile: the same cards, and their own hire on Home as a short line ---------- */
+  {
+    const f = await go({ who: 'member', hash: '#hrcentre/onboarding', rpcs: rpcs275({ mine: ['proposed'] }) });
+    await open(f);
+    ok('HR member: the cards on the new path show', await has(f, card(F.offered)) && await has(f, card(F.said)));
+    ok('HR member: Set the manager\'s exceptions is HR\'s, so it is offered', await has(f, card(F.offered) + ' [data-o275a="open"][data-kind="exc"]'));
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    const t = await txtOf(f, '#o275mine');
+    ok('HR member on Home: "Your new hires" lists their own hire with a link to Onboarding, not a second card', /Your new hires/.test(t) && /Nia Proposed/.test(t) && await has(f, '#o275mine a[href="#hrcentre/onboarding"]') && !(await has(f, '#o275mine [data-o271flow]')), t);
+    ok('HR member: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 3. a plain member who manages two hires: only her own cards, on Home and her team page ---------- */
+  {
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started', 'old'] }), init: init + '\n' + NOT_HR });
+    await f.ev(RECORD);
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(1200);
+    let t = await txtOf(f, '#o275mine');
+    ok('Joy on Home: "Your new hires" with her two hires', /Your new hires/.test(t) && /James/.test(t) && /Ola Started/.test(t), t.slice(0, 500));
+    ok('Joy: no other card (Review Focus 4)', !(await has(f, card(F.offered))) && !(await has(f, card(F.proposed))) && !(await has(f, card(F.moved))) && !(await has(f, card(FLOW.real))));
+    await f.ev(() => window.o271.load());   // a reload, recorded (the first load ran before the recorder)
+    await f.page.waitForTimeout(400);
+    let rp = await rpcsCalled(f);
+    ok('Joy: the database refused her HR\'s list (Only HR), so her cards come from wa275_my_cards', await f.ev(() => window.o275.state().hrList) === false && rp.indexOf('wa275_my_cards') >= 0, rp);
+    t = await txtOf(f, card(F.old));
+    ok('Joy: a wave271 hire\'s card keeps HR\'s own buttons off (no availability link, no preview), and They backed out stays', /Wren Earlier/.test(t) && !(await has(f, card(F.old) + ' [data-o271a="link"]')) && !(await has(f, card(F.old) + ' [data-o271a="open"]')) && await has(f, card(F.old) + ' [data-o271a="act"][data-kind="back"]'), t);
+    ok('Joy: no Set exceptions and no Change manager before booking (HR\'s)', !(await has(f, card(F.said) + ' [data-o275a="open"][data-kind="exc"]')) && !(await has(f, card(F.said) + ' [data-o275a="open"][data-kind="mgr"]')));
+    ok('Joy: the started card with its rundown, 3 of 12', /3 of 12 setup steps done/.test(await txtOf(f, card(F.started) + ' [data-o275ticks]')));
+    ok('Joy: no first password field', !(await has(f, '[data-o271pw]')));
+    ok('Joy: the Google step says what HR does, without the HR button I created it, continue', /The first password is not set/.test(await txtOf(f, card(F.said))) && !(await has(f, card(F.said) + ' [data-o271a="gmanual"]')));
+    await shot(f, 'w275-joy-home-1366');
+    /* she books from her hire's grid */
+    await press(f, card(F.said) + ' [data-o275a="open"][data-kind="bookg"]');
+    await f.page.waitForSelector(cell(F.said, AT(10)), { timeout: 4000 });
+    await press(f, cell(F.said, AT(10)));
+    await press(f, card(F.said) + ' [data-o275a="mode"][data-mode="one"]');
+    await press(f, cell(F.said, AT(12)));
+    await press(f, card(F.said) + ' [data-o275a="go"]');
+    let c = await calls(f, 'book');
+    ok('Joy books from the card', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.call_at === AT(10) && c[0].body.one_on_one_at === AT(12), c);
+    /* and changes a time on the started one */
+    await press(f, card(F.started) + ' [data-o271a="act"][data-kind="time"]');
+    await f.page.waitForTimeout(500);
+    ok('Change time opens without HR\'s preview (the picker reads times)', (await calls(f, 'preview')).length === 0 && (await calls(f, 'times')).some((x) => x.body.flow_id === F.started) && !/Only HR/.test(await txtOf(f, card(F.started))));
+    await fill(f, card(F.started) + ' [data-o271i="at"]', '2026-09-30T10:00');
+    await press(f, card(F.started) + ' [data-o271a="actgo"]');
+    c = await calls(f, 'change_time');
+    ok('Joy changes the call time', c.length === 1 && c[0].body.flow_id === F.started && c[0].body.which === 'call', c);
+    ok('Joy: only card actions were called', (await allCalls(f)).every((a) => ['times', 'book', 'welcome', 'change_time', 'retry', 'set_ask_availability', 'grid_for', 'set_welcome', 'propose'].indexOf(a) >= 0), await allCalls(f));
+    /* her team page */
+    await open(f, '#team/marketing');
+    await f.page.waitForTimeout(1500);
+    ok('Joy\'s team page shows "Your new hires" too', /Your new hires/.test(await txtOf(f, '#w116host')) && await has(f, '#w116host #o275mine'));
+    ok('one copy of her cards in the page', await f.ev((s) => document.querySelectorAll(s).length, card(F.started)) === 1);
+    ok('Joy: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 4. a leader who manages nobody, and a board viewer: nothing ---------- */
+  for (const who of ['leader', 'board']) {
+    const f = await go({ who, hash: '#mypage', rpcs: rpcs275(), init: init + '\n' + NOT_HR });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    ok(who + ': no "Your new hires", no card, nothing asked of onboard-run', !(await has(f, '#o275mine')) && !(await has(f, '[data-o271flow]')) && (await allCalls(f)).length === 0, await allCalls(f));
+    ok(who + ': no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 4b. review fix: the database, not the menu profile, decides who gets HR's list ----------
+     A leader is not on the hr profile (surelyHr() is false for them). In the fixture the leader cannot open HR Center > Onboarding (that page follows the
+     role's tabs), so this is checked on the loader itself, on the page: with the database giving them HR's list (as wa_is_hr does for someone in
+     wa_hr_access) the loader keeps it; with the database refusing it, they get their own hires. */
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }) });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    const s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, denied: S.denied, ready: S.ready.map((x) => x.flow_id), profileHr: window.o271.surelyHr() }; });
+    ok("a leader the database gives HR's list to (wa_hr_access, not the hr profile) keeps HR's whole list, as before wave275", s.profileHr === false && s.hrList === true && !s.mine && !s.denied && [F.said, F.offered, F.proposed, F.moved, FLOW.real].every((id) => s.ready.indexOf(id) >= 0), s);
+    ok('on Home they see their own hire as a short line, not a second card', /Nia Proposed/.test(await txtOf(f, '#o275mine')) && !(await has(f, '#o275mine [data-o271flow]')));
+    ok('wa_hr_access leader: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }), init: init + '\n' + NOT_HR });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    const s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, ready: S.ready.map((x) => x.flow_id) }; });
+    ok("the same leader refused HR's list (Only HR) gets their own hire only, as a card", s.hrList === false && s.mine && s.ready.length === 1 && s.ready[0] === F.proposed && await has(f, '#o275mine ' + card(F.proposed)), s);
+    await done(f);
+  }
+
+  /* ---------- 4c. re-review fix: an error that is not the "Only HR" refusal decides nothing ----------
+     The same leader (not on the hr profile), with HR's list failing for another reason: the error is kept to show, they are not sent to their own
+     hires, HR's tools stay on, and the next load asks for HR's list again and gets it. */
+  {
+    const f = await go({ who: 'leader', hash: '#mypage', rpcs: rpcs275({ mine: ['proposed'] }), init: init + '\n' + 'window.__WA_RPC_ERRORS = { wa271_ready_list: "upstream request timeout" };' });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(800);
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    let s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, denied: S.denied, err: S.err, tools: window.o271R.hrTools(), mineRpc: (window.__O275_RPC || []).length }; });
+    ok("a timeout on HR's list: the error is kept to show (not hidden as a refusal), and the leader is not sent to their own hires", s.hrList == null && !s.mine && s.denied === false && /could not load this list: upstream request timeout/.test(s.err) && s.tools === true, s);
+    await f.ev(() => { window.__WA_RPC_ERRORS = {}; });
+    await f.ev(() => window.o271.load());
+    await f.page.waitForTimeout(500);
+    s = await f.ev(() => { const S = window.o275.state(); return { hrList: S.hrList, mine: !!S.mine, err: S.err, ready: S.ready.map((x) => x.flow_id) }; });
+    ok("the next load asks for HR's list again and gets it", s.hrList === true && !s.mine && !s.err && [F.said, F.offered, FLOW.real].every((id) => s.ready.indexOf(id) >= 0), s);
+    ok('no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 4d. wave275b (03/11/26, Steel): the availability checks are settings, off by default ----------
+     A flow made after wa275b starts "already communicated" (onboard_ask_hire_availability off); with onboard_manager_hours off the card row says
+     manager_hours false, the week line is information, and the picker offers every cell of the window, greying only hub@ meetings, other hires and
+     too-soon cells; the hours line says "confirmed" only when the hire ticked the box (onboard_require_hours off makes it optional). */
+  {
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', rpcs: rpcs275({ extra: ['fresh', 'loose'] }) });
+    await open(f, '#hrcentre/overview'); await open(f);
+    ok('wave275b: a new flow\'s switch shows "already communicated" by default', /\bon\b/.test(await cls(f, card(F.fresh) + ' [data-o275a="ask"][data-on="0"]')) && !/\bon\b/.test(await cls(f, card(F.fresh) + ' [data-o275a="ask"][data-on="1"]')));
+    let t = await txtOf(f, card(F.fresh) + ' [data-o275mgr]');
+    ok('wave275b: no week saved, hours off: one quiet line, not a prompt', /Dana has not set their week on Home; times are not limited to it/.test(t) && !/Monday to Friday/.test(t) && !/asked/.test(t), t);
+    t = await txtOf(f, card(F.loose) + ' [data-o275mgr]');
+    ok('wave275b: a week saved (and asked again), hours off: when it was set, for information', /their week was set on 10 Sep; times are not limited to it/.test(t) && !/asked for their week again/.test(t), t);
+    t = await txtOf(f, card(F.loose) + ' [data-o275state]');
+    ok('wave275b: the box not ticked: "6 hours a week", not "confirmed"', /Accepted 21 Sep, 6 hours a week$/m.test(t) && !/confirmed/.test(t), t);
+    t = await txtOf(f, card(F.said) + ' [data-o275state]');
+    ok('wave275b: ticked, still "confirmed"', /6 hours a week confirmed/.test(t), t);
+    t = await txtOf(f, card(F.offered) + ' [data-o275mgr]');
+    ok('wave275b: a row from before (no manager_hours) keeps today\'s prompt', /has not set their week on the Hub's Home page yet/.test(t), t);
+
+    await click(f, card(F.fresh) + ' [data-o275a="open"][data-kind="propose"]');
+    await f.page.waitForSelector(cell(F.fresh, AT(10)), { timeout: 4000 });
+    const c = await calls(f, 'times');
+    ok('wave275b: the picker reads times', c.length === 1 && c[0].body.flow_id === F.fresh, c);
+    ok('wave275b: hours off, the picker offers cells outside the manager\'s week (8 am, 6 pm) as well as inside it', /\bm\b/.test(await cls(f, cell(F.fresh, AT(8)))) && /\bm\b/.test(await cls(f, cell(F.fresh, AT(18)))) && /\bm\b/.test(await cls(f, cell(F.fresh, AT(10)))), [await cls(f, cell(F.fresh, AT(8))), await cls(f, cell(F.fresh, AT(18)))]);
+    ok('wave275b: hub@ meetings, other hires and too-soon cells are still greyed', /\bbusy\b/.test(await cls(f, cell(F.fresh, AT(13)))) && /\bbusy\b/.test(await cls(f, cell(F.fresh, AT(15)))) && /\bbusy\b/.test(await cls(f, cell(F.fresh, new Date(Date.UTC(2026, 8, 26, 14)).toISOString()))));
+    t = await txtOf(f, card(F.fresh) + ' [data-o275pn]');
+    ok('wave275b: the panel does not say the times must be inside the manager\'s hours, and has no "no week" warning', !/inside Dana's hours/.test(t) && !/Monday to Friday/.test(t) && /Open to pick/.test(t) && !/Dana is free/.test(t), t.slice(0, 600));
+    await shot(f, 'w275b-propose-hours-off-1366');
+    await press(f, cell(F.fresh, AT(8)));
+    await press(f, card(F.fresh) + ' [data-o275a="mode"][data-mode="one"]');
+    await press(f, cell(F.fresh, AT(18)));
+    t = await txtOf(f, card(F.fresh) + ' [data-o275said="call"]');
+    ok('wave275b: a time outside the week is not flagged', /8:00/.test(t) && !/Careful/.test(t), t);
+    await press(f, card(F.fresh) + ' [data-o275a="go"]');
+    const p = await calls(f, 'propose');
+    ok('wave275b: Propose these times sends the times outside the week', p.length === 1 && p[0].body.call_at === AT(8) && p[0].body.one_on_one_at === AT(18), p);
+    ok('no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  /* ---------- 5. 390 px ---------- */
+  {
+    const f = await go({ who: 'plain', width: 390, hash: '#mypage', rpcs: rpcs275({ mine: ['said', 'started'] }), init: init + '\n' + NOT_HR });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(1200);
+    ok('390, Joy on Home: no sideways scroll', !(await hasScroll(f)), await f.ev(() => document.documentElement.scrollWidth));
+    await press(f, card(F.said) + ' [data-o275a="open"][data-kind="bookg"]');
+    await f.page.waitForSelector(cell(F.said, AT(10)), { state: 'attached', timeout: 4000 });
+    await f.page.waitForTimeout(300);
+    ok('390: the picker has no sideways scroll; its grid scrolls in its own box', !(await hasScroll(f)) && await f.ev((s) => { const w = document.querySelector(s + ' .o271gw'); return w.scrollWidth > w.clientWidth; }, card(F.said)));
+    await f.ev((s) => document.querySelector(s).scrollIntoView(), card(F.said));
+    await shot(f, 'w275-joy-book-390', false);
+    await done(f);
+  }
+  {
+    const f = await go({ who: 'admin', width: 390, hash: '#hrcentre/onboarding', rpcs: rpcs275() });
+    await open(f);
+    ok('390, admin: the cards have no sideways scroll', !(await hasScroll(f)), await f.ev(() => document.documentElement.scrollWidth));
+    await press(f, card(F.offered) + ' [data-o275a="open"][data-kind="exc"]');
+    await press(f, card(F.offered) + ' [data-o275x="adddate"]');
+    await press(f, card(F.offered) + ' [data-o275x="addblk"][data-x="0"]');
+    ok('390: the exceptions editor fits', !(await hasScroll(f)));
+    await press(f, card(F.offered) + ' [data-o275a="cancel"]');
+    await press(f, card(F.offered) + ' [data-o275a="open"][data-kind="welcome"]');
+    await f.page.waitForTimeout(300);
+    ok('390: the welcome editor fits', !(await hasScroll(f)));
+    await f.ev((s) => document.querySelector(s).scrollIntoView(), card(F.offered));
+    await shot(f, 'w275-admin-390', false);
+    await done(f);
+  }
+
+  /* ---------- 6. wave278 Task 6: the access steps, the leader decision, Re-check, and the welcome copies ---------- */
+  {
+    const f = await go({ who: 'admin', hash: '#hrcentre/onboarding', rpcs: rpcs275() });
+    await open(f, '#hrcentre/overview'); await open(f);
+    let t = await txtOf(f, acc(F.said));
+    ok('wave278 admin: an accepted new-path card shows the four new steps with their results', /Google Groups/.test(t) && /Added to org@welfareavenue\.com and marketing@welfareavenue\.com/.test(t) && /Shared drives/.test(t) && /Shared Org's Files and Marketing & Web/.test(t) && /Weekly meeting/.test(t) && /No weekly meeting set for marketing/.test(t) && /Slack onboarding channel/.test(t), t);
+    ok('wave278: the four rows are drawn by wave271\'s step rows (numbered after the eight)', await f.ev((s) => document.querySelectorAll(s + ' ol.o271st li').length, acc(F.said)) === 4 && /^9\. Google Groups/.test(t.split('\n').filter((l) => /Google Groups/.test(l))[0] || ''), t);
+    ok('wave278: the channel step while pending says "Waiting for them to join Slack", with no Retry', /Waiting for them to join Slack/.test(t) && !/waiting for them to join Slack/.test(t) && !(await has(f, acc(F.said) + ' [data-o271a="retry"][data-step="channel"]')), t);
+    ok('wave278: the meeting step as an HR task has wave271\'s Done button', await has(f, acc(F.said) + ' [data-o271a="taskdone"][data-step="meeting"]'));
+    ok('wave278: the rundown counts twelve', /1 of 12 setup steps done/.test(await txtOf(f, card(F.said) + ' [data-o275ticks]')));
+    t = await txtOf(f, acc(F.said) + ' [data-o278lead]');
+    ok('wave278: the leader line "Joining as a member" with Change', /^Joining as a member/.test(t) && await has(f, acc(F.said) + ' [data-o278a="leader"][data-on="1"]') && /Change/.test(t), t);
+    t = await txtOf(f, acc(F.proposed) + ' [data-o278lead]');
+    ok('wave278: not decided yet offers both', /Joining as: not decided yet/.test(t) && await has(f, acc(F.proposed) + ' [data-o278a="leader"][data-on="1"]') && await has(f, acc(F.proposed) + ' [data-o278a="leader"][data-on="0"]'), t);
+    await press(f, acc(F.said) + ' [data-o278a="leader"][data-on="1"]');
+    let c = await calls(f, 'set_leader');
+    ok('wave278: Change calls set_leader with the opposite value', c.length === 1 && c[0].body.flow_id === F.said && c[0].body.leader === true, c);
+    t = await txtOf(f, acc(F.said));
+    ok('wave278: while it runs, the Groups and Drives rows say "Re-running"', (t.match(/Re-running/g) || []).length === 2 && await f.ev((s) => document.querySelector(s).disabled, acc(F.said) + ' [data-o278a="leader"]'), t);
+    await f.page.waitForTimeout(1100);
+    t = await txtOf(f, acc(F.said));
+    ok('wave278: after it, "Joining as a leader" and the rows re-painted from the answer', /Joining as a leader/.test(t) && /admin@welfareavenue\.com and directors@welfareavenue\.com/.test(t) && /every drive but Accounting and Board of Directors/.test(t) && !/Re-running/.test(t), t);
+    ok('wave278: the note says they join as a leader now', /as a leader now/.test(await txtOf(f, card(F.said))));
+    ok('wave278 fix wave (I2): an accepted card with no Groups or Drives rows yet (accepted before the release) has Re-check', await has(f, acc(F.proposed) + ' [data-o278a="recheck"]'));
+    await press(f, acc(F.proposed) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    c = await calls(f, 'set_leader');
+    ok('wave278: undecided, "As a member" calls set_leader false', c.length === 2 && c[1].body.flow_id === F.proposed && c[1].body.leader === false && /Joining as a member/.test(await txtOf(f, acc(F.proposed) + ' [data-o278lead]')), c);
+    t = await txtOf(f, card(F.proposed));
+    ok('wave278 fix wave (I2): onboard-run made the Groups and Drives rows and ran them; the note says so', /Google Groups/.test(t) && /Shared drives/.test(t) && /ran Groups and Drives again/.test(t) && await has(f, acc(F.proposed) + ' [data-o278a="recheck"]'), t);
+    ok('wave278 fix wave (M4): undecided to member, no "never removes" sentence (the server warns only from leader to member)', !/never removes/.test(t), t);
+    ok('wave278 fix wave (M2): the sender line is the server\'s (the offer\'s sender left the roster: hub@), not the offer\'s sender', /Welcome email: from hub@welfareavenue\.com/.test(await txtOf(f, acc(F.proposed) + ' [data-o278wel]')) && !/Lee Gone/.test(t), await txtOf(f, acc(F.proposed) + ' [data-o278wel]'));
+    ok('wave278 fix wave (M2): a sender the server could not work out names nobody', /Welcome email: from the offer's sender or hub@welfareavenue\.com/.test(await txtOf(f, acc(F.moved) + ' [data-o278wel]')), await txtOf(f, acc(F.moved) + ' [data-o278wel]'));
+    const light = await f.ev(() => window.__O271_CALLS.filter((c) => c.body.action === 'times' && c.body.only === 'welcome_from').map((c) => c.body.flow_id));
+    ok('wave278 fix wave (M2): the card asks times {only: welcome_from} once per card, not on every repaint', light.length > 0 && light.length === new Set(light).size && light.indexOf(F.said) >= 0 && light.indexOf(F.started) < 0, light);
+    ok('wave278 fix wave (I2): no Re-check on a card before Accept', !(await has(f, acc(F.offered) + ' [data-o278a="recheck"]')));
+    await press(f, acc(F.offered) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    t = await warns(f, card(F.offered));
+    ok('wave278 fix: before Accept, the server\'s own sentence shows ("nothing to run yet"), and the note does not claim Groups and Drives ran again', /The groups and drives steps are made when the offer is accepted, so there is nothing to run yet\./.test(t) && !/ran Groups and Drives again/.test(await txtOf(f, card(F.offered))), await txtOf(f, card(F.offered)));
+    await press(f, acc(F.said) + ' [data-o278a="recheck"]');
+    c = await calls(f, 'recheck_access');
+    ok('wave278: Re-check Drives and Groups calls recheck_access', c.length === 1 && c[0].body.flow_id === F.said && /Re-check Drives and Groups/.test(await txtOf(f, acc(F.said) + ' [data-o278a="recheck"]')), c);
+    await f.page.waitForTimeout(1100);
+    ok('wave278: after Re-check the rows show the answer', /Checked again: in org@/.test(await txtOf(f, acc(F.said))));
+    await press(f, acc(F.said) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    t = await warns(f, card(F.said));
+    ok('wave278 fix: leader to member, the groups to take them out of by hand show as a warning', /Take them out of admin@welfareavenue\.com and directors@welfareavenue\.com by hand/.test(t) && /Joining as a member/.test(await txtOf(f, acc(F.said) + ' [data-o278lead]')), await txtOf(f, card(F.said)));
+    t = await txtOf(f, card(F.said));
+    ok('wave278 fix wave (M4): "never removes" is said once, by the server\'s warning, not again by the note', (t.match(/never removes/g) || []).length === 1, t);
+
+    /* the welcome's copies */
+    t = await txtOf(f, acc(F.said) + ' [data-o278wel]');
+    ok('wave278: "Welcome email: from Samson Jules, copied to Dana Fixture and 1 other" with Add people', /^Welcome email: from Samson Jules, copied to Dana Fixture and 1 other/.test(t) && await has(f, acc(F.said) + ' [data-o278a="ccopen"]'), t);
+    t = await txtOf(f, acc(F.offered) + ' [data-o278wel]');
+    ok('wave278: no sender and no owner: from hub@, no copies', /Welcome email: from hub@welfareavenue\.com, with no copies/.test(t), t);
+    await press(f, acc(F.said) + ' [data-o278a="ccopen"]');
+    await f.page.waitForSelector(acc(F.said) + ' [data-o278cc]', { timeout: 4000 });
+    const list = await f.ev((s) => Array.prototype.map.call(document.querySelectorAll(s + ' [data-o278cc]'), (i) => ({ e: i.getAttribute('data-o278cc'), on: i.checked })), acc(F.said));
+    const emails = list.map((x) => x.e);
+    ok('wave278: Add people lists active staff only (no one who left, not the owner, who always gets one), Omar ticked', emails.indexOf('omar@example.invalid') >= 0 && list.filter((x) => x.e === 'omar@example.invalid')[0].on && emails.indexOf('joy.dumansi@welfareavenue.com') >= 0 && emails.indexOf('lee.gone@welfareavenue.com') < 0 && emails.indexOf('rae.unset@welfareavenue.com') < 0 && emails.indexOf('dana@example.invalid') < 0 && emails.every((e) => /@/.test(e)) && /Dana Fixture always gets a copy/.test(await txtOf(f, acc(F.said))), list);
+    await press(f, acc(F.said) + ' [data-o278cc="joy.dumansi@welfareavenue.com"]');
+    await press(f, acc(F.said) + ' [data-o278a="ccsave"]');
+    c = await calls(f, 'set_welcome_cc');
+    ok('wave278: Save calls set_welcome_cc with the ticked staff', c.length === 1 && c[0].body.flow_id === F.said && JSON.stringify(c[0].body.emails.slice().sort()) === JSON.stringify(['joy.dumansi@welfareavenue.com', 'omar@example.invalid']), c);
+    t = await txtOf(f, acc(F.said) + ' [data-o278wel]');
+    ok('wave278: after Save the line counts them, and the picker closes', /copied to Dana Fixture and 2 others/.test(t) && !(await has(f, acc(F.said) + ' [data-o278cc]')), t);
+    /* fix round: HR's started card (read from the tables) has the leader line under its eight steps, and Change works. The stub hands back every fixture
+       column whatever the select names, so the column list itself is checked in the candidate's source */
+    const pageSrc = fs.readFileSync(process.env.CAND || require('path').join(__dirname, '../build/candidate.html'), 'utf8');
+    ok('wave278 fix: wave271\'s FLOW_COLS selects leader (HR\'s started cards read it from the table)', /var FLOW_COLS = '[^']*\bleader\b[^']*'/.test(pageSrc) && !/var FLOW_COLS = '[^']*\bwelcome_cc\b/.test(pageSrc));
+    t = await txtOf(f, acc(F.started) + ' [data-o278lead]');
+    ok('wave278 fix: HR\'s started new-path card shows the leader line with Change', /^Joining as a member/.test(t) && await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]'), t);
+    ok('wave278 fix: on a started card the access block is under the eight steps, the rundown above them', await f.ev((s) => { const c = document.querySelector(s), ol = c.querySelector(':scope > ol.o271st'), a = c.querySelector(':scope > [data-o278acc]'), k = c.querySelector('[data-o275ticks]'); return !!(ol && a && k) && !!(ol.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(k.compareDocumentPosition(ol) & Node.DOCUMENT_POSITION_FOLLOWING) && /^1\. Roster profile/.test(ol.innerText); }, card(F.started)));
+    await press(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]');
+    await f.page.waitForTimeout(1100);
+    c = await calls(f, 'set_leader');
+    ok('wave278 fix: Change on HR\'s started card calls set_leader and the line follows the table', c.some((x) => x.body.flow_id === F.started && x.body.leader === true) && /Joining as a leader/.test(await txtOf(f, acc(F.started) + ' [data-o278lead]')), c);
+    /* fix round: a refused set_welcome_cc shows its error */
+    await press(f, acc(F.offered) + ' [data-o278a="ccopen"]');
+    await f.page.waitForSelector(acc(F.offered) + ' [data-o278cc]', { timeout: 4000 });
+    await f.ev(() => { window.__O271_REFUSE = { action: 'set_welcome_cc', error: 'not_staff', message: 'Only active staff can get a copy of the welcome email.' }; });
+    await press(f, acc(F.offered) + ' [data-o278cc="joy.dumansi@welfareavenue.com"]');
+    await press(f, acc(F.offered) + ' [data-o278a="ccsave"]');
+    t = await txtOf(f, card(F.offered) + ' .o271err');
+    ok('wave278 fix: a refused set_welcome_cc shows its error in the note, and the picker stays open', /Only active staff can get a copy of the welcome email/.test(t) && await has(f, acc(F.offered) + ' [data-o278cc]'), t);
+    ok('wave278 fix: the picker says someone who left is taken off on Save', /taken off the copies when you save/.test(await txtOf(f, acc(F.offered) + ' [data-o278pk]')));
+    ok('wave278: the started card (welcome sent) has the steps and Re-check but no Add people', await has(f, acc(F.started) + ' [data-o278a="recheck"]') && /Slack onboarding channel/.test(await txtOf(f, acc(F.started))) && !(await has(f, acc(F.started) + ' [data-o278a="ccopen"]')));
+    t = await f.ev(() => document.getElementById('o271').innerText);
+    ok('wave278: Hub words: no em dash, no "AI"', noDashNoAI(t));
+    ok('wave278 admin: no console errors', f.cons.length === 0, f.cons);
+    await shot(f, 'w278-admin-access-1366');
+    await done(f);
+  }
+  {
+    const rp = rpcs275({ mine: ['said', 'started', 'old'] });
+    rp.wa275_my_cards.filter((r) => r.flow_id === F.started).forEach((r) => { r.leader = true; });   // HR made Ola a leader
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: rp, init: init + '\n' + NOT_HR });
+    await open(f, '#mypage');
+    await f.page.waitForTimeout(1200);
+    ok('wave278 Joy: her own hire\'s card has the leader line and Re-check, and no other card shows', await has(f, acc(F.said) + ' [data-o278lead]') && await has(f, acc(F.said) + ' [data-o278a="recheck"]') && !(await has(f, card(F.offered))) && !(await has(f, card(F.proposed))) && !(await has(f, card(F.moved))));
+    let t = await txtOf(f, acc(F.said) + ' [data-o278lead]');
+    ok('wave278 fix wave (I3): Joy (not HR) is not offered "make a leader": a member stays a member on her card, with a line saying HR decides', /^Joining as a member/.test(t) && !(await has(f, acc(F.said) + ' [data-o278a="leader"][data-on="1"]')) && /HR/.test(t) && !/Change/.test(t), t);
+    t = await txtOf(f, acc(F.started) + ' [data-o278lead]');
+    ok('wave278 fix wave (I3): on her leader hire she may change them to a member', /^Joining as a leader/.test(t) && await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="0"]') && !(await has(f, acc(F.started) + ' [data-o278a="leader"][data-on="1"]')), t);
+    await press(f, acc(F.started) + ' [data-o278a="leader"][data-on="0"]');
+    await f.page.waitForTimeout(1100);
+    await press(f, acc(F.said) + ' [data-o278a="recheck"]');
+    await f.page.waitForTimeout(1100);
+    const sl = await calls(f, 'set_leader'), rc = await calls(f, 'recheck_access');
+    ok('wave278 Joy: Change (to member) and Re-check on her own hires call set_leader false and recheck_access', sl.length === 1 && sl[0].body.flow_id === F.started && sl[0].body.leader === false && rc.length === 1 && rc[0].body.flow_id === F.said, [sl, rc]);
+    ok('wave278 Joy: the line now says member', /Joining as a member/.test(await txtOf(f, acc(F.started) + ' [data-o278lead]')));
+    ok('wave278 Joy: the started card from her list has the leader line, and no Add people (sent)', await has(f, acc(F.started) + ' [data-o278lead]') && !(await has(f, acc(F.started) + ' [data-o278a="ccopen"]')));
+    ok('wave278 Joy: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+  {
+    const f = await go({ who: 'admin', width: 390, hash: '#hrcentre/onboarding', rpcs: rpcs275() });
+    await open(f);
+    await press(f, acc(F.said) + ' [data-o278a="ccopen"]');
+    await f.page.waitForSelector(acc(F.said) + ' [data-o278cc]', { timeout: 4000 });
+    ok('wave278 390: the access block and the copies picker have no sideways scroll', !(await hasScroll(f)), await f.ev(() => document.documentElement.scrollWidth));
+    await f.ev((s) => document.querySelector(s).scrollIntoView(), acc(F.said));
+    await shot(f, 'w278-admin-access-390', false);
+    ok('wave278 390: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
+  ok('no page errors anywhere', allErrs.length === 0, allErrs);
+  ok('no console errors anywhere', allCons.length === 0, allCons);
+  console.log('\nw275drive: ' + pass + ' passed, ' + fail + ' failed');
+  await b.close();
+  process.exit(fail ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(2); });
+

@@ -1,0 +1,501 @@
+/* =====================================================================
+   WA v277 the Connections page (02/11/26)
+   =====================================================================
+   One list of every account the Hub posts to, read from the platform registry (studio_platforms, through social-connect
+   status): a row per account in registry order (Instagram and Facebook share the Meta row), a status pill from the
+   connection's health, the capability chips, and one action. Pressing a row opens its disclosure: who connected it and
+   when, when it expires, scopes asked against granted, the console, the redirect address, the keys, and for LinkedIn the
+   Make hook under Advanced. An attention strip lists what expires or fails. The Hub modal replaces confirm and prompt.
+
+   wave225 keeps the page, the route and the state. It hands over through three hooks: its paint asks
+   window.w277.connectHtml for the connections section, its connAct passes every action to window.w277.connAct, and its
+   loadConn keeps the registry in S.platforms. wave277 reads that state through window.w225.state() and repaints with
+   window.w225.paint(). Test: test/w277drive.js with test/fx_w277.json.
+   ===================================================================== */
+(function () {
+  if (window.__wa277) return; window.__wa277 = true;
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var GREEN = 'var(--wa-green,#103F39)', GOLD = 'var(--wa-gold,#DCA527)', CARD = 'var(--wa-card,#FFFAF2)', MUTED = 'var(--wa-muted,#797773)', FLAG = 'var(--wa-flag,#b3402f)';
+  var INK = '#1F201E', TEAL = '#2A8C7A', WARN = '#8a5a00';   /* wave225's ink, teal and reminder brown */
+  var OUT = 'cubic-bezier(.23,1,.32,1)', LINE = 'rgba(16,63,57,.11)', SURF = 'rgba(16,63,57,.05)', SURF2 = 'rgba(16,63,57,.1)';
+  var DAY = 86400000;
+  var LINE_TEXT = 'Every account the Hub posts to, and what each one can carry.';
+  var META = ['instagram', 'facebook'];
+
+  /* wave277's own state: which row is open, which actions are running, the last pill text per row */
+  var S277 = { open: null, busy: {}, pills: {}, held: null };
+
+  /* ---------- small helpers (copied, not imported: wave225 keeps its own closure) ---------- */
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function dateOf(iso) { if (!iso) return ''; try { return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); } }
+  function ago(iso) { if (!iso) return ''; var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 24) return h + ' h ago'; var d = Math.round(h / 24); return d === 1 ? 'yesterday' : d + ' days ago'; }
+  function who(email) {
+    try { var m = ((typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []).filter(function (x) { return x && x.email && String(x.email).toLowerCase() === String(email || '').toLowerCase(); })[0]; if (m && m.name) return m.name; } catch (e) { /* below */ }
+    return String(email || '').split('@')[0].replace(/\./g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+  function fn(name, body) {
+    var call = typeof window.__WA_INVOKE === 'function' ? Promise.resolve().then(function () { return window.__WA_INVOKE(name, { body: body }); }) : db.functions.invoke(name, { body: body });
+    return Promise.resolve(call).then(function (r) {
+      r = r || {};
+      if (r.error) { var m = r.error.message || String(r.error); try { if (r.error.context && r.error.context.json) return r.error.context.json().then(function (j) { throw new Error((j && j.error) || m); }); } catch (x) { /* below */ } throw new Error(m); }
+      if (r.data && r.data.error) throw new Error(r.data.error);
+      return r.data;
+    });
+  }
+
+  /* ---------- wave225's state, through its test hook ---------- */
+  function w() { return window.w225 || null; }
+  function St() { var x = w(); return x && x.state ? x.state() : null; }
+  function paint() { var x = w(); if (x && x.paint) x.paint(); }
+  function W121() { var x = w(); return x && x.W ? x.W() : (window.w121 || null); }
+  function loadConn() { var x = w(); return x && x.loadConn ? x.loadConn() : Promise.resolve(); }
+  async function loadCap() { var c = W121(); if (c && c.loadCap) { try { await c.loadCap(); } catch (e) { /* the page still reads */ } } }
+  function conn() { var S = St(); return (S && S.conn) || null; }
+  function connOf(k) { var c = conn(); return (c && c.connections && c.connections[k]) || {}; }
+  function canChange() { var c = conn(); return !!(c && c.can_change); }
+  function canMeta() { var c = conn(); return !!(c && c.can_meta); }
+  /* without the registry (status answered no platforms): wave225's own list, no chips, no steps */
+  function fallbackPlatforms() {
+    var x = w(), PLX = (x && x.PLX) || {}, ORD = (x && x.PORDER) || [];
+    return ORD.filter(function (k) { return PLX[k]; }).map(function (k, i) {
+      var meta = META.indexOf(k) >= 0, modes = { direct: 'Posts directly', reminder: 'Reminder to post by hand' };
+      if (k === 'linkedin') modes.make = 'Posts through Make'; if (k === 'tiktok') modes.drafts = 'Lands in TikTok drafts';
+      return { key: k, label: PLX[k][0], short: PLX[k][1], colour: PLX[k][2], sort: i + 1, auth: meta ? 'meta_token' : 'oauth', caps: {}, scopes: [], steps: [], modes: modes, active: true };
+    });
+  }
+  function noRegistry() { var S = St(), c = conn(); return !!c && !c.error && !((S && S.platforms && S.platforms.length) || (c.platforms && c.platforms.length)); }
+  function platforms() {
+    var S = St(), list = (S && S.platforms && S.platforms.length ? S.platforms : (conn() && conn().platforms)) || [];
+    if (!list.length && noRegistry()) list = fallbackPlatforms();
+    return list.filter(function (p) { return p && p.key && p.active !== false; }).slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+  }
+  function platOf(k) { return platforms().filter(function (p) { return p.key === k; })[0] || null; }
+  function labelOf(k) { var p = platOf(k); return p ? p.label : k === 'meta' ? 'Meta' : k === 'make' ? 'the Make route' : k; }
+  function redirect() { var c = conn(); return (c && c.redirect_uri) || 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/social-connect'; }
+  function metaCap() { var c = W121(); var x = c && c.cap ? c.cap() : null; if (!x) { var S = St(); x = S && S.cap; } return x || {}; }
+
+  /* ---------- health and the pill ---------- */
+  function daysTo(iso) { return Math.ceil((new Date(iso).getTime() - Date.now()) / DAY); }
+  function healthOf(c) {
+    if (!c || c.status !== 'connected') return 'not_connected';
+    var h = c.health && c.health !== 'not_connected' ? c.health : 'ok';
+    if (c.expires_at && daysTo(c.expires_at) <= 0) return 'expired';
+    return h;
+  }
+  function expiresText(c) { var n = Math.max(1, daysTo(c.expires_at)); return 'Expires in ' + n + (n === 1 ? ' day' : ' days'); }
+  function metaState() {
+    var c = connOf('meta'), cx = metaCap(), missing = c.missing || cx.missing || [];
+    if (c.token === false || (c.token == null && cx.token === false)) return 'none';
+    return missing.length ? 'missing' : 'ok';
+  }
+  /* [text, tone]: tone is ok, warn, flag or quiet */
+  function pillOf(k) {
+    if (k === 'meta') { var m = metaState(); return m === 'none' ? ['Not connected', 'quiet'] : m === 'missing' ? ['Needs attention', 'flag'] : ['Connected', 'ok']; }
+    var c = connOf(k), h = healthOf(c), p = platOf(k) || {};
+    if (h === 'expired') return ['Expired', 'flag'];
+    if (h === 'expiring') return [c.expires_at ? expiresText(c) : 'Expires soon', 'warn'];
+    if (h === 'error') return ['Needs attention', 'flag'];
+    if (c.mode === 'drafts' && (p.modes || {}).drafts) return ['To ' + p.label + ' drafts', 'ok'];
+    if (c.mode === 'make' && (p.modes || {}).make) return ['Through Make', 'ok'];
+    return h === 'not_connected' ? ['Not connected', 'quiet'] : ['Connected', 'ok'];
+  }
+  /* scopes the registry asks for against the ones the platform granted */
+  function scopesOf(k) {
+    var p = platOf(k), c = connOf(k); if (!p || c.status !== 'connected') return null;
+    var asked = p.scopes || []; if (!asked.length) return null;
+    if (!Array.isArray(c.scopes_granted)) return null;   /* not reported: nothing to compare */
+    var got = c.scopes_granted;
+    return { n: asked.length, m: asked.filter(function (s) { return got.indexOf(s) >= 0; }).length };
+  }
+  function attention() {
+    return platforms().filter(function (p) { return p.auth === 'oauth'; }).map(function (p) {
+      var c = connOf(p.key), h = healthOf(c);
+      if (h === 'expiring') return { k: p.key, label: p.label, why: c.expires_at ? expiresText(c) : 'Expires soon', act: 'reconnect', btn: 'Reconnect' };
+      if (h === 'expired') return { k: p.key, label: p.label, why: 'Expired', act: 'reconnect', btn: 'Reconnect' };
+      if (h === 'error') return { k: p.key, label: p.label, why: c.last_error || 'The last check failed', act: 'health', btn: 'Check again' };
+      return null;
+    }).filter(Boolean);
+  }
+
+  /* ---------- the look: one card of rows on hairlines, motion only on what the person touches ---------- */
+  (function () {
+    if (document.getElementById('wa277css')) return;
+    var C = '#w277conn ', M = '#w277modal ';
+    var css = document.createElement('style'); css.id = 'wa277css';
+    css.textContent = ''
+      + '#w277conn{font-family:' + BODY + ';color:' + INK + ';max-width:1100px;font-size:14.5px;line-height:1.45;}'
+      + C + '*{box-sizing:border-box;}'
+      + C + '.w277note{margin:0 0 10px;color:' + MUTED + ';font-size:13.5px;}'
+      + C + '.w277bar{display:flex;align-items:center;gap:12px;margin:0 0 12px;color:' + MUTED + ';font-size:13.5px;}' + C + '.w277bar span{flex:1;min-width:0;}'
+      + C + '.w277flash{border:1px solid ' + LINE + ';border-radius:14px;padding:10px 14px;margin:0 0 12px;background:' + SURF + ';}' + C + '.w277flash.bad{border-color:' + FLAG + ';background:none;color:' + FLAG + ';}'
+      /* the attention strip: flag on a hairline, no fill */
+      + '#w277attn{border:1px solid ' + FLAG + ';border-radius:18px;padding:4px 16px;margin:0 0 14px;}'
+      + '#w277attn .w277arow{display:flex;align-items:center;gap:12px;min-height:46px;}' + '#w277attn .w277arow + .w277arow{border-top:1px solid ' + LINE + ';}'
+      + '#w277attn b{font-family:' + HEAD + ';font-weight:600;font-size:18px;color:' + GREEN + ';letter-spacing:.01em;}' + '#w277attn .why{flex:1;min-width:0;color:' + FLAG + ';}'
+      /* the card and its rows */
+      + C + '.w277card{background:' + CARD + ';border:1px solid ' + LINE + ';border-radius:18px;margin:0 0 14px;overflow:hidden;}'
+      + C + '.w277item + .w277item{border-top:1px solid ' + LINE + ';}'
+      + C + '.w277row{display:grid;grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;grid-template-areas:"mk nm pl ch ac";align-items:center;gap:6px 12px;min-height:48px;padding:8px 16px;cursor:pointer;transition:transform 160ms ' + OUT + ',background-color 120ms ease;}'
+      + C + '.w277row:active:not(:has(.w277btn:active)){transform:scale(.97);}'
+      + C + '.w277mk{grid-area:mk;display:flex;}' + C + '.w277nm{grid-area:nm;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}'
+      + C + '.w277pl{grid-area:pl;}' + C + '.w277ch{grid-area:ch;display:flex;flex-wrap:wrap;gap:4px 12px;color:' + MUTED + ';font-size:12.5px;}' + C + '.w277act{grid-area:ac;display:flex;justify-content:flex-end;}'
+      + C + '.w277m{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;color:#FFFAF2;font:700 12px ' + HEAD + ';letter-spacing:.02em;flex:none;}'
+      + C + '.w277m.sm{width:20px;height:20px;border-radius:6px;font-size:10px;}' + C + '.w277m.sm + .w277m.sm{margin-left:3px;}'
+      + C + '.w277nm b{font-family:' + HEAD + ';font-weight:600;font-size:19px;color:' + GREEN + ';letter-spacing:.01em;line-height:1.1;}' + C + '.w277nm small{color:' + MUTED + ';font-size:13px;overflow-wrap:anywhere;}'
+      /* pills: a quiet tint, the word carries the meaning; a change crossfades */
+      + C + '.w277pill{display:inline-block;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:600;white-space:nowrap;background:' + SURF + ';color:' + MUTED + ';transition:opacity 150ms ease;}'
+      + C + '.w277pill.ok{color:' + GREEN + ';background:' + SURF2 + ';}' + C + '.w277pill.warn{color:' + WARN + ';background:rgba(220,165,39,.16);}' + C + '.w277pill.flag{color:' + FLAG + ';background:rgba(179,64,47,.08);}'
+      + C + '.w277pill.fresh{animation:w277fade 150ms ease;}' + '@keyframes w277fade{from{opacity:0;}to{opacity:1;}}'
+      + C + '.w277chev{width:18px;height:18px;color:' + MUTED + ';transition:transform 180ms ' + OUT + ';}' + C + '[aria-expanded="true"] .w277chev{transform:rotate(90deg);}'
+      /* buttons */
+      + '#w277conn .w277btn,#w277modal .w277btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;border-radius:999px;padding:0 16px;font:600 13.5px ' + BODY + ';border:1px solid rgba(16,63,57,.2);background:' + CARD + ';color:' + GREEN + ';cursor:pointer;text-decoration:none;white-space:nowrap;transition:transform 160ms ' + OUT + ',background-color 120ms ease,opacity 120ms ease;}'
+      + '#w277conn .w277btn:active,#w277modal .w277btn:active{transform:scale(.97);}'
+      + '#w277conn .w277btn.gold,#w277modal .w277btn.gold{background:' + GOLD + ';border-color:' + GOLD + ';color:' + GREEN + ';}'
+      + '#w277conn .w277btn.bad,#w277modal .w277btn.bad{color:' + FLAG + ';border-color:rgba(179,64,47,.35);}'
+      + '#w277conn .w277btn.sm{min-height:30px;padding:0 12px;font-size:12.5px;}'
+      + '#w277conn .w277btn[disabled]{opacity:.55;cursor:default;transform:none;}'
+      + '#w277conn :focus-visible,#w277modal :focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      /* the disclosure: grid rows from 0fr to 1fr, opens in 180ms, closes in 120ms */
+      + C + '.w277disc{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows 120ms ' + OUT + ',opacity 120ms ease;}'
+      + C + '.w277disc.open{grid-template-rows:1fr;opacity:1;transition:grid-template-rows 180ms ' + OUT + ',opacity 180ms ease;}'
+      + C + '.w277disc > .w277in{overflow:hidden;min-height:0;}'
+      + C + '.w277body{padding:2px 16px 16px 56px;display:flex;flex-direction:column;gap:10px;font-size:13.5px;}'
+      + C + '.w277body p{margin:0;}' + C + '.w277body ol{margin:0;padding-left:20px;color:' + MUTED + ';}' + C + '.w277body .muted{color:' + MUTED + ';}' + C + '.w277body .flag{color:' + FLAG + ';}'
+      + C + '.w277facts{display:flex;flex-wrap:wrap;gap:4px 18px;}'
+      + C + '.w277line{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}'
+      + C + '.w277line code{background:' + SURF + ';border-radius:6px;padding:2px 6px;font-size:12px;overflow-wrap:anywhere;}'
+      + C + '.w277keys{display:flex;flex-wrap:wrap;gap:8px;}' + C + '.w277keys input,' + C + '.w277adv input{flex:1 1 180px;min-width:0;min-height:36px;border:1px solid rgba(16,63,57,.2);border-radius:10px;padding:0 12px;font:14px ' + BODY + ';background:' + CARD + ';color:' + INK + ';}'
+      + C + '.w277chips{display:flex;flex-wrap:wrap;gap:6px;}' + C + '.w277chips span{border-radius:999px;padding:2px 9px;font-size:12px;background:' + SURF + ';}' + C + '.w277chips span.miss{color:' + FLAG + ';background:rgba(179,64,47,.08);}'
+      + C + '.w277adv{border-top:1px solid ' + LINE + ';padding-top:8px;}' + C + '.w277adv summary{cursor:pointer;color:' + MUTED + ';font-weight:600;}' + C + '.w277adv[open] > *:not(summary){margin-top:8px;}'
+      + C + '.w277test{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;}' + C + '.w277test b{font-family:' + HEAD + ';font-weight:600;font-size:19px;color:' + GREEN + ';}' + C + '.w277test span{flex:1;min-width:200px;color:' + MUTED + ';font-size:13.5px;}'
+      + C + '.w277pre{white-space:pre-wrap;font-size:12.5px;background:' + SURF + ';border-radius:10px;padding:10px 12px;margin:0 16px 14px;}'
+      + C + '.w277extra{margin-top:14px;}'
+      + C + '.w277empty{padding:18px;color:' + MUTED + ';}' + C + '.w277empty a{color:' + GREEN + ';font-weight:700;cursor:pointer;}'
+      /* the modal, inside the Hub's #modalBox or on its own back */
+      + '#w277modal{font-family:' + BODY + ';color:' + INK + ';max-width:420px;}' + M + 'p{margin:0 0 16px;font-size:15px;line-height:1.45;}' + M + '.w277mb{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}'
+      + '.w277back{position:fixed;inset:0;background:rgba(16,63,57,.35);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;}' + '.w277back > #w277modal{background:' + CARD + ';border-radius:18px;padding:20px;}'
+      /* hover only on a mouse */
+      + '@media (hover:hover) and (pointer:fine){' + C + '.w277row:hover{background:' + SURF + ';}' + '#w277conn .w277btn:hover,#w277modal .w277btn:hover{background:' + SURF2 + ';}' + '#w277conn .w277btn.gold:hover,#w277modal .w277btn.gold:hover{background:' + GOLD + ';filter:brightness(1.05);}}'
+      /* reduced motion: opacity stays, the height jumps */
+      + '@media (prefers-reduced-motion:reduce){' + C + '.w277disc,' + C + '.w277disc.open{transition:opacity 120ms ease;}' + C + '.w277row,' + C + '.w277btn,' + C + '.w277chev{transition:none;}' + C + '.w277row:active,' + C + '.w277btn:active{transform:none;}}'
+      /* wide: the rows share the card's columns (subgrid) so names, pills and chips line up; without subgrid, a fixed name column */
+      + '@supports not (grid-template-columns:subgrid){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(160px,220px) auto minmax(0,1fr) auto;}}'
+      + '@supports (grid-template-columns:subgrid){@media (min-width:621px){'
+      + C + '.w277card[role="list"]{display:grid;grid-template-columns:minmax(28px,max-content) minmax(140px,1fr) auto minmax(0,1.2fr) auto;column-gap:12px;}'
+      + C + '.w277card[role="list"] > .w277item{display:grid;grid-template-columns:subgrid;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277row{grid-template-columns:subgrid;grid-template-areas:none;grid-column:1 / -1;}'
+      + C + '.w277card[role="list"] .w277disc{grid-column:1 / -1;}'
+      + C + '.w277row > .w277mk{grid-area:auto;grid-column:1;grid-row:1;}' + C + '.w277row > .w277nm{grid-area:auto;grid-column:2;grid-row:1;}' + C + '.w277row > .w277pl{grid-area:auto;grid-column:3;grid-row:1;}' + C + '.w277row > .w277ch{grid-area:auto;grid-column:4;grid-row:1;}' + C + '.w277row > .w277act{grid-area:auto;grid-column:5;grid-row:1;}'
+      + '}}'
+      /* 620: the chips wrap under the name, the action stays on the right */
+      + '@media (max-width:620px){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(0,1fr) auto auto;grid-template-areas:"mk nm pl ac" ". ch ch ch";}' + C + '.w277body{padding-left:16px;}}'
+      /* 480: two lines, the action full width */
+      + '@media (max-width:480px){' + C + '.w277row{grid-template-columns:minmax(28px,max-content) minmax(0,1fr) auto;grid-template-areas:"mk nm pl" ". ch ch" "ac ac ac";padding:10px 10px;}' + C + '.w277row.quiet{grid-template-areas:"mk nm pl" ". ch ch";}' + C + '.w277row.quiet .w277act{display:none;}' + C + '.w277act{justify-content:stretch;}' + C + '.w277act .w277btn{width:100%;}' + '#w277attn .w277arow{flex-wrap:wrap;padding:8px 0;}' + '#w277attn .w277arow .w277btn{width:100%;}}';
+    document.head.appendChild(css);
+  })();
+
+  /* ---------- the page: renders only (the wiring is in z_wire) ---------- */
+  var CHEV = '<svg class="w277chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+  function markOf(p, small) { return '<i class="w277m' + (small ? ' sm' : '') + '" style="background:' + E(p.colour || '#1F201E') + '" title="' + E(p.label) + '" aria-hidden="true">' + E(p.short || p.label.slice(0, 2)) + '</i>'; }
+  function btn(act, k, text, cls, extra) {
+    var busy = S277.busy[k + ':' + act];
+    return '<button type="button" class="w277btn' + (cls ? ' ' + cls : '') + '" data-w277act="' + act + '" data-w277k="' + E(k) + '"' + (extra || '') + (busy ? ' disabled aria-busy="true"' : '') + '>' + E(text) + '</button>';
+  }
+  function chipsOf(caps) {
+    caps = caps || {}; var out = [];
+    if (caps.images && caps.max_images > 0) out.push('Photos ' + caps.max_images);
+    if (caps.video) out.push('Video');
+    if (caps.comments) out.push('Comments');
+    if (caps.analytics) out.push('Analytics');
+    return out.map(function (x) { return '<span>' + E(x) + '</span>'; }).join('');
+  }
+  function list(xs, cls) { return (xs || []).map(function (x) { return '<span' + (cls ? ' class="' + cls + '"' : '') + '>' + E(x) + '</span>'; }).join(''); }
+  function pillHtml(k) {
+    var p = pillOf(k), prev = S277.pills[k], fresh = prev && prev !== p[0];
+    S277.pills[k] = p[0];
+    return '<span class="w277pill ' + p[1] + (fresh ? ' fresh' : '') + '" data-w277pill="' + E(k) + '">' + E(p[0]) + '</span>';
+  }
+
+  /* the row's one action: Connect, Reconnect, or the chevron that says it opens */
+  function actionOf(k) {
+    if (k === 'meta') return canMeta() && metaState() === 'none' ? btn('connect', 'meta', 'Connect', 'gold') : CHEV;
+    if (!canChange()) return CHEV;
+    var c = connOf(k), h = healthOf(c), sc = scopesOf(k);
+    if (h === 'not_connected') return btn('connect', k, 'Connect', 'gold');
+    if (h === 'expiring' || h === 'expired' || h === 'error' || (sc && sc.m < sc.n)) return btn('reconnect', k, 'Reconnect', 'gold');
+    return CHEV;
+  }
+  function rowHtml(k, marks, name, sub, caps) {
+    var open = S277.open === k, act = actionOf(k), quiet = act === CHEV;
+    return '<div class="w277item" role="listitem">'
+      + '<div class="w277row' + (quiet ? ' quiet' : '') + '" data-w277row="' + E(k) + '" role="button" tabindex="0" aria-expanded="' + open + '" aria-controls="w277d-' + E(k) + '">'
+      + '<span class="w277mk">' + marks + '</span>'
+      + '<span class="w277nm"><b>' + E(name) + '</b>' + (sub ? '<small>' + E(sub) + '</small>' : '') + '</span>'
+      + '<span class="w277pl">' + pillHtml(k) + '</span>'
+      + '<span class="w277ch">' + chipsOf(caps) + '</span>'
+      + '<span class="w277act">' + act + '</span></div>'
+      + '<div class="w277disc' + (open ? ' open' : '') + '" id="w277d-' + E(k) + '" data-w277disc="' + E(k) + '"><div class="w277in"' + (open ? '' : ' inert') + '><div class="w277body">' + (k === 'meta' ? metaBody() : oauthBody(k)) + '</div></div></div></div>';
+  }
+
+  /* the Meta row's disclosure: the system user token and its permissions (the words of wave225's Meta card) */
+  function metaBody() {
+    var c = connOf('meta'), cx = metaCap(), S = St() || { keys: {}, busy: {} }, granted = c.granted || cx.granted || [], missing = c.missing || cx.missing || [];
+    var h = '<p class="muted">Instagram and Facebook, through the Meta system user token.</p>';
+    if (metaState() === 'none') h += '<p class="flag">No Meta token in the vault yet.</p>';
+    if (granted.length || missing.length) h += '<div class="w277chips">' + list(granted) + list(missing, 'miss') + '</div>';
+    if (missing.length) h += '<p class="flag">Missing: ' + E(missing.join(', ')) + '. Comments' + (missing.some(function (x) { return /publish|manage_posts/.test(x); }) ? ', posting' : '') + ' and some formats wait for a token with these. Section 2 of the setup doc says how to make it.</p>';
+    else if (granted.length) h += '<p class="muted">Every permission the Studio uses is there.</p>';
+    if (c.replaced_at) h += '<p class="muted">Replaced ' + E(ago(c.replaced_at)) + ' by ' + E(who(c.replaced_by)) + '.</p>';
+    if (canMeta()) {
+      h += '<div class="w277keys"><input type="password" id="w277metatok" autocomplete="off" spellcheck="false" aria-label="The new system user token" placeholder="Paste the new system user token">'
+        + btn('meta_check', 'meta', 'Check it', 'sm', S.busy.meta ? ' disabled' : '') + btn('meta_save', 'meta', 'Replace', 'sm gold', S.busy.meta ? ' disabled' : '') + '</div>'
+        + '<p class="muted">It goes straight into the vault. The Hub never shows it again.</p>'
+        + (S.keys.metaCheck ? '<div class="w277chips">' + list(S.keys.metaCheck.granted) + list(S.keys.metaCheck.missing, 'miss') + '</div>' : '');
+    } else h += '<p class="muted">An admin replaces the token.</p>';
+    return h;
+  }
+
+  /* an OAuth platform's disclosure */
+  function oauthBody(k) {
+    var p = platOf(k) || {}, c = connOf(k), h = healthOf(c), sc = scopesOf(k), ch = canChange(), r = redirect(), out = '';
+    if (h !== 'not_connected') {
+      var facts = [];
+      if (c.connected_at) facts.push('Connected ' + (c.connected_by ? 'by ' + who(c.connected_by) + ' ' : '') + 'on ' + dateOf(c.connected_at));
+      if (c.expires_at) facts.push((h === 'expired' ? 'Expired on ' : 'Expires on ') + dateOf(c.expires_at));
+      if (c.last_checked_at) facts.push('Checked ' + ago(c.last_checked_at));
+      if (facts.length) out += '<div class="w277facts">' + facts.map(function (f) { return '<span>' + E(f) + '</span>'; }).join('') + '</div>';
+    }
+    if (c.last_error) out += '<p class="flag">' + E(c.last_error) + '</p>';
+    if (sc) out += '<div class="w277line"><span>Asked for ' + sc.n + ', granted ' + sc.m + '</span>' + (sc.m < sc.n ? '<span class="muted">Some features wait for the rest.</span>' + (ch ? btn('reconnect', k, 'Reconnect', 'sm gold') : '') : '') + '</div>';
+    if (h === 'not_connected' && (p.steps || []).length) out += '<ol>' + p.steps.map(function (s) { return '<li>' + E(s) + '</li>'; }).join('') + '</ol>';
+    if (p.console_url) out += '<div class="w277line"><a class="w277btn sm" data-w277act="open_console" data-w277k="' + E(k) + '" href="' + E(p.console_url) + '" target="_blank" rel="noopener">Open the console</a>' + (p.console_note ? '<span class="muted">' + E(p.console_note) + '</span>' : '') + '</div>';
+    out += '<div class="w277line"><span class="muted">Redirect address</span><code>' + E(r) + '</code>' + btn('copy_redirect', k, 'Copy', 'sm', ' data-w277v="' + E(r) + '"') + '</div>';
+    if (k === 'threads') out += ['uninstall', 'delete'].map(function (ev) { var u = r + '?event=' + ev; return '<div class="w277line"><span class="muted">' + (ev === 'uninstall' ? 'Uninstall callback' : 'Delete callback') + '</span><code>' + E(u) + '</code>' + btn('copy_redirect', k, 'Copy', 'sm', ' data-w277v="' + E(u) + '"') + '</div>'; }).join('');
+    if (ch) {
+      out += (c.app_saved ? '<p class="muted">Keys saved' + (c.app_id ? ' (' + E(c.app_id) + ')' : '') + '. Paste new ones to replace them.</p>' : '')
+        + '<div class="w277keys"><input type="text" id="w277id-' + E(k) + '" autocomplete="off" spellcheck="false" aria-label="' + E(p.label) + ' client ID" placeholder="' + (k === 'tiktok' ? 'Client key' : k === 'threads' ? 'Threads app ID' : 'Client ID') + '">'
+        + '<input type="password" id="w277sec-' + E(k) + '" autocomplete="off" aria-label="' + E(p.label) + ' client secret" placeholder="' + (k === 'threads' ? 'Threads app secret' : 'Client secret') + '">'
+        + btn('save_keys', k, 'Save keys', 'sm') + '</div>';
+      out += '<div class="w277line">' + (h === 'not_connected' ? btn('connect', k, 'Connect', 'gold') : (sc && sc.m < sc.n ? '' : btn('reconnect', k, 'Reconnect', '')) + btn('disconnect', k, 'Disconnect', 'bad'))
+        + (k === 'youtube' && h !== 'not_connected' ? btn('test_short', k, 'Send a test Short', '') : '') + '</div>';
+    } else out += '<p class="muted">A marketing lead or an admin connects it.</p>';
+    if (k === 'linkedin') out += makeBody();
+    return out;
+  }
+  /* LinkedIn, Advanced: the Make hook that posts to the Page until LinkedIn approves the direct connection */
+  function makeBody() {
+    var m = connOf('make'), ch = canChange();
+    var h = '<details class="w277adv"><summary>Advanced</summary><p class="muted">Until LinkedIn approves the direct connection, a Make scenario can post to the Page. Paste its webhook address here.</p>';
+    if (ch) {
+      h += '<div class="w277keys"><input type="url" id="w277mkhook" autocomplete="off" aria-label="Make webhook address" placeholder="' + (m.saved ? 'Saved. Paste a new address to replace it' : 'The Make webhook address') + '">' + btn('make_hook', 'make', 'Save', 'sm') + '</div>';
+      if (m.secret) h += '<div class="w277line"><span class="muted">The filter code</span><code>' + E(m.secret) + '</code>' + btn('copy_redirect', 'make', 'Copy', 'sm', ' data-w277v="' + E(m.secret) + '"') + '</div>';
+      if (m.saved) h += '<div class="w277line">' + btn('make_sample', 'make', 'Send Make a sample', 'sm') + btn('make_test', 'make', 'Send a test post', 'sm') + btn('disconnect', 'make', 'Forget it', 'sm bad') + '</div>';
+      if (m.sampled_at || m.tested_at) h += '<p class="muted">' + (m.sampled_at ? 'Sample sent ' + E(ago(m.sampled_at)) + '. ' : '') + (m.tested_at ? 'Test post ' + E(ago(m.tested_at)) + (m.tested_ok ? ', Make took it.' : ', Make refused it.') : '') + '</p>';
+    } else h += '<p class="muted">' + (m.saved ? 'Set up.' : 'Not set up yet.') + ' A marketing lead or an admin changes it.</p>';
+    return h + '</details>';
+  }
+
+  function attnHtml() {
+    var xs = attention(); if (!xs.length) return '';
+    return '<div id="w277attn" role="region" aria-label="Needs attention">' + xs.map(function (x) {
+      return '<div class="w277arow"><b>' + E(x.label) + '</b><span class="why">' + E(x.why) + '</span>' + (canChange() ? btn(x.act, x.k, x.btn, 'sm gold') : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function testHtml() {
+    var S = St() || { keys: {} }, x = w(), byHand = platforms().filter(function (p) { return x && x.modeOf && x.modeOf(p.key) === 'reminder'; }).map(function (p) { return p.label; });
+    return '<div class="w277card"><div class="w277test"><b>Reminders</b><span>' + (byHand.length ? 'By reminder now: ' + E(byHand.join(', ')) + '. ' : 'Every platform posts on its own. ') + 'At the time of the post, its owner gets the caption and the media to post by hand.</span>'
+      + btn('remind_preview', 'remind', 'Preview a reminder', 'sm') + '</div>'
+      + (S.keys.remind ? '<div class="w277pre">' + E(S.keys.remind) + '</div>' : '') + '</div>';
+  }
+
+  function connectHtml() {
+    var S = St(); if (!S) return '';
+    if (!S.conn) { loadConn().then(paint); return '<div id="w277conn" aria-busy="true"><div class="w277card"><div class="w277empty">Checking the connections.</div></div></div>'; }
+    if (S.conn.error) return '<div id="w277conn"><div class="w277card"><div class="w277empty">Could not read the connections: ' + E(S.conn.error) + ' <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Try again</a></div></div></div>';
+    var ps = platforms(), meta = ps.filter(function (p) { return META.indexOf(p.key) >= 0; }), rows = [], metaDone = false;
+    ps.forEach(function (p) {
+      if (META.indexOf(p.key) >= 0) {
+        if (metaDone) return; metaDone = true;
+        rows.push(rowHtml('meta', meta.map(function (m) { return markOf(m, true); }).join(''), meta.map(function (m) { return m.label; }).join(' and '), 'Meta', p.caps));
+      } else {
+        var c = connOf(p.key);
+        rows.push(rowHtml(p.key, markOf(p), p.label, c.handle ? '@' + String(c.handle).replace(/^@+/, '') : c.name || '', p.caps));
+      }
+    });
+    var fl = S.keys.flash;
+    return '<div id="w277conn">'
+      + (fl ? '<div class="w277flash' + (fl.ok ? '' : ' bad') + '" role="status">' + E(fl.text) + '</div>' : '')
+      + (noRegistry() ? '<p class="w277note" role="status">Platform details are unavailable right now; the accounts below still work.</p>' : '')
+      + '<div class="w277bar"><span>Keys and tokens go into the vault and are never shown again.</span>' + btn('reload', '', 'Check again', 'sm') + '</div>'
+      + attnHtml()
+      + (rows.length ? '<div class="w277card" role="list">' + rows.join('') + '</div>' : '<div class="w277card"><div class="w277empty">No platforms are on yet. <a data-w277act="reload" data-w277k="" role="button" tabindex="0">Check again</a></div></div>')
+      + testHtml() + extraHtml() + '</div>';
+  }
+  /* wave250's Meta live and WhatsApp cards keep their own markup and handlers (data-w250cx, in wave225) */
+  function extraHtml() { var x = w(); if (!x || !x.connectExtra) return ''; try { var h = x.connectExtra(); return h ? '<div class="w277extra cx">' + h + '</div>' : ''; } catch (e) { return ''; } }
+
+  /* ---------- ask: one clear sentence and a primary button, in the Hub modal (never confirm or prompt) ---------- */
+  function ask(text, okLabel, danger) {
+    return new Promise(function (resolve) {
+      var done = false, prev = document.activeElement;
+      var html = '<div id="w277modal" role="dialog" aria-modal="true" aria-labelledby="w277mt"><p id="w277mt">' + E(text) + '</p><div class="w277mb">'
+        + '<button type="button" class="w277btn" data-w277cancel>Cancel</button>'
+        + '<button type="button" class="w277btn ' + (danger ? 'bad' : 'gold') + '" data-w277ok>' + E(okLabel || 'Go ahead') + '</button></div></div>';
+      var hub = typeof openModal === 'function' && typeof closeModal === 'function' && document.getElementById('modalBox') && document.getElementById('modalBack');
+      var back, box;
+      if (hub) { openModal(html); back = document.getElementById('modalBack'); box = document.getElementById('modalBox'); }
+      else { back = document.createElement('div'); back.className = 'w277back'; back.innerHTML = html; document.body.appendChild(back); box = back; }
+      function finish(v) {
+        if (done) return; done = true;
+        box.removeEventListener('click', onClick); back.removeEventListener('click', onBack); document.removeEventListener('keydown', onKey, true);
+        if (hub) { try { if (document.getElementById('w277modal')) closeModal(); } catch (e) { /* fine */ } } else if (back.parentNode) back.parentNode.removeChild(back);
+        try { if (prev && prev.focus && document.contains(prev)) prev.focus(); } catch (e) { /* fine */ }
+        resolve(v);
+      }
+      function onClick(e) { var t = e.target && e.target.closest ? e.target.closest('[data-w277ok],[data-w277cancel]') : null; if (t) { e.preventDefault(); finish(t.hasAttribute('data-w277ok')); } }
+      function onBack(e) { if (e.target === back) finish(false); }
+      function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); } }
+      box.addEventListener('click', onClick); back.addEventListener('click', onBack); document.addEventListener('keydown', onKey, true);
+      setTimeout(function () { var b = document.querySelector(danger ? '#w277modal [data-w277cancel]' : '#w277modal [data-w277ok]'); if (b) try { b.focus(); } catch (e) { /* fine */ } }, 0);
+    });
+  }
+
+  /* ---------- wiring: typed text survives a repaint, the masthead line, the disclosure, the actions ---------- */
+  function hold() {
+    var root = document.getElementById('w277conn'); if (!root) return;
+    var vals = {}, a = document.activeElement, focus = null;
+    root.querySelectorAll('input[id^="w277"]').forEach(function (el) { if (el.value) vals[el.id] = el.value; });
+    if (a && root.contains(a) && a.id) focus = { id: a.id, s: a.selectionStart, e: a.selectionEnd };
+    else if (a && root.contains(a) && a.hasAttribute('data-w277row')) focus = { row: a.getAttribute('data-w277row') };
+    S277.held = { vals: vals, focus: focus };
+    Promise.resolve().then(restore);
+  }
+  function restore() {
+    var h = S277.held; S277.held = null; if (!h) return;
+    Object.keys(h.vals).forEach(function (id) { var el = document.getElementById(id); if (el && !el.value) el.value = h.vals[id]; });
+    try {
+      var f = h.focus, el = f && (f.id ? document.getElementById(f.id) : document.querySelector('#w277conn [data-w277row="' + f.row + '"]'));
+      if (el && document.activeElement !== el) { el.focus(); if (f.id && f.s != null && el.setSelectionRange) el.setSelectionRange(f.s, f.e); }
+    } catch (e) { /* fine */ }
+  }
+  function mastLine() {
+    var m = document.querySelector('#studio > .w118mast p');
+    if (m && m.textContent !== LINE_TEXT) m.textContent = LINE_TEXT;
+  }
+  function page() { hold(); var html = connectHtml(); Promise.resolve().then(mastLine); return html; }
+
+  /* one disclosure open at a time; the DOM changes in place so the height can ease */
+  function setOpen(k) {
+    S277.open = k || null;
+    document.querySelectorAll('#w277conn [data-w277row]').forEach(function (r) {
+      var key = r.getAttribute('data-w277row'), on = key === S277.open, d = document.getElementById('w277d-' + key);
+      r.setAttribute('aria-expanded', on ? 'true' : 'false');
+      if (d) { d.classList.toggle('open', on); var inn = d.firstElementChild; if (inn) { if (on) inn.removeAttribute('inert'); else inn.setAttribute('inert', ''); } }
+    });
+  }
+  function toggle(k) { setOpen(S277.open === k ? null : k); }
+  function focusId(id) { setTimeout(function () { var el = document.getElementById(id); if (el) try { el.focus(); } catch (e) { /* fine */ } }, 200); }
+  function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
+  function clear(id) { var el = document.getElementById(id); if (el) el.value = ''; }
+  function copy(t) {
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(function () { toastS('Copied'); }, function () { toastS('Could not copy. Select it and copy by hand.'); }); return; } } catch (e) { /* below */ }
+    toastS('Could not copy. Select it and copy by hand.');
+  }
+  async function refresh() { await loadConn(); await loadCap(); paint(); }
+
+  /* every action, the wave225 names too ('save_app', 'start'), as '<action>|<key>' */
+  async function connAct(what) {
+    var parts = String(what || '').split('|'), a = parts[0], k = parts[1] || '', S = St(); if (!S) return;
+    if (a === 'save_app') a = 'save_keys'; if (a === 'start') a = 'connect';
+    var tag = k + ':' + a;
+    try {
+      if (a === 'toggle') { toggle(k); return; }
+      if (a === 'open_console') return;
+      if (a === 'copy_redirect') { copy(parts.slice(2).join('|') || redirect()); return; }
+      if (a === 'reload') { S.conn = null; S.keys.flash = null; S.keys.metaCheck = null; await loadCap(); paint(); return; }
+      if (a === 'health') {
+        S277.busy[tag] = true; paint();
+        var hr = await fn('social-connect', { action: 'health' });
+        if (hr && hr.connections) { var keep = { can_change: S.conn.can_change, can_meta: S.conn.can_meta, redirect_uri: S.conn.redirect_uri }; Object.assign(S.conn, hr, keep); if (hr.platforms && hr.platforms.length) S.platforms = hr.platforms; }
+        S277.busy[tag] = false; toastS('Checked again'); paint(); return;
+      }
+      if (a === 'connect' || a === 'reconnect') {
+        if (k === 'meta') { setOpen('meta'); focusId('w277metatok'); return; }
+        if (a === 'connect' && !connOf(k).app_saved) { setOpen(k); focusId('w277id-' + k); toastS('Save the ' + labelOf(k) + ' keys first, then Connect'); return; }
+        S277.busy[tag] = true; paint();
+        var s = await fn('social-connect', { action: 'start', platform: k });
+        S277.busy[tag] = false;
+        if (s && s.url) { location.href = s.url; return; }
+        paint(); return;
+      }
+      if (a === 'save_keys') {
+        var id = val('w277id-' + k), sec = val('w277sec-' + k); if (!id || !sec) { toastS('Paste both the ID and the secret'); return; }
+        await fn('social-connect', { action: 'save_app', platform: k, id: id, secret: sec });
+        clear('w277id-' + k); clear('w277sec-' + k);
+        toastS('Saved in the vault'); await loadConn(); paint(); return;
+      }
+      if (a === 'disconnect') {
+        var ok = await ask(k === 'make' ? 'Forget the Make route? LinkedIn posts go back to reminders until it is set up again.' : 'Disconnect ' + labelOf(k) + '? Posts go back to reminders until it is connected again.', k === 'make' ? 'Forget it' : 'Disconnect', true);
+        if (!ok) return;
+        await fn('social-connect', { action: 'disconnect', platform: k }); toastS('Disconnected'); await refresh(); return;
+      }
+      if (a === 'meta_check' || a === 'meta_save') {
+        var tok = val('w277metatok'); if (!tok) { toastS('Paste the token first'); return; }
+        S.busy.meta = true; paint();
+        var r = await fn('social-connect', { action: 'meta_token', token: tok, check_only: a === 'meta_check' });
+        S.keys.metaCheck = { granted: r.granted || [], missing: r.missing || [] };
+        if (a === 'meta_save') { clear('w277metatok'); toastS('Replaced. ' + (r.missing && r.missing.length ? r.missing.length + ' permissions still missing' : 'Every permission is there')); S.busy.meta = false; await refresh(); return; }
+        toastS(r.missing && r.missing.length ? 'Missing ' + r.missing.length + ': ' + r.missing.join(', ') : 'Every permission is there');
+        S.busy.meta = false; paint(); return;
+      }
+      if (a === 'make_hook') {
+        var u = val('w277mkhook'); if (!u) { toastS('Paste the webhook address'); return; }
+        await fn('social-connect', { action: 'make_hook', url: u }); clear('w277mkhook'); toastS('Saved. Now send Make a sample'); await refresh(); return;
+      }
+      if (a === 'make_sample') { var m = await fn('social-connect', { action: 'make_sample' }); toastS(m && m.ok ? 'Make got the sample' : 'Make answered ' + (m && m.status) + '. Is the scenario listening?'); await loadConn(); paint(); return; }
+      if (a === 'make_test') {
+        if (!(await ask('This puts a real post on the Welfare Avenue LinkedIn Page: "Testing the connection between the Welfare Avenue Hub and our LinkedIn Page. Please ignore this post." Send it?', 'Send the test post'))) return;
+        var t = await fn('social-connect', { action: 'make_test', confirm: true }); toastS(t && t.ok ? 'Sent. Check the LinkedIn Page in a minute.' : 'Make answered ' + (t && t.status)); await loadConn(); paint(); return;
+      }
+      if (a === 'test_short') {
+        var c121 = W121(), pre = { title: 'Test Short from the Hub', platforms: ['youtube'], caption: 'Testing the connection between the Welfare Avenue Hub and YouTube.', variants: { youtube: { title: 'Test from the Hub', privacy: 'unlisted', kids: false } } };
+        toastS('Add a short vertical video, then Publish now. It goes up unlisted.');
+        if (c121 && c121.compose) c121.compose(pre); return;
+      }
+      if (a === 'remind_preview') {
+        var x = w(), mode = function (p) { return x && x.modeOf ? x.modeOf(p) : 'reminder'; }, all = x && x.posts ? x.posts() : [];
+        var cand = all.filter(function (p) { return ['draft', 'scheduled'].indexOf(p.status) >= 0 && (p.platforms || []).some(function (q) { return mode(q) === 'reminder'; }); }).sort(function (p, q) { return String(p.scheduled_at || '9').localeCompare(String(q.scheduled_at || '9')); })[0];
+        if (!cand) { S.keys.remind = 'No planned post goes out by reminder. Plan one for a platform that is not connected to see the message.'; paint(); return; }
+        var pl = (cand.platforms || []).filter(function (q) { return mode(q) === 'reminder'; })[0];
+        var rr = await fn('social-publish', { action: 'remind_test', post_id: cand.id, platform: pl });
+        var plan = (rr && rr.plan) || {}; S.keys.remind = 'To: ' + (plan.to || 'nobody (the post has no owner)') + '\n\n' + String(plan.slack || '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/\*/g, ''); paint(); return;
+      }
+    } catch (e) { S.busy.meta = false; S277.busy = {}; toastS(e.message || String(e)); paint(); }
+  }
+
+  /* delegated on #w277conn: actions first, then the row toggle (never from a field, a link or Advanced) */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w277conn')) return;
+    var b = t.closest('[data-w277act]');
+    if (b) {
+      var act = b.getAttribute('data-w277act'); if (act === 'open_console') return;
+      e.preventDefault(); if (b.hasAttribute('disabled')) return;
+      connAct(act + '|' + (b.getAttribute('data-w277k') || '') + (b.hasAttribute('data-w277v') ? '|' + b.getAttribute('data-w277v') : '')); return;
+    }
+    if (t.closest('input,textarea,select,a,details,code')) return;
+    var r = t.closest('[data-w277row]'); if (r) toggle(r.getAttribute('data-w277row'));
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w277conn')) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (t.hasAttribute('data-w277row')) { e.preventDefault(); toggle(t.getAttribute('data-w277row')); return; }
+    if (t.matches('a[data-w277act][role="button"]')) { e.preventDefault(); t.click(); }
+  });
+
+  /* ---------- the interface wave225 and the tests use ---------- */
+  window.w277 = {
+    connectHtml: page, connAct: connAct, state: function () { return S277; }, platforms: platforms,
+    ask: ask, pillOf: pillOf, healthOf: healthOf, attention: attention
+  };
+})();

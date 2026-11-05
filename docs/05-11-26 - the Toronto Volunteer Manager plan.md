@@ -64,7 +64,7 @@ Administrative Coordinator, Program Development Specialist, Student Engagement C
 - *Student volunteers* (`.../welfare-avenue-toronto-student-registration-form`): the same, plus the school ("so we can see
   who is a TMU student or who is a UFT student").
 - Tate's question to the Hub (12/10/26): "Will this be remade in the hub, so we can distinguish Toronto volunteers on our
-  contact system. General compared to student, school etc?" This plan answers yes (wave275).
+  contact system. General compared to student, school etc?" This plan answers yes (wave274c).
 
 **What was agreed on 07/10/26** (Loom recap): Toronto adopts the Hub; keep Keela until the move is ready (Steel: Google
 Forms "lack data granularity"); Sama gives a procedure list of the intake and confirmation steps; a working session with
@@ -115,25 +115,28 @@ Toronto works, on the same tables as Montreal so the CRM, hours, sign-offs and h
   or on a Toronto crew. School from `org_id`; area, days, age and consent from the CRM fields. Adding a person to a crew
   gives them a volunteer record if they have none (`wa274_crew_add`), so the CRM counts their servings like anyone's.
 - **Messages go by email and by hand first.** No automatic text reaches a Toronto volunteer until the Toronto messaging
-  wave (277) and Steel's switch. Until then the app makes Sama's way fast: copy the crew's emails or numbers, the
+  wave (274e) and Steel's switch. Until then the app makes Sama's way fast: copy the crew's emails or numbers, the
   WhatsApp group link, mark who was called.
 - **The stages follow Tate's sequence**: Plan (date, kitchen, who the meals go to), Crew (who comes, by crew), Confirm (who
-  said yes, who to call), Prep (menu, groceries, kit, wave278), Wrap up (meals delivered, who came, mark completed).
+  said yes, who to call), Prep (menu, groceries, kit, wave274f), Wrap up (meals delivered, who came, mark completed).
 
-The rail: **Events | Volunteers, Sign-ups | Setup** (Sign-ups with wave275, Setup with wave278).
+The rail: **Events | Volunteers, Sign-ups | Setup** (Sign-ups with wave274c, Setup with wave274f).
 
 ## 5. The waves
 
 Each wave is one pull request, built by a goldfish from its brief, reviewed against section 6, approved by Steel.
+Waves 275 to 279 were taken by other Hub work at the same time (onboarding, availability, connections), so Toronto's
+later waves are 274b to 274g.
 
 | Wave | What it delivers | Database | Needs first |
 |---|---|---|---|
 | **274** | The app: Events (next event, upcoming, past), New event, the event page (Plan with who the meals go to, Crew with targets and Add people, Confirm with copy emails and numbers and the WhatsApp link, Wrap up with meals delivered and Mark completed), Volunteers (the pool with Students / General, school, area, day filters, Open in the CRM, Add to an event). Montreal's lists leave Toronto out. | `build/data/wa274_toronto.sql`: the recipients table, `wa274_crew_add`, the `toronto` page in every access profile | Nothing |
-| **275** | Intake in the Hub: *Volunteer in Toronto* reopened and *Student volunteers in Toronto* new (school from `volunteer_orgs`), both making volunteer records tagged `toronto` / `toronto student`; Sign-ups, Sama's inbox (Welcome email, Called, Add to an event); the website's Toronto page swaps Keela for the Hub forms, English and French. | form rows, the schools in `volunteer_orgs` | Tate's school list, Steel's approval for the website forms |
-| **276** | Keela out: import the two forms' answers (area, school, days, consent) onto the 44 contacts and any newer ones, matched by email, with a dry run and a report of what changed. | an import script and its report | **The two Keela form exports (CSV), before 05/12/26** |
-| **277** | Messages: the confirmation email with the volunteer's own link (Toronto kitchen, time, what to bring), the call for volunteers to a chosen part of the pool (school, area, day), reminders by email, a Toronto switch for anything automatic, Toronto role guides. | Toronto email templates, a `toronto_auto` switch, the role guides by city | Sama's procedure list |
-| **278** | Prep and Setup: the recipe scaled to the headcount and the dietary needs, the grocery list, the Toronto kit; Setup with kitchens, partner organizations and the usual crew sizes; a grant report (meals per organization, volunteer hours) for Tate's applications. | kitchens and kit lists | Tate and Karan's recipes |
-| **279** | The Toronto SOP from Sama's procedure, the page tour, an Avenue Academy lesson. | the SOP rows, `trainings` `tour:toronto` | Sama's procedure list |
+| **274b** | Anticipated spend: what each Toronto event is expected to cost, set in Plan, shown on the Hub's shared calendar (each event and the month's total) beside Montreal's servings. | a `budget` amount on `volunteer_events` | Steel's ask (05/11/26) |
+| **274c** | Intake in the Hub: *Volunteer in Toronto* reopened and *Student volunteers in Toronto* new (school from `volunteer_orgs`), both making volunteer records tagged `toronto` / `toronto student`; Sign-ups, Sama's inbox (Welcome email, Called, Add to an event); the website's Toronto page swaps Keela for the Hub forms, English and French. | form rows, the schools in `volunteer_orgs` | Tate's school list, Steel's approval for the website forms |
+| **274d** | Keela out: import the two forms' answers (area, school, days, consent) onto the 44 contacts and any newer ones, matched by email, with a dry run and a report of what changed. | an import script and its report | **The two Keela form exports (CSV), before 05/12/26** |
+| **274e** | Messages: the confirmation email with the volunteer's own link (Toronto kitchen, time, what to bring), the call for volunteers to a chosen part of the pool (school, area, day), reminders by email, a Toronto switch for anything automatic, Toronto role guides. | Toronto email templates, a `toronto_auto` switch, the role guides by city | Sama's procedure list |
+| **274f** | Prep and Setup: the recipe scaled to the headcount and the dietary needs, the grocery list, the Toronto kit; Setup with kitchens, partner organizations and the usual crew sizes; a grant report (meals per organization, volunteer hours) for Tate's applications. | kitchens and kit lists | Tate and Karan's recipes |
+| **274g** | The Toronto SOP from Sama's procedure, the page tour, an Avenue Academy lesson. | the SOP rows, `trainings` `tour:toronto` | Sama's procedure list |
 
 Dates that matter: the Toronto meeting on 10/11/26 (Sama's procedure, the schools, the Keela exports); the events of
 22/11/26 (TMU, likely) and 29/11/26; cancelling Keela by 05/12/26; Keela's next charge 19/12/26. Wave274 applied and
@@ -160,14 +163,15 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 
 ## 7. Decisions for Steel
 
-1. **Toronto as its own app** on the same tables (recommended, as above), rather than a city switch inside the Montreal
-   Volunteer Manager. You said "this new app in the hub"; the 07/10 recap had "a toggle to distinguish Montreal vs
+1. **Decided 05/11/26: Toronto is its own app** on the same tables, rather than a city switch inside the Montreal
+   Volunteer Manager. Steel: "I don't want Montreal methodologies to mess up Toronto methodologies and operations." You said "this new app in the hub"; the 07/10 recap had "a toggle to distinguish Montreal vs
    Toronto". The separate app keeps Toronto's flow simple and leaves Montreal untouched.
 2. **Who sees whom.** Today every staff member can read every volunteer in both cities. Keep it (simplest), or limit the
-   Toronto team to Toronto people and Montreal's to Montreal's (a row-security change for wave276 or later).
+   Toronto team to Toronto people and Montreal's to Montreal's (a row-security change for wave274d or later).
 3. **The name** in the launcher: "Toronto Volunteers" (proposed), and whether Montreal's becomes "Montreal Volunteers".
-4. **Applying wave274's SQL** (additive: one new table, one function, the page in the access profiles) and publishing.
-5. **The website's Toronto forms** (wave275): replace the Keela embeds with the Hub forms once they are live.
+4. **Approved 05/11/26: applying wave274's SQL** (additive: one new table, two functions, the page in the access
+   profiles) and publishing.
+5. **The website's Toronto forms** (wave274c): replace the Keela embeds with the Hub forms once they are live.
 
 ## 8. What Tate, Sama and Steel need to bring
 
@@ -184,21 +188,24 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 | 05/11/26 | Toronto events are `kind = 'meal'`, `location = 'Toronto'` | Every Montreal automation filters `kind = 'service'` (checked in the live function definitions) |
 | 05/11/26 | Shared role keys with Toronto labels | The CRM, hours letters and history read the keys |
 | 05/11/26 | Who the meals go to is its own table | Two organizations per event happens (24/08/26) |
-| 05/11/26 | No automatic message to Toronto volunteers before wave277 | Montreal's wording and line; Sama confirms by hand |
+| 05/11/26 | No automatic message to Toronto volunteers before wave274e | Montreal's wording and line; Sama confirms by hand |
 | 05/11/26 | The `toronto` page copies each profile's `volunteering` access | Same people, same rule |
 | 05/11/26 | wave274 brief written, built on the branch, SQL not applied | `docs/toronto/wave274 brief.md` |
 | 05/11/26 | `wa274_toronto.sql` dry-run on a throwaway local Postgres 16 with the live column types: applies, re-applies cleanly; `wa274_crew_add` refuses non-staff, Montreal (`service`) events, unknown roles and completed events, gives a contact a volunteer record once, never duplicates a crew row, leaves tags alone; `wa274_next_code` gives TO-26-1, TO-26-2, TO-27-1; profiles copy their `volunteering` value | The database half is safe to apply once Steel approves |
 | 05/11/26 | Every wave's design review uses one brief | `docs/toronto/design review brief.md` |
-| 05/11/26 | wave275 and wave276 briefs written, ready for their inputs | `docs/toronto/wave275 brief.md` (needs Tate's schools), `docs/toronto/wave276 brief.md` (needs the Keela exports) |
-| 05/11/26 | The school question needs a city: form-submit offers every `on_form` organization, Montreal's included | wave275 adds `volunteer_orgs.city` and a question's `org_city` (form-submit v10) |
-| 05/11/26 | The Keela import adds tags, which fires `crm_auto_on_tags` | wave276's report and doc warn first |
+| 05/11/26 | wave274c and wave274d briefs written, ready for their inputs | `docs/toronto/wave274c brief.md` (needs Tate's schools), `docs/toronto/wave274d brief.md` (needs the Keela exports) |
+| 05/11/26 | The school question needs a city: form-submit offers every `on_form` organization, Montreal's included | wave274c adds `volunteer_orgs.city` and a question's `org_city` (form-submit v10) |
+| 05/11/26 | The Keela import adds tags, which fires `crm_auto_on_tags` | wave274d's report and doc warn first |
 | 05/11/26 | wave274 built from its brief: `test/w274drive.js` 222 passed, 0 failed (admin and opsto, 1366 and 390, every fallback for the unapplied SQL); w259, w191, w272, w195 unchanged; w153 45 of 46 before and after (the "dock stays in view" check fails on the unchanged build too) | `docs/05-11-26 - wave274 the Toronto Volunteers app.md` |
-| 05/11/26 | Three Montreal places still show Toronto events: the Forms editor's event picker (`parts152/i_forms.js:18`), the planned-events count (`035_wave35.seg:86`), the Hub calendars (124, 128; may be right) | Left for wave275 or a small follow-up |
+| 05/11/26 | Three Montreal places still show Toronto events: the Forms editor's event picker (`parts152/i_forms.js:18`), the planned-events count (`035_wave35.seg:86`), the Hub calendars (124, 128; may be right) | Left for wave274c or a small follow-up |
 | 05/11/26 | New event is the Hub's own app action (wave197's masthead button, the app bar on a phone), tinted purple in Toronto | A second button overlapped it |
 | 05/11/26 | Ten apps overflowed the launcher at a 900 px window height; a `max-height: 960px` rule keeps the tile blurbs on one line | `parts153/b_css.js`, marked `wave274` |
 | 05/11/26 | Builder's calls to confirm: taking someone off a crew deletes the row after 5 seconds of Undo; Mark completed asks again if the date is ahead; More reopens a cancelled or completed event; Copy emails for "only those waiting" leaves out people who can't come | Steel or Sama |
 | 05/11/26 | Tests need `WA_CHROME=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome` here | `test/boot.js` points at an old path |
 | 05/11/26 | Call with Tate and Sama asked for this weekend (Slack DM to Tate) | Section 8 inputs, before the 10/11 meeting |
 | 05/11/26 | wave274 design review (Emil and Apple): 19 findings, all applied, w274drive still 222 of 222; on touch a sheet focuses itself, not its first field | The release note's Design review section |
-| 05/11/26 | Two Hub-wide fixes the review found, outside any wave's scope: the phone rail's capitals and second filled button, and no `viewport-fit=cover` in the head | A small shared wave, or wave279's polish |
+| 05/11/26 | Two Hub-wide fixes the review found, outside any wave's scope: the phone rail's capitals and second filled button, and no `viewport-fit=cover` in the head | A small shared wave, or wave274g's polish |
 | 05/11/26 | Still to judge on a real iPhone: press feedback, the sheet's header and footer scroll, where the note sits beside Ask | Steel or Edison on a phone, once published |
+| 05/11/26 | Steel decided Toronto is its own app, approved the SQL and publishing, and asked for the anticipated spend on the shared calendar and a break-UI pass | Sections 5 and 7 |
+| 05/11/26 | The live Hub is built from `wave279-onboarding-plan` (index.html bcf0c01b), not `main` (other sessions released 271, 273, 275 to 279 from their branches). This branch merges it, so Toronto goes on top of what is live | Deploy only on top of the live md5 |
+| 05/11/26 | Waves 275 to 279 are taken; Toronto's later waves renumbered 274b to 274g (briefs renamed) | Section 5 |

@@ -14,15 +14,20 @@
   function hubGo(id) { var api = window.w112Api; if (api && api.go) { try { api.go(id); } catch (e) { /* fine */ } } }
   async function signPolicy(key, btn) {
     var m = me(); if (!m.email) return;
-    if (btn) btn.disabled = true;
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
     try {
       var r = await db.from('wa_policy_signoffs').insert({ email: m.email, name: m.full || m.name, policy_key: key });
-      if (r && r.error && !/duplicate|unique/i.test(String(r.error.message || ''))) throw r.error;
+      if (r && r.error && !/duplicate|unique/i.test(String(r.error.message || ''))) throw { db: String(r.error.message || '') };
       A.signs[key] = nowIso();
       ['w105sign', 'w105signt'].forEach(function (id) { var el = document.getElementById(id); if (el) el.remove(); });
       toastS('Sign-off recorded, thank you');
       afterChange();
-    } catch (e) { if (btn) btn.disabled = false; toastS('Could not record the sign-off'); }
+    } catch (e) {
+      /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is, and the count is read again */
+      if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      toastS((e && e.db) || 'Could not record the sign-off');
+      if (window.wa279Pol) { window.wa279Pol.reload(); window.wa279Pol.refresh(); }
+    }
   }
   async function ackStep(el) {
     var g = orgState(); if (!g.has) return;

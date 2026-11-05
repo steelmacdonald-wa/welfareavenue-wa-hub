@@ -1,4 +1,10 @@
-// Welfare Avenue: hub-invite (v5, 25/09/26)
+// Welfare Avenue: hub-invite (v6, 02/11/26)
+// v6 (wave275 Task 3): the Hub itself may invite. The header x-wa-secret, equal to the vault's
+//   WA_TRIGGER_SECRET, opens 'invite' and nothing else (any other action, or a wrong secret, is as if
+//   the header were not there). It is the onboarding runner's Hub access step for a new hire: the level
+//   is forced to member, whatever the body asks; someone who already has a level keeps it (never
+//   lowered), and a person an admin removed (blocked) is refused. The department comes from the body.
+//   The inviter (Reply-To, change_log) is body.inviter when it is a welfareavenue.com address, else hub@.
 // v5: the invitation email goes out from hub@welfareavenue.com through the
 //   Gmail API (domain-wide delegation, scope gmail.send): a branded message
 //   with a one-time sign-in button (Supabase generateLink), reply-to the
@@ -44,7 +50,7 @@ const FALLBACK_ADMINS = ['steel.macdonald', 'suhaib.abdillahi', 'ian.odhiambo', 
 const DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
 const HUB_ROLES = ['admin', 'leader', 'member', 'viewer'];
 
-type Caller = { email: string; level: 'admin' | 'leader'; department: string | null };
+type Caller = { email: string; level: 'admin' | 'leader' | 'system'; department: string | null };   // system: the Hub itself, through the trigger secret (v6)
 
 async function getSecret(name: string): Promise<string | null> {
   try {
@@ -211,6 +217,13 @@ async function invite(person: Record<string, unknown>, who: Caller): Promise<Inv
       hubRole = existingRole.role; /* never downgrade someone through a leader invite */
     }
   }
+  if (who.level === 'system') {   /* v6: member level, forced; an existing level is kept, never lowered; a removed person stays removed */
+    hubRole = 'member';
+    if (existingRole) {
+      if (existingRole.role === 'blocked') return { ok: false, email, name, error: 'this person was removed by an admin; only an admin can invite them again' };
+      if (HUB_ROLES.indexOf(existingRole.role) >= 0) hubRole = existingRole.role;
+    }
+  }
 
   const { data: existing } = await svc.from('team_members').select('id, active, department').ilike('email', email).maybeSingle();
   let memberId: number | null = existing?.id || null;
@@ -255,14 +268,33 @@ async function invite(person: Record<string, unknown>, who: Caller): Promise<Inv
   await svc.from('change_log').insert({
     entity_type: 'member', entity_id: email, field: 'invited',
     old_value: existing ? 'existing profile' : null,
-    new_value: hubRole + (emailSent ? ' (email sent)' : ' (email not sent)') + ' (slack ' + slack + ')' + (who.level === 'leader' ? ' by leader' : ''),
+    new_value: hubRole + (emailSent ? ' (email sent)' : ' (email not sent)') + ' (slack ' + slack + ')' + (who.level === 'leader' ? ' by leader' : who.level === 'system' ? ' by onboarding' : ''),
     changed_by: who.email
   });
   return { ok: true, email, name, member_id: memberId, email_sent: emailSent, note: emailNote || null, slack, existed: !!existing, hub_role: hubRole };
 }
 
+function sameText(a: string, b: string): boolean {   // the trigger secret is compared without stopping at the first difference
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  /* v6: the Hub itself (onboard-run's Hub access step), invite only */
+  const given = req.headers.get('x-wa-secret');
+  if (given) {
+    const secret = await getSecret('WA_TRIGGER_SECRET');
+    const sb = await req.clone().json().catch(() => ({}));
+    if (secret && sameText(given, secret) && sb && sb.action === 'invite') {
+      const inviter = String(sb.inviter || '').trim().toLowerCase();
+      const system: Caller = { email: /^[a-z0-9._-]+@welfareavenue\.com$/.test(inviter) ? inviter : HUB, level: 'system', department: null };
+      const r = await invite({ ...sb, hub_role: 'member' }, system);
+      return json(r, r.ok ? 200 : 400);
+    }
+  }
   const who = await caller(req);
   if (!who) return json({ error: 'admins and department leaders only' }, 403);
   const body = await req.json().catch(() => ({}));

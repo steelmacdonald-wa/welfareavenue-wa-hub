@@ -24,6 +24,7 @@
     + '#w225host .btn225.bad{color:' + FLAG + ';border-color:rgba(179,64,47,.35);}'
     + '#w225host .btn225[disabled]{opacity:.5;cursor:default;}'
     + '#w225host .btn225.sm{padding:4px 10px;font-size:11.5px;}'
+    + '#w225host [data-w277apsave]{transition:transform 160ms cubic-bezier(.23,1,.32,1);}#w225host [data-w277apsave]:active{transform:scale(.97);}'
     + '#w225host .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}'
     + '#w225host .sp{flex:1;}'
     + '#w225host .muted{color:' + MUTED + ';font-size:12.5px;}'

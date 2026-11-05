@@ -1,0 +1,550 @@
+/* =====================================================================
+   WA v275 One streamlined onboarding: the card for HR and the manager (02/11/26, Task 6)
+   =====================================================================
+   Steel (02/11/26): from the offer onward there is one flow, driven by HR or by the hire's own manager. This wave gives wave271's Ready to onboard a
+   card for every flow on the new path (offered, proposed, answered, accepted): the offer and the proposal as plain lines ("Offer sent 02 Nov, 6 hours a
+   week; waiting for the manager's times", "Proposed by Kahkashan: Wed 4 Nov 10 am and Thu 5 Nov 10 am; waiting for James", "James said no to the
+   times" or "the times moved; James is marking their availability"), the hours, the manager and their week (wave276's typical week, from Home), the
+   switch "Availability: ask the hire / already communicated", the steps that ran at Accept with Retry, the hire's setup rundown ticks, the fresh Canva link
+   until booking (whole-branch fix), and the actions:
+   Propose times (the picker over the manager's week, hub@ meetings and other hires greyed), Book the times (from the hire's grid), Enter their
+   availability, Edit the welcome email, Set <manager>'s exceptions and Change manager (HR's), They backed out. A started card gains the rundown ticks.
+   A manager who is not HR sees only their own hires' cards (wa275_my_cards), as "Your new hires" on Home and on their team page; HR and admins see
+   every card in HR Center > Onboarding, and their own hires on Home as short lines. Every write goes through onboard-run, which checks who may
+   (wa275_manager_of); the menu is not the lock. Wraps wave271's doors (window.o271R: load, paint, readyCard, panelHtml, startedMore, preview) and reuses
+   its words, grid and steps (window.o271). Times are America/Toronto wall clock, through Intl only.
+   wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): the card row's manager_hours (wa275b's wa275_flow_row, from
+   onboard_manager_hours) and the times answer's manager_hours. False: the week line is one quiet line of information ("<first> has not set their week
+   on Home; times are not limited to it"), and the picker offers every cell of the window ("Open to pick"), greying only hub@ meetings, other hires and
+   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it.
+   wave278 (04/11/26, Task 6): the rundown counts twelve steps, and the card gains the access block (c_access.js): the groups, drives, meeting and channel
+   steps, the leader decision with Change, Re-check Drives and Groups, and the welcome's copies with Add people. c_access.js closes this wrapper. */
+(function () {
+  if (window.__wa275) return; window.__wa275 = true;
+  var O = window.o271, R = window.o271R;
+  if (!O || !R) return;   /* wave271 is not on this page */
+  var S = O.state(), E = O.E, run = O.run;
+  var GREEN = '#103F39', GROUND = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2';
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], WDN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], WDK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  var DEFAULT_WEEK = { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] };
+  /* the hire's setup rundown (onboard-link SETUP, 12 steps since wave278; wa278a carried the old ticks over: profile to chrome, drives to drive, loom
+     dropped); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
+  var RUNDOWN = [['google', 'their Google account'], ['chrome', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['drive', 'Drive'], ['groups', 'Groups'], ['hub', 'the Hub'], ['slack', 'Slack'],
+    ['canva', 'Canva'], ['academy', 'the Academy'], ['jd', 'the job description'], ['weekly', 'the weekly meeting'], ['phone', 'the phone apps']];
+  var MINE_KINDS = { propose: 1, bookg: 1, gridfor: 1, exc: 1, welcome: 1, mgr: 1 };
+  R.readyStatuses.push('offered');   /* a card runs from the offer (wa271_ready_list lists offered flows since wa275a) */
+
+  /* ---------- style ---------- */
+  var st = document.createElement('style'); st.id = 'o275css';
+  st.textContent =
+    '.o275state{font-size:14px;font-weight:600;color:' + GROUND + ';margin:6px 0 4px;overflow-wrap:anywhere;}' +
+    '.o275state .o271ln{font-weight:400;margin:0 0 2px;}' +
+    '.o275sw{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;margin:8px 0 2px;color:' + GROUND + ';}' +
+    '.o275sw .o271md{margin:0;}' +
+    '.o275sw .o271md button{min-height:32px;}' +
+    '.o275xd{border:1px solid ' + LINE + ';border-radius:10px;padding:8px 10px;margin:8px 0;background:' + CREAM + ';min-width:0;}' +
+    '.o275xr{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0;min-width:0;}' +
+    '.o275xr input[type=date],.o275xr input[type=time]{font:inherit;font-size:14px;min-height:36px;padding:4px 8px;border:1px solid ' + LINE + ';border-radius:8px;background:#FFFAF2;color:' + GROUND + ';min-width:0;max-width:100%;box-sizing:border-box;}' +
+    '.o275cnt{font-size:12.5px;color:' + MUTE + ';margin:6px 0 0;}' +
+    '.o275line{border-top:1px solid #ECEBE3;padding:10px 0;min-width:0;}' +
+    '.o275line:first-of-type{border-top:none;}' +
+    '.o275line b{color:' + GROUND + ';overflow-wrap:anywhere;}' +
+    '.o275line span{color:' + MUTE + ';font-size:13px;margin-left:6px;}' +
+    '.o275line a{font-size:13px;font-weight:600;color:' + GREEN + ';}' +
+    '#o275mine{margin:0 0 16px;min-width:0;box-sizing:border-box;}' +
+    '#o275mine > h2{font-size:22px;}' +
+    '#mypage.w272 #mpBody > #o275mine{order:5;grid-column:1 / -1;}' +
+    '#w116host > #o275mine{background:var(--wa-card,' + CREAM + ');border:1px solid ' + LINE + ';border-radius:16px;padding:14px 16px;}';
+  document.head.appendChild(st);
+
+  /* ---------- who and times ---------- */
+  function hrList() { return S.hrList === true; }   /* the database gave this person HR's list (see R.load) */
+  function staffUser() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function firstOf(name) { return String(name || '').replace(/<[^>]*>/g, '').trim().split(/\s+/)[0] || 'the new hire'; }
+  function clockOf(h, m) { return ((h % 12) || 12) + (m ? ':' + O.pad2(m) : '') + (h < 12 ? ' am' : ' pm'); }
+  /* "Wed 4 Nov 10 am", on the Toronto clock */
+  function brief(at) { var w = O.wall(at); return WDN[new Date(Date.UTC(w.y, w.mo - 1, w.d)).getUTCDay()] + ' ' + w.d + ' ' + MON[w.mo - 1] + ' ' + clockOf(w.h, w.mi); }
+  /* "02 Nov": a date (YYYY-MM-DD) as it is, an instant on the Toronto clock */
+  function day(v) {
+    if (!v) return '';
+    var s = String(v), m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return m[3] + ' ' + MON[Number(m[2]) - 1];
+    var w = O.wall(s); return O.pad2(w.d) + ' ' + MON[w.mo - 1];
+  }
+  function personName(email) {
+    var e = String(email || '').trim().toLowerCase(); if (!e) return 'someone';
+    var p = S.people.filter(function (x) { return String(x.email || '').trim().toLowerCase() === e; })[0];
+    return p ? p.name : e;
+  }
+  function hm(s) { var m = /^(\d{2}):(\d{2})$/.exec(String(s || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : NaN; }
+  /* the manager's hours as onboard-run reads them (it decides): an except date replaces the weekday; the whole span inside one block of that date */
+  function inside(av, s, e) {
+    var a = O.wall(s), b = O.wall(e); if (a.date !== b.date) return false;
+    var ex = (av.except || []).filter(function (x) { return x.date === a.date; })[0];
+    var list = ex ? ex.free : (av.weekly || {})[WDK[new Date(Date.UTC(a.y, a.mo - 1, a.d)).getUTCDay()]];
+    return (list || []).some(function (blk) { return hm(blk[0]) <= a.mins && b.mins <= hm(blk[1]); });
+  }
+  function rowOf(id) {
+    return S.ready.filter(function (x) { return String(x.flow_id) === String(id); })[0] || S.started.filter(function (x) { return String(x.id) === String(id); })[0] || null;
+  }
+  function cardEl(id) { return document.querySelector('[data-o271flow="' + id + '"]'); }
+  function ticked(ticks) { var t = ticks && typeof ticks === 'object' ? ticks : {}; return RUNDOWN.filter(function (r) { var v = t['rd_' + r[0]]; return v != null && v !== false; }); }
+
+  /* ---------- the loader and painter: HR keeps wave271's list; anyone else reads their own hires (wa275_my_cards) ----------
+     Who gets HR's list is the database's call (wa271_ready_list: wa_is_hr or an admin), never the menu profile: the list is asked for first, and only its
+     refusal sends this person to their own hires. S.hrList: true (HR's list), false (refused: their own hires), null (not known yet). */
+  var loadHr = R.load;
+  R.load = function () {
+    if (S.loading) return S.loading;
+    if (!staffUser()) return loadHr();
+    if (S.hrList === false) return loadMine();
+    return loadHr().then(function () {
+      if (S.refused) { S.hrList = false; return loadMine(); }   /* the database's own "Only HR": their own hires from now on */
+      if (S.loadErr) {   /* anything else decides nothing: the error shows as wave271 shows it, and the next load asks for HR's list again */
+        if (S.denied) { S.denied = false; S.err = 'The Hub could not load this list: ' + S.loadErr; R.paint(); }
+        return;
+      }
+      S.hrList = true;
+    });
+  };
+  R.hrTools = function () { return !S.mine; };   /* a manager's view leaves HR's own buttons off wave271's cards too */
+  /* Home asks only whether the list is theirs, so it never loads HR's whole list there; a refusal other than "Only HR" decides nothing */
+  async function probe() {
+    S.probing = true;
+    try {
+      var r = await db.rpc('wa271_ready_list');
+      if (!r || !r.error) S.hrList = true;
+      else if (/Only HR/i.test(String(r.error.message || ''))) S.hrList = false;
+    } catch (e) { /* decided on the next visit */ }
+    S.probing = false; S.probed = true;
+    mount();
+  }
+  function loadMine() {
+    S.mine = true;
+    S.loading = (async function () {
+      try {
+        var r = await db.rpc('wa275_my_cards');
+        if (r && r.error) throw r.error;
+        var rows = (r && r.data) || [], cut = Date.now() - O.KEEP_DAYS * 86400000;
+        S.denied = true;   /* HR's list is HR's: wave271's own section stays away for this person */
+        S.ready = rows.filter(function (x) { return ['offered', 'waiting', 'ready'].indexOf(x.status) >= 0; });
+        S.started = rows.filter(function (x) { return x.status === 'running' || (x.status === 'started' && (!x.call_at || Date.parse(x.call_at) >= cut)); })
+          .map(function (x) { return Object.assign({}, x, { id: x.flow_id }); });
+        S.backed = []; S.offers = []; S.mineErr = '';
+        await O.readWelcomes(S.started);
+        await Promise.all([O.readPeople(), O.readCfg()]);
+      } catch (e) { S.mineErr = 'The Hub could not load your new hires: ' + String((e && e.message) || e); }
+      S.loaded = true; S.mineLoaded = true; S.loading = null;
+      Object.keys(S.act).forEach(function (id) { if (!O.flowOf(id)) delete S.act[id]; });
+      R.paint();
+    })();
+    return S.loading;
+  }
+  /* HR's own hires, for Home: short lines that open Onboarding (their cards are in HR Center, so the page never holds two copies of one card) */
+  async function loadMineList() {
+    S.mineListLoading = true;
+    try { var r = await db.rpc('wa275_my_cards'); S.mineList = (r && !r.error && r.data) || []; } catch (e) { S.mineList = []; }
+    S.mineListLoading = false; S.mineListLoaded = true;
+    if (!S.people.length) await O.readPeople();
+    paintMine();
+  }
+  var paintHr = R.paint;
+  R.paint = function () { paintHr(); paintMine(); };
+  /* a manager's change panel reads the picker's marks through times (preview is HR's) */
+  var preview271 = R.preview;
+  R.preview = async function (id) { if (!S.mine) return preview271(id); return pvOf(await run('times', { flow_id: Number(id) })); };
+
+  /* ---------- the card on the new path ---------- */
+  var readyCard271 = R.readyCard, panel271 = R.panelHtml;
+  R.readyCard = function (x) { return x.propose_path || x.status === 'offered' ? card275(x) : readyCard271(x); };
+  R.panelHtml = function (f, A) { return MINE_KINDS[A.kind] ? panel275(rowOf(f.id), A) : panel271(f, A); };
+  R.startedMore = function (f) { return f.propose_path || f.proposed_at || ticked(f.setup_ticks).length ? ticksHtml(f) : ''; };
+
+  function stateLines(x) {
+    var first = firstOf(x.name), hours = Number(x.offer_hours) > 0 ? Number(x.offer_hours) + ' hours a week' : '';
+    var ask = x.ask_availability !== false, lines = [];
+    var proposal = x.proposed_at && x.proposed_call_at && x.proposed_one_on_one_at ? 'Proposed by ' + personName(x.proposed_by) + ': ' + brief(x.proposed_call_at) + ' and ' + brief(x.proposed_one_on_one_at) : '';
+    if (x.call_at) { lines.push('Booked: the onboarding call on ' + brief(x.call_at) + (x.one_on_one_at ? ' and the 1-on-1 on ' + brief(x.one_on_one_at) : '')); return lines; }
+    if (!x.accepted_on) {
+      lines.push(proposal ? proposal + '; waiting for ' + first + ' to accept the offer' : 'Offer sent ' + day(x.offer_sent_at) + (hours ? ', ' + hours : '') + '; waiting for the manager\'s times');
+      return lines;
+    }
+    lines.push('Accepted ' + day(x.accepted_on) + (hours ? ', ' + hours + (x.hours_confirmed_at ? ' confirmed' : '') : ''));
+    var grid = x.grids && x.grids.hire === 'marked';
+    if (x.hire_answer === 'no' && x.hire_answered_at) {
+      lines.push(first + ' said no to the times' + (!ask ? '; availability already communicated: get in touch with them, then book the times here' : grid ? '; their times are on their grid: book from it' : '; ' + first + ' is marking their availability'));
+    } else if (x.hire_answer === 'no') {
+      lines.push(ask ? 'The times moved; ' + first + ' is marking their availability' + (grid ? ': book from their grid' : '') : 'The times moved; availability already communicated: get in touch with ' + first + ' about other times');
+    } else if (proposal) lines.push(proposal + '; waiting for ' + first);
+    else lines.push(ask ? 'Waiting for the manager\'s times' : 'Availability already communicated: book the times here, or propose them');
+    return lines;
+  }
+  function mgrLine(x) {
+    if (!x.manager_member_id) return 'Manager: not chosen yet. Choose one with Change manager.';
+    var name = x.manager_name || O.nameOf(x.manager_member_id), first = firstOf(name);
+    if (x.manager_hours === false) {   /* wave275b: the week is information, not a rule, so no prompt */
+      var info = x.manager_no_week ? first + ' has not set their week on Home; times are not limited to it'
+        : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) + '; times are not limited to it' : 'times are not limited to their week';
+      return 'Manager: ' + E(name) + ' &middot; ' + E(info);
+    }
+    var week = x.manager_no_week ? first + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used'
+      : x.manager_week_stale ? first + '\'s team asked for their week again' + (x.manager_availability_at ? ' since they set it on ' + day(x.manager_availability_at) : '') + ': they are asked on Home'
+      : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) : '';
+    return 'Manager: ' + E(name) + (week ? ' &middot; ' + E(week) : '');
+  }
+  function ticksHtml(x) {
+    var done = ticked(x.setup_ticks);
+    return '<div class="o271ln" data-o275ticks title="' + E(done.length ? 'Done: ' + done.map(function (r) { return r[1]; }).join(', ') : 'Nothing ticked yet') + '">' + E((done.length ? firstOf(x.name) + '\'s' : 'Their') + ' setup rundown: ' + done.length + ' of ' + RUNDOWN.length + ' setup steps done') + '</div>';
+  }
+  function switchHtml(x) {
+    var ask = x.ask_availability !== false, id = E(x.flow_id), busy = S.busy['k' + x.flow_id] ? ' disabled' : '';
+    return '<div class="o275sw"><span>Availability:</span><div class="o271md" role="group" aria-label="Availability: ask the hire, or already communicated">'
+      + '<button type="button" class="' + (ask ? 'on' : '') + '" aria-pressed="' + ask + '" data-o275a="ask" data-on="1" data-f="' + id + '"' + busy + '>ask the hire</button>'
+      + '<button type="button" class="' + (ask ? '' : 'on') + '" aria-pressed="' + !ask + '" data-o275a="ask" data-on="0" data-f="' + id + '"' + busy + '>already communicated</button></div></div>';
+  }
+  function stepsHtml(x) {
+    var rows = x.steps || [];
+    if (!rows.length) return '';
+    var f = { id: x.flow_id, steps: rows, wa_email: x.wa_email, canva_link: x.canva_link };   /* HR's "I created it, continue" follows R.hrTools in wave271's stepHtml */
+    return '<ol class="o271st">' + O.STEPS.map(function (s, i) { return rows.some(function (r) { return r.step === s[0]; }) ? O.stepHtml(f, s[0], s[1], i + 1) : ''; }).join('') + '</ol>'
+      + '<div class="o271ln">The other steps run when the times are booked.</div>';
+  }
+  /* whole-branch fix (design decision 5 and section 6): the fresh Canva link, HR's or the manager's to paste before booking. The welcome email goes when the
+     times are booked and reads the link from the flow, so here is its only place before then (wave271's field sits under the welcome step, made at booking).
+     Canva's links last 30 days, so the note says to get a new one for each hire. Saved through set_canva_link, as on wave271's card. */
+  function canvaHtml(x) {
+    return '<div data-o275canva>' + O.canvaCardHtml({ id: x.flow_id, canva_link: x.canva_link }, 'No Canva link yet. Paste a fresh one before the times are booked: the welcome email goes then, and leaves Canva out without one.') + '</div>';
+  }
+  function btn(kind, label, x, pri) {
+    var A = S.act[x.flow_id];
+    return '<button type="button" class="o271b' + (pri ? ' pri' : '') + '" data-o275a="open" data-kind="' + kind + '" data-f="' + E(x.flow_id) + '"' + (A && A.kind === kind ? ' disabled' : '') + '>' + E(label) + '</button>';
+  }
+  function buttonsHtml(x) {
+    var hr = R.hrTools(), booked = !!x.call_at, live = !!(x.proposed_at && !x.hire_answer), mfirst = firstOf(x.manager_name || O.nameOf(x.manager_member_id)), b = [];
+    if (!booked && x.hire_answer !== 'yes') b.push(btn('propose', x.proposed_at ? 'Propose new times' : 'Propose times', x, !x.accepted_on || live));
+    if (x.accepted_on && !booked && !live) b.push(btn('bookg', 'Book the times', x, true));
+    if (x.accepted_on && !booked) b.push(btn('gridfor', 'Enter their availability', x));
+    if (!booked && !x.welcome_sent_at) b.push(btn('welcome', 'Edit the welcome email', x));
+    if (hr && x.manager_member_id && !booked) b.push(btn('exc', 'Set ' + mfirst + '\'s exceptions', x));
+    if (hr && !booked) b.push(btn('mgr', 'Change manager', x));
+    if (hr && x.manager_member_id && !booked && !x.proposed_at) b.push('<button type="button" class="o271b" data-o275a="askmgr" data-f="' + E(x.flow_id) + '"' + (S.busy['m' + x.flow_id] ? ' disabled' : '') + '>Ask ' + E(mfirst) + ' for times again</button>');
+    b.push('<button type="button" class="o271b dng" data-o271a="act" data-kind="back" data-f="' + E(x.flow_id) + '"' + (S.act[x.flow_id] && S.act[x.flow_id].kind === 'back' ? ' disabled' : '') + '>They backed out</button>');
+    return '<div class="o271btns">' + b.join('') + '</div>';
+  }
+  function card275(x) {
+    var id = x.flow_id, A = S.act[id], booked = !!x.call_at, tag = booked ? ['Booked', 'ok'] : x.accepted_on ? ['Accepted', ''] : ['Offer sent', ''];
+    return '<div class="o271cd o275cd" data-o271flow="' + E(id) + '">'
+      + '<div class="o271top"><b>' + E(x.name) + '</b><span>' + E(x.role || '') + '</span>' + (x.practice ? '<i class="o271tag pr" style="font-style:normal">Practice</i>' : '') + '<i class="o271tag ' + tag[1] + '" style="font-style:normal">' + tag[0] + '</i></div>'
+      + '<div class="o275state" data-o275state>' + stateLines(x).map(function (l, i) { return i ? '<div>' + E(l) + '</div>' : '<div class="o271ln">' + E(l) + '</div>'; }).join('') + '</div>'
+      + '<div class="o271ln" data-o275mgr>' + mgrLine(x) + '</div>'
+      + (x.accepted_on && !booked ? '<div class="o271ln" data-o275hire>New hire\'s times: ' + (x.grids && x.grids.hire === 'marked' ? 'marked' : 'not marked yet') + '</div>' : '')
+      + (booked ? '' : switchHtml(x))
+      + (x.accepted_on ? ticksHtml(x) : '')
+      + stepsHtml(x)
+      + accessHtml(x, id)   /* wave278: c_access.js */
+      + (booked ? '' : canvaHtml(x))
+      + O.noteHtml(id)
+      + buttonsHtml(x)
+      + (A ? (MINE_KINDS[A.kind] ? panel275(x, A) : panel271(O.flowOf(id), A)) : '')
+      + '</div>';
+  }
+
+  /* ---------- the panels: open, draw, go ---------- */
+  /* the picker's data in the shape wave271's grid takes: the hire's marks, the manager's free cells (their hours over the window), their hub@ meetings */
+  function hoursRule(tv) { return !(tv && tv.manager_hours === false); }   /* wave275b: onboard_manager_hours, as times says; missing means on */
+  function pvOf(tv) {
+    var av = (tv && tv.availability) || { weekly: DEFAULT_WEEK, except: [] }, len = S.cfg.cell * 60000, rule = hoursRule(tv);
+    var g = O.newGrid('z0', { grids: {}, hub_events: [] }, 'call'), free = [];
+    g.days.forEach(function (d) { Object.keys(d.cells).forEach(function (k) { var t = d.cells[k]; if (!rule || inside(av, t, t + len)) free.push(new Date(t).toISOString()); }); });   /* off: every cell of the window */
+    return { grids: { hire: (tv && tv.hire_slots) || [], manager: free }, hub_events: ((tv && tv.busy) || []).map(function (e) { return { start_at: e.start, end_at: e.end, summary: e.summary || 'A meeting', who: ['hire', 'manager'] }; }) };
+  }
+  function markOf(tv, kind) {
+    var lead = Number(kind === 'bookg' ? tv.yes_lead_hours : tv.lead_hours) || 48, taken = (tv.taken || []).map(function (t) { return [Date.parse(t.start), Date.parse(t.end)]; });
+    var lens = tv.lengths || { callMin: 60, oneMin: 30 };
+    return function (t, mode) {
+      var end = t + (mode === 'one' ? lens.oneMin : lens.callMin) * 60000;
+      if (t < Date.now() + lead * 3600000) return 'too soon: at least ' + lead + ' hours from now';
+      if (taken.some(function (k) { return k[0] < end && t < k[1]; })) return 'another new hire\'s time';
+      return '';
+    };
+  }
+  async function openPanel(id, kind) {
+    var x = rowOf(id); if (!x) return;
+    delete S.note[id];
+    var A = S.act[id] = { kind: kind, loading: true, err: '', g: null, tv: null, member: '', mname: '', exc: [], sel: {}, subject: '', text: '' };
+    R.paint();
+    try {
+      if (kind === 'welcome') {
+        var w = await run('welcome', { flow_id: Number(id) });
+        A.subject = w.subject || ''; A.text = w.text || '';
+      } else if (kind !== 'mgr') {
+        var tv = await run('times', { flow_id: Number(id) });
+        if (S.act[id] !== A) return;
+        A.tv = tv; A.mname = (tv.manager && tv.manager.name) || x.manager_name || 'the manager';
+        if (kind === 'propose' || kind === 'bookg') {
+          var g = O.newGrid('q' + id, pvOf(tv), 'call');
+          g.both = true; g.mark = markOf(tv, kind);
+          g.words = hoursRule(tv) ? { h: 'New hire marked', m: firstOf(A.mname) + ' is free', mTip: firstOf(A.mname) + ' is free', busy: 'A meeting, another new hire, or too soon' }
+            : { h: 'New hire marked', m: 'Open to pick', mTip: 'open to pick', busy: 'A hub@ meeting, another new hire, or too soon' };   /* wave275b: the week is not a rule */
+          if (kind === 'propose' && tv.proposal && !tv.hire_answer) { g.vals.call = O.toLocal(tv.proposal.call_at); g.vals.one = O.toLocal(tv.proposal.one_on_one_at); }
+          A.g = g;
+        } else if (kind === 'gridfor') {
+          A.g = O.newGrid('h' + id, { grids: {}, hub_events: [] }, 'call');
+          (tv.hire_slots || []).forEach(function (s) { A.sel[Date.parse(s)] = true; });
+        } else if (kind === 'exc') {
+          A.member = (tv.manager && tv.manager.member_id) || x.manager_member_id;
+          A.exc = ((tv.availability && tv.availability.except) || []).map(function (d) { return { date: d.date, free: (d.free || []).map(function (b) { return [b[0], b[1]]; }) }; });
+        }
+      }
+    } catch (e) { if (S.act[id] === A) A.err = e.message; }
+    if (S.act[id] !== A) return;
+    A.loading = false; R.paint();
+  }
+  function saidOf(g, mode) {
+    var v = g.vals[mode]; if (!v) return 'Not picked yet';
+    var ms = O.toInstant(v); if (ms == null) return 'That time does not exist on the Toronto clock. Pick another.';
+    var why = g.mark && g.mark(ms, mode);
+    return O.whenText(ms) + (why ? '. Careful: ' + why : '');
+  }
+  function pickReady(g) { return !!g && O.toInstant(g.vals.call) != null && O.toInstant(g.vals.one) != null; }
+  function goButtons(id, label, ready) {
+    var busy = S.busy['q' + id];
+    return '<div class="o271btns"><button type="button" class="o271b pri" data-o275a="go" data-f="' + E(id) + '"' + (busy || !ready ? ' disabled' : '') + '>' + E(busy ? 'Working...' : label) + '</button>'
+      + '<button type="button" class="o271b" data-o275a="cancel" data-f="' + E(id) + '">Cancel</button></div>';
+  }
+  function panel275(x, A) {
+    var id = x.flow_id, h = '<div class="o271pn" data-o275pn="' + E(A.kind) + '">';
+    if (A.loading) return h + '<div class="o271ln">Loading...</div></div>';
+    if (A.err && ((A.kind === 'propose' || A.kind === 'bookg' || A.kind === 'gridfor') && !A.g || A.kind === 'exc' && !A.tv)) return h + '<div class="o271err">' + E(A.err) + '</div>' + goButtons(id, 'Try again', false) + '</div>';
+    var first = firstOf(x.name), mgr = firstOf(A.mname || x.manager_name);
+    if (A.kind === 'propose' || A.kind === 'bookg') {
+      var g = A.g, isBook = A.kind === 'bookg';
+      var rule = hoursRule(A.tv);   /* wave275b: off, the manager's week does not limit the times */
+      h += '<div class="o271ln">' + E(isBook
+          ? 'Pick both times from ' + first + '\'s marks' + (rule ? ' over ' + mgr + '\'s hours' : '') + '. The Hub books them at once: the invites, the plan and the welcome email follow.'
+          : (rule ? 'Pick both times inside ' + mgr + '\'s hours. ' : 'Pick both times; ' + mgr + '\'s week does not limit them. ') + first + ' is emailed them to say yes or no' + (x.accepted_on ? '.' : ', once they accept the offer.')) + '</div>'
+        + (rule && A.tv && A.tv.no_week ? '<div class="o271warn">' + E(mgr + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used.') + '</div>' : '')
+        + '<div class="o271md" role="group" aria-label="Which meeting you are picking"><button type="button" class="' + (g.mode === 'call' ? 'on' : '') + '" data-o275a="mode" data-mode="call" data-f="' + E(id) + '">Onboarding call</button><button type="button" class="' + (g.mode === 'one' ? 'on' : '') + '" data-o275a="mode" data-mode="one" data-f="' + E(id) + '">1-on-1</button></div>'
+        + O.gridHtml(g)
+        + '<div class="o271two"><div><label class="o271f">Onboarding call (Toronto time)</label><input type="datetime-local" data-o275i="call" data-f="' + E(id) + '" value="' + E(g.vals.call) + '"><div class="o271said" data-o275said="call">' + E(saidOf(g, 'call')) + '</div></div>'
+        + '<div><label class="o271f">1-on-1 with ' + E(mgr) + ' (Toronto time)</label><input type="datetime-local" data-o275i="one" data-f="' + E(id) + '" value="' + E(g.vals.one) + '"><div class="o271said" data-o275said="one">' + E(saidOf(g, 'one')) + '</div></div></div>'
+        + (A.err ? '<div class="o271err">' + E(A.err) + '</div>' : '')
+        + goButtons(id, isBook ? 'Book these times' : 'Propose these times', pickReady(g));
+    } else if (A.kind === 'gridfor') {
+      var n = Object.keys(A.sel).filter(function (k) { return A.sel[k]; }).length;
+      h += '<div class="o271ln">' + E('Mark when ' + first + ' is free, as they told you. Their own minimum of hours is for their page; it does not apply here.') + '</div>'
+        + gridForHtml(id, A) + '<div class="o275cnt" data-o275cnt>' + E(hoursText(n)) + '</div>'
+        + (A.err ? '<div class="o271err">' + E(A.err) + '</div>' : '') + goButtons(id, 'Save their times', true);
+    } else if (A.kind === 'exc') {
+      h += excHtml(id, A) + (A.err ? '<div class="o271err">' + E(A.err) + '</div>' : '') + goButtons(id, 'Save the dates', true);
+    } else if (A.kind === 'welcome') {
+      h += '<label class="o271f">Welcome email: subject</label><input type="text" style="max-width:none" data-o275i="wsubj" data-f="' + E(id) + '" value="' + E(A.subject) + '">'
+        + '<label class="o271f">Welcome email: text</label><textarea data-o275i="wtext" data-f="' + E(id) + '">' + E(A.text) + '</textarea>'
+        + '<div class="o271ln">Anything in [square brackets] fills in from the times, manager, address and links when the times are booked. Leave the brackets in place, even if you change the rest.</div>'
+        + '<div class="o271ln">[first password] is filled in only in the email itself, as it goes: nobody reads the password here or on the card.</div>'
+        + '<div class="o271ln"><b>The Hub sends this one</b> from hub@ to their personal address as soon as the times are booked, with your edits.</div>'
+        + (A.err ? '<div class="o271err">' + E(A.err) + '</div>' : '') + goButtons(id, 'Save the email', true);
+    } else if (A.kind === 'mgr') {
+      h += '<label class="o271f">New manager</label><select data-o275i="member" data-f="' + E(id) + '">' + O.memberOptions(A.member) + '</select>'
+        + '<div class="o271ln">The Hub asks the new manager for times at once. The old manager\'s link stops working.</div>'
+        + (A.err ? '<div class="o271err">' + E(A.err) + '</div>' : '') + goButtons(id, 'Change manager', !!A.member);
+    }
+    return h + '</div>';
+  }
+  function hoursText(n) { var hrs = n * S.cfg.cell / 60; return n ? hrs + (hrs === 1 ? ' hour' : ' hours') + ' marked' : 'Nothing marked yet'; }
+  /* the hire's grid, marked by HR or the manager: the same window and cells as wave271's grid; a click marks or clears a cell */
+  function gridForHtml(id, A) {
+    var g = A.g;
+    if (!g.days.length) return '';
+    var h = '<div class="o271lg"><span><i style="background:rgba(16,63,57,.30)"></i>Free</span><span>Toronto time</span></div><div class="o271gw o275gw"><table class="o271g"><thead><tr><th></th>' + g.days.map(function (d) {
+      var at = new Date(d.at);
+      return '<th>' + E(at.toLocaleDateString('en-US', { timeZone: 'America/Toronto', weekday: 'short' })) + '<br>' + E(at.toLocaleDateString('en-US', { timeZone: 'America/Toronto', month: 'short', day: 'numeric' })) + '</th>';
+    }).join('') + '</tr></thead><tbody>';
+    g.rows.forEach(function (mins) {
+      var hh = Math.floor(mins / 60);
+      h += '<tr><th>' + E(((hh % 12) || 12) + ':' + O.pad2(mins % 60) + (hh < 12 ? ' am' : ' pm')) + '</th>';
+      g.days.forEach(function (d) {
+        var t = d.cells[mins];
+        if (t == null) { h += '<td></td>'; return; }
+        var on = !!A.sel[t], label = O.whenText(t) + (on ? '; marked free' : '');
+        h += '<td><button type="button" class="o271c' + (on ? ' h on' : '') + '" aria-pressed="' + on + '" data-o275cell="' + E(new Date(t).toISOString()) + '" data-f="' + E(id) + '" title="' + E(label) + '" aria-label="' + E(label) + '"></button></td>';
+      });
+      h += '</tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+  async function goPanel(id) {
+    var A = S.act[id], x = rowOf(id); if (!A || !x || S.busy['q' + id] || A.loading) return;
+    if (A.err && !A.g && !A.tv && A.kind !== 'welcome' && A.kind !== 'mgr') { openPanel(id, A.kind); return; }   /* Try again */
+    S.busy['q' + id] = true; A.err = ''; R.paint();
+    var first = firstOf(x.name);
+    try {
+      var note;
+      if (A.kind === 'propose' || A.kind === 'bookg') {
+        var call = O.isoOf(A.g.vals.call), one = O.isoOf(A.g.vals.one);
+        if (!call || !one) throw new Error('Pick both times first.');
+        if (A.kind === 'propose') {
+          var p = await run('propose', { flow_id: Number(id), call_at: call, one_on_one_at: one });
+          note = { ok: p.repeated ? 'These times were already proposed. Nothing changed.' : p.practice ? 'Practice: the times are proposed, and nobody is emailed.' : 'The times are proposed.' + (p.hire_emailed ? ' ' + first + ' is emailed them to say yes or no.' : x.accepted_on ? '' : ' They go to ' + first + ' once the offer is accepted.'), warnings: p.warnings || [] };
+        } else {
+          await run('book', { flow_id: Number(id), call_at: call, one_on_one_at: one });
+          note = { ok: 'The times are booked. The invites, the plan and the welcome email follow; each step shows on the card as it runs.' };
+        }
+      } else if (A.kind === 'gridfor') {
+        var slots = Object.keys(A.sel).filter(function (k) { return A.sel[k]; }).map(Number).sort(function (a, b) { return a - b; }).map(function (ms) { return new Date(ms).toISOString(); });
+        var gr = await run('grid_for', { flow_id: Number(id), who: 'hire', slots: slots });
+        note = { ok: 'Their times are saved: ' + hoursText(gr.saved != null ? gr.saved : slots.length).replace(' marked', '') + '.' };
+      } else if (A.kind === 'exc') {
+        var problem = excProblem(A.exc); if (problem) throw new Error(problem);
+        await run('availability_for', { member_id: Number(A.member), except: excClean(A.exc) });
+        note = { ok: A.mname + '\'s one-off dates are saved.' };
+      } else if (A.kind === 'welcome') {
+        var w = await run('set_welcome', { flow_id: Number(id), subject: A.subject, text: A.text });
+        note = { ok: w.edited === false ? 'The welcome email is the Hub\'s own again.' : 'The welcome email is saved. The Hub sends it when the times are booked.' };
+      } else if (A.kind === 'mgr') {
+        if (!A.member) throw new Error('Choose the new manager.');
+        await run('set_manager', { flow_id: Number(id), member_id: Number(A.member) });
+        note = { ok: 'The manager has changed to ' + O.nameOf(A.member) + '.', warnings: [] };
+        try { var a = await run('ask_manager', { flow_id: Number(id) }); if (a.sent) note.ok += ' They were asked for times.'; (a.warnings || []).forEach(function (m) { note.warnings.push(m); }); }
+        catch (e) { note.warnings.push('They were not asked for times yet: ' + e.message + ' The hourly check asks them.'); }
+      }
+      delete S.act[id]; delete S.busy['q' + id];
+      if (note) S.note[id] = note;
+      await R.load();
+    } catch (e) { delete S.busy['q' + id]; A.err = e.message; try { toast(e.message); } catch (x2) { /* no toast */ } R.paint(); }
+  }
+  async function setAsk(id, on) {
+    var key = 'k' + id; if (S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try { await run('set_ask_availability', { flow_id: Number(id), on: on }); delete S.busy[key]; S.note[id] = { ok: on ? 'The new hire is asked for their availability if they say no.' : 'Availability already communicated: if they say no, they are told you will be in touch.' }; await R.load(); }
+    catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+  }
+  async function askAgain(id) {
+    var key = 'm' + id; if (S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try { var r = await run('ask_manager', { flow_id: Number(id) }); S.note[id] = r.skipped ? { ok: r.reason || 'Nothing to send.' } : { ok: (r.manager || 'The manager') + ' was asked for times again.', warnings: r.warnings || [] }; }
+    catch (e) { S.note[id] = { err: e.message }; }
+    delete S.busy[key]; R.paint();
+  }
+  function liveUpdate(id) {
+    var A = S.act[id], root = cardEl(id); if (!A || !A.g || !root) return;
+    ['call', 'one'].forEach(function (m) {
+      var inp = root.querySelector('[data-o275i="' + m + '"]'); if (inp && inp !== document.activeElement) inp.value = A.g.vals[m];
+      var s = root.querySelector('[data-o275said="' + m + '"]'); if (s) s.textContent = saidOf(A.g, m);
+    });
+    var go = root.querySelector('[data-o275a="go"]'); if (go && !S.busy['q' + id]) go.disabled = !pickReady(A.g);
+  }
+
+  /* ---------- "Your new hires": on Home and on the manager's own team page, one copy at a time ---------- */
+  var MINE_EL = null;
+  function mineEl() { if (!MINE_EL) { MINE_EL = document.createElement('div'); MINE_EL.id = 'o275mine'; MINE_EL.className = 'o271 o275mine'; } return MINE_EL; }
+  function onHome() { var h = String(location.hash || ''); return !h || h === '#' || /^#mypage(\/|$)/.test(h); }
+  function myTeam() { try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; } }
+  function hostEl() {
+    if (onHome()) return document.getElementById('mpBody');
+    var m = /^#team\/([a-z]+)\/?$/.exec(String(location.hash || ''));   /* the team's Overview only */
+    return m && m[1] === myTeam() ? document.getElementById('w116host') : null;
+  }
+  function mount() {
+    if (!staffUser()) return;
+    var h = hostEl(), el = mineEl();
+    if (!h) { if (el.parentNode) el.parentNode.removeChild(el); return; }
+    if (S.hrList == null) { if (!S.probing && !S.probed) probe(); return; }   /* not known: ask the database once; still unknown after that, nothing shows */
+    if (hrList()) { if (!S.mineListLoaded) { if (!S.mineListLoading) loadMineList(); return; } }
+    else if (!S.mineLoaded) { if (!S.loading) R.load(); return; }
+    if (!hasMine()) { if (el.parentNode) el.parentNode.removeChild(el); return; }
+    if (el.parentNode !== h) {
+      if (h.id === 'w116host') { var head = h.querySelector('.w116grid'); h.insertBefore(el, head || null); } else h.appendChild(el);
+      paintMine();
+    }
+  }
+  function hasMine() { return hrList() ? (S.mineList || []).length > 0 : !!(S.mineErr || S.ready.length || S.started.length); }
+  function lineHtml(x) {
+    var l = stateLines(x);
+    return '<div class="o275line" data-o275line="' + E(x.flow_id) + '"><b>' + E(x.name) + '</b><span>' + E(x.role || '') + '</span><div class="o271ln">' + E(l[l.length - 1]) + '</div><a href="#hrcentre/onboarding">Open in Onboarding</a></div>';
+  }
+  function paintMine() {
+    var el = MINE_EL; if (!el) return;
+    if (!el.parentNode) { if (hasMine()) mount(); return; }
+    if (!hasMine()) { el.parentNode.removeChild(el); return; }
+    var html = '<h2>Your new hires</h2>';
+    if (hrList()) html += '<p class="o271sub">The people joining whom you manage. Their cards are in HR Center, Onboarding.</p>' + (S.mineList || []).map(lineHtml).join('');
+    else {
+      html += '<p class="o271sub">The people joining whom you manage: propose or book their times, follow their setup, and change a time when you need to.</p>'
+        + (S.mineErr ? '<div class="o271err">' + E(S.mineErr) + '</div>' : '')
+        + S.ready.map(function (x) { return R.readyCard(x); }).join('') + S.started.map(function (f) { return R.startedCard(f); }).join('');
+    }
+    var scrolls = {}; Array.prototype.forEach.call(el.querySelectorAll('.o271gw'), function (b, i) { scrolls[i] = b.scrollLeft; });
+    var active = document.activeElement, keep = active && el.contains(active) && active.getAttribute && (active.getAttribute('data-o275i') || active.getAttribute('data-o271i'));
+    var keepF = keep ? active.getAttribute('data-f') : '', attr = keep && active.getAttribute('data-o275i') ? 'data-o275i' : 'data-o271i';
+    el.innerHTML = html;
+    Array.prototype.forEach.call(el.querySelectorAll('.o271gw'), function (b, i) { if (scrolls[i]) b.scrollLeft = scrolls[i]; });
+    if (keep) { var again = el.querySelector('[' + attr + '="' + keep + '"][data-f="' + keepF + '"]'); if (again) { try { again.focus(); } catch (e) { /* fine */ } } }
+  }
+  /* the team page's Overview is drawn after its data loads, so the block is put back whenever wave116 redraws the host */
+  var watched = false;
+  function watchTeam() {
+    var team = document.getElementById('team'); if (!team || watched) return;
+    watched = true;
+    new MutationObserver(function (list) {
+      if (list.every(function (m) { return MINE_EL && (m.target === MINE_EL || MINE_EL.contains(m.target)); })) return;   /* our own paint */
+      try { mount(); } catch (e) { /* the next redraw */ }
+    }).observe(team, { childList: true, subtree: true });
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var cell = t.closest('[data-o271cell]');
+    if (cell) { var key = cell.getAttribute('data-g') || ''; if (key.charAt(0) === 'q') liveUpdate(key.slice(1)); return; }   /* wave271's own handler set the time */
+    var mine = t.closest('[data-o275cell]');
+    if (mine) {
+      var fid = mine.getAttribute('data-f'), A0 = S.act[fid]; if (!A0 || A0.kind !== 'gridfor') return;
+      var ms = Date.parse(mine.getAttribute('data-o275cell')); A0.sel[ms] = !A0.sel[ms];
+      mine.className = 'o271c' + (A0.sel[ms] ? ' h on' : ''); mine.setAttribute('aria-pressed', String(!!A0.sel[ms]));
+      var cnt = cardEl(fid) && cardEl(fid).querySelector('[data-o275cnt]'); if (cnt) cnt.textContent = hoursText(Object.keys(A0.sel).filter(function (k) { return A0.sel[k]; }).length);
+      return;
+    }
+    var x = t.closest('[data-o275x]');
+    if (x && !x.disabled) { excClick(x); return; }
+    var b = t.closest('[data-o275a]'); if (!b || b.disabled) return;
+    var a = b.getAttribute('data-o275a'), id = b.getAttribute('data-f');
+    if (a === 'open') { openPanel(id, b.getAttribute('data-kind')); return; }
+    if (a === 'go') { goPanel(id); return; }
+    if (a === 'cancel') { delete S.act[id]; R.paint(); return; }
+    if (a === 'mode') { var A = S.act[id]; if (A && A.g) { A.g.mode = b.getAttribute('data-mode'); R.paint(); } return; }
+    if (a === 'ask') { setAsk(id, b.getAttribute('data-on') === '1'); return; }
+    if (a === 'askmgr') { askAgain(id); return; }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    if (t.hasAttribute('data-o275xi')) { excInput(t); return; }
+    var k = t.getAttribute('data-o275i'), id = t.getAttribute('data-f'), A = S.act[id]; if (!k || !A) return;
+    if ((k === 'call' || k === 'one') && A.g) { A.g.vals[k] = t.value; O.refreshGrid(A.g); liveUpdate(id); return; }
+    if (k === 'wsubj') { A.subject = t.value; return; }
+    if (k === 'wtext') { A.text = t.value; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    if (t.hasAttribute('data-o275xi')) { excInput(t); return; }
+    var id = t.getAttribute('data-f'), A = S.act[id];
+    if (t.getAttribute('data-o275i') === 'member' && A) { A.member = t.value; R.paint(); }
+  });
+
+  /* ---------- wiring ---------- */
+  if (typeof renderMyPage === 'function') {
+    var __rm275 = renderMyPage;
+    renderMyPage = async function () { var r = await __rm275.apply(this, arguments); try { mount(); } catch (e) { console.warn('wave275 home', e); } return r; };
+  }
+  if (typeof window.w116Route === 'function') {
+    var __wr275 = window.w116Route;
+    window.w116Route = function () { var r = __wr275.apply(this, arguments); try { watchTeam(); mount(); } catch (e) { /* fine */ } return r; };
+  }
+  if (typeof startApp === 'function') {
+    var __sa275 = startApp;
+    startApp = async function () { var r = await __sa275.apply(this, arguments); try { watchTeam(); mount(); } catch (e) { /* non-fatal */ } return r; };
+  }
+  window.addEventListener('hashchange', function () { setTimeout(function () { try { watchTeam(); mount(); } catch (e) { /* fine */ } }, 150); });
+
+  /* ---------- test hook ---------- */
+  window.o275 = { brief: brief, day: day, stateLines: stateLines, inside: inside, pvOf: pvOf, mount: mount, paintMine: paintMine, state: function () { return S; } };

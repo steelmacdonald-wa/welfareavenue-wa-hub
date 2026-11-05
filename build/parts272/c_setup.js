@@ -96,13 +96,13 @@
   function opened(key) { try { return (JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]')).indexOf(key) >= 0; } catch (e) { return false; } }
   function markOpened(key) { try { var a = JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]'); if (a.indexOf(key) < 0) a.push(key); sessionStorage.setItem(KEY_OPENED, JSON.stringify(a)); } catch (e) { /* fine */ } }
   async function signPolicy(key, btn) {
-    if (S.polBusy[key]) return; S.polBusy[key] = true; if (btn) btn.disabled = true;
+    if (S.polBusy[key]) return; S.polBusy[key] = true; if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
     try {
       var ins = await db.from('wa_policy_signoffs').insert({ email: meEmail(), name: meName(), policy_key: key });
-      if (ins && ins.error) throw ins.error;
+      if (ins && ins.error) throw { db: String(ins.error.message || '') };
       say('Sign-off recorded, thank you');
       S.pols = (S.pols || []).filter(function (p) { return p.key !== key; }); S.polsPending = S.pols.length;
-    } catch (e) { say('Could not record the sign-off'); }
+    } catch (e) { say((e && e.db) || 'Could not record the sign-off'); if (window.wa279Pol) window.wa279Pol.reload(); }   /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is */
     S.polBusy[key] = false; paintSetup();
   }
 
@@ -145,9 +145,10 @@
   }
   function rowsPolicies(n0) {
     return (S.pols || []).map(function (p, i) {
-      var canSign = opened(p.key), busy = !!S.polBusy[p.key];
-      return { k: 'pol:' + p.key, ok: false, n: String(n0 + i), t: 'Read and sign: ' + p.title, s: canSign ? 'Read it? Then sign here. HR keeps the date.' : 'Open it, read it, then sign here. HR keeps the date.',
-        act: '<a class="lnk" href="' + E(p.url) + '" target="_blank" rel="noopener" data-w272pol="open" data-key="' + E(p.key) + '">Open</a><button type="button" class="go" data-w272pol="sign" data-key="' + E(p.key) + '"' + (canSign && !busy ? '' : ' disabled') + '>' + (busy ? 'Saving…' : 'Sign') + '</button>' };
+      /* wave279: Sign waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then Sign */
+      var W = window.wa279Pol, seen = opened(p.key) || !!(W && W.opened(p.key)), busy = !!S.polBusy[p.key], v = W ? W.view(p.key, 'Sign', seen) : { dis: !seen, txt: 'Sign' };
+      return { k: 'pol:' + p.key, ok: false, n: String(n0 + i), t: 'Read and sign: ' + p.title, s: seen ? 'Read it? Then sign here. HR keeps the date.' : 'Open it, read it, then sign here. HR keeps the date.',
+        act: '<a class="lnk" href="' + E(p.url) + '" target="_blank" rel="noopener" data-w272pol="open" data-w279polopen="' + E(p.key) + '" data-key="' + E(p.key) + '">Open</a><button type="button" class="go" data-w272pol="sign" data-key="' + E(p.key) + '"' + (busy ? ' aria-busy="true" disabled' : (W ? W.attrs(p.key, 'Sign', seen) : '') + (v.dis ? ' disabled' : '')) + '>' + (busy ? 'Saving…' : E(v.txt)) + '</button>' };
     });
   }
   function rowHtml(r) {
@@ -366,7 +367,7 @@
   function tipState() { var o = null; try { o = JSON.parse(lsGet(KEY_TIP) || 'null'); } catch (e) { o = null; } return o || { n: 0, at: 0 }; }
   function otherOpen() {
     if (!document.documentElement.classList.contains('wa-ready')) return true;
-    if (document.getElementById('w272back') || document.getElementById('w213pop') || document.getElementById('w262new')) return true;
+    if (document.getElementById('w272back') || document.getElementById('w213pop') || document.getElementById('w262new') || document.getElementById('w276pop')) return true;
     var vis = function (el) { if (!el) return false; var c = getComputedStyle(el); return c.display !== 'none' && c.visibility !== 'hidden' && el.getBoundingClientRect().width > 0; };
     if (vis(document.getElementById('w238loop')) || vis(document.getElementById('w177pop')) || vis(document.getElementById('w227'))) return true;
     if (document.querySelector('.w122tp')) return true;

@@ -230,7 +230,8 @@
     }
     return null;
   }
-  function chipHtml(t, ls) {
+  function chipHtml(t, ls, onb) {
+    if (/^role(60|90)$/.test(t.academy_path || '') && window.w279 && typeof window.w279.roleStep === 'function') return window.w279.roleStep(t, onb);   /* wave279: the role step lists the manager's picks */
     if (!t.training_id && !t.academy_path) return '';
     if (!ls) return '<div><span class="w166acad">Avenue Academy</span></div>';
     var open = (ls.asked === 'team' || ls.asked === 'any') && !ls.n && !ls.done;   /* nothing started yet: they choose */
@@ -273,7 +274,7 @@
           + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
           + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
           + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
-          + chipHtml(t, ls)
+          + chipHtml(t, ls, onb)
           + (t.description ? '<div class="ds">' + ((typeof wa37Md === 'function') ? wa37Md(t.description) : E(t.description)) + '</div>' : '')
           + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + E(s.done_by) + '</div>' : (done && !s.done ? '<div class="ds" style="opacity:.6">done in the Avenue Academy</div>' : ''))
           + '</div></div>';
@@ -382,7 +383,7 @@
     return S.loading;
   }
   var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
-  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; if (day <= 90) return 'Up to 90 days'; return 'Past 90 days'; }   /* wave279: day is day one = 1, so 0 to 27 days in is Week n of 4, then 60 and 90 days */
   function leadStepsHtml(p) {
     var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     var steps = (p.lead_steps || []).slice();
@@ -436,7 +437,8 @@
     var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
     return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
       + '<div class="w166top"><div class="w166av"' + (ownImg(p.avatar_url) ? ' style="background:' + GREEN + ' url(\'' + E(p.avatar_url) + '\') center/cover"' : '') + '>' + (ownImg(p.avatar_url) ? '' : E(initials(p.name))) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
-      + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
+      + (p.starts_on ? '<div class="w166day">Starts on ' + E(fmtDay(p.starts_on)) + '</div></div>'   /* wave271: the call date can be ahead, and there is no day yet to count */
+        : '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>')
       + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
       + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')
       + (p.next ? ' &middot; next: ' + E(p.next.name) : '') + '</div>'

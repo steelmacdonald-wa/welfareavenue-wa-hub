@@ -15,7 +15,7 @@
     return S.loading;
   }
   var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
-  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; if (day <= 90) return 'Up to 90 days'; return 'Past 90 days'; }   /* wave279: day is day one = 1, so 0 to 27 days in is Week n of 4, then 60 and 90 days */
   function leadStepsHtml(p) {
     var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     var steps = (p.lead_steps || []).slice();
@@ -69,7 +69,8 @@
     var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
     return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
       + '<div class="w166top"><div class="w166av"' + (ownImg(p.avatar_url) ? ' style="background:' + GREEN + ' url(\'' + E(p.avatar_url) + '\') center/cover"' : '') + '>' + (ownImg(p.avatar_url) ? '' : E(initials(p.name))) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
-      + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
+      + (p.starts_on ? '<div class="w166day">Starts on ' + E(fmtDay(p.starts_on)) + '</div></div>'   /* wave271: the call date can be ahead, and there is no day yet to count */
+        : '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>')
       + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
       + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')
       + (p.next ? ' &middot; next: ' + E(p.next.name) : '') + '</div>'

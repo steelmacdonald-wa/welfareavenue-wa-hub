@@ -15,6 +15,8 @@ function fx() {
     Object.assign({}, base, { id: 3, title: 'Thank you donors', platforms: ['facebook'], scheduled_at: iso('2026-09-30', '09:00'), status: 'draft', approval_status: 'changes', approval_note: 'Add the total raised', submitted_by: 'joy.dumansi@welfareavenue.com' }),
     Object.assign({}, base, { id: 5, title: 'Oberoi 2025 article', platforms: ['linkedin'], format: 'article', scheduled_at: iso('2025-06-30', '12:00'), published_at: iso('2025-06-30', '12:01'), status: 'posted', approval_status: 'approved', partner_id: 5, caption: 'Last summer with Oberoi Financial Group: a long read.' })
   ];
+  /* wave277: the Approvers box lists the marketing team as checkboxes */
+  f.team_members = [{ id: 9001, name: 'Ian Odhiambo', email: 'ian.odhiambo@welfareavenue.com', department: 'marketing', role: 'Member', active: true, nicknames: [] }, { id: 9002, name: 'Kahkashan Ansary', email: 'kahkashan.ansary@welfareavenue.com', department: 'marketing', role: 'Member', active: true, nicknames: ['KK'] }];
   f.content_tags = []; f.content_snippets = []; f.content_slots = []; f.short_links = []; f.short_link_clicks = []; f.social_comments = [];
   f.wa_partners = [{ id: 5, name: 'Oberoi Financial Group', category: 'sponsor', status: 'active' }, { id: 73, name: 'DESTA Black Community Network', category: 'partner', status: 'active' }];
   f.hub_settings = (f.hub_settings || []).concat([
@@ -47,9 +49,9 @@ const W = () => window.__W || [];
     const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#studio/approvals', fixture: JSON.parse(JSON.stringify(FX)), rpcs: RP, init: INIT, wait: 5000 });
     const p = f.page; await f.ev(() => window.__REC());
     let t = await f.ev(HOST);
-    ok('the Approvers box shows Ian and KK', /Approvers/.test(t) && (await f.ev(() => (document.querySelector('#w225host [data-w241approvers]') || {}).value)) === 'ian.odhiambo@welfareavenue.com, kahkashan.ansary@welfareavenue.com', t.slice(0, 300));
+    ok('the Approvers box shows Ian and KK ticked', /Approvers/.test(t) && JSON.stringify(await f.ev(() => Array.from(document.querySelectorAll('#w225host [data-w277ap]')).filter(c => c.checked).map(c => c.getAttribute('data-w277ap')))) === '["ian.odhiambo@welfareavenue.com","kahkashan.ansary@welfareavenue.com"]', t.slice(0, 300));
     ok('the waiting card has Open in Canva', await f.ev(() => !!document.querySelector('#w225host a[href="https://www.canva.com/design/DAF123/view"]')));
-    await f.ev(() => { const i = document.querySelector('#w225host [data-w241approvers]'); i.value = 'ian.odhiambo@welfareavenue.com'; document.querySelector('#w225host [data-w241apsave]').click(); }); await p.waitForTimeout(700);
+    await f.ev(() => { document.querySelector('#w225host [data-w277ap="kahkashan.ansary@welfareavenue.com"]').click(); document.querySelector('#w225host [data-w277apsave]').click(); }); await p.waitForTimeout(700);
     const sv = await f.ev(() => (window.__W || []).filter(w => w[0] === 'rpc' && w[1] === 'studio_settings_save')[0]);
     ok('Save writes content_studio.approvers', sv && sv[2].p_key === 'content_studio' && JSON.stringify(sv[2].p_value.approvers) === '["ian.odhiambo@welfareavenue.com"]' && sv[2].p_value.hashtag_cap === 5, sv);
     /* the Approve link from Slack */

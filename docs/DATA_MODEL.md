@@ -2203,8 +2203,64 @@ wave261 (16/10/26, Steel: an editable gift counter for the Holiday Gift Basket D
 - `updated_by`: Who last changed it.
 - `updated_at`: When it last changed.
 
+### `social_hashtag_watch`
+
+wave262c: the Instagram hashtags the Content Studio watches (Hashtags section). tag is lower case without the #; ig_hashtag_id is Instagram's id, cached by hashtag-watch (Instagram allows 30 different hashtags a week). Written through wa262_hashtag_set (the marketing team and admins); read by the marketing team and admins (wa225_marketing).
+
+### `social_hashtag_posts`
+
+wave262c: public Instagram posts found under a watched hashtag (hashtag-watch, every 30 minutes). status: new (nobody looked yet), ok (looks fine), flagged (needs attention), reported (asked Instagram to take it down or contacted the poster). The review goes through wa262_hashtag_review; read by the marketing team and admins.
+
+- `source`: recent: Instagram's recent_media (public posts of the last 24 hours); top: top_media (the most popular).
+
+### `ask_guest_chats`
+
+wave265: a guest's conversation with the Hub. Only its owner writes in it; deleted_at hides it.
+
+### `ask_guest_attempts`
+
+wave265: sign-in attempts with a personal code, by a hash of the address (never the address), to slow down guessing. Pruned after 7 days by ask-guest.
+
+### `hub_team_avail`
+
+wave276: when each team member is usually free to meet, one row per person, team and start date. Written only through wa_avail_save and wa_avail_snooze (the browser has no insert or update on the table, so it cannot set hours, dates or someone else's row). The current grid is the newest row whose effective_from is today or earlier; a row with a later date waits for its day. A person reads their own rows and the rows of a team they are on or manage.
+
+- `id`: Row id.
+- `email`: Whose week this is: their Welfare Avenue address in lower case (mybox_me() at save time, so a sign-in alias in wa_email_aliases is stored as the address the team roster uses).
+- `department`: Team code (dept_meta.department). A person on two teams keeps one grid for each.
+- `effective_from`: The first day this week applies, for example the first day of term. The newest row on or before today is the current one.
+- `slots`: The free cells, each the start of a cell as weekday * 1440 + minute of the day (weekday 0 = Monday, Toronto wall time), sorted with no repeats. Cells are avail_cell_min minutes long.
+- `hours`: Hours free in the week: the number of slots times avail_cell_min, over 60, worked out when the grid is saved.
+- `snoozed_until`: Set by Ask me later (3 days from then). While it is in the future the Home pop-up does not ask again. Saving clears it.
+- `created_at`: When the row was first written.
+- `updated_at`: When the person last saved this grid. Null on a row that only holds an Ask me later from someone who never saved: that is not an answer.
+
+### `hub_team_avail_ask`
+
+wave276: the dates a team asks everyone for their typical week again. On and after an ask date, a member whose grid was last saved before it sees the Home pop-up. Seeded with the term starts; a manager adds one through wa_avail_ask_set. Staff read it; nobody writes it from the browser.
+
+- `id`: Row id.
+- `department`: Team code (dept_meta.department).
+- `ask_date`: The day the ask starts. Only asks on or before today count.
+- `set_by`: Who set it: the manager's email, or wave276 for the term dates seeded with the wave.
+- `note`: A short reason the manager typed, for example term. May be empty.
+- `created_at`: When the ask was written.
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
+- `ask_guest_spaces.status`: testing = only testers and organizers can sign in; open = delegates too (from opens_at if set); closed = nobody.
+- `ask_guest_spaces.daily_limit`: Answers a delegate can get per Toronto day (testers and organizers get twice as many).
+- `ask_guest_spaces.total_limit`: Answers a delegate can get in all (testers and organizers twice as many).
+- `ask_guest_spaces.monthly_budget`: US dollars of model spend per calendar month (Toronto) for the whole space; at the cap the Hub pauses for its guests.
+- `ask_guest_spaces.answer_tokens`: max_tokens per answer sent to the router (the guest_ask route also caps at 900).
+- `ask_guest_spaces.facts_only`: When true the Hub shares facts and context but does not write the teams' case solution.
+- `ask_guest_spaces.suggestions`: Up to six starter questions shown on an empty chat (JSON array of strings).
+- `ask_guests.team`: School or group. Guests with the same team in the same space can share projects with each other.
+- `ask_guests.code_hash`: SHA-256 (hex) of the personal code in their link (12 characters). The code itself is shown once to the manager who made it.
+- `ask_guests.code_hint`: Last four characters of the code, so managers can tell links apart.
+- `ask_guests.staff_email`: Set when a Welfare Avenue manager uses Try it yourself: their own tester entry.
+- `ask_guest_kb.sensitivity`: How the draft was labelled when written: public (already public), internal-ok (harmless internal facts), needs-steel (finances, plans, challenges and the like).
+- `ask_guest_kb.review_note`: Note for the reviewer: what was left out or is uncertain. Never sent to the model.
 
 Functions:
 
@@ -2501,7 +2557,7 @@ Functions:
 - `wa213_team_meetings(text, date)`: wave213: the next two dates the team meets (Hub calendar, Toronto), from a day on; dates only, nothing else about the events
 - `my_due_date_check()`: wave213: the signed-in person's open tasks that are overdue or have no due date, and the ones a meeting dated that nobody confirmed (from 1 Sep 2026), each with the team's next and following meetings and a suggestion
 - `confirm_due_dates(jsonb)`: wave213: saves the dates a person set or confirmed, and the tasks they marked done, in the due-date check (their own listed tasks only), with a change_log line each
-- `confirm_due_check(jsonb)`: wave213c, wave237: saves what a person chose in the due-date check: a date, done, to the bank, discard (closes the task with the status Discarded), mine (clears owner_unsure), not mine (the task goes to the team's lead, still unsure) and, for a lead, assign (names the owner). Their own listed tasks only; a change_log line each.
+- `confirm_due_check(jsonb)`: wave213c, wave237, wave262: saves what a person chose in the due-date check: a date, done, to the bank, discard (closes the task with the status Discarded), mine (clears owner_unsure), not mine (the task goes to the team's lead, still unsure) and, for a lead, assign (names the owner). Their own listed tasks only (the list is read once per call since wave262; the page sends batches of 15); a change_log line each. Access: authenticated.
 - `wa216_open_positions()`: wave216: positions open to applicants on the website (Posted or Interviewing, serving roles excepted); wave216c: the public PDF of the job description; wave216d: null while held, and whether it is a leadership role (by title).
 - `wa217_loop_dm_due()`: wave217: open sessions due the one Still in? Slack DM (3 to 4 hours in, none sent yet, no Still in in the last 40 minutes, so someone answering in the Hub gets no DM). Read by checkin-post still_dm with the service key and by wa217_loop_dm_tick. Closed to the API.
 - `wa217_loop_dm_tick()`: wave217: run every 5 minutes by cron wa-loop-still-dm; calls checkin-post {action: still_dm} (trigger secret) only when wa217_loop_dm_due() has a session and app_config loop_still_dm is on. Closed to the API.
@@ -2538,7 +2594,7 @@ Functions:
 - `wa230_conversions(int)`: wave230: the sign-ups (CRM forms) and gifts (the donation page) that followed a link page click on the same network within 2 hours, last click wins; the person is named only because they signed up or gave. The marketing team and admins.
 - `wa234_fold_role()`: wave234: Community welcome (community_talker) is Community lead (community_debrief). Before insert or update on event_roster (role), volunteer_profiles and volunteer_applications (roles): the old key is written as the new one. Trigger only.
 - `wa237_upcoming_dates(text, date)`: wave237: the named dates in the 45 days after a meeting (serving events, fundraisers, the team's own meetings), one line each, for process-transcript (the service role) to resolve "before Sunday's event". Security invoker: anyone else gets only what row security lets them read.
-- `wa237_due_check()`: wave237: the due-date check's list for the signed-in person: their open tasks that are overdue, undated, dated by a meeting and unconfirmed, or whose owner a meeting left unsure (owner_unsure: "Is this yours?"), plus, for a team's lead, the team's tasks nobody on the roster owns (for_lead: "Who owns this?"). Replaces my_due_date_check() for the pop-up; that one stays for pages on the old build.
+- `wa237_due_check()`: wave237, wave262: the due-date check's list for the signed-in person: their open tasks that are overdue, due today and not yet confirmed today (wave262, due_today), undated, dated by a meeting and unconfirmed, or whose owner a meeting left unsure (owner_unsure: "Is this yours?"), plus, for a team's lead, the team's tasks nobody on the roster owns (for_lead: "Who owns this?"). Replaces my_due_date_check() for the pop-up; that one stays for pages on the old build. Access: authenticated (it reads the caller's own email).
 - `wa242_name_is(text, text, text, jsonb)`: wave242: is this owner or allowed person this team member (the email, the full name, a unique first name as a whole word, a nickname)
 - `wa242_due_lists(bigint)`: wave242: a team member's open tasks with a date: due today, overdue (60 days), due tomorrow; theirs as an assignee or the named owner, and only what they could open
 - `wa242_due_mine()`: wave242: the caller's due lists (the notification centre shows them)
@@ -2580,4 +2636,18 @@ Functions:
 - `wa261_gifts(text)`: wave261: the Fundraising app's Gifts collected box for a campaign: the gift goal (app_config donate_campaigns), counted (received plus confirmed pledges, the website's number), waiting (unconfirmed pledges: quantity and how many) and every batch. Staff who can open the Fundraising app only (wa_fund_ok, checked inside).
 - `wa261_gift_save(jsonb)`: wave261: the only way staff change campaign_gifts. action add {slug, quantity, what, given_by, received_on, status received|pledged, confirmed, note}, edit {id, same fields}, confirm {id} (a pledge now counts), receive {id, received_on} (a pledge arrived), remove {id}. Staff who can open the Fundraising app only (wa_fund_ok, checked inside); every change has a change_log line (campaign_gift).
 - `www_campaign_totals(text)`: 15/10/26 (Holiday Gift Basket Drive page): the public progress of a donation campaign for its page on welfareavenue.com: raised (CAD, gifts of kind donation or sponsorship whose crm_donations.campaign is the campaign's name in app_config donate_campaigns, less refunds; online gifts and gifts recorded by hand with that campaign alike), donors (distinct contacts), gifts (money gifts), the money goal and the gift goal from the settings, the last gift's time. wave261 (16/10/26): gifts_in, the gifts in kind collected (campaign_gifts: received batches and confirmed pledges). Aggregates only, never a name or one gift. Anonymous by design (security definer), like www_upcoming.
+- `wa262_hashtag_set(text, boolean)`: wave262c: watch (true) or stop watching (false) an Instagram hashtag in the Content Studio. The marketing team and admins (wa225_marketing, checked inside); ten active at most. Access: authenticated.
+- `wa262_hashtag_review(bigint, text, text)`: wave262c: the marketing team marks a hashtag post looked at (ok), needing attention (flagged) or reported, with an optional note; a change_log line each. Checked inside (wa225_marketing). Access: authenticated.
+- `ask_guest_stats(bigint)`: wave265: usage of one guest space for its managers (spend this month and in all, answers today and in all, refusals, thumbs, and per person). Service role only (ask-guest).
+- `wa273_ask_signup(bigint, boolean)`: wave273: Ask to sign up on Applicants received. p_send false returns the email to preview; true sends it from volunteer@ with replies to the sender and moves the application to Contacted. Same people as wa256_can_text.
+- `wa_avail_setting(text)`: wave276: an avail_ setting from app_config as a number, with the wave's default (10 hours, 480, 1320, 30 minutes) when it is missing. Used inside the wa_avail_ functions only.
+- `wa_avail_can_manage(text)`: wave276: true when the signed-in person manages the team: an admin, HR, any leader of the team (wa_leads_team), or the person a team member's seat reports to in org_positions. Managers see who has not entered a week, ask the team again and propose meeting times.
+- `wa_avail_can_see(text)`: wave276: true when the signed-in person may see the team's availability: they are on the team (wa_in_team) or manage it (wa_avail_can_manage).
+- `wa_avail_manager_of(text, text)`: wave276: the wa_avail_can_manage rule for any email (admin, HR, a leader of the team, or the person the team's seats report to). An alias in wa_email_aliases counts as the Welfare Avenue address it belongs to, as mybox_me() does at sign-in. The notify function calls it with the service key before it lets someone message the whole team; the browser cannot call it.
+- `wa_avail_due()`: wave276: the signed-in person's teams that want their typical week now, one row each: never saved for that team (even if the team has no ask yet), or last saved before the latest ask dated today or earlier; and no Ask me later still running. ask_date is that latest ask (null if none) and last_saved their last save (null if never). The Home pop-up opens for the first row.
+- `wa_avail_mine(text)`: wave276: the signed-in person's current grid for a team as {id, effective_from, slots, hours, updated_at, snoozed_until}: the newest saved row dated today or earlier (a row dated later waits for its day). A row that only holds an Ask me later is never returned. Null when there is none.
+- `wa_avail_save(text, date, smallint[])`: wave276: saves the signed-in person's typical week for one of their teams from a date (today when empty), under their Welfare Avenue address (mybox_me(): a sign-in alias saves as the address the roster uses). Same person, team and date: the row is replaced. Hours = number of slots times avail_cell_min over 60. Clears any Ask me later. Returns {id, hours, min_hours}; under min_hours the page shows its note but the grid is saved anyway. Refuses a team the person is not on.
+- `wa_avail_snooze(text)`: wave276: Ask me later. The Home pop-up stays away for 3 days for that team. Sets snoozed_until on the person's newest row, or adds an empty row (with no save time, so it is not an answer) if they have none. Refuses a team the person is not on.
+- `wa_avail_team(text)`: wave276: a team's availability for its Agenda tab, for the team and its managers only. Returns {can_manage, cell_min, start, end, min_hours, ask_date, me, members:[{email, name, slots, hours, updated_at, since_ask}], missing:[{email, name, since_ask}], clashes:[{email, slot}]}. me is the caller's own address (mybox_me(), so an alias reads as the Welfare Avenue address the roster uses); ask_date the latest ask dated today or earlier. members are the active roster with a current saved grid; missing the rest of the active roster with an email; since_ask is true when the person saved a grid (any date) on or after ask_date, or there is no ask, the rule Ask the team and the Home pop-up use (false on missing unless a later-dated grid was saved since); clashes the grid cells where a member is in a confirmed hub_events meeting in 3 or more of the next 4 weeks (Toronto time, events of 12 hours or more left out).
+- `wa_avail_ask_set(text, date, text)`: wave276: a manager asks the team for its typical week again from a date (today when empty), with an optional note. From that date, everyone whose grid was saved before it sees the Home pop-up. Returns {ask_date, missing}: the emails of active members with an email who have not saved their week since the latest ask (this one included, even if dated later): never saved, or last saved before that ask date. The notify function uses the same rule for meet_avail_ask. For the message the page sends next. Refuses anyone who does not manage the team.
 

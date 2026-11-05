@@ -60,12 +60,14 @@
     h += '<div class="foot"><button class="w122btn soft sm" data-w122tour="chrome">' + ic('map') + ' Take the 2 minute tour</button></div></div>';
     /* 3. policies */
     var p = o.pol;
+    /* wave279: the button waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then "I have read it" */
+    function polSignBtn(k) { var W = window.wa279Pol, v = W ? W.view(k, 'I have read it', true) : { dis: false, txt: 'I have read it' }; return '<button class="go dark" data-w122sign="' + E(k) + '"' + (W ? W.attrs(k, 'I have read it', true) : '') + (v.dis ? ' disabled' : '') + '>' + E(v.txt) + '</button>'; }
     h += '<div class="w122trk" data-trk="policies"><div class="th"><div class="rg">' + ring(p.has ? p.pct : 0, 48, 5, PURPLE) + '<i>' + (p.has ? p.signed + '/' + p.total : '–') + '</i></div><div><h3>Policies to sign</h3><div class="m">' + (p.has ? (p.all ? 'All signed' : 'Read each one, then sign off') : 'Nothing to sign') + '</div></div></div>';
     if (p.has) {
       h += '<div class="lst">' + p.list.map(function (x) {
         return '<div class="it' + (x.at ? ' done' : '') + '"><span class="ck' + (x.at ? ' on' : '') + '">' + ic('check') + '</span><div class="tx"><b>' + E(x.t) + '</b><span>' + (x.at ? 'Signed ' + E(fmtShort(x.at)) : 'Your sign-off is recorded for HR with the date') + '</span><div class="ia">' +
-          (x.url ? '<a class="go" href="' + E(x.url) + '" target="_blank" rel="noopener">' + (x.at ? 'Read again' : 'Open and read') + '</a>' : '') +
-          (x.at ? '' : '<button class="go dark" data-w122sign="' + E(x.key) + '">I have read it</button>') + '</div></div></div>';
+          (x.url ? '<a class="go" href="' + E(x.url) + '" target="_blank" rel="noopener"' + (x.at ? '' : ' data-w279polopen="' + E(x.key) + '"') + '>' + (x.at ? 'Read again' : 'Open and read') + '</a>' : '') +
+          (x.at ? '' : polSignBtn(x.key)) + '</div></div></div>';
       }).join('') + '</div>';
     } else h += '<div class="empty">There are no policies waiting for you.</div>';
     h += '</div></div>';

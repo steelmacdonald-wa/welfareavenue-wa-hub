@@ -1,4 +1,4 @@
-# wave276 brief: Keela out, the Toronto answers in (for one builder with no other context)
+# wave274d brief: Keela out, the Toronto answers in (for one builder with no other context)
 
 Status: **ready once the two Keela form exports exist** (CSV, from Keela's form responses for *Toronto Volunteer
 Registration* and *Welfare Avenue Toronto Student Registration Form*). Welfare Avenue cancels Keela by 05/12/26; the next
@@ -20,7 +20,7 @@ given on the command line (a private folder). Only the script, its tests with ma
 
 ## 3. The work
 
-- `build/data/wa276_keela_toronto.py` (Python 3, standard library only):
+- `build/data/wa274d_keela_toronto.py` (Python 3, standard library only):
   - `--general <csv> --student <csv> --contacts <json> --out <dir>`. `--contacts` is a JSON export of the Toronto-relevant
     `crm_contacts` rows (`id, full_name, primary_email, emails, phones, city, tags, org_id, volunteer_id, legacy_refs`) and
     of `volunteer_orgs (id, name, short)` and `crm_fields (id, key)`, made with the read-only query in the doc.
@@ -40,7 +40,7 @@ given on the command line (a private folder). Only the script, its tests with ma
   - Adding tags fires the CRM's tag automations (trigger `crm_auto_on_tags` on `crm_contacts`). `report.md` must say
     so at the top, and the doc tells Steel to check that no automation on `toronto` or `toronto student` is turned on
     (the "Welcome new volunteers (Toronto)" automation of wave157 is a draft) before applying.
-- `docs/<date> - wave276 Keela out, the Toronto answers in.md`: how to export from Keela, the read-only query for
+- `docs/<date> - wave274d Keela out, the Toronto answers in.md`: how to export from Keela, the read-only query for
   `--contacts`, how to run it, how Steel reviews `report.md` and applies `apply.sql`, how to undo.
 
 ## 4. Hand back

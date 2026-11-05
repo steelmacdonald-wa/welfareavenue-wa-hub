@@ -151,7 +151,7 @@ async function wa39OnbLoad() {
 function wa39Pace(o) {
   if (o.status === 'completed') return null;
   var days = Math.max(0, (Date.now() - new Date(String(o.started_at) + 'T12:00:00').getTime()) / 86400000);
-  var expected = Math.min(100, Math.round(days / 60 * 100));
+  var expected = Math.min(100, Math.round(days / 90 * 100));   /* wave279: the plan runs 90 days */
   var p = wa37Pct(o.id).pct;
   if (p >= Math.min(99, expected + 10)) return ['ahead', '#103F39'];
   if (p + 15 < expected) return ['falling behind', '#b3402f'];

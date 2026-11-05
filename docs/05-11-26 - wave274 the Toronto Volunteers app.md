@@ -80,9 +80,9 @@ Not done here, outside this wave's selectors:
 
 ## Left for later waves (the plan, section 5)
 
-- wave275: the Toronto sign-up forms in the Hub (general and student) and Sign-ups.
-- wave276: the Keela answers imported onto the CRM contacts.
-- wave277: messages: the confirmation email, the call for volunteers, reminders, a Toronto switch for anything automatic.
-- wave278: Prep (the recipe scaled to the headcount and dietary needs, groceries, the kit) and Setup.
-- wave279: the Toronto SOP, the page tour, an Avenue Academy lesson.
+- wave274c: the Toronto sign-up forms in the Hub (general and student) and Sign-ups.
+- wave274d: the Keela answers imported onto the CRM contacts.
+- wave274e: messages: the confirmation email, the call for volunteers, reminders, a Toronto switch for anything automatic.
+- wave274f: Prep (the recipe scaled to the headcount and dietary needs, groceries, the kit) and Setup.
+- wave274g: the Toronto SOP, the page tour, an Avenue Academy lesson.
 - Applying `build/data/wa274_toronto.sql` (Steel).

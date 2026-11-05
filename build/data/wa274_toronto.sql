@@ -1,4 +1,4 @@
--- wa274_toronto (05/11/26): the Toronto Volunteers app, its data. NOT APPLIED: Steel applies it after review.
+-- wa274_toronto (05/11/26): the Toronto Volunteers app, its data. Applied 05/11/26 with Steel's approval (migration wa274_toronto).
 -- Steel (05/11/26): "a volunteer manager for Toronto ... a robust, easy to use volunteer management tool for Toronto ...
 -- It also should integrate with the CRM as well in the hub, like the Montreal volunteer manager does."
 -- The plan: docs/05-11-26 - the Toronto Volunteer Manager plan.md (sections 4 and 9).
@@ -107,10 +107,18 @@ $$;
 grant execute on function public.wa274_next_code(date) to authenticated;
 
 /* ---------- 4. the page in every access profile: the same rule as the Volunteer Manager ---------- */
-update public.hub_access_profiles
-   set pages = coalesce(pages, '{}'::jsonb) || jsonb_build_object('toronto', coalesce(pages->>'volunteering', 'none')),
-       updated_at = now(), updated_by = 'wave274'
- where not (coalesce(pages, '{}'::jsonb) ? 'toronto');
+with done as (
+  update public.hub_access_profiles
+     set pages = coalesce(pages, '{}'::jsonb) || jsonb_build_object('toronto', coalesce(pages->>'volunteering', 'none')),
+         updated_at = now(), updated_by = 'wave274'
+   where not (coalesce(pages, '{}'::jsonb) ? 'toronto')
+  returning key, pages->>'toronto' as v
+)
+insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+select 'access_profile', key, 'pages', null,
+       'Toronto Volunteers: ' || case v when 'all' then 'everyone' when 'lead' then 'leads' else 'nobody' end || ' (new page, as the Volunteer Manager)',
+       'Hub release (wave274)'
+  from done;
 
 /* ---------- checks (run after applying) ----------
 select key, pages->>'volunteering' vol, pages->>'toronto' toronto from hub_access_profiles order by sort;

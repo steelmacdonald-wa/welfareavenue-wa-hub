@@ -10,6 +10,9 @@
      bar does the same for several. Cards say Texted Oct 6, or Said yes.
    - Offer: moving a card to Offer opens the offer letter (language, reports to, hours, start, reply by, who signs, the
      note), a preview, then Create the letter and email it (or the letter only). The sheet at Offer and Hired opens it again.
+     wave275 (02/11/26): "Hours a week" is a choice of 4, 6 or 8 (default 4), and "Onboarding manager" is required, defaulting from the
+     position (offer_preview's manager.default, how it was chosen said under it; the choices are the active roster). The server refuses an
+     offer without them in a plain sentence, shown here; once the offer is out, the manager is asked for times (onboard-run ask_manager).
    - From the CV: what the CV says (current role, experience, education, languages, skills, a summary); Read the CV.
    - Slack when a card moves to Interview, Offer or Hired is server-side (recruit-actions stage_moved, trigger).
    Edge: recruit-actions. Hooks: w199.cardBits, w199.sheetBits, w199's selection bar, parts197 moveTo. */
@@ -116,15 +119,32 @@
   function defaults(c) {
     var d = new Date(); d.setDate(d.getDate() + 7);
     var fr = /\b(Français|French)\b/i.test(String(c.summary || ''));
-    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: 4, start: '', respond_by: iso(d), signer_email: '', signer_title: '', note: '' };
+    return { email: c.email || '', lang: fr ? 'fr' : 'en', reports_to: '', hours: '4', start: '', respond_by: iso(d), signer_email: '', signer_title: '', note: '', manager_member_id: '' };
+  }
+  /* wave275: the onboarding manager (required) and the hours (4, 6 or 8) */
+  var HOURS = ['4', '6', '8'];
+  function managerDefault(r) {   /* the position's manager, put in once the preview says who, unless HR has chosen already */
+    var d = r && r.manager && r.manager.default;
+    if (!M.f.manager_member_id && d && d.member_id != null && d.available !== false) M.f.manager_member_id = String(d.member_id);   /* an unavailable default stays a placeholder */
+  }
+  function managerBits(f, d) {
+    var m = (d && d.manager) || { default: null, choices: [] }, def = m.default || {}, choices = m.choices || [];
+    var who = def.how === 'team_lead' ? (def.name || 'They') + ' is the only leader of the position’s department' : (def.name || 'They') + ' is who the position reports to';
+    var how = def.member_id == null ? 'The Hub cannot tell who manages this position, so choose the onboarding manager.'
+      : def.available === false ? who + (def.why === 'no_email' ? ', but has no email on the roster' : ', but is no longer active on the roster') + ', so choose someone else.'
+      : who + '.';
+    return '<label for="w211o_manager">Onboarding manager</label><select id="w211o_manager" required aria-describedby="w211o_mnote"><option value="">Choose the onboarding manager...</option>' +
+      choices.map(function (p) { return '<option value="' + E(p.id) + '"' + (String(p.id) === String(f.manager_member_id) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('') + '</select>' +
+      '<p class="w197note" id="w211o_mnote">' + (d ? E(how) + ' ' : '') + 'They are asked to propose the onboarding call and the 1-on-1 as soon as the offer goes out.</p>';
   }
   function askOffer(id) {
     var c = cand(id); if (!c || !staff()) return;
     M = { kind: 'offer', id: c.id, data: null, busy: false, err: '', f: defaults(c), preview: '' }; paintOffer();
-    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; M.data = r; if (!M.f.signer_email) M.f.signer_email = r.signer_email || ''; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
+    fn({ action: 'offer_preview', id: c.id, f: M.f }).then(function (r) { if (M.kind !== 'offer' || M.id !== c.id) return; readOffer(); M.data = r; managerDefault(r); if (!M.f.signer_email) M.f.signer_email = r.signer_email || ''; if (!M.f.signer_title && r.signer_title) M.f.signer_title = r.signer_title; paintOffer(); }).catch(function (e) { M.err = e.message; paintOffer(); });
   }
   function readOffer() {
     ['email', 'lang', 'reports_to', 'hours', 'start', 'respond_by', 'signer_email', 'signer_title', 'note'].forEach(function (k) { var x = document.getElementById('w211o_' + k); if (x) M.f[k] = x.value; });
+    var mg = document.getElementById('w211o_manager'); if (mg && (mg.options.length > 1 || !M.f.manager_member_id)) M.f.manager_member_id = mg.value;   /* wave275 */
   }
   function paintOffer() {
     if (M.kind !== 'offer') return;
@@ -136,7 +156,8 @@
       (d && d.practice ? '<p class="w211warn">Practice: the letter is saved as PRACTICE and emailed to the practice applicant\u2019s own address (yours), even while email is in test mode.</p>' : '') +
       (test ? '<p class="w211warn">Email is in test mode: the email goes to the test inboxes (' + E(d.test_to) + '), not to them. Turning email on is an admin setting (CRM).</p>' : '') +
       '<div class="w211two">' + inp('email', 'Their email', 'email') + '<div><label for="w211o_lang">Language</label><select id="w211o_lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></div></div>' +
-      '<div class="w211two">' + inp('reports_to', 'Reports to (optional)') + inp('hours', 'Hours a week', 'number', ' min="1" max="40"') + '</div>' +
+      '<div class="w211two">' + inp('reports_to', 'Reports to (optional)') + '<label for="w211o_hours">Hours a week</label><select id="w211o_hours">' + HOURS.map(function (h) { return '<option value="' + h + '"' + (String(f.hours) === h ? ' selected' : '') + '>' + h + '</option>'; }).join('') + '</select></div>' +
+      managerBits(f, d) +
       '<div class="w211two">' + inp('start', 'Start date (optional)', 'date') + inp('respond_by', 'Reply by', 'date') + '</div>' +
       '<div class="w211two"><div><label for="w211o_signer_email">Signed by</label><select id="w211o_signer_email">' + signers.map(function (x) { return '<option value="' + E(x.email) + '"' + (x.email === f.signer_email ? ' selected' : '') + '>' + E(x.name) + (x.has_sig ? '' : ' (no signature yet)') + (d && x.email === d.default_signer ? ' · default' : '') + '</option>'; }).join('') + '</select></div>' + inp('signer_title', 'Their title') + '</div>' +
       (d && d.signers && f.signer_email && d.default_signer !== f.signer_email ? '<div class="acts">' + btn('Make ' + E((signers.filter(function (x) { return x.email === f.signer_email; })[0] || {}).name || 'them') + ' the default signer', 'data-w211a="osigner"', 'sm') + '</div>' : '') +
@@ -166,10 +187,12 @@
     if (M.busy) return; readOffer();
     if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(M.f.email || '')) { M.err = 'Their email, please.'; paintOffer(); return; }
     if (!M.f.respond_by) { M.err = 'The reply-by date, please.'; paintOffer(); return; }
+    if (!M.f.manager_member_id) { M.err = 'Choose the onboarding manager, please: they are asked for times as soon as the offer goes out.'; paintOffer(); return; }   /* wave275 */
     M.busy = true; M.err = ''; paintOffer();
     try {
       var r = await fn({ action: 'offer_send', id: M.id, f: M.f, email: !!mail }); var id = M.id; shut();
-      toastS(r.emailed ? (r.emailed.mode === 'live' || r.emailed.mode === 'practice' ? 'Offer letter emailed (a copy to ' + (r.signer || 'the signer') + ')' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters');
+      var asked = r.manager && r.manager.asked ? ' ' + r.manager.name + (r.manager.already ? ' was already asked to propose times.' : ' was asked to propose times.') : '', warn = (r.warnings || []).length ? ' ' + r.warnings.join(' ') : '';   /* wave275 */
+      toastS((r.emailed ? (r.emailed.mode === 'live' || r.emailed.mode === 'practice' ? 'Offer letter emailed (a copy to ' + (r.signer || 'the signer') + ')' : 'Offer letter emailed to the test inboxes (test mode)') : 'Offer letter created in Offer Letters') + (asked || warn ? '.' + asked + warn : ''));
       await reload(id);
     } catch (e) { M.busy = false; M.err = e.message; paintOffer(); }
   }

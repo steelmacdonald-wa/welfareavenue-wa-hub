@@ -13,7 +13,7 @@
    ===================================================================== */
 
 var WA37 = { tmpl: [], onbs: [], steps: [], loaded: false };
-var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 DAYS': 5 };
+var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 DAYS': 5, '90 DAYS': 6 };   /* wave279: 90 DAYS is part of every plan */
 
 (function () {
   if (document.getElementById('wa37css')) return;

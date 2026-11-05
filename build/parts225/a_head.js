@@ -6,6 +6,7 @@
    (the calendar and the analytics move in and leave the Hub menu); marketing leads and admins publish, everyone else sends
    a post for approval; the marketing team and admins answer comments (deleting is leads and admins); LinkedIn, TikTok and
    YouTube by the reminder flow until their connections are approved.
+   Since wave277 (02/11/26) the Connections page and the approvers picker come from wave277 (build/parts277, e_approvals.js).
 
    - The app (parts153 APPS.studio): Overview, Calendar (wave121, its composer rebuilt by the patches in parts225), Queue and
      schedule, Approvals, Comments, Library, Link pages (wave230), Short links, Analytics (wave120), Report, Connections.
@@ -126,6 +127,9 @@
           q(db.from('hub_settings').select('key, value, updated_at').in('key', ['content_studio', 'link_page', 'studio_inbox_sync']))
         ]);
         S.pub = rs[0].data === true; S.mk = rs[1].data === true;
+        /* wave277: the marketing team, for the approvers picker (only a publisher sees it) */
+        S.marketing = [];
+        if (S.pub) { var tm = await q(db.from('team_members').select('id,name,email,department,role,active,nicknames').eq('active', true).eq('department', 'marketing').order('name')); S.marketing = (tm.data || []).filter(function (m) { return m.email; }); }
         S.comments = rs[2].data || []; S.links = rs[3].data || []; S.clicks = rs[4].data || []; S.social = rs[5].data || [];
         (rs[6].data || []).forEach(function (r) { if (r.key === 'content_studio') S.settings = r.value || {}; else if (r.key === 'link_page') S.linkPage = r.value || {}; else if (r.key === 'studio_inbox_sync') S.inboxLast = r.value || null; });
         S.cap = w ? w.cap() : S.cap;
@@ -136,7 +140,7 @@
     })();
     return S.loading;
   }
-  async function loadConn() { try { S.conn = await fn('social-connect', { action: 'status' }); } catch (e) { S.conn = { error: e.message || String(e) }; } }
+  async function loadConn() { try { S.conn = await fn('social-connect', { action: 'status' }); } catch (e) { S.conn = { error: e.message || String(e) }; } S.platforms = (S.conn && S.conn.platforms) || []; }   /* wave277: the registry */
   function counts() {
     var pend = posts().filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; }).length;
     var open = S.comments.filter(function (c) { return c.status === 'open' && !c.from_us; }).length;

@@ -3,6 +3,7 @@
 -- analytics move into it); marketing leads and admins publish, everyone else asks for approval; the marketing team and admins
 -- answer comments (deleting is leads and admins); LinkedIn, TikTok and YouTube by the reminder flow until their connections
 -- are approved.
+-- Since wave277 (02/11/26) the Connections page and the approvers picker come from wave277 (build/parts277, e_approvals.js).
 
 -- ---------- who ----------
 create or replace function public.wa225_marketing() returns boolean
