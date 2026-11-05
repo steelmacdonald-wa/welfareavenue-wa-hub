@@ -300,19 +300,22 @@
 - [ ] **Step 1: Check live against the branch.**
   - The live index.html md5, notify, onboard-run and the wa278 SQL against what this branch was built on. If wave278 or anything else moved, rebuild on it first.
   - List the done ticks the release removes (expected: Alyx's two Learning Avenue ticks), and put them in the note.
+  - Re-run the role-recommend check (read only): every path key in `onboard_role_recommend` (build/wa279b_template.sql) is an active `academy_paths` row with active modules (not tours, not planned), and every training id exists in `trainings` and is active. Fix the seed before step 4 if one fails. (Checked 04/11/26: 13 paths and 27 trainings, all good.)
+  - `build/wa279c_undo.sql`'s literals still match onboardings 4 and 5 (both on 25 September 2026, every step's due date and template section as listed). If not, capture them again first.
 - [ ] **Step 2: Back up** `onboarding_template`, `onboarding_steps`, `onboardings` and `wa_policy_signoffs` to `claude/backups/` (JSON), and write the note's undo order.
 - [ ] **Step 3: Get Steel's yes** on the exact list (the SQL, the functions, the page).
 - [ ] **Step 4: Release in order:**
   1. wa279a by pinned fetch;
   2. wa279b by pinned fetch;
   3. set `onboard_behind_since` and `onboard_role_picks_since` to the release date;
-  4. `wa271_move_start` for onboardings 4 and 5 to the release date;
+  4. `build/wa279c_restart.sql` by pinned fetch: onboardings 4 and 5 restart on the release date (it reads `onboard_behind_since` from 3). Only `started_at` and the OPEN steps' due dates change, with one change_log row per plan; done steps and `team_members` (start date, start source) are not touched. Not `wa271_move_start`: it also sets `team_members.start_date` / `start_source = 'manual'` (the reel, shout-outs, the board pack, anniversaries) and refuses under execute_sql (no JWT). Undo: `build/wa279c_undo.sql`, run before wa279b's and wa279a's undo. Because their dates restart, Alyx's and Zachee's role-pick pop-up comes at restart + 21 days, not at release;
   5. notify and onboard-run stubs pinned to the pushed commit;
   6. the page (staged, gated);
-  7. `onboard_behind_on = on` last.
+  7. last, together: `onboard_behind_on = on` and `policy_read_minutes = '10'` (wa279a seeds it as '0', so the 10 minute rule stays off until the page with the timer is out).
 - [ ] **Step 5: Prove it:**
   - `wa279_onboard_tick(true)` dry run, showing who would be messaged;
   - a practice plan with a flow, showing the section counts;
   - the Home policy timer in the browser, signed in as Steel (read only; no sign-off is made for him unless he does it);
   - Alyx's and Zachee's plans show the new steps and keep their setup steps.
+  - a real-browser render of the plan view and the lead card (signed in as Steel, read only), since the w166/w169 drives can't run on this PC.
 - [ ] **Step 6: Wrap up.** Push the branch; update the docs, the ledger and memory (`hr-onboarding-automation.md` gets a wave279 line).

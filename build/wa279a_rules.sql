@@ -161,6 +161,22 @@ $function$;
 revoke all on function public.wa279_can_pick(bigint) from public, anon, authenticated;
 comment on function public.wa279_can_pick(bigint) is 'wave279: true for the service role, HR, an admin, or the plan''s manager (by sign-in email).';
 
+-- the active plans the signed-in person manages (final review): the flow's named manager is not always on the lead card (onboarding_lead_view), so Home
+-- asks this too. The same people wa279_can_pick lets pick as manager: wa279_plan_manager's first group (the flow's manager, the line manager, the team's
+-- leaders, the admins). HR and admins as such are not in it: they pick from the HR centre. day = today (Toronto) minus day one, as the database counts it.
+create or replace function public.wa279_my_hires()
+returns jsonb language sql stable security definer set search_path to '' as $function$
+  with me as (select lower(btrim(coalesce(auth.jwt() ->> 'email', ''))) as em)
+  select coalesce(jsonb_agg(jsonb_build_object('onboarding_id', ob.id, 'name', coalesce(tm.name, ob.person_name),
+                                               'day', (now() at time zone 'America/Toronto')::date - ob.started_at) order by ob.started_at, ob.id), '[]'::jsonb)
+    from public.onboardings ob join public.team_members tm on tm.id = ob.member_id cross join me
+   where ob.status = 'active' and me.em <> ''
+     and exists (select 1 from public.wa279_plan_manager(ob.id) m where m.email = me.em)
+$function$;
+revoke all on function public.wa279_my_hires() from public, anon;
+grant execute on function public.wa279_my_hires() to authenticated, service_role;
+comment on function public.wa279_my_hires() is 'wave279: the active onboarding plans the signed-in person manages (wa279_plan_manager by sign-in email, the flow''s manager first), as [{onboarding_id, name, day}] with day = today (Toronto) minus day one. Home lists these with the lead card''s hires for the role-pick card.';
+
 -- the recommended modules for a plan, in order
 create or replace function public.wa279_recommended(p_onb bigint)
 returns table(training_id bigint, title text, path text, done boolean)
@@ -338,10 +354,10 @@ grant execute on function public.wa279_role_save(bigint, text, bigint[]) to auth
 comment on function public.wa279_role_save(bigint, text, bigint[]) is 'wave279: replaces the role trainings picked for one section (60 DAYS: 2 to 3, 90 DAYS: 5 to 6) of a plan. For the plan''s manager, HR or an admin. Refuses a finished module, a module already in the other section, and any change to a section whose picks are all finished. Each pick gets a people-only Academy assignment due on the section''s due date; unpicked ones are ended.';
 
 -- the Hub fills a short list itself
-create or replace function public.wa279_role_autopick(p_today date default current_date)
+create or replace function public.wa279_role_autopick(p_today date default ((now() at time zone 'America/Toronto')::date))
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare v_raw text; v_since date; o record; s text; v_day int; v_gate int; v_n int; v_min int; v_max int; r record; v_added int; v_total int := 0; v_plans int := 0;
-        pl record; v_failed jsonb := '[]'::jsonb;
+        pl record; v_failed jsonb := '[]'::jsonb; v_ids bigint[]; v_plan_added jsonb; v_list jsonb := '[]'::jsonb;
 begin
   select nullif(btrim(c.value), '') into v_raw from public.app_config c where c.key = 'onboard_role_picks_since';
   if v_raw is null or v_raw !~ '^\d{4}-\d{2}-\d{2}$' then return jsonb_build_object('picked', 0, 'plans', 0, 'reason', 'off'); end if;
@@ -355,6 +371,7 @@ begin
       if not found then continue; end if;
       v_day := p_today - o.started_at;
       v_added := 0;
+      v_plan_added := '[]'::jsonb;
       foreach s in array array['60 DAYS', '90 DAYS'] loop
         v_gate := case when s = '60 DAYS' then 29 else 59 end;
         v_min := case when s = '60 DAYS' then 2 else 5 end;
@@ -362,29 +379,35 @@ begin
         if v_day >= v_gate then
           select count(*) into v_n from public.onboarding_role_picks k where k.onboarding_id = o.id and k.section = s;
           if v_n < v_min then
+            v_ids := '{}';
             for r in select rec.training_id from public.wa279_recommended(o.id) with ordinality rec(training_id, title, path, done, ord)
                       where not rec.done
                         and not exists (select 1 from public.onboarding_role_picks k where k.onboarding_id = o.id and k.training_id = rec.training_id)
                       order by rec.ord limit (v_max - v_n) loop
               perform public.wa279_pick_add(o.id, s, r.training_id, 'the Hub', true);
               v_added := v_added + 1;
+              v_ids := v_ids || r.training_id;
             end loop;
+            if cardinality(v_ids) > 0 then
+              v_plan_added := v_plan_added || jsonb_build_object('onboarding_id', o.id, 'section', s, 'training_ids', to_jsonb(v_ids));
+            end if;
           end if;
         end if;
       end loop;
       if v_added > 0 then
         perform public.wa166_onb_sync(o.id);
         v_total := v_total + v_added; v_plans := v_plans + 1;
+        v_list := v_list || v_plan_added;   -- last, so a plan that failed above never shows here
       end if;
     exception when others then
       v_failed := v_failed || jsonb_build_object('onboarding_id', pl.id, 'error', sqlerrm);
     end;
   end loop;
-  return jsonb_build_object('picked', v_total, 'plans', v_plans, 'failed', v_failed);
+  return jsonb_build_object('picked', v_total, 'plans', v_plans, 'added', v_list, 'failed', v_failed);
 end $function$;
 revoke all on function public.wa279_role_autopick(date) from public, anon, authenticated;
 grant execute on function public.wa279_role_autopick(date) to service_role;
-comment on function public.wa279_role_autopick(date) is 'wave279: for each active plan whose 60 DAYS list is short at day 29 (90 DAYS at day 59), picks recommended modules (not done, not already picked) up to the maximum, auto = true, picked_by the Hub. Does nothing unless app_config onboard_role_picks_since is a date and today is at least 7 days after it. Each plan runs in its own sub-block under the same row lock wa279_role_save takes; a plan that fails is listed in failed and the rest go on.';
+comment on function public.wa279_role_autopick(date) is 'wave279: for each active plan whose 60 DAYS list is short at day 29 (90 DAYS at day 59), picks recommended modules (not done, not already picked) up to the maximum, auto = true, picked_by the Hub. Today is the Toronto date, as wa279_onboard_tick counts it. Does nothing unless app_config onboard_role_picks_since is a date and today is at least 7 days after it. Each plan runs in its own sub-block under the same row lock wa279_role_save takes; a plan that fails is listed in failed and the rest go on. Returns {picked, plans, added [{onboarding_id, section, training_ids}], failed}; wa279_onboard_tick tells the manager from added.';
 
 -- the path state behind the plan steps
 create or replace function public.wa279_role_state(p_member bigint, p_key text)
@@ -457,10 +480,12 @@ $function$;
 -- Rules:
 --   wa_policy_opens (email, policy_key, opened_at) records the first time a person opened a policy. No direct grants: people reach it only through
 --     wa279_policy_open(key) (records the first open, returns {opened_at, unlock_at, minutes}) and wa279_policy_state() (the caller's own opens).
---   BEFORE INSERT on wa_policy_signoffs raises 'Read it for N more minutes first' when the insert is by the authenticated role, the row's email is the caller's
---     (compared lower-cased), the policy is required and active, policy_read_minutes is above 0, and there is no open or it is younger than the rule.
---     N is the whole minutes left, rounded up, at least 1. The service role and every other insert pass. Existing sign-offs are never looked at again.
---   policy_read_minutes (app_config, text): missing or not a whole number = 10; 0 = off.
+--   BEFORE INSERT on wa_policy_signoffs refuses when the insert is by the authenticated role, the row's email is the caller's (compared lower-cased), the
+--     policy is required and active, policy_read_minutes is above 0, and there is no open or it is younger than the rule. No open: 'Open it first, then read
+--     it for N minutes.' An open that is too young: 'Read it for N more minutes first.' ('1 more minute' when one is left). N is the whole minutes left,
+--     rounded up, at least 1. The service role and every other insert pass. Existing sign-offs are never looked at again.
+--   policy_read_minutes (app_config, text): missing or not a whole number = 10; 0 = off. This file seeds it as '0' (a new key only), so the rule is off
+--     between the SQL release and the page release; the release's last step sets it to '10' with onboard_behind_on.
 --   AFTER INSERT on wa_policy_signoffs runs wa166_onb_sync for the signer's active plan(s) (found by team_members.email, lower-cased). It never fails a sign-off.
 --   wa166_path_state(member, 'policies') (above, in the wrapper) is complete when every required, active policy is signed by the member's email.
 
@@ -481,6 +506,8 @@ returns int language sql stable security definer set search_path to '' as $funct
 $function$;
 revoke all on function public.wa279_policy_minutes() from public, anon, authenticated;
 comment on function public.wa279_policy_minutes() is 'wave279: app_config policy_read_minutes as whole minutes. Missing or not a number = 10. 0 = the rule is off.';
+-- off until the page is out (the page shows the timer); the release's last step sets it to '10'. A value already there is kept.
+insert into public.app_config (key, value) values ('policy_read_minutes', '0') on conflict (key) do nothing;
 
 create or replace function public.wa279_policy_open(p_key text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
@@ -515,10 +542,11 @@ begin
   v_min := public.wa279_policy_minutes();
   if v_min <= 0 then return new; end if;
   select o.opened_at into v_at from public.wa_policy_opens o where o.email = v_me and o.policy_key = new.policy_key;
-  if v_at is null then raise exception 'Read it for % more minutes first', v_min; end if;
+  -- final review: never opened says so; otherwise the minutes left, "1 more minute" or "7 more minutes"
+  if v_at is null then raise exception 'Open it first, then read it for % minute%.', v_min, case when v_min = 1 then '' else 's' end; end if;
   if now() < v_at + make_interval(mins => v_min) then
     v_left := greatest(1, ceil(extract(epoch from (v_at + make_interval(mins => v_min) - now())) / 60)::int);
-    raise exception 'Read it for % more minutes first', v_left;
+    raise exception 'Read it for % more minute% first.', v_left, case when v_left = 1 then '' else 's' end;
   end if;
   return new;
 end $function$;
@@ -554,11 +582,14 @@ create trigger trg_wa279_policy_sync after insert on public.wa_policy_signoffs f
 -- Rules:
 --   Behind: an open step with a due date more than 2 days gone (due_date < today - 2, Toronto date). The role steps (academy_path role60 / role90) never count
 --     while their section has no picks. A plan counts when status = 'active' and started_at >= app_config onboard_behind_since (a date; empty = no plan counts).
---   wa279_onboard_tick (cron wa-onboard-behind, weekdays 12:35 UTC): 1. wa279_role_autopick() (its own switch is onboard_role_picks_since); 2. for each counting
+--   wa279_onboard_tick (cron wa-onboard-behind, weekdays 12:35 UTC): 1. wa279_role_autopick(Toronto date) (its own switch is onboard_role_picks_since); 1b. for
+--     each plan and section the Hub just picked for, onboard_role_pick to the manager ("The Hub picked <name>'s role trainings", what it picked, change them on
+--     Home), once per plan and section (log kind onboard_role_autopicked); 2. for each counting
 --     plan with late steps and no onboard_behind row in the last 7 days (by Toronto date): onboard_behind to the hire, onboard_behind_lead to the manager (the first
 --     of wa279_plan_manager by member id; none = only the hire hears), and from the third onboard_behind row on a plan the hr_notify_emails as well;
 --     3. for each plan at day 21 or more (started_at >= onboard_role_picks_since) with a section under its minimum (60 DAYS 2, 90 DAYS 5) whose auto-pick day (29, 59) is still ahead and no onboard_role_pick
 --     row in the last 7 days: onboard_role_pick to the manager. app_config onboard_behind_on must be 'on' to send anything; a dry run still returns the plan.
+--   Links: the hire and the manager go to Home (#mypage, where the pick card is); HR (the behind message from the third on) to #hrcentre/onboarding.
 --   Each plan runs in its own sub-block: a plan that fails is listed in failed and the others go on. The log row is written before the messages go.
 --   Sending goes through notify only (its relay branch sends the Hub notification too, honouring push_on), wrapped so it never raises.
 --   onboarding_behind_log is the memory (one row per plan, kind and send); nothing reads it but this function.
@@ -575,7 +606,7 @@ create index if not exists onboarding_behind_log_plan_kind on public.onboarding_
 alter table public.onboarding_behind_log enable row level security;
 revoke all on table public.onboarding_behind_log from public, anon, authenticated;
 revoke all on sequence public.onboarding_behind_log_id_seq from public, anon, authenticated;
-comment on table public.onboarding_behind_log is 'wave279: one row each time wa279_onboard_tick sent a plan''s behind message (kind onboard_behind) or role-pick reminder (kind onboard_role_pick). It sets the 7 day pause and the third-message rule. No direct access.';
+comment on table public.onboarding_behind_log is 'wave279: one row each time wa279_onboard_tick sent a plan''s behind message (kind onboard_behind), role-pick reminder (kind onboard_role_pick) or what the Hub picked (kind onboard_role_autopicked, detail.section). It sets the 7 day pause and the third-message rule. No direct access.';
 
 -- the late steps of a plan, oldest first
 create or replace function public.wa279_behind_list(p_onb bigint)
@@ -617,15 +648,42 @@ declare
   v_raw text; v_since date; v_pick_since date;
   v_list jsonb; v_n int; v_prev int; v_names text; v_label text; v_body text; v_lead_title text; v_lead_body text; v_title text;
   v_mgr text; v_hire text; v_leads text[]; v_hr text[]; v_to jsonb; v_x text; v_day int; v_short text[]; v_auto jsonb;
-  v_plan jsonb := '[]'::jsonb; v_failed jsonb := '[]'::jsonb; v_behind int := 0; v_picks int := 0;
+  v_plan jsonb := '[]'::jsonb; v_failed jsonb := '[]'::jsonb; v_behind int := 0; v_picks int := 0; v_told int := 0;
+  a jsonb; v_onb bigint; v_sec text; v_word text; v_titles text; v_k int;
 begin
   if session_user = 'authenticator' and coalesce(auth.role(), '') <> 'service_role' and not coalesce(public.is_wa_admin(), false) then
     raise exception 'not allowed';
   end if;
-  -- 1. the Hub's own role-training pick (it has its own switch, onboard_role_picks_since); a dry run changes nothing
-  if p_dry then v_auto := jsonb_build_object('skipped', 'dry run'); else v_auto := public.wa279_role_autopick(); end if;
+  -- 1. the Hub's own role-training pick (it has its own switch, onboard_role_picks_since), on the same Toronto date; a dry run changes nothing
+  if p_dry then v_auto := jsonb_build_object('skipped', 'dry run'); else v_auto := public.wa279_role_autopick(v_today); end if;
   -- the switch: anything but 'on' sends nothing (a dry run still shows the plan)
   if not v_on and not p_dry then return jsonb_build_object('day', v_today, 'off', true, 'sent', 0, 'autopick', v_auto); end if;
+
+  -- 1b. the manager hears what the Hub picked: one message per plan and section, ever (onboarding_behind_log kind onboard_role_autopicked)
+  for a in select e.value from jsonb_array_elements(coalesce(v_auto -> 'added', '[]'::jsonb)) e loop
+    begin
+      v_onb := (a ->> 'onboarding_id')::bigint;
+      v_sec := a ->> 'section';
+      v_mgr := (select x.email from public.wa279_plan_manager(v_onb) x where x.email <> '' order by x.member_id limit 1);
+      if v_mgr is not null and not exists (select 1 from public.onboarding_behind_log l
+                                            where l.onboarding_id = v_onb and l.kind = 'onboard_role_autopicked' and l.detail ->> 'section' = v_sec) then
+        select string_agg(t.title, ', ' order by e.i), count(*)::int into v_titles, v_k
+          from jsonb_array_elements_text(a -> 'training_ids') with ordinality e(id, i) join public.trainings t on t.id = e.id::bigint;
+        v_hire := coalesce((select tm.name from public.onboardings ob join public.team_members tm on tm.id = ob.member_id where ob.id = v_onb), 'A new hire');
+        v_word := case when v_sec = '60 DAYS' then '60 days' else '90 days' end;
+        v_title := 'The Hub picked ' || v_hire || '''s role trainings';
+        v_body := 'The Hub picked ' || v_k || ' training' || case when v_k = 1 then '' else 's' end || ' for ' || v_hire || '''s ' || v_word || ': ' || v_titles
+                  || '. You can change them on Home.';
+        insert into public.onboarding_behind_log (onboarding_id, kind, late, detail)
+        values (v_onb, 'onboard_role_autopicked', v_k, jsonb_build_object('to', v_mgr, 'section', v_sec, 'training_ids', a -> 'training_ids'));
+        perform public.wa279_tell('onboard_role_pick', v_mgr, '#mypage', 'onboard-role-autopicked-' || v_onb || '-' || replace(lower(v_sec), ' ', '') || '-' || v_today, v_title, v_body);
+        v_told := v_told + 1;
+        v_plan := v_plan || jsonb_build_object('kind', 'onboard_role_autopicked', 'onboarding_id', v_onb, 'section', v_sec, 'to', jsonb_build_array(v_mgr), 'title', v_title, 'body', v_body);
+      end if;
+    exception when others then
+      v_failed := v_failed || jsonb_build_object('onboarding_id', v_onb, 'error', sqlerrm);
+    end;
+  end loop;
   select nullif(btrim(c.value), '') into v_raw from public.app_config c where c.key = 'onboard_behind_since';
   v_since := case when v_raw ~ '^\d{4}-\d{2}-\d{2}$' then v_raw::date end;
   select nullif(btrim(c.value), '') into v_raw from public.app_config c where c.key = 'onboard_role_picks_since';
@@ -668,8 +726,10 @@ begin
               if v_hire is not null then
                 perform public.wa279_tell('onboard_behind', v_hire, '#mypage', 'onboard-behind-' || o.id || '-' || v_today, 'You''re behind on onboarding', 'You''re ' || v_body);
               end if;
+              -- the manager's link goes to Home (where the pick card is); HR's to Onboarding in the HR centre
               foreach v_x in array v_leads loop
-                perform public.wa279_tell('onboard_behind_lead', v_x, '#hrcentre/onboarding', 'onboard-behind-lead-' || o.id || '-' || v_today, v_lead_title, v_lead_body);
+                perform public.wa279_tell('onboard_behind_lead', v_x, case when v_x = v_mgr then '#mypage' else '#hrcentre/onboarding' end,
+                                          'onboard-behind-lead-' || o.id || '-' || v_today, v_lead_title, v_lead_body);
               end loop;
             end if;
             v_behind := v_behind + 1;
@@ -695,7 +755,7 @@ begin
           if not p_dry then
             insert into public.onboarding_behind_log (onboarding_id, kind, late, detail)
             values (o.id, 'onboard_role_pick', cardinality(v_short), jsonb_build_object('to', v_mgr, 'short', to_jsonb(v_short), 'day', v_day));
-            perform public.wa279_tell('onboard_role_pick', v_mgr, '#hrcentre/onboarding', 'onboard-role-pick-' || o.id || '-' || v_today, v_title, v_body);
+            perform public.wa279_tell('onboard_role_pick', v_mgr, '#mypage', 'onboard-role-pick-' || o.id || '-' || v_today, v_title, v_body);
           end if;
           v_picks := v_picks + 1;
           v_plan := v_plan || jsonb_build_object('kind', 'onboard_role_pick', 'onboarding_id', o.id, 'short', to_jsonb(v_short), 'to', jsonb_build_array(v_mgr), 'title', v_title, 'body', v_body);
@@ -705,12 +765,12 @@ begin
       v_failed := v_failed || jsonb_build_object('onboarding_id', o.id, 'error', sqlerrm);
     end;
   end loop;
-  return jsonb_build_object('day', v_today, 'dry', p_dry, 'off', not v_on, 'behind', v_behind, 'role_pick', v_picks,
-                            'sent', case when p_dry or not v_on then 0 else v_behind + v_picks end, 'autopick', v_auto, 'plan', v_plan, 'failed', v_failed);
+  return jsonb_build_object('day', v_today, 'dry', p_dry, 'off', not v_on, 'behind', v_behind, 'role_pick', v_picks, 'autopick_told', v_told,
+                            'sent', case when p_dry or not v_on then 0 else v_behind + v_picks + v_told end, 'autopick', v_auto, 'plan', v_plan, 'failed', v_failed);
 end $function$;
 revoke all on function public.wa279_onboard_tick(boolean) from public, anon, authenticated;
 grant execute on function public.wa279_onboard_tick(boolean) to service_role;
-comment on function public.wa279_onboard_tick(boolean) is 'wave279: the daily onboarding job (cron wa-onboard-behind, weekdays 12:35 UTC): the Hub''s role-training pick, then a behind message to the hire and their manager (HR too from the third), then the manager''s reminder to pick role trainings. Nothing is sent unless app_config onboard_behind_on is on; p_dry returns the plan and sends nothing.';
+comment on function public.wa279_onboard_tick(boolean) is 'wave279: the daily onboarding job (cron wa-onboard-behind, weekdays 12:35 UTC): the Hub''s role-training pick (on the Toronto date) and a message to the manager saying what it picked (once per plan and section), then a behind message to the hire and their manager (HR too from the third), then the manager''s reminder to pick role trainings. Managers'' links go to Home, HR''s to Onboarding in the HR centre. Nothing is sent unless app_config onboard_behind_on is on; p_dry returns the plan and sends nothing.';
 
 -- the notification kinds
 insert into public.hub_notification_kinds (key, grp, grp_title, sort, title, blurb, says, example_title, example_body, example_url, hub, slack, email, channel_only, audience, sender, active) values
@@ -721,13 +781,13 @@ insert into public.hub_notification_kinds (key, grp, grp_title, sort, title, blu
    true, true, false, false, 'a new hire', 'wa279_onboard_tick, notify', true),
   ('onboard_behind_lead', 'people', 'People and HR', 82, 'Onboarding: a hire is behind',
    'When steps on the onboarding plan of someone you manage are more than 2 days past their due date. At most once a week. HR hears too from the third message on a plan.',
-   'Who is behind, how many steps and the first five, with a link to Onboarding in the HR centre.',
-   'Alex Tremblay is behind on onboarding', 'Alex Tremblay is behind on 3 onboarding steps from Week 1: Meet your buddy, Set up your calendar, Read the handbook.', '#hrcentre/onboarding',
+   'Who is behind, how many steps and the first five, with a link to Home (HR''s link goes to Onboarding in the HR centre).',
+   'Alex Tremblay is behind on onboarding', 'Alex Tremblay is behind on 3 onboarding steps from Week 1: Meet your buddy, Set up your calendar, Read the handbook.', '#mypage',
    true, true, false, false, 'the new hire''s manager and the HR notify list (from the third message)', 'wa279_onboard_tick, notify', true),
   ('onboard_role_pick', 'people', 'People and HR', 83, 'Onboarding: pick role trainings',
-   'From day 21 of a new hire''s plan, every 7 days while their 60 days or 90 days list of role trainings is short. The Hub picks for you on day 29 and day 59 if you don''t.',
-   'Who needs role trainings picked and how many, with a link to Onboarding in the HR centre.',
-   'Pick Alex Tremblay''s role trainings', 'Pick 2 or 3 trainings for Alex Tremblay''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', '#hrcentre/onboarding',
+   'From day 21 of a new hire''s plan, every 7 days while their 60 days or 90 days list of role trainings is short. The Hub picks for you on day 29 and day 59 if you don''t, and tells you what it picked.',
+   'Who needs role trainings picked and how many, or what the Hub picked, with a link to Home.',
+   'Pick Alex Tremblay''s role trainings', 'Pick 2 or 3 trainings for Alex Tremblay''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', '#mypage',
    true, true, false, false, 'the new hire''s manager', 'wa279_onboard_tick, notify', true)
 on conflict (key) do update set grp = excluded.grp, grp_title = excluded.grp_title, sort = excluded.sort, title = excluded.title, blurb = excluded.blurb, says = excluded.says,
   example_title = excluded.example_title, example_body = excluded.example_body, example_url = excluded.example_url, hub = excluded.hub, slack = excluded.slack, email = excluded.email,

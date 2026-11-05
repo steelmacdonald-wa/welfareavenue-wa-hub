@@ -36,7 +36,7 @@ async function runAssertions(db, label, sql = assertions, expected = 'w279sql: a
 
 // the functions wave279a redefines or adds, as they stand: body, comment and ACL
 const REDEFINED = ['public.onboarding_template_propagate()', 'public.wa166_path_state(bigint,text)'];
-const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()', 'public.wa279_plan_manager(bigint)', 'public.wa279_can_pick(bigint)', 'public.wa279_recommended(bigint)', 'public.wa279_pick_add(bigint,text,bigint,text,boolean)', 'public.wa279_pick_remove(bigint,text)', 'public.wa279_role_options(bigint,date)', 'public.wa279_role_save(bigint,text,bigint[])', 'public.wa279_role_autopick(date)', 'public.wa279_role_state(bigint,text)', 'public.wa279_policies_state(bigint)', 'public.wa279_policy_minutes()', 'public.wa279_policy_open(text)', 'public.wa279_policy_state()', 'public.wa279_policy_rule()', 'public.wa279_policy_sync()', 'public.wa279_behind_list(bigint)', 'public.wa279_tell(text,text,text,text,text,text)', 'public.wa279_onboard_tick(boolean)'];
+const ADDED = ['public.wa279_via_setup(bigint)', 'public.wa279_flow_plan()', 'public.wa279_plan_manager(bigint)', 'public.wa279_can_pick(bigint)', 'public.wa279_my_hires()', 'public.wa279_recommended(bigint)', 'public.wa279_pick_add(bigint,text,bigint,text,boolean)', 'public.wa279_pick_remove(bigint,text)', 'public.wa279_role_options(bigint,date)', 'public.wa279_role_save(bigint,text,bigint[])', 'public.wa279_role_autopick(date)', 'public.wa279_role_state(bigint,text)', 'public.wa279_policies_state(bigint)', 'public.wa279_policy_minutes()', 'public.wa279_policy_open(text)', 'public.wa279_policy_state()', 'public.wa279_policy_rule()', 'public.wa279_policy_sync()', 'public.wa279_behind_list(bigint)', 'public.wa279_tell(text,text,text,text,text,text)', 'public.wa279_onboard_tick(boolean)'];
 async function snapshot(db) {
   const out = {};
   for (const f of REDEFINED) {
@@ -70,6 +70,7 @@ try {
   ok(afterMig['public.wa166_path_state(bigint,text)'].cmt === before['public.wa166_path_state(bigint,text)'].cmt, 'path_state keeps its comment');
   for (const f of ADDED) ok((await one(db, `select to_regprocedure('${f}') is not null as x`)).x === true, f + ' exists');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname = 'trg_wa279_flow_plan' and not tgisinternal`)).n === 1, 'one flow trigger after two runs');
+  ok((await one(db, `select value from public.app_config where key = 'policy_read_minutes'`)).value === '0', 'policy_read_minutes is seeded as 0 (the rule off until the page release)');
 
   await runAssertions(db, 'assertions');
   await runAssertions(db, 'assertions (second run)');
@@ -149,12 +150,115 @@ try {
   ok((await one(db, `select count(*)::int as n from cron.job where jobname = 'wa-onboard-behind'`)).n === 0, 'the behind cron entry is gone');
   ok((await one(db, `select count(*)::int as n from public.hub_notification_kinds where key in ('onboard_behind', 'onboard_behind_lead', 'onboard_role_pick')`)).n === 0, 'the three notification kinds are gone');
   ok((await one(db, `select count(*)::int as n from public.app_config where key in ('onboard_behind_on', 'onboard_behind_since', 'onboard_role_picks_since')`)).n === 0, 'the three settings are gone');
+  ok((await one(db, `select count(*)::int as n from public.app_config where key = 'policy_read_minutes'`)).n === 0, 'policy_read_minutes is gone (live has no such key before wave279)');
   await db.exec(`delete from public.team_members where email = 'w279.undo@example.invalid'`);
   console.log('wa279a undo: every check passed');
 
   // ---- and the migration goes back on after an undo
   await db.exec(migration);
   await runAssertions(db, 're-applied assertions');
+  // the seed never overwrites HR's value: the release sets it to 10, and a later run of the migration keeps that
+  await db.exec(`update public.app_config set value = '10' where key = 'policy_read_minutes'`);
+  await db.exec(migration);
+  ok((await one(db, `select value from public.app_config where key = 'policy_read_minutes'`)).value === '10', 'a second run of the migration keeps policy_read_minutes as HR set it');
+
+  // ---- wa279c: the release restart of onboardings 4 and 5, on a fresh database with a copy of the two plans as they stood on 04/11/26 (read live, read only:
+  // 46 steps each, day one 25 September 2026, Alyx's 9 done steps) plus a third plan that must not move. wa279a and wa279b go first, as at release.
+  {
+    const db2 = new PGlite();
+    await db2.exec(schema);
+    await db2.exec(migration);
+    await db2.exec(liveTemplate);
+    await db2.exec(`insert into public.team_members (id, name, email, department, start_date, start_source) overriding system value values
+        (50, 'Test Alyx Copy', 'w279c.alyx@example.invalid', 'fundraising', date '2026-09-25', 'directory'),
+        (46, 'Test Zachee Copy', 'w279c.zachee@example.invalid', 'progdev', date '2026-09-25', 'directory'),
+        (47, 'Test Other Plan', 'w279c.other@example.invalid', 'progdev', date '2026-09-25', 'directory');
+      insert into public.onboardings (id, member_id, person_name, status, started_at, assigned_by) overriding system value values
+        (4, 50, 'Test Alyx Copy', 'active', date '2026-09-25', 'test'), (5, 46, 'Test Zachee Copy', 'active', date '2026-09-25', 'test'),
+        (6, 47, 'Test Other Plan', 'active', date '2026-09-25', 'test');
+      insert into public.onboarding_steps (id, onboarding_id, template_id, done, due_date) overriding system value values
+  (140, 4, '86e1cj9gh', false, date '2026-10-02'), (141, 4, '86e1cj9he', false, date '2026-10-02'), (142, 4, '86e1cj9gj', false, date '2026-10-02'), (143, 4, '86e1cj9gp', true, date '2026-10-02'),
+  (144, 4, '86e1cj9gx', false, date '2026-10-02'), (145, 4, '86e1cj9gr', false, date '2026-10-02'), (146, 4, '86e1cj9gy', false, date '2026-10-02'), (147, 4, '86e1cj9gn', true, date '2026-10-02'),
+  (148, 4, '86e1cj9ha', false, date '2026-10-02'), (149, 4, '86e1cj9h6', false, date '2026-10-02'), (150, 4, '86e1cj9hh', false, date '2026-10-02'), (151, 4, '86e1cj9h0', false, date '2026-10-02'),
+  (153, 4, '86e1cj9gm', false, date '2026-10-09'), (154, 4, '86e1cj9gv', false, date '2026-10-09'), (155, 4, '86e1cj9hg', false, date '2026-10-16'), (156, 4, '86e1cj9hz', false, date '2026-10-23'),
+  (157, 4, '86e1cj9j0', true, date '2026-11-24'), (158, 4, '86e1cj9gq', false, date '2026-10-02'), (159, 4, '86e1cj9h2', false, date '2026-10-02'), (161, 4, '86e1cj9hc', false, date '2026-10-02'),
+  (162, 4, '86e1cj9h8', true, date '2026-10-02'), (163, 4, '86e1cj9h3', false, date '2026-10-02'), (164, 4, '86e1cj9j3', false, date '2026-11-24'), (165, 4, '86e1cj9j4', false, date '2026-11-24'),
+  (166, 4, '86e1cj9j6', false, date '2026-11-24'), (172, 4, '86e1cj9hm', false, date '2026-10-16'), (177, 4, '86e1cj9hx', false, date '2026-10-23'), (178, 4, '86e1cj9hv', false, date '2026-10-23'),
+  (179, 4, '86e1cj9hw', false, date '2026-10-23'), (180, 4, '86e1cj9j1', false, date '2026-11-24'), (183, 4, '86e1cj9ht', false, date '2026-10-23'), (184, 4, '86e1cj9hr', false, date '2026-10-23'),
+  (296, 4, 'wa166hub', false, date '2026-10-02'), (298, 4, 'wa166hubfirst', false, date '2026-10-02'), (300, 4, 'wa166usehub', true, date '2026-10-02'), (302, 4, 'wa166slack2', false, date '2026-10-02'),
+  (304, 4, 'wa166found', true, date '2026-10-09'), (306, 4, 'wa166brand', false, date '2026-10-09'), (308, 4, 'wa166work', true, date '2026-10-09'), (310, 4, 'wa166team', true, date '2026-10-16'),
+  (312, 4, 'wa166meeting', false, date '2026-10-16'), (322, 4, 'wa167w1', true, date '2026-10-02'), (324, 4, 'wa167w2', false, date '2026-10-09'), (326, 4, 'wa167w3', false, date '2026-10-16'),
+  (328, 4, 'wa167w4', false, date '2026-10-23'), (375, 4, 'wa272appsetup', false, date '2026-10-02'), (186, 5, '86e1cj9gh', false, date '2026-10-02'), (187, 5, '86e1cj9he', false, date '2026-10-02'),
+  (188, 5, '86e1cj9gj', false, date '2026-10-02'), (189, 5, '86e1cj9gp', false, date '2026-10-02'), (190, 5, '86e1cj9gx', false, date '2026-10-02'), (191, 5, '86e1cj9gr', false, date '2026-10-02'),
+  (192, 5, '86e1cj9gy', false, date '2026-10-02'), (193, 5, '86e1cj9gn', false, date '2026-10-02'), (194, 5, '86e1cj9ha', false, date '2026-10-02'), (195, 5, '86e1cj9h6', false, date '2026-10-02'),
+  (196, 5, '86e1cj9hh', false, date '2026-10-02'), (197, 5, '86e1cj9h0', false, date '2026-10-02'), (199, 5, '86e1cj9gm', false, date '2026-10-09'), (200, 5, '86e1cj9gv', false, date '2026-10-09'),
+  (201, 5, '86e1cj9hg', false, date '2026-10-16'), (202, 5, '86e1cj9hz', false, date '2026-10-23'), (203, 5, '86e1cj9j0', false, date '2026-11-24'), (204, 5, '86e1cj9gq', false, date '2026-10-02'),
+  (205, 5, '86e1cj9h2', false, date '2026-10-02'), (207, 5, '86e1cj9hc', false, date '2026-10-02'), (208, 5, '86e1cj9h8', false, date '2026-10-02'), (209, 5, '86e1cj9h3', false, date '2026-10-02'),
+  (210, 5, '86e1cj9j3', false, date '2026-11-24'), (211, 5, '86e1cj9j4', false, date '2026-11-24'), (212, 5, '86e1cj9j6', false, date '2026-11-24'), (218, 5, '86e1cj9hm', false, date '2026-10-16'),
+  (223, 5, '86e1cj9hx', false, date '2026-10-23'), (224, 5, '86e1cj9hv', false, date '2026-10-23'), (225, 5, '86e1cj9hw', false, date '2026-10-23'), (226, 5, '86e1cj9j1', false, date '2026-11-24'),
+  (229, 5, '86e1cj9ht', false, date '2026-10-23'), (230, 5, '86e1cj9hr', false, date '2026-10-23'), (297, 5, 'wa166hub', false, date '2026-10-02'), (299, 5, 'wa166hubfirst', false, date '2026-10-02'),
+  (301, 5, 'wa166usehub', false, date '2026-10-02'), (303, 5, 'wa166slack2', false, date '2026-10-02'), (305, 5, 'wa166found', false, date '2026-10-09'), (307, 5, 'wa166brand', false, date '2026-10-09'),
+  (309, 5, 'wa166work', false, date '2026-10-09'), (311, 5, 'wa166team', false, date '2026-10-16'), (313, 5, 'wa166meeting', false, date '2026-10-16'), (323, 5, 'wa167w1', false, date '2026-10-02'),
+  (325, 5, 'wa167w2', false, date '2026-10-09'), (327, 5, 'wa167w3', false, date '2026-10-16'), (329, 5, 'wa167w4', false, date '2026-10-23'), (376, 5, 'wa272appsetup', false, date '2026-10-02');
+      update public.onboarding_steps set done_at = now(), done_by = 'test' where done;
+      insert into public.onboarding_steps (onboarding_id, template_id, done, due_date) select 6, template_id, false, due_date from public.onboarding_steps where onboarding_id = 5;`);
+    ok((await one(db2, `select count(*)::int as n from public.onboarding_steps where onboarding_id in (4, 5)`)).n === 92 && (await one(db2, `select count(*)::int as n from public.onboarding_steps where done`)).n === 9, 'the copy: 92 steps, 9 done');
+    ok((await one(db2, `select count(*)::int as n from public.onboarding_steps s join public.onboarding_template t on t.id = s.template_id where s.due_date is distinct from public.onb_due(t.section, date '2026-09-25')`)).n === 0, 'the copy: every due date is onb_due(section, 25 September), as live');
+    await db2.exec(migrationB);
+    const PLAN = `select s.onboarding_id, s.template_id, s.due_date::text as due, s.done from public.onboarding_steps s where s.onboarding_id in (4, 5, 6) order by 1, 2`;
+    const before = JSON.stringify((await db2.query(PLAN)).rows);
+    const members = `select id, start_date::text as sd, start_source from public.team_members where id in (46, 47, 50) order by id`;
+    const membersBefore = JSON.stringify((await db2.query(members)).rows);
+    const restart = read('../build/wa279c_restart.sql'), undoC = read('../build/wa279c_undo.sql');
+    // no release date yet (wa279a seeds onboard_behind_since empty): refused, nothing changes
+    let refused = '';
+    try { await db2.exec(restart); } catch (e) { refused = String(e.message); }
+    ok(/onboard_behind_since is not a date/.test(refused) && JSON.stringify((await db2.query(PLAN)).rows) === before, 'wa279c refuses with no release date and changes nothing (' + refused + ')');
+    await db2.exec(`update public.app_config set value = '2026-11-05' where key = 'onboard_behind_since'`);
+    await db2.exec(restart);
+    await db2.exec(restart);
+    console.log('wa279c: applied twice with no error');
+    ok((await one(db2, `select string_agg(id || '=' || started_at, ',' order by id) as x from public.onboardings where id in (4, 5, 6)`)).x === '4=2026-11-05,5=2026-11-05,6=2026-09-25', 'plans 4 and 5 start on the release date; plan 6 does not move');
+    const open = await one(db2, `select count(*)::int as n, count(*) filter (where s.due_date is distinct from public.onb_due(t.section, date '2026-11-05'))::int as bad
+      from public.onboarding_steps s join public.onboarding_template t on t.id = s.template_id where s.onboarding_id in (4, 5) and not s.done`);
+    ok(open.n > 80 && open.bad === 0, 'every open step of 4 and 5 is due from the release date (' + open.n + ' open, ' + open.bad + ' wrong)');
+    const doneBefore = JSON.stringify(JSON.parse(before).filter((r) => r.done));
+    const doneAfter = JSON.stringify((await db2.query(PLAN)).rows.filter((r) => r.done));
+    // 9 done in the copy; wa279b retires wa166team and 86e1cj9j0 (Alyx had both done), so 7 are left at the restart
+    ok(doneAfter === doneBefore && JSON.parse(doneBefore).length === 7, 'the done steps keep their ticks and their dates (' + doneAfter + ')');
+    ok((await one(db2, `select string_agg(template_id || '=' || due_date, ',' order by template_id) as x from public.onboarding_steps where onboarding_id = 4 and template_id in ('wa279role60', 'wa279role90')`)).x === 'wa279role60=2027-01-04,wa279role90=2027-02-03', 'the new role steps from wa279b are re-dated too (60 and 90 days from 5 November)');
+    ok(JSON.stringify((await db2.query(`select onboarding_id, template_id, due_date::text as due, done from public.onboarding_steps where onboarding_id = 6 order by 1, 2`)).rows) === JSON.stringify(JSON.parse(before).filter((r) => Number(r.onboarding_id) === 6)), 'plan 6 is untouched');
+    ok(JSON.stringify((await db2.query(members)).rows) === membersBefore, 'team_members (start_date, start_source) are untouched');
+    ok((await one(db2, `select string_agg(entity_id || ':' || old_value || '>' || new_value, ',' order by entity_id) as x from public.change_log where changed_by = 'wave279c'`)).x === '4:2026-09-25>2026-11-05,5:2026-09-25>2026-11-05', 'one change_log row per plan, even after two runs');
+    // the undo, twice: the plans are back exactly as before the restart (after wa279b)
+    await db2.exec(undoC);
+    await db2.exec(undoC);
+    console.log('wa279c undo: applied twice with no error');
+    {
+      const now = (await db2.query(PLAN)).rows, was = JSON.parse(before);
+      const diff = now.filter((r, i) => JSON.stringify(r) !== JSON.stringify(was[i])).concat(now.length === was.length ? [] : [{ rows: now.length, was: was.length }]);
+      ok(diff.length === 0, 'after the wa279c undo every step of 4, 5 and 6 has its due date and tick as before the restart (' + JSON.stringify(diff) + ')');
+    }
+    ok((await one(db2, `select string_agg(id || '=' || started_at, ',' order by id) as x from public.onboardings where id in (4, 5, 6)`)).x === '4=2026-09-25,5=2026-09-25,6=2026-09-25', 'and both start on 25 September again');
+    ok((await one(db2, `select count(*)::int as n from public.change_log where changed_by = 'wave279c undo'`)).n === 2, 'one undo change_log row per plan');
+    // a step ticked after the restart keeps its tick through the undo and gets its old date back
+    await db2.exec(restart);
+    await db2.exec(`update public.onboarding_steps set done = true, done_at = now(), done_by = 'test' where onboarding_id = 5 and template_id in ('86e1cj9gh', '86e1cj9h6', 'wa279role60')`);
+    await db2.exec(undoC);
+    ok((await one(db2, `select done::text || ' ' || due_date as x from public.onboarding_steps where onboarding_id = 5 and template_id = '86e1cj9gh'`)).x === 'true 2026-10-02', 'a step ticked after the restart stays ticked and gets its listed date back');
+    // wa279b moved 86e1cj9h6 from WEEK 1 to WEEK 2 (so its date before the restart was 9 October, not the listed 2 October), and added wa279role60
+    ok((await one(db2, `select string_agg(template_id || ' ' || done || ' ' || due_date, ',' order by template_id) as x from public.onboarding_steps where onboarding_id = 5 and template_id in ('86e1cj9h6', 'wa279role60')`)).x === '86e1cj9h6 true 2026-10-09,wa279role60 true 2026-11-24',
+      'a moved step and a new step ticked after the restart stay ticked and get the date wa279b gave them');
+    ok((await one(db2, `select due_date::text as d from public.onboarding_steps where onboarding_id = 4 and template_id = '86e1cj9h8'`)).d === '2026-10-02', 'a moved step done before the restart keeps its own date (wa279b and the restart leave done steps alone)');
+    // someone moved a plan: the restart refuses and changes nothing
+    await db2.exec(`update public.onboardings set started_at = date '2026-10-01' where id = 5`);
+    const moved = JSON.stringify((await db2.query(PLAN)).rows);
+    refused = '';
+    try { await db2.exec(restart); } catch (e) { refused = String(e.message); }
+    ok(/onboarding 5 starts on 2026-10-01/.test(refused) && JSON.stringify((await db2.query(PLAN)).rows) === moved && (await one(db2, `select started_at::text as d from public.onboardings where id = 4`)).d === '2026-09-25', 'a plan someone moved stops the restart before either plan changes (' + refused + ')');
+    await db2.close();
+    console.log('wa279c: every check passed');
+  }
 
   console.log(`w279sql.mjs: OK (${checks} runner checks, plus the assertion runs)`);
   process.exit(0);

@@ -1,4 +1,4 @@
-// v21 (wave279, 04/11/26): three relayed onboarding kinds from the daily onboarding job (SQL, through call_edge, the trigger secret only), handled exactly like onboard_remind: onboard_behind (the hire: your plan is behind), onboard_behind_lead (the manager and HR: a hire is behind) and onboard_role_pick (the manager: pick the hire's role trainings). Each follows the person's own wa_notify_prefs; on top of v20.
+// v21 (wave279, 04/11/26): three relayed onboarding kinds from the daily onboarding job (SQL, through call_edge, the trigger secret only), handled exactly like onboard_remind: onboard_behind (the hire: your plan is behind), onboard_behind_lead (the manager and HR: a hire is behind) and onboard_role_pick (the manager: pick the hire's role trainings, or what the Hub picked). Each follows the person's own wa_notify_prefs. A call without a url links the hire and the manager to Home (#mypage, where the pick card is); the job passes HR's own link (#hrcentre/onboarding). On top of v20.
 // v20 (wave275, 02/11/26, released on top of wave277's v19): three more relay events for one streamlined onboarding, from onboard-run and onboard-link (the trigger secret only), the same
 // shape as v16's: onboard_propose (the manager: propose the call and the 1-on-1 for a new hire), onboard_answer (the manager and HR: times were proposed, or
 // the hire said yes or no) and onboard_ready (the manager: the hire finished their setup rundown; reserved, not yet sent). Nothing here is ever sent to the new hire.
@@ -118,7 +118,7 @@ const RELAY_TITLE: Record<string, string> = { timeoff_request: 'Time off request
 const RELAY_URL: Record<string, string> = { timeoff_request: '#hrcentre/timeoff', applicant: '#hrcentre/applications', loop_still: '#mypage', onboard_date: '#hrcentre/onboarding', onboard_grid: '#hrcentre/onboarding', onboard_remind: '#hrcentre/onboarding',
   meet_avail_ask: '#mypage', connection_expiring: '#studio/connections',
   onboard_propose: '#hrcentre/onboarding', onboard_answer: '#hrcentre/onboarding', onboard_ready: '#hrcentre/onboarding',
-  onboard_behind: '#mypage', onboard_behind_lead: '#hrcentre/onboarding', onboard_role_pick: '#hrcentre/onboarding' };   /* meet_propose builds its own link to the team's Agenda tab; onboard-run passes its own url for managers (Home) */
+  onboard_behind: '#mypage', onboard_behind_lead: '#mypage', onboard_role_pick: '#mypage' };   /* meet_propose builds its own link to the team's Agenda tab; onboard-run passes its own url for managers (Home) */
 /* v15 (shared since v18): a relayed message to each person, the Slack DM through their switch and the log, then the Hub notification through hub-push */
 async function relaySend(event: string, toList: string[], text: string, title: string, plainBody: string, url: string, tag?: string): Promise<{ outcome: Record<string, string>; hub: string }> {
   const to = Array.from(new Set(toList));

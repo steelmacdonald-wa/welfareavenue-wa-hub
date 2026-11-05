@@ -180,6 +180,36 @@ begin
   assert (select count(*) from public.wa279_plan_manager(-1)) = 0, 'a plan that does not exist has no manager';
   assert not has_function_privilege('authenticated', 'public.wa279_plan_manager(bigint)', 'execute'), 'wa279_plan_manager is not open to signed-in people';
 
+  -- ---- final review: wa279_my_hires, the plans the signed-in person manages (the flow's manager is not always on the lead card)
+  perform set_config('request.jwt.claims', c_mgr, true);
+  v_o := public.wa279_my_hires();
+  assert (select array_agg((x ->> 'onboarding_id')::bigint order by (x ->> 'onboarding_id')::bigint) from jsonb_array_elements(v_o) x) = array[v_ph, v_ph2],
+    'my_hires for the manager: the plan whose flow names them and the plan of their report on the org chart: ' || v_o::text;
+  assert (select x ->> 'name' from jsonb_array_elements(v_o) x where (x ->> 'onboarding_id')::bigint = v_ph) = 'Test Role Hire', 'with the hire''s name';
+  assert (select (x ->> 'day')::int from jsonb_array_elements(v_o) x where (x ->> 'onboarding_id')::bigint = v_ph) = (now() at time zone 'America/Toronto')::date - v_start,
+    'and the day as the database counts it (Toronto today minus day one)';
+  assert (select array_agg(k order by k) from jsonb_object_keys(v_o -> 0) k) = array['day', 'name', 'onboarding_id'], 'exactly onboarding_id, name and day';
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"W279.Leader@example.invalid"}', true);
+  assert (select array_agg((x ->> 'onboarding_id')::bigint) from jsonb_array_elements(public.wa279_my_hires()) x) = array[v_ph3],
+    'a team leader gets the plan that has no flow and no line manager (the email compared lower-cased), not the plans whose manager is named';
+  perform set_config('request.jwt.claims', c_out, true);
+  assert public.wa279_my_hires() = '[]'::jsonb, 'an outsider manages nobody';
+  perform set_config('request.jwt.claims', c_hire, true);
+  assert public.wa279_my_hires() = '[]'::jsonb, 'nor does the hire';
+  perform set_config('request.jwt.claims', c_hr, true);
+  assert public.wa279_my_hires() = '[]'::jsonb, 'HR as such is not a manager here (HR picks from the HR centre)';
+  perform set_config('request.jwt.claims', '{}', true);
+  assert public.wa279_my_hires() = '[]'::jsonb, 'someone not signed in gets nothing';
+  perform set_config('request.jwt.claims', c_mgr, true);
+  update public.onboardings set status = 'completed' where id = v_ph2;
+  assert (select array_agg((x ->> 'onboarding_id')::bigint) from jsonb_array_elements(public.wa279_my_hires()) x) = array[v_ph], 'a finished plan is not listed';
+  update public.onboardings set status = 'active' where id = v_ph2;
+  update public.team_members set active = false where id = v_m;
+  assert public.wa279_my_hires() = '[]'::jsonb, 'a manager who left manages nothing (the next in line does)';
+  update public.team_members set active = true where id = v_m;
+  assert has_function_privilege('authenticated', 'public.wa279_my_hires()', 'execute') and not has_function_privilege('anon', 'public.wa279_my_hires()', 'execute'), 'my_hires is for signed-in people only';
+  perform set_config('request.jwt.claims', c_staff, true);
+
   -- ---- the plan steps for the two sections (a plan with nothing picked leaves them open)
   insert into public.onboarding_template (id, section, name, academy_path) values
     ('wa279role60', '60 DAYS', 'Your role trainings', 'role60'), ('wa279role90', '90 DAYS', 'Your role trainings', 'role90');
@@ -408,14 +438,16 @@ begin
   assert exists (select 1 from public.wa_policy_signoffs where email = 'w279.pol@example.invalid' and policy_key = 'w279-old'), 'a sign-off from before stays';
 
   -- no setting: 10 minutes. The caller's email comes in capitals in the token and is judged lower-cased.
-  assert not exists (select 1 from public.app_config where key = 'policy_read_minutes'), 'no setting in the test data';
+  -- final review: the migration seeds the setting as '0' (off until the page release); take it out to prove the default of 10
+  assert (select value from public.app_config where key = 'policy_read_minutes') = '0', 'the migration seeds policy_read_minutes as 0';
+  delete from public.app_config where key = 'policy_read_minutes';
   perform set_config('request.jwt.claims', c_pol, true);
 
   -- sign without opening: refused
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 10 more minutes first', 'sign without opening is refused: ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Open it first, then read it for 10 minutes.', 'sign without opening is refused: ' || coalesce(v_msg, 'no error');
 
   -- an unknown or inactive policy cannot be opened
   v_msg := null;
@@ -432,7 +464,7 @@ begin
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 10 more minutes first', 'open then sign at once is refused: ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Read it for 10 more minutes first.', 'open then sign at once is refused: ' || coalesce(v_msg, 'no error');
 
   -- a second open keeps the first time; one row; the email is lower case; minutes left round up
   update public.wa_policy_opens set opened_at = now() - interval '3 minutes 30 seconds' where policy_key = 'w279-a';
@@ -443,7 +475,7 @@ begin
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.pol@example.invalid', 'Test Policy Person', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 7 more minutes first', 'minutes left are rounded up (6.5 becomes 7): ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Read it for 7 more minutes first.', 'minutes left are rounded up (6.5 becomes 7): ' || coalesce(v_msg, 'no error');
 
   -- the state shows the caller's opens only
   v_s := public.wa279_policy_state();
@@ -492,18 +524,22 @@ begin
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 25 more minutes first', 'a longer rule is used: ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Read it for 25 more minutes first.', 'a longer rule is used: ' || coalesce(v_msg, 'no error');
   update public.app_config set value = 'ten' where key = 'policy_read_minutes';
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 10 more minutes first', 'a setting that is not a number falls back to 10: ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Read it for 10 more minutes first.', 'a setting that is not a number falls back to 10: ' || coalesce(v_msg, 'no error');
   update public.app_config set value = '1' where key = 'policy_read_minutes';
   update public.wa_policy_opens set opened_at = now() - interval '1 second' where email = 'w279.long@example.invalid';
   v_msg := null;
   begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-a');
   exception when raise_exception then v_msg := sqlerrm; end;
-  assert v_msg = 'Read it for 1 more minutes first', 'never less than 1 minute: ' || coalesce(v_msg, 'no error');
+  assert v_msg = 'Read it for 1 more minute first.', 'never less than 1 minute, and one minute is singular: ' || coalesce(v_msg, 'no error');
+  v_msg := null;
+  begin insert into public.wa_policy_signoffs (email, name, policy_key) values ('w279.long@example.invalid', 'Test Long', 'w279-b');
+  exception when raise_exception then v_msg := sqlerrm; end;
+  assert v_msg = 'Open it first, then read it for 1 minute.', 'never opened with a 1 minute rule: singular too: ' || coalesce(v_msg, 'no error');
   delete from public.app_config where key = 'policy_read_minutes';
 
   -- a sync that blows up never fails a sign-off
@@ -624,9 +660,9 @@ begin
   assert v_p ->> 'text' = 'You''re behind on 1 onboarding step from Week 1: Test step in week 1. <https://hub.welfareavenue.com/#mypage|Open the Hub>', 'the hire: the Slack text';
   assert (select array_agg(k order by k) from jsonb_object_keys(v_p) k) = array['body', 'event', 'tag', 'text', 'title', 'to_email', 'url'], 'exactly the fields notify reads';
   v_p := (select payload from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead1@example.invalid');
-  assert v_p ->> 'event' = 'onboard_behind_lead' and v_p ->> 'url' = '#hrcentre/onboarding' and v_p ->> 'title' = 'Test Behind A is behind on onboarding', 'the manager: event, url, title';
+  assert v_p ->> 'event' = 'onboard_behind_lead' and v_p ->> 'url' = '#mypage' and v_p ->> 'title' = 'Test Behind A is behind on onboarding', 'the manager: event, url (Home), title';
   assert v_p ->> 'body' = 'Test Behind A is behind on 1 onboarding step from Week 1: Test step in week 1.', 'the manager: body';
-  assert v_p ->> 'text' like '% <https://hub.welfareavenue.com/#hrcentre/onboarding|Open the Hub>', 'the manager: the Slack text links to Onboarding';
+  assert v_p ->> 'text' like '% <https://hub.welfareavenue.com/#mypage|Open the Hub>', 'the manager: the Slack text links to Home';
   assert not exists (select 1 from public.w279_edge_calls where payload ->> 'to_email' = 'w279.lead2@example.invalid'), 'only the first leader is messaged';
   assert (select count(*) from public.onboarding_behind_log where onboarding_id = pa and kind = 'onboard_behind' and late = 1) = 1, 'one log row';
 
@@ -649,6 +685,11 @@ begin
   assert (select count(*) from public.w279_edge_calls) = 4, 'the third message goes to the hire, the manager and both HR addresses';
   assert (select array_agg(payload ->> 'to_email' order by payload ->> 'to_email') from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind_lead')
          = array['w279.hr1@example.invalid', 'w279.hr2@example.invalid', 'w279.lead1@example.invalid'], 'HR hears as onboard_behind_lead';
+  assert (select array_agg((payload ->> 'to_email') || ' ' || (payload ->> 'url') order by payload ->> 'to_email') from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind_lead')
+         = array['w279.hr1@example.invalid #hrcentre/onboarding', 'w279.hr2@example.invalid #hrcentre/onboarding', 'w279.lead1@example.invalid #mypage'],
+    'HR''s link goes to Onboarding in the HR centre, the manager''s to Home';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind_lead' and payload ->> 'url' = '#hrcentre/onboarding'
+           and payload ->> 'text' like '%<https://hub.welfareavenue.com/#hrcentre/onboarding|Open the Hub>') = 2, 'and HR''s Slack text says so too';
   assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_behind') = 1, 'and the hire once';
   assert (select (detail ->> 'hr')::boolean from public.onboarding_behind_log where onboarding_id = pa order by id desc limit 1), 'the log says HR was added';
 
@@ -709,7 +750,8 @@ begin
   v_r := public.wa279_onboard_tick();
   assert (v_r ->> 'role_pick')::int = 1 and (select count(*) from public.w279_edge_calls) = 1, 'day 21: one reminder ' || v_r::text;
   v_p := (select payload from public.w279_edge_calls);
-  assert v_p ->> 'event' = 'onboard_role_pick' and v_p ->> 'to_email' = 'w279.lead1@example.invalid' and v_p ->> 'url' = '#hrcentre/onboarding', 'to the manager, as onboard_role_pick';
+  assert v_p ->> 'event' = 'onboard_role_pick' and v_p ->> 'to_email' = 'w279.lead1@example.invalid' and v_p ->> 'url' = '#mypage', 'to the manager, as onboard_role_pick, linking to Home';
+  assert v_p ->> 'text' like '%<https://hub.welfareavenue.com/#mypage|Open the Hub>', 'the Slack text links to Home too';
   assert v_p ->> 'title' = 'Pick Test Behind E''s role trainings', 'the title names the hire';
   assert v_p ->> 'body' = 'Pick 2 or 3 trainings for Test Behind E''s 60 days and 5 or 6 for their 90 days. The Hub picks for you on day 29 and day 59 if you don''t.', 'both short: the body names both';
   assert v_p ->> 'tag' = 'onboard-role-pick-' || pe || '-' || v_today and v_p ->> 'text' like '%|Open the Hub>', 'the tag and the Slack text';
@@ -741,12 +783,12 @@ begin
   delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
   update public.onboardings set started_at = v_today - 29 where id = pe;
   perform public.wa279_onboard_tick();
-  assert (select payload ->> 'body' from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick') = 'Pick 5 or 6 trainings for Test Behind E''s 90 days. The Hub picks for you on day 59 if you don''t.', 'day 29: the 60 days is no longer asked';
+  assert (select payload ->> 'body' from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick' and payload ->> 'title' like 'Pick %') = 'Pick 5 or 6 trainings for Test Behind E''s 90 days. The Hub picks for you on day 59 if you don''t.', 'day 29: the 60 days is no longer asked';
   delete from public.onboarding_role_picks where onboarding_id = pe;
   delete from public.w279_edge_calls; delete from public.onboarding_behind_log;
   update public.onboardings set started_at = v_today - 59 where id = pe;
   perform public.wa279_onboard_tick();
-  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick') = 0, 'day 59: both auto-pick days have passed, no reminder';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'event' = 'onboard_role_pick' and payload ->> 'title' like 'Pick %') = 0, 'day 59: both auto-pick days have passed, no reminder (the Hub tells what it picked instead)';
   delete from public.onboarding_role_picks where onboarding_id = pe;
   update public.onboardings set started_at = v_today - 21 where id = pe;
   -- both lists full: no reminder
@@ -772,6 +814,34 @@ begin
   assert (public.wa279_onboard_tick(true) -> 'autopick' ->> 'skipped') = 'dry run', 'a dry run does not pick';
   delete from public.onboarding_role_picks where onboarding_id = pf;
   assert (public.wa279_onboard_tick(true) ->> 'dry')::boolean and (select count(*) from public.onboarding_role_picks where onboarding_id = pf) = 0, 'the dry run left no picks';
+  -- final review: the manager hears what the Hub picked, once per plan and section
+  v_p := (select payload from public.w279_edge_calls where payload ->> 'title' = 'The Hub picked Test Behind F''s role trainings');
+  assert v_p ->> 'event' = 'onboard_role_pick' and v_p ->> 'to_email' = 'w279.lead1@example.invalid' and v_p ->> 'url' = '#mypage', 'the Hub''s pick: to the manager, as onboard_role_pick, linking to Home: ' || coalesce(v_p::text, 'not sent');
+  assert v_p ->> 'body' = 'The Hub picked 3 trainings for Test Behind F''s 60 days: Behind module 3, Behind module 1, Behind module 2. You can change them on Home.', 'the body names the count, the section and the modules in order: ' || (v_p ->> 'body');
+  assert v_p ->> 'text' like 'The Hub picked 3 trainings%<https://hub.welfareavenue.com/#mypage|Open the Hub>' and v_p ->> 'tag' = 'onboard-role-autopicked-' || pf || '-60days-' || v_today, 'the Slack text and a tag for the plan, section and day';
+  assert (v_r ->> 'autopick_told')::int = 1 and (select count(*) from jsonb_array_elements(v_r -> 'plan') x where x ->> 'kind' = 'onboard_role_autopicked' and (x ->> 'onboarding_id')::bigint = pf) = 1, 'the job counts it and lists it';
+  assert (select count(*) from public.onboarding_behind_log where onboarding_id = pf and kind = 'onboard_role_autopicked' and detail ->> 'section' = '60 DAYS' and late = 3 and detail ->> 'to' = 'w279.lead1@example.invalid') = 1, 'one log row for the section';
+  v_r := public.wa279_onboard_tick();   -- the picks were taken off above: the Hub picks again, but the manager was already told about this section
+  assert (v_r -> 'autopick' ->> 'picked')::int = 3 and (v_r ->> 'autopick_told')::int = 0, 'picked again, not told again';
+  assert (select count(*) from public.w279_edge_calls where payload ->> 'title' = 'The Hub picked Test Behind F''s role trainings') = 1, 'one message for the section, ever';
+  -- day 59: the 90 days list gets the one recommended module left, and that section is its own message (one training, singular)
+  update public.onboardings set started_at = v_today - 59 where id = pf;
+  v_r := public.wa279_onboard_tick();
+  assert (v_r ->> 'autopick_told')::int = 1, 'the 90 days pick is told: ' || v_r::text;
+  assert (select payload ->> 'body' from public.w279_edge_calls where payload ->> 'title' = 'The Hub picked Test Behind F''s role trainings' and payload ->> 'tag' like '%-90days-%')
+         = 'The Hub picked 1 training for Test Behind F''s 90 days: Behind module 4. You can change them on Home.', 'one training is singular';
+  -- the switch off: the Hub still picks, but nobody is told and nothing is logged
+  delete from public.onboarding_role_picks where onboarding_id = pf;
+  delete from public.onboarding_behind_log where onboarding_id = pf;
+  delete from public.w279_edge_calls;
+  update public.app_config set value = 'off' where key = 'onboard_behind_on';
+  v_r := public.wa279_onboard_tick();
+  assert (v_r -> 'autopick' ->> 'picked')::int = 4 and (select count(*) from public.w279_edge_calls) = 0 and (select count(*) from public.onboarding_behind_log) = 0, 'switch off: picked, not told, not logged: ' || v_r::text;
+  update public.app_config set value = 'on' where key = 'onboard_behind_on';
+  -- the Hub's pick and the tick count days on the same Toronto date
+  assert pg_get_function_arguments('public.wa279_role_autopick(date)'::regprocedure) ~ 'America/Toronto', 'the autopick''s today defaults to the Toronto date: ' || pg_get_function_arguments('public.wa279_role_autopick(date)'::regprocedure);
+  assert pg_get_functiondef('public.wa279_onboard_tick(boolean)'::regprocedure) ~ 'wa279_role_autopick\(v_today\)', 'the tick passes its own Toronto date';
+  delete from public.onboarding_role_picks where onboarding_id = pf;
   update public.onboardings set status = 'completed' where id = pf;
   update public.app_config set value = '' where key = 'onboard_role_picks_since';
   delete from public.w279_edge_calls; delete from public.onboarding_behind_log;

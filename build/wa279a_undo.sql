@@ -6,7 +6,8 @@
 -- Steps already deleted from plans by the flow trigger are not put back (they were covered by the setup page). Safe to run twice.
 -- Later parts of wa279a add their undo here, ABOVE this part 2 block where they depend on it.
 
--- Part 4 (Task 4): the behind job. The cron entry, the three notification kinds, the three settings, the functions and the log table go.
+-- Part 4 (Task 4): the behind job. The cron entry, the three notification kinds, the three settings (and part 3's policy_read_minutes), the functions and the
+--   log table go.
 --   Messages already sent stay sent. The hardening of wa279_recommended, wa279_role_options and wa279_role_autopick goes with part 2 below (those functions are dropped).
 do $cron$
 begin
@@ -14,6 +15,7 @@ begin
 end $cron$;
 delete from public.hub_notification_kinds where key in ('onboard_behind', 'onboard_behind_lead', 'onboard_role_pick');
 delete from public.app_config where key in ('onboard_behind_on', 'onboard_behind_since', 'onboard_role_picks_since');
+delete from public.app_config where key = 'policy_read_minutes';   -- part 3's setting (live had no such key before wave279)
 drop function if exists public.wa279_onboard_tick(boolean);
 drop function if exists public.wa279_tell(text, text, text, text, text, text);
 drop function if exists public.wa279_behind_list(bigint);
@@ -72,6 +74,7 @@ drop function if exists public.wa279_role_state(bigint, text);
 drop function if exists public.wa279_pick_remove(bigint, text);
 drop function if exists public.wa279_pick_add(bigint, text, bigint, text, boolean);
 drop function if exists public.wa279_recommended(bigint);
+drop function if exists public.wa279_my_hires();
 drop function if exists public.wa279_can_pick(bigint);
 drop function if exists public.wa279_plan_manager(bigint);
 drop table if exists public.onboarding_role_picks;

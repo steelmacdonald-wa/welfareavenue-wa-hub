@@ -4,8 +4,9 @@
    Steel (04/11/26): the manager chooses each hire's role trainings in a pop-up that recommends trainings for that person's role or
    department: 2 or 3 for 60 days and 5 or 6 for 90 days.
    - Home: a manager whose hire is at day 21 or later (the database's count: today minus day one) and still has a short list sees
-     "Pick <first name>'s role trainings". The hires come from the lead's card (wave166, onboarding_lead_view); wa279_role_options is
-     asked only for the hires at day 21 or later, and the card shows only where the database says this person may pick.
+     "Pick <first name>'s role trainings". The hires come from the lead's card (wave166, onboarding_lead_view) and from wa279_my_hires
+     (the plans the database says this person manages, the flow's named manager first), each plan once; wa279_role_options is asked
+     only for the hires at day 21 or later, and the card shows only where the database says this person may pick.
    - The pop-up (its own layer, so it opens over HR's checklist too): two lists, 60 days and 90 days. Recommended modules first, in
      the database's order, then the ones already picked; a search over every active Academy module (the trainings table, as the
      Academy reads it; planned ones left out). Modules the hire finished (done_ids, search results included) are greyed and cannot
@@ -15,7 +16,7 @@
    - HR centre: the person's checklist (wa37OpenModal) gets a Role trainings button that opens the same pop-up.
    - The plan: wave166's checklist hands the role60 / role90 steps to roleStep (one call-site line in parts166/c_plan.js): the
      picked modules with a tick each and who picked them, or "Your manager picks these in week 3."
-   Data: build/wa279a_rules.sql (wa279_role_options, wa279_role_save). Test: test/w279drive.js with test/w279fx.js. */
+   Data: build/wa279a_rules.sql (wa279_role_options, wa279_role_save, wa279_my_hires). Test: test/w279drive.js with test/w279fx.js. */
 (function () {
   if (window.__wa279) return; window.__wa279 = true;
   var GREEN = '#103F39', INK = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2', FLAG = '#B3402F', GOLD = '#DCA527';
@@ -295,10 +296,26 @@
     if (homeQ) return homeQ;
     homeQ = (async function () {
       try {
-        var W = window.w166; if (!W || typeof W.load !== 'function' || !document.getElementById('mpBody')) return;
-        var lead = await W.load(false);
-        /* the lead's card counts day one as day 1; the database counts today minus day one, so a lead day of 21 or more is the wider net */
-        var ppl = ((lead && lead.people) || []).filter(function (p) { return p && p.onboarding_id && !p.starts_on && Number(p.day) >= 21; });
+        if (!document.getElementById('mpBody')) return;
+        var W = window.w166, seen = {}, ppl = [];
+        /* the hires on the lead's card (onboarding_lead_view). It counts day one as day 1; the database counts today minus day one, so a lead day
+           of 21 or more is the wider net */
+        if (W && typeof W.load === 'function') {
+          try {
+            var lead = await W.load(false);
+            ((lead && lead.people) || []).forEach(function (p) {
+              if (p && p.onboarding_id && !p.starts_on && Number(p.day) >= 21 && !seen[p.onboarding_id]) { seen[p.onboarding_id] = 1; ppl.push(p); }
+            });
+          } catch (e) { /* the other list still counts */ }
+        }
+        /* final review: plus the plans the database says this person manages (wa279_my_hires), so a flow's named manager who is not on the lead's
+           card still sees the card. Day as the database counts it. */
+        try {
+          var mh = await db.rpc('wa279_my_hires');
+          if (mh && !mh.error) (mh.data || []).forEach(function (p) {
+            if (p && p.onboarding_id && Number(p.day) >= 21 && !seen[p.onboarding_id]) { seen[p.onboarding_id] = 1; ppl.push(p); }
+          });
+        } catch (e) { /* the lead's card still counts */ }
         var out = [];
         for (var i = 0; i < ppl.length; i++) {
           try { var d = await options(ppl[i].onboarding_id); if (d && Number(d.day) >= 21 && d.can_pick && isShort(d)) out.push({ onb: ppl[i].onboarding_id, d: d }); } catch (e) { /* not theirs to pick */ }

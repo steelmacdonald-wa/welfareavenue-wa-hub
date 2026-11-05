@@ -2,7 +2,8 @@
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
 // v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on;
 // v8, 04/11/26, wave278 Task 3: the access steps, the leader decision, Re-check and the welcome copies; v9, 04/11/26, wave278 Task 4: the welcome email
-// rewritten and sent as the offer's sender)
+// rewritten and sent as the offer's sender; v10, 04/11/26, wave279 Task 6: the job title at Accept, the position's title becomes the new Google
+// account's job title when the flow has a position)
 // wave278 (v9), the welcome email: the companion note's text (claude/04-11-26, section 1), EN and FR: the two meetings, the login (its video on its own
 //   line), the personal Hub link (the steps live on that page now, so none are pasted), the team's weekly meeting (setup_ticks.weekly_meeting) and the
 //   documents (the job description, the signed offer letter hub_candidates.offer_doc_url, one line per drive in setup_ticks.drives_added, else "HR will

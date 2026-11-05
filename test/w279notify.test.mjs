@@ -36,8 +36,8 @@ async function world(prefs = []) {
 const secret = { 'x-wa-secret': SECRET, Authorization: 'Bearer anon-key-for-tests' };
 const KINDS = [
   ['onboard_behind', '#mypage', "Onboarding: you're behind"],
-  ['onboard_behind_lead', '#hrcentre/onboarding', 'Onboarding: a hire is behind'],
-  ['onboard_role_pick', '#hrcentre/onboarding', 'Onboarding: pick role trainings'],
+  ['onboard_behind_lead', '#mypage', 'Onboarding: a hire is behind'],   // final review: managers go to Home, where the pick card is
+  ['onboard_role_pick', '#mypage', 'Onboarding: pick role trainings'],
 ];
 const payload = (event, url, title) => ({ event, to_email: P, url, tag: event + '-1', title, body: 'Plain body for ' + event, text: ':bell: Text for ' + event });
 
@@ -66,6 +66,13 @@ for (const [event, url, title] of KINDS) {
     assert.equal(r.status, 200, JSON.stringify(r.body));
     assert.equal(n.push()[0].body.title, title);
     assert.equal(n.push()[0].body.url, '/' + url);
+  });
+
+  test(event + ': a url the job passes wins over the fallback (HR gets the link to Onboarding in the HR centre)', async () => {
+    const n = await world();
+    const r = await n.send({ ...payload(event, '#hrcentre/onboarding', title) }, secret);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    assert.equal(n.push()[0].body.url, '/#hrcentre/onboarding');
   });
 
   test(event + ': a person who switched Slack off for the kind gets no DM; without the secret it is 401', async () => {

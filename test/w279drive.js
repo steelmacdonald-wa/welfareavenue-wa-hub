@@ -124,6 +124,32 @@ const noDash = (t) => !/—/.test(t);
     await done(f);
   }
 
+  /* ---------- 1b. final review: Joy is Lina's manager on the flow only (the lead's card does not list her); wa279_my_hires brings her in ---------- */
+  {
+    const mine = [{ onboarding_id: ONB.lina, name: 'Lina Fixture', day: 22 }, { onboarding_id: ONB.omar, name: 'Omar Early', day: 10 }];
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: { onboarding_lead_view: { people: [] }, wa279_my_hires: mine } });
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w279home', { timeout: 6000 }).catch(() => {});
+    const t = await textOf(f, '#w279home');
+    ok('my_hires: the flow\'s manager sees "Pick Lina\'s role trainings" with no lead card', /Pick Lina's role trainings/.test(t), t);
+    const c = await calls(f, 'wa279_role_options');
+    ok('my_hires: options asked only for the hire at day 21 or later', c.length >= 1 && c.every((x) => x.args.p_onb === ONB.lina), c);
+    ok('my_hires: no card for Omar (day 10)', !/Omar/.test(t), t);
+    ok('my_hires: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+  /* ---------- 1c. Lina on both lists: one card; my_hires refused: the lead's card still works ---------- */
+  {
+    const f = await go({ who: 'plain', hash: '#mypage', rpcs: { onboarding_lead_view: lead279(), wa279_my_hires: [{ onboarding_id: ONB.lina, name: 'Lina Fixture', day: 22 }] } });   // o.rpcs replaces go's rpcs, so the lead's card is named here
+    await f.hash('#mypage', 1500);
+    await f.page.waitForSelector('#w279home', { timeout: 6000 }).catch(() => {});
+    ok('both lists: Lina\'s card shows once', (await f.ev(() => document.querySelectorAll('#w279home .w279hc').length)) === 1, await textOf(f, '#w279home'));
+    const n = await f.ev(async () => { window.__WA_RPC_ERRORS = { wa279_my_hires: 'permission denied for function wa279_my_hires' }; const el = document.getElementById('w279home'); if (el) el.remove(); await window.w279.home(); return document.querySelectorAll('#w279home .w279hc').length; });
+    ok('my_hires refused: the lead\'s card still brings Lina\'s card', n === 1, n);
+    ok('both lists: no console errors', f.cons.length === 0, f.cons);
+    await done(f);
+  }
+
   /* ---------- 2. Joy at phone width ---------- */
   {
     const f = await go({ who: 'plain', hash: '#mypage', width: 375 });
@@ -254,10 +280,10 @@ const noDash = (t) => !/—/.test(t);
     b = await signBtn(f, H('agency-handbook'));
     ok('Home: at unlock_at, Sign is on and says Sign', b && !b.dis && b.txt === 'Sign', b);
     ok('Home: nothing left to count, so the timer stops', !(await ticking(f)));
-    await f.ev(() => { window.__W279.polRefuse = 'Read it for 3 more minutes first'; });
+    await f.ev(() => { window.__W279.polRefuse = 'Read it for 3 more minutes first.'; });
     await press(f, H('expense-policy'));
     await f.page.waitForTimeout(300);
-    ok('Home: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Read it for 3 more minutes first', await toastTxt(f));
+    ok('Home: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Read it for 3 more minutes first.', await toastTxt(f));
     ok('Home: after a refusal the opens are read again', (await calls(f, 'wa279_policy_state')).length === 2, await calls(f, 'wa279_policy_state'));
     b = await signBtn(f, H('expense-policy'));
     ok('Home: the refused policy stays, its Sign on again', b && !b.dis, b);
@@ -361,10 +387,10 @@ const noDash = (t) => !/—/.test(t);
     await clockAt(f, 10);
     b = await signBtn(f, H('agency-handbook'));
     ok('Academy: at unlock_at it is on again', b && !b.dis && b.txt === 'I have read it', b);
-    await f.ev(() => { window.__W279.polRefuse = 'Read it for 2 more minutes first'; });
+    await f.ev(() => { window.__W279.polRefuse = 'Open it first, then read it for 10 minutes.'; });
     await press(f, H('expense-policy'));
     await f.page.waitForTimeout(300);
-    ok('Academy: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Read it for 2 more minutes first', await toastTxt(f));
+    ok('Academy: a refused sign-off shows the database\'s message as it is', (await toastTxt(f)) === 'Open it first, then read it for 10 minutes.', await toastTxt(f));
     b = await signBtn(f, H('expense-policy'));
     ok('Academy: after a refusal the button is usable again', b && !b.dis, b);
     ok('Academy policies: no console errors', f.cons.length === 0, f.cons);
