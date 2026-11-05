@@ -291,6 +291,8 @@
 261_wave261
 # 272_wave272: the new Home (lays out the older cards with CSS; set up your Hub; directors get Home). After 262, before 164 and 110.
 272_wave272
+# 274_wave274: the Toronto Volunteers app (Steel, 05/11/26: "a volunteer manager for Toronto ... this new app in the hub"): page #toronto in the launcher (Your apps for opsto), Events (the next event, upcoming, past), New event, the event page (Plan with the kitchen and who the meals go to, Crew with targets and Add people from the Toronto pool, Confirm with Called, Copy emails or numbers and the WhatsApp link, Wrap up with meals delivered, who came and Mark completed), Volunteers (the CRM's Toronto pool with Students / General, school, area and day filters); Montreal's Volunteer Manager leaves Toronto out. Also in this wave: 110, 118, and the parts of 127, 131, 134, 153. Data: build/data/wa274_toronto.sql (not applied).
+274_wave274
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

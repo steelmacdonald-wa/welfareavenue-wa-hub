@@ -195,6 +195,18 @@
       },
       actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]
     },
+    /* wave274: Steel (05/11/26): "a volunteer manager for Toronto ... this new app in the hub". Toronto Volunteers: the Toronto team's
+       events (a community kitchen, one or two organizations the meals go to, a crew), on the Volunteer Manager's tables (page #toronto) */
+    toronto: { id: 'toronto', label: 'Toronto Volunteers', color: PURPLE, ic: 'people', blurb: 'Toronto events, crews and volunteers', pages: ['toronto'], home: '#toronto',
+      groups: function () {
+        return [{ label: 'Events', items: [
+          { h: '#toronto', l: 'Events', ic: 'list', page: 'toronto' }
+        ] }, { label: 'People', solo: true, items: [
+          { h: '#toronto/people', l: 'Volunteers', ic: 'people', page: 'toronto' }
+        ] }];
+      },
+      actions: [{ k: 'newevent', l: 'New event', ic: 'plus', page: 'toronto' }]
+    },
     /* wave193: Steel (01/10/26): "a new app called Fundraising that holds: Fundraising Events, Donor relations (Donor Program), Events
        Calendar, Fundraising Event Sops (as it's own page), Grants". One page (#fund) with sections by address, plus wave124's Events page */
     fund: { id: 'fund', label: 'Fundraising', color: ORANGE, ic: 'heart', blurb: 'Events, donors, grants and the money they bring', pages: ['fund', 'fundevents'], need: 'fund', home: '#fund',
@@ -251,7 +263,7 @@
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */
+  var ORDER = ['hub', 'strategy', 'volunteer', 'toronto', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave274: Toronto Volunteers after the Volunteer Manager */   /* wave193: the Fundraising app, before HR and Finance */
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
@@ -263,7 +275,7 @@
   /* wave262 (Steel, 20/10/26: "allow them to look through the apps that are available to them"): the apps that belong to a
      person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
      Admins and the Executive profile have every app as theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: [], board: [] };
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['toronto', 'crm'], board: [] };   /* wave274: the Toronto team's apps */
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }

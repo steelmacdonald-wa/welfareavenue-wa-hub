@@ -1,0 +1,1831 @@
+/* =====================================================================
+   WA v274 Toronto Volunteers: the Toronto team's own app (05/11/26)
+   =====================================================================
+   Steel (05/11/26): "a volunteer manager for Toronto ... a robust, easy to use volunteer management tool for Toronto using
+   Emil's design and animation skills for this new app in the hub ... It also should integrate with the CRM as well in the
+   hub, like the Montreal volunteer manager does."
+
+   Toronto runs a different kind of event from Montreal's Sunday servings: about once a month the team books a community
+   kitchen (usually the Ralph Thornton Community Centre) for a time window, one crew cooks there, and the meals go to one or
+   two organizations that sent a headcount and dietary needs; sometimes a second crew serves outdoors. Sama confirms people
+   by hand, by email, phone or WhatsApp. This app (page #toronto) is built for that, on the same tables as Montreal, so a
+   Toronto volunteer is the same CRM contact with the same servings count and history as anyone else.
+
+   - Events (#toronto): the next event as a hero card, then the upcoming ones, then the past ones (folded). New event.
+   - The event page (#toronto/e/<id>): Plan (the kitchen; who the meals go to), Crew (crews with targets, Add people from the
+     Toronto pool, statuses, Take off the crew with Undo), Confirm (the counts, Called, Copy emails or phone numbers, the
+     WhatsApp group link), Wrap up (meals delivered, who came, Mark this event completed).
+   - Volunteers (#toronto/people): the Toronto pool from the CRM with search, Students / General, school, area and days.
+   - Montreal's Volunteer Manager leaves Toronto out of its lists (the waVolLoad wrapper in z_wire.js).
+
+   A Toronto event is volunteer_events kind 'meal', location 'Toronto' (every Montreal automation filters kind 'service').
+   The data: build/data/wa274_toronto.sql (volunteer_event_recipients, wa274_crew_add, wa274_next_code, the page in every
+   access profile; not applied yet: everything here works without it, saying plainly what waits for it).
+   Not in this wave: sign-up forms, automatic emails or texts, recipes and groceries, Setup, page tours.
+   window.w274: state, show, paint, load, loadPool, newEvent, stageOf, crewOf, pool, filterPeople, flush. */
+(function () {
+  'use strict';
+  if (window.__wa274) return; window.__wa274 = true;
+  var PURPLE = '#6F64AB';   /* Toronto's accent: the Hub purple (brand Possibility purple) */
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var OUT = 'cubic-bezier(.23,1,.32,1)', DRAWER = 'cubic-bezier(.32,.72,0,1)', MOVE = 'cubic-bezier(.77,0,.175,1)';
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function fold(s) { try { return lower(s).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { return lower(s); } }
+  function num(v, d) { if (v === null || v === undefined || v === '') return d; var n = Number(v); return isFinite(n) ? n : d; }
+  function msgOf(e) { return String((e && (e.message || e.details || e.hint)) || e || 'unknown error'); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function me() {
+    try { if (typeof USER !== 'undefined' && USER && USER.email) return lower(USER.email); } catch (e) { /* fine */ }
+    try { if (typeof SESSION !== 'undefined' && SESSION && SESSION.user && SESSION.user.email) return lower(SESSION.user.email); } catch (e) { /* fine */ }
+    return 'staff';
+  }
+  function reduced() { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  function audit(id, field, oldV, newV) {   /* the audit trail: best effort, never in the way of a save */
+    try { if (typeof logChange === 'function' && String(oldV == null ? '' : oldV) !== String(newV == null ? '' : newV)) logChange('volunteer_event', id, field, oldV, newV); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- dates: plain days, counted in Toronto ---------- */
+  var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  function todayIso() {
+    try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+    catch (e) { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  }
+  function dParse(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12)) : null; }
+  function daysTo(iso) { var a = dParse(iso), b = dParse(todayIso()); return a && b ? Math.round((a.getTime() - b.getTime()) / 864e5) : null; }
+  function fmtDay(iso) { var d = dParse(iso); if (!d) return ''; var s = DOW[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; if (String(d.getUTCFullYear()) !== todayIso().slice(0, 4)) s += ' ' + d.getUTCFullYear(); return s; }
+  function hm(t) { var m = /^(\d{1,2}):(\d{2})/.exec(String(t || '')); return m ? ('0' + m[1]).slice(-2) + ':' + m[2] : ''; }
+  function rel(n) { if (n == null) return ''; if (n === 0) return 'today'; if (n === 1) return 'tomorrow'; if (n === -1) return 'yesterday'; return n > 0 ? 'in ' + n + ' days' : -n + ' days ago'; }
+  function stamp(iso) {   /* a moment, said in Toronto time: "Fri 25 Sep, 16:00" */
+    var d = iso ? new Date(iso) : null; if (!d || isNaN(d.getTime())) return '';
+    try {
+      var p = {}; new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
+      return p.weekday.replace(/\.$/, '') + ' ' + p.day + ' ' + p.month.replace(/\.$/, '') + ', ' + p.hour + ':' + p.minute;
+    } catch (e) { return DOW[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()] + ', ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  }
+
+  /* ---------- the stages: Plan, Crew, Confirm, Wrap up (from the date; a completed event is wrapped up) ---------- */
+  var STAGES = [['plan', 'Plan'], ['crew', 'Crew'], ['confirm', 'Confirm'], ['wrap', 'Wrap up']];
+  function stageOf(ev) {
+    if (!ev) return 'plan';
+    if (lower(ev.status) === 'completed') return 'wrap';
+    var d = daysTo(ev.event_date);
+    if (d == null) return 'plan';
+    if (d < 0) return 'wrap';
+    if (d <= 2) return 'confirm';
+    if (d <= 10) return 'crew';
+    return 'plan';
+  }
+  function stageIdx(k) { for (var i = 0; i < STAGES.length; i++) if (STAGES[i][0] === k) return i; return 0; }
+  function stageLabel(k) { return STAGES[stageIdx(k)][1]; }
+
+  /* ---------- the crews: the shared role keys, labelled the Toronto way ---------- */
+  var ROLES = [['team_leader', 'Lead', 1], ['cook', 'Kitchen crew', 4], ['server', 'Serving crew', 4], ['driver', 'Delivery', 1], ['photographer', 'Photos', 0]];
+  var ROLE_IN = { team_leader: 'the lead', cook: 'the kitchen crew', server: 'the serving crew', driver: 'delivery', photographer: 'photos' };
+  function roleLabel(k) { for (var i = 0; i < ROLES.length; i++) if (ROLES[i][0] === k) return ROLES[i][1]; var s = String(k || 'Other').replace(/_/g, ' '); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function roleIn(k) { return ROLE_IN[k] || lower(roleLabel(k)); }
+
+  /* ---------- the pool's rule (the same on the server's answer and in the browser) ---------- */
+  var TAGS = ['toronto', 'toronto volunteer', 'toronto student'];
+  var GTA = ['toronto', 'mississauga', 'brampton', 'scarborough', 'north york', 'etobicoke', 'east york', 'york', 'markham', 'vaughan', 'richmond hill', 'oakville', 'pickering', 'ajax'];
+  var AREAS = ['Downtown Toronto', 'Midtown (Yonge-Eglinton)', 'North York', 'East York', 'York', 'Etobicoke', 'Scarborough'];
+  var FKEYS = ['gta_area', 'days_available', 'age_16_plus', 'photo_consent'];
+
+  /* ---------- state ---------- */
+  var S = {
+    loaded: false, loading: null, evErr: null, rosterErr: null,
+    events: [], roster: [], rec: [], recOk: true,
+    pool: null, poolBusy: null, poolErr: null, byCid: {}, byVid: {}, orgs: {},
+    view: 'events', evId: null, key: '', fresh: true, pastOpen: false,
+    f: { q: '', kind: 'all', school: '', area: '', days: [], sort: 'newest' },
+    scope: 'all', waEdit: false, confirmRec: null, confirmDone: false, err: {},
+    pend: {}, snackT: null
+  };
+  function evById(id) { for (var i = 0; i < S.events.length; i++) if (String(S.events[i].id) === String(id)) return S.events[i]; return null; }
+  function rowById(id) { for (var i = 0; i < S.roster.length; i++) if (String(S.roster[i].id) === String(id)) return S.roster[i]; return null; }
+  function rowsOf(evId) { return S.roster.filter(function (r) { return String(r.event_id) === String(evId) && !S.pend[r.id]; }); }
+  function recsOf(evId) { return S.rec.filter(function (r) { return String(r.event_id) === String(evId); }).sort(function (a, b) { return num(a.sort, 0) - num(b.sort, 0) || num(a.id, 0) - num(b.id, 0); }); }
+  function isTo(e) { return !!e && lower(e.kind) === 'meal' && /toronto/i.test(String(e.location || '')); }
+  function titleOf(e) { return (e && String(e.title || '').trim()) || 'Free meal event'; }
+  function isOpen(e) { var s = lower(e && e.status); return s !== 'completed' && s !== 'cancelled'; }
+
+  /* a roster row's state: yes (confirmed), wait, no (can't come), off (taken off elsewhere) */
+  function stOf(r) {
+    var s = lower(r && r.status), c = lower(r && r.confirm_status);
+    if (s === 'cancelled') return 'off';
+    if (s === 'unavailable' || s === 'declined') return 'no';
+    if (s === 'confirmed') return 'yes';
+    if (c === 'declined') return 'no';
+    if (c === 'confirmed') return 'yes';
+    return 'wait';
+  }
+  var ST_LABEL = { yes: 'Confirmed', wait: 'Waiting', no: 'Can\u2019t come', off: 'Off the crew' };
+
+  /* the crews of an event: each role's target (spot_counts first, else the defaults) and its people */
+  function targetsOf(ev) {
+    var sc = (ev && ev.spot_counts && typeof ev.spot_counts === 'object') ? ev.spot_counts : {};
+    var out = {}; ROLES.forEach(function (r) { var v = num(sc[r[0]], null); out[r[0]] = v == null ? r[2] : Math.max(0, Math.round(v)); });
+    return out;
+  }
+  function crewOf(ev) {
+    if (!ev) return [];
+    var t = targetsOf(ev), rows = rowsOf(ev.id).filter(function (r) { return stOf(r) !== 'off'; });
+    var keys = ROLES.map(function (r) { return r[0]; });
+    rows.forEach(function (r) { if (keys.indexOf(r.role) < 0) keys.push(r.role); });
+    return keys.map(function (k) {
+      var ppl = rows.filter(function (r) { return r.role === k; }).sort(function (a, b) { return num(a.sort, 0) - num(b.sort, 0) || num(a.id, 0) - num(b.id, 0); });
+      var yes = ppl.filter(function (r) { return stOf(r) === 'yes'; }).length, wait = ppl.filter(function (r) { return stOf(r) === 'wait'; }).length;
+      return { role: k, label: roleLabel(k), target: t[k] == null ? 0 : t[k], people: ppl, yes: yes, wait: wait, no: ppl.length - yes - wait };
+    }).filter(function (c) { return c.target > 0 || c.people.length > 0; });
+  }
+  function totals(crews) {
+    var o = { yes: 0, wait: 0, no: 0, target: 0, filled: 0 };
+    crews.forEach(function (c) { o.yes += c.yes; o.wait += c.wait; o.no += c.no; o.target += c.target; o.filled += Math.min(c.target, c.yes + c.wait); });
+    return o;
+  }
+
+  /* ---------- the look: the Hub's tokens and faces, the Hub purple as Toronto's accent ----------
+     One stylesheet (#wa274css), every selector under #toronto or this wave's own ids (#w274sheet, #w274menu, #w274snack).
+     Motion only where something is touched or changes: a press (scale .97, 160 ms), a sheet (the drawer curve, 280 ms in,
+     200 ms out), the stage marker (240 ms), a status (200 ms crossfade); the bars fill and the lists rise once, on a page's
+     first draw. Hover only with a real pointer; reduced motion keeps the fades and drops every movement. */
+  var PRESS = ['#toronto .w274btn', '#w274sheet .w274btn', '#toronto .w274card', '#toronto .w274hero', '#toronto .w274prow', '#toronto .w274ib', '#w274sheet .w274ib',
+    '#toronto .w274add', '#toronto .w274tog', '#toronto .w274seg button', '#w274sheet .w274seg button', '#toronto .w274dayb button', '#w274sheet .w274dayb button',
+    '#toronto .w274steps button', '#w274sheet .w274rad label', '#w274sheet .w274pk', '#w274sheet .w274evp', '#w274menu .w274mi', '#w274snack button', '#toronto .w274fold', '#toronto > .w118mast .w197pact'];
+  var TAP = '-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
+  var FOCUS = ['#toronto a', '#toronto button', '#toronto input', '#toronto select', '#toronto textarea', '#w274sheet a', '#w274sheet button', '#w274sheet input', '#w274sheet select', '#w274sheet textarea', '#w274menu .w274mi', '#w274snack button'];
+  var FIELD = '#toronto .w274i,#w274sheet .w274i';
+  var css274 = ''
+    /* tokens (the Hub's :root values, the brand's rgba tints, the purple) */
+    + '#toronto,#w274sheet,#w274menu,#w274snack{--t-ac:' + PURPLE + ';--t-ink:var(--wa-text);--t-green:var(--wa-green);--t-card:var(--wa-card);--t-mut:rgba(31,32,30,.7);--t-line:rgba(16,63,57,.12);--t-line2:rgba(16,63,57,.24);--t-surf:rgba(16,63,57,.05);--t-surf2:rgba(16,63,57,.09);--t-act:rgba(111,100,171,.14);--t-goldt:rgba(220,165,39,.26);--t-flag:var(--wa-flag);--t-flagt:rgba(179,64,47,.11);}'
+    + FOCUS.map(function (s) { return s + ':focus-visible'; }).join(',') + '{outline:2px solid var(--t-ac);outline-offset:2px;box-shadow:none;}'
+    + '#toronto .w274hero:focus-visible{outline-color:var(--wa-gold);outline-offset:3px;}'
+    + '#toronto .w274vh,#w274sheet .w274vh{position:absolute !important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}'
+    /* the masthead (wave118's) holds the page title, the way back and the page's one primary action */
+    + '#toronto > .w118mast h1{text-transform:none;letter-spacing:0;overflow-wrap:anywhere;}'
+    + '#toronto > .w118mast > p{color:var(--t-mut);font-size:14px;}'   /* the Hub muted on the page ground is 4.0:1; this is 5.8:1 */
+    + '#toronto > .w118mast .w274cnt{display:inline-block;vertical-align:.32em;margin-left:10px;padding:3px 11px;border-radius:999px;background:var(--t-act);color:var(--t-ink);font:600 15px/1.3 ' + BODY + ';font-variant-numeric:tabular-nums;}'
+    + '#toronto > .w118mast .w274back{display:inline-flex;align-items:center;gap:6px;min-height:36px;margin:0 0 2px -2px;color:var(--t-ac);font:600 14px/1 ' + BODY + ';text-decoration:none;white-space:nowrap;border-radius:8px;' + TAP + '}'
+    + '#toronto > .w118mast .w274back svg{width:18px;height:18px;flex:0 0 18px;}'
+    + '#toronto > .w118mast .w197pact{min-height:40px;padding:0 16px;border-radius:10px;background:var(--t-ac);color:var(--t-card);font:600 14px/1 ' + BODY + ';' + TAP + 'transition:transform 160ms ' + OUT + ',box-shadow 200ms ' + OUT + ';}'
+    + '#toronto > .w118mast .w197pact svg{width:18px;height:18px;}'
+    + '#toronto[data-w274v="event"] > .w118mast .w197pact,#toronto[data-w274v="people"] > .w118mast .w197pact{background:var(--t-card);color:var(--t-green);box-shadow:inset 0 0 0 1px var(--t-line2);}'   /* one primary per screen: New event leads on Events only */
+    + '@media (max-width:900px){#toronto > .w118mast .w274back{min-height:44px;}}'
+    /* the page */
+    + '#w274root{display:block;max-width:1180px;color:var(--t-ink);font:400 15px/1.45 ' + BODY + ';}'
+    + '#toronto .w274blk{margin:0 0 30px;}'
+    + '#toronto .w274kick{margin:0 0 10px;font:700 14px/1.2 ' + BODY + ';letter-spacing:.02em;color:var(--t-ac);}'
+    + '#toronto .w274h2{margin:0 0 12px;font:500 28px/1.05 ' + HEAD + ';letter-spacing:.005em;color:var(--t-green);}'
+    + '#toronto .w274quiet{margin:6px 0;font-size:14px;color:var(--t-mut);}'
+    + '#toronto .w274meta{margin:2px 0;font-size:14px;color:var(--t-mut);overflow-wrap:anywhere;}'
+    + '#toronto .w274err,#w274sheet .w274err{margin:8px 0 0;font-size:14px;font-weight:600;color:var(--t-flag);}'
+    + '#toronto .w274err:empty,#w274sheet .w274err:empty{display:none;}'
+    + '#toronto .w274empty{padding:26px 22px;border-radius:18px;background:var(--t-surf);}'
+    + '#toronto .w274empty h2{margin:0 0 6px;font:500 30px/1.05 ' + HEAD + ';color:var(--t-green);}'
+    + '#toronto .w274empty p{margin:0 0 14px;color:var(--t-mut);max-width:560px;}'
+    /* buttons */
+    + '#toronto .w274btn,#w274sheet .w274btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:10px;border:1px solid var(--t-line2);background:var(--t-card);color:var(--t-green);font:600 14px/1.1 ' + BODY + ';text-decoration:none;white-space:nowrap;cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',border-color 200ms ' + OUT + ',box-shadow 200ms ' + OUT + ';}'
+    + '#toronto .w274btn.pri,#w274sheet .w274btn.pri{background:var(--t-ac);border-color:var(--t-ac);color:var(--t-card);}'
+    + '#toronto .w274btn.dng,#w274sheet .w274btn.dng{color:var(--t-flag);border-color:rgba(179,64,47,.4);}'
+    + '#toronto .w274btn.dng.pri,#w274sheet .w274btn.dng.pri{background:var(--t-flag);border-color:var(--t-flag);color:var(--t-card);}'
+    + '#toronto .w274btn.sm,#w274sheet .w274btn.sm{min-height:34px;padding:0 12px;font-size:13px;}'
+    + '#toronto .w274btn:disabled,#w274sheet .w274btn:disabled{opacity:.5;cursor:not-allowed;}'
+    + '#toronto .w274btn svg,#w274sheet .w274btn svg{width:18px;height:18px;flex:0 0 18px;}'
+    + '#toronto .w274ib,#w274sheet .w274ib{display:inline-grid;place-items:center;width:44px;height:44px;flex:0 0 44px;padding:0;border:0;border-radius:10px;background:none;color:var(--t-green);cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ';}'
+    + '#toronto .w274ib svg,#w274sheet .w274ib svg{width:20px;height:20px;}'
+    /* chips */
+    + '#toronto .w274chip,#w274sheet .w274chip{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:2px 9px;border-radius:999px;background:var(--t-surf2);color:var(--t-green);font:600 12px/1.2 ' + BODY + ';white-space:nowrap;}'
+    + '#toronto .w274chip svg,#w274sheet .w274chip svg{width:13px;height:13px;}'
+    + '#toronto .w274chip.yes,#w274sheet .w274chip.yes{background:rgba(16,63,57,.12);}'
+    + '#toronto .w274chip.wait,#w274sheet .w274chip.wait{background:var(--t-goldt);color:var(--t-ink);}'
+    + '#toronto .w274chip.no,#w274sheet .w274chip.no,#toronto .w274chip.st-cancelled{background:var(--t-flagt);color:var(--t-flag);}'
+    + '#toronto .w274chip.sch,#w274sheet .w274chip.sch{background:var(--t-act);color:var(--t-ink);}'
+    + '#toronto .w274chip.gen,#w274sheet .w274chip.gen{background:none;box-shadow:inset 0 0 0 1px var(--t-line2);color:var(--t-mut);}'
+    + '#toronto .w274chip.stg,#w274sheet .w274chip.stg{background:var(--t-ac);color:var(--t-card);}'
+    + '#toronto .w274chip.st-completed{background:rgba(16,63,57,.12);}'
+    + '#toronto .w274sw{display:inline-grid;justify-items:start;align-items:center;}'
+    + '#toronto .w274sw > .w274chip{grid-area:1 / 1;transition:opacity 200ms ' + OUT + ';}'
+    + '#toronto .w274sw > .w274chip.w274fo{opacity:0;}'
+    /* the next event */
+    + '#toronto .w274hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;padding:20px;border-radius:20px;background:var(--t-green);color:var(--t-card);text-decoration:none;box-shadow:0 1px 2px rgba(16,63,57,.12),0 12px 32px rgba(16,63,57,.14);' + TAP + 'transition:transform 160ms ' + OUT + ';}'
+    + '@media (min-width:760px){#toronto .w274hero{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:32px;padding:26px 28px;}}'
+    + '#toronto .w274ht{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}'
+    + '#toronto .w274date{display:block;font:500 52px/.95 ' + HEAD + ';letter-spacing:-.01em;}'
+    + '#toronto .w274hero .w274rel{margin:8px 0 0;font:600 15px/1.3 ' + BODY + ';color:var(--wa-gold);}'
+    + '#toronto .w274hero h3{margin:14px 0 6px;font:600 20px/1.25 ' + BODY + ';color:var(--t-card);overflow-wrap:anywhere;}'
+    + '#toronto .w274hero .w274meta{color:rgba(255,250,242,.86);font-size:14.5px;}'
+    + '#toronto .w274hero .w274chip.stg{background:var(--wa-gold);color:var(--t-green);}'
+    + '#toronto .w274conf{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin:0 0 14px;font-size:15px;color:rgba(255,250,242,.9);}'
+    + '#toronto .w274conf b{font:500 46px/1 ' + HEAD + ';color:var(--t-card);font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274br{display:grid;grid-template-columns:100px minmax(0,1fr) 48px;align-items:center;gap:10px;margin:9px 0;font-size:13.5px;}'
+    + '#toronto .w274br .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}'
+    + '#toronto .w274hero .w274bar{background:rgba(255,250,242,.2);}'
+    + '#toronto .w274hero .w274bar .c{background:var(--t-card);}#toronto .w274hero .w274bar .w{background:var(--wa-gold);}'
+    + '#toronto .w274leg{display:flex;gap:14px;margin:12px 0 0;font-size:12.5px;color:rgba(255,250,242,.86);}'
+    + '#toronto .w274leg span{display:inline-flex;align-items:center;gap:6px;}#toronto .w274leg i{width:10px;height:10px;border-radius:3px;background:var(--t-card);}#toronto .w274leg i.w{background:var(--wa-gold);}'
+    /* the crew bars: confirmed over waiting, scaled from the left */
+    + '#toronto .w274bar{position:relative;display:block;height:8px;border-radius:99px;background:var(--t-surf2);overflow:hidden;}'
+    + '#toronto .w274bar i{position:absolute;left:0;top:0;bottom:0;width:100%;transform:scaleX(0);transform-origin:left center;transition:transform 260ms ' + OUT + ';}'
+    + '#toronto .w274bar .w{background:rgba(111,100,171,.42);}#toronto .w274bar .c{background:var(--t-ac);}'
+    + '#toronto .w274bar.w274now i{transition:none;}'
+    /* upcoming events */
+    + '#toronto .w274grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:14px;}'
+    + '@media (max-width:600px){#toronto .w274grid{grid-template-columns:minmax(0,1fr);}}'
+    + '#toronto .w274card{display:flex;flex-direction:column;gap:2px;min-width:0;padding:16px 16px 14px;border-radius:16px;background:var(--t-card);border:1px solid var(--t-line);color:var(--t-ink);text-decoration:none;' + TAP + 'transition:transform 160ms ' + OUT + ',box-shadow 200ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#toronto .w274card.off{border-style:dashed;background:none;}'
+    + '#toronto .w274ct{display:flex;align-items:center;justify-content:space-between;gap:8px;}'
+    + '#toronto .w274cd{font:500 30px/1 ' + HEAD + ';color:var(--t-green);}'
+    + '#toronto .w274card .w274rel{margin:4px 0 0;font:600 13.5px/1.3 ' + BODY + ';color:var(--t-ac);}'
+    + '#toronto .w274card h3{margin:10px 0 2px;font:600 16px/1.3 ' + BODY + ';color:var(--t-ink);overflow-wrap:anywhere;}'
+    + '#toronto .w274cf{margin:12px 0 2px;font-size:13.5px;color:var(--t-mut);}#toronto .w274cf b{font:500 24px/1 ' + HEAD + ';color:var(--t-green);margin-right:4px;font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274card .w274br{grid-template-columns:88px minmax(0,1fr) 40px;margin:6px 0;font-size:12.5px;color:var(--t-mut);}'
+    + '#toronto .w274card .w274bar{height:6px;}'
+    /* past events */
+    + '#toronto .w274fold{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 4px 0 0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;border-radius:8px;' + TAP + 'transition:transform 160ms ' + OUT + ';}'
+    + '#toronto .w274fold svg{width:22px;height:22px;transition:transform 200ms ' + OUT + ';}'
+    + '#toronto .w274fold[aria-expanded="true"] svg{transform:rotate(90deg);}'
+    + '#toronto .w274prow{display:grid;grid-template-columns:120px minmax(0,1fr) auto;align-items:center;gap:6px 14px;margin:0 0 8px;padding:12px 16px;border-radius:12px;background:var(--t-card);border:1px solid var(--t-line);color:var(--t-ink);text-decoration:none;' + TAP + 'transition:transform 160ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#toronto .w274prow .d{font:500 20px/1 ' + HEAD + ';color:var(--t-green);}#toronto .w274prow .t{font-weight:600;overflow-wrap:anywhere;}#toronto .w274prow .m{font-size:13.5px;color:var(--t-mut);text-align:right;}'
+    + '@media (max-width:600px){#toronto .w274prow{grid-template-columns:minmax(0,1fr) auto;}#toronto .w274prow .d{grid-column:1 / -1;}}'
+    /* the event page: its header and the stage strip */
+    + '#toronto .w274eh{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;margin:0 0 16px;}'
+    + '#toronto .w274ehl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;font-size:14px;color:var(--t-mut);}'
+    + '#toronto .w274code{font:600 13px/1 ' + BODY + ';color:var(--t-mut);font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274eha{display:flex;gap:8px;}'
+    + '#toronto .w274steps{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:4px;margin:0 0 22px;border-radius:14px;background:var(--t-surf2);}'
+    + '#toronto .w274mk{position:absolute;left:4px;top:4px;bottom:4px;width:calc((100% - 8px) / 4);border-radius:10px;background:var(--t-ac);box-shadow:0 1px 3px rgba(31,32,30,.18);transform:translateX(0);}'
+    + '#toronto .w274steps.w274go .w274mk{transition:transform 240ms ' + MOVE + ';}'
+    + '#toronto .w274steps button{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 4px;border:0;border-radius:10px;background:none;color:var(--t-green);font:600 14px/1.1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:color 200ms ' + OUT + ',transform 160ms ' + OUT + ';}'
+    + '#toronto .w274steps button[aria-current="step"]{color:var(--t-card);}'
+    + '#toronto .w274done,#toronto .w274cx{margin:0 0 18px;padding:14px 16px;border-radius:14px;background:rgba(16,63,57,.08);color:var(--t-green);font-size:15px;}'
+    + '#toronto .w274cx{background:var(--t-flagt);color:var(--t-flag);}'
+    /* the four sections */
+    + '#toronto .w274sec{padding:22px 0 10px;border-top:1px solid var(--t-line);scroll-margin-top:80px;}'
+    + '#toronto .w274sh{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 4px;}'
+    + '#toronto .w274sh h2{margin:0;font:500 30px/1.05 ' + HEAD + ';color:var(--t-green);}'
+    + '#toronto .w274no{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--t-surf2);color:var(--t-green);font:700 13px/1 ' + BODY + ';}'
+    + '#toronto .w274sec.cur .w274no{background:var(--t-ac);color:var(--t-card);}'
+    + '#toronto .w274sha{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto;}'
+    + '@media (max-width:600px){#toronto .w274sha{width:100%;margin-left:0;}#toronto .w274sha .w274btn{flex:1 1 auto;}}'
+    + '#toronto .w274lead{margin:0 0 16px;max-width:660px;font-size:14.5px;color:var(--t-mut);}'
+    + '#toronto .w274two{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;}'
+    + '@media (min-width:960px){#toronto .w274two{grid-template-columns:minmax(0,.85fr) minmax(0,1.4fr);align-items:start;}}'
+    + '#toronto .w274box{min-width:0;padding:16px;border-radius:16px;background:var(--t-card);border:1px solid var(--t-line);}'
+    + '#toronto .w274box + .w274box{margin-top:0;}'
+    + '#toronto .w274bh{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;margin:0 0 10px;}'
+    + '#toronto .w274bh h3,#toronto .w274h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
+    + '#toronto .w274h3{margin:18px 0 10px;}'
+    + '#toronto .w274dl{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'
+    + '#toronto .w274dl dt{color:var(--t-mut);}#toronto .w274dl dd{margin:0;overflow-wrap:anywhere;}'
+    + '#toronto .w274dl .none{color:var(--t-mut);}'
+    /* who the meals go to */
+    + '#toronto .w274rc{padding:12px 0;border-top:1px solid var(--t-line);}'
+    + '#toronto .w274rc:first-child{border-top:0;padding-top:2px;}'
+    + '#toronto .w274rct{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}'
+    + '#toronto .w274rct h4{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:2px 0 0;font:600 16px/1.3 ' + BODY + ';color:var(--t-ink);overflow-wrap:anywhere;}'
+    + '#toronto .w274ml{font-size:13.5px;color:var(--t-mut);white-space:nowrap;}#toronto .w274ml b{font:500 28px/1 ' + HEAD + ';color:var(--t-green);margin-right:3px;font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274diet{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;}'
+    + '#toronto .w274rca{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}'
+    + '#toronto .w274cfm{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:8px;padding:10px 12px;border-radius:12px;background:var(--t-flagt);font-size:14px;}'
+    + '#toronto .w274cfm span{flex:1 1 180px;}'
+    + '#toronto .w274placed{margin:12px 0 0;font-size:14px;color:var(--t-mut);}#toronto .w274placed b{color:var(--t-green);}'
+    /* the crews */
+    + '#toronto .w274crews{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;}'
+    + '@media (min-width:760px){#toronto .w274crews{grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}}'
+    + '#toronto .w274col{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;border-radius:16px;background:var(--t-surf);}'
+    + '#toronto .w274colh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}'
+    + '#toronto .w274colh h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
+    + '#toronto .w274cn{font:600 14px/1 ' + BODY + ';color:var(--t-ink);font-variant-numeric:tabular-nums;white-space:nowrap;}'
+    + '#toronto .w274ppl{display:flex;flex-direction:column;gap:8px;}'
+    + '#toronto .w274pc{display:flex;align-items:center;gap:8px;min-height:58px;padding:7px 2px 7px 12px;border-radius:12px;background:var(--t-card);border:1px solid var(--t-line);transition:opacity 200ms ' + OUT + ';}'
+    + '#toronto .w274pc.gone{opacity:0;}'
+    + '#toronto .w274pm{display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0;}'
+    + '#toronto .w274pn,#w274sheet .w274pn{font:600 14.5px/1.25 ' + BODY + ';color:var(--t-ink);overflow-wrap:anywhere;}'
+    + '#toronto .w274pcs{display:flex;flex-wrap:wrap;gap:4px;}'
+    + '#toronto .w274add{display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 12px;border:1px dashed var(--t-line2);border-radius:12px;background:none;color:var(--t-green);font:600 13.5px/1.1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ';}'
+    + '#toronto .w274add svg{width:16px;height:16px;}'
+    /* confirm */
+    + '#toronto .w274cnts{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin:6px 0 16px;font-size:15px;color:var(--t-mut);}'
+    + '#toronto .w274cnts b{margin-right:6px;font:500 40px/1 ' + HEAD + ';color:var(--t-green);font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274wl{display:flex;flex-direction:column;gap:8px;}'
+    + '#toronto .w274wr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px;padding:10px 10px 10px 14px;border-radius:12px;background:var(--t-card);border:1px solid var(--t-line);}'
+    + '#toronto .w274wr .how{font-size:13.5px;color:var(--t-mut);overflow-wrap:anywhere;}#toronto .w274wr .how a{color:var(--t-green);}'
+    + '#toronto .w274wr .when{font-size:12.5px;color:var(--t-mut);}'
+    + '@media (max-width:600px){#toronto .w274wr.w274cr{grid-template-columns:minmax(0,1fr);}#toronto .w274wr.w274cr .w274seg{display:flex;}#toronto .w274wr.w274cr .w274seg button{flex:1 1 0;}}'
+    + '#toronto .w274tog{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px 0 10px;border-radius:999px;border:1px solid var(--t-line2);background:var(--t-card);color:var(--t-green);font:600 13.5px/1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',color 200ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#toronto .w274tog .bx{display:grid;place-items:center;width:20px;height:20px;border-radius:6px;box-shadow:inset 0 0 0 1.5px currentColor;}'
+    + '#toronto .w274tog svg{width:14px;height:14px;opacity:0;transition:opacity 200ms ' + OUT + ';}'
+    + '#toronto .w274tog[aria-pressed="true"]{background:var(--t-green);border-color:var(--t-green);color:var(--t-card);}'
+    + '#toronto .w274tog[aria-pressed="true"] svg{opacity:1;}'
+    + '#toronto .w274copy{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:16px 0 4px;}'
+    + '#toronto .w274wa{display:flex;flex-wrap:wrap;align-items:center;gap:8px;}'
+    + '#toronto .w274wa .w274i{flex:1 1 260px;}'
+    /* segmented controls and day chips */
+    + '#toronto .w274seg,#w274sheet .w274seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:3px;border-radius:11px;background:var(--t-surf2);}'
+    + '#toronto .w274seg button,#w274sheet .w274seg button{min-height:38px;padding:0 14px;border:0;border-radius:8px;background:none;color:var(--t-green);font:600 13.5px/1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',box-shadow 200ms ' + OUT + ';}'
+    + '#toronto .w274seg button[aria-pressed="true"],#w274sheet .w274seg button[aria-pressed="true"]{background:var(--t-card);box-shadow:0 1px 2px rgba(31,32,30,.16),0 0 0 1px rgba(16,63,57,.08);}'
+    + '#toronto .w274dayb,#w274sheet .w274dayb{display:inline-flex;flex-wrap:wrap;gap:4px;}'
+    + '#toronto .w274dayb button,#w274sheet .w274dayb button{min-width:44px;min-height:38px;padding:0 6px;border-radius:9px;border:1px solid var(--t-line2);background:var(--t-card);color:var(--t-green);font:600 13px/1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',color 200ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#toronto .w274dayb button[aria-pressed="true"],#w274sheet .w274dayb button[aria-pressed="true"]{background:var(--t-ac);border-color:var(--t-ac);color:var(--t-card);}'
+    /* fields */
+    + FIELD + '{display:block;width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--t-line2);border-radius:10px;background:var(--t-card);color:var(--t-ink);font:400 16px/1.3 ' + BODY + ';box-sizing:border-box;transition:border-color 200ms ' + OUT + ',box-shadow 200ms ' + OUT + ';}'
+    + '#toronto .w274i:focus-visible,#w274sheet .w274i:focus-visible{outline:none;border-color:var(--t-ac);box-shadow:0 0 0 3px var(--t-act);}'
+    + '#toronto .w274i[aria-invalid="true"],#w274sheet .w274i[aria-invalid="true"]{border-color:var(--t-flag);}'
+    + '#w274sheet textarea.w274i{min-height:92px;resize:vertical;}'
+    + '#toronto select.w274i,#w274sheet select.w274i{padding-right:30px;}'
+    + '#w274sheet .w274lb{display:block;margin:16px 0 6px;font:600 14px/1.2 ' + BODY + ';color:var(--t-ink);}'
+    + '#w274sheet .w274lb small{font-weight:400;color:var(--t-mut);}'
+    + '#w274sheet .w274hint{margin:6px 0 0;font-size:13px;color:var(--t-mut);}'
+    + '#w274sheet .w274row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;}'
+    + '#w274sheet .w274ck{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;cursor:pointer;}'
+    + '#w274sheet .w274ck input{width:20px;height:20px;margin:0;accent-color:' + PURPLE + ';}'
+    + '#w274sheet fieldset{margin:16px 0 0;padding:0;border:0;min-width:0;}'
+    + '#w274sheet legend{padding:0;margin:0 0 6px;font:600 14px/1.2 ' + BODY + ';color:var(--t-ink);}'
+    + '#toronto .w274md{display:grid;grid-template-columns:minmax(0,1fr) 108px;align-items:center;gap:12px;padding:8px 0;border-top:1px solid var(--t-line);}'
+    + '#toronto .w274md:first-child{border-top:0;padding-top:0;}#toronto .w274md label{min-width:0;overflow-wrap:anywhere;}'
+    + '#toronto #w274cpt{margin-top:8px;font-size:14px;}'
+    + '#toronto .w274cfm.ok{background:var(--t-surf2);}'
+    /* the Volunteers page */
+    + '#toronto .w274tools{display:flex;flex-direction:column;gap:12px;margin:0 0 14px;}'
+    + '#w274sheet .w274tools{display:flex;flex-direction:column;gap:12px;margin:18px 0 0;}'
+    + '#toronto .w274srch,#w274sheet .w274srch{position:relative;}'
+    + '#toronto .w274srch svg,#w274sheet .w274srch svg{position:absolute;left:12px;top:50%;width:18px;height:18px;margin-top:-9px;color:var(--t-mut);pointer-events:none;}'
+    + '#toronto .w274srch .w274i,#w274sheet .w274srch .w274i{padding-left:40px;}'
+    + '#toronto .w274fl,#w274sheet .w274fl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}'
+    + '#toronto .w274sl,#w274sheet .w274sl{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--t-mut);}'
+    + '#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{width:auto;min-width:0;max-width:220px;min-height:40px;padding-top:6px;padding-bottom:6px;font-size:14.5px;}'
+    + '#toronto .w274count{margin:0 0 10px;font-size:14px;color:var(--t-mut);}'
+    + '#toronto .w274rows{display:flex;flex-direction:column;gap:8px;}'
+    + '#toronto .w274row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;align-items:center;gap:8px 18px;padding:12px 12px 12px 16px;border-radius:14px;background:var(--t-card);border:1px solid var(--t-line);}'
+    + '#toronto .w274row .a{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;}'
+    + '#toronto .w274row .b{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;font-size:13.5px;color:var(--t-mut);}'
+    + '#toronto .w274row .ev{font-size:13.5px;color:var(--t-mut);}#toronto .w274row .ev b{display:block;font:600 14.5px/1.3 ' + BODY + ';color:var(--t-ink);}'
+    + '#toronto .w274row .x{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:6px;}'
+    + '@media (max-width:900px){#toronto .w274row{grid-template-columns:minmax(0,1fr);gap:8px;padding:14px;}#toronto .w274row .x{justify-content:flex-start;}#toronto .w274row .x .w274btn{flex:1 1 auto;}}'
+    + '#toronto .w274d7,#w274sheet .w274d7{display:inline-flex;gap:3px;vertical-align:middle;}'
+    + '#toronto .w274d7 i,#w274sheet .w274d7 i{width:8px;height:8px;border-radius:50%;box-shadow:inset 0 0 0 1.5px rgba(16,63,57,.55);}'
+    + '#toronto .w274d7 i.on,#w274sheet .w274d7 i.on{background:var(--t-ac);box-shadow:none;}'
+    /* lists rise once, on a page's first draw */
+    + '#toronto .w274st{transition:opacity 260ms ' + OUT + ',transform 260ms ' + OUT + ';}'
+    + '#toronto .w274st.w274pre{opacity:0;transform:translateY(8px);}'
+    /* the sheet: up from the bottom on a phone, in from the right on a computer */
+    + '#w274sheet{position:fixed;inset:0;z-index:300;visibility:hidden;pointer-events:none;transition:visibility 0s linear 200ms;}'
+    + '#w274sheet.open{visibility:visible;pointer-events:auto;transition:visibility 0s linear 0s;}'
+    + '#w274sheet .w274bd{position:absolute;inset:0;background:rgba(31,32,30,.42);opacity:0;touch-action:none;transition:opacity 200ms ' + DRAWER + ';}'
+    + '#w274sheet.open .w274bd{opacity:1;transition-duration:280ms;}'
+    + '#w274pane{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;max-height:calc(100% - 28px);background:var(--wa-card);color:var(--wa-text);border-radius:22px 22px 0 0;box-shadow:0 -10px 40px rgba(31,32,30,.18);transform:translateY(100%);transition:transform 200ms ' + DRAWER + ';font:400 15px/1.45 ' + BODY + ';outline:none;}'
+    + '#w274sheet.open #w274pane{transform:translateY(0);transition-duration:280ms;}'
+    + '@media (min-width:901px){#w274pane{top:0;left:auto;width:min(520px,100vw);max-height:none;border-radius:22px 0 0 22px;box-shadow:-10px 0 40px rgba(31,32,30,.16);transform:translateX(100%);}#w274sheet.open #w274pane{transform:translateX(0);}#w274pane .w274grab{display:none;}}'
+    + '#w274pane .w274fx{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;margin:0;}'
+    + '#w274pane .w274grab{width:40px;height:5px;margin:8px auto 0;border-radius:3px;background:rgba(16,63,57,.2);flex:0 0 auto;}'
+    + '#w274pane .w274shd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 12px 8px 22px;flex:0 0 auto;}'
+    + '#w274pane .w274shd h2{margin:8px 0 0;font:500 30px/1.05 ' + HEAD + ';color:var(--wa-green);overflow-wrap:anywhere;}'
+    + '#w274pane .w274shd p{margin:6px 0 0;font-size:14px;color:var(--t-mut);}'
+    + '#w274pane .w274sbd{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:2px 22px 20px;-webkit-overflow-scrolling:touch;}'
+    + '#w274pane .w274sft{display:flex;flex-wrap:wrap;gap:8px;padding:12px 22px calc(14px + env(safe-area-inset-bottom));border-top:1px solid var(--t-line);flex:0 0 auto;}'
+    + '#w274pane .w274sft .w274btn{flex:0 0 auto;}#w274pane .w274sft .w274btn.pri{flex:1 1 auto;}'
+    + '#w274pane .w274sft .w274err{flex:1 1 100%;margin:0 0 4px;}'
+    + '@media (max-width:900px){#w274pane .w274sft .w274btn{flex:1 1 100%;min-height:48px;}}'
+    + '#w274sheet .w274rad{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '#w274sheet .w274rad label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--t-line2);background:var(--t-card);color:var(--t-green);font:600 13.5px/1 ' + BODY + ';cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',color 200ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#w274sheet .w274rad input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none;}'
+    + '#w274sheet .w274rad label.on{background:var(--t-ac);border-color:var(--t-ac);color:var(--t-card);}'
+    + '#w274sheet .w274rad label:has(input:focus-visible){outline:2px solid var(--t-ac);outline-offset:2px;}'
+    + '#w274sheet .w274pks{display:flex;flex-direction:column;gap:8px;margin-top:14px;}'
+    + '#w274sheet .w274pk,#w274sheet .w274evp{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:center;gap:12px;min-height:56px;padding:8px 12px;border-radius:12px;border:1px solid var(--t-line);background:var(--t-card);cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 200ms ' + OUT + ',border-color 200ms ' + OUT + ';}'
+    + '#w274sheet .w274pk input,#w274sheet .w274evp input{width:20px;height:20px;margin:0;accent-color:' + PURPLE + ';}'
+    + '#w274sheet .w274pk input,#w274sheet .w274evp input,#w274sheet .w274ck input,#w274sheet .w274rad input{background:none;box-shadow:none;}'   /* the base page paints focused inputs cream, a square behind a round radio */
+    + '#w274sheet .w274pk.on,#w274sheet .w274evp.on{border-color:var(--t-ac);background:var(--t-act);}'
+    + '#w274sheet .w274pk.dis,#w274sheet .w274evp.dis{cursor:default;background:var(--t-surf);}'
+    + '#w274sheet .w274pk .s,#w274sheet .w274evp .s{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin-top:3px;font-size:13px;color:var(--t-mut);}'
+    + '#w274sheet .w274pkc{margin:12px 0 0;font-size:13.5px;color:var(--t-mut);}'
+    /* the small menus: they grow from the button that opened them */
+    + '#w274menu{position:fixed;z-index:335;min-width:220px;max-width:calc(100vw - 24px);padding:6px;border-radius:14px;background:var(--wa-card);border:1px solid rgba(16,63,57,.14);box-shadow:0 14px 36px rgba(16,63,57,.18);opacity:0;visibility:hidden;transform:scale(.96);transform-origin:top right;transition:opacity 160ms ' + OUT + ',transform 160ms ' + OUT + ',visibility 0s linear 160ms;}'
+    + '#w274menu.up{transform-origin:bottom right;}#w274menu:focus{outline:none;}'
+    + '#w274sheet.w274inst,#w274sheet.w274inst .w274bd,#w274sheet.w274inst #w274pane,#w274menu.w274inst{transition:none !important;}'   /* nothing moves on a keyboard action */
+    + '#w274menu.on{opacity:1;visibility:visible;transform:scale(1);transition:opacity 160ms ' + OUT + ',transform 160ms ' + OUT + ',visibility 0s linear 0s;}'
+    + '#w274menu .w274mi{display:flex;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 12px;border:0;border-radius:9px;background:none;color:var(--wa-text);font:500 14.5px/1.2 ' + BODY + ';text-align:left;text-decoration:none;cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ',background-color 160ms ' + OUT + ';}'
+    + '#w274menu .w274mi svg{width:18px;height:18px;flex:0 0 18px;color:var(--wa-green);}'
+    + '#w274menu .w274mi[aria-checked="true"]{font-weight:700;}'
+    + '#w274menu .w274mi.dng,#w274menu .w274mi.dng svg{color:var(--wa-flag);}'
+    + '#w274menu hr{margin:4px 6px;border:0;border-top:1px solid rgba(16,63,57,.12);}'
+    /* the note at the foot of the screen (saved, copied, undo) */
+    + '#w274snack{position:fixed;left:50%;bottom:24px;z-index:340;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);min-height:48px;padding:6px 8px 6px 16px;border-radius:12px;background:var(--wa-text);color:var(--wa-card);font:500 14.5px/1.3 ' + BODY + ';box-shadow:0 10px 30px rgba(31,32,30,.24);opacity:0;visibility:hidden;transform:translate(-50%,8px);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 200ms;}'
+    + '#w274snack.on{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 0s;}'
+    + '#w274snack button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:none;color:var(--wa-card);font:700 14.5px/1 ' + BODY + ';text-decoration:underline;text-underline-offset:3px;cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ';}'
+    + '#w274snack button:empty{display:none;}'
+    + '@media (max-width:900px){#w274snack{bottom:calc(84px + env(safe-area-inset-bottom));}#w274snack button{min-height:44px;}}'
+    /* press feedback on everything pressable; hover only with a real pointer */
+    + PRESS.map(function (s) { return s + ':active:not(:disabled)'; }).join(',') + '{transform:scale(.97);}'
+    + '@media (hover:hover) and (pointer:fine){'
+    + '#toronto .w274btn:hover:not(:disabled),#w274sheet .w274btn:hover:not(:disabled){background-color:var(--t-surf);border-color:rgba(16,63,57,.34);}'
+    + '#toronto .w274btn.pri:hover:not(:disabled),#w274sheet .w274btn.pri:hover:not(:disabled){background-color:var(--t-ac);box-shadow:inset 0 0 0 99px rgba(31,32,30,.14);}'
+    + '#toronto .w274btn.dng.pri:hover:not(:disabled),#w274sheet .w274btn.dng.pri:hover:not(:disabled){background-color:var(--t-flag);}'
+    + '#toronto .w274card:hover,#toronto .w274prow:hover{border-color:rgba(16,63,57,.26);box-shadow:0 6px 20px rgba(16,63,57,.08);}'
+    + '#toronto .w274ib:hover,#w274sheet .w274ib:hover,#toronto .w274add:hover{background-color:var(--t-surf2);}'
+    + '#toronto .w274seg button:hover,#w274sheet .w274seg button:hover{background-color:rgba(255,250,242,.6);}'
+    + '#toronto .w274seg button[aria-pressed="true"]:hover,#w274sheet .w274seg button[aria-pressed="true"]:hover{background-color:var(--t-card);}'
+    + '#toronto .w274dayb button:hover:not([aria-pressed="true"]),#w274sheet .w274dayb button:hover:not([aria-pressed="true"]),#w274sheet .w274rad label:not(.on):hover,#toronto .w274tog:not([aria-pressed="true"]):hover{background-color:var(--t-surf);}'
+    + '#w274sheet .w274pk:not(.on):not(.dis):hover,#w274sheet .w274evp:not(.on):not(.dis):hover{border-color:rgba(16,63,57,.26);}'
+    + '#w274menu .w274mi:hover{background-color:rgba(16,63,57,.06);}'
+    + '#toronto > .w118mast .w274back:hover{text-decoration:underline;text-underline-offset:3px;}'
+    + '#toronto > .w118mast .w197pact:hover{background:var(--t-ac);box-shadow:inset 0 0 0 99px rgba(31,32,30,.14);}'
+    + '#toronto[data-w274v="event"] > .w118mast .w197pact:hover,#toronto[data-w274v="people"] > .w118mast .w197pact:hover{background:var(--t-surf);box-shadow:inset 0 0 0 1px rgba(16,63,57,.34);}'
+    + '}'
+    + '@media (max-width:900px){#toronto .w274btn,#w274sheet .w274btn,#toronto .w274btn.sm,#w274sheet .w274btn.sm,#toronto .w274seg button,#w274sheet .w274seg button,#toronto .w274dayb button,#w274sheet .w274dayb button,#w274sheet .w274rad label{min-height:44px;}#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{min-height:44px;}#toronto .w274date{font-size:46px;}}'
+    /* reduced motion: the fades stay, every movement goes */
+    + '@media (prefers-reduced-motion:reduce){'
+    + PRESS.map(function (s) { return s + ':active:not(:disabled)'; }).join(',') + '{transform:none;}'
+    + '#w274pane,#w274sheet.open #w274pane{transform:none;opacity:0;transition:opacity 200ms ' + DRAWER + ';}'
+    + '#w274sheet.open #w274pane{opacity:1;transition-duration:280ms;}'
+    + '#toronto .w274st.w274pre{transform:none;}'
+    + '#toronto .w274bar i,#toronto .w274steps.w274go .w274mk,#toronto .w274fold svg{transition:none;}'
+    + '#w274menu,#w274menu.on,#w274menu.up{transform:none;}'
+    + '#w274snack,#w274snack.on{transform:translate(-50%,0);}'
+    + '}';
+  if (!document.getElementById('wa274css')) {
+    var st274 = document.createElement('style'); st274.id = 'wa274css'; st274.textContent = css274; document.head.appendChild(st274);
+  }
+
+  /* ---------- the data: Toronto events (volunteer_events kind 'meal', location Toronto), their crews and who the meals go to ---------- */
+  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts';
+  var RO_COLS = 'id,event_id,person_id,person_name,role,status,confirm_status,confirmed_at,notes,detail,sort';
+  function missingFn(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /PGRST202|PGRST205|42883|42P01|could not find|does not exist|schema cache/i.test(s); }
+  async function loadEvents(force) {
+    if (S.loading && !force) return S.loading;
+    S.loading = (async function () {
+      try {
+        var r = await db.from('volunteer_events').select(EV_COLS).eq('kind', 'meal').order('event_date', { ascending: true });
+        if (r && r.error) throw r.error;
+        S.events = ((r && r.data) || []).filter(isTo);
+        S.evErr = null;
+      } catch (e) { S.evErr = msgOf(e); console.warn('wave274 events', e); }
+      var ids = S.events.map(function (e) { return e.id; });
+      if (ids.length) {
+        var rr = await Promise.all([
+          db.from('event_roster').select(RO_COLS).in('event_id', ids).order('sort', { ascending: true }),
+          db.from('volunteer_event_recipients').select('*').in('event_id', ids).order('sort', { ascending: true })
+        ].map(function (q) { return Promise.resolve(q).then(function (x) { return x; }, function (e) { return { error: e }; }); }));
+        if (rr[0] && rr[0].error) { S.rosterErr = msgOf(rr[0].error); }
+        else { S.rosterErr = null; S.roster = ((rr[0] && rr[0].data) || []).filter(function (x) { return x && ids.some(function (i) { return String(i) === String(x.event_id); }); }); }
+        if (rr[1] && rr[1].error) { S.recOk = false; S.rec = []; }
+        else { S.recOk = true; S.rec = ((rr[1] && rr[1].data) || []).filter(function (x) { return x && ids.some(function (i) { return String(i) === String(x.event_id); }); }); }
+      } else {
+        S.roster = []; S.rec = [];
+        try { var p = await db.from('volunteer_event_recipients').select('id').limit(1); S.recOk = !(p && p.error); } catch (e) { S.recOk = false; }
+      }
+      S.loaded = true;
+      reindexPool();
+    })();
+    try { await S.loading; } finally { S.loading = null; }
+  }
+  /* one event's crew again (after an add the server made) */
+  async function reloadRoster(evId) {
+    try {
+      var r = await db.from('event_roster').select(RO_COLS).eq('event_id', evId).order('sort', { ascending: true });
+      if (r && r.error) throw r.error;
+      var fresh = ((r && r.data) || []).filter(function (x) { return String(x.event_id) === String(evId); });
+      S.roster = S.roster.filter(function (x) { return String(x.event_id) !== String(evId); }).concat(fresh);
+      reindexPool();
+    } catch (e) { console.warn('wave274 roster', e); }
+  }
+
+  /* ---------- the Toronto pool: the CRM's people in Toronto ----------
+     Tagged toronto / toronto volunteer / toronto student, or living in the GTA, or on a Toronto crew. The server is asked for
+     each, and the same rule is applied again here (the browser's word is what the page shows). */
+  var C_COLS = 'id,full_name,first_name,last_name,primary_email,emails,phones,city,tags,kinds,volunteer_id,org_id,merged_into,created_at,last_activity_at,source';
+  function torontoVids() { var v = {}; S.roster.forEach(function (r) { if (r.person_id != null) v[String(r.person_id)] = 1; }); return v; }
+  function inPool(c, vids) {
+    if (!c || c.merged_into != null) return false;
+    if ((c.tags || []).some(function (t) { return TAGS.indexOf(lower(t)) >= 0; })) return true;
+    if (GTA.indexOf(lower(c.city)) >= 0) return true;
+    return c.volunteer_id != null && !!vids[String(c.volunteer_id)];
+  }
+  function jv(v) {
+    if (typeof v === 'string') { var t = v.trim(); if (/^[\[{"]/.test(t)) { try { return jv(JSON.parse(t)); } catch (e) { return v; } } return v; }
+    if (v && typeof v === 'object' && !Array.isArray(v)) { if ('value' in v) return jv(v.value); if ('values' in v) return jv(v.values); }
+    return v;
+  }
+  function asText(v) { v = jv(v); if (v == null) return ''; if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(', '); if (typeof v === 'object') return String(v.label || v.name || ''); return String(v).trim(); }
+  function asList(v) {
+    v = jv(v); if (v == null || v === '') return [];
+    if (Array.isArray(v)) { var o = []; v.forEach(function (x) { asList(x).forEach(function (y) { o.push(y); }); }); return o; }
+    if (typeof v === 'object') return [asText(v)].filter(Boolean);
+    return String(v).split(/[,;\n\/|]+|\s+and\s+/i).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+  function asBool(v) { v = jv(v); if (typeof v === 'boolean') return v; var s = lower(asText(v)); if (!s) return null; return /^(yes|y|true|oui|1|i am|agree)/.test(s); }
+  var DAYK = { mon: 0, lun: 0, tue: 1, mar: 1, wed: 2, mer: 2, thu: 3, jeu: 3, fri: 4, ven: 4, sat: 5, sam: 5, sun: 6, dim: 6 };
+  function daysOf(v) {
+    var on = [false, false, false, false, false, false, false];
+    asList(v).forEach(function (s) {
+      var f = fold(s);
+      if (/weekend|fin de semaine/.test(f)) { on[5] = on[6] = true; return; }
+      if (/weekday|semaine/.test(f)) { for (var i = 0; i < 5; i++) on[i] = true; return; }
+      if (/^(any|all|every|flexible|tous|toutes)/.test(f)) { for (var j = 0; j < 7; j++) on[j] = true; return; }
+      var k = DAYK[f.slice(0, 3)]; if (k != null) on[k] = true;
+    });
+    return on;
+  }
+  function areaOf(c, raw) {
+    var a = asText(raw); if (a) return a;
+    var city = lower(c.city); for (var i = 0; i < AREAS.length; i++) if (lower(AREAS[i]) === city) return AREAS[i];
+    return c.city ? String(c.city).trim() : '';
+  }
+  function chunks(a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; }
+  async function q(p) { try { var r = await p; if (r && r.error) throw r.error; return (r && r.data) || []; } catch (e) { throw e; } }
+  async function loadPool(force) {
+    if (S.pool && !force) return S.pool;
+    if (S.poolBusy) return S.poolBusy;
+    S.poolBusy = (async function () {
+      try {
+        if (!S.loaded) await loadEvents();
+        var vids = torontoVids(), vlist = Object.keys(vids).map(Number).filter(function (n) { return isFinite(n); });
+        var tagq = TAGS.concat(TAGS.map(function (t) { return t.replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }));
+        var asks = [
+          db.from('crm_contacts').select(C_COLS).is('merged_into', null).overlaps('tags', tagq).limit(3000),
+          db.from('crm_contacts').select(C_COLS).is('merged_into', null).or(GTA.map(function (c) { return 'city.ilike."' + c + '"'; }).join(',')).limit(3000)
+        ];
+        chunks(vlist, 150).forEach(function (part) { asks.push(db.from('crm_contacts').select(C_COLS).in('volunteer_id', part).limit(3000)); });
+        var got = await Promise.all(asks.map(q));
+        var by = {};
+        got.forEach(function (rows) { rows.forEach(function (c) { if (c && c.id != null && !by[c.id]) by[c.id] = c; }); });
+        var list = Object.keys(by).map(function (k) { return by[k]; }).filter(function (c) { return inPool(c, vids); });
+        /* schools, and the answers (area, days, age, consent) */
+        var orgIds = list.map(function (c) { return c.org_id; }).filter(function (x, i, a) { return x != null && a.indexOf(x) === i; });
+        var orgs = {}, fields = {}, vals = [];
+        try { if (orgIds.length) (await q(db.from('volunteer_orgs').select('id,name,short').in('id', orgIds))).forEach(function (o) { orgs[o.id] = o; }); } catch (e) { console.warn('wave274 schools', e); }
+        try {
+          var fs = await q(db.from('crm_fields').select('id,key').in('key', FKEYS));
+          fs.forEach(function (f) { if (FKEYS.indexOf(f.key) >= 0) fields[f.id] = f.key; });
+          var fids = Object.keys(fields).map(Number);
+          if (fids.length && list.length) {
+            var parts = await Promise.all(chunks(list.map(function (c) { return c.id; }), 150).map(function (ids) { return q(db.from('crm_contact_fields').select('contact_id,field_id,value').in('field_id', fids).in('contact_id', ids)); }));
+            parts.forEach(function (p) { vals = vals.concat(p); });
+          }
+        } catch (e) { console.warn('wave274 answers', e); }
+        var ans = {};
+        vals.forEach(function (v) { var k = fields[v.field_id]; if (!k) return; (ans[v.contact_id] = ans[v.contact_id] || {})[k] = v.value; });
+        S.orgs = orgs;
+        S.pool = list.map(function (c) { return person(c, ans[c.id] || {}); });
+        S.poolErr = null;
+      } catch (e) { S.poolErr = msgOf(e); S.pool = S.pool || []; console.warn('wave274 pool', e); }
+      reindexPool();
+      return S.pool;
+    })();
+    try { return await S.poolBusy; } finally { S.poolBusy = null; }
+  }
+  function person(c, a) {
+    var tags = (c.tags || []).map(lower), org = c.org_id != null ? S.orgs[c.org_id] : null;
+    var student = c.org_id != null || tags.indexOf('toronto student') >= 0;
+    var name = String(c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ') || 'No name').trim();
+    var emails = [c.primary_email].concat(c.emails || []).filter(function (x, i, l) { return x && l.indexOf(x) === i; });
+    return {
+      id: c.id, c: c, name: name, email: emails[0] || '', phone: (c.phones || [])[0] || '',
+      student: student, school: org ? String(org.short || org.name || '') : '', schoolName: org ? String(org.name || org.short || '') : '', schoolId: org ? org.id : null,
+      area: areaOf(c, a.gta_area), days: daysOf(a.days_available), age16: asBool(a.age_16_plus), photo: asBool(a.photo_consent),
+      created: c.created_at || '', evs: [], count: 0, last: '', next: ''
+    };
+  }
+  /* each person's Toronto events, and the maps from a roster row to its person */
+  function reindexPool() {
+    S.byCid = {}; S.byVid = {};
+    (S.pool || []).forEach(function (p) { S.byCid[p.id] = p; if (p.c.volunteer_id != null) S.byVid[String(p.c.volunteer_id)] = p; p.evs = []; });
+    var t = todayIso();
+    S.roster.forEach(function (r) {
+      if (stOf(r) === 'off' || S.pend[r.id]) return;
+      var p = personOf(r), e = evById(r.event_id); if (!p || !e) return;
+      p.evs.push({ ev: e, row: r });
+    });
+    (S.pool || []).forEach(function (p) {
+      var ds = p.evs.filter(function (x) { return lower(x.ev.status) !== 'cancelled'; }).map(function (x) { return String(x.ev.event_date); }).sort();
+      p.count = ds.length;
+      var past = ds.filter(function (d) { return d < t; }), fut = ds.filter(function (d) { return d >= t; });
+      p.last = past.length ? past[past.length - 1] : ''; p.next = fut.length ? fut[0] : '';
+    });
+  }
+  function personOf(r) {
+    if (!r) return null;
+    var cid = r.detail && r.detail.contact_id;
+    return (cid != null && S.byCid[cid]) || (r.person_id != null && S.byVid[String(r.person_id)]) || null;
+  }
+  function onEvent(p, evId) {
+    return S.roster.some(function (r) { return String(r.event_id) === String(evId) && !S.pend[r.id] && stOf(r) !== 'off' && ((r.detail && String(r.detail.contact_id) === String(p.id)) || (p.c.volunteer_id != null && String(r.person_id) === String(p.c.volunteer_id))); });
+  }
+  function contactOfRow(r) {
+    var p = personOf(r), d = (r && r.detail) || {};
+    return { email: (p && p.email) || d.email || '', phone: (p && p.phone) || d.phone || '' };
+  }
+
+  /* ---------- writes (each one optimistic, put back with a plain sentence when it fails) ---------- */
+  async function must(p) { var r = await p; if (r && r.error) throw r.error; return r; }
+  function nextCodeLocal(date) {
+    var yy = String(date || todayIso()).slice(2, 4), n = 0, re = new RegExp('^TO-' + yy + '-(\\d+)$');
+    S.events.forEach(function (e) { var m = re.exec(String(e.code || '')); if (m) n = Math.max(n, Number(m[1])); });
+    return 'TO-' + yy + '-' + (n + 1);
+  }
+  async function nextCode(date) {
+    try {
+      var r = await db.rpc('wa274_next_code', { p_date: date });
+      if (r && !r.error && typeof r.data === 'string' && /^TO-\d{2}-\d+$/.test(r.data)) return r.data;
+    } catch (e) { /* the SQL is not applied yet */ }
+    return nextCodeLocal(date);
+  }
+  async function createEvent(f) {
+    var row = { code: await nextCode(f.event_date), event_date: f.event_date, start_time: f.start_time || '10:00', title: f.title || 'Free meal event', location: 'Toronto', kind: 'meal', status: 'planned',
+      notes: f.notes || null, planned_meals: f.planned_meals, kitchen_place: f.kitchen_place || null, kitchen_shift: f.kitchen_shift || null };
+    var r = await must(db.from('volunteer_events').insert(row).select(EV_COLS).single());
+    var made = (r && r.data && r.data.id != null) ? r.data : null;
+    if (!made) { await loadEvents(true); made = S.events.filter(function (e) { return e.code === row.code; })[0] || null; }
+    else if (!evById(made.id)) S.events.push(Object.assign({}, row, made));
+    try { if (typeof logChange === 'function') logChange('volunteer_event', made ? made.id : row.code, 'created', null, row.code + ' ' + row.title + ' on ' + row.event_date); } catch (e) { /* fine */ }
+    return made;
+  }
+  async function saveEvent(ev, patch) {
+    var old = {}; Object.keys(patch).forEach(function (k) { old[k] = ev[k]; });
+    Object.assign(ev, patch);
+    try { await must(db.from('volunteer_events').update(patch).eq('id', ev.id)); }
+    catch (e) { Object.assign(ev, old); throw e; }
+    Object.keys(patch).forEach(function (k) { audit(ev.id, k, old[k] && typeof old[k] === 'object' ? JSON.stringify(old[k]) : old[k], patch[k] && typeof patch[k] === 'object' ? JSON.stringify(patch[k]) : patch[k]); });
+  }
+  var ST_PATCH = {
+    yes: function () { return { status: 'Confirmed', confirm_status: 'confirmed', confirmed_at: new Date().toISOString() }; },
+    no: function () { return { status: 'Unavailable', confirm_status: 'declined' }; },
+    wait: function () { return { status: 'TBD', confirm_status: null }; }
+  };
+  async function setStatus(r, st) {
+    var patch = ST_PATCH[st](), old = { status: r.status, confirm_status: r.confirm_status, confirmed_at: r.confirmed_at };
+    Object.assign(r, patch);
+    try { await must(db.from('event_roster').update(patch).eq('id', r.id)); }
+    catch (e) { Object.assign(r, old); throw e; }
+    try { if (typeof logChange === 'function' && old.status !== patch.status) logChange('event_roster', r.id, 'status', old.status, patch.status); } catch (e) { /* fine */ }
+  }
+  async function setCalled(r, on) {
+    var d = Object.assign({}, r.detail || {}), old = r.detail;
+    if (on) { d.called_at = new Date().toISOString(); d.called_by = me(); } else { delete d.called_at; delete d.called_by; }
+    r.detail = d;
+    try { await must(db.from('event_roster').update({ detail: d }).eq('id', r.id)); }
+    catch (e) { r.detail = old; throw e; }
+  }
+  /* a person onto a crew: the database function first (it gives a contact a volunteer record when it has none) */
+  async function crewAdd(ev, p, role) {
+    var res = null;
+    try {
+      var r = await db.rpc('wa274_crew_add', { p_event: ev.id, p_contact: p.id, p_role: role });
+      if (r && r.error && !missingFn(r.error)) return { ok: false, err: msgOf(r.error) };
+      if (r && !r.error && r.data && r.data.ok) res = r.data;
+    } catch (e) { if (!missingFn(e)) return { ok: false, err: msgOf(e) }; }
+    if (res) {
+      if (res.person_id != null && p.c.volunteer_id == null) p.c.volunteer_id = res.person_id;
+      if (!res.already && res.roster_id != null && !rowById(res.roster_id)) {
+        S.roster.push({ id: res.roster_id, event_id: ev.id, person_id: res.person_id, person_name: p.name, role: role, status: 'TBD', confirm_status: null, confirmed_at: null, notes: null, sort: 9999,
+          detail: { source: 'toronto', contact_id: p.id, added_by: me(), email: p.email || null, phone: p.phone || null } });
+      } else if (res.already && !rowById(res.roster_id)) await reloadRoster(ev.id);
+      return { ok: true, already: !!res.already };
+    }
+    /* the database update is not applied yet: a person with a volunteer record goes straight onto the crew */
+    if (p.c.volunteer_id == null) return { ok: false, needs: true };
+    if (onEvent(p, ev.id)) return { ok: true, already: true };
+    var row = { event_id: ev.id, person_id: p.c.volunteer_id, person_name: p.c.full_name || p.name, role: role, status: 'TBD', detail: { source: 'toronto', contact_id: p.id } };
+    try {
+      var ins = await must(db.from('event_roster').insert(row).select(RO_COLS).single());
+      var got = ins && ins.data;
+      if (got && got.id != null) S.roster.push(Object.assign({ confirm_status: null, confirmed_at: null, notes: null, sort: 9999 }, row, got));
+      else await reloadRoster(ev.id);
+      return { ok: true, already: false };
+    } catch (e) { return { ok: false, err: msgOf(e) }; }
+  }
+  /* who the meals go to */
+  async function saveRecipient(ev, id, f) {
+    if (id) {
+      var r = S.rec.filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) throw new Error('That organization is not on this event any more.');
+      var old = Object.assign({}, r);
+      Object.assign(r, f);
+      try { await must(db.from('volunteer_event_recipients').update(f).eq('id', r.id)); } catch (e) { Object.keys(r).forEach(function (k) { delete r[k]; }); Object.assign(r, old); throw e; }
+      return r;
+    }
+    var row = Object.assign({ event_id: ev.id, sort: recsOf(ev.id).reduce(function (m, x) { return Math.max(m, num(x.sort, 0)); }, 0) + 1 }, f);
+    var ins = await must(db.from('volunteer_event_recipients').insert(row).select('*').single());
+    var got = ins && ins.data;
+    if (got && got.id != null) { S.rec.push(Object.assign({}, row, got)); return got; }
+    var re = await db.from('volunteer_event_recipients').select('*').eq('event_id', ev.id).order('sort', { ascending: true });
+    if (re && !re.error) S.rec = S.rec.filter(function (x) { return String(x.event_id) !== String(ev.id); }).concat((re.data || []).filter(function (x) { return String(x.event_id) === String(ev.id); }));
+    return row;
+  }
+  async function removeRecipient(id) {
+    var r = S.rec.filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
+    var keep = S.rec.slice();
+    S.rec = S.rec.filter(function (x) { return x !== r; });
+    try { await must(db.from('volunteer_event_recipients').delete().eq('id', r.id)); } catch (e) { S.rec = keep; throw e; }
+  }
+  /* taking someone off the crew waits 5 seconds for Undo, then deletes the row */
+  function takeOff(r, onDone) {
+    if (!r || S.pend[r.id]) return;
+    var p = { row: r, t: null, done: onDone };
+    p.t = setTimeout(function () { commitOff(r.id); }, 5000);
+    S.pend[r.id] = p;
+    reindexPool();
+  }
+  async function commitOff(id) {
+    var p = S.pend[id]; if (!p) return;
+    clearTimeout(p.t); p.t = null;
+    try {
+      await must(db.from('event_roster').delete().eq('id', id));
+      S.roster = S.roster.filter(function (x) { return String(x.id) !== String(id); });
+      delete S.pend[id];
+      try { if (typeof logChange === 'function') logChange('event_roster', id, 'removed', (p.row.person_name || '') + ' (' + p.row.role + ')', null); } catch (e) { /* fine */ }
+      reindexPool();
+      if (p.done) p.done(null);
+    } catch (e) { delete S.pend[id]; reindexPool(); if (p.done) p.done(e); }
+  }
+  function undoOff(id) { var p = S.pend[id]; if (!p) return false; clearTimeout(p.t); delete S.pend[id]; reindexPool(); return true; }
+  function flushOff() { Object.keys(S.pend).forEach(function (id) { if (S.pend[id] && S.pend[id].t) commitOff(id); }); }
+
+  /* ---------- small drawing helpers ---------- */
+  var IC = {
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    back: '<path d="m10 6-6 6 6 6"/><path d="M4 12h16"/>',
+    chev: '<path d="m9 6 6 6-6 6"/>',
+    dots: '<circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/>',
+    lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.2a1.7 1.7 0 0 0-1.7-1.7H6.2a1.7 1.7 0 0 0-1.7 1.7v7.6a1.7 1.7 0 0 0 1.7 1.7h2.3"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>',
+    person: '<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/>',
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    off: '<path d="M5 12h14"/>',
+    wait: '<circle cx="12" cy="12" r="8"/><path d="M12 7.5V12l3 2"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>'
+  };
+  function ic(n) { return '<svg viewBox="0 0 24 24" fill="' + (n === 'dots' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (IC[n] || '') + '</svg>'; }
+  function andJoin(a) { a = a.filter(Boolean); if (a.length < 2) return a.join(''); return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+  function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function ratio(a, b) { if (!b) return a > 0 ? 1 : 0; return Math.max(0, Math.min(1, a / b)); }
+  function barHtml(c) { return '<span class="w274bar" aria-hidden="true"><i class="w" data-x="' + ratio(c.yes + c.wait, c.target).toFixed(3) + '"></i><i class="c" data-x="' + ratio(c.yes, c.target).toFixed(3) + '"></i></span>'; }
+  function barRow(c) { return '<div class="w274br"><span class="l">' + E(c.label) + '</span>' + barHtml(c) + '<span class="n">' + (c.yes + c.wait) + ' of ' + c.target + '</span></div>'; }
+  /* the bars: they fill from the left on a page's first draw, and otherwise just stand at their value */
+  function bars(scope, grow) {
+    if (!scope) return;
+    var els = Array.prototype.slice.call(scope.querySelectorAll('.w274bar i[data-x]'));
+    if (!els.length) return;
+    var set = function () { els.forEach(function (i) { i.style.transform = 'scaleX(' + i.getAttribute('data-x') + ')'; }); };
+    if (grow && !reduced()) { void scope.offsetWidth; requestAnimationFrame(function () { requestAnimationFrame(set); }); return; }
+    var bs = Array.prototype.slice.call(scope.querySelectorAll('.w274bar'));
+    bs.forEach(function (b) { b.classList.add('w274now'); }); set(); void scope.offsetWidth; bs.forEach(function (b) { b.classList.remove('w274now'); });
+  }
+  /* a list rises in, 40 ms apart, on a page's first draw only */
+  function rise(scope, sel) {
+    if (!scope) return;
+    var items = Array.prototype.slice.call(scope.querySelectorAll(sel)); if (!items.length) return;
+    var still = reduced();
+    items.forEach(function (el) { el.classList.add('w274st', 'w274pre'); });
+    void scope.offsetWidth;
+    items.forEach(function (el, i) { el.style.transitionDelay = still ? '0ms' : Math.min(i, 10) * 40 + 'ms'; el.classList.remove('w274pre'); });
+    setTimeout(function () { items.forEach(function (el) { el.classList.remove('w274st'); el.style.transitionDelay = ''; }); }, 760);
+  }
+  function errLine(key, text) { return '<p class="w274err" data-w274err="' + E(key) + '" aria-live="polite">' + E(text || S.err[key] || '') + '</p>'; }
+  function setErr(key, text) {
+    S.err[key] = text || '';
+    var els = document.querySelectorAll('[data-w274err="' + key + '"]');
+    Array.prototype.forEach.call(els, function (el) { el.textContent = text || ''; });
+  }
+  function kitchenLine(e) { var k = String(e.kitchen_place || '').trim(), s = String(e.kitchen_shift || '').trim(); return k ? k + (s ? ', ' + s : '') : (s ? 'Kitchen not set, ' + s : 'Kitchen not booked yet'); }
+  function mealsFor(e) {
+    var planned = num(e.planned_meals, null);
+    if (!S.recOk) return planned ? plural(planned, 'meal') + ' planned' : '';
+    var rs = recsOf(e.id);
+    if (!rs.length) return (planned ? plural(planned, 'meal') + ' planned. ' : '') + 'Who the meals go to is not set yet.';
+    var parts = rs.filter(function (r) { return !r.private; }).map(function (r) { return String(r.name || '') + (r.meals != null ? ' (' + r.meals + ')' : ''); });
+    var priv = rs.filter(function (r) { return r.private; });
+    if (priv.length) { var pm = priv.reduce(function (s, r) { return s + num(r.meals, 0); }, 0); parts.push(plural(priv.length, 'organization') + ', not named publicly' + (pm ? ' (' + pm + ')' : '')); }
+    return 'Meals for: ' + andJoin(parts);
+  }
+  function delivered(e) { var rs = recsOf(e.id).filter(function (r) { return r.meals_delivered != null && r.meals_delivered !== ''; }); return rs.length ? rs.reduce(function (s, r) { return s + num(r.meals_delivered, 0); }, 0) : null; }
+  function relLine(e) { var d = daysTo(e.event_date), t = hm(e.start_time); return cap(rel(d)) + (t ? ', at ' + t : ''); }
+
+  /* ---------- the masthead (wave118's): the page's title, its line, the way back. Its primary action is the app's own New event
+     (APPS.toronto.actions): wave197 shows it at the masthead's right on a computer, the app bar shows it on a phone ---------- */
+  function mastEl() {
+    var panel = document.getElementById('toronto'); if (!panel) return null;
+    var m = panel.querySelector(':scope > .w118mast');
+    if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w118', 'toronto'); m.innerHTML = '<div class="crumb">Operations Toronto</div><h1>Toronto Volunteers</h1><p></p>'; panel.insertBefore(m, panel.firstChild); }
+    else if (panel.firstElementChild !== m) panel.insertBefore(m, panel.firstChild);
+    return m;
+  }
+  function setMast(title, blurb, o) {
+    o = o || {};
+    var m = mastEl(); if (!m) return;
+    var h1 = m.querySelector('h1'), p = m.querySelector(':scope > p');
+    var hh = E(title) + (o.count != null ? ' <span class="w274cnt">' + E(o.count) + '</span>' : ''), want = title + (o.count != null ? ' ' + o.count : '');
+    if (h1 && h1.textContent !== want) h1.innerHTML = hh;   /* the live text, so a rename by another wave is put right */
+    if (p && p.textContent !== blurb) p.textContent = blurb;
+    var b = m.querySelector(':scope > .w274back');
+    if (o.back && !b) { b = document.createElement('a'); b.className = 'w274back'; b.href = '#toronto'; b.innerHTML = ic('back') + 'All events'; m.insertBefore(b, h1 || m.firstChild); }
+    else if (!o.back && b) b.parentNode.removeChild(b);
+  }
+
+  /* ---------- Events (#toronto) ---------- */
+  function heroHtml(e) {
+    var st = stageOf(e), crews = crewOf(e), t = totals(crews);
+    return '<a class="w274hero" href="#toronto/e/' + E(e.id) + '" data-w274ev="' + E(e.id) + '">' +
+      '<div class="w274hl"><div class="w274ht"><span class="w274date">' + E(fmtDay(e.event_date)) + '</span><span class="w274chip stg">' + E(stageLabel(st)) + '</span></div>' +
+      '<p class="w274rel">' + E(relLine(e)) + '</p>' +
+      '<h3>' + E(titleOf(e)) + '</h3>' +
+      '<p class="w274meta">' + E(kitchenLine(e)) + '</p>' +
+      '<p class="w274meta">' + E(mealsFor(e)) + '</p></div>' +
+      '<div class="w274hr"><p class="w274conf"><b>' + t.yes + '</b> of ' + t.target + ' confirmed</p>' + crews.map(barRow).join('') +
+      '<p class="w274leg" aria-hidden="true"><span><i></i>Confirmed</span><span><i class="w"></i>Waiting</span></p></div></a>';
+  }
+  function cardHtml(e) {
+    var off = lower(e.status) === 'cancelled', st = stageOf(e), crews = crewOf(e), t = totals(crews);
+    return '<a class="w274card' + (off ? ' off' : '') + '" href="#toronto/e/' + E(e.id) + '" data-w274ev="' + E(e.id) + '">' +
+      '<div class="w274ct"><span class="w274cd">' + E(fmtDay(e.event_date)) + '</span>' + (off ? '<span class="w274chip st-cancelled">Cancelled</span>' : '<span class="w274chip stg">' + E(stageLabel(st)) + '</span>') + '</div>' +
+      '<p class="w274rel">' + E(relLine(e)) + '</p>' +
+      '<h3>' + E(titleOf(e)) + '</h3>' +
+      '<p class="w274meta">' + E(kitchenLine(e)) + '</p>' +
+      '<p class="w274meta">' + E(mealsFor(e)) + '</p>' +
+      (off ? '' : '<p class="w274cf"><b>' + t.yes + '</b> of ' + t.target + ' confirmed</p>' + crews.map(barRow).join('')) + '</a>';
+  }
+  function pastRow(e) {
+    var s = lower(e.status), d = delivered(e);
+    var m = s === 'cancelled' ? 'Cancelled' : d != null ? plural(d, 'meal') + ' delivered' : s === 'completed' ? 'Meals not counted' : 'Not wrapped up yet';
+    return '<a class="w274prow" href="#toronto/e/' + E(e.id) + '" data-w274ev="' + E(e.id) + '"><span class="d">' + E(fmtDay(e.event_date)) + '</span><span class="t">' + E(titleOf(e)) + '</span><span class="m">' + E(m) + '</span></a>';
+  }
+  function eventsHtml() {
+    if (!S.loaded) return '<p class="w274quiet" role="status">Loading the Toronto events\u2026</p>';
+    var t = todayIso();
+    var all = S.events.slice().sort(function (a, b) { return String(a.event_date) < String(b.event_date) ? -1 : String(a.event_date) > String(b.event_date) ? 1 : num(a.id, 0) - num(b.id, 0); });
+    var head = S.evErr ? '<p class="w274err" role="alert">Couldn\u2019t load the Toronto events. Check your connection, then reload the page.</p>' : '';
+    if (!all.length) return head + '<div class="w274empty"><h2>No Toronto events yet.</h2><p>Plan the first one: pick a date and a kitchen, then build the crew.</p><button type="button" class="w274btn pri" data-w274new="1">' + ic('plus') + 'New event</button></div>';
+    var up = all.filter(function (e) { return String(e.event_date) >= t && isOpen(e); });
+    var offUp = all.filter(function (e) { return String(e.event_date) >= t && lower(e.status) === 'cancelled'; });
+    var past = all.filter(function (e) { return up.indexOf(e) < 0 && offUp.indexOf(e) < 0; }).reverse();
+    var next = up[0], rest = up.slice(1).concat(offUp);
+    var html = head + '<section class="w274blk" aria-labelledby="w274hnext"><h2 class="w274kick" id="w274hnext">Next event</h2>' +
+      (next ? heroHtml(next) : '<div class="w274empty"><p>No upcoming event yet.</p><button type="button" class="w274btn pri" data-w274new="1">' + ic('plus') + 'New event</button></div>') + '</section>';
+    if (rest.length) html += '<section class="w274blk" aria-labelledby="w274hup"><h2 class="w274h2" id="w274hup">Upcoming</h2><div class="w274grid">' + rest.map(cardHtml).join('') + '</div></section>';
+    if (past.length) html += '<section class="w274blk" aria-labelledby="w274hpast"><h2 class="w274h2" id="w274hpast"><button type="button" class="w274fold" data-w274past="1" aria-expanded="' + (S.pastOpen ? 'true' : 'false') + '" aria-controls="w274pastl">' + ic('chev') + 'Past events (' + past.length + ')</button></h2>' +
+      '<div id="w274pastl"' + (S.pastOpen ? '' : ' hidden') + '>' + past.map(pastRow).join('') + '</div></section>';
+    return html;
+  }
+  function paintEvents(root, fresh) {
+    setMast('Toronto events', 'Cook together, then bring the meals to the people who need them.', {});
+    root.innerHTML = eventsHtml();
+    bars(root, fresh);
+    if (fresh) rise(root, '.w274hero, .w274card');
+  }
+
+  /* ---------- the event page (#toronto/e/<id>): Plan, Crew, Confirm, Wrap up ---------- */
+  var ADD_TO = { team_leader: 'Add a lead', cook: 'Add to the kitchen crew', server: 'Add to the serving crew', driver: 'Add someone for delivery', photographer: 'Add a photographer' };
+  var ST_NAME = { planned: 'Planned', completed: 'Completed', cancelled: 'Cancelled' };
+  function curEv() { return S.view === 'event' ? evById(S.evId) : null; }
+  function mastLine(e) { var t = hm(e.start_time), k = String(e.kitchen_place || '').trim(); return fmtDay(e.event_date) + (t ? ' at ' + t : '') + (k ? ', ' + k : ''); }
+  /* the current stage's main action is the page's primary one */
+  function pri(e, k) { return stageOf(e) === k && isOpen(e) ? ' pri' : ''; }
+  function val(v) { v = String(v == null ? '' : v).trim(); return v ? E(v) : '<span class="none">Not set yet</span>'; }
+  function secHead(k, e, acts) {
+    return '<div class="w274sh"><span class="w274no" aria-hidden="true">' + (stageIdx(k) + 1) + '</span><h2 id="w274h-' + k + '" tabindex="-1">' + E(stageLabel(k)) + '</h2>' +
+      (stageOf(e) === k ? '<span class="w274chip stg">Now</span>' : '') + (acts ? '<div class="w274sha">' + acts + '</div>' : '') + '</div>';
+  }
+  function headHtml(e) {
+    var s = lower(e.status) || 'planned';
+    return '<div class="w274ehl"><span class="w274chip st-' + E(s) + '">' + E(ST_NAME[s] || cap(s)) + '</span>' + (e.code ? '<span class="w274code">' + E(e.code) + '</span>' : '') + '<span>' + E(cap(rel(daysTo(e.event_date)))) + '</span></div>' +
+      '<div class="w274eha"><button type="button" class="w274btn" data-w274edit="1">' + ic('pen') + 'Edit</button><button type="button" class="w274btn" data-w274more="1" aria-haspopup="menu" aria-expanded="false">More</button></div>';
+  }
+  function stepsHtml(e) {
+    var cur = stageOf(e);
+    return '<nav class="w274steps" aria-label="Stages of this event"><span class="w274mk" aria-hidden="true"></span>' +
+      STAGES.map(function (s) { return '<button type="button" data-w274go="' + s[0] + '"' + (s[0] === cur ? ' aria-current="step"' : '') + '>' + E(s[1]) + '</button>'; }).join('') + '</nav>';
+  }
+  function sumHtml(e) {
+    var s = lower(e.status);
+    if (s === 'cancelled') return '<p class="w274cx" role="status">This event was cancelled. More, then Plan this event again, brings it back.</p>';
+    if (s !== 'completed') return '';
+    var d = delivered(e), rs = recsOf(e.id), came = rowsOf(e.id).filter(function (r) { return stOf(r) === 'yes'; }).length;
+    return '<p class="w274done" role="status"><b>Completed.</b> ' + (d != null ? E(plural(d, 'meal')) + ' delivered' + (rs.length ? ' to ' + E(plural(rs.length, 'organization')) : '') + '. ' : '') + E(plural(came, 'person', 'people')) + ' came.</p>';
+  }
+  /* Plan: the kitchen, and who the meals go to */
+  function dietChips(d) {
+    d = (d && typeof d === 'object') ? d : {}; var o = [];
+    if (d.halal) o.push('Halal'); if (d.nut_free) o.push('Nut-free');
+    if (num(d.vegetarian, 0) > 0) o.push(num(d.vegetarian, 0) + ' vegetarian'); if (num(d.vegan, 0) > 0) o.push(num(d.vegan, 0) + ' vegan');
+    if (String(d.other || '').trim()) o.push(String(d.other).trim());
+    return o;
+  }
+  function recHtml(r) {
+    var chips = dietChips(r.dietary), id = E(r.id);
+    var contact = [r.contact_name ? E(r.contact_name) : '', r.contact_phone ? '<a href="tel:' + E(String(r.contact_phone).replace(/[^\d+]/g, '')) + '">' + E(r.contact_phone) + '</a>' : '', r.contact_email ? '<a href="mailto:' + E(r.contact_email) + '">' + E(r.contact_email) + '</a>' : ''].filter(Boolean);
+    var drop = [r.drop_off, r.address].map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+    return '<article class="w274rc" data-w274rid="' + id + '"><div class="w274rct"><h4>' + E(r.name) + (r.private ? '<span class="w274chip">' + ic('lock') + 'Not named publicly</span>' : '') + '</h4>' +
+      (r.meals != null ? '<span class="w274ml"><b>' + E(r.meals) + '</b> meals</span>' : '') + '</div>' +
+      (chips.length ? '<div class="w274diet" role="list" aria-label="Dietary needs">' + chips.map(function (c) { return '<span class="w274chip" role="listitem">' + E(c) + '</span>'; }).join('') + '</div>' : '') +
+      (drop.length ? '<p class="w274meta">Drop-off: ' + E(drop.join(', ')) + '</p>' : '') +
+      (contact.length ? '<p class="w274meta">Contact: ' + contact.join(', ') + '</p>' : '') +
+      (r.note ? '<p class="w274meta">' + E(r.note) + '</p>' : '') +
+      (String(S.confirmRec) === String(r.id)
+        ? '<div class="w274cfm" role="group" aria-label="Remove ' + E(r.name) + '"><span>Remove ' + E(r.name) + ' from this event?</span><button type="button" class="w274btn sm dng pri" data-w274recy="' + id + '">Remove</button><button type="button" class="w274btn sm" data-w274recn="' + id + '">Keep</button></div>'
+        : '<div class="w274rca"><button type="button" class="w274btn sm" data-w274rec="' + id + '">' + ic('pen') + 'Edit</button><button type="button" class="w274btn sm dng" data-w274recx="' + id + '">Remove</button></div>') + '</article>';
+  }
+  function planHtml(e) {
+    var kit = '<div class="w274box"><div class="w274bh"><h3>Kitchen</h3><button type="button" class="w274btn sm" data-w274kit="1">' + ic('pen') + 'Edit</button></div>' +
+      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd></dl>' + errLine('kit') + '</div>';
+    var body;
+    if (!S.recOk) body = '<p class="w274quiet">Who the meals go to opens once the Toronto database update is applied.</p>';
+    else {
+      var rs = recsOf(e.id), planned = num(e.planned_meals, null), placed = rs.reduce(function (s, r) { return s + num(r.meals, 0); }, 0);
+      body = (rs.length ? '<div class="w274rcs">' + rs.map(recHtml).join('') + '</div>' : '<p class="w274quiet">No organization yet. Add the one that sent the request, with its headcount and dietary needs.</p>') +
+        (planned != null && rs.some(function (r) { return r.meals != null; }) ? '<p class="w274placed"><b>' + placed + ' of ' + planned + '</b> planned meals placed</p>' : planned != null ? '<p class="w274placed">' + E(plural(planned, 'meal')) + ' planned</p>' : '');
+    }
+    var rec = '<div class="w274box"><div class="w274bh"><h3>Who the meals go to</h3>' + (S.recOk ? '<button type="button" class="w274btn sm' + pri(e, 'plan') + '" data-w274rec="new">' + ic('plus') + 'Add an organization</button>' : '') + '</div>' + body + errLine('rec') + '</div>';
+    return secHead('plan', e) + '<p class="w274lead">The kitchen and its time, and the organizations the meals go to, with what each one asked for.</p><div class="w274two">' + kit + rec + '</div>';
+  }
+  /* Crew: one column per crew, its people, Add people, the targets */
+  function stChip(st) { return '<span class="w274chip ' + st + '">' + E(ST_LABEL[st]) + '</span>'; }
+  function whoChip(p) { return !p ? '' : p.student ? '<span class="w274chip sch">' + E(p.school || 'Student') + '</span>' : '<span class="w274chip gen">General</span>'; }
+  function nameOf(r) { var p = personOf(r); return String((r && r.person_name) || (p && p.name) || 'No name').trim(); }
+  function pcHtml(r) {
+    var p = personOf(r), st = stOf(r), nm = nameOf(r), chip = whoChip(p);
+    return '<div class="w274pc" data-w274r="' + E(r.id) + '" data-st="' + st + '"><div class="w274pm"><span class="w274pn">' + E(nm) + '</span><span class="w274pcs">' + chip +
+      '<span class="w274sw" data-w274chip="' + E(r.id) + '">' + stChip(st) + '</span></span></div>' +
+      '<button type="button" class="w274ib" data-w274pm="' + E(r.id) + '" aria-haspopup="menu" aria-expanded="false" aria-label="' + E('Change ' + nm + '\u2019s place on the crew') + '">' + ic('dots') + '</button></div>';
+  }
+  function crewSum(t) { return t.target ? t.filled + ' of ' + t.target + ' places filled, ' + t.yes + ' confirmed.' : 'No crew places set yet. Edit the targets to say how many people each crew needs.'; }
+  function colHtml(e, c) {
+    return '<div class="w274col" data-w274role="' + E(c.role) + '"><div class="w274colh"><h3>' + E(c.label) + '</h3><span class="w274cn" data-w274cn="' + E(c.role) + '">' + (c.yes + c.wait) + ' of ' + c.target + '</span></div>' + barHtml(c) +
+      '<div class="w274ppl">' + (c.people.length ? c.people.map(pcHtml).join('') : '<p class="w274quiet">No one yet.</p>') + '</div>' +
+      (isOpen(e) ? '<button type="button" class="w274add" data-w274addp="' + E(c.role) + '">' + ic('plus') + E(ADD_TO[c.role] || 'Add people') + '</button>' : '') + '</div>';
+  }
+  function crewHtml(e) {
+    var crews = crewOf(e), t = totals(crews);
+    var acts = isOpen(e) ? '<button type="button" class="w274btn' + pri(e, 'crew') + '" data-w274addp="">' + ic('plus') + 'Add people</button><button type="button" class="w274btn" data-w274tg="1">Edit the targets</button>' : '';
+    return secHead('crew', e, acts) + '<p class="w274lead" data-w274crewsum="1">' + E(crewSum(t)) + '</p>' +
+      (S.rosterErr ? '<p class="w274err" role="alert">Couldn\u2019t load the crew. Reload the page to try again.</p>' : '') +
+      '<div class="w274crews">' + crews.map(function (c) { return colHtml(e, c); }).join('') + '</div>' + errLine('crew');
+  }
+  /* Confirm: the counts, who to call, the crew's emails and numbers, the WhatsApp group */
+  function linksOf(r) {
+    var k = contactOfRow(r), o = [];
+    if (k.phone) o.push('<a href="tel:' + E(String(k.phone).replace(/[^\d+]/g, '')) + '">' + E(k.phone) + '</a>');
+    if (k.email) o.push('<a href="mailto:' + E(k.email) + '">' + E(k.email) + '</a>');
+    return o.length ? o.join(', ') : 'No phone or email on file';
+  }
+  function who(email) { var s = String(email || ''); return s.split('@')[0].split('.')[0].replace(/^\w/, function (c) { return c.toUpperCase(); }); }
+  function scopeRows(e) { return rowsOf(e.id).filter(function (r) { var s = stOf(r); return S.scope === 'wait' ? s === 'wait' : (s === 'yes' || s === 'wait'); }); }
+  function confirmHtml(e) {
+    var rows = rowsOf(e.id).filter(function (r) { return stOf(r) !== 'off'; });
+    var yes = rows.filter(function (r) { return stOf(r) === 'yes'; }).length, wait = rows.filter(function (r) { return stOf(r) === 'wait'; }).length, no = rows.length - yes - wait;
+    var waiting = rows.filter(function (r) { return stOf(r) === 'wait'; });
+    var list = waiting.length ? '<div class="w274wl">' + waiting.map(function (r) {
+      var d = r.detail || {}, on = !!d.called_at;
+      return '<div class="w274wr" data-w274wr="' + E(r.id) + '"><div class="who"><span class="w274pn">' + E(nameOf(r)) + '</span> <span class="w274chip">' + E(roleLabel(r.role)) + '</span><div class="how">' + linksOf(r) + '</div>' +
+        (on ? '<div class="when">Called ' + E(stamp(d.called_at)) + (d.called_by ? ' by ' + E(who(d.called_by)) : '') + '</div>' : '') + '</div>' +
+        '<button type="button" class="w274tog" data-w274call="' + E(r.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '" aria-label="' + E('Called ' + nameOf(r)) + '"><span class="bx">' + ic('check') + '</span>Called</button></div>';
+    }).join('') + '</div>' : '<p class="w274quiet">' + (rows.length ? 'No one is waiting: everyone on the crew has answered.' : 'No one on the crew yet. Add people in Crew first.') + '</p>';
+    var n = yes + wait;
+    var copy = '<div class="w274copy"><div class="w274seg" role="group" aria-label="Whose details to copy">' +
+      '<button type="button" data-w274scope="all" aria-pressed="' + (S.scope !== 'wait' ? 'true' : 'false') + '">All the crew (' + n + ')</button>' +
+      '<button type="button" data-w274scope="wait" aria-pressed="' + (S.scope === 'wait' ? 'true' : 'false') + '">Only those waiting (' + wait + ')</button></div>' +
+      '<button type="button" class="w274btn' + pri(e, 'confirm') + '" data-w274copy="phone">' + ic('copy') + 'Copy phone numbers</button><button type="button" class="w274btn" data-w274copy="email">' + ic('copy') + 'Copy emails</button></div>' + errLine('copy') +
+      (S.copyShow ? '<label class="w274vh" for="w274cpt">The copied list</label><textarea class="w274i" id="w274cpt" readonly rows="3">' + E(S.copyShow) + '</textarea>' : '');
+    var url = String(e.whatsapp_url || '').trim();
+    var wa = '<div class="w274box"><div class="w274bh"><h3>WhatsApp group</h3></div>' + (S.waEdit
+      ? '<label class="w274vh" for="w274wa">WhatsApp group link</label><div class="w274wa"><input class="w274i" id="w274wa" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://chat.whatsapp.com/your-group" value="' + E(url) + '" aria-describedby="w274wae"><button type="button" class="w274btn pri" data-w274wa="save">Save the link</button><button type="button" class="w274btn" data-w274wa="cancel">Cancel</button>' + (url ? '<button type="button" class="w274btn dng" data-w274wa="clear">Remove the link</button>' : '') + '</div><p class="w274err" id="w274wae" data-w274err="wa" aria-live="polite">' + E(S.err.wa || '') + '</p>'
+      : (url ? '<div class="w274wa"><a class="w274btn" href="' + E(url) + '" target="_blank" rel="noopener noreferrer">' + ic('ext') + 'Open the group</a><button type="button" class="w274btn" data-w274wa="edit">' + ic('pen') + 'Edit the link</button></div><p class="w274meta">' + E(url) + '</p>'
+        : '<p class="w274quiet">No group link yet. Add it so the crew can find the chat.</p><button type="button" class="w274btn" data-w274wa="edit">' + ic('plus') + 'Add the group link</button>') + errLine('wa')) + '</div>';
+    return secHead('confirm', e) + '<p class="w274cnts" data-w274cnts="1"><span><b>' + yes + '</b> confirmed</span><span><b>' + wait + '</b> waiting</span><span><b>' + no + '</b> can\u2019t come</span></p>' +
+      '<div class="w274two"><div class="w274box"><div class="w274bh"><h3>Waiting to hear back</h3></div>' + list + errLine('call') + copy + '</div>' + wa + '</div>';
+  }
+  /* Wrap up: meals delivered, who came, Mark this event completed */
+  function wrapHtml(e) {
+    var s = lower(e.status), rs = recsOf(e.id), d = delivered(e);
+    var md = !S.recOk ? '<p class="w274quiet">Meals delivered open once the Toronto database update is applied.</p>'
+      : !rs.length ? '<p class="w274quiet">Add who the meals go to in Plan, then count what each organization got here.</p>'
+        : '<div class="w274mds">' + rs.map(function (r) {
+          return '<div class="w274md"><label for="w274md' + E(r.id) + '"><span class="w274pn">' + E(r.name) + '</span>' + (r.meals != null ? ' <span class="w274meta">' + E(r.meals) + ' asked for</span>' : '') + '</label>' +
+            '<input class="w274i" type="number" min="0" max="2000" step="1" inputmode="numeric" id="w274md' + E(r.id) + '" data-w274md="' + E(r.id) + '" value="' + E(r.meals_delivered == null ? '' : r.meals_delivered) + '"></div>';
+        }).join('') + '</div><div class="w274copy"><button type="button" class="w274btn" data-w274mdsave="1">Save meals delivered</button><span class="w274meta">' + (d != null ? E(plural(d, 'meal')) + ' delivered in all' : 'Not counted yet') + '</span></div>' + errLine('md');
+    var came = rowsOf(e.id).filter(function (r) { var x = stOf(r); return x === 'yes' || (x === 'no' && r.confirmed_at); });
+    var whoList = came.length ? '<div class="w274wl">' + came.map(function (r) {
+      var y = stOf(r) === 'yes', nm = nameOf(r);
+      return '<div class="w274wr w274cr"><div class="who"><span class="w274pn">' + E(nm) + '</span> <span class="w274chip">' + E(roleLabel(r.role)) + '</span></div>' +
+        '<div class="w274seg" role="group" aria-label="' + E('Did ' + nm + ' come?') + '"><button type="button" data-w274came="' + E(r.id) + '" data-v="yes" aria-pressed="' + (y ? 'true' : 'false') + '">Came</button><button type="button" data-w274came="' + E(r.id) + '" data-v="no" aria-pressed="' + (y ? 'false' : 'true') + '">Didn\u2019t come</button></div></div>';
+    }).join('') + '</div>' : '<p class="w274quiet">No one has confirmed yet. The confirmed crew shows here, to mark who came.</p>';
+    var fin;
+    if (s === 'cancelled') fin = '<p class="w274quiet">This event was cancelled, so there is nothing to wrap up.</p>';
+    else if (s === 'completed') fin = '<p class="w274quiet">This event is completed. The CRM counts it for everyone marked as came.</p>';
+    else if (S.confirmDone) fin = '<div class="w274cfm ok" role="group" aria-label="Mark completed"><span>This event is ' + E(rel(daysTo(e.event_date))) + '. Mark it completed now?</span><button type="button" class="w274btn sm pri" data-w274done="yes">Mark completed</button><button type="button" class="w274btn sm" data-w274done="no">Not yet</button></div>';
+    else fin = '<button type="button" class="w274btn' + pri(e, 'wrap') + '" data-w274done="ask">' + ic('check') + 'Mark this event completed</button>';
+    return secHead('wrap', e) + '<p class="w274lead">After the event: what each organization got, who came, and the event marked completed so the CRM counts it.</p>' +
+      '<div class="w274two"><div class="w274box"><div class="w274bh"><h3>Meals delivered</h3></div>' + md + '</div><div class="w274box"><div class="w274bh"><h3>Who came</h3></div>' + whoList + errLine('came') + '</div></div>' +
+      '<div class="w274copy">' + fin + '</div>' + errLine('done');
+  }
+  var PART = { head: headHtml, sum: sumHtml, plan: planHtml, crew: crewHtml, confirm: confirmHtml, wrap: wrapHtml };
+  function selOf(a) {
+    if (!a || !a.getAttribute) return null;
+    for (var i = 0; i < a.attributes.length; i++) {
+      var n = a.attributes[i].name;
+      if (/^data-w274/.test(n)) { var s = '[' + n + '="' + String(a.attributes[i].value).replace(/["\\]/g, '\\$&') + '"]'; if (a.getAttribute('data-v')) s += '[data-v="' + a.getAttribute('data-v') + '"]'; return s; }
+    }
+    return a.id ? '#' + a.id : null;
+  }
+  function keepFocus(fn) {
+    var a = document.activeElement, sel = a && a !== document.body ? selOf(a) : null;
+    fn();
+    if (sel) { var b = document.querySelector(sel); if (b && b !== document.activeElement && b.offsetParent !== null) { try { b.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  function paintParts(names) {
+    var e = curEv(), root = document.getElementById('w274root'); if (!e || !root) return;
+    keepFocus(function () {
+      names.forEach(function (n) {
+        var el = root.querySelector('[data-w274part="' + n + '"]'); if (!el || !PART[n]) return;
+        el.innerHTML = PART[n](e); bars(el, false);
+        if (/^(plan|crew|confirm|wrap)$/.test(n)) el.classList.toggle('cur', stageOf(e) === n);
+      });
+    });
+  }
+  /* the stage marker: placed at once on a first draw, moved (240 ms) when the stage changes */
+  function marker(root, e) {
+    var st = root.querySelector('.w274steps'), mk = st && st.querySelector('.w274mk'); if (!mk) return;
+    var to = stageIdx(stageOf(e)), from = S.mk && String(S.mk.id) === String(e.id) ? S.mk.i : to;
+    mk.style.transform = 'translateX(' + (from * 100) + '%)';
+    void mk.offsetWidth;
+    st.classList.add('w274go');
+    if (from !== to) requestAnimationFrame(function () { mk.style.transform = 'translateX(' + (to * 100) + '%)'; });
+    S.mk = { id: e.id, i: to };
+  }
+  function paintEvent(root, fresh) {
+    var e = curEv();
+    if (!S.loaded) { setMast('Toronto event', 'Loading the event\u2026', { back: true }); root.innerHTML = '<p class="w274quiet" role="status">Loading the event\u2026</p>'; return; }
+    if (!e) { setMast('This event isn\u2019t here', 'It may have been removed, or it is not a Toronto event.', { back: true }); root.innerHTML = '<div class="w274empty"><p>Go back to all the Toronto events to find the one you need.</p><a class="w274btn" href="#toronto">All events</a></div>'; return; }
+    setMast(titleOf(e), mastLine(e), { back: true });
+    var st = stageOf(e);
+    keepFocus(function () {
+      root.innerHTML = '<div class="w274eh" data-w274part="head">' + headHtml(e) + '</div>' + stepsHtml(e) + '<div data-w274part="sum">' + sumHtml(e) + '</div>' +
+        ['plan', 'crew', 'confirm', 'wrap'].map(function (k) { return '<section class="w274sec' + (k === st ? ' cur' : '') + '" id="w274s-' + k + '" data-w274part="' + k + '" aria-labelledby="w274h-' + k + '">' + PART[k](e) + '</section>'; }).join('');
+    });
+    marker(root, e);
+    bars(root, fresh);
+  }
+  /* a status changed: the chip crossfades in place, the counts follow, Confirm and Wrap up redraw */
+  function crossfade(sw, html) {
+    var old = Array.prototype.slice.call(sw.children), tmp = document.createElement('span'); tmp.innerHTML = html;
+    var nu = tmp.firstChild; if (!nu) return;
+    if (S.kbd) { sw.innerHTML = html; return; }   /* a keyboard action: the new status at once */
+    nu.classList.add('w274fo'); sw.appendChild(nu); void nu.offsetWidth;
+    nu.classList.remove('w274fo'); old.forEach(function (o) { o.classList.add('w274fo'); });
+    setTimeout(function () { old.forEach(function (o) { if (o.parentNode) o.parentNode.removeChild(o); }); }, 220);
+  }
+  function statusInPlace(r) {
+    var root = document.getElementById('w274root'), e = evById(r.event_id); if (!root || !e) return;
+    var st = stOf(r), sw = root.querySelector('[data-w274chip="' + r.id + '"]'), card = root.querySelector('[data-w274r="' + r.id + '"]');
+    if (sw) crossfade(sw, stChip(st));
+    if (card) card.setAttribute('data-st', st);
+    crewOf(e).forEach(function (c) {
+      var cn = root.querySelector('[data-w274cn="' + c.role + '"]'); if (cn) cn.textContent = (c.yes + c.wait) + ' of ' + c.target;
+      var col = root.querySelector('.w274col[data-w274role="' + c.role + '"]'), w = col && col.querySelector('.w274bar .w'), cc = col && col.querySelector('.w274bar .c');
+      if (w) { w.setAttribute('data-x', ratio(c.yes + c.wait, c.target).toFixed(3)); w.style.transform = 'scaleX(' + w.getAttribute('data-x') + ')'; }
+      if (cc) { cc.setAttribute('data-x', ratio(c.yes, c.target).toFixed(3)); cc.style.transform = 'scaleX(' + cc.getAttribute('data-x') + ')'; }
+    });
+    var sum = root.querySelector('[data-w274crewsum]'); if (sum) sum.textContent = crewSum(totals(crewOf(e)));
+    paintParts(['confirm', 'wrap', 'sum']);
+  }
+  function repaintCrew() { paintParts(['crew', 'confirm', 'wrap', 'sum']); }
+
+  /* ---------- Volunteers (#toronto/people): the Toronto pool from the CRM ---------- */
+  function schoolsOf(list) {
+    var seen = {}, o = [];
+    list.forEach(function (p) { if (p.schoolId != null && !seen[p.schoolId]) { seen[p.schoolId] = 1; o.push({ id: p.schoolId, name: p.schoolName || p.school, short: p.school }); } });
+    return o.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+  }
+  function areasOf(list) {
+    var o = AREAS.slice();
+    list.forEach(function (p) { if (p.area && o.indexOf(p.area) < 0) o.push(p.area); });
+    return o;
+  }
+  function filterPeople(list, f) {
+    var qn = fold(f.q), dg = String(f.q || '').replace(/\D/g, '');
+    return (list || []).filter(function (p) {
+      if (f.kind === 'students' && !p.student) return false;
+      if (f.kind === 'general' && p.student) return false;
+      if (f.school && String(p.schoolId) !== String(f.school)) return false;
+      if (f.area && p.area !== f.area) return false;
+      if (f.days && f.days.length && !f.days.some(function (d) { return p.days[d]; })) return false;
+      if (qn) {
+        var hay = fold([p.name, p.email, (p.c.emails || []).join(' '), (p.c.phones || []).join(' '), p.school, p.schoolName].join(' '));
+        var tel = dg.length >= 3 && (p.c.phones || []).some(function (x) { return String(x).replace(/\D/g, '').indexOf(dg) >= 0; });
+        if (hay.indexOf(qn) < 0 && !tel) return false;
+      }
+      return true;
+    });
+  }
+  function sortPeople(list, how) {
+    var byName = function (a, b) { return a.name.localeCompare(b.name); };
+    return list.slice().sort(function (a, b) {
+      if (how === 'name') return byName(a, b);
+      if (how === 'last') { var x = a.last || a.next || '', y = b.last || b.next || ''; return x === y ? byName(a, b) : x < y ? 1 : -1; }
+      var c = String(a.created || ''), d = String(b.created || ''); return c === d ? byName(a, b) : c < d ? 1 : -1;
+    });
+  }
+  function daysDots(on) {
+    var names = WEEK.filter(function (d, i) { return on[i]; }), lbl = names.length ? 'Can give ' + andJoin(names) : 'Days not given';
+    return '<span class="w274d7" role="img" aria-label="' + E(lbl) + '" title="' + E(lbl) + '">' + on.map(function (x) { return '<i' + (x ? ' class="on"' : '') + '></i>'; }).join('') + '</span>';
+  }
+  function anyFilter(f) { return f.kind !== 'all' || !!f.school || !!f.area || (f.days && f.days.length > 0); }
+  function describe(f) {
+    var o = [];
+    if (f.q) o.push('\u201c' + f.q + '\u201d');
+    if (f.kind === 'students') o.push('Students'); if (f.kind === 'general') o.push('General');
+    if (f.school) { var s = schoolsOf(S.pool || []).filter(function (x) { return String(x.id) === String(f.school); })[0]; o.push(s ? s.short || s.name : 'that school'); }
+    if (f.area) o.push(f.area);
+    if (f.days && f.days.length) o.push(f.days.slice().sort().map(function (d) { return WEEK[d]; }).join(' or '));
+    return o;
+  }
+  /* the search and the filters, shared by the page (scope p) and the Add people sheet (scope k) */
+  function toolsHtml(f, sc) {
+    var pool = S.pool || [];
+    return '<div class="w274srch">' + ic('search') + '<label class="w274vh" for="w274q' + sc + '">Search the Toronto volunteers</label><input class="w274i" type="search" id="w274q' + sc + '" data-w274q="' + sc + '" placeholder="Search by name, email, phone or school" autocomplete="off" spellcheck="false" value="' + E(f.q) + '"></div>' +
+      '<div class="w274fl"><div class="w274seg" role="group" aria-label="Students or general">' + [['all', 'All'], ['students', 'Students'], ['general', 'General']].map(function (k) { return '<button type="button" data-w274kind="' + k[0] + '" data-w274fs="' + sc + '" aria-pressed="' + (f.kind === k[0] ? 'true' : 'false') + '">' + k[1] + '</button>'; }).join('') + '</div>' +
+      '<label class="w274sl">School <select class="w274i" data-w274fsel="school" data-w274fs="' + sc + '"><option value="">All schools</option>' + schoolsOf(pool).map(function (s) { return '<option value="' + E(s.id) + '"' + (String(f.school) === String(s.id) ? ' selected' : '') + '>' + E(s.short && s.short !== s.name ? s.short + ', ' + s.name : s.name) + '</option>'; }).join('') + '</select></label>' +
+      '<label class="w274sl">Area <select class="w274i" data-w274fsel="area" data-w274fs="' + sc + '"><option value="">All areas</option>' + areasOf(pool).map(function (a) { return '<option' + (f.area === a ? ' selected' : '') + '>' + E(a) + '</option>'; }).join('') + '</select></label>' +
+      '<div class="w274dayb" role="group" aria-label="Days they can give">' + WEEK.map(function (d, i) { return '<button type="button" data-w274day="' + i + '" data-w274fs="' + sc + '" aria-pressed="' + (f.days.indexOf(i) >= 0 ? 'true' : 'false') + '">' + d + '</button>'; }).join('') + '</div>' +
+      (sc === 'p' ? '<label class="w274sl">Sort <select class="w274i" data-w274fsel="sort" data-w274fs="p">' + [['newest', 'Newest'], ['last', 'Last event'], ['name', 'Name']].map(function (o) { return '<option value="' + o[0] + '"' + (f.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>' : '') + '</div>';
+  }
+  function noneHtml(f) {
+    return '<div class="w274empty"><p>No one matches ' + E(andJoin(describe(f))) + '.</p><div class="w274copy">' +
+      (anyFilter(f) ? '<button type="button" class="w274btn" data-w274clear="f" data-w274fs="' + (f === S.f ? 'p' : 'k') + '">Clear the filters</button>' : '') +
+      (f.q ? '<button type="button" class="w274btn" data-w274clear="q" data-w274fs="' + (f === S.f ? 'p' : 'k') + '">Clear the search</button>' : '') + '</div></div>';
+  }
+  function rowHtml(p) {
+    var evs = p.count ? '<b>' + E(plural(p.count, 'Toronto event')) + '</b>' + (p.last ? 'Last: ' + E(fmtDay(p.last)) : p.next ? 'Next: ' + E(fmtDay(p.next)) : '') : '<b>No Toronto event yet</b>';
+    return '<article class="w274row" data-w274cid="' + E(p.id) + '"><div><div class="a"><span class="w274pn">' + E(p.name) + '</span>' + whoChip(p) + '</div>' +
+      '<div class="b"><span>' + E(p.area || 'Area not given') + '</span>' + daysDots(p.days) + '</div></div>' +
+      '<div class="ev">' + evs + '</div>' +
+      '<div class="x">' + (p.email ? '<button type="button" class="w274ib" data-w274cpe="' + E(p.id) + '" aria-label="' + E('Copy ' + p.name + '\u2019s email') + '" title="Copy the email">' + ic('copy') + '</button>' : '') +
+      '<a class="w274btn sm" href="#crm/c/' + E(p.id) + '" data-w274crm="' + E(p.id) + '">Open in the CRM</a>' +
+      '<button type="button" class="w274btn sm" data-w274to="' + E(p.id) + '">' + ic('plus') + 'Add to an event</button></div></article>';
+  }
+  function countLine(n, all) { return n === all ? plural(all, 'person', 'people') : n + ' of ' + plural(all, 'person', 'people'); }
+  function paintList(fresh) {
+    var rows = document.getElementById('w274rows'), cnt = document.getElementById('w274pcount'); if (!rows) return;
+    var pool = S.pool || [], list = sortPeople(filterPeople(pool, S.f), S.f.sort);
+    if (cnt) cnt.textContent = pool.length ? countLine(list.length, pool.length) : '';
+    if (S.poolErr && !pool.length) rows.innerHTML = '<p class="w274err" role="alert">Couldn\u2019t load the Toronto volunteers from the CRM. Check your connection, then reload the page.</p>';
+    else if (!pool.length) rows.innerHTML = '<div class="w274empty"><h2>No Toronto volunteers in the CRM yet.</h2><p>Contacts tagged toronto, toronto volunteer or toronto student, or living in the GTA, show here.</p></div>';
+    else if (!list.length) rows.innerHTML = noneHtml(S.f);
+    else rows.innerHTML = list.map(rowHtml).join('');
+    if (fresh) rise(rows, '.w274row');
+  }
+  function paintPeople(root, fresh) {
+    if (!S.pool) { setMast('Toronto volunteers', 'Everyone in the CRM who volunteers with us in Toronto.', {}); root.innerHTML = '<p class="w274quiet" role="status">Loading the Toronto volunteers\u2026</p>'; return; }
+    setMast('Toronto volunteers', 'Everyone in the CRM who volunteers with us in Toronto: students and general volunteers.', { count: S.pool.length });
+    var sig = S.pool.length + '|' + schoolsOf(S.pool).length;
+    if (!root.querySelector('[data-w274tools="p"]') || S.toolsSig !== sig) {
+      keepFocus(function () {
+        root.innerHTML = (S.poolErr ? '<p class="w274err" role="alert">Some of the CRM didn\u2019t load. The list may be missing people: reload the page to try again.</p>' : '') +
+          '<div class="w274tools" data-w274tools="p">' + toolsHtml(S.f, 'p') + '</div><p class="w274count" id="w274pcount" aria-live="polite"></p><div class="w274rows" id="w274rows"></div>';
+      });
+      S.toolsSig = sig;
+    }
+    paintList(fresh);
+  }
+  /* a filter changed: its buttons follow in place (the search keeps its focus), then the list redraws, never rising */
+  function syncTools(sc) {
+    var f = sc === 'k' ? S.pk.f : S.f, host = sc === 'k' ? document.getElementById('w274pane') : document.getElementById('w274root'); if (!host) return;
+    Array.prototype.forEach.call(host.querySelectorAll('[data-w274kind][data-w274fs="' + sc + '"]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-w274kind') === f.kind ? 'true' : 'false'); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-w274day][data-w274fs="' + sc + '"]'), function (b) { b.setAttribute('aria-pressed', f.days.indexOf(Number(b.getAttribute('data-w274day'))) >= 0 ? 'true' : 'false'); });
+    Array.prototype.forEach.call(host.querySelectorAll('[data-w274fsel][data-w274fs="' + sc + '"]'), function (s) { var k = s.getAttribute('data-w274fsel'); if (s.value !== String(f[k] || '')) s.value = String(f[k] || ''); });
+    var qi = host.querySelector('[data-w274q="' + sc + '"]'); if (qi && qi.value !== f.q) qi.value = f.q;
+    if (sc === 'k') paintPick(); else paintList(false);
+  }
+
+  /* ---------- the sheet: one at a time, Escape closes it, focus stays inside and goes back to what opened it ---------- */
+  var SH = { kind: null, opener: null, openerSel: null, ctx: null };
+  function sheetRoot() {
+    var el = document.getElementById('w274sheet');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w274sheet'; el.setAttribute('aria-hidden', 'true');
+      el.innerHTML = '<div class="w274bd" data-w274x="1"></div><div id="w274pane" role="dialog" aria-modal="true" aria-labelledby="w274sht" tabindex="-1"></div>';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+  function sheetOpen() { var el = document.getElementById('w274sheet'); return !!el && el.classList.contains('open'); }
+  function openSheet(kind, o) {
+    var el = sheetRoot(), pane = document.getElementById('w274pane');
+    closeMenu(true);
+    try { if (window.w272 && window.w272.closeTip) window.w272.closeTip(); } catch (e) { /* fine */ }   /* wave272's corner note never sits over a window */
+    if (!S.snackFn) hideSnack();   /* a plain note (saved, copied) makes way for the sheet; an Undo stays its 5 seconds */
+    if (!sheetOpen()) { SH.opener = o.opener || document.activeElement; SH.openerSel = selOf(SH.opener); }
+    SH.kind = kind; SH.ctx = o.ctx || null;
+    pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '"><div class="w274grab" aria-hidden="true"></div>' +
+      '<div class="w274shd"><div><h2 id="w274sht">' + E(o.title) + '</h2>' + (o.sub ? '<p>' + E(o.sub) + '</p>' : '') + '</div><button type="button" class="w274ib" data-w274x="1" aria-label="Close">' + ic('x') + '</button></div>' +
+      '<div class="w274sbd">' + o.body + '</div><div class="w274sft">' + errLine('sheet', '') + (o.foot || '') + '</div></form>';
+    S.err.sheet = '';
+    el.removeAttribute('aria-hidden');
+    void pane.offsetWidth;
+    still(el, function () { el.classList.add('open'); });
+    var f = o.focus ? pane.querySelector(o.focus) : null;
+    if (!f) f = pane.querySelector('.w274sbd input:not([type=hidden]):not([disabled]), .w274sbd select, .w274sbd textarea');
+    try { (f || pane).focus({ preventScroll: true }); } catch (e) { /* fine */ }
+  }
+  function closeSheet(noReturn) {
+    var el = document.getElementById('w274sheet'); if (!el || !el.classList.contains('open')) return;
+    still(el, function () { el.classList.remove('open'); }); el.setAttribute('aria-hidden', 'true');
+    SH.kind = null; SH.ctx = null;
+    var op = SH.opener, sel = SH.openerSel; SH.opener = null; SH.openerSel = null;
+    if (noReturn) return;
+    if (!op || !document.contains(op) || op.offsetParent === null) op = sel ? document.querySelector(sel) : null;
+    if (op) { try { op.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  /* a keyboard action changes at once (no slide, no fade); a pointer gets the motion */
+  function still(el, fn) {
+    if (!S.kbd) { el.classList.remove('w274inst'); fn(); return; }
+    el.classList.add('w274inst'); fn(); void el.offsetWidth;
+    requestAnimationFrame(function () { el.classList.remove('w274inst'); });
+  }
+  function focusables(root) { return Array.prototype.filter.call(root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'), function (x) { return x.offsetParent !== null || x === document.activeElement; }); }
+  function busy(on) { var b = document.querySelector('#w274f [type="submit"]'); if (b) { b.disabled = !!on; b.setAttribute('aria-busy', on ? 'true' : 'false'); } }
+  function fld(label, input) { return '<label class="w274lb" for="' + input.id + '">' + label + '</label>' + input.html; }
+  function inp(id, name, type, value, extra) { return { id: id, html: '<input class="w274i" id="' + id + '" name="' + name + '" type="' + type + '" value="' + E(value == null ? '' : value) + '"' + (extra || '') + '>' }; }
+  function bad(el, msg) { if (!el) return; el.setAttribute('aria-invalid', 'true'); setErr('sheet', msg); try { el.focus(); } catch (e) { /* fine */ } }
+  function wholeOrNull(v, max) { v = String(v == null ? '' : v).trim(); if (v === '') return null; var n = Number(v); return isFinite(n) && n >= 0 && n <= (max || 2000) && Math.round(n) === n ? n : NaN; }
+
+  /* ---------- the small menus ---------- */
+  var MN = { trigger: null, sel: null, fn: null };
+  function menuEl() { var m = document.getElementById('w274menu'); if (!m) { m = document.createElement('div'); m.id = 'w274menu'; m.setAttribute('role', 'menu'); m.tabIndex = -1; document.body.appendChild(m); } return m; }
+  function openMenu(trigger, items, fn, label, kbd) {
+    closeMenu(true);
+    var m = menuEl();
+    m.setAttribute('aria-label', label || 'Options');
+    m.innerHTML = items.map(function (it) {
+      if (it === '-') return '<hr role="separator">';
+      var a = ' class="w274mi' + (it.dng ? ' dng' : '') + '" data-w274mk="' + E(it.k) + '"';
+      if (it.href) return '<a role="menuitem"' + a + ' href="' + E(it.href) + '" tabindex="-1">' + ic(it.ic) + E(it.l) + '</a>';
+      return '<button type="button" role="' + (it.radio ? 'menuitemradio' : 'menuitem') + '"' + (it.radio ? ' aria-checked="' + (it.on ? 'true' : 'false') + '"' : '') + a + ' tabindex="-1">' + ic(it.radio ? (it.on ? 'check' : '') : it.ic) + E(it.l) + '</button>';
+    }).join('');
+    var r = trigger.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+    var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8)), top = r.bottom + 6, up = false;
+    if (top + h > window.innerHeight - 8 && r.top - h - 6 > 8) { top = r.top - h - 6; up = true; }
+    m.style.left = Math.round(left) + 'px'; m.style.top = Math.round(top) + 'px';
+    m.style.transformOrigin = Math.round(Math.min(w, Math.max(0, r.right - left - r.width / 2))) + 'px ' + (up ? h + 'px' : '0px');
+    m.classList.toggle('up', up);
+    void m.offsetWidth; still(m, function () { m.classList.add('on'); });
+    trigger.setAttribute('aria-expanded', 'true');
+    MN.trigger = trigger; MN.sel = selOf(trigger); MN.fn = fn;
+    var first = kbd ? m.querySelector('.w274mi') : m; if (first) { try { first.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  function menuOpen() { var m = document.getElementById('w274menu'); return !!m && m.classList.contains('on'); }
+  function closeMenu(silent) {
+    var m = document.getElementById('w274menu'); if (!m || !m.classList.contains('on')) return;
+    still(m, function () { m.classList.remove('on'); });
+    var t = MN.trigger; if (t) t.setAttribute('aria-expanded', 'false');
+    if (!silent) { if (!t || !document.contains(t)) t = MN.sel ? document.querySelector(MN.sel) : null; if (t) { try { t.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+    MN.trigger = null; MN.fn = null;
+  }
+
+  /* ---------- the note at the foot of the screen ---------- */
+  function snack(msg, act, fn) {
+    var s = document.getElementById('w274snack');
+    if (!s) { s = document.createElement('div'); s.id = 'w274snack'; s.setAttribute('role', 'status'); s.setAttribute('aria-live', 'polite'); s.innerHTML = '<span></span><button type="button"></button>'; document.body.appendChild(s); }
+    s.querySelector('span').textContent = msg;
+    s.querySelector('button').textContent = act || '';
+    S.snackFn = fn || null;
+    s.classList.add('on');
+    clearTimeout(S.snackT); S.snackT = setTimeout(hideSnack, act ? 5000 : 3200);
+  }
+  function hideSnack() { var s = document.getElementById('w274snack'); if (s) s.classList.remove('on'); S.snackFn = null; clearTimeout(S.snackT); }
+
+  /* ---------- New event and Edit (one sheet) ---------- */
+  function kitchens() {
+    var o = ['Ralph Thornton Community Centre'];
+    S.events.slice().reverse().forEach(function (e) { var k = String(e.kitchen_place || '').trim(); if (k && o.indexOf(k) < 0) o.push(k); });
+    return o;
+  }
+  function kitchenList() { return '<datalist id="w274kl">' + kitchens().map(function (k) { return '<option value="' + E(k) + '"></option>'; }).join('') + '</datalist>'; }
+  function eventSheet(ev) {
+    var e = ev || {};
+    var body = fld('Date', inp('w274fd', 'event_date', 'date', e.event_date || '', ' required aria-required="true"')) +
+      '<div class="w274row2"><div>' + fld('Start time', inp('w274ft', 'start_time', 'time', hm(e.start_time) || '10:00')) + '</div><div>' +
+      fld('Meals planned', inp('w274fm', 'planned_meals', 'number', e.planned_meals == null ? '' : e.planned_meals, ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div></div>' +
+      fld('Kitchen', inp('w274fk', 'kitchen_place', 'text', e.kitchen_place || '', ' list="w274kl" autocomplete="off"')) + kitchenList() +
+      fld('Kitchen time', inp('w274fs', 'kitchen_shift', 'text', e.kitchen_shift || '', ' placeholder="10:00 to 14:00" autocomplete="off"')) +
+      fld('Title', inp('w274fti', 'title', 'text', ev ? titleOf(e) : 'Free meal event', ' autocomplete="off"')) +
+      '<label class="w274lb" for="w274fn">Note <small>(optional)</small></label><textarea class="w274i" id="w274fn" name="notes" rows="3">' + E(e.notes || '') + '</textarea>';
+    openSheet('event', { title: ev ? 'Edit the event' : 'New event', sub: ev ? (e.code || '') : 'A date and a kitchen to start. The crew and who the meals go to come next.', body: body, ctx: ev ? ev.id : null,
+      foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">' + (ev ? 'Save the changes' : 'Create the event') + '</button>' });
+  }
+  function newEvent() {
+    if (!staffOk()) return;
+    if (!S.loaded) { loadEvents().then(function () { eventSheet(null); }); return; }
+    eventSheet(null);
+  }
+  async function submitEvent(form) {
+    var ev = SH.ctx != null ? evById(SH.ctx) : null;
+    Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
+    var d = form.event_date.value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad(form.event_date, 'Pick a date for the event.');
+    var meals = wholeOrNull(form.planned_meals.value);
+    if (meals !== meals) return bad(form.planned_meals, 'Meals planned is a whole number from 0 to 2000.');
+    var f = { event_date: d, start_time: form.start_time.value || '10:00', planned_meals: meals, kitchen_place: form.kitchen_place.value.trim() || null, kitchen_shift: form.kitchen_shift.value.trim() || null, title: form.title.value.trim() || 'Free meal event', notes: form.notes.value.trim() || null };
+    setErr('sheet', ''); busy(true);
+    try {
+      if (ev) {
+        var patch = {};
+        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
+        if (Object.keys(patch).length) await saveEvent(ev, patch);
+        closeSheet(); paint(); snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
+      } else {
+        var made = await createEvent(f);
+        if (!made || made.id == null) throw new Error('no id');
+        closeSheet(true);
+        location.hash = '#toronto/e/' + made.id;
+        snack('Created ' + (made.code || 'the event') + '. Next: who the meals go to, then the crew.');
+      }
+    } catch (e) { busy(false); setErr('sheet', ev ? 'Couldn\u2019t save the event. Try again.' : 'Couldn\u2019t create the event. Try again.'); console.warn('wave274 event', e); }
+  }
+
+  /* ---------- the kitchen ---------- */
+  function kitchenSheet(ev) {
+    var body = fld('Kitchen', inp('w274kp', 'kitchen_place', 'text', ev.kitchen_place || '', ' list="w274kl" autocomplete="off"')) + kitchenList() +
+      fld('Kitchen time', inp('w274ks', 'kitchen_shift', 'text', ev.kitchen_shift || '', ' placeholder="10:00 to 14:00" autocomplete="off"')) +
+      fld('Kitchen contact', inp('w274kc', 'kitchen_contact', 'text', ev.kitchen_contact || '', ' placeholder="Who to reach at the kitchen" autocomplete="off"')) +
+      '<p class="w274hint">The person at the kitchen, by name or role. Keep personal phone numbers in the CRM.</p>';
+    openSheet('kitchen', { title: 'The kitchen', sub: titleOf(ev) + ', ' + fmtDay(ev.event_date), body: body, ctx: ev.id, foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">Save the kitchen</button>' });
+  }
+  async function submitKitchen(form) {
+    var ev = evById(SH.ctx); if (!ev) return closeSheet();
+    var f = { kitchen_place: form.kitchen_place.value.trim() || null, kitchen_shift: form.kitchen_shift.value.trim() || null, kitchen_contact: form.kitchen_contact.value.trim() || null };
+    var patch = {}; Object.keys(f).forEach(function (k) { if (String(ev[k] == null ? '' : ev[k]) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
+    setErr('sheet', ''); busy(true);
+    try { if (Object.keys(patch).length) await saveEvent(ev, patch); closeSheet(); paint(); snack('Saved the kitchen.'); }
+    catch (e) { busy(false); setErr('sheet', 'Couldn\u2019t save the kitchen. Try again.'); console.warn('wave274 kitchen', e); }
+  }
+
+  /* ---------- an organization the meals go to ---------- */
+  function recSheet(ev, rid) {
+    var r = rid ? S.rec.filter(function (x) { return String(x.id) === String(rid); })[0] : null;
+    if (rid && !r) return;
+    var x = r || {}, d = (x.dietary && typeof x.dietary === 'object') ? x.dietary : {};
+    var ck = function (id, name, on, label) { return '<label class="w274ck" for="' + id + '"><input type="checkbox" id="' + id + '" name="' + name + '"' + (on ? ' checked' : '') + '>' + label + '</label>'; };
+    var body = fld('Organization', inp('w274rn', 'name', 'text', x.name || '', ' required aria-required="true" autocomplete="off" maxlength="160"')) +
+      fld('Meals <small>(the headcount they sent)</small>', inp('w274rm', 'meals', 'number', x.meals == null ? '' : x.meals, ' min="0" max="2000" step="1" inputmode="numeric"')) +
+      '<fieldset><legend>Dietary needs</legend>' + ck('w274rh', 'halal', d.halal, 'Halal') + ck('w274rnf', 'nut_free', d.nut_free, 'Nut-free') +
+      '<div class="w274row2"><div>' + fld('Vegetarian meals', inp('w274rv', 'vegetarian', 'number', num(d.vegetarian, 0) || '', ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div><div>' +
+      fld('Vegan meals', inp('w274rvg', 'vegan', 'number', num(d.vegan, 0) || '', ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div></div>' +
+      fld('Anything else', inp('w274ro', 'other', 'text', d.other || '', ' placeholder="No pork, low sodium" autocomplete="off"')) + '</fieldset>' +
+      fld('Drop-off', inp('w274rd', 'drop_off', 'text', x.drop_off || '', ' placeholder="12:30 at the side door" autocomplete="off"')) +
+      fld('Address', inp('w274ra', 'address', 'text', x.address || '', ' autocomplete="off"')) +
+      fld('Contact name', inp('w274rcn', 'contact_name', 'text', x.contact_name || '', ' autocomplete="off"')) +
+      '<div class="w274row2"><div>' + fld('Contact phone', inp('w274rcp', 'contact_phone', 'tel', x.contact_phone || '', ' autocomplete="off"')) + '</div><div>' +
+      fld('Contact email', inp('w274rce', 'contact_email', 'email', x.contact_email || '', ' autocomplete="off"')) + '</div></div>' +
+      '<fieldset><legend>Naming them</legend>' + ck('w274rp', 'private', x.private, 'Supported but not named publicly') + '<p class="w274hint">The Hub then says \u201c1 organization, not named publicly\u201d wherever it lists who the meals go to.</p></fieldset>' +
+      '<label class="w274lb" for="w274rnote">Note <small>(optional)</small></label><textarea class="w274i" id="w274rnote" name="note" rows="2">' + E(x.note || '') + '</textarea>';
+    openSheet('rec', { title: r ? 'Edit ' + (x.name || 'the organization') : 'Add an organization', sub: 'Who the meals go to, ' + titleOf(ev) + ', ' + fmtDay(ev.event_date), body: body, ctx: { ev: ev.id, id: r ? r.id : null },
+      foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">' + (r ? 'Save the changes' : 'Add the organization') + '</button>' });
+  }
+  async function submitRec(form) {
+    var ctx = SH.ctx || {}, ev = evById(ctx.ev); if (!ev) return closeSheet();
+    Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
+    var name = form.name.value.trim();
+    if (!name) return bad(form.name, 'Give the organization\u2019s name.');
+    var meals = wholeOrNull(form.meals.value), veg = wholeOrNull(form.vegetarian.value), vg = wholeOrNull(form.vegan.value);
+    if (meals !== meals) return bad(form.meals, 'Meals is a whole number from 0 to 2000.');
+    if (veg !== veg) return bad(form.vegetarian, 'Vegetarian meals is a whole number.');
+    if (vg !== vg) return bad(form.vegan, 'Vegan meals is a whole number.');
+    var em = form.contact_email.value.trim();
+    if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) return bad(form.contact_email, 'That email doesn\u2019t look right.');
+    var diet = { halal: !!form.halal.checked, nut_free: !!form.nut_free.checked, vegetarian: veg || 0, vegan: vg || 0, other: form.other.value.trim() };
+    var f = { name: name, meals: meals, dietary: diet, drop_off: form.drop_off.value.trim() || null, address: form.address.value.trim() || null, contact_name: form.contact_name.value.trim() || null,
+      contact_phone: form.contact_phone.value.trim() || null, contact_email: em || null, private: !!form.private.checked, note: form.note.value.trim() || null };
+    setErr('sheet', ''); busy(true);
+    try { await saveRecipient(ev, ctx.id, f); closeSheet(); paintParts(['plan', 'wrap', 'sum']); snack(ctx.id ? 'Saved ' + name + '.' : 'Added ' + name + ' to who the meals go to.'); }
+    catch (e) { busy(false); setErr('sheet', 'Couldn\u2019t save the organization. Try again.'); console.warn('wave274 recipient', e); }
+  }
+
+  /* ---------- the crew targets (volunteer_events.spot_counts) ---------- */
+  function targetsSheet(ev) {
+    var t = targetsOf(ev);
+    var body = '<p class="w274hint">How many people each crew needs. Photos shows on the page once it needs someone.</p>' +
+      ROLES.map(function (r) { return fld(r[1], inp('w274t' + r[0], r[0], 'number', t[r[0]], ' min="0" max="40" step="1" inputmode="numeric"')); }).join('');
+    openSheet('targets', { title: 'Crew targets', sub: titleOf(ev) + ', ' + fmtDay(ev.event_date), body: body, ctx: ev.id, foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">Save the targets</button>' });
+  }
+  async function submitTargets(form) {
+    var ev = evById(SH.ctx); if (!ev) return closeSheet();
+    var sc = Object.assign({}, (ev.spot_counts && typeof ev.spot_counts === 'object') ? ev.spot_counts : {});
+    for (var i = 0; i < ROLES.length; i++) {
+      var k = ROLES[i][0], v = wholeOrNull(form[k].value, 40);
+      if (v !== v) return bad(form[k], ROLES[i][1] + ' is a whole number from 0 to 40.');
+      sc[k] = v == null ? 0 : v;
+    }
+    setErr('sheet', ''); busy(true);
+    try { await saveEvent(ev, { spot_counts: sc }); closeSheet(); repaintCrew(); snack('Saved the crew targets.'); }
+    catch (e) { busy(false); setErr('sheet', 'Couldn\u2019t save the targets. Try again.'); console.warn('wave274 targets', e); }
+  }
+
+  /* ---------- Add people: the Toronto pool in a sheet, a crew, Add ---------- */
+  function roleRadios(sel, roles) {
+    return '<fieldset><legend>Crew</legend><div class="w274rad">' + roles.map(function (r) { var on = r[0] === sel; return '<label class="' + (on ? 'on' : '') + '" for="w274ro' + r[0] + '"><input type="radio" name="w274role" id="w274ro' + r[0] + '" value="' + r[0] + '"' + (on ? ' checked' : '') + '>' + E(r[1]) + '</label>'; }).join('') + '</div></fieldset>';
+  }
+  function pickSheet(ev, role) {
+    S.pk = { ev: ev.id, role: role || 'cook', f: { q: '', kind: 'all', school: '', area: '', days: [] }, sel: {}, order: [] };
+    var go = function () {
+      openSheet('pick', { title: 'Add people to the crew', sub: titleOf(ev) + ', ' + fmtDay(ev.event_date), ctx: ev.id, focus: '#w274qk',
+        body: roleRadios(S.pk.role, ROLES) + '<div class="w274tools" data-w274tools="k">' + toolsHtml(S.pk.f, 'k') + '</div><p class="w274pkc" id="w274pkc" aria-live="polite"></p><div class="w274pks" id="w274pkl"></div>',
+        foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri" id="w274pkgo" disabled>Add people</button>' });
+      paintPick();
+    };
+    if (S.pool) go(); else loadPool().then(go);
+  }
+  function paintPick() {
+    var box = document.getElementById('w274pkl'), cnt = document.getElementById('w274pkc'), k = S.pk; if (!box || !k) return;
+    var pool = S.pool || [], list = sortPeople(filterPeople(pool, k.f), 'name'), shown = list.slice(0, 150);
+    if (cnt) cnt.textContent = !pool.length ? '' : (list.length > shown.length ? 'Showing ' + shown.length + ' of ' + list.length + '. Search to find someone.' : countLine(list.length, pool.length));
+    box.innerHTML = !pool.length ? '<p class="w274quiet">No Toronto volunteers in the CRM yet.</p>' : !list.length ? noneHtml(k.f) : shown.map(function (p) {
+      var on = onEvent(p, k.ev), sel = !!k.sel[p.id];
+      return '<label class="w274pk' + (on ? ' dis' : sel ? ' on' : '') + '" for="w274pk' + E(p.id) + '"><input type="checkbox" id="w274pk' + E(p.id) + '" data-w274pick="' + E(p.id) + '"' + (on ? ' checked disabled' : sel ? ' checked' : '') + '>' +
+        '<span><span class="w274pn">' + E(p.name) + '</span><span class="s">' + whoChip(p) + '<span>' + E(p.area || 'Area not given') + '</span>' + daysDots(p.days) + (on ? '<span>Already on this event</span>' : '') + '</span></span></label>';
+    }).join('');
+    pickFoot();
+  }
+  function pickFoot() {
+    var b = document.getElementById('w274pkgo'), k = S.pk; if (!b || !k) return;
+    var n = k.order.filter(function (id) { return k.sel[id]; }).length;
+    b.disabled = !n;
+    b.textContent = n ? 'Add ' + plural(n, 'person', 'people') + ' to ' + roleIn(k.role) : 'Add people';
+  }
+  async function submitPick() {
+    var k = S.pk, ev = k && evById(k.ev); if (!ev) return closeSheet();
+    var ids = k.order.filter(function (id) { return k.sel[id]; }); if (!ids.length) return;
+    setErr('sheet', ''); busy(true);
+    var added = [], already = [], needs = [], errs = [];
+    for (var i = 0; i < ids.length; i++) {
+      var p = S.byCid[ids[i]]; if (!p) continue;
+      var r = await crewAdd(ev, p, k.role);
+      if (r.ok && r.already) already.push(p.name); else if (r.ok) added.push(p.name); else if (r.needs) needs.push(p.name); else errs.push(p.name);
+      if (r.ok) delete k.sel[p.id];
+    }
+    reindexPool(); repaintCrew();
+    var said = added.length ? 'Added ' + andJoin(added) + ' to ' + roleIn(k.role) + '.' : already.length ? andJoin(already) + (already.length === 1 ? ' is' : ' are') + ' already on this event.' : '';
+    if (!needs.length && !errs.length) { closeSheet(); if (said) snack(said); return; }
+    busy(false); paintPick();
+    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the wave274 database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
+      errs.length ? 'Couldn\u2019t add ' + andJoin(errs) + '. Try again.' : ''].filter(Boolean).join(' '));
+    if (said) snack(said);
+  }
+
+  /* ---------- Add to an event (from Volunteers): an upcoming Toronto event and a crew ---------- */
+  function toEventSheet(p) {
+    var t = todayIso(), evs = S.events.filter(function (e) { return isOpen(e) && String(e.event_date) >= t; }).sort(function (a, b) { return String(a.event_date) < String(b.event_date) ? -1 : 1; });
+    var first = evs.filter(function (e) { return !onEvent(p, e.id); })[0];
+    S.te = { cid: p.id, ev: first ? first.id : null, role: 'cook' };
+    var body = !evs.length ? '<p class="w274quiet">There is no upcoming Toronto event to add them to yet. Create one with New event.</p>' :
+      '<fieldset><legend>Event</legend><div class="w274pks">' + evs.map(function (e) {
+        var on = onEvent(p, e.id), sel = first && first.id === e.id;
+        return '<label class="w274evp' + (on ? ' dis' : sel ? ' on' : '') + '" for="w274te' + E(e.id) + '"><input type="radio" name="w274tev" id="w274te' + E(e.id) + '" value="' + E(e.id) + '"' + (on ? ' disabled' : sel ? ' checked' : '') + '>' +
+          '<span><span class="w274pn">' + E(fmtDay(e.event_date)) + ', ' + E(titleOf(e)) + '</span><span class="s"><span>' + E(kitchenLine(e)) + '</span>' + (on ? '<span>Already on the crew</span>' : '<span>' + E(cap(rel(daysTo(e.event_date)))) + '</span>') + '</span></span></label>';
+      }).join('') + '</div></fieldset>' + roleRadios('cook', ROLES);
+    openSheet('toev', { title: 'Add ' + p.name + ' to an event', sub: p.student ? (p.school || 'Student') : 'General volunteer', body: body, ctx: p.id,
+      foot: '<button type="button" class="w274btn" data-w274x="1">' + (evs.length ? 'Cancel' : 'Close') + '</button>' + (evs.length ? '<button type="submit" class="w274btn pri" id="w274tego"' + (first ? '' : ' disabled') + '>Add to the crew</button>' : '') });
+  }
+  async function submitToEvent() {
+    var k = S.te, p = k && S.byCid[k.cid], ev = k && evById(k.ev); if (!p || !ev) return;
+    setErr('sheet', ''); busy(true);
+    var r = await crewAdd(ev, p, k.role);
+    if (r.ok) { reindexPool(); closeSheet(); if (S.view === 'people') paintList(false); else if (S.view === 'event') repaintCrew(); snack(r.already ? p.name + ' is already on that event.' : 'Added ' + p.name + ' to ' + roleIn(k.role) + ' on ' + fmtDay(ev.event_date) + '.'); return; }
+    busy(false);
+    setErr('sheet', r.needs ? p.name + ' needs the wave274 database update first: there is no volunteer record for them yet.' : 'Couldn\u2019t add ' + p.name + ' to the crew. Try again.');
+  }
+
+  /* ---------- Cancel this event (a confirm step) ---------- */
+  function cancelSheet(ev) {
+    openSheet('cancel', { title: 'Cancel this event?', sub: (ev.code ? ev.code + ', ' : '') + fmtDay(ev.event_date), ctx: ev.id, focus: '[data-w274keep]',
+      body: '<p>' + E(titleOf(ev)) + ' moves to the past events as cancelled. Nobody is told automatically: let the crew and the organizations know yourself.</p><p class="w274hint">You can plan it again later from More.</p>',
+      foot: '<button type="button" class="w274btn" data-w274x="1" data-w274keep="1">Keep the event</button><button type="submit" class="w274btn pri dng">Cancel the event</button>' });
+  }
+  async function submitCancel() {
+    var ev = evById(SH.ctx); if (!ev) return closeSheet();
+    setErr('sheet', ''); busy(true);
+    try { await saveEvent(ev, { status: 'cancelled' }); closeSheet(); paint(); snack('Cancelled the event.'); }
+    catch (e) { busy(false); setErr('sheet', 'Couldn\u2019t cancel the event. Try again.'); console.warn('wave274 cancel', e); }
+  }
+  var SUBMIT = { event: submitEvent, kitchen: submitKitchen, rec: submitRec, targets: submitTargets, pick: submitPick, toev: submitToEvent, cancel: submitCancel };
+
+  /* ---------- the page: one root inside #toronto, under wave118's masthead ---------- */
+  function rootEl() {
+    var p = document.getElementById('toronto'); if (!p) return null;
+    var r = document.getElementById('w274root');
+    if (!r || r.parentNode !== p) { r = document.createElement('div'); r.id = 'w274root'; p.appendChild(r); }
+    return r;
+  }
+  function paint() {
+    var root = rootEl(); if (!root || !staffOk()) return;
+    try { root.parentNode.setAttribute('data-w274v', S.view); } catch (e) { /* fine */ }
+    var ready = S.loaded && (S.view === 'events' || !!S.pool), fresh = false;
+    if (ready && S.fresh) { S.fresh = false; fresh = true; }
+    if (S.view === 'event') paintEvent(root, fresh);
+    else if (S.view === 'people') paintPeople(root, fresh);
+    else paintEvents(root, fresh);
+  }
+  function show(h) {
+    if (!staffOk()) return;
+    h = String(h || '').replace(/^#/, '');
+    var p = h.split('/'); if (p[0] !== 'toronto') return;
+    var v = 'events', id = null;
+    if (p[1] === 'e' && p[2]) { v = 'event'; id = p[2]; } else if (p[1] === 'people') v = 'people';
+    var key = v + ':' + (id || '');
+    if (key !== S.key) {
+      var first = !S.key;
+      S.key = key; S.view = v; S.evId = id; S.fresh = true; S.mk = null; S.waEdit = false; S.confirmRec = null; S.confirmDone = false; S.err = {}; S.copyShow = ''; S.toolsSig = null;
+      closeMenu(true); if (sheetOpen()) closeSheet(true);
+      if (!first) { try { window.scrollTo(0, 0); } catch (e) { /* fine */ } }
+    }
+    paint();
+    var need = [];
+    if (!S.loaded) need.push(loadEvents());
+    if (v !== 'events' && !S.pool) need.push(loadPool());
+    if (need.length) Promise.all(need).then(function () { if (S.key === key) paint(); }, function (e) { console.warn('wave274 load', e); if (S.key === key) paint(); });
+  }
+  function scrollToSec(k, pointer) {
+    var s = document.getElementById('w274s-' + k), h = document.getElementById('w274h-' + k); if (!s) return;
+    try { s.scrollIntoView({ behavior: pointer && !reduced() ? 'smooth' : 'auto', block: 'start' }); } catch (e) { s.scrollIntoView(); }
+    if (h) { try { h.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+
+  /* ---------- the actions on the event page ---------- */
+  function personMenu(btn, r, kbd) {
+    var p = personOf(r), st = stOf(r), nm = nameOf(r);
+    var items = [{ k: 'yes', l: 'Confirmed', ic: 'check', radio: true, on: st === 'yes' }, { k: 'no', l: 'Can\u2019t come', ic: 'off', radio: true, on: st === 'no' }, { k: 'wait', l: 'Waiting', ic: 'wait', radio: true, on: st === 'wait' }, '-'];
+    if (p) items.push({ k: 'crm', l: 'Open in the CRM', ic: 'person', href: '#crm/c/' + p.id });
+    items.push({ k: 'off', l: 'Take off the crew', ic: 'x', dng: true });
+    openMenu(btn, items, function (k) {
+      if (k === 'crm') return;
+      if (k === 'off') return doTakeOff(r);
+      if (stOf(r) === k) return;
+      setErr('crew', '');
+      setStatus(r, k).then(function () { statusInPlace(r); snack(nm + ': ' + ST_LABEL[k] + '.'); }, function (e) { statusInPlace(r); setErr('crew', 'Couldn\u2019t change ' + nm + '\u2019s status. Try again.'); console.warn('wave274 status', e); });
+      statusInPlace(r);
+    }, 'Options for ' + nm, kbd);
+  }
+  function doTakeOff(r) {
+    var nm = nameOf(r), role = roleLabel(r.role), root = document.getElementById('w274root'), card = root && root.querySelector('[data-w274r="' + r.id + '"]');
+    setErr('crew', '');
+    takeOff(r, function (err) { if (err) { repaintCrew(); setErr('crew', 'Couldn\u2019t take ' + nm + ' off the crew, so they are still on it. Try again.'); console.warn('wave274 off', err); } });
+    var redraw = function () { repaintCrew(); var c = root && root.querySelector('.w274col[data-w274role="' + r.role + '"] [data-w274addp], [data-w274addp=""]'); if (c) { try { c.focus({ preventScroll: true }); } catch (e) { /* fine */ } } };
+    if (card) { card.classList.add('gone'); setTimeout(redraw, 200); } else redraw();
+    snack(nm + ' is off the ' + lower(role) + '.', 'Undo', function () { if (undoOff(r.id)) { repaintCrew(); snack(nm + ' is back on the crew.'); var b = document.querySelector('[data-w274pm="' + r.id + '"]'); if (b) { try { b.focus({ preventScroll: true }); } catch (e) { /* fine */ } } } });
+  }
+  function moreMenu(btn, e, kbd) {
+    var s = lower(e.status), items = [];
+    if (s === 'cancelled') items.push({ k: 'plan', l: 'Plan this event again', ic: 'cal' });
+    else if (s === 'completed') items.push({ k: 'plan', l: 'Reopen this event', ic: 'cal' });
+    else items.push({ k: 'cancel', l: 'Cancel this event', ic: 'x', dng: true });
+    openMenu(btn, items, function (k) {
+      if (k === 'cancel') return cancelSheet(e);
+      if (k === 'plan') saveEvent(e, { status: 'planned' }).then(function () { paint(); snack(s === 'cancelled' ? 'The event is planned again.' : 'The event is open again.'); }, function (x) { setErr('done', 'Couldn\u2019t change the event. Try again.'); console.warn('wave274 status', x); });
+    }, 'More for this event', kbd);
+  }
+  async function copyText(txt) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* the fallback below */ }
+    try {
+      var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '0'; ta.style.left = '0'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); document.body.removeChild(ta); return !!ok;
+    } catch (e) { return false; }
+  }
+  async function doCopy(e, kind) {
+    var rows = scopeRows(e), vals = [], miss = 0;
+    rows.forEach(function (r) { var k = contactOfRow(r), v = kind === 'email' ? k.email : k.phone; if (v && vals.indexOf(v) < 0) vals.push(v); else if (!v) miss++; });
+    setErr('copy', ''); S.copyShow = '';
+    var what = kind === 'email' ? 'email' : 'phone number';
+    if (!vals.length) { setErr('copy', rows.length ? 'No ' + what + 's on file for ' + (S.scope === 'wait' ? 'the people waiting.' : 'this crew.') : 'No one to copy yet.'); return; }
+    var txt = vals.join(', ');
+    S.lastCopy = txt;
+    var ok = await copyText(txt);
+    if (ok) snack('Copied ' + plural(vals.length, what) + '.' + (miss ? ' ' + plural(miss, 'person', 'people') + ' have none on file.' : ''));
+    else { S.copyShow = txt; paintParts(['confirm']); setErr('copy', 'Couldn\u2019t copy by itself. The list is in the box below: select it and copy.'); }
+  }
+  async function waAction(e, k) {
+    if (k === 'edit') { S.waEdit = true; S.err.wa = ''; paintParts(['confirm']); var i = document.getElementById('w274wa'); if (i) { try { i.focus(); } catch (x) { /* fine */ } } return; }
+    if (k === 'cancel') { S.waEdit = false; S.err.wa = ''; paintParts(['confirm']); var b = document.querySelector('[data-w274wa="edit"]'); if (b) { try { b.focus(); } catch (x) { /* fine */ } } return; }
+    var input = document.getElementById('w274wa'), v = k === 'clear' ? '' : String((input && input.value) || '').trim();
+    if (v && !/^https:\/\/(chat\.whatsapp\.com|wa\.me|whatsapp\.com)\//.test(v)) { if (input) input.setAttribute('aria-invalid', 'true'); setErr('wa', 'That isn\u2019t a WhatsApp group link. It starts with https://chat.whatsapp.com/'); if (input) { try { input.focus(); } catch (x) { /* fine */ } } return; }
+    try { await saveEvent(e, { whatsapp_url: v || null }); S.waEdit = false; S.err.wa = ''; paintParts(['confirm']); snack(v ? 'Saved the WhatsApp group link.' : 'Removed the WhatsApp group link.'); var b2 = document.querySelector('[data-w274wa="edit"]'); if (b2) { try { b2.focus({ preventScroll: true }); } catch (x) { /* fine */ } } }
+    catch (x) { setErr('wa', 'Couldn\u2019t save the link. Try again.'); console.warn('wave274 whatsapp', x); }
+  }
+  async function saveDelivered(e) {
+    var inputs = Array.prototype.slice.call(document.querySelectorAll('#w274root [data-w274md]')), todo = [];
+    setErr('md', '');
+    for (var i = 0; i < inputs.length; i++) {
+      var el = inputs[i], v = wholeOrNull(el.value); el.removeAttribute('aria-invalid');
+      if (v !== v) { el.setAttribute('aria-invalid', 'true'); setErr('md', 'Meals delivered is a whole number from 0 to 2000.'); try { el.focus(); } catch (x) { /* fine */ } return; }
+      var r = S.rec.filter(function (x) { return String(x.id) === el.getAttribute('data-w274md'); })[0];
+      if (r && String(r.meals_delivered == null ? '' : r.meals_delivered) !== String(v == null ? '' : v)) todo.push([r, v]);
+    }
+    if (!todo.length) { snack('Nothing changed.'); return; }
+    try {
+      await Promise.all(todo.map(function (x) { return saveRecipient(e, x[0].id, { meals_delivered: x[1] }); }));
+      paintParts(['wrap', 'sum']); var d = delivered(e); snack('Saved the meals delivered' + (d != null ? ': ' + d + ' in all.' : '.'));
+    } catch (x) { setErr('md', 'Couldn\u2019t save the meals delivered. Try again.'); console.warn('wave274 delivered', x); }
+  }
+  async function complete(e) {
+    setErr('done', '');
+    try { await saveEvent(e, { status: 'completed' }); S.confirmDone = false; paint(); snack('Marked completed. The CRM counts it now.'); var h = document.getElementById('w274h-wrap'); if (h) { try { h.focus({ preventScroll: true }); } catch (x) { /* fine */ } } }
+    catch (x) { setErr('done', 'Couldn\u2019t mark the event completed. Try again.'); console.warn('wave274 complete', x); }
+  }
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t || !t.closest) return;
+    var el = t.closest('#w274menu [data-w274mk]');
+    if (el) { var fn = MN.fn, k = el.getAttribute('data-w274mk'); if (k !== 'crm') ev.preventDefault(); closeMenu(k === 'crm'); if (fn) fn(k); return; }
+    if (menuOpen() && !t.closest('#w274menu')) { var trig = MN.trigger; closeMenu(true); if (trig && t.closest('[data-w274pm], [data-w274more]') === trig) return; }
+    if (!t.closest('#toronto, #w274sheet, #w274snack')) return;
+    var e = curEv();
+    if ((el = t.closest('#w274snack button'))) { var sf = S.snackFn; hideSnack(); if (sf) sf(); return; }
+    if ((el = t.closest('[data-w274x]'))) { ev.preventDefault(); closeSheet(); return; }
+    if ((el = t.closest('[data-w274new]'))) { ev.preventDefault(); newEvent(); return; }
+    if ((el = t.closest('[data-w274past]'))) { S.pastOpen = el.getAttribute('aria-expanded') !== 'true'; el.setAttribute('aria-expanded', S.pastOpen ? 'true' : 'false'); var pl = document.getElementById('w274pastl'); if (pl) pl.hidden = !S.pastOpen; return; }
+    /* the Volunteers page and the Add people sheet */
+    if ((el = t.closest('[data-w274kind]'))) { var sc = el.getAttribute('data-w274fs'), f = sc === 'k' ? S.pk.f : S.f; f.kind = el.getAttribute('data-w274kind'); syncTools(sc); return; }
+    if ((el = t.closest('[data-w274day]'))) { var sc2 = el.getAttribute('data-w274fs'), f2 = sc2 === 'k' ? S.pk.f : S.f, d = Number(el.getAttribute('data-w274day')), at = f2.days.indexOf(d); if (at >= 0) f2.days.splice(at, 1); else f2.days.push(d); syncTools(sc2); return; }
+    if ((el = t.closest('[data-w274clear]'))) { var sc3 = el.getAttribute('data-w274fs'), f3 = sc3 === 'k' ? S.pk.f : S.f; if (el.getAttribute('data-w274clear') === 'q') f3.q = ''; else { f3.kind = 'all'; f3.school = ''; f3.area = ''; f3.days = []; } syncTools(sc3); var qi = document.querySelector('[data-w274q="' + sc3 + '"]'); if (qi) { try { qi.focus(); } catch (x) { /* fine */ } } return; }
+    if ((el = t.closest('[data-w274cpe]'))) { var pp = S.byCid[el.getAttribute('data-w274cpe')]; if (pp && pp.email) { S.lastCopy = pp.email; copyText(pp.email).then(function (ok) { snack(ok ? 'Copied ' + pp.email + '.' : 'Couldn\u2019t copy. The email is ' + pp.email + '.'); }); } return; }
+    if ((el = t.closest('[data-w274to]'))) { var pt = S.byCid[el.getAttribute('data-w274to')]; if (pt) { if (!S.loaded) loadEvents().then(function () { toEventSheet(pt); }); else toEventSheet(pt); } return; }
+    if (!e) return;
+    /* the event page */
+    if ((el = t.closest('[data-w274go]'))) { scrollToSec(el.getAttribute('data-w274go'), ev.detail > 0); return; }
+    if ((el = t.closest('[data-w274edit]'))) { eventSheet(e); return; }
+    if ((el = t.closest('[data-w274more]'))) { moreMenu(el, e, ev.detail === 0); return; }
+    if ((el = t.closest('[data-w274kit]'))) { kitchenSheet(e); return; }
+    if ((el = t.closest('[data-w274recx]'))) { S.confirmRec = el.getAttribute('data-w274recx'); paintParts(['plan']); var y = document.querySelector('[data-w274recn="' + S.confirmRec + '"]'); if (y) { try { y.focus({ preventScroll: true }); } catch (x) { /* fine */ } } return; }
+    if ((el = t.closest('[data-w274recn]'))) { var rn = el.getAttribute('data-w274recn'); S.confirmRec = null; paintParts(['plan']); var rb = document.querySelector('[data-w274recx="' + rn + '"]'); if (rb) { try { rb.focus({ preventScroll: true }); } catch (x) { /* fine */ } } return; }
+    if ((el = t.closest('[data-w274recy]'))) {
+      var rid = el.getAttribute('data-w274recy'), rr = S.rec.filter(function (x) { return String(x.id) === rid; })[0], rname = rr ? rr.name : 'the organization';
+      setErr('rec', '');
+      removeRecipient(rid).then(function () { S.confirmRec = null; paintParts(['plan', 'wrap', 'sum']); snack('Removed ' + rname + '.'); var ab = document.querySelector('[data-w274rec="new"]'); if (ab) { try { ab.focus({ preventScroll: true }); } catch (x) { /* fine */ } } },
+        function (x) { S.confirmRec = null; paintParts(['plan']); setErr('rec', 'Couldn\u2019t remove ' + rname + '. Try again.'); console.warn('wave274 recipient', x); });
+      return;
+    }
+    if ((el = t.closest('[data-w274rec]'))) { var w = el.getAttribute('data-w274rec'); recSheet(e, w === 'new' ? null : w); return; }
+    if ((el = t.closest('[data-w274addp]'))) { pickSheet(e, el.getAttribute('data-w274addp') || stageOfRole(e)); return; }
+    if ((el = t.closest('[data-w274tg]'))) { targetsSheet(e); return; }
+    if ((el = t.closest('[data-w274pm]'))) { var pr = rowById(el.getAttribute('data-w274pm')); if (pr) personMenu(el, pr, ev.detail === 0); return; }
+    if ((el = t.closest('[data-w274call]'))) {
+      var cr = rowById(el.getAttribute('data-w274call')); if (!cr) return;
+      var on = el.getAttribute('aria-pressed') !== 'true'; el.setAttribute('aria-pressed', on ? 'true' : 'false'); setErr('call', '');
+      setCalled(cr, on).then(function () { paintParts(['confirm']); snack(on ? 'Marked ' + nameOf(cr) + ' as called.' : 'Took the call off for ' + nameOf(cr) + '.'); }, function (x) { el.setAttribute('aria-pressed', on ? 'false' : 'true'); setErr('call', 'Couldn\u2019t save that call. Try again.'); console.warn('wave274 called', x); });
+      return;
+    }
+    if ((el = t.closest('[data-w274scope]'))) { S.scope = el.getAttribute('data-w274scope'); Array.prototype.forEach.call(document.querySelectorAll('[data-w274scope]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-w274scope') === S.scope ? 'true' : 'false'); }); return; }
+    if ((el = t.closest('[data-w274copy]'))) { doCopy(e, el.getAttribute('data-w274copy')); return; }
+    if ((el = t.closest('[data-w274wa]'))) { waAction(e, el.getAttribute('data-w274wa')); return; }
+    if ((el = t.closest('[data-w274mdsave]'))) { saveDelivered(e); return; }
+    if ((el = t.closest('[data-w274came]'))) {
+      var wr = rowById(el.getAttribute('data-w274came')), want = el.getAttribute('data-v') === 'yes' ? 'yes' : 'no'; if (!wr || stOf(wr) === want) return;
+      setErr('came', '');
+      setStatus(wr, want).then(function () { statusInPlace(wr); }, function (x) { statusInPlace(wr); setErr('came', 'Couldn\u2019t save that for ' + nameOf(wr) + '. Try again.'); console.warn('wave274 came', x); });
+      statusInPlace(wr);
+      return;
+    }
+    if ((el = t.closest('[data-w274done]'))) {
+      var dk = el.getAttribute('data-w274done');
+      if (dk === 'no') { S.confirmDone = false; paintParts(['wrap']); var ab2 = document.querySelector('[data-w274done="ask"]'); if (ab2) { try { ab2.focus({ preventScroll: true }); } catch (x) { /* fine */ } } return; }
+      if (dk === 'ask' && daysTo(e.event_date) > 0) { S.confirmDone = true; paintParts(['wrap']); var yb = document.querySelector('[data-w274done="yes"]'); if (yb) { try { yb.focus({ preventScroll: true }); } catch (x) { /* fine */ } } return; }
+      complete(e); return;
+    }
+  });
+  /* the crew to add to from the section's own button: the one most short of people */
+  function stageOfRole(e) { var best = null; crewOf(e).forEach(function (c) { var gap = c.target - (c.yes + c.wait); if (gap > 0 && (!best || gap > best.gap)) best = { role: c.role, gap: gap }; }); return best ? best.role : 'cook'; }
+
+  /* ---------- fields: search, selects, the picker's ticks and radios, the forms ---------- */
+  var qT = null;
+  document.addEventListener('input', function (ev) {
+    var t = ev.target; if (!t || !t.getAttribute) return;
+    var sc = t.getAttribute('data-w274q');
+    if (sc) { clearTimeout(qT); qT = setTimeout(function () { var f = sc === 'k' ? S.pk && S.pk.f : S.f; if (!f) return; f.q = t.value; if (sc === 'k') paintPick(); else paintList(false); }, 120); return; }
+    if (t.closest && t.closest('#w274pane') && t.getAttribute('aria-invalid')) t.removeAttribute('aria-invalid');
+  });
+  document.addEventListener('change', function (ev) {
+    var t = ev.target; if (!t || !t.getAttribute) return;
+    var k = t.getAttribute('data-w274fsel');
+    if (k) { var sc = t.getAttribute('data-w274fs'), f = sc === 'k' ? S.pk.f : S.f; f[k] = t.value; syncTools(sc); return; }
+    var pid = t.getAttribute('data-w274pick');
+    if (pid && S.pk) { S.pk.sel[pid] = !!t.checked; if (t.checked && S.pk.order.indexOf(pid) < 0) S.pk.order.push(pid); var lab = t.closest('.w274pk'); if (lab) lab.classList.toggle('on', !!t.checked); pickFoot(); return; }
+    if (t.name === 'w274role') {
+      Array.prototype.forEach.call(document.querySelectorAll('#w274pane .w274rad label'), function (l) { var i = l.querySelector('input'); l.classList.toggle('on', !!(i && i.checked)); });
+      if (SH.kind === 'pick' && S.pk) { S.pk.role = t.value; pickFoot(); }
+      if (SH.kind === 'toev' && S.te) S.te.role = t.value;
+      return;
+    }
+    if (t.name === 'w274tev' && S.te) {
+      S.te.ev = t.value;
+      Array.prototype.forEach.call(document.querySelectorAll('#w274pane .w274evp'), function (l) { var i = l.querySelector('input'); l.classList.toggle('on', !!(i && i.checked)); });
+      var g = document.getElementById('w274tego'); if (g) g.disabled = false;
+    }
+  });
+  document.addEventListener('submit', function (ev) {
+    var f = ev.target; if (!f || f.id !== 'w274f') return;
+    ev.preventDefault();
+    var fn = SUBMIT[SH.kind]; if (fn) fn(f);
+  });
+  /* ---------- the keyboard: Escape closes, Tab stays in the sheet, arrows walk a menu ---------- */
+  document.addEventListener('keydown', function (ev) {
+    S.kbd = true;   /* this key is the action: what it opens or closes does not move */
+    if (menuOpen()) {
+      var m = document.getElementById('w274menu'), its = Array.prototype.slice.call(m.querySelectorAll('.w274mi')), at = its.indexOf(document.activeElement);
+      if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeMenu(false); return; }
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); var n = its.length, dn = ev.key === 'ArrowDown'; if (n) its[at < 0 ? (dn ? 0 : n - 1) : (at + (dn ? 1 : n - 1)) % n].focus(); return; }
+      if (ev.key === 'Home' || ev.key === 'End') { ev.preventDefault(); if (its.length) its[ev.key === 'Home' ? 0 : its.length - 1].focus(); return; }
+      if (ev.key === 'Tab') { closeMenu(false); ev.preventDefault(); return; }
+    }
+    if (!sheetOpen()) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); closeSheet(); return; }
+    if (ev.key === 'Tab') {
+      var pane = document.getElementById('w274pane'), fs = focusables(pane); if (!fs.length) { ev.preventDefault(); return; }
+      var a = fs[0], z = fs[fs.length - 1], cur = document.activeElement;
+      if (!pane.contains(cur)) { ev.preventDefault(); a.focus(); return; }
+      if (ev.shiftKey && (cur === a || cur === pane)) { ev.preventDefault(); z.focus(); }
+      else if (!ev.shiftKey && cur === z) { ev.preventDefault(); a.focus(); }
+    }
+  }, true);
+  window.addEventListener('hashchange', function () { closeMenu(true); if (sheetOpen()) closeSheet(true); hideSnack(); });
+  document.addEventListener('pointerdown', function () { S.kbd = false; }, true);
+  window.addEventListener('resize', function () { closeMenu(true); });
+  window.addEventListener('pagehide', flushOff);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushOff(); });
+
+  /* ---------- Montreal's Volunteer Manager leaves Toronto out (its events list is WA_VOL_EVENTS, filled by waVolLoad) ---------- */
+  function montrealOnly() {
+    try {
+      if (typeof WA_VOL_EVENTS === 'undefined' || !Array.isArray(WA_VOL_EVENTS)) return;
+      var keep = WA_VOL_EVENTS.filter(function (e) { return !(e && (lower(e.kind) === 'meal' || /toronto/i.test(String(e.location || '')))); });
+      if (keep.length !== WA_VOL_EVENTS.length) WA_VOL_EVENTS = keep;
+    } catch (e) { /* fine */ }
+  }
+  if (typeof waVolLoad === 'function' && !waVolLoad.__w274) {
+    var __vl274 = waVolLoad;
+    waVolLoad = async function () { var r = await __vl274.apply(this, arguments); montrealOnly(); return r; };
+    waVolLoad.__w274 = true;
+  }
+
+  /* ---------- access: until wa274_toronto.sql gives every profile the page, it follows the Volunteer Manager's ----------
+     The profile's own word for 'toronto' wins once it has one (wave127 applies it); before that, a person who opens the
+     Volunteer Manager opens Toronto Volunteers too, and directors never do. */
+  function torontoRule(a) {
+    a = (a || []).slice();
+    var has = a.indexOf('toronto') >= 0;
+    if (boardMode()) return has ? a.filter(function (x) { return x !== 'toronto'; }) : a;
+    var prof = null, lead = false;
+    try { var k = window.w127 && window.w127.mine ? window.w127.mine() : null, st = k && window.w127.state ? window.w127.state() : null; prof = st && st.byKey ? st.byKey[k] : null; } catch (e) { prof = null; }
+    try { var rl = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; lead = rl === 'leader' || rl === 'admin' || (prof && prof.tier === 'leader'); } catch (e) { /* fine */ }
+    var vol;
+    if (prof && prof.pages) {
+      if (prof.pages.toronto !== undefined) return a;
+      var v = prof.pages.volunteering; vol = v === 'all' || (v === 'lead' && lead);
+    } else vol = a.indexOf('volunteering') >= 0;
+    if (vol && !has) a.push('toronto');
+    if (!vol && has) a = a.filter(function (x) { return x !== 'toronto'; });
+    return a;
+  }
+  function wrapAllowed() {
+    try {
+      if (typeof wa40Allowed !== 'function' || wa40Allowed.__w274) return;
+      var __al274 = wa40Allowed;
+      wa40Allowed = function () { var a = __al274.apply(this, arguments) || []; try { return torontoRule(a); } catch (e) { return a; } };
+      Object.keys(__al274).forEach(function (k) { try { wa40Allowed[k] = __al274[k]; } catch (x) { /* fine */ } });
+      wa40Allowed.__w274 = true;
+    } catch (e) { /* fine */ }
+  }
+  function register() {
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    wrapAllowed();
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'toronto'; })) WA_NAV.register({ id: 'toronto', label: 'Toronto Volunteers', group: 'apps', dot: PURPLE, gate: 'member', onShow: function (h) { show(h); } });
+    try { if (typeof wa40Enforce === 'function') wa40Enforce(); } catch (e) { /* fine */ }
+    /* Home's Your apps (wave272) was drawn before the page existed: draw it again so the app is there from the start */
+    try { if (window.w272 && typeof window.w272.paint === 'function') window.w272.paint(); } catch (e) { /* fine */ }
+  }
+  if (typeof startApp === 'function') {
+    var __sa274 = startApp;
+    startApp = async function () {
+      var out = await __sa274.apply(this, arguments);
+      try {
+        montrealOnly();
+        register();
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+        if (h.split('/')[0] === 'toronto') { try { showPanel('toronto'); } catch (x) { /* fine */ } show(h); }
+      } catch (e) { console.warn('wave274 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w274 = {
+    state: function () { return S; }, show: show, paint: paint, load: loadEvents, loadPool: loadPool, newEvent: newEvent, stageOf: stageOf, crewOf: crewOf, totals: totals,
+    pool: function () { return S.pool; }, filterPeople: filterPeople, flush: flushOff, close: closeSheet, isTo: isTo, rule: torontoRule, montrealOnly: montrealOnly, today: todayIso
+  };
+})();

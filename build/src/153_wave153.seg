@@ -195,6 +195,18 @@
       },
       actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]
     },
+    /* wave274: Steel (05/11/26): "a volunteer manager for Toronto ... this new app in the hub". Toronto Volunteers: the Toronto team's
+       events (a community kitchen, one or two organizations the meals go to, a crew), on the Volunteer Manager's tables (page #toronto) */
+    toronto: { id: 'toronto', label: 'Toronto Volunteers', color: PURPLE, ic: 'people', blurb: 'Toronto events, crews and volunteers', pages: ['toronto'], home: '#toronto',
+      groups: function () {
+        return [{ label: 'Events', items: [
+          { h: '#toronto', l: 'Events', ic: 'list', page: 'toronto' }
+        ] }, { label: 'People', solo: true, items: [
+          { h: '#toronto/people', l: 'Volunteers', ic: 'people', page: 'toronto' }
+        ] }];
+      },
+      actions: [{ k: 'newevent', l: 'New event', ic: 'plus', page: 'toronto' }]
+    },
     /* wave193: Steel (01/10/26): "a new app called Fundraising that holds: Fundraising Events, Donor relations (Donor Program), Events
        Calendar, Fundraising Event Sops (as it's own page), Grants". One page (#fund) with sections by address, plus wave124's Events page */
     fund: { id: 'fund', label: 'Fundraising', color: ORANGE, ic: 'heart', blurb: 'Events, donors, grants and the money they bring', pages: ['fund', 'fundevents'], need: 'fund', home: '#fund',
@@ -251,7 +263,7 @@
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */
+  var ORDER = ['hub', 'strategy', 'volunteer', 'toronto', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave274: Toronto Volunteers after the Volunteer Manager */   /* wave193: the Fundraising app, before HR and Finance */
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
@@ -263,7 +275,7 @@
   /* wave262 (Steel, 20/10/26: "allow them to look through the apps that are available to them"): the apps that belong to a
      person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
      Admins and the Executive profile have every app as theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: [], board: [] };
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['toronto', 'crm'], board: [] };   /* wave274: the Toronto team's apps */
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
@@ -333,6 +345,8 @@
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
     + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
+    /* wave274: with Toronto Volunteers the launcher has ten apps; on a screen up to 960 px tall each blurb keeps to one line, so every app and the Website link fit without scrolling */
+    + '@media (max-height:960px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
     + '#w153pop .w153ph.w262ph{padding-top:12px;}'
     + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
@@ -344,7 +358,7 @@
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
     /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
     + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
-    + 'html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
+    + 'html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="toronto"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave274: Toronto Volunteers' page too */   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -576,6 +590,7 @@
   function act(k) {
     if (S.app === 'studio' && k === 'newpost') { try { if (pageOf(hashNow()) === 'contentcal' && window.w121 && window.w121.compose) window.w121.compose(); else location.hash = '#contentcal/new'; } catch (e) { location.hash = '#contentcal/new'; } return; }   /* wave225 */
     if (S.app === 'volunteer' && k === 'text') { try { if (typeof waTxtModal === 'function') waTxtModal(); } catch (e) { /* fine */ } return; }
+    if (S.app === 'toronto' && k === 'newevent') { try { if (window.w274 && window.w274.newEvent) window.w274.newEvent(); else location.hash = '#toronto'; } catch (e) { /* fine */ } return; }   /* wave274: New event opens its sheet */
     if (S.app === 'crm' && k === 'add') {
       if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';
       var tries = 0, iv = setInterval(function () { tries++; var b = document.querySelector('#crm [data-w152add]'); if (b) { clearInterval(iv); b.click(); } else if (tries > 40) clearInterval(iv); }, 100);

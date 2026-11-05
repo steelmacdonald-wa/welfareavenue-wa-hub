@@ -29,6 +29,8 @@
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
     + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
+    /* wave274: with Toronto Volunteers the launcher has ten apps; on a screen up to 960 px tall each blurb keeps to one line, so every app and the Website link fit without scrolling */
+    + '@media (max-height:960px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
     + '#w153pop .w153ph.w262ph{padding-top:12px;}'
     + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
@@ -40,7 +42,7 @@
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
     /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
     + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
-    + 'html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
+    + 'html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="toronto"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave274: Toronto Volunteers' page too */   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'

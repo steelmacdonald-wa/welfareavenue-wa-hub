@@ -161,6 +161,7 @@
   function act(k) {
     if (S.app === 'studio' && k === 'newpost') { try { if (pageOf(hashNow()) === 'contentcal' && window.w121 && window.w121.compose) window.w121.compose(); else location.hash = '#contentcal/new'; } catch (e) { location.hash = '#contentcal/new'; } return; }   /* wave225 */
     if (S.app === 'volunteer' && k === 'text') { try { if (typeof waTxtModal === 'function') waTxtModal(); } catch (e) { /* fine */ } return; }
+    if (S.app === 'toronto' && k === 'newevent') { try { if (window.w274 && window.w274.newEvent) window.w274.newEvent(); else location.hash = '#toronto'; } catch (e) { /* fine */ } return; }   /* wave274: New event opens its sheet */
     if (S.app === 'crm' && k === 'add') {
       if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';
       var tries = 0, iv = setInterval(function () { tries++; var b = document.querySelector('#crm [data-w152add]'); if (b) { clearInterval(iv); b.click(); } else if (tries > 40) clearInterval(iv); }, 100);
