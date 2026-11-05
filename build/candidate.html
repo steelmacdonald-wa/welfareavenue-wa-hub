@@ -92965,14 +92965,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var PRESS = ['#toronto .w274btn', '#w274sheet .w274btn', '#toronto .w274card', '#toronto .w274hero', '#toronto .w274prow', '#toronto .w274ib', '#w274sheet .w274ib',
     '#toronto .w274add', '#toronto .w274tog', '#toronto .w274seg button', '#w274sheet .w274seg button', '#toronto .w274dayb button', '#w274sheet .w274dayb button',
     '#toronto .w274steps button', '#w274sheet .w274rad label', '#w274sheet .w274pk', '#w274sheet .w274evp', '#w274menu .w274mi', '#w274snack button', '#toronto .w274fold', '#toronto > .w118mast .w197pact'];
-  var TAP = '-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
+  var TAP = '-webkit-tap-highlight-color:transparent;touch-action:manipulation;-webkit-user-select:none;user-select:none;';   /* design review: a long press does not select a control's label */
   var FOCUS = ['#toronto a', '#toronto button', '#toronto input', '#toronto select', '#toronto textarea', '#w274sheet a', '#w274sheet button', '#w274sheet input', '#w274sheet select', '#w274sheet textarea', '#w274menu .w274mi', '#w274snack button'];
   var FIELD = '#toronto .w274i,#w274sheet .w274i';
   var css274 = ''
     /* tokens (the Hub's :root values, the brand's rgba tints, the purple) */
     + '#toronto,#w274sheet,#w274menu,#w274snack{--t-ac:' + PURPLE + ';--t-ink:var(--wa-text);--t-green:var(--wa-green);--t-card:var(--wa-card);--t-mut:rgba(31,32,30,.7);--t-line:rgba(16,63,57,.12);--t-line2:rgba(16,63,57,.24);--t-surf:rgba(16,63,57,.05);--t-surf2:rgba(16,63,57,.09);--t-act:rgba(111,100,171,.14);--t-goldt:rgba(220,165,39,.26);--t-flag:var(--wa-flag);--t-flagt:rgba(179,64,47,.11);}'
     + FOCUS.map(function (s) { return s + ':focus-visible'; }).join(',') + '{outline:2px solid var(--t-ac);outline-offset:2px;box-shadow:none;}'
-    + '#toronto .w274hero:focus-visible{outline-color:var(--wa-gold);outline-offset:3px;}'
+    + '#toronto .w274hero:focus-visible{outline-offset:3px;}'   /* the purple ring on the page ground: gold there is about 2:1 */
     + '#toronto .w274vh,#w274sheet .w274vh{position:absolute !important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;}'
     /* the masthead (wave118's) holds the page title, the way back and the page's one primary action */
     + '#toronto > .w118mast h1{text-transform:none;letter-spacing:0;overflow-wrap:anywhere;}'
@@ -92988,7 +92988,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w274root{display:block;max-width:1180px;color:var(--t-ink);font:400 15px/1.45 ' + BODY + ';}'
     + '#toronto .w274blk{margin:0 0 30px;}'
     + '#toronto .w274kick{margin:0 0 10px;font:700 14px/1.2 ' + BODY + ';letter-spacing:.02em;color:var(--t-ac);}'
-    + '#toronto .w274h2{margin:0 0 12px;font:500 28px/1.05 ' + HEAD + ';letter-spacing:.005em;color:var(--t-green);}'
+    + '#toronto .w274h2{margin:0 0 12px;font:500 30px/1.05 ' + HEAD + ';letter-spacing:0;color:var(--t-green);}'
     + '#toronto .w274quiet{margin:6px 0;font-size:14px;color:var(--t-mut);}'
     + '#toronto .w274meta{margin:2px 0;font-size:14px;color:var(--t-mut);overflow-wrap:anywhere;}'
     + '#toronto .w274err,#w274sheet .w274err{margin:8px 0 0;font-size:14px;font-weight:600;color:var(--t-flag);}'
@@ -93029,7 +93029,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto .w274hero .w274meta{color:rgba(255,250,242,.86);font-size:14.5px;}'
     + '#toronto .w274hero .w274chip.stg{background:var(--wa-gold);color:var(--t-green);}'
     + '#toronto .w274conf{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 8px;margin:0 0 14px;font-size:15px;color:rgba(255,250,242,.9);}'
-    + '#toronto .w274conf b{font:500 46px/1 ' + HEAD + ';color:var(--t-card);font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274conf b{font:500 46px/1 ' + HEAD + ';letter-spacing:-.01em;color:var(--t-card);font-variant-numeric:tabular-nums;}'
     + '#toronto .w274br{display:grid;grid-template-columns:100px minmax(0,1fr) 48px;align-items:center;gap:10px;margin:9px 0;font-size:13.5px;}'
     + '#toronto .w274br .n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}'
     + '#toronto .w274hero .w274bar{background:rgba(255,250,242,.2);}'
@@ -93108,7 +93108,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto .w274col{display:flex;flex-direction:column;gap:10px;min-width:0;padding:14px;border-radius:16px;background:var(--t-surf);}'
     + '#toronto .w274colh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}'
     + '#toronto .w274colh h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
-    + '#toronto .w274cn{font:600 14px/1 ' + BODY + ';color:var(--t-ink);font-variant-numeric:tabular-nums;white-space:nowrap;}'
+    + '#toronto .w274cn{font:500 24px/1 ' + HEAD + ';color:var(--t-green);font-variant-numeric:tabular-nums;white-space:nowrap;}'
     + '#toronto .w274ppl{display:flex;flex-direction:column;gap:8px;}'
     + '#toronto .w274pc{display:flex;align-items:center;gap:8px;min-height:58px;padding:7px 2px 7px 12px;border-radius:12px;background:var(--t-card);border:1px solid var(--t-line);transition:opacity 200ms ' + OUT + ';}'
     + '#toronto .w274pc.gone{opacity:0;}'
@@ -93119,7 +93119,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto .w274add svg{width:16px;height:16px;}'
     /* confirm */
     + '#toronto .w274cnts{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 22px;margin:6px 0 16px;font-size:15px;color:var(--t-mut);}'
-    + '#toronto .w274cnts b{margin-right:6px;font:500 40px/1 ' + HEAD + ';color:var(--t-green);font-variant-numeric:tabular-nums;}'
+    + '#toronto .w274cnts b{margin-right:6px;font:500 40px/1 ' + HEAD + ';letter-spacing:-.01em;color:var(--t-green);font-variant-numeric:tabular-nums;}'
     + '#toronto .w274wl{display:flex;flex-direction:column;gap:8px;}'
     + '#toronto .w274wr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px 12px;padding:10px 10px 10px 14px;border-radius:12px;background:var(--t-card);border:1px solid var(--t-line);}'
     + '#toronto .w274wr .how{font-size:13.5px;color:var(--t-mut);overflow-wrap:anywhere;}#toronto .w274wr .how a{color:var(--t-green);}'
@@ -93144,6 +93144,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + FIELD + '{display:block;width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--t-line2);border-radius:10px;background:var(--t-card);color:var(--t-ink);font:400 16px/1.3 ' + BODY + ';box-sizing:border-box;transition:border-color 200ms ' + OUT + ',box-shadow 200ms ' + OUT + ';}'
     + '#toronto .w274i:focus-visible,#w274sheet .w274i:focus-visible{outline:none;border-color:var(--t-ac);box-shadow:0 0 0 3px var(--t-act);}'
     + '#toronto .w274i[aria-invalid="true"],#w274sheet .w274i[aria-invalid="true"]{border-color:var(--t-flag);}'
+    + '#toronto .w274i::placeholder,#w274sheet .w274i::placeholder{color:var(--t-mut);opacity:1;}'   /* the only format hint for a time: 4.5:1 or better */
     + '#w274sheet textarea.w274i{min-height:92px;resize:vertical;}'
     + '#toronto select.w274i,#w274sheet select.w274i{padding-right:30px;}'
     + '#w274sheet .w274lb{display:block;margin:16px 0 6px;font:600 14px/1.2 ' + BODY + ';color:var(--t-ink);}'
@@ -93167,6 +93168,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto .w274fl,#w274sheet .w274fl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;}'
     + '#toronto .w274sl,#w274sheet .w274sl{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;color:var(--t-mut);}'
     + '#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{width:auto;min-width:0;max-width:220px;min-height:40px;padding-top:6px;padding-bottom:6px;font-size:14.5px;}'
+    + '@media (max-width:600px){#toronto .w274sl,#w274sheet .w274sl{display:grid;grid-template-columns:52px minmax(0,1fr);width:100%;}#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{width:100%;max-width:none;}}'   /* one label column on a phone */
     + '#toronto .w274count{margin:0 0 10px;font-size:14px;color:var(--t-mut);}'
     + '#toronto .w274rows{display:flex;flex-direction:column;gap:8px;}'
     + '#toronto .w274row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto;align-items:center;gap:8px 18px;padding:12px 12px 12px 16px;border-radius:14px;background:var(--t-card);border:1px solid var(--t-line);}'
@@ -93190,7 +93192,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w274sheet.open #w274pane{transform:translateY(0);transition-duration:280ms;}'
     + '@media (min-width:901px){#w274pane{top:0;left:auto;width:min(520px,100vw);max-height:none;border-radius:22px 0 0 22px;box-shadow:-10px 0 40px rgba(31,32,30,.16);transform:translateX(100%);}#w274sheet.open #w274pane{transform:translateX(0);}#w274pane .w274grab{display:none;}}'
     + '#w274pane .w274fx{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;margin:0;}'
-    + '#w274pane .w274grab{width:40px;height:5px;margin:8px auto 0;border-radius:3px;background:rgba(16,63,57,.2);flex:0 0 auto;}'
     + '#w274pane .w274shd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 12px 8px 22px;flex:0 0 auto;}'
     + '#w274pane .w274shd h2{margin:8px 0 0;font:500 30px/1.05 ' + HEAD + ';color:var(--wa-green);overflow-wrap:anywhere;}'
     + '#w274pane .w274shd p{margin:6px 0 0;font-size:14px;color:var(--t-mut);}'
@@ -93223,7 +93224,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w274menu .w274mi.dng,#w274menu .w274mi.dng svg{color:var(--wa-flag);}'
     + '#w274menu hr{margin:4px 6px;border:0;border-top:1px solid rgba(16,63,57,.12);}'
     /* the note at the foot of the screen (saved, copied, undo) */
-    + '#w274snack{position:fixed;left:50%;bottom:24px;z-index:340;display:flex;align-items:center;gap:14px;max-width:calc(100vw - 32px);min-height:48px;padding:6px 8px 6px 16px;border-radius:12px;background:var(--wa-text);color:var(--wa-card);font:500 14.5px/1.3 ' + BODY + ';box-shadow:0 10px 30px rgba(31,32,30,.24);opacity:0;visibility:hidden;transform:translate(-50%,8px);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 200ms;}'
+    + '#w274snack{position:fixed;left:50%;bottom:24px;z-index:340;display:flex;align-items:center;gap:14px;width:max-content;max-width:calc(100vw - 32px);min-height:48px;padding:6px 8px 6px 16px;border-radius:12px;background:var(--wa-text);color:var(--wa-card);font:500 14.5px/1.3 ' + BODY + ';box-shadow:0 10px 30px rgba(31,32,30,.24);opacity:0;visibility:hidden;transform:translate(-50%,8px);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 200ms;}'
     + '#w274snack.on{opacity:1;visibility:visible;transform:translate(-50%,0);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ',visibility 0s linear 0s;}'
     + '#w274snack button{min-height:40px;padding:0 12px;border:0;border-radius:8px;background:none;color:var(--wa-card);font:700 14.5px/1 ' + BODY + ';text-decoration:underline;text-underline-offset:3px;cursor:pointer;' + TAP + 'transition:transform 160ms ' + OUT + ';}'
     + '#w274snack button:empty{display:none;}'
@@ -93245,10 +93246,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto > .w118mast .w197pact:hover{background:var(--t-ac);box-shadow:inset 0 0 0 99px rgba(31,32,30,.14);}'
     + '#toronto[data-w274v="event"] > .w118mast .w197pact:hover,#toronto[data-w274v="people"] > .w118mast .w197pact:hover{background:var(--t-surf);box-shadow:inset 0 0 0 1px rgba(16,63,57,.34);}'
     + '}'
-    + '@media (max-width:900px){#toronto .w274btn,#w274sheet .w274btn,#toronto .w274btn.sm,#w274sheet .w274btn.sm,#toronto .w274seg button,#w274sheet .w274seg button,#toronto .w274dayb button,#w274sheet .w274dayb button,#w274sheet .w274rad label{min-height:44px;}#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{min-height:44px;}#toronto .w274date{font-size:46px;}}'
+    + '@media (max-width:900px){#toronto .w274btn,#w274sheet .w274btn,#toronto .w274btn.sm,#w274sheet .w274btn.sm,#toronto .w274seg button,#w274sheet .w274seg button,#toronto .w274dayb button,#w274sheet .w274dayb button,#w274sheet .w274rad label{min-height:44px;}#toronto .w274sl .w274i,#w274sheet .w274sl .w274i{min-height:44px;font-size:16px;}#toronto .w274wr .how a{display:flex;align-items:center;width:max-content;max-width:100%;min-height:44px;}#toronto .w274wr .how .w274sep{display:none;}#toronto .w274rc .w274meta a{display:inline-flex;align-items:center;min-height:44px;}#toronto .w274date{font-size:46px;}}'
     /* reduced motion: the fades stay, every movement goes */
     + '@media (prefers-reduced-motion:reduce){'
-    + PRESS.map(function (s) { return s + ':active:not(:disabled)'; }).join(',') + '{transform:none;}'
+    + PRESS.map(function (s) { return s + ':active:not(:disabled)'; }).join(',') + '{transform:none;opacity:.85;}'   /* the press still answers, without movement */
     + '#w274pane,#w274sheet.open #w274pane{transform:none;opacity:0;transition:opacity 200ms ' + DRAWER + ';}'
     + '#w274sheet.open #w274pane{opacity:1;transition-duration:280ms;}'
     + '#toronto .w274st.w274pre{transform:none;}'
@@ -93750,7 +93751,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       body = (rs.length ? '<div class="w274rcs">' + rs.map(recHtml).join('') + '</div>' : '<p class="w274quiet">No organization yet. Add the one that sent the request, with its headcount and dietary needs.</p>') +
         (planned != null && rs.some(function (r) { return r.meals != null; }) ? '<p class="w274placed"><b>' + placed + ' of ' + planned + '</b> planned meals placed</p>' : planned != null ? '<p class="w274placed">' + E(plural(planned, 'meal')) + ' planned</p>' : '');
     }
-    var rec = '<div class="w274box"><div class="w274bh"><h3>Who the meals go to</h3>' + (S.recOk ? '<button type="button" class="w274btn sm' + pri(e, 'plan') + '" data-w274rec="new">' + ic('plus') + 'Add an organization</button>' : '') + '</div>' + body + errLine('rec') + '</div>';
+    var rec = '<div class="w274box"><div class="w274bh"><h3>Who the meals go to</h3>' + (S.recOk ? '<button type="button" class="w274btn' + (pri(e, 'plan') ? pri(e, 'plan') : ' sm') + '" data-w274rec="new">' + ic('plus') + 'Add an organization</button>' : '') + '</div>' + body + errLine('rec') + '</div>';
     return secHead('plan', e) + '<p class="w274lead">The kitchen and its time, and the organizations the meals go to, with what each one asked for.</p><div class="w274two">' + kit + rec + '</div>';
   }
   /* Crew: one column per crew, its people, Add people, the targets */
@@ -93781,7 +93782,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var k = contactOfRow(r), o = [];
     if (k.phone) o.push('<a href="tel:' + E(String(k.phone).replace(/[^\d+]/g, '')) + '">' + E(k.phone) + '</a>');
     if (k.email) o.push('<a href="mailto:' + E(k.email) + '">' + E(k.email) + '</a>');
-    return o.length ? o.join(', ') : 'No phone or email on file';
+    return o.length ? o.join('<span class="w274sep">, </span>') : 'No phone or email on file';   /* on a phone each link is its own 44 px line */
   }
   function who(email) { var s = String(email || ''); return s.split('@')[0].split('.')[0].replace(/^\w/, function (c) { return c.toUpperCase(); }); }
   function scopeRows(e) { return rowsOf(e.id).filter(function (r) { var s = stOf(r); return S.scope === 'wait' ? s === 'wait' : (s === 'yes' || s === 'wait'); }); }
@@ -93812,7 +93813,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* Wrap up: meals delivered, who came, Mark this event completed */
   function wrapHtml(e) {
     var s = lower(e.status), rs = recsOf(e.id), d = delivered(e);
-    var md = !S.recOk ? '<p class="w274quiet">Meals delivered open once the Toronto database update is applied.</p>'
+    var md = !S.recOk ? '<p class="w274quiet">Counting meals delivered opens once the Toronto database update is applied.</p>'
       : !rs.length ? '<p class="w274quiet">Add who the meals go to in Plan, then count what each organization got here.</p>'
         : '<div class="w274mds">' + rs.map(function (r) {
           return '<div class="w274md"><label for="w274md' + E(r.id) + '"><span class="w274pn">' + E(r.name) + '</span>' + (r.meals != null ? ' <span class="w274meta">' + E(r.meals) + ' asked for</span>' : '') + '</label>' +
@@ -93957,7 +93958,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* the search and the filters, shared by the page (scope p) and the Add people sheet (scope k) */
   function toolsHtml(f, sc) {
     var pool = S.pool || [];
-    return '<div class="w274srch">' + ic('search') + '<label class="w274vh" for="w274q' + sc + '">Search the Toronto volunteers</label><input class="w274i" type="search" id="w274q' + sc + '" data-w274q="' + sc + '" placeholder="Search by name, email, phone or school" autocomplete="off" spellcheck="false" value="' + E(f.q) + '"></div>' +
+    return '<div class="w274srch">' + ic('search') + '<label class="w274vh" for="w274q' + sc + '">Search the Toronto volunteers</label><input class="w274i" type="search" id="w274q' + sc + '" data-w274q="' + sc + '" placeholder="Name, email, phone or school" autocomplete="off" spellcheck="false" value="' + E(f.q) + '"></div>' +
       '<div class="w274fl"><div class="w274seg" role="group" aria-label="Students or general">' + [['all', 'All'], ['students', 'Students'], ['general', 'General']].map(function (k) { return '<button type="button" data-w274kind="' + k[0] + '" data-w274fs="' + sc + '" aria-pressed="' + (f.kind === k[0] ? 'true' : 'false') + '">' + k[1] + '</button>'; }).join('') + '</div>' +
       '<label class="w274sl">School <select class="w274i" data-w274fsel="school" data-w274fs="' + sc + '"><option value="">All schools</option>' + schoolsOf(pool).map(function (s) { return '<option value="' + E(s.id) + '"' + (String(f.school) === String(s.id) ? ' selected' : '') + '>' + E(s.short && s.short !== s.name ? s.short + ', ' + s.name : s.name) + '</option>'; }).join('') + '</select></label>' +
       '<label class="w274sl">Area <select class="w274i" data-w274fsel="area" data-w274fs="' + sc + '"><option value="">All areas</option>' + areasOf(pool).map(function (a) { return '<option' + (f.area === a ? ' selected' : '') + '>' + E(a) + '</option>'; }).join('') + '</select></label>' +
@@ -94031,15 +94032,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!S.snackFn) hideSnack();   /* a plain note (saved, copied) makes way for the sheet; an Undo stays its 5 seconds */
     if (!sheetOpen()) { SH.opener = o.opener || document.activeElement; SH.openerSel = selOf(SH.opener); }
     SH.kind = kind; SH.ctx = o.ctx || null;
-    pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '"><div class="w274grab" aria-hidden="true"></div>' +
+    pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '">' +   /* no grab handle: there is no drag to dismiss */
       '<div class="w274shd"><div><h2 id="w274sht">' + E(o.title) + '</h2>' + (o.sub ? '<p>' + E(o.sub) + '</p>' : '') + '</div><button type="button" class="w274ib" data-w274x="1" aria-label="Close">' + ic('x') + '</button></div>' +
       '<div class="w274sbd">' + o.body + '</div><div class="w274sft">' + errLine('sheet', '') + (o.foot || '') + '</div></form>';
     S.err.sheet = '';
     el.removeAttribute('aria-hidden');
     void pane.offsetWidth;
     still(el, function () { el.classList.add('open'); });
+    /* on a touch screen the sheet itself takes focus: a keyboard or date wheel rising during the slide covers the list and the action */
+    var touch = !S.kbd && matchMedia('(pointer: coarse)').matches;
     var f = o.focus ? pane.querySelector(o.focus) : null;
-    if (!f) f = pane.querySelector('.w274sbd input:not([type=hidden]):not([disabled]), .w274sbd select, .w274sbd textarea');
+    if (!f && !touch) f = pane.querySelector('.w274sbd input:not([type=hidden]):not([disabled]), .w274sbd select, .w274sbd textarea');
+    if (touch && f && f.matches('input:not([type=checkbox]):not([type=radio]), textarea')) f = null;
     try { (f || pane).focus({ preventScroll: true }); } catch (e) { /* fine */ }
   }
   function closeSheet(noReturn) {
@@ -94282,7 +94286,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var said = added.length ? 'Added ' + andJoin(added) + ' to ' + roleIn(k.role) + '.' : already.length ? andJoin(already) + (already.length === 1 ? ' is' : ' are') + ' already on this event.' : '';
     if (!needs.length && !errs.length) { closeSheet(); if (said) snack(said); return; }
     busy(false); paintPick();
-    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the wave274 database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
+    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the Toronto database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
       errs.length ? 'Couldn\u2019t add ' + andJoin(errs) + '. Try again.' : ''].filter(Boolean).join(' '));
     if (said) snack(said);
   }
@@ -94307,7 +94311,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var r = await crewAdd(ev, p, k.role);
     if (r.ok) { reindexPool(); closeSheet(); if (S.view === 'people') paintList(false); else if (S.view === 'event') repaintCrew(); snack(r.already ? p.name + ' is already on that event.' : 'Added ' + p.name + ' to ' + roleIn(k.role) + ' on ' + fmtDay(ev.event_date) + '.'); return; }
     busy(false);
-    setErr('sheet', r.needs ? p.name + ' needs the wave274 database update first: there is no volunteer record for them yet.' : 'Couldn\u2019t add ' + p.name + ' to the crew. Try again.');
+    setErr('sheet', r.needs ? p.name + ' needs the Toronto database update first: there is no volunteer record for them yet.' : 'Couldn\u2019t add ' + p.name + ' to the crew. Try again.');
   }
 
   /* ---------- Cancel this event (a confirm step) ---------- */
@@ -94486,7 +94490,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w274call]'))) {
       var cr = rowById(el.getAttribute('data-w274call')); if (!cr) return;
       var on = el.getAttribute('aria-pressed') !== 'true'; el.setAttribute('aria-pressed', on ? 'true' : 'false'); setErr('call', '');
-      setCalled(cr, on).then(function () { paintParts(['confirm']); snack(on ? 'Marked ' + nameOf(cr) + ' as called.' : 'Took the call off for ' + nameOf(cr) + '.'); }, function (x) { el.setAttribute('aria-pressed', on ? 'false' : 'true'); setErr('call', 'Couldn\u2019t save that call. Try again.'); console.warn('wave274 called', x); });
+      setCalled(cr, on).then(function () { paintParts(['confirm']); snack(on ? 'Marked ' + nameOf(cr) + ' as called.' : nameOf(cr) + ': not called yet.'); }, function (x) { el.setAttribute('aria-pressed', on ? 'false' : 'true'); setErr('call', 'Couldn\u2019t save that call. Try again.'); console.warn('wave274 called', x); });
       return;
     }
     if ((el = t.closest('[data-w274scope]'))) { S.scope = el.getAttribute('data-w274scope'); Array.prototype.forEach.call(document.querySelectorAll('[data-w274scope]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-w274scope') === S.scope ? 'true' : 'false'); }); return; }
@@ -94563,7 +94567,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }, true);
   window.addEventListener('hashchange', function () { closeMenu(true); if (sheetOpen()) closeSheet(true); hideSnack(); });
   document.addEventListener('pointerdown', function () { S.kbd = false; }, true);
+  document.addEventListener('touchstart', function () {}, { passive: true });   /* iOS Safari applies :active only with a touch listener */
   window.addEventListener('resize', function () { closeMenu(true); });
+  window.addEventListener('scroll', function () { if (menuOpen()) closeMenu(false); }, { passive: true });   /* the menu belongs to its button */
   window.addEventListener('pagehide', flushOff);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushOff(); });
 

@@ -50,6 +50,34 @@ Motion and the look follow the brief's design bar (section 6): the Hub's tokens 
 - `test/w274drive.js`: admin and plain (a member on the opsto profile) at 1366 and 390 px; then the fallbacks before the SQL (a direct crew row, a contact without a volunteer record named in the sheet, the code worked out locally, the recipients line); the other edits on a phone (Edit with only the changed fields and the audit trail, the kitchen, the targets, removing an organization, meals delivered, Didn't come, Cancel); and a board viewer: 222 passed, 0 failed. Run it with `export WA_CHROME=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome; bash build/build.sh && CAND=build/candidate.html node test/w274drive.js` (`WA_SHOTS=<folder>` saves the screenshots).
 - Regression on the same build: `w259drive` 22 of 22, `w191drive` 39 of 39, `w272drive` 152 of 152, `w195drive` 52 of 52, `w153drive` 45 of 46. Its one failure (the dock at the foot of a menu taller than the screen) fails the same way on the build before this wave. Its launcher check now lists Toronto Volunteers after the Volunteer Manager.
 
+## Design review
+
+A separate reviewer checked the screens and the code against `docs/toronto/design review brief.md` (Emil Kowalski's rules and Apple's fluid-interface rules). Applied:
+
+- **On a phone**:
+  - The School, Area and Sort selects are 16 px, so iOS no longer zooms in when one is tapped. They also sit in one label column.
+  - Each phone number and email in Confirm is its own 44 px line.
+  - The note at the foot of the screen fits on one line (`width: max-content`).
+  - A sheet takes focus itself on a touch screen, so no keyboard or date wheel rises while it slides in.
+  - The grab handle is gone, since there is no drag to dismiss.
+  - A long press doesn't select a button's label.
+  - An empty `touchstart` listener lets iOS Safari show the press.
+- **Contrast**: the hero card's focus ring is the purple one; gold on the page was about 2:1. Placeholders use the app's muted ink, 4.5:1 or better.
+- **Hierarchy**:
+  - A crew's "2 of 4" is the largest thing in its column (Barlow 24 px).
+  - Add an organization is full size when it is the Plan stage's primary.
+  - "Upcoming" and "Past events" match the other titles (30 px, no tracking), and the big numerals are tightened (-0.01em).
+- **Motion**: a menu closes when the page scrolls away from its button. With reduced motion, a press dims to 85% instead of doing nothing.
+- **Words**:
+  - "the Toronto database update", not "wave274".
+  - "Counting meals delivered opens once …".
+  - "Mei Example: not called yet."
+
+Not done here, outside this wave's selectors:
+
+- The phone's app rail shows "TORONTO VOLUNTEERS" in capitals and a filled New event next to the page's own primary.
+- `000_head_base.seg` has no `viewport-fit=cover`, so the sheet's safe-area padding is 0 on an iPhone.
+
 ## Left for later waves (the plan, section 5)
 
 - wave275: the Toronto sign-up forms in the Hub (general and student) and Sign-ups.

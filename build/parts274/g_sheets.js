@@ -18,15 +18,18 @@
     if (!S.snackFn) hideSnack();   /* a plain note (saved, copied) makes way for the sheet; an Undo stays its 5 seconds */
     if (!sheetOpen()) { SH.opener = o.opener || document.activeElement; SH.openerSel = selOf(SH.opener); }
     SH.kind = kind; SH.ctx = o.ctx || null;
-    pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '"><div class="w274grab" aria-hidden="true"></div>' +
+    pane.innerHTML = '<form id="w274f" class="w274fx" novalidate data-w274form="' + E(kind) + '">' +   /* no grab handle: there is no drag to dismiss */
       '<div class="w274shd"><div><h2 id="w274sht">' + E(o.title) + '</h2>' + (o.sub ? '<p>' + E(o.sub) + '</p>' : '') + '</div><button type="button" class="w274ib" data-w274x="1" aria-label="Close">' + ic('x') + '</button></div>' +
       '<div class="w274sbd">' + o.body + '</div><div class="w274sft">' + errLine('sheet', '') + (o.foot || '') + '</div></form>';
     S.err.sheet = '';
     el.removeAttribute('aria-hidden');
     void pane.offsetWidth;
     still(el, function () { el.classList.add('open'); });
+    /* on a touch screen the sheet itself takes focus: a keyboard or date wheel rising during the slide covers the list and the action */
+    var touch = !S.kbd && matchMedia('(pointer: coarse)').matches;
     var f = o.focus ? pane.querySelector(o.focus) : null;
-    if (!f) f = pane.querySelector('.w274sbd input:not([type=hidden]):not([disabled]), .w274sbd select, .w274sbd textarea');
+    if (!f && !touch) f = pane.querySelector('.w274sbd input:not([type=hidden]):not([disabled]), .w274sbd select, .w274sbd textarea');
+    if (touch && f && f.matches('input:not([type=checkbox]):not([type=radio]), textarea')) f = null;
     try { (f || pane).focus({ preventScroll: true }); } catch (e) { /* fine */ }
   }
   function closeSheet(noReturn) {
@@ -269,7 +272,7 @@
     var said = added.length ? 'Added ' + andJoin(added) + ' to ' + roleIn(k.role) + '.' : already.length ? andJoin(already) + (already.length === 1 ? ' is' : ' are') + ' already on this event.' : '';
     if (!needs.length && !errs.length) { closeSheet(); if (said) snack(said); return; }
     busy(false); paintPick();
-    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the wave274 database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
+    setErr('sheet', [needs.length ? andJoin(needs) + (needs.length === 1 ? ' needs' : ' need') + ' the Toronto database update first: there is no volunteer record for ' + (needs.length === 1 ? 'them' : 'them') + ' yet.' : '',
       errs.length ? 'Couldn’t add ' + andJoin(errs) + '. Try again.' : ''].filter(Boolean).join(' '));
     if (said) snack(said);
   }
@@ -294,7 +297,7 @@
     var r = await crewAdd(ev, p, k.role);
     if (r.ok) { reindexPool(); closeSheet(); if (S.view === 'people') paintList(false); else if (S.view === 'event') repaintCrew(); snack(r.already ? p.name + ' is already on that event.' : 'Added ' + p.name + ' to ' + roleIn(k.role) + ' on ' + fmtDay(ev.event_date) + '.'); return; }
     busy(false);
-    setErr('sheet', r.needs ? p.name + ' needs the wave274 database update first: there is no volunteer record for them yet.' : 'Couldn’t add ' + p.name + ' to the crew. Try again.');
+    setErr('sheet', r.needs ? p.name + ' needs the Toronto database update first: there is no volunteer record for them yet.' : 'Couldn’t add ' + p.name + ' to the crew. Try again.');
   }
 
   /* ---------- Cancel this event (a confirm step) ---------- */

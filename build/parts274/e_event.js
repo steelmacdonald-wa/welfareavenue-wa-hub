@@ -60,7 +60,7 @@
       body = (rs.length ? '<div class="w274rcs">' + rs.map(recHtml).join('') + '</div>' : '<p class="w274quiet">No organization yet. Add the one that sent the request, with its headcount and dietary needs.</p>') +
         (planned != null && rs.some(function (r) { return r.meals != null; }) ? '<p class="w274placed"><b>' + placed + ' of ' + planned + '</b> planned meals placed</p>' : planned != null ? '<p class="w274placed">' + E(plural(planned, 'meal')) + ' planned</p>' : '');
     }
-    var rec = '<div class="w274box"><div class="w274bh"><h3>Who the meals go to</h3>' + (S.recOk ? '<button type="button" class="w274btn sm' + pri(e, 'plan') + '" data-w274rec="new">' + ic('plus') + 'Add an organization</button>' : '') + '</div>' + body + errLine('rec') + '</div>';
+    var rec = '<div class="w274box"><div class="w274bh"><h3>Who the meals go to</h3>' + (S.recOk ? '<button type="button" class="w274btn' + (pri(e, 'plan') ? pri(e, 'plan') : ' sm') + '" data-w274rec="new">' + ic('plus') + 'Add an organization</button>' : '') + '</div>' + body + errLine('rec') + '</div>';
     return secHead('plan', e) + '<p class="w274lead">The kitchen and its time, and the organizations the meals go to, with what each one asked for.</p><div class="w274two">' + kit + rec + '</div>';
   }
   /* Crew: one column per crew, its people, Add people, the targets */
@@ -91,7 +91,7 @@
     var k = contactOfRow(r), o = [];
     if (k.phone) o.push('<a href="tel:' + E(String(k.phone).replace(/[^\d+]/g, '')) + '">' + E(k.phone) + '</a>');
     if (k.email) o.push('<a href="mailto:' + E(k.email) + '">' + E(k.email) + '</a>');
-    return o.length ? o.join(', ') : 'No phone or email on file';
+    return o.length ? o.join('<span class="w274sep">, </span>') : 'No phone or email on file';   /* on a phone each link is its own 44 px line */
   }
   function who(email) { var s = String(email || ''); return s.split('@')[0].split('.')[0].replace(/^\w/, function (c) { return c.toUpperCase(); }); }
   function scopeRows(e) { return rowsOf(e.id).filter(function (r) { var s = stOf(r); return S.scope === 'wait' ? s === 'wait' : (s === 'yes' || s === 'wait'); }); }
@@ -122,7 +122,7 @@
   /* Wrap up: meals delivered, who came, Mark this event completed */
   function wrapHtml(e) {
     var s = lower(e.status), rs = recsOf(e.id), d = delivered(e);
-    var md = !S.recOk ? '<p class="w274quiet">Meals delivered open once the Toronto database update is applied.</p>'
+    var md = !S.recOk ? '<p class="w274quiet">Counting meals delivered opens once the Toronto database update is applied.</p>'
       : !rs.length ? '<p class="w274quiet">Add who the meals go to in Plan, then count what each organization got here.</p>'
         : '<div class="w274mds">' + rs.map(function (r) {
           return '<div class="w274md"><label for="w274md' + E(r.id) + '"><span class="w274pn">' + E(r.name) + '</span>' + (r.meals != null ? ' <span class="w274meta">' + E(r.meals) + ' asked for</span>' : '') + '</label>' +

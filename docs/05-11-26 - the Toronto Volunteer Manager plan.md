@@ -199,3 +199,6 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 | 05/11/26 | Builder's calls to confirm: taking someone off a crew deletes the row after 5 seconds of Undo; Mark completed asks again if the date is ahead; More reopens a cancelled or completed event; Copy emails for "only those waiting" leaves out people who can't come | Steel or Sama |
 | 05/11/26 | Tests need `WA_CHROME=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome` here | `test/boot.js` points at an old path |
 | 05/11/26 | Call with Tate and Sama asked for this weekend (Slack DM to Tate) | Section 8 inputs, before the 10/11 meeting |
+| 05/11/26 | wave274 design review (Emil and Apple): 19 findings, all applied, w274drive still 222 of 222; on touch a sheet focuses itself, not its first field | The release note's Design review section |
+| 05/11/26 | Two Hub-wide fixes the review found, outside any wave's scope: the phone rail's capitals and second filled button, and no `viewport-fit=cover` in the head | A small shared wave, or wave279's polish |
+| 05/11/26 | Still to judge on a real iPhone: press feedback, the sheet's header and footer scroll, where the note sits beside Ask | Steel or Edison on a phone, once published |

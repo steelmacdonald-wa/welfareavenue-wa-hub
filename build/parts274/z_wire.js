@@ -161,7 +161,7 @@
     if ((el = t.closest('[data-w274call]'))) {
       var cr = rowById(el.getAttribute('data-w274call')); if (!cr) return;
       var on = el.getAttribute('aria-pressed') !== 'true'; el.setAttribute('aria-pressed', on ? 'true' : 'false'); setErr('call', '');
-      setCalled(cr, on).then(function () { paintParts(['confirm']); snack(on ? 'Marked ' + nameOf(cr) + ' as called.' : 'Took the call off for ' + nameOf(cr) + '.'); }, function (x) { el.setAttribute('aria-pressed', on ? 'false' : 'true'); setErr('call', 'Couldn’t save that call. Try again.'); console.warn('wave274 called', x); });
+      setCalled(cr, on).then(function () { paintParts(['confirm']); snack(on ? 'Marked ' + nameOf(cr) + ' as called.' : nameOf(cr) + ': not called yet.'); }, function (x) { el.setAttribute('aria-pressed', on ? 'false' : 'true'); setErr('call', 'Couldn’t save that call. Try again.'); console.warn('wave274 called', x); });
       return;
     }
     if ((el = t.closest('[data-w274scope]'))) { S.scope = el.getAttribute('data-w274scope'); Array.prototype.forEach.call(document.querySelectorAll('[data-w274scope]'), function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-w274scope') === S.scope ? 'true' : 'false'); }); return; }
@@ -238,7 +238,9 @@
   }, true);
   window.addEventListener('hashchange', function () { closeMenu(true); if (sheetOpen()) closeSheet(true); hideSnack(); });
   document.addEventListener('pointerdown', function () { S.kbd = false; }, true);
+  document.addEventListener('touchstart', function () {}, { passive: true });   /* iOS Safari applies :active only with a touch listener */
   window.addEventListener('resize', function () { closeMenu(true); });
+  window.addEventListener('scroll', function () { if (menuOpen()) closeMenu(false); }, { passive: true });   /* the menu belongs to its button */
   window.addEventListener('pagehide', flushOff);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flushOff(); });
 

@@ -118,7 +118,7 @@ async function run(browser, who, width) {
   ok(tag + ': New event is the page’s primary action (' + (phone ? 'the app bar' : 'the masthead') + ')', !!nb && (phone ? /w153bar/.test(nb) : /w118mast/.test(nb)) && (phone || (await f.ev(s => getComputedStyle(document.querySelector(s)).backgroundColor, nb)) === 'rgb(111, 100, 171)'), nb);
   await f.page.click(nb); await f.page.waitForTimeout(500);
   let s = await sheet(f);
-  ok(tag + ': New event opens the sheet, the date first', s.open && s.title === 'New event' && s.focus === 'w274fd', s);
+  ok(tag + ': New event opens the sheet, the date first on a computer, the sheet itself on a touch screen', s.open && s.title === 'New event' && s.focus === (phone ? 'w274pane' : 'w274fd'), s);
   await shot(f, 'newevent-' + tag);
   await tap(f, '#w274f [type="submit"]'); await f.page.waitForTimeout(300);
   s = await sheet(f);
@@ -149,7 +149,7 @@ async function run(browser, who, width) {
   /* who the meals go to: add one, not named publicly */
   await tap(f, '[data-w274rec="new"]'); await f.page.waitForTimeout(450);
   s = await sheet(f);
-  ok(tag + ': Add an organization opens its sheet', s.open && s.title === 'Add an organization' && s.focus === 'w274rn', s);
+  ok(tag + ': Add an organization opens its sheet', s.open && s.title === 'Add an organization' && s.focus === (phone ? 'w274pane' : 'w274rn'), s);
   await f.page.fill('#w274rn', 'Fred Victor'); await f.page.fill('#w274rm', '10');
   await f.ev(() => { document.getElementById('w274rh').checked = true; document.getElementById('w274rp').checked = true; });
   await tap(f, '#w274f [type="submit"]'); await f.page.waitForTimeout(900);
@@ -195,7 +195,7 @@ async function run(browser, who, width) {
   await at(f, '#w274s-crew');
   await tap(f, '[data-w274addp=""]'); await f.page.waitForTimeout(600);
   s = await sheet(f);
-  ok(tag + ': Add people opens the picker with the search first', s.open && s.title === 'Add people to the crew' && s.focus === 'w274qk', s);
+  ok(tag + ': Add people opens the picker, the search first on a computer', s.open && s.title === 'Add people to the crew' && s.focus === (phone ? 'w274pane' : 'w274qk'), s);
   await tap(f, 'label[for="w274roserver"]'); await tap(f, '[data-w274kind="students"][data-w274fs="k"]'); await f.page.waitForTimeout(250);
   const pk = await f.ev(() => Array.from(document.querySelectorAll('#w274pkl .w274pk')).map(l => l.querySelector('.w274pn').textContent + (l.classList.contains('dis') ? '(on)' : '')));
   ok(tag + ': the picker filters by Students (those already on the event shown, not pickable)', pk.join('|') === 'Ava Example|Jordan Example(on)|Kiran Example|Mei Example(on)', pk);
@@ -294,7 +294,7 @@ async function fallbacks(browser) {
   await tap(f, '#w274pk' + C.ava); await tap(f, '#w274pk' + C.zoe); await tap(f, '#w274pkgo'); await f.page.waitForTimeout(1200);
   const ins = await writes(f, 'event_roster', 'insert'), s = await sheet(f);
   ok('before the SQL: Zoe (a volunteer record) goes straight onto the crew', ins.length === 1 && ins[0].payload.event_id === EV.next && ins[0].payload.person_id === 27110 && ins[0].payload.person_name === 'Zoe Example' && ins[0].payload.role === 'cook' && ins[0].payload.status === 'TBD' && ins[0].payload.detail.source === 'toronto' && ins[0].payload.detail.contact_id === C.zoe, ins);
-  ok('before the SQL: Ava (no volunteer record) is said plainly, in the sheet', s.open && /Ava Example needs the wave274 database update first/.test(s.err) && /Zoe Example/.test(await txt(f, '.w274col[data-w274role="cook"]')), s);
+  ok('before the SQL: Ava (no volunteer record) is said plainly, in the sheet', s.open && /Ava Example needs the Toronto database update first/.test(s.err) && /Zoe Example/.test(await txt(f, '.w274col[data-w274role="cook"]')), s);
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(300);
   ok('Escape closes the sheet and focus returns to the button that opened it', !(await sheet(f)).open && (await f.ev(() => document.activeElement && document.activeElement.getAttribute('data-w274addp'))) === 'cook', await f.ev(() => document.activeElement && document.activeElement.outerHTML.slice(0, 120)));
   await f.ev(() => window.w274.newEvent()); await f.page.waitForTimeout(400);
