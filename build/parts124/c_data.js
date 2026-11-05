@@ -4,7 +4,7 @@
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
     fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
-    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
+    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null, budgetOk: null,   /* wave274b: false once the database said it has no volunteer_events.budget */
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
   function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
@@ -71,7 +71,7 @@
         q(db.rpc('calendar_my_meetings', { p_from: fromIso, p_to: toIso })),
         staffOk() || boardOk() ? q(db.from('social_posts').select('id, platform, url, kind, caption, published_at, views, likes, comments').gte('published_at', fromIso).lt('published_at', toIso).in('platform', ['instagram', 'facebook', 'linkedin', 'tiktok']).order('published_at').limit(400)) : Promise.resolve({ data: [] }),
         staffOk() || boardOk() ? q(db.from('content_posts').select('id, title, platforms, format, scheduled_at, status, published_at, campaign, owner').gte('scheduled_at', fromIso).lt('scheduled_at', toIso).order('scheduled_at').limit(300)) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('volunteer_events').select('id, code, event_date, title, kind, location, status, planned_meals').gte('event_date', ymd(r.qFrom)).lt('event_date', ymd(r.qTo)).order('event_date').limit(200)) : Promise.resolve({ data: [] })
+        staffOk() ? volRange(ymd(r.qFrom), ymd(r.qTo)) : Promise.resolve({ data: [] })   /* wave274b: with the anticipated spend */
       ]);
       var meet = a[0].data;
       if (!Array.isArray(meet) || a[0].error) meet = await myMeetingsFallback(fromIso, toIso);
@@ -83,6 +83,21 @@
     })();
     try { await C.loadingRange; } finally { C.loadingRange = null; }
   }
+  /* wave274b: the volunteering events with their anticipated spend (volunteer_events.budget, wa274b_budget.sql). Before the
+     column exists the database answers 42703 (or PGRST204): ask again without it, and not again in this page load */
+  var VOL_COLS = 'id, code, event_date, title, kind, location, status, planned_meals';
+  function missingCol(e) { var s = String((e && e.code) || '') + ' ' + String((e && (e.message || e.details)) || e || ''); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
+  async function volRange(fromD, toD) {
+    var ask = function (cols) { return q(db.from('volunteer_events').select(cols).gte('event_date', fromD).lt('event_date', toD).order('event_date').limit(200)); };
+    if (C.budgetOk !== false) {
+      var a = await ask(VOL_COLS + ', budget');
+      if (!(a.error && missingCol(a.error))) { if (!a.error) C.budgetOk = true; return a; }
+      C.budgetOk = false;
+    }
+    return ask(VOL_COLS);
+  }
+  /* wave274b: an app changed a volunteering event (the Toronto app's spend, date or status): read the range again on the next draw */
+  document.addEventListener('wa:volevents', function () { C.rangeKey = ''; });
   /* before calendar_my_meetings exists (or in the offline harness): the same filter on this side */
   async function myMeetingsFallback(fromIso, toIso) {
     var res = await q(db.from('hub_events').select('*').gte('start_at', fromIso).lt('start_at', toIso).order('start_at').limit(500));
@@ -125,7 +140,7 @@
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0, budget: budgetOf(v) });   /* wave274b: budget */
     });
     if (L.board && hasBoard()) {
       C.boardMeets.forEach(function (m) {

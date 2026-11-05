@@ -134,9 +134,10 @@
     + '#toronto .w274bh{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;margin:0 0 10px;}'
     + '#toronto .w274bh h3,#toronto .w274h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
     + '#toronto .w274h3{margin:18px 0 10px;}'
-    + '#toronto .w274dl{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'
+    + '#toronto .w274dl{display:grid;grid-template-columns:fit-content(88px) minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'   /* wave274b: wide enough for "Anticipated", so "Anticipated spend" wraps at its space */
     + '#toronto .w274dl dt{color:var(--t-mut);}#toronto .w274dl dd{margin:0;overflow-wrap:anywhere;}'
     + '#toronto .w274dl .none{color:var(--t-mut);}'
+    + '#toronto .w274dl .w274amt{font-variant-numeric:tabular-nums;}'   /* wave274b: the anticipated spend */
     /* who the meals go to */
     + '#toronto .w274rc{padding:12px 0;border-top:1px solid var(--t-line);}'
     + '#toronto .w274rc:first-child{border-top:0;padding-top:2px;}'
@@ -197,6 +198,10 @@
     + '#w274sheet .w274lb small{font-weight:400;color:var(--t-mut);}'
     + '#w274sheet .w274hint{margin:6px 0 0;font-size:13px;color:var(--t-mut);}'
     + '#w274sheet .w274row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;}'
+    /* wave274b: Anticipated spend: the $ sits inside the field, before the amount (decorative: the label says "in dollars") */
+    + '#w274sheet .w274cur{position:relative;}'
+    + '#w274sheet .w274cur > span{position:absolute;left:13px;top:0;bottom:0;display:flex;align-items:center;color:var(--t-mut);font:500 16px/1 ' + BODY + ';pointer-events:none;}'
+    + '#w274sheet .w274cur .w274i{padding-left:27px;font-variant-numeric:tabular-nums;}'
     + '#w274sheet .w274ck{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;cursor:pointer;}'
     + '#w274sheet .w274ck input{width:20px;height:20px;margin:0;accent-color:' + PURPLE + ';}'
     + '#w274sheet fieldset{margin:16px 0 0;padding:0;border:0;min-width:0;}'

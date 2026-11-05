@@ -187,11 +187,16 @@
 
   /* ---------- fields: search, selects, the picker's ticks and radios, the forms ---------- */
   var qT = null;
+  document.addEventListener('change', function (ev) {   /* wave274b: a typed $ or stray spaces settle into the house format */
+    var t = ev.target; if (!t || t.id !== 'w274fb' || !String(t.value).trim()) return;
+    var v = dollarsOrNull(t.value); if (typeof v === 'number' && isFinite(v)) t.value = amt(v);
+  });
   document.addEventListener('input', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;
     var sc = t.getAttribute('data-w274q');
     if (sc) { clearTimeout(qT); qT = setTimeout(function () { var f = sc === 'k' ? S.pk && S.pk.f : S.f; if (!f) return; f.q = t.value; if (sc === 'k') paintPick(); else paintList(false); }, 120); return; }
     if (t.closest && t.closest('#w274pane') && t.getAttribute('aria-invalid')) t.removeAttribute('aria-invalid');
+    if (t.id === 'w274fb' && S.err.budget) setErr('budget', '');   /* wave274b: the error goes once the amount is being fixed */
   });
   document.addEventListener('change', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;

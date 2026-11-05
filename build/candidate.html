@@ -43183,6 +43183,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    Data: wa124_calendar (fund_events, hub_settings fund_goals,
    hub_birthdays, hub_directory.aliases, my_emails(),
    calendar_my_meetings()); directory-sync v1.4 keeps the aliases.
+   wave274b: a volunteering event's anticipated spend (volunteer_events.budget, wa274b_budget.sql) on its item, in its sheet and
+   in the month's total, Toronto and Montreal alike; read again without it until the column exists.
    ===================================================================== */
 (function () {
   if (window.__wa124) return; window.__wa124 = true;
@@ -43228,7 +43230,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
     doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
-    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>',
+    cash: '<rect x="3" y="6.5" width="18" height="11" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 10v4M17.5 10v4"/>'   /* wave274b: an anticipated spend */
   };
   function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -43249,6 +43252,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function fmtDate(d, opt) { return d.toLocaleDateString('en-CA', opt || { weekday: 'short', month: 'short', day: 'numeric' }); }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-CA', { maximumFractionDigits: 0 }); }
   function kMoney(n) { n = Number(n || 0); return n >= 1000 ? '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'K' : money(n); }
+  /* wave274b: an anticipated spend, cents only when there are cents ($250, $1,250.50) */
+  function spend(n) { n = Number(n || 0); var c = Math.round(n * 100) % 100 !== 0; return '$' + n.toLocaleString('en-CA', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 }); }
+  function budgetOf(v) { var b = v ? v.budget : null; if (b === null || b === undefined || b === '') return null; b = Number(b); return isFinite(b) ? b : null; }   /* wave274b */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
   function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
@@ -43287,6 +43293,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w124bar .sp{flex:1 1 auto;}'
     + '.w124bar h2{font-size:26px;font-weight:700;letter-spacing:-.4px;margin:0 6px;color:var(--wa-text,' + INK + ');text-transform:none;min-width:190px;}'
     + '.w124layers{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}'
+    /* wave274b: the month's anticipated spend, in the Volunteering layer's ink (5.7:1 on the page) with its dot */
+    + '.w124spend{display:flex;align-items:flex-start;gap:8px;margin:-4px 0 14px;font-size:13px;line-height:1.45;color:' + LAYER.vol.ink + ';}'
+    + '.w124spend i{width:9px;height:9px;margin-top:5px;border-radius:50%;background:' + LAYER.vol.c + ';flex:0 0 auto;}'
+    + '.w124spend b{font-weight:700;font-variant-numeric:tabular-nums;}'
     + '.w124wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}'
     + '.w124band{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:10px 12px;border-radius:14px;background:rgba(220,165,39,.09);}'
     + '.w124band .lb{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b4d05;margin-right:4px;}'
@@ -43307,6 +43317,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w124ev.past{opacity:.62;}'
     + '.w124ev.x{text-decoration:line-through;opacity:.5;}'
     + '.w124ev .w124i{width:12px;height:12px;flex:0 0 auto;}'
+    /* wave274b: a volunteering event's anticipated spend, a short tag after the title, only where the pill has 70 px for its text
+       (the tag and a few letters of the title: 1366 px yes, 1280 px no; each pill is its own container, so a cell never widens);
+       on a phone the pills are bars and show no text at all */
+    + '.w124ev{container-type:inline-size;}'
+    + '.w124ev .w124amt{flex:0 0 auto;margin-left:auto;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;}'
+    + '@container (max-width:69.98px){.w124ev .w124amt{display:none;}}'
     + '.w124more{font-size:11px;font-weight:700;color:var(--wa-muted);cursor:pointer;padding:1px 6px;}'
     + '.w124more:hover{color:' + GREEN + ';}'
     /* agenda */
@@ -43443,7 +43459,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
     fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
-    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
+    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null, budgetOk: null,   /* wave274b: false once the database said it has no volunteer_events.budget */
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
   function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
@@ -43510,7 +43526,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         q(db.rpc('calendar_my_meetings', { p_from: fromIso, p_to: toIso })),
         staffOk() || boardOk() ? q(db.from('social_posts').select('id, platform, url, kind, caption, published_at, views, likes, comments').gte('published_at', fromIso).lt('published_at', toIso).in('platform', ['instagram', 'facebook', 'linkedin', 'tiktok']).order('published_at').limit(400)) : Promise.resolve({ data: [] }),
         staffOk() || boardOk() ? q(db.from('content_posts').select('id, title, platforms, format, scheduled_at, status, published_at, campaign, owner').gte('scheduled_at', fromIso).lt('scheduled_at', toIso).order('scheduled_at').limit(300)) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('volunteer_events').select('id, code, event_date, title, kind, location, status, planned_meals').gte('event_date', ymd(r.qFrom)).lt('event_date', ymd(r.qTo)).order('event_date').limit(200)) : Promise.resolve({ data: [] })
+        staffOk() ? volRange(ymd(r.qFrom), ymd(r.qTo)) : Promise.resolve({ data: [] })   /* wave274b: with the anticipated spend */
       ]);
       var meet = a[0].data;
       if (!Array.isArray(meet) || a[0].error) meet = await myMeetingsFallback(fromIso, toIso);
@@ -43522,6 +43538,21 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     })();
     try { await C.loadingRange; } finally { C.loadingRange = null; }
   }
+  /* wave274b: the volunteering events with their anticipated spend (volunteer_events.budget, wa274b_budget.sql). Before the
+     column exists the database answers 42703 (or PGRST204): ask again without it, and not again in this page load */
+  var VOL_COLS = 'id, code, event_date, title, kind, location, status, planned_meals';
+  function missingCol(e) { var s = String((e && e.code) || '') + ' ' + String((e && (e.message || e.details)) || e || ''); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
+  async function volRange(fromD, toD) {
+    var ask = function (cols) { return q(db.from('volunteer_events').select(cols).gte('event_date', fromD).lt('event_date', toD).order('event_date').limit(200)); };
+    if (C.budgetOk !== false) {
+      var a = await ask(VOL_COLS + ', budget');
+      if (!(a.error && missingCol(a.error))) { if (!a.error) C.budgetOk = true; return a; }
+      C.budgetOk = false;
+    }
+    return ask(VOL_COLS);
+  }
+  /* wave274b: an app changed a volunteering event (the Toronto app's spend, date or status): read the range again on the next draw */
+  document.addEventListener('wa:volevents', function () { C.rangeKey = ''; });
   /* before calendar_my_meetings exists (or in the offline harness): the same filter on this side */
   async function myMeetingsFallback(fromIso, toIso) {
     var res = await q(db.from('hub_events').select('*').gte('start_at', fromIso).lt('start_at', toIso).order('start_at').limit(500));
@@ -43564,7 +43595,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0, budget: budgetOf(v) });   /* wave274b: budget */
     });
     if (L.board && hasBoard()) {
       C.boardMeets.forEach(function (m) {
@@ -43623,8 +43654,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function chipCounts(list) { var c = {}; list.forEach(function (x) { c[x.k] = (c[x.k] || 0) + 1; }); return c; }
   function evPill(it, compact) {
     var L = LAYER[it.k];
-    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '')) + '" tabindex="0" role="button">'
-      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span></div>';
+    var amt = it.budget != null ? spend(it.budget) : '';   /* wave274b: the anticipated spend: in full in the tooltip, as a short tag ($750, $1.3K) after the title where it fits (b_css.js) */
+    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '') + (amt ? ', anticipated spend ' + amt : '')) + '" tabindex="0" role="button">'
+      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span>' + (amt ? '<em class="w124amt">' + E(kMoney(it.budget)) + '</em>' : '') + '</div>';
   }
   function monthHtml(list) {
     var s = monthStart(C.anchor), dow = (s.getDay() + 6) % 7, start = addDays(s, -dow), t = today();
@@ -43643,7 +43675,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function rowHtml(it) {
     var L = LAYER[it.k];
-    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (it.sub ? '<div class="mm">' + E(clip(it.sub, 120)) + '</div>' : '') + '</div></div>';
+    /* wave274b: the anticipated spend on its line; a cancelled event says so, since the month's total leaves it out */
+    var mm = [it.sub ? clip(it.sub, 120) : '', it.budget != null && it.cancelled ? 'Cancelled' : '', it.budget != null ? 'Anticipated spend ' + spend(it.budget) : ''].filter(Boolean).join(' \u00b7 ');
+    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (mm ? '<div class="mm">' + E(mm) + '</div>' : '') + '</div></div>';
   }
   function agendaHtml(list) {
     var t = today(), tk = ymd(t), byDay = {}, days = [];
@@ -43680,6 +43714,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var next = C.fund.filter(function (f) { var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; return s && e >= t && f.status !== 'cancelled' && f.status !== 'idea' && f.precision !== 'none'; }).sort(function (a, b) { return String(a.start_date).localeCompare(String(b.start_date)); }).slice(0, 4);
     return '<div class="w124card"><h3>Fundraising next<span class="lnk" data-w124go="#fundevents">events calendar</span></h3>' + (next.length ? next.map(function (f) { return '<div class="w124row" data-w124fund="' + f.id + '" style="--c:' + LAYER.fund.c + ';grid-template-columns:1fr"><div><div class="tt"><i></i>' + E(f.title) + '</div><div class="mm">' + E(fundWhen(f)) + (f.target_min ? ' \u00b7 target ' + E(kMoney(f.target_min)) + (f.target_max ? ' to ' + E(kMoney(f.target_max)) : '') : '') + '</div></div></div>'; }).join('') : '<p class="w124empty">No fundraising events ahead.</p>') + '</div>';
   }
+  /* wave274b: the month's anticipated spend, one quiet line under the layers while Volunteering is on: "Anticipated spend this
+     month: $1,250 on 3 events (Toronto $750, Montreal $500)". Cancelled events are left out; a city is Toronto when its location
+     says so, otherwise Montreal; the cities are named only when both have one. Nothing until the shown month is loaded. */
+  function spendLine() {
+    if (!C.layers.vol || !staffOk()) return '';
+    var y = C.anchor.getFullYear(), m = C.anchor.getMonth(), k = String(C.rangeKey || '').split('/');
+    if (!(k[0] && k[1] && k[0] <= ymd(monthStart(C.anchor)) && k[1] >= ymd(addMonths(C.anchor, 1)))) return '';
+    var tor = { n: 0, s: 0 }, mtl = { n: 0, s: 0 };
+    C.vol.forEach(function (v) {
+      var d = parseDay(v.event_date), b = budgetOf(v);
+      if (!d || b == null || d.getFullYear() !== y || d.getMonth() !== m || lower(v.status) === 'cancelled') return;
+      var c = /toronto/i.test(String(v.location || '')) ? tor : mtl; c.n++; c.s = Math.round((c.s + b) * 100) / 100;
+    });
+    var n = tor.n + mtl.n; if (!n) return '';
+    return '<p class="w124spend"><i aria-hidden="true"></i><span>Anticipated spend this month: <b>' + E(spend(Math.round((tor.s + mtl.s) * 100) / 100)) + '</b> on ' + n + (n === 1 ? ' event' : ' events')
+      + (tor.n && mtl.n ? ' (Toronto ' + E(spend(tor.s)) + ', Montreal ' + E(spend(mtl.s)) + ')' : '') + '</span></p>';
+  }
   function calPaint() {
     var h = calHost(); if (!h) return;
     var r = rangeFor(), grid = C.view === 'month';
@@ -43692,7 +43743,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
-      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>'
+      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>' + spendLine()   /* wave274b */
       + '<div class="w124wrap"><div style="min-width:0">' + bandHtml(monthStart(C.anchor), addMonths(C.anchor, 1)) + (grid ? monthHtml(list) : agendaHtml(monthOnly)) + '</div>'
       + '<div class="w124side"><div class="w124card"><h3>Up next</h3>' + upNext() + '</div>' + fundSideHtml() + (staffOk() ? bdaysHtml() : '') + '</div></div>';
     h.innerHTML = html;
@@ -43956,7 +44007,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' })) + (it.cancelled ? ' (cancelled)' : '')));
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
-      acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+      if (it.budget != null) rows.push(kv('cash', 'Anticipated spend <b>' + E(spend(it.budget)) + '</b>'));   /* wave274b: its own line */
+      var toEv = String(r.kind || '').toLowerCase() === 'meal' && /toronto/i.test(String(r.location || ''));   /* wave274b: a Toronto event opens in the Toronto app */
+      acts.push('<a class="w124btn" data-w124go="' + (toEv ? '#toronto/e/' : '#volunteering/e/') + E(r.id) + '">Open the event</a>');
     } else if (it.k === 'board') {
       if (it.fy) {
         rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));
@@ -96279,6 +96332,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    A Toronto event is volunteer_events kind 'meal', location 'Toronto' (every Montreal automation filters kind 'service').
    The data: build/data/wa274_toronto.sql (volunteer_event_recipients, wa274_crew_add, wa274_next_code, the page in every
    access profile; not applied yet: everything here works without it, saying plainly what waits for it).
+   wave274b: the anticipated spend of an event (volunteer_events.budget, build/data/wa274b_budget.sql), set in New event and
+   Edit the event, shown in Plan and on the Hub calendar (parts124); until the column exists the field is hidden.
    Not in this wave: sign-up forms, automatic emails or texts, recipes and groceries, Setup, page tours.
    window.w274: state, show, paint, load, loadPool, newEvent, stageOf, crewOf, pool, filterPeople, flush. */
 (function () {
@@ -96297,6 +96352,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var NF = null;
   function nf(n) { try { NF = NF || new Intl.NumberFormat('en-CA'); var v = Number(n); return isFinite(v) ? NF.format(v) : String(n); } catch (e) { return String(n); } }   /* break274: 1,999 and 2,000, not 1999 */
   function plural(n, one, many) { return nf(n) + ' ' + (Number(n) === 1 ? one : (many || one + 's')); }
+  /* wave274b: an amount in dollars, the Canadian way, cents only when there are cents: 250 and 1,250.50 (money() adds the $) */
+  function amt(v) {
+    var n = Number(v); if (v === null || v === undefined || v === '' || !isFinite(n)) return '';
+    var c = Math.round(n * 100) % 100 !== 0;
+    try { return new Intl.NumberFormat('en-CA', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 }).format(n); } catch (e) { return c ? n.toFixed(2) : String(Math.round(n)); }
+  }
+  function money(v) { var s = amt(v); return s ? '$' + s : ''; }
+  /* wave274b: an event's anticipated spend (volunteer_events.budget) as a number, or null when it has none */
+  function budgetOf(e) { var v = e ? e.budget : null; if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function me() {
@@ -96359,7 +96423,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- state ---------- */
   var S = {
     loaded: false, loading: null, evErr: null, rosterErr: null,
-    events: [], roster: [], rec: [], recOk: true,
+    events: [], roster: [], rec: [], recOk: true, budgetOk: true,   /* wave274b: budgetOk is false until volunteer_events has its budget column */
     pool: null, poolBusy: null, poolErr: null, byCid: {}, byVid: {}, orgs: {},
     view: 'events', evId: null, key: '', fresh: true, pastOpen: false,
     f: { q: '', kind: 'all', school: '', area: '', days: [], sort: 'newest' },
@@ -96544,9 +96608,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#toronto .w274bh{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;margin:0 0 10px;}'
     + '#toronto .w274bh h3,#toronto .w274h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
     + '#toronto .w274h3{margin:18px 0 10px;}'
-    + '#toronto .w274dl{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'
+    + '#toronto .w274dl{display:grid;grid-template-columns:fit-content(88px) minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'   /* wave274b: wide enough for "Anticipated", so "Anticipated spend" wraps at its space */
     + '#toronto .w274dl dt{color:var(--t-mut);}#toronto .w274dl dd{margin:0;overflow-wrap:anywhere;}'
     + '#toronto .w274dl .none{color:var(--t-mut);}'
+    + '#toronto .w274dl .w274amt{font-variant-numeric:tabular-nums;}'   /* wave274b: the anticipated spend */
     /* who the meals go to */
     + '#toronto .w274rc{padding:12px 0;border-top:1px solid var(--t-line);}'
     + '#toronto .w274rc:first-child{border-top:0;padding-top:2px;}'
@@ -96607,6 +96672,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w274sheet .w274lb small{font-weight:400;color:var(--t-mut);}'
     + '#w274sheet .w274hint{margin:6px 0 0;font-size:13px;color:var(--t-mut);}'
     + '#w274sheet .w274row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;}'
+    /* wave274b: Anticipated spend: the $ sits inside the field, before the amount (decorative: the label says "in dollars") */
+    + '#w274sheet .w274cur{position:relative;}'
+    + '#w274sheet .w274cur > span{position:absolute;left:13px;top:0;bottom:0;display:flex;align-items:center;color:var(--t-mut);font:500 16px/1 ' + BODY + ';pointer-events:none;}'
+    + '#w274sheet .w274cur .w274i{padding-left:27px;font-variant-numeric:tabular-nums;}'
     + '#w274sheet .w274ck{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;cursor:pointer;}'
     + '#w274sheet .w274ck input{width:20px;height:20px;margin:0;accent-color:' + PURPLE + ';}'
     + '#w274sheet fieldset{margin:16px 0 0;padding:0;border:0;min-width:0;}'
@@ -96721,14 +96790,22 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---------- the data: Toronto events (volunteer_events kind 'meal', location Toronto), their crews and who the meals go to ---------- */
-  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts';
+  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts,budget';
+  var EV_COLS0 = EV_COLS.replace(/,budget$/, '');   /* wave274b: the same without the budget, until wa274b_budget.sql is applied */
+  function evCols() { return S.budgetOk ? EV_COLS : EV_COLS0; }
   var RO_COLS = 'id,event_id,person_id,person_name,role,status,confirm_status,confirmed_at,notes,detail,sort';
   function missingFn(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /PGRST202|PGRST205|42883|42P01|could not find|does not exist|schema cache/i.test(s); }
+  /* wave274b: a column the database does not have yet (Postgres 42703, PostgREST PGRST204) */
+  function missingCol(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
   async function loadEvents(force) {
     if (S.loading && !force) return S.loading;
     S.loading = (async function () {
       try {
-        var r = await db.from('volunteer_events').select(EV_COLS).eq('kind', 'meal').order('event_date', { ascending: true });
+        var ask = function (cols) { return db.from('volunteer_events').select(cols).eq('kind', 'meal').order('event_date', { ascending: true }); };
+        var r = await ask(EV_COLS);
+        /* wave274b: without the budget column, the events again without it; the spend waits for the database update */
+        if (r && r.error && missingCol(r.error)) { r = await ask(EV_COLS0); if (r && !r.error) S.budgetOk = false; }
+        else if (r && !r.error) S.budgetOk = true;
         if (r && r.error) throw r.error;
         S.events = ((r && r.data) || []).filter(isTo);
         S.evErr = null;
@@ -96907,20 +96984,26 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function createEvent(f) {
     var row = { code: await nextCode(f.event_date), event_date: f.event_date, start_time: f.start_time || '10:00', title: f.title || 'Free meal event', location: 'Toronto', kind: 'meal', status: 'planned',
       notes: f.notes || null, planned_meals: f.planned_meals, kitchen_place: f.kitchen_place || null, kitchen_shift: f.kitchen_shift || null };
-    var r = await must(db.from('volunteer_events').insert(row).select(EV_COLS).single());
+    if (S.budgetOk && f.budget != null) row.budget = f.budget;   /* wave274b: never sent before the column exists */
+    var r = await must(db.from('volunteer_events').insert(row).select(evCols()).single());
     var made = (r && r.data && r.data.id != null) ? r.data : null;
     if (!made) { await loadEvents(true); made = S.events.filter(function (e) { return e.code === row.code; })[0] || null; }
     else if (!evById(made.id)) S.events.push(Object.assign({}, row, made));
     try { if (typeof logChange === 'function') logChange('volunteer_event', made ? made.id : row.code, 'created', null, row.code + ' ' + row.title + ' on ' + row.event_date); } catch (e) { /* fine */ }
+    eventsChanged(made ? made.id : null);
     return made;
   }
   async function saveEvent(ev, patch) {
+    if (!S.budgetOk && 'budget' in patch) { patch = Object.assign({}, patch); delete patch.budget; if (!Object.keys(patch).length) return; }   /* wave274b */
     var old = {}; Object.keys(patch).forEach(function (k) { old[k] = ev[k]; });
     Object.assign(ev, patch);
     try { await must(db.from('volunteer_events').update(patch).eq('id', ev.id)); }
     catch (e) { Object.assign(ev, old); throw e; }
     Object.keys(patch).forEach(function (k) { audit(ev.id, k, old[k] && typeof old[k] === 'object' ? JSON.stringify(old[k]) : old[k], patch[k] && typeof patch[k] === 'object' ? JSON.stringify(patch[k]) : patch[k]); });
+    eventsChanged(ev.id);
   }
+  /* wave274b: the Hub calendar (wave124) keeps the events it has read; this tells it to read them again on its next draw */
+  function eventsChanged(id) { try { document.dispatchEvent(new CustomEvent('wa:volevents', { detail: { id: id } })); } catch (e) { /* fine */ } }
   var ST_PATCH = {
     yes: function () { return { status: 'Confirmed', confirm_status: 'confirmed', confirmed_at: new Date().toISOString() }; },
     no: function () { return { status: 'Unavailable', confirm_status: 'declined' }; },
@@ -97214,9 +97297,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         ? '<div class="w274cfm" role="group" aria-label="Remove ' + E(r.name) + '"><span>Remove ' + E(r.name) + ' from this event?</span><button type="button" class="w274btn sm dng pri" data-w274recy="' + id + '">Remove</button><button type="button" class="w274btn sm" data-w274recn="' + id + '">Keep</button></div>'
         : '<div class="w274rca"><button type="button" class="w274btn sm" data-w274rec="' + id + '">' + ic('pen') + 'Edit</button><button type="button" class="w274btn sm dng" data-w274recx="' + id + '">Remove</button></div>') + '</article>';
   }
+  /* wave274b: the anticipated spend in Plan: $250, Not set, or why it is not there yet */
+  function spendHtml(e) {
+    if (!S.budgetOk) return '<span class="none">Opens once the Toronto database update is applied.</span>';
+    var b = budgetOf(e);
+    return b == null ? '<span class="none">Not set</span>' : '<span class="w274amt">' + E(money(b)) + '</span>';
+  }
   function planHtml(e) {
     var kit = '<div class="w274box"><div class="w274bh"><h3>Kitchen</h3><button type="button" class="w274btn sm" data-w274kit="1">' + ic('pen') + 'Edit</button></div>' +
-      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd></dl>' + errLine('kit') + '</div>';
+      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd>' +
+      '<dt>Anticipated spend</dt><dd data-w274spend="1">' + spendHtml(e) + '</dd></dl>' + errLine('kit') + '</div>';
     var body;
     if (!S.recOk) body = '<p class="w274quiet">Who the meals go to opens once the Toronto database update is applied.</p>';
     else {
@@ -97554,6 +97644,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function inp(id, name, type, value, extra) { return { id: id, html: '<input class="w274i" id="' + id + '" name="' + name + '" type="' + type + '" value="' + E(value == null ? '' : value) + '"' + (extra || '') + '>' }; }
   function bad(el, msg) { if (!el) return; el.setAttribute('aria-invalid', 'true'); setErr('sheet', msg); try { el.focus(); } catch (e) { /* fine */ } }
   function wholeOrNull(v, max) { v = String(v == null ? '' : v).trim(); if (v === '') return null; var n = Number(v); return isFinite(n) && n >= 0 && n <= (max || 2000) && Math.round(n) === n ? n : NaN; }
+  /* wave274b: an amount in dollars (250, 250.5, $1,250.00): null when empty, NaN when it is not an amount, Infinity over 100,000 */
+  function dollarsOrNull(v) {
+    v = String(v == null ? '' : v).trim(); if (v === '') return null;
+    var m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?$/.exec(v); if (!m) return NaN;
+    var n = Number(m[1].replace(/,/g, '') + (m[2] ? '.' + m[2] : ''));
+    return n > 100000 ? Infinity : Math.round(n * 100) / 100;
+  }
 
   /* ---------- the small menus ---------- */
   var MN = { trigger: null, sel: null, fn: null };
@@ -97624,12 +97721,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var body = fld('Date', inp('w274fd', 'event_date', 'date', e.event_date || '', ' required aria-required="true"')) +
       '<div class="w274row2"><div>' + fld('Start time', inp('w274ft', 'start_time', 'time', hm(e.start_time) || '10:00')) + '</div><div>' +
       fld('Meals planned', inp('w274fm', 'planned_meals', 'number', e.planned_meals == null ? '' : e.planned_meals, ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div></div>' +
+      spendField(e) +
       fld('Kitchen', inp('w274fk', 'kitchen_place', 'text', e.kitchen_place || '', ' list="w274kl" autocomplete="off"')) + kitchenList() +
       fld('Kitchen time', inp('w274fs', 'kitchen_shift', 'text', e.kitchen_shift || '', ' placeholder="10:00 to 14:00" autocomplete="off"')) +
       fld('Title', inp('w274fti', 'title', 'text', ev ? titleOf(e) : 'Free meal event', ' autocomplete="off"')) +
       '<label class="w274lb" for="w274fn">Note <small>(optional)</small></label><textarea class="w274i" id="w274fn" name="notes" rows="3">' + E(e.notes || '') + '</textarea>';
     openSheet('event', { title: ev ? 'Edit the event' : 'New event', sub: ev ? (e.code || '') : 'A date and a kitchen to start. The crew and who the meals go to come next.', body: body, ctx: ev ? ev.id : null,
       foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">' + (ev ? 'Save the changes' : 'Create the event') + '</button>' });
+  }
+  /* wave274b: Anticipated spend, after Meals planned: a $ before it (decorative: the label says "in dollars"), its words
+     beside it when it is not an amount; not there at all until the database has the column */
+  function spendField(e) {
+    if (!S.budgetOk) return '';
+    var b = budgetOf(e);
+    return '<label class="w274lb" for="w274fb">Anticipated spend<span class="w274vh">, in dollars</span> <small>(optional)</small></label>' +
+      '<div class="w274cur"><span aria-hidden="true">$</span><input class="w274i" id="w274fb" name="budget" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + E(b == null ? '' : amt(b)) + '" aria-describedby="w274fbe w274fbh"></div>' +
+      '<p class="w274err" id="w274fbe" data-w274err="budget" aria-live="polite"></p>' +
+      '<p class="w274hint" id="w274fbh">Groceries and supplies you expect to pay for. It shows on the Hub calendar.</p>';
   }
   function newEvent() {
     if (!staffOk()) return;
@@ -97639,18 +97747,33 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function submitEvent(form) {
     var ev = SH.ctx != null ? evById(SH.ctx) : null;
     Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
+    setErr('budget', '');
     var d = form.event_date.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad(form.event_date, 'Pick a date for the event.');
     var meals = wholeOrNull(form.planned_meals.value);
     if (meals !== meals) return bad(form.planned_meals, 'Meals planned is a whole number from 0 to 2000.');
     var f = { event_date: d, start_time: form.start_time.value || '10:00', planned_meals: meals, kitchen_place: form.kitchen_place.value.trim() || null, kitchen_shift: form.kitchen_shift.value.trim() || null, title: form.title.value.trim() || 'Free meal event', notes: form.notes.value.trim() || null };
+    /* wave274b: the anticipated spend, said beside its field when it is not an amount */
+    var bi = S.budgetOk ? form.querySelector('#w274fb') : null;
+    if (bi) {
+      var spend = dollarsOrNull(bi.value);
+      if (spend !== spend || spend === Infinity) {
+        setErr('sheet', ''); bi.setAttribute('aria-invalid', 'true');
+        setErr('budget', spend === Infinity ? 'Anticipated spend can be up to $100,000.' : 'Anticipated spend is an amount in dollars, like 250 or 1,250.50.');
+        try { bi.focus(); } catch (x) { /* fine */ }
+        return;
+      }
+      f.budget = spend;
+    }
     setErr('sheet', ''); busy(true);
     try {
       if (ev) {
         var patch = {};
-        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
+        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : k === 'budget' ? budgetOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
         if (Object.keys(patch).length) await saveEvent(ev, patch);
-        closeSheet(); paint(); snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
+        closeSheet();
+        if (Object.keys(patch).join() === 'budget') paintParts(['plan']); else paint();   /* wave274b: only the spend changed: Plan, in place */
+        snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
       } else {
         var made = await createEvent(f);
         if (!made || made.id == null) throw new Error('no id');
@@ -98017,11 +98140,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- fields: search, selects, the picker's ticks and radios, the forms ---------- */
   var qT = null;
+  document.addEventListener('change', function (ev) {   /* wave274b: a typed $ or stray spaces settle into the house format */
+    var t = ev.target; if (!t || t.id !== 'w274fb' || !String(t.value).trim()) return;
+    var v = dollarsOrNull(t.value); if (typeof v === 'number' && isFinite(v)) t.value = amt(v);
+  });
   document.addEventListener('input', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;
     var sc = t.getAttribute('data-w274q');
     if (sc) { clearTimeout(qT); qT = setTimeout(function () { var f = sc === 'k' ? S.pk && S.pk.f : S.f; if (!f) return; f.q = t.value; if (sc === 'k') paintPick(); else paintList(false); }, 120); return; }
     if (t.closest && t.closest('#w274pane') && t.getAttribute('aria-invalid')) t.removeAttribute('aria-invalid');
+    if (t.id === 'w274fb' && S.err.budget) setErr('budget', '');   /* wave274b: the error goes once the amount is being fixed */
   });
   document.addEventListener('change', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;

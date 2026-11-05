@@ -1,13 +1,21 @@
 
   /* ---------- the data: Toronto events (volunteer_events kind 'meal', location Toronto), their crews and who the meals go to ---------- */
-  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts';
+  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts,budget';
+  var EV_COLS0 = EV_COLS.replace(/,budget$/, '');   /* wave274b: the same without the budget, until wa274b_budget.sql is applied */
+  function evCols() { return S.budgetOk ? EV_COLS : EV_COLS0; }
   var RO_COLS = 'id,event_id,person_id,person_name,role,status,confirm_status,confirmed_at,notes,detail,sort';
   function missingFn(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /PGRST202|PGRST205|42883|42P01|could not find|does not exist|schema cache/i.test(s); }
+  /* wave274b: a column the database does not have yet (Postgres 42703, PostgREST PGRST204) */
+  function missingCol(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
   async function loadEvents(force) {
     if (S.loading && !force) return S.loading;
     S.loading = (async function () {
       try {
-        var r = await db.from('volunteer_events').select(EV_COLS).eq('kind', 'meal').order('event_date', { ascending: true });
+        var ask = function (cols) { return db.from('volunteer_events').select(cols).eq('kind', 'meal').order('event_date', { ascending: true }); };
+        var r = await ask(EV_COLS);
+        /* wave274b: without the budget column, the events again without it; the spend waits for the database update */
+        if (r && r.error && missingCol(r.error)) { r = await ask(EV_COLS0); if (r && !r.error) S.budgetOk = false; }
+        else if (r && !r.error) S.budgetOk = true;
         if (r && r.error) throw r.error;
         S.events = ((r && r.data) || []).filter(isTo);
         S.evErr = null;
@@ -186,20 +194,26 @@
   async function createEvent(f) {
     var row = { code: await nextCode(f.event_date), event_date: f.event_date, start_time: f.start_time || '10:00', title: f.title || 'Free meal event', location: 'Toronto', kind: 'meal', status: 'planned',
       notes: f.notes || null, planned_meals: f.planned_meals, kitchen_place: f.kitchen_place || null, kitchen_shift: f.kitchen_shift || null };
-    var r = await must(db.from('volunteer_events').insert(row).select(EV_COLS).single());
+    if (S.budgetOk && f.budget != null) row.budget = f.budget;   /* wave274b: never sent before the column exists */
+    var r = await must(db.from('volunteer_events').insert(row).select(evCols()).single());
     var made = (r && r.data && r.data.id != null) ? r.data : null;
     if (!made) { await loadEvents(true); made = S.events.filter(function (e) { return e.code === row.code; })[0] || null; }
     else if (!evById(made.id)) S.events.push(Object.assign({}, row, made));
     try { if (typeof logChange === 'function') logChange('volunteer_event', made ? made.id : row.code, 'created', null, row.code + ' ' + row.title + ' on ' + row.event_date); } catch (e) { /* fine */ }
+    eventsChanged(made ? made.id : null);
     return made;
   }
   async function saveEvent(ev, patch) {
+    if (!S.budgetOk && 'budget' in patch) { patch = Object.assign({}, patch); delete patch.budget; if (!Object.keys(patch).length) return; }   /* wave274b */
     var old = {}; Object.keys(patch).forEach(function (k) { old[k] = ev[k]; });
     Object.assign(ev, patch);
     try { await must(db.from('volunteer_events').update(patch).eq('id', ev.id)); }
     catch (e) { Object.assign(ev, old); throw e; }
     Object.keys(patch).forEach(function (k) { audit(ev.id, k, old[k] && typeof old[k] === 'object' ? JSON.stringify(old[k]) : old[k], patch[k] && typeof patch[k] === 'object' ? JSON.stringify(patch[k]) : patch[k]); });
+    eventsChanged(ev.id);
   }
+  /* wave274b: the Hub calendar (wave124) keeps the events it has read; this tells it to read them again on its next draw */
+  function eventsChanged(id) { try { document.dispatchEvent(new CustomEvent('wa:volevents', { detail: { id: id } })); } catch (e) { /* fine */ } }
   var ST_PATCH = {
     yes: function () { return { status: 'Confirmed', confirm_status: 'confirmed', confirmed_at: new Date().toISOString() }; },
     no: function () { return { status: 'Unavailable', confirm_status: 'declined' }; },

@@ -21,6 +21,8 @@
    A Toronto event is volunteer_events kind 'meal', location 'Toronto' (every Montreal automation filters kind 'service').
    The data: build/data/wa274_toronto.sql (volunteer_event_recipients, wa274_crew_add, wa274_next_code, the page in every
    access profile; not applied yet: everything here works without it, saying plainly what waits for it).
+   wave274b: the anticipated spend of an event (volunteer_events.budget, build/data/wa274b_budget.sql), set in New event and
+   Edit the event, shown in Plan and on the Hub calendar (parts124); until the column exists the field is hidden.
    Not in this wave: sign-up forms, automatic emails or texts, recipes and groceries, Setup, page tours.
    window.w274: state, show, paint, load, loadPool, newEvent, stageOf, crewOf, pool, filterPeople, flush. */
 (function () {
@@ -39,6 +41,15 @@
   var NF = null;
   function nf(n) { try { NF = NF || new Intl.NumberFormat('en-CA'); var v = Number(n); return isFinite(v) ? NF.format(v) : String(n); } catch (e) { return String(n); } }   /* break274: 1,999 and 2,000, not 1999 */
   function plural(n, one, many) { return nf(n) + ' ' + (Number(n) === 1 ? one : (many || one + 's')); }
+  /* wave274b: an amount in dollars, the Canadian way, cents only when there are cents: 250 and 1,250.50 (money() adds the $) */
+  function amt(v) {
+    var n = Number(v); if (v === null || v === undefined || v === '' || !isFinite(n)) return '';
+    var c = Math.round(n * 100) % 100 !== 0;
+    try { return new Intl.NumberFormat('en-CA', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 }).format(n); } catch (e) { return c ? n.toFixed(2) : String(Math.round(n)); }
+  }
+  function money(v) { var s = amt(v); return s ? '$' + s : ''; }
+  /* wave274b: an event's anticipated spend (volunteer_events.budget) as a number, or null when it has none */
+  function budgetOf(e) { var v = e ? e.budget : null; if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function me() {
@@ -101,7 +112,7 @@
   /* ---------- state ---------- */
   var S = {
     loaded: false, loading: null, evErr: null, rosterErr: null,
-    events: [], roster: [], rec: [], recOk: true,
+    events: [], roster: [], rec: [], recOk: true, budgetOk: true,   /* wave274b: budgetOk is false until volunteer_events has its budget column */
     pool: null, poolBusy: null, poolErr: null, byCid: {}, byVid: {}, orgs: {},
     view: 'events', evId: null, key: '', fresh: true, pastOpen: false,
     f: { q: '', kind: 'all', school: '', area: '', days: [], sort: 'newest' },
@@ -286,9 +297,10 @@
     + '#toronto .w274bh{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 10px;margin:0 0 10px;}'
     + '#toronto .w274bh h3,#toronto .w274h3{margin:0;font:500 22px/1.1 ' + HEAD + ';color:var(--t-green);}'
     + '#toronto .w274h3{margin:18px 0 10px;}'
-    + '#toronto .w274dl{display:grid;grid-template-columns:72px minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'
+    + '#toronto .w274dl{display:grid;grid-template-columns:fit-content(88px) minmax(0,1fr);gap:6px 12px;margin:0;font-size:14.5px;}'   /* wave274b: wide enough for "Anticipated", so "Anticipated spend" wraps at its space */
     + '#toronto .w274dl dt{color:var(--t-mut);}#toronto .w274dl dd{margin:0;overflow-wrap:anywhere;}'
     + '#toronto .w274dl .none{color:var(--t-mut);}'
+    + '#toronto .w274dl .w274amt{font-variant-numeric:tabular-nums;}'   /* wave274b: the anticipated spend */
     /* who the meals go to */
     + '#toronto .w274rc{padding:12px 0;border-top:1px solid var(--t-line);}'
     + '#toronto .w274rc:first-child{border-top:0;padding-top:2px;}'
@@ -349,6 +361,10 @@
     + '#w274sheet .w274lb small{font-weight:400;color:var(--t-mut);}'
     + '#w274sheet .w274hint{margin:6px 0 0;font-size:13px;color:var(--t-mut);}'
     + '#w274sheet .w274row2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 12px;}'
+    /* wave274b: Anticipated spend: the $ sits inside the field, before the amount (decorative: the label says "in dollars") */
+    + '#w274sheet .w274cur{position:relative;}'
+    + '#w274sheet .w274cur > span{position:absolute;left:13px;top:0;bottom:0;display:flex;align-items:center;color:var(--t-mut);font:500 16px/1 ' + BODY + ';pointer-events:none;}'
+    + '#w274sheet .w274cur .w274i{padding-left:27px;font-variant-numeric:tabular-nums;}'
     + '#w274sheet .w274ck{display:flex;align-items:center;gap:10px;min-height:44px;font-size:15px;cursor:pointer;}'
     + '#w274sheet .w274ck input{width:20px;height:20px;margin:0;accent-color:' + PURPLE + ';}'
     + '#w274sheet fieldset{margin:16px 0 0;padding:0;border:0;min-width:0;}'
@@ -463,14 +479,22 @@
   }
 
   /* ---------- the data: Toronto events (volunteer_events kind 'meal', location Toronto), their crews and who the meals go to ---------- */
-  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts';
+  var EV_COLS = 'id,code,event_date,start_time,title,location,kind,status,notes,plan_note,planned_meals,kitchen_place,kitchen_contact,kitchen_shift,whatsapp_url,spot_counts,budget';
+  var EV_COLS0 = EV_COLS.replace(/,budget$/, '');   /* wave274b: the same without the budget, until wa274b_budget.sql is applied */
+  function evCols() { return S.budgetOk ? EV_COLS : EV_COLS0; }
   var RO_COLS = 'id,event_id,person_id,person_name,role,status,confirm_status,confirmed_at,notes,detail,sort';
   function missingFn(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /PGRST202|PGRST205|42883|42P01|could not find|does not exist|schema cache/i.test(s); }
+  /* wave274b: a column the database does not have yet (Postgres 42703, PostgREST PGRST204) */
+  function missingCol(e) { var s = String((e && (e.code || '')) + ' ' + msgOf(e)); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
   async function loadEvents(force) {
     if (S.loading && !force) return S.loading;
     S.loading = (async function () {
       try {
-        var r = await db.from('volunteer_events').select(EV_COLS).eq('kind', 'meal').order('event_date', { ascending: true });
+        var ask = function (cols) { return db.from('volunteer_events').select(cols).eq('kind', 'meal').order('event_date', { ascending: true }); };
+        var r = await ask(EV_COLS);
+        /* wave274b: without the budget column, the events again without it; the spend waits for the database update */
+        if (r && r.error && missingCol(r.error)) { r = await ask(EV_COLS0); if (r && !r.error) S.budgetOk = false; }
+        else if (r && !r.error) S.budgetOk = true;
         if (r && r.error) throw r.error;
         S.events = ((r && r.data) || []).filter(isTo);
         S.evErr = null;
@@ -649,20 +673,26 @@
   async function createEvent(f) {
     var row = { code: await nextCode(f.event_date), event_date: f.event_date, start_time: f.start_time || '10:00', title: f.title || 'Free meal event', location: 'Toronto', kind: 'meal', status: 'planned',
       notes: f.notes || null, planned_meals: f.planned_meals, kitchen_place: f.kitchen_place || null, kitchen_shift: f.kitchen_shift || null };
-    var r = await must(db.from('volunteer_events').insert(row).select(EV_COLS).single());
+    if (S.budgetOk && f.budget != null) row.budget = f.budget;   /* wave274b: never sent before the column exists */
+    var r = await must(db.from('volunteer_events').insert(row).select(evCols()).single());
     var made = (r && r.data && r.data.id != null) ? r.data : null;
     if (!made) { await loadEvents(true); made = S.events.filter(function (e) { return e.code === row.code; })[0] || null; }
     else if (!evById(made.id)) S.events.push(Object.assign({}, row, made));
     try { if (typeof logChange === 'function') logChange('volunteer_event', made ? made.id : row.code, 'created', null, row.code + ' ' + row.title + ' on ' + row.event_date); } catch (e) { /* fine */ }
+    eventsChanged(made ? made.id : null);
     return made;
   }
   async function saveEvent(ev, patch) {
+    if (!S.budgetOk && 'budget' in patch) { patch = Object.assign({}, patch); delete patch.budget; if (!Object.keys(patch).length) return; }   /* wave274b */
     var old = {}; Object.keys(patch).forEach(function (k) { old[k] = ev[k]; });
     Object.assign(ev, patch);
     try { await must(db.from('volunteer_events').update(patch).eq('id', ev.id)); }
     catch (e) { Object.assign(ev, old); throw e; }
     Object.keys(patch).forEach(function (k) { audit(ev.id, k, old[k] && typeof old[k] === 'object' ? JSON.stringify(old[k]) : old[k], patch[k] && typeof patch[k] === 'object' ? JSON.stringify(patch[k]) : patch[k]); });
+    eventsChanged(ev.id);
   }
+  /* wave274b: the Hub calendar (wave124) keeps the events it has read; this tells it to read them again on its next draw */
+  function eventsChanged(id) { try { document.dispatchEvent(new CustomEvent('wa:volevents', { detail: { id: id } })); } catch (e) { /* fine */ } }
   var ST_PATCH = {
     yes: function () { return { status: 'Confirmed', confirm_status: 'confirmed', confirmed_at: new Date().toISOString() }; },
     no: function () { return { status: 'Unavailable', confirm_status: 'declined' }; },
@@ -956,9 +986,16 @@
         ? '<div class="w274cfm" role="group" aria-label="Remove ' + E(r.name) + '"><span>Remove ' + E(r.name) + ' from this event?</span><button type="button" class="w274btn sm dng pri" data-w274recy="' + id + '">Remove</button><button type="button" class="w274btn sm" data-w274recn="' + id + '">Keep</button></div>'
         : '<div class="w274rca"><button type="button" class="w274btn sm" data-w274rec="' + id + '">' + ic('pen') + 'Edit</button><button type="button" class="w274btn sm dng" data-w274recx="' + id + '">Remove</button></div>') + '</article>';
   }
+  /* wave274b: the anticipated spend in Plan: $250, Not set, or why it is not there yet */
+  function spendHtml(e) {
+    if (!S.budgetOk) return '<span class="none">Opens once the Toronto database update is applied.</span>';
+    var b = budgetOf(e);
+    return b == null ? '<span class="none">Not set</span>' : '<span class="w274amt">' + E(money(b)) + '</span>';
+  }
   function planHtml(e) {
     var kit = '<div class="w274box"><div class="w274bh"><h3>Kitchen</h3><button type="button" class="w274btn sm" data-w274kit="1">' + ic('pen') + 'Edit</button></div>' +
-      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd></dl>' + errLine('kit') + '</div>';
+      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd>' +
+      '<dt>Anticipated spend</dt><dd data-w274spend="1">' + spendHtml(e) + '</dd></dl>' + errLine('kit') + '</div>';
     var body;
     if (!S.recOk) body = '<p class="w274quiet">Who the meals go to opens once the Toronto database update is applied.</p>';
     else {
@@ -1296,6 +1333,13 @@
   function inp(id, name, type, value, extra) { return { id: id, html: '<input class="w274i" id="' + id + '" name="' + name + '" type="' + type + '" value="' + E(value == null ? '' : value) + '"' + (extra || '') + '>' }; }
   function bad(el, msg) { if (!el) return; el.setAttribute('aria-invalid', 'true'); setErr('sheet', msg); try { el.focus(); } catch (e) { /* fine */ } }
   function wholeOrNull(v, max) { v = String(v == null ? '' : v).trim(); if (v === '') return null; var n = Number(v); return isFinite(n) && n >= 0 && n <= (max || 2000) && Math.round(n) === n ? n : NaN; }
+  /* wave274b: an amount in dollars (250, 250.5, $1,250.00): null when empty, NaN when it is not an amount, Infinity over 100,000 */
+  function dollarsOrNull(v) {
+    v = String(v == null ? '' : v).trim(); if (v === '') return null;
+    var m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?$/.exec(v); if (!m) return NaN;
+    var n = Number(m[1].replace(/,/g, '') + (m[2] ? '.' + m[2] : ''));
+    return n > 100000 ? Infinity : Math.round(n * 100) / 100;
+  }
 
   /* ---------- the small menus ---------- */
   var MN = { trigger: null, sel: null, fn: null };
@@ -1366,12 +1410,23 @@
     var body = fld('Date', inp('w274fd', 'event_date', 'date', e.event_date || '', ' required aria-required="true"')) +
       '<div class="w274row2"><div>' + fld('Start time', inp('w274ft', 'start_time', 'time', hm(e.start_time) || '10:00')) + '</div><div>' +
       fld('Meals planned', inp('w274fm', 'planned_meals', 'number', e.planned_meals == null ? '' : e.planned_meals, ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div></div>' +
+      spendField(e) +
       fld('Kitchen', inp('w274fk', 'kitchen_place', 'text', e.kitchen_place || '', ' list="w274kl" autocomplete="off"')) + kitchenList() +
       fld('Kitchen time', inp('w274fs', 'kitchen_shift', 'text', e.kitchen_shift || '', ' placeholder="10:00 to 14:00" autocomplete="off"')) +
       fld('Title', inp('w274fti', 'title', 'text', ev ? titleOf(e) : 'Free meal event', ' autocomplete="off"')) +
       '<label class="w274lb" for="w274fn">Note <small>(optional)</small></label><textarea class="w274i" id="w274fn" name="notes" rows="3">' + E(e.notes || '') + '</textarea>';
     openSheet('event', { title: ev ? 'Edit the event' : 'New event', sub: ev ? (e.code || '') : 'A date and a kitchen to start. The crew and who the meals go to come next.', body: body, ctx: ev ? ev.id : null,
       foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">' + (ev ? 'Save the changes' : 'Create the event') + '</button>' });
+  }
+  /* wave274b: Anticipated spend, after Meals planned: a $ before it (decorative: the label says "in dollars"), its words
+     beside it when it is not an amount; not there at all until the database has the column */
+  function spendField(e) {
+    if (!S.budgetOk) return '';
+    var b = budgetOf(e);
+    return '<label class="w274lb" for="w274fb">Anticipated spend<span class="w274vh">, in dollars</span> <small>(optional)</small></label>' +
+      '<div class="w274cur"><span aria-hidden="true">$</span><input class="w274i" id="w274fb" name="budget" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + E(b == null ? '' : amt(b)) + '" aria-describedby="w274fbe w274fbh"></div>' +
+      '<p class="w274err" id="w274fbe" data-w274err="budget" aria-live="polite"></p>' +
+      '<p class="w274hint" id="w274fbh">Groceries and supplies you expect to pay for. It shows on the Hub calendar.</p>';
   }
   function newEvent() {
     if (!staffOk()) return;
@@ -1381,18 +1436,33 @@
   async function submitEvent(form) {
     var ev = SH.ctx != null ? evById(SH.ctx) : null;
     Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
+    setErr('budget', '');
     var d = form.event_date.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad(form.event_date, 'Pick a date for the event.');
     var meals = wholeOrNull(form.planned_meals.value);
     if (meals !== meals) return bad(form.planned_meals, 'Meals planned is a whole number from 0 to 2000.');
     var f = { event_date: d, start_time: form.start_time.value || '10:00', planned_meals: meals, kitchen_place: form.kitchen_place.value.trim() || null, kitchen_shift: form.kitchen_shift.value.trim() || null, title: form.title.value.trim() || 'Free meal event', notes: form.notes.value.trim() || null };
+    /* wave274b: the anticipated spend, said beside its field when it is not an amount */
+    var bi = S.budgetOk ? form.querySelector('#w274fb') : null;
+    if (bi) {
+      var spend = dollarsOrNull(bi.value);
+      if (spend !== spend || spend === Infinity) {
+        setErr('sheet', ''); bi.setAttribute('aria-invalid', 'true');
+        setErr('budget', spend === Infinity ? 'Anticipated spend can be up to $100,000.' : 'Anticipated spend is an amount in dollars, like 250 or 1,250.50.');
+        try { bi.focus(); } catch (x) { /* fine */ }
+        return;
+      }
+      f.budget = spend;
+    }
     setErr('sheet', ''); busy(true);
     try {
       if (ev) {
         var patch = {};
-        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
+        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : k === 'budget' ? budgetOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
         if (Object.keys(patch).length) await saveEvent(ev, patch);
-        closeSheet(); paint(); snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
+        closeSheet();
+        if (Object.keys(patch).join() === 'budget') paintParts(['plan']); else paint();   /* wave274b: only the spend changed: Plan, in place */
+        snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
       } else {
         var made = await createEvent(f);
         if (!made || made.id == null) throw new Error('no id');
@@ -1759,11 +1829,16 @@
 
   /* ---------- fields: search, selects, the picker's ticks and radios, the forms ---------- */
   var qT = null;
+  document.addEventListener('change', function (ev) {   /* wave274b: a typed $ or stray spaces settle into the house format */
+    var t = ev.target; if (!t || t.id !== 'w274fb' || !String(t.value).trim()) return;
+    var v = dollarsOrNull(t.value); if (typeof v === 'number' && isFinite(v)) t.value = amt(v);
+  });
   document.addEventListener('input', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;
     var sc = t.getAttribute('data-w274q');
     if (sc) { clearTimeout(qT); qT = setTimeout(function () { var f = sc === 'k' ? S.pk && S.pk.f : S.f; if (!f) return; f.q = t.value; if (sc === 'k') paintPick(); else paintList(false); }, 120); return; }
     if (t.closest && t.closest('#w274pane') && t.getAttribute('aria-invalid')) t.removeAttribute('aria-invalid');
+    if (t.id === 'w274fb' && S.err.budget) setErr('budget', '');   /* wave274b: the error goes once the amount is being fixed */
   });
   document.addEventListener('change', function (ev) {
     var t = ev.target; if (!t || !t.getAttribute) return;

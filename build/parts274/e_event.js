@@ -50,9 +50,16 @@
         ? '<div class="w274cfm" role="group" aria-label="Remove ' + E(r.name) + '"><span>Remove ' + E(r.name) + ' from this event?</span><button type="button" class="w274btn sm dng pri" data-w274recy="' + id + '">Remove</button><button type="button" class="w274btn sm" data-w274recn="' + id + '">Keep</button></div>'
         : '<div class="w274rca"><button type="button" class="w274btn sm" data-w274rec="' + id + '">' + ic('pen') + 'Edit</button><button type="button" class="w274btn sm dng" data-w274recx="' + id + '">Remove</button></div>') + '</article>';
   }
+  /* wave274b: the anticipated spend in Plan: $250, Not set, or why it is not there yet */
+  function spendHtml(e) {
+    if (!S.budgetOk) return '<span class="none">Opens once the Toronto database update is applied.</span>';
+    var b = budgetOf(e);
+    return b == null ? '<span class="none">Not set</span>' : '<span class="w274amt">' + E(money(b)) + '</span>';
+  }
   function planHtml(e) {
     var kit = '<div class="w274box"><div class="w274bh"><h3>Kitchen</h3><button type="button" class="w274btn sm" data-w274kit="1">' + ic('pen') + 'Edit</button></div>' +
-      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd></dl>' + errLine('kit') + '</div>';
+      '<dl class="w274dl"><dt>Place</dt><dd>' + val(e.kitchen_place) + '</dd><dt>Time</dt><dd>' + val(e.kitchen_shift) + '</dd><dt>Contact</dt><dd>' + val(e.kitchen_contact) + '</dd><dt>Starts</dt><dd>' + val(hm(e.start_time)) + '</dd>' +
+      '<dt>Anticipated spend</dt><dd data-w274spend="1">' + spendHtml(e) + '</dd></dl>' + errLine('kit') + '</div>';
     var body;
     if (!S.recOk) body = '<p class="w274quiet">Who the meals go to opens once the Toronto database update is applied.</p>';
     else {

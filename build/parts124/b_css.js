@@ -33,6 +33,10 @@
     + '.w124bar .sp{flex:1 1 auto;}'
     + '.w124bar h2{font-size:26px;font-weight:700;letter-spacing:-.4px;margin:0 6px;color:var(--wa-text,' + INK + ');text-transform:none;min-width:190px;}'
     + '.w124layers{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}'
+    /* wave274b: the month's anticipated spend, in the Volunteering layer's ink (5.7:1 on the page) with its dot */
+    + '.w124spend{display:flex;align-items:flex-start;gap:8px;margin:-4px 0 14px;font-size:13px;line-height:1.45;color:' + LAYER.vol.ink + ';}'
+    + '.w124spend i{width:9px;height:9px;margin-top:5px;border-radius:50%;background:' + LAYER.vol.c + ';flex:0 0 auto;}'
+    + '.w124spend b{font-weight:700;font-variant-numeric:tabular-nums;}'
     + '.w124wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}'
     + '.w124band{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:10px 12px;border-radius:14px;background:rgba(220,165,39,.09);}'
     + '.w124band .lb{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b4d05;margin-right:4px;}'
@@ -53,6 +57,12 @@
     + '.w124ev.past{opacity:.62;}'
     + '.w124ev.x{text-decoration:line-through;opacity:.5;}'
     + '.w124ev .w124i{width:12px;height:12px;flex:0 0 auto;}'
+    /* wave274b: a volunteering event's anticipated spend, a short tag after the title, only where the pill has 70 px for its text
+       (the tag and a few letters of the title: 1366 px yes, 1280 px no; each pill is its own container, so a cell never widens);
+       on a phone the pills are bars and show no text at all */
+    + '.w124ev{container-type:inline-size;}'
+    + '.w124ev .w124amt{flex:0 0 auto;margin-left:auto;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;}'
+    + '@container (max-width:69.98px){.w124ev .w124amt{display:none;}}'
     + '.w124more{font-size:11px;font-weight:700;color:var(--wa-muted);cursor:pointer;padding:1px 6px;}'
     + '.w124more:hover{color:' + GREEN + ';}'
     /* agenda */

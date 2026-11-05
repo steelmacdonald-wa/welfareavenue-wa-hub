@@ -63,6 +63,13 @@
   function inp(id, name, type, value, extra) { return { id: id, html: '<input class="w274i" id="' + id + '" name="' + name + '" type="' + type + '" value="' + E(value == null ? '' : value) + '"' + (extra || '') + '>' }; }
   function bad(el, msg) { if (!el) return; el.setAttribute('aria-invalid', 'true'); setErr('sheet', msg); try { el.focus(); } catch (e) { /* fine */ } }
   function wholeOrNull(v, max) { v = String(v == null ? '' : v).trim(); if (v === '') return null; var n = Number(v); return isFinite(n) && n >= 0 && n <= (max || 2000) && Math.round(n) === n ? n : NaN; }
+  /* wave274b: an amount in dollars (250, 250.5, $1,250.00): null when empty, NaN when it is not an amount, Infinity over 100,000 */
+  function dollarsOrNull(v) {
+    v = String(v == null ? '' : v).trim(); if (v === '') return null;
+    var m = /^\$?\s*(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d{1,2}))?$/.exec(v); if (!m) return NaN;
+    var n = Number(m[1].replace(/,/g, '') + (m[2] ? '.' + m[2] : ''));
+    return n > 100000 ? Infinity : Math.round(n * 100) / 100;
+  }
 
   /* ---------- the small menus ---------- */
   var MN = { trigger: null, sel: null, fn: null };
@@ -133,12 +140,23 @@
     var body = fld('Date', inp('w274fd', 'event_date', 'date', e.event_date || '', ' required aria-required="true"')) +
       '<div class="w274row2"><div>' + fld('Start time', inp('w274ft', 'start_time', 'time', hm(e.start_time) || '10:00')) + '</div><div>' +
       fld('Meals planned', inp('w274fm', 'planned_meals', 'number', e.planned_meals == null ? '' : e.planned_meals, ' min="0" max="2000" step="1" inputmode="numeric"')) + '</div></div>' +
+      spendField(e) +
       fld('Kitchen', inp('w274fk', 'kitchen_place', 'text', e.kitchen_place || '', ' list="w274kl" autocomplete="off"')) + kitchenList() +
       fld('Kitchen time', inp('w274fs', 'kitchen_shift', 'text', e.kitchen_shift || '', ' placeholder="10:00 to 14:00" autocomplete="off"')) +
       fld('Title', inp('w274fti', 'title', 'text', ev ? titleOf(e) : 'Free meal event', ' autocomplete="off"')) +
       '<label class="w274lb" for="w274fn">Note <small>(optional)</small></label><textarea class="w274i" id="w274fn" name="notes" rows="3">' + E(e.notes || '') + '</textarea>';
     openSheet('event', { title: ev ? 'Edit the event' : 'New event', sub: ev ? (e.code || '') : 'A date and a kitchen to start. The crew and who the meals go to come next.', body: body, ctx: ev ? ev.id : null,
       foot: '<button type="button" class="w274btn" data-w274x="1">Cancel</button><button type="submit" class="w274btn pri">' + (ev ? 'Save the changes' : 'Create the event') + '</button>' });
+  }
+  /* wave274b: Anticipated spend, after Meals planned: a $ before it (decorative: the label says "in dollars"), its words
+     beside it when it is not an amount; not there at all until the database has the column */
+  function spendField(e) {
+    if (!S.budgetOk) return '';
+    var b = budgetOf(e);
+    return '<label class="w274lb" for="w274fb">Anticipated spend<span class="w274vh">, in dollars</span> <small>(optional)</small></label>' +
+      '<div class="w274cur"><span aria-hidden="true">$</span><input class="w274i" id="w274fb" name="budget" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" value="' + E(b == null ? '' : amt(b)) + '" aria-describedby="w274fbe w274fbh"></div>' +
+      '<p class="w274err" id="w274fbe" data-w274err="budget" aria-live="polite"></p>' +
+      '<p class="w274hint" id="w274fbh">Groceries and supplies you expect to pay for. It shows on the Hub calendar.</p>';
   }
   function newEvent() {
     if (!staffOk()) return;
@@ -148,18 +166,33 @@
   async function submitEvent(form) {
     var ev = SH.ctx != null ? evById(SH.ctx) : null;
     Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (x) { x.removeAttribute('aria-invalid'); });
+    setErr('budget', '');
     var d = form.event_date.value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return bad(form.event_date, 'Pick a date for the event.');
     var meals = wholeOrNull(form.planned_meals.value);
     if (meals !== meals) return bad(form.planned_meals, 'Meals planned is a whole number from 0 to 2000.');
     var f = { event_date: d, start_time: form.start_time.value || '10:00', planned_meals: meals, kitchen_place: form.kitchen_place.value.trim() || null, kitchen_shift: form.kitchen_shift.value.trim() || null, title: form.title.value.trim() || 'Free meal event', notes: form.notes.value.trim() || null };
+    /* wave274b: the anticipated spend, said beside its field when it is not an amount */
+    var bi = S.budgetOk ? form.querySelector('#w274fb') : null;
+    if (bi) {
+      var spend = dollarsOrNull(bi.value);
+      if (spend !== spend || spend === Infinity) {
+        setErr('sheet', ''); bi.setAttribute('aria-invalid', 'true');
+        setErr('budget', spend === Infinity ? 'Anticipated spend can be up to $100,000.' : 'Anticipated spend is an amount in dollars, like 250 or 1,250.50.');
+        try { bi.focus(); } catch (x) { /* fine */ }
+        return;
+      }
+      f.budget = spend;
+    }
     setErr('sheet', ''); busy(true);
     try {
       if (ev) {
         var patch = {};
-        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
+        Object.keys(f).forEach(function (k) { var o = k === 'start_time' ? hm(ev[k]) : k === 'title' ? titleOf(ev) : k === 'budget' ? budgetOf(ev) : ev[k]; if (String(o == null ? '' : o) !== String(f[k] == null ? '' : f[k])) patch[k] = f[k]; });
         if (Object.keys(patch).length) await saveEvent(ev, patch);
-        closeSheet(); paint(); snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
+        closeSheet();
+        if (Object.keys(patch).join() === 'budget') paintParts(['plan']); else paint();   /* wave274b: only the spend changed: Plan, in place */
+        snack(Object.keys(patch).length ? 'Saved the event.' : 'Nothing changed.');
       } else {
         var made = await createEvent(f);
         if (!made || made.id == null) throw new Error('no id');

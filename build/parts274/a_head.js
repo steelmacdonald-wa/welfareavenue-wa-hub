@@ -21,6 +21,8 @@
    A Toronto event is volunteer_events kind 'meal', location 'Toronto' (every Montreal automation filters kind 'service').
    The data: build/data/wa274_toronto.sql (volunteer_event_recipients, wa274_crew_add, wa274_next_code, the page in every
    access profile; not applied yet: everything here works without it, saying plainly what waits for it).
+   wave274b: the anticipated spend of an event (volunteer_events.budget, build/data/wa274b_budget.sql), set in New event and
+   Edit the event, shown in Plan and on the Hub calendar (parts124); until the column exists the field is hidden.
    Not in this wave: sign-up forms, automatic emails or texts, recipes and groceries, Setup, page tours.
    window.w274: state, show, paint, load, loadPool, newEvent, stageOf, crewOf, pool, filterPeople, flush. */
 (function () {
@@ -39,6 +41,15 @@
   var NF = null;
   function nf(n) { try { NF = NF || new Intl.NumberFormat('en-CA'); var v = Number(n); return isFinite(v) ? NF.format(v) : String(n); } catch (e) { return String(n); } }   /* break274: 1,999 and 2,000, not 1999 */
   function plural(n, one, many) { return nf(n) + ' ' + (Number(n) === 1 ? one : (many || one + 's')); }
+  /* wave274b: an amount in dollars, the Canadian way, cents only when there are cents: 250 and 1,250.50 (money() adds the $) */
+  function amt(v) {
+    var n = Number(v); if (v === null || v === undefined || v === '' || !isFinite(n)) return '';
+    var c = Math.round(n * 100) % 100 !== 0;
+    try { return new Intl.NumberFormat('en-CA', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 }).format(n); } catch (e) { return c ? n.toFixed(2) : String(Math.round(n)); }
+  }
+  function money(v) { var s = amt(v); return s ? '$' + s : ''; }
+  /* wave274b: an event's anticipated spend (volunteer_events.budget) as a number, or null when it has none */
+  function budgetOf(e) { var v = e ? e.budget : null; if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function me() {
@@ -101,7 +112,7 @@
   /* ---------- state ---------- */
   var S = {
     loaded: false, loading: null, evErr: null, rosterErr: null,
-    events: [], roster: [], rec: [], recOk: true,
+    events: [], roster: [], rec: [], recOk: true, budgetOk: true,   /* wave274b: budgetOk is false until volunteer_events has its budget column */
     pool: null, poolBusy: null, poolErr: null, byCid: {}, byVid: {}, orgs: {},
     view: 'events', evId: null, key: '', fresh: true, pastOpen: false,
     f: { q: '', kind: 'all', school: '', area: '', days: [], sort: 'newest' },
