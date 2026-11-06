@@ -119,7 +119,7 @@ function leadSteps(plan) {
 
 /* created_at: before automatic setup began (V2) unless said otherwise: an existing member, so their plan's setup steps count */
 const V2 = '2026-09-01T00:00:00Z', BEFORE = '2026-07-01T12:00:00Z', AFTER = '2026-09-20T12:00:00Z';
-const MEMBER = (id, name, dept, role, email, made) => ({ id, name, email: email || name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.invalid', active: true, department: dept, role, responsibilities: [], created_at: made || BEFORE });
+const MEMBER = (id, name, dept, role, email, made) => ({ id, name, email: email || name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.invalid', active: true, department: dept, role, responsibilities: [], created_at: made === 'none' ? null : (made || BEFORE) });
 const STEP = (flow, step, status, detail) => ({ flow_id: flow, step, status, detail: detail || null, practice: false, at: '2026-09-25T18:00:00Z', by: 'hr@example.invalid' });
 const ALL = ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'welcome', 'groups', 'drives', 'meeting'];
 function startedSteps(flow, over) { return ALL.map((k) => STEP(flow, k, (over && over[k] && over[k][0]) || 'done', (over && over[k] && over[k][1]) || 'Done.')).concat([STEP(flow, 'slack', (over && over.slack && over.slack[0]) || 'hr_task', 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.'), STEP(flow, 'channel', 'pending', 'waiting for them to join Slack')]); }
@@ -167,7 +167,7 @@ function addStarted(fx, o) {
 function pos(fx, id, mid, title, reportsTo) { fx.org_positions.push({ id, member_id: mid, title, department: null, reports_to: reportsTo || null, kind: 'role', status: 'filled', note: null, sort: id }); }
 
 function fx285(name) {
-  const fx = base({ keepSteel: name === 'demo', joyNew: name === 'rules' }), ready = [], extra = {};
+  const fx = base({ keepSteel: name === 'demo', joyNew: false }), ready = [], extra = {};
   const tp = (fx.training_progress = fx.training_progress || []);
   const MG = { sima: 9801, vera: 9802, amina: 9803, ahmet: 9804 };
   [[MG.sima, 'Sima Hale', 'progdev', 'Program Development Lead'], [MG.vera, 'Vera Lund', 'hr', 'HR Lead'], [MG.amina, 'Amina Dorr', 'fundraising', 'Director of Fundraising'], [MG.ahmet, 'Ahmet Fakir', 'opsmtl', 'Operations lead']]
@@ -210,7 +210,17 @@ function fx285(name) {
     addPlan(fx, planRows(718, 9818, 'Hana Hire', '2026-09-12', allBut('86e1cj9hh')));
     addPlan(fx, planRows(719, 9819, 'Otto Oldflow', '2026-08-12', allBut('86e1cj9hh')));
     addStarted(fx, { flow: 819, cand: 8819, mid: 9819, name: 'Otto Oldflow', role: 'Writer', mgr: MG.vera, ticks: 3, onb: 719, call_at: '2026-08-12T14:00:00Z', made: '2026-09-02T12:00:00Z', steps: startedSteps(819, { slack: ['done'] }) });   /* call 44 days ago: wave271 drops it */
-    addPlan(fx, planRows(720, 9104, 'Joy Dumansi', '2026-09-16', allBut('86e1cj9hh')));   /* the hire's own view: Joy made 15/09, after automatic setup began */
+    /* the hire's own view (Joy, an existing member): every real step ticked but week 1's lesson, which she finished in the Academy; headers and setup
+       steps open in the table. Complete only once her training_progress is loaded */
+    const real = (skip) => (t) => HEADERS.indexOf(t[0]) < 0 && !t[6] && skip.indexOf(t[0]) < 0;
+    addPlan(fx, planRows(720, 9104, 'Joy Dumansi', '2026-09-16', real(['wa167w1'])));
+    tp.push({ id: 99300, training_id: 222, person_name: 'Joy Dumansi', email: 'joy.dumansi@welfareavenue.com', status: 'done', done_at: '2026-09-24T12:00:00Z' });
+    /* completing with headers and setup steps open in the table: Cara (an existing member) has every real step but one ticked */
+    fx.team_members.push(MEMBER(9821, 'Cara Complete', 'marketing', 'Writer', 'cara@example.invalid'));
+    addPlan(fx, planRows(721, 9821, 'Cara Complete', '2026-09-12', real(['86e1cj9hh'])));
+    /* a flow more than 30 days past its call whose roster profile has no created_at: the cover is unknown */
+    addPlan(fx, planRows(722, 9822, 'Uma Unknown', '2026-08-12', (t) => !(t[6] && HEADERS.indexOf(t[0]) < 0)));
+    addStarted(fx, { flow: 822, cand: 8822, mid: 9822, name: 'Uma Unknown', role: 'Writer', mgr: MG.vera, ticks: 3, onb: 722, call_at: '2026-08-12T14:00:00Z', made: 'none', steps: startedSteps(822, { slack: ['done'] }) });
     fx.team_members.push(MEMBER(9814, 'Kofi Late', 'marketing', 'Writer'));
     let k = 0;
     addPlan(fx, planRows(704, 9814, 'Kofi Late', '2026-09-14', (t) => t[2] !== 'WEEK 1' ? false : (HEADERS.indexOf(t[0]) >= 0 || t[3] || ++k > 2)));

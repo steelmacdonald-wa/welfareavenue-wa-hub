@@ -247,6 +247,26 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
     await toPage(f);
     r2 = await f.ev(() => ({ otto: wa37Pct(719), loaded: !!(window.o271 && o271.state().loaded) }));
     ok('never early: Otto still not covered with wave271 loaded', r2.loaded && r2.otto.total - r2.otto.done === 4, r2);
+    r2 = await f.ev(() => ({ uma: wa37Pct(722), known: w285.completeKnown(722) }));
+    ok('never early: a flow more than 30 days old whose cover is unknown (no created_at) does not complete', r2.known === false && r2.uma.total - r2.uma.done === 3, r2);
+    /* completing for real: the last real step, with headers and covered setup steps open in the table */
+    r2 = await f.ev(() => ({ before: w285.completeKnown(721), raw: wa37PctRaw(721), rows: w285.derivedRows(721).length }));
+    ok('complete: Cara is one real step short, so not complete yet', r2.before === false, r2);
+    await f.ev(() => {
+      window.__STEPW = []; window.__ONBW = []; const f0 = db.from.bind(db);
+      db.from = function (t) { const b = f0(t); const u = b.update.bind(b);
+        if (t === 'onboarding_steps') b.update = function (p) { const q = u(p), e0 = q.eq.bind(q); q.eq = function (c, v) { window.__STEPW.push({ p, id: v }); return e0(c, v); }; return q; };
+        if (t === 'onboardings') b.update = function (p) { window.__ONBW.push(p); return u(p); };
+        return b; };
+      const s = WA37.steps.filter((x) => x.onboarding_id === 721 && x.template_id === '86e1cj9hh')[0];
+      const c = document.createElement('input'); c.type = 'checkbox'; c.setAttribute('data-w37chk', s.id); c.checked = true; document.body.appendChild(c);
+      c.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await f.page.waitForTimeout(2500);
+    r2 = await f.ev(() => ({ onb: window.__ONBW, steps: window.__STEPW.map((x) => x.p.done_by), st: WA37.onbs.filter((o) => o.id === 721)[0].status, raw: wa37PctRaw(721) }));
+    ok('complete: ticking the last real step completes the plan (wave37 writes completed)', r2.onb.length === 1 && r2.onb[0].status === 'completed' && r2.st === 'completed', r2);
+    ok('complete: the headers and the covered setup steps are written done first (8 headers, 3 setup steps)', r2.steps.filter((x) => x === 'Hub: done when its steps were').length === 8 && r2.steps.filter((x) => x === 'Hub: done at setup').length === 3, r2.steps);
+    ok('complete: the table then agrees (every row ticked)', r2.raw.done === r2.raw.total, r2.raw);
     await done(f);
   }
   /* the hire's own view (Joy, made after automatic setup began): no completion, no certificate */
@@ -255,9 +275,10 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
     await f.hash('#mypage', 1500);
     await f.ev(async () => { try { await w122.load(true); } catch (e) { /* */ } });
     await f.page.waitForTimeout(800);
-    const r = await f.ev(() => { const s = w122.stats(); return { pct: wa37Pct(720), raw: wa37PctRaw(720), complete: s.onb.org.complete, cert: s.onb.cert, has: s.onb.org.has, total: s.onb.org.total, done: s.onb.org.done }; });
-    ok('never early: the hire\'s own view counts her setup steps as open (4 left)', r.pct.total - r.pct.done === 4, r);
-    ok('never early: the Academy does not call her plan complete or give the certificate', r.has && r.complete === false && r.cert === false, r);
+    const r0 = await f.ev(() => { const keep = w122.A.loaded; w122.A.loaded = 0; const k = w285.completeKnown(720), s = w122.stats(); w122.A.loaded = keep; return { known: k, complete: s.onb.org.complete, cert: s.onb.cert }; });
+    ok('never early: the hire\'s own view without her training_progress does not complete or certify', r0.known === false && r0.complete === false && r0.cert === false, r0);
+    const r = await f.ev(() => { const s = w122.stats(); return { known: w285.completeKnown(720), raw: wa37PctRaw(720), complete: s.onb.org.complete, has: s.onb.org.has, xp: s.xp }; });
+    ok('complete: a hire who finished her real steps (one in the Academy) is complete in wave122, with headers and setup steps open in the table', r.has && r.known === true && r.complete === true && r.raw.done < r.raw.total, r);
     await done(f);
   }
 
