@@ -553,10 +553,11 @@ begin
         w := public.wa284_push(w, 'keela_ids_skipped', jsonb_build_object('keela_id', v_kid, 'reason', 'no email or phone'));
         continue;
       end if;
-      insert into public.crm_contacts (full_name, first_name, last_name, emails, phones, primary_email, address, city, province, postal_code, country, notes,
+      -- primary_email is generated from emails[1] on live, so it is never written
+      insert into public.crm_contacts (full_name, first_name, last_name, emails, phones, address, city, province, postal_code, country, notes,
                                        source, legacy_refs, created_by, updated_by)
       values (coalesce(v_full, nullif(concat_ws(' ', v_first, v_last), ''), v_email, 'Keela contact ' || v_kid), v_first, v_last,
-              case when v_email is null then '{}'::text[] else array[v_email] end, case when v_phone is null then '{}'::text[] else array[v_phone] end, v_email,
+              case when v_email is null then '{}'::text[] else array[v_email] end, case when v_phone is null then '{}'::text[] else array[v_phone] end,
               v_addr, public.wa284_txt(r.data -> k_city), public.wa284_txt(r.data -> k_prov), public.wa284_txt(r.data -> k_postal), public.wa284_txt(r.data -> k_country),
               case when v_note is null then null else 'From Keela: ' || v_note end,
               'keela', jsonb_build_object('keela', jsonb_build_object('contact_id', v_kid)), 'Keela import', 'Keela import')
@@ -579,15 +580,12 @@ begin
     w := public.wa284_fill(p_batch, 'crm_contacts', c.id, 'province', c.province, public.wa284_txt(r.data -> k_prov), w);
     w := public.wa284_fill(p_batch, 'crm_contacts', c.id, 'postal_code', c.postal_code, public.wa284_txt(r.data -> k_postal), w);
     w := public.wa284_fill(p_batch, 'crm_contacts', c.id, 'country', c.country, public.wa284_txt(r.data -> k_country), w);
-    -- a missing phone or email is added; a missing primary email is filled
+    -- a missing phone or email is added (primary_email follows emails[1] by itself)
     if v_digits is not null and not exists (select 1 from unnest(c.phones) p where public.wa171_digits(p) = v_digits) then
       perform public.wa284_upd(p_batch, 'crm_contacts', c.id, 'phones', to_jsonb(c.phones || v_phone));
     end if;
     if v_email is not null and not exists (select 1 from unnest(c.emails) e where lower(btrim(e)) = v_email) then
       perform public.wa284_upd(p_batch, 'crm_contacts', c.id, 'emails', to_jsonb(c.emails || v_email));
-    end if;
-    if v_email is not null and nullif(btrim(coalesce(c.primary_email, '')), '') is null then
-      perform public.wa284_upd(p_batch, 'crm_contacts', c.id, 'primary_email', to_jsonb(v_email));
     end if;
     -- notes are appended once, as "From Keela: ..."
     if v_note is not null and position('From Keela: ' || v_note in coalesce(c.notes, '')) = 0 then

@@ -20,6 +20,10 @@ create schema if not exists net;
 create table if not exists net.http_request_queue (id bigserial primary key, method text not null, url text not null, headers jsonb, body bytea, timeout_milliseconds int);
 
 -- 2. live tables the import reads or guards (the columns that matter)
+-- crm_contacts.primary_email is generated on live (lower(nullif(btrim(emails[1]), ''))); test/w281schema.sql has it as a plain column, so it is
+-- rebuilt here as live has it (the wave281 view crm_contacts_v and crm_contact_match, which depend on it, are dropped with it: wave284 uses neither)
+alter table public.crm_contacts drop column primary_email cascade;
+alter table public.crm_contacts add column primary_email text generated always as (lower(nullif(btrim(emails[1]), ''::text))) stored;
 create table public.team_members (id bigint primary key, name text not null, email text, active boolean not null default true);
 create table public.volunteer_role_guides (role text primary key, label_en text, label_fr text);
 create table public.dept_requests (id bigserial primary key, department text, title text, body text, status text not null default 'open', created_at timestamptz not null default now());
@@ -38,16 +42,16 @@ insert into public.crm_fields (key, label, type, options, sort, created_by) valu
   ('donor_readiness', 'Donor readiness', 'choice', '["R", "SP", "NR"]', 240, 'wave156');
 
 -- Hub contacts the Keela rows meet
-insert into public.crm_contacts (id, full_name, first_name, emails, primary_email, email_status, notes, legacy_refs) overriding system value values
-  (3001, 'Test Alpha Keela', null, array['alpha@example.com'], 'alpha@example.com', 'subscribed', 'A Hub note',
+insert into public.crm_contacts (id, full_name, first_name, emails, email_status, notes, legacy_refs) overriding system value values
+  (3001, 'Test Alpha Keela', null, array['alpha@example.com'], 'subscribed', 'A Hub note',
    '{"keela": {"contact_id": "KT001", "positions": ["Volunteer Cook, Volunteer Server", "Juggler"], "availability": ["Sundays May to August"], "dates_volunteered": ["2025-06-01", "2025-07-06"], "rally_paper_team": "Quest", "donor_readiness": "Shows potential", "assignee": "Test Staff One"}}');
-insert into public.crm_contacts (id, full_name, first_name, emails, primary_email, city, legacy_refs) overriding system value values
-  (3002, 'Test Beta', 'Beta', array['beta@example.com'], 'beta@example.com', 'Montreal', '{}');
+insert into public.crm_contacts (id, full_name, first_name, emails, city, legacy_refs) overriding system value values
+  (3002, 'Test Beta', 'Beta', array['beta@example.com'], 'Montreal', '{}');
 insert into public.crm_contacts (id, full_name, phones, legacy_refs) overriding system value values
   (3003, 'gamma@example.com', array['+1 514 555 0303'], '{}');
-insert into public.crm_contacts (id, full_name, emails, primary_email, email_status, legacy_refs) overriding system value values
-  (3004, 'Test Delta', array['delta@example.com'], 'delta@example.com', 'unsubscribed', '{"keela": {"contact_id": "KT004", "donor_readiness": "Ready", "assignee": "Test Nobody"}}'),
-  (3005, 'Test Epsilon', array['epsilon@example.com'], 'epsilon@example.com', 'subscribed', '{"keela": {"contact_id": "KT005"}}');
+insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
+  (3004, 'Test Delta', array['delta@example.com'], 'unsubscribed', '{"keela": {"contact_id": "KT004", "donor_readiness": "Ready", "assignee": "Test Nobody"}}'),
+  (3005, 'Test Epsilon', array['epsilon@example.com'], 'subscribed', '{"keela": {"contact_id": "KT005"}}');
 insert into public.crm_contact_private (contact_id, birth_date, source, updated_at, updated_by) values (3002, '1970-01-01', 'set by HR in the CRM', now(), 'w281.hr@example.invalid');
 insert into public.crm_contact_fields (contact_id, field_id, value, source) select 3004, f.id, '"NR"', 'keela' from public.crm_fields f where f.key = 'donor_readiness';
 insert into public.crm_interactions (contact_id, kind, direction, channel, subject, body, occurred_at, source, source_ref, meta) values
