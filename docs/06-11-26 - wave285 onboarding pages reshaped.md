@@ -83,3 +83,11 @@ Not seen yet: signed in with live data (the real cohort's rows, the panel's acti
 ## Undo
 
 Put back index.html b8082fba: build `origin/ccr-50e3ba2b-mbnz80` at e61aa46 with `build/build_lf.py`, stage and gate it with expected live 9977c375, and run host-sync. wave285 wrote no data at release; from release on, a plan completed through the new rule writes its header, setup and Academy rows as done (done_by 'Hub: ...'), which an undo leaves in place.
+
+## Seen signed in (06/11/26, Steel's account, browser pane at 800 px)
+
+- Onboarding: Needs you holds one item (Suro's Slack channel). Everyone: 9 onboarding. Accepted: Caline (Valex to book the times). Weeks 1 to 4: 8 people with the right managers (Adelina and Vatsala: Shima, Albert and Alyx: Amanda, Rania: Valex, Suro: Ahmed). Alyx 24 of 41, Zachee 3 of 41, Rania 13 of 38. 1 finished.
+- Alyx's panel: weeks 9/14, 9/12, 6/9, 0/6, 0/7, 0/5; Academy tab "Your onboarding 8 of 10". Rania's Setup: 12 of 12 done by the Hub, her own setup 1 of 12, HR checklist 4 of 22.
+- Plan template and Onboarding insights pages load; the rail shows the three sub-pages. No script errors and no sideways scroll.
+- A first draw, before the flows load, shows the org chart's manager and roster title for a moment (Adelina and Albert: Steel, Vatsala: none); it corrects itself once the flows arrive.
+- Data, not code: Samuel has a plan started by hand (onboarding 16, Shima, 05/11) while his flow 8 is still waiting, so he shows in Weeks 1 to 4 with the org chart's manager (Vatsala Godi), where the flow says Shima.
