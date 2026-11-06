@@ -14,8 +14,8 @@ begin
     raise exception 'w283live: crm_donations does not have the read policy and the three gifts_edit policies';
   end if;
   if exists (select 1 from pg_policy where polrelid = 'public.crm_donations'::regclass and polname like 'crm_donations_gifts_%'
-              and (coalesce(pg_get_expr(polqual, polrelid), '') || coalesce(pg_get_expr(polwithcheck, polrelid), '')) not like '%is_wa_staff()%wa_can(''gifts_edit''::text)%') then
-    raise exception 'w283live: a gifts policy is not is_wa_staff() and wa_can(gifts_edit)';
+              and (coalesce(pg_get_expr(polqual, polrelid), '') || coalesce(pg_get_expr(polwithcheck, polrelid), '')) not like '%is_wa_staff()%wa_can(''gifts_edit''::text)%COALESCE(wa_page_ok(''crm''::text), true)%') then
+    raise exception 'w283live: a gifts policy is not is_wa_staff() and wa_can(gifts_edit) and the CRM page';
   end if;
   if (select q from pg_temp.w283_policy_before where polname = 'crm_donations_staff_read') is distinct from
      (select pg_get_expr(polqual, polrelid) from pg_policy where polrelid = 'public.crm_donations'::regclass and polname = 'crm_donations_staff_read') then

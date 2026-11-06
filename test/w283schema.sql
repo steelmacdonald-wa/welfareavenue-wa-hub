@@ -198,7 +198,7 @@ comment on function public.crm_receipt_doc(bigint) is 'One receipt as it was iss
 -- 5. fixture rows (invented)
 do $$ begin   -- a named finance person (wave281's caps; test/w283sql.mjs also loads this file without wave281, to see the migration stop)
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'hub_roles' and column_name = 'caps') then
-    execute $q$update public.hub_roles set caps = '{"gifts_edit": true}'::jsonb where email = 'w281.finance@example.invalid'$q$;
+    execute $q$update public.hub_roles set caps = '{"gifts_edit": true}'::jsonb where email in ('w281.finance@example.invalid', 'w281.nocrm@example.invalid')$q$;   -- nocrm: gifts_edit on a profile without the CRM page
   end if;
 end $$;
 insert into public.app_config (key, value) values ('receipt_mode', 'on'), ('receipt_prefix', 'W283-');

@@ -17,7 +17,7 @@ Hub CRM slice 1, Phase 3 (design CRM-S1 v2, items 12 to 22; Part A.9). Built on 
 ## What it changes
 
 **Database** (`build/data/wa283_page.sql`, needs wave281):
-1. `crm_donations`: the three write policies (`crm_donations_staff_insert`, `crm_donations_staff_update`, `crm_donations_admin_delete`) are replaced by `crm_donations_gifts_insert`, `_update` and `_delete`, each `is_wa_staff() and wa_can('gifts_edit')`. Reading is unchanged.
+1. `crm_donations`: the three write policies (`crm_donations_staff_insert`, `crm_donations_staff_update`, `crm_donations_admin_delete`) are replaced by `crm_donations_gifts_insert`, `_update` and `_delete`, each `is_wa_staff() and wa_can('gifts_edit') and coalesce(wa_page_ok('crm'), true)` (the CRM page lock stays, so a lead or a finance person whose profile leaves the CRM out cannot write gifts through the API). Reading is unchanged.
 2. `trg_wa283_gift_audit` (function `wa283_gift_audit`, security definer): one `change_log` row for every gift recorded, changed or deleted: `entity_type crm_donations`, `entity_id` the gift id, `field gift`, the amount, date (Toronto), kind, campaign and contact before and after as JSON text, `changed_by` the signed-in email or `system`. A receipt number written on a gift counts as a change too.
 3. `crm_receipt_issue`, `crm_receipt_replace`, `crm_receipt_cancel`: the admin check becomes `wa_can('gifts_edit')` ("Only team leads, admins and finance can ... a receipt."). Exact anchor, as wave273 and wave281 did.
 4. `crm_receipt_config` and `crm_receipt_doc` also return `can_issue` (`wa_can('gifts_edit')`; the service role too for the doc). `is_admin` stays.

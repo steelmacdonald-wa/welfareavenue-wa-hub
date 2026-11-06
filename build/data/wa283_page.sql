@@ -15,9 +15,10 @@ begin
 end $wa283$;
 
 -- ============================================================================================ 1. who may change gifts (Part A.9)
--- Reading stays as it is (crm_donations_staff_read). Recording, changing and deleting a gift need gifts_edit. The live text of the three old
--- policies is in the undo. System writers (crm_stripe_apply, crm_receipt_auto_issue, crm_merge_contacts, the receipt functions) are security
--- definer and are not held by row security.
+-- Reading stays as it is (crm_donations_staff_read). Recording, changing and deleting a gift need gifts_edit, and the CRM page as before
+-- (wa_page_ok('crm'), so a lead or a finance person whose profile leaves the CRM out cannot write gifts through the API either). The live text
+-- of the three old policies is in the undo. System writers (crm_stripe_apply, crm_receipt_auto_issue, crm_merge_contacts, the receipt
+-- functions) are security definer and are not held by row security.
 drop policy if exists crm_donations_staff_insert on public.crm_donations;
 drop policy if exists crm_donations_staff_update on public.crm_donations;
 drop policy if exists crm_donations_admin_delete on public.crm_donations;
@@ -25,11 +26,12 @@ drop policy if exists crm_donations_gifts_insert on public.crm_donations;
 drop policy if exists crm_donations_gifts_update on public.crm_donations;
 drop policy if exists crm_donations_gifts_delete on public.crm_donations;
 create policy crm_donations_gifts_insert on public.crm_donations for insert to authenticated
-  with check (public.is_wa_staff() and public.wa_can('gifts_edit'));
+  with check (public.is_wa_staff() and public.wa_can('gifts_edit') and coalesce(public.wa_page_ok('crm'), true));
 create policy crm_donations_gifts_update on public.crm_donations for update to authenticated
-  using (public.is_wa_staff() and public.wa_can('gifts_edit')) with check (public.is_wa_staff() and public.wa_can('gifts_edit'));
+  using (public.is_wa_staff() and public.wa_can('gifts_edit') and coalesce(public.wa_page_ok('crm'), true))
+  with check (public.is_wa_staff() and public.wa_can('gifts_edit') and coalesce(public.wa_page_ok('crm'), true));
 create policy crm_donations_gifts_delete on public.crm_donations for delete to authenticated
-  using (public.is_wa_staff() and public.wa_can('gifts_edit'));
+  using (public.is_wa_staff() and public.wa_can('gifts_edit') and coalesce(public.wa_page_ok('crm'), true));
 
 -- every gift change writes one change_log row: the amount, date, kind, campaign and contact before and after, as JSON text
 create or replace function public.wa283_gift_audit()

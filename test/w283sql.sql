@@ -10,8 +10,8 @@ declare v text;
 begin
   assert (select string_agg(polname || ':' || polcmd::text, ',' order by polname) from pg_policy where polrelid = 'public.crm_donations'::regclass)
     = 'crm_donations_gifts_delete:d,crm_donations_gifts_insert:a,crm_donations_gifts_update:w,crm_donations_staff_read:r', 'crm_donations: the read policy and the three gifts_edit policies, nothing else';
-  assert (select bool_and(coalesce(pg_get_expr(polqual, polrelid), '') || coalesce(pg_get_expr(polwithcheck, polrelid), '') like '%is_wa_staff()%wa_can(''gifts_edit''::text)%')
-            from pg_policy where polrelid = 'public.crm_donations'::regclass and polname like 'crm_donations_gifts_%'), 'each write policy is is_wa_staff() and wa_can(gifts_edit)';
+  assert (select bool_and(coalesce(pg_get_expr(polqual, polrelid), '') || coalesce(pg_get_expr(polwithcheck, polrelid), '') like '%is_wa_staff()%wa_can(''gifts_edit''::text)%COALESCE(wa_page_ok(''crm''::text), true)%')
+            from pg_policy where polrelid = 'public.crm_donations'::regclass and polname like 'crm_donations_gifts_%'), 'each write policy is is_wa_staff() and wa_can(gifts_edit) and the CRM page (wa_page_ok)';
   assert (select pg_get_expr(polqual, polrelid) is not null and pg_get_expr(polwithcheck, polrelid) is not null from pg_policy where polname = 'crm_donations_gifts_update'), 'update checks both the old and the new row';
   assert (select polroles::regrole[]::text from pg_policy where polname = 'crm_donations_gifts_insert') = '{authenticated}', 'the policies are for signed-in users';
   assert exists (select 1 from pg_trigger where tgname = 'trg_wa283_gift_audit' and tgrelid = 'public.crm_donations'::regclass and not tgisinternal), 'the gift audit trigger is there';
@@ -55,6 +55,26 @@ begin
   assert v_ok, 'a member cannot issue a receipt, and is told who can';
 end $$;
 reset role;
+
+-- ---------------------------------------------------------------- gifts_edit without the CRM page: no gift writes through the API (fix round 1)
+select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.nocrm@example.invalid","sub":"00000000-0000-0000-0000-000000000009"}', true);
+set local role authenticated;
+do $$
+declare n int; v_ok boolean := false;
+begin
+  assert public.wa_can('gifts_edit') and public.wa_page_ok('crm') = false, 'the test person has gifts_edit (caps) but a profile without the CRM page';
+  begin insert into public.crm_donations (contact_id, amount, donated_at, platform) values (1401, 5, now(), 'hub'); exception when insufficient_privilege then v_ok := true; end;
+  assert v_ok, 'gifts_edit without the CRM page cannot record a gift (row security refuses the insert)';
+  update public.crm_donations set notes = 'w283 nocrm' where contact_id = 1401; get diagnostics n = row_count;
+  assert n = 0, 'gifts_edit without the CRM page changes no gift';
+  delete from public.crm_donations where contact_id = 1401; get diagnostics n = row_count;
+  assert n = 0, 'gifts_edit without the CRM page deletes no gift';
+end $$;
+reset role;
+do $$
+begin
+  assert (select count(*) from public.crm_donations where contact_id = 1401) = 3 and not exists (select 1 from public.crm_donations where notes = 'w283 nocrm'), 'and the gifts are as they were';
+end $$;
 
 -- ---------------------------------------------------------------- a named finance person (a member with caps gifts_edit): gifts and receipts
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.finance@example.invalid","sub":"00000000-0000-0000-0000-000000000002"}', true);
