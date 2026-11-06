@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const read = (p) => readFileSync(join(here, p), 'utf8');
+// LF always: a checkout with CRLF line endings (core.autocrlf on Windows) would change the function text the fixture holds and its md5
+const read = (p) => readFileSync(join(here, p), 'utf8').split('\r\n').join('\n');
 const schema281 = read('w281schema.sql');
 const mig281 = read('../build/data/wa281_rules.sql');
 const schema283 = read('w283schema.sql');
