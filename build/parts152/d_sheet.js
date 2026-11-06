@@ -419,6 +419,7 @@
       field('Date they said yes', inp('consent_at', c.consent_at ? dayOf(c.consent_at) : '', '', 'date'), false, 'express consent') +
       field('Implied consent runs until', inp('implied_consent_until', until, '', 'date'), false, 'two years after the last gift, membership or volunteering') +
       '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + '> They unsubscribed: no newsletters or campaigns</label>' +
+      (lower(c.email_status) === 'complained' ? '<div class="note" data-w283spam>They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.</div>' : '') +   /* final review M4 */
       '<label class="chk full"><input type="checkbox" data-f="sms_opt_out"' + (c.sms_opt_out ? ' checked' : '') + '> No text messages</label>' +
       (c.do_not_contact ? '<div class="note" data-w281dnc>Do not contact is on. Clear it first to change these.</div>' : '') +
       '<div class="note">Implied consent under CASL: an existing relationship in the last two years, such as a gift or volunteering for a registered charity, or a membership. It runs out two years after the last one. When in doubt, ask for express consent.</div>' +
@@ -545,7 +546,7 @@
     else row.implied_consent_until = null;
     var st = lower(c.email_status);
     if (v.unsub) row.email_status = 'unsubscribed';
-    else if (st === 'unsubscribed' || st === 'complained') row.email_status = 'unknown';
+    else if (st === 'unsubscribed') row.email_status = 'unknown';   /* final review M4: a spam complaint (complained) is never cleared from here */
     try {
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;

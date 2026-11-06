@@ -213,6 +213,23 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   ok('marketing: no page errors', f.errs.length === 0, f.errs);
   await f.close();
 
+  /* ---------------- final review M4: unticking "They unsubscribed" clears an unsubscribe, never a spam complaint ---------------- */
+  {
+    const fx = fixture(); fx.crm_contacts_v[2].email_status = 'complained'; fx.crm_contacts = fx.crm_contacts_v.map(c => Object.assign({}, c));
+    f = await fresh(browser, { who: 'admin', hash: '#mypage', fixture: fx, rpcs: RPCS('admin', null, { can_issue: true, is_admin: true }), wait: 4000 });
+  }
+  await f.hash('#crm/c/5003', 2000);
+  await click(f, '#w152sheet [data-w152perm-edit="5003"]'); await f.page.waitForTimeout(500);
+  b = await f.ev(() => ({ box: (document.querySelector('#w152sheet [data-f="unsub"]') || {}).checked, line: (document.querySelector('#w152sheet [data-w283spam]') || {}).textContent || '' }));
+  ok('a spam complaint: the box is ticked, with a line that says why it stays', b.box === true && b.line === 'They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.', b);
+  b = await f.ev(async () => { const rows = []; const f0 = db.from; db.from = function (t) { const q = f0.apply(db, arguments); if (t === 'crm_contacts') { const u0 = q.update; q.update = function (p) { rows.push(JSON.parse(JSON.stringify(p))); return u0.call(this, p); }; } return q; };
+    document.querySelector('#w152sheet [data-f="unsub"]').checked = false;
+    try { await window.w152.savePerm('5003'); } finally { db.from = f0; }
+    return { rows, st: window.w152.state().contacts.filter(c => c.id === 5003)[0].email_status }; });
+  ok('unticking it and saving leaves complained as it is (the update has no email_status)', b.rows.length === 1 && !('email_status' in b.rows[0]) && b.st === 'complained', b);
+  ok('spam complaint: no page errors', f.errs.length === 0, f.errs);
+  await f.close();
+
   /* ---------------- phone width ---------------- */
   f = await fresh(browser, { who: 'admin', width: 390, hash: '#mypage', fixture: fixture(), rpcs: RPCS('admin', null, { can_issue: true, is_admin: true }), wait: 4000 });
   await f.hash('#crm/c/5002', 2600);
