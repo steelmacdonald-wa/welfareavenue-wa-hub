@@ -1,12 +1,12 @@
--- Welfare Avenue Hub: wave285 undo, 06/11/26. Reverses build/data/wa285_toronto.sql, in reverse order.
+-- Welfare Avenue Hub: wave288 undo, 06/11/26. Reverses build/data/wa288_toronto.sql, in reverse order.
 -- crm_form_apply and wa209_volunteer_apply come back exactly as live had them on 06/11/26 (pg_get_functiondef, read with the Supabase connector;
--- the md5 of each definition is checked in test/w285sql.mjs), with their live grants and comment (wa209_volunteer_apply had none). The forms are
+-- the md5 of each definition is checked in test/w288sql.mjs), with their live grants and comment (wa209_volunteer_apply had none). The forms are
 -- closed again: toronto-volunteer gets back the settings and consent live had on 06/11/26 and is closed; each of the three new forms is deleted if
 -- nobody answered it, else closed (its answers stay). The request type toronto-volunteer is deleted if no Request uses it, else switched off (the
 -- Requests stay). volunteer_applications.chapter is dropped and the French word removed. What people said stays as the record of it: the chapter
 -- rows (crm_contact_chapters), sms_consent and the consent log rows the forms wrote. The release line stays; an undo line is added.
 -- Run it before wave281's undo, never after (the chapter column points at crm_chapters, which wave281's undo drops). With it, put back the page's
--- 152 segment, form-submit v9 and the /f/ page (build/f/index.html) of the commit before wave285, and take the Toronto forms off the website.
+-- 152 segment, form-submit v9 and the /f/ page (build/f/index.html) of the commit before wave288, and take the Toronto forms off the website.
 -- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data, and must keep reading the migration's text.
 -- No transaction control (see the migration). Safe to run twice.
 
@@ -382,7 +382,7 @@ grant execute on function public.wa209_volunteer_apply(jsonb) to authenticated, 
 update public.crm_forms
    set settings = '{"city": "Toronto", "tags": ["toronto"], "confirm": false, "volunteer_record": true}',
        consent = '{"ask": true, "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.", "required": false}',
-       status = 'closed', updated_by = 'wave285 undo'
+       status = 'closed', updated_by = 'wave288 undo'
  where slug = 'toronto-volunteer'
    and (settings is distinct from '{"city": "Toronto", "tags": ["toronto"], "confirm": false, "volunteer_record": true}'::jsonb
         or consent is distinct from '{"ask": true, "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.", "required": false}'::jsonb
@@ -390,7 +390,7 @@ update public.crm_forms
 delete from public.crm_forms f
  where f.slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto')
    and not exists (select 1 from public.crm_form_submissions s where s.form_id = f.id);
-update public.crm_forms set status = 'closed', updated_by = 'wave285 undo'
+update public.crm_forms set status = 'closed', updated_by = 'wave288 undo'
  where slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto') and status is distinct from 'closed';
 
 -- ============================================================================================ 3. the request type
@@ -400,11 +400,11 @@ update public.request_types set enabled = false where key = 'toronto-volunteer' 
 -- ============================================================================================ 4. volunteer_applications.chapter (after the functions, which no longer write it)
 alter table public.volunteer_applications drop column if exists chapter;
 
--- ============================================================================================ 5. the French word wave285 seeded
+-- ============================================================================================ 5. the French word wave288 seeded
 delete from public.hub_i18n where lang = 'fr' and kind = 'seed' and en = 'Also ask for text consent' and tr = 'Demander aussi le consentement par texto';
 
 -- the undo record (once per release)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
-select 'release', 'wave285', 'wave285 undo', null, 'wave285 undone: crm_form_apply and wa209_volunteer_apply back as live had them on 06/11/26; the Toronto forms closed (toronto-volunteer with its old settings and consent; unanswered new drafts deleted); the request type toronto-volunteer removed or switched off; volunteer_applications.chapter dropped; the French word removed.', 'wave285 undo'
- where not exists (select 1 from public.change_log u where u.entity_type = 'release' and u.entity_id = 'wave285' and u.field = 'wave285 undo'
-                    and u.changed_at >= coalesce((select max(r.changed_at) from public.change_log r where r.entity_type = 'release' and r.entity_id = 'wave285' and r.field = 'wave285'), '-infinity'::timestamptz));
+select 'release', 'wave288', 'wave288 undo', null, 'wave288 undone: crm_form_apply and wa209_volunteer_apply back as live had them on 06/11/26; the Toronto forms closed (toronto-volunteer with its old settings and consent; unanswered new drafts deleted); the request type toronto-volunteer removed or switched off; volunteer_applications.chapter dropped; the French word removed.', 'wave288 undo'
+ where not exists (select 1 from public.change_log u where u.entity_type = 'release' and u.entity_id = 'wave288' and u.field = 'wave288 undo'
+                    and u.changed_at >= coalesce((select max(r.changed_at) from public.change_log r where r.entity_type = 'release' and r.entity_id = 'wave288' and r.field = 'wave288'), '-infinity'::timestamptz));

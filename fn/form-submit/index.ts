@@ -1,4 +1,4 @@
-// Welfare Avenue: form-submit (v10, 06/11/26, wave285: the second consent box. A form whose consent.sms.ask is true sends the page
+// Welfare Avenue: form-submit (v10, 06/11/26, wave288: the second consent box. A form whose consent.sms.ask is true sends the page
 //   consent.sms {ask, label}; the page sends the text box as a top-level consent_sms (true or false) next to consent, and the stored
 //   consent gains sms {asked: the text box's words, given}, which crm_form_apply records as express text consent. The answers show
 //   Text permission. A one-choice question saved to volunteer.roles with the value both (Either) means cook and server.
@@ -160,7 +160,7 @@ async function publicForm(form: Json): Promise<Json> {
     }),
     consent: {
       ...(form.consent && form.consent.ask ? { ask: true, required: !!form.consent.required, label: String(form.consent.label || '') } : { ask: false }),
-      ...(form.consent && form.consent.sms && form.consent.sms.ask ? { sms: { ask: true, label: String(form.consent.sms.label || '') } } : {})   // v10 (wave285): the text box
+      ...(form.consent && form.consent.sms && form.consent.sms.ask ? { sms: { ask: true, label: String(form.consent.sms.label || '') } } : {})   // v10 (wave288): the text box
     }
   };
 }
@@ -229,7 +229,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean, smsG
     display.push({ label: pq.label, value: shown });
     const to = String(q.to || '');
     if (to.startsWith('contact.')) mapped.contact[to.slice(8)] = typeof val === 'string' ? val : String(val);
-    else if (to === 'volunteer.roles') mapped.roles = Array.isArray(val) ? val : String(val) === 'both' ? ['cook', 'server'] : [val];   // v10 (wave285): both (Either) is cook and server
+    else if (to === 'volunteer.roles') mapped.roles = Array.isArray(val) ? val : String(val) === 'both' ? ['cook', 'server'] : [val];   // v10 (wave288): both (Either) is cook and server
     else if (to === 'volunteer.dates') mapped.dates = Array.isArray(val) ? val : [val];
     else if (to.startsWith('field:')) mapped.fields[to.slice(6)] = val;
     else if (to === 'volunteer.organization') {   // v9 (wave264)
@@ -249,7 +249,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean, smsG
     mapped.consent = consentGiven;
     display.push({ label: t.permission, value: consentGiven ? t.yes + ': "' + pub.consent.label + '"' : t.no });
   }
-  if (pub.consent.sms) display.push({ label: t.textPermission, value: smsGiven ? t.yes + ': "' + pub.consent.sms.label + '"' : t.no });   // v10 (wave285)
+  if (pub.consent.sms) display.push({ label: t.textPermission, value: smsGiven ? t.yes + ': "' + pub.consent.sms.label + '"' : t.no });   // v10 (wave288)
   if (!mapped.contact.email && !Object.keys(errors).length) errors._form = 'This form has no email question.';
   return { errors, clean, mapped, display };
 }
@@ -377,7 +377,7 @@ Deno.serve(async (req: Request) => {
       if ((count || 0) >= PER_EMAIL) return reply(req, { error: 'rate' }, 429);
     }
     const account = await accountOf(req);
-    // v10 (wave285): the text box goes in the same object as sms {asked, given}; today's keys (asked, given, at, form) are unchanged
+    // v10 (wave288): the text box goes in the same object as sms {asked, given}; today's keys (asked, given, at, form) are unchanged
     const sms = pub.consent.sms ? { sms: { asked: pub.consent.sms.label, given: body.consent_sms === true } } : {};
     const consent = pub.consent.ask ? { asked: pub.consent.label, given: body.consent === true, at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}), ...sms }
       : pub.consent.sms ? { at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}), ...sms } : null;

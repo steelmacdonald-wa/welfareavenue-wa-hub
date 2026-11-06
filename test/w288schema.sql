@@ -1,9 +1,9 @@
--- wave285: what build/data/wa285_toronto.sql, its undo and the wave285 assertions touch beyond test/w281schema.sql and test/w283schema.sql, for the
--- offline proof in test/w285sql.mjs (PGlite). Loaded after test/w281schema.sql, build/data/wa281_rules.sql, test/w283schema.sql and
--- build/data/wa283_page.sql (both waves are built on this branch, not live yet); test/w285sql.mjs also loads it without wave281, to see the
+-- wave288: what build/data/wa288_toronto.sql, its undo and the wave288 assertions touch beyond test/w281schema.sql and test/w283schema.sql, for the
+-- offline proof in test/w288sql.mjs (PGlite). Loaded after test/w281schema.sql, build/data/wa281_rules.sql, test/w283schema.sql and
+-- build/data/wa283_page.sql (both waves are built on this branch, not live yet); test/w288sql.mjs also loads it without wave281, to see the
 -- migration stop. Copied read-only from live (zwnmulmnvopclzcvytce) on 06/11/26: the column lists and constraints that matter, the
 -- toronto-volunteer form's settings, consent and questions, and in section 4 the pg_get_functiondef text of crm_form_apply and
--- wa209_volunteer_apply (the same text as build/data/wa285_undo.sql; test/w285sql.mjs checks each md5 against live) with their live grants and
+-- wa209_volunteer_apply (the same text as build/data/wa288_undo.sql; test/w288sql.mjs checks each md5 against live) with their live grants and
 -- comment (wa209_volunteer_apply has none on live). volunteer_people is a view on live whose write trigger keeps the volunteer profile and its
 -- CRM contact in step; here a stand-in trigger does that part. wa171_role_label, wa209_volunteer_roles and account_link_user are stand-ins.
 -- Every person in section 5 is invented (Fixture ..., Tate Fixture, example.invalid). Not a copy of live: do not apply it anywhere but the
@@ -31,9 +31,9 @@ create table public.dept_requests (
 
 -- 2. volunteer_people: new rows get an id, and (as live's write trigger does) a CRM contact: the one with that email that has no volunteer yet, or a
 --    new one; contact_id and crm_contacts.volunteer_id link the two, so crm_form_apply and wa209_volunteer_apply find the contact as they do on live
-create sequence public.volunteer_people_w285_seq start 9001;
-alter table public.volunteer_people alter column id set default nextval('public.volunteer_people_w285_seq');
-create or replace function public.w285_vp_write() returns trigger language plpgsql set search_path to '' as $f$
+create sequence public.volunteer_people_w288_seq start 9001;
+alter table public.volunteer_people alter column id set default nextval('public.volunteer_people_w288_seq');
+create or replace function public.w288_vp_write() returns trigger language plpgsql set search_path to '' as $f$
 declare v_cid bigint;
 begin
   if new.contact_id is null then
@@ -51,7 +51,7 @@ begin
   end if;
   return new;
 end $f$;
-create trigger w285_vp_write before insert on public.volunteer_people for each row execute function public.w285_vp_write();
+create trigger w288_vp_write before insert on public.volunteer_people for each row execute function public.w288_vp_write();
 
 -- 3. stand-ins for functions the slice calls but never needs the real work of
 create or replace function public.wa171_role_label(p_role text, p_lang text) returns text language sql immutable set search_path to '' as
@@ -61,15 +61,15 @@ $f$ select '{}'::text[] $f$;   -- stand-in
 create or replace function public.account_link_user(p_uid uuid, p_lang text) returns bigint language sql stable set search_path to '' as
 $f$ select null::bigint $f$;   -- stand-in (no test submission is from a website account)
 
--- live, these triggers call edge functions (team-inbox and notify, through call_edge); test/w285live.sql switches them off by name before its test
+-- live, these triggers call edge functions (team-inbox and notify, through call_edge); test/w288live.sql switches them off by name before its test
 -- answers, so they are here too, doing nothing
-create or replace function public.w285_noop_trigger() returns trigger language plpgsql set search_path to '' as $f$ begin return null; end $f$;
-create trigger trg_wa123_request_new after insert on public.dept_requests for each row execute function public.w285_noop_trigger();
-create trigger trg_wa123_request_update after update on public.dept_requests for each row execute function public.w285_noop_trigger();
-create trigger trg_wa89_request_filed after insert on public.dept_requests for each row execute function public.w285_noop_trigger();
-create trigger trg_wa239_volunteer_applied after insert on public.volunteer_applications for each row execute function public.w285_noop_trigger();
+create or replace function public.w288_noop_trigger() returns trigger language plpgsql set search_path to '' as $f$ begin return null; end $f$;
+create trigger trg_wa123_request_new after insert on public.dept_requests for each row execute function public.w288_noop_trigger();
+create trigger trg_wa123_request_update after update on public.dept_requests for each row execute function public.w288_noop_trigger();
+create trigger trg_wa89_request_filed after insert on public.dept_requests for each row execute function public.w288_noop_trigger();
+create trigger trg_wa239_volunteer_applied after insert on public.volunteer_applications for each row execute function public.w288_noop_trigger();
 
--- 4. the two live functions wave285 changes (pg_get_functiondef, 06/11/26), with their live grants and comment
+-- 4. the two live functions wave288 changes (pg_get_functiondef, 06/11/26), with their live grants and comment
 CREATE OR REPLACE FUNCTION public.crm_form_apply(p_submission_id bigint)
  RETURNS jsonb
  LANGUAGE plpgsql

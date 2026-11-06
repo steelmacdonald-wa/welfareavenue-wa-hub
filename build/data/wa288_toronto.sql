@@ -1,4 +1,4 @@
--- Welfare Avenue Hub: wave285, 06/11/26. Hub CRM slice 1, Phase 5a: the Toronto forms and the second consent box (design CRM-S1 v2, B.2 and
+-- Welfare Avenue Hub: wave288, 06/11/26. Hub CRM slice 1, Phase 5a: the Toronto forms and the second consent box (design CRM-S1 v2, B.2 and
 -- Phase 5a items 29 to 34; Part A.2 and A.5). Toronto volunteers and students sign up on Hub forms instead of Keela, and a form can ask a second
 -- question: may we text you. It adds: the request type toronto-volunteer (Ops Toronto, assigned to Tate); volunteer_applications.chapter;
 -- wa209_volunteer_apply saves the chapter on the application and puts the person in it; crm_form_apply puts the person in the form's chapter
@@ -8,33 +8,33 @@
 -- Needs wave281 first (crm_chapters, crm_add_chapter, the consent log, sms_consent): the file stops at the top without it. Live functions are
 -- changed by exact replacement of an anchor in their live text (pg_get_functiondef), as wave273, wave281 and wave283 did: a missing anchor stops
 -- the whole file. The toronto-volunteer form is changed only from the settings and consent live had on 06/11/26 (else the file stops). Each patch
--- skips when its wave285 text is already there and every other step is guarded, so the file is safe to run twice. The live text of the two
--- functions and of the form's settings and consent is in build/data/wa285_undo.sql. No transaction control: the release runs it through the
--- Supabase connector, and build/sql_rollback_test.py runs it inside a block that rolls back. Proved offline first: node test/w285sql.mjs (PGlite).
+-- skips when its wave288 text is already there and every other step is guarded, so the file is safe to run twice. The live text of the two
+-- functions and of the form's settings and consent is in build/data/wa288_undo.sql. No transaction control: the release runs it through the
+-- Supabase connector, and build/sql_rollback_test.py runs it inside a block that rolls back. Proved offline first: node test/w288sql.mjs (PGlite).
 -- Built 06/11/26, not released.
 
-do $wa285$
+do $wa288$
 begin
   if to_regprocedure('public.crm_add_chapter(bigint,text,text,text)') is null or to_regclass('public.crm_chapters') is null
      or not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'crm_contacts' and column_name = 'sms_consent') then
-    raise exception 'wave285 needs wave281 first (crm_chapters, crm_add_chapter and crm_contacts.sms_consent are missing)';
+    raise exception 'wave288 needs wave281 first (crm_chapters, crm_add_chapter and crm_contacts.sms_consent are missing)';
   end if;
-  if not exists (select 1 from public.crm_chapters where code = 'toronto' and active) then raise exception 'wave285: the toronto chapter is missing'; end if;
-end $wa285$;
+  if not exists (select 1 from public.crm_chapters where code = 'toronto' and active) then raise exception 'wave288: the toronto chapter is missing'; end if;
+end $wa288$;
 
 -- ============================================================================================ 1. the request type toronto-volunteer
 -- Ops Toronto, assigned to Tate. Statuses, default status, channel and channel mode are copied from serving-signup. The assignee is the display
 -- name of the one active Ops Toronto member whose first name is Tate, looked up when this runs: request_types.default_assignee and
 -- dept_requests.assignee hold a display name, which notify, hub-push and team-inbox match to team_members by name. The file stops when there is not
 -- exactly one. A type an undo switched off (it had Requests, so it was kept) is switched on again.
-do $wa285$
+do $wa288$
 declare v_n int; v_who text;
 begin
   if not exists (select 1 from public.request_types where key = 'toronto-volunteer') then
     select count(*), min(name) into v_n, v_who from public.team_members
      where active and department = 'opsto' and split_part(lower(btrim(name)), ' ', 1) = 'tate';
-    if v_n <> 1 then raise exception 'wave285: expected one active Ops Toronto member whose first name is Tate, found %', v_n; end if;
-    if not exists (select 1 from public.request_types where key = 'serving-signup') then raise exception 'wave285: the serving-signup request type is missing'; end if;
+    if v_n <> 1 then raise exception 'wave288: expected one active Ops Toronto member whose first name is Tate, found %', v_n; end if;
+    if not exists (select 1 from public.request_types where key = 'serving-signup') then raise exception 'wave288: the serving-signup request type is missing'; end if;
     insert into public.request_types (key, label, department, description, fields, statuses, default_status, source, enabled, sort, default_assignee, channel, channel_mode)
     select 'toronto-volunteer', 'Toronto volunteer sign-up', 'opsto', 'Volunteer sign-ups from the Hub''s Toronto forms', '[]'::jsonb,
            s.statuses, s.default_status, 'form', true, 100, v_who, s.channel, s.channel_mode
@@ -42,11 +42,11 @@ begin
   else
     update public.request_types set enabled = true where key = 'toronto-volunteer' and not enabled;
   end if;
-end $wa285$;
+end $wa288$;
 
 -- ============================================================================================ 2. which chapter an application is for
 alter table public.volunteer_applications add column if not exists chapter text not null default 'montreal' references public.crm_chapters(code);
-comment on column public.volunteer_applications.chapter is 'wave285: the chapter the application is for (crm_chapters code): montreal unless the form that sent it names another (crm_form_apply passes the form''s settings.chapter to wa209_volunteer_apply, which saves it here and puts the person in that chapter).';
+comment on column public.volunteer_applications.chapter is 'wave288: the chapter the application is for (crm_chapters code): montreal unless the form that sent it names another (crm_form_apply passes the form''s settings.chapter to wa209_volunteer_apply, which saves it here and puts the person in that chapter).';
 
 -- ============================================================================================ 3. the two live functions, by exact anchor
 -- wa209_volunteer_apply: reads {chapter} (montreal when there is none), saves it on the application, and after the insert puts the person in that
@@ -58,7 +58,7 @@ comment on column public.volunteer_applications.chapter is 'wave285: the chapter
 -- words in the log, but only for a contact the answer created, a signed-in person's own record, or a contact who has not said STOP, is not
 -- do-not-contact and whose phone is the one typed (or who had none); otherwise the tick stays in the answer for the team to confirm.
 -- sms_opt_out is never touched here: STOP stays the stop switch.
-do $wa285$
+do $wa288$
 declare v text; a text; b text;
 begin
   v := pg_get_functiondef('public.wa209_volunteer_apply(jsonb)'::regprocedure);
@@ -69,25 +69,25 @@ begin
       $x$insert into public.volunteer_applications (person_id, contact_id, name, email, phone, roles, role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, created_by)$x$,
       $x$          nullif(p->>'mail_id', '')::bigint, nullif(p->>'candidate_id', '')::bigint, v_by)
   returning id into v_app;$x$] loop
-      if length(v) - length(replace(v, a, '')) <> length(a) then raise exception 'wave285: a live function moved: wa209_volunteer_apply'; end if;
+      if length(v) - length(replace(v, a, '')) <> length(a) then raise exception 'wave288: a live function moved: wa209_volunteer_apply'; end if;
     end loop;
     v := replace(v, $x$  v_pid bigint; v_cid bigint; v_new boolean := false; v_app bigint; v_by text; v_existing record; v_role_label text;$x$,
                     $x$  v_pid bigint; v_cid bigint; v_new boolean := false; v_app bigint; v_by text; v_existing record; v_role_label text; v_chapter text;$x$);
     v := replace(v, $x$  v_lang := case when coalesce(p->>'language', '') ~* '^(fr|fran|french)' then 'fr' when coalesce(p->>'language', '') ~* '^(en|eng|angl)' then 'en' else null end;$x$,
                     $x$  v_lang := case when coalesce(p->>'language', '') ~* '^(fr|fran|french)' then 'fr' when coalesce(p->>'language', '') ~* '^(en|eng|angl)' then 'en' else null end;
-  v_chapter := coalesce(nullif(p ->> 'chapter', ''), 'montreal');   -- wave285: the chapter the application is for (crm_chapters)$x$);
+  v_chapter := coalesce(nullif(p ->> 'chapter', ''), 'montreal');   -- wave288: the chapter the application is for (crm_chapters)$x$);
     v := replace(v, $x$insert into public.volunteer_applications (person_id, contact_id, name, email, phone, roles, role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, created_by)$x$,
                     $x$insert into public.volunteer_applications (person_id, contact_id, name, email, phone, roles, role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, created_by, chapter)$x$);
     v := replace(v, $x$          nullif(p->>'mail_id', '')::bigint, nullif(p->>'candidate_id', '')::bigint, v_by)
   returning id into v_app;$x$,
                     $x$          nullif(p->>'mail_id', '')::bigint, nullif(p->>'candidate_id', '')::bigint, v_by, v_chapter)
   returning id into v_app;
-  if v_cid is not null then perform public.crm_add_chapter(v_cid, v_chapter, 'application', v_app::text); end if;   -- wave285$x$);
+  if v_cid is not null then perform public.crm_add_chapter(v_cid, v_chapter, 'application', v_app::text); end if;   -- wave288$x$);
     execute v;
   end if;
 
   v := pg_get_functiondef('public.crm_form_apply(bigint)'::regprocedure);
-  if position('wave285' in v) = 0 then
+  if position('wave288' in v) = 0 then
     foreach a in array array[
       $x$  v_city := nullif(btrim(coalesce(m #>> '{contact,city}', f.settings ->> 'city', '')), '');$x$,
       $x$  -- 5. the email permission: a ticked box is express consent, recorded with the form's name and the day. Someone who$x$,
@@ -96,19 +96,19 @@ begin
     where id = v_cid;
   end if;$x$,
       $x$        'language', coalesce(f.lang, 'en'), 'by', v_src));$x$] loop
-      if length(v) - length(replace(v, a, '')) <> length(a) then raise exception 'wave285: a live function moved: crm_form_apply'; end if;
+      if length(v) - length(replace(v, a, '')) <> length(a) then raise exception 'wave288: a live function moved: crm_form_apply'; end if;
     end loop;
     v := replace(v, $x$  v_city := nullif(btrim(coalesce(m #>> '{contact,city}', f.settings ->> 'city', '')), '');$x$,
-                    $x$  v_city := nullif(btrim(coalesce(m #>> '{contact,city}', '')), '');   -- wave285: from the answers only, never the form's settings$x$);
+                    $x$  v_city := nullif(btrim(coalesce(m #>> '{contact,city}', '')), '');   -- wave288: from the answers only, never the form's settings$x$);
     v := replace(v, $x$  -- 5. the email permission: a ticked box is express consent, recorded with the form's name and the day. Someone who$x$,
-                    $x$  -- 4b. wave285: a form with settings.chapter (montreal, toronto) puts the person in that chapter
+                    $x$  -- 4b. wave288: a form with settings.chapter (montreal, toronto) puts the person in that chapter
   if coalesce(f.settings ->> 'chapter', '') <> '' and exists (select 1 from public.crm_chapters ch where ch.code = f.settings ->> 'chapter') then
     perform public.crm_add_chapter(v_cid, f.settings ->> 'chapter', 'form', s.id::text);
   end if;
 
   -- 5. the email permission: a ticked box is express consent, recorded with the form's name and the day. Someone who$x$);
     v := replace(v, $x$    update public.crm_contacts set email_consent = 'express',$x$,
-                    $x$    perform set_config('wa.consent_source', 'form: ' || f.slug, true);   -- wave285: the consent log's source and words
+                    $x$    perform set_config('wa.consent_source', 'form: ' || f.slug, true);   -- wave288: the consent log's source and words
     perform set_config('wa.consent_words', coalesce(s.consent ->> 'asked', ''), true);
     update public.crm_contacts set email_consent = 'express',$x$);
     v := replace(v, $x$      email_status = case when email_status in ('bounced', 'complained') then email_status else 'subscribed' end
@@ -118,7 +118,7 @@ begin
     where id = v_cid;
   end if;
 
-  -- 5b. wave285: the text box (crm_forms.consent.sms): a ticked box is express text consent, recorded with the form and the day (in Toronto); the
+  -- 5b. wave288: the text box (crm_forms.consent.sms): a ticked box is express text consent, recorded with the form and the day (in Toronto); the
   --     consent log keeps the words they saw. As with the email permission, the box could have been ticked by anyone who typed this email, so it
   --     counts only for a contact this answer created, a signed-in person's own record, or a contact who has not said STOP, is not do-not-contact
   --     and whose phone is the one typed (or who had no phone). Otherwise the tick stays in the answer and the timeline for the team to confirm.
@@ -138,23 +138,23 @@ begin
     where id = v_cid;
   end if;$x$);
     v := replace(v, $x$        'language', coalesce(f.lang, 'en'), 'by', v_src));$x$,
-                    $x$        'language', coalesce(f.lang, 'en'), 'by', v_src, 'chapter', f.settings ->> 'chapter'));   -- wave285: the form's chapter$x$);
+                    $x$        'language', coalesce(f.lang, 'en'), 'by', v_src, 'chapter', f.settings ->> 'chapter'));   -- wave288: the form's chapter$x$);
     execute v;
   end if;
-end $wa285$;
+end $wa288$;
 
--- the patched functions keep their live grants (re-applied) and get comments that say what wave285 changed
+-- the patched functions keep their live grants (re-applied) and get comments that say what wave288 changed
 revoke all on function public.wa209_volunteer_apply(jsonb) from public, anon;
 grant execute on function public.wa209_volunteer_apply(jsonb) to authenticated, service_role;
 revoke all on function public.crm_form_apply(bigint) from public, anon, authenticated;
 grant execute on function public.crm_form_apply(bigint) to service_role;
-comment on function public.wa209_volunteer_apply(jsonb) is 'wave209: files a volunteer application ({name, email, phone, roles | role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, by, chapter}): the person found by email or phone in volunteer_people or added there (so they are in the CRM and the directory), roles and tags (volunteer applicant, the source, applied YYYY-MM) merged, last_applied and Review set, a timeline entry in crm_interactions, and the row in volunteer_applications (Applicants received). A source_ref files an application once. wave239: the videographer role. wave285: the chapter (montreal when none is given) is saved on the application (volunteer_applications.chapter) and puts the person in that chapter (crm_add_chapter, source application). Staff and the service role.';
-comment on function public.crm_form_apply(bigint) is 'Applies one form submission (wave156): the contact, the volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account''s own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else''s submission only fills gaps and never re-subscribes. wave216: an application form adds a card to the Applications board; wave239: a volunteer form with a volunteering record files the application in Applicants received. wave261 (16/10/26): settings.request files a Request (request_types, assigned to its default assignee) without the email or phone; settings.gift_pledge adds a pledged campaign_gifts row waiting for a Confirm; settings.role_text names what a volunteer applied for; an address at a reserved test domain (example.com/.org/.net, .test, .example, .invalid) is a test (no Request, pledge or applicant; the submission is marked is_test). wave285 (06/11/26): settings.chapter puts the person in that chapter (crm_add_chapter, source form) and goes with the application to wa209_volunteer_apply; a new contact''s city comes only from the answers, never the form''s settings.city; the consent log records the form (form: <slug>) and the words shown; a ticked text box (consent.sms) is express text consent (sms_consent, its source with the day in Toronto, and time) for a contact the answer created, the person''s own record, or a contact who has not said STOP, is not do-not-contact and whose phone is the one typed (or who had none); otherwise the tick stays in the answer for the team to confirm; sms_opt_out is never touched. Called by form-submit with the service role.';
+comment on function public.wa209_volunteer_apply(jsonb) is 'wave209: files a volunteer application ({name, email, phone, roles | role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, by, chapter}): the person found by email or phone in volunteer_people or added there (so they are in the CRM and the directory), roles and tags (volunteer applicant, the source, applied YYYY-MM) merged, last_applied and Review set, a timeline entry in crm_interactions, and the row in volunteer_applications (Applicants received). A source_ref files an application once. wave239: the videographer role. wave288: the chapter (montreal when none is given) is saved on the application (volunteer_applications.chapter) and puts the person in that chapter (crm_add_chapter, source application). Staff and the service role.';
+comment on function public.crm_form_apply(bigint) is 'Applies one form submission (wave156): the contact, the volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account''s own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else''s submission only fills gaps and never re-subscribes. wave216: an application form adds a card to the Applications board; wave239: a volunteer form with a volunteering record files the application in Applicants received. wave261 (16/10/26): settings.request files a Request (request_types, assigned to its default assignee) without the email or phone; settings.gift_pledge adds a pledged campaign_gifts row waiting for a Confirm; settings.role_text names what a volunteer applied for; an address at a reserved test domain (example.com/.org/.net, .test, .example, .invalid) is a test (no Request, pledge or applicant; the submission is marked is_test). wave288 (06/11/26): settings.chapter puts the person in that chapter (crm_add_chapter, source form) and goes with the application to wa209_volunteer_apply; a new contact''s city comes only from the answers, never the form''s settings.city; the consent log records the form (form: <slug>) and the words shown; a ticked text box (consent.sms) is express text consent (sms_consent, its source with the day in Toronto, and time) for a contact the answer created, the person''s own record, or a contact who has not said STOP, is not do-not-contact and whose phone is the one typed (or who had none); otherwise the tick stays in the answer for the team to confirm; sms_opt_out is never touched. Called by form-submit with the service role.';
 
 -- ============================================================================================ 4. the forms
 -- toronto-volunteer: the Toronto settings (chapter, serving location, the Request for Tate; no settings.city) and both boxes. It stays closed (its
 -- live status); publishing it and the three new drafts is step 7.7 of the release. It is changed only from what live had on 06/11/26.
-do $wa285$
+do $wa288$
 declare v_s jsonb; v_c jsonb;
   c_old_s constant jsonb := '{"city": "Toronto", "tags": ["toronto"], "confirm": false, "volunteer_record": true}';
   c_old_c constant jsonb := '{"ask": true, "label": "Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.", "required": false}';
@@ -162,20 +162,20 @@ declare v_s jsonb; v_c jsonb;
   c_new_c constant jsonb := '{"ask":true,"required":false,"label":"Send me Welfare Avenue news by email. I can unsubscribe at any time.","sms":{"ask":true,"label":"Text me about volunteering. I can reply STOP at any time."}}';
 begin
   select settings, consent into v_s, v_c from public.crm_forms where slug = 'toronto-volunteer';
-  if not found then raise exception 'wave285: the toronto-volunteer form is missing'; end if;
+  if not found then raise exception 'wave288: the toronto-volunteer form is missing'; end if;
   if v_s is distinct from c_new_s or v_c is distinct from c_new_c then
     if v_s is distinct from c_old_s or v_c is distinct from c_old_c then
-      raise exception 'wave285: the toronto-volunteer form''s settings or consent changed since 06/11/26; read them again and update this file and its undo';
+      raise exception 'wave288: the toronto-volunteer form''s settings or consent changed since 06/11/26; read them again and update this file and its undo';
     end if;
-    update public.crm_forms set settings = c_new_s, consent = c_new_c, updated_by = 'wave285' where slug = 'toronto-volunteer';
+    update public.crm_forms set settings = c_new_s, consent = c_new_c, updated_by = 'wave288' where slug = 'toronto-volunteer';
   end if;
-end $wa285$;
+end $wa288$;
 
 -- benevole-toronto (its French twin), toronto-student and etudiant-toronto: drafts with the same settings (and cover photo) as toronto-volunteer
 -- and the same two boxes. The student intro is the Keela form's ([FORMS], Toronto Student Registration). The wording of all three is for Steel and
 -- Tate to approve (E10): the French intros are the English ones under "Version française à venir." until Tate's draft; the French labels the
 -- brief does not give (photos, days, experience, support, their help lines, the thank-you) are a draft. Added once (a slug already there is kept).
-do $wa285$
+do $wa288$
 declare
   t record;
   v_si text := 'Welfare Avenue and the Toronto Youth Food Policy Council (TYFPC) are partnering to launch the Cook & Support Program, bringing together volunteers and students from across Toronto to prepare and provide meals for low-income and unhoused communities.'
@@ -242,11 +242,11 @@ declare
 begin
   select settings, consent, intro, thank_you, cover_photo_id into t from public.crm_forms where slug = 'toronto-volunteer';
   insert into public.crm_forms (slug, title, intro, lang, kind, purpose, status, questions, consent, thank_you, settings, cover_photo_id, created_by, updated_by) values
-    ('benevole-toronto', 'Faire du bénévolat à Toronto', v_fr || t.intro, 'fr', 'volunteer', 'volunteers', 'draft', q_benevole, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave285', 'wave285'),
-    ('toronto-student', 'Toronto student registration', v_si, 'en', 'volunteer', 'volunteers', 'draft', q_student, t.consent, t.thank_you, t.settings, t.cover_photo_id, 'wave285', 'wave285'),
-    ('etudiant-toronto', 'Inscription étudiante à Toronto', v_fr || v_si, 'fr', 'volunteer', 'volunteers', 'draft', q_etudiant, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave285', 'wave285')
+    ('benevole-toronto', 'Faire du bénévolat à Toronto', v_fr || t.intro, 'fr', 'volunteer', 'volunteers', 'draft', q_benevole, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave288', 'wave288'),
+    ('toronto-student', 'Toronto student registration', v_si, 'en', 'volunteer', 'volunteers', 'draft', q_student, t.consent, t.thank_you, t.settings, t.cover_photo_id, 'wave288', 'wave288'),
+    ('etudiant-toronto', 'Inscription étudiante à Toronto', v_fr || v_si, 'fr', 'volunteer', 'volunteers', 'draft', q_etudiant, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave288', 'wave288')
   on conflict (slug) do nothing;
-end $wa285$;
+end $wa288$;
 
 -- ============================================================================================ 5. the French word for the form editor (wave198)
 insert into public.hub_i18n (lang, en, tr, kind)
@@ -256,6 +256,6 @@ on conflict (lang, en) do update set tr = excluded.tr, kind = 'seed', updated_at
 
 -- ============================================================================================ 6. the release record (once)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
-select 'release', 'wave285', 'wave285', null,
-       'Toronto forms and the second consent box: request type toronto-volunteer (Ops Toronto, Tate); volunteer_applications.chapter; wa209_volunteer_apply and crm_form_apply put people in the form''s chapter, tell the consent log the form and the words, and record the text box; the toronto-volunteer form gets the Toronto settings and both boxes; three draft forms; one French word.', 'wave285'
- where not exists (select 1 from public.change_log where entity_type = 'release' and entity_id = 'wave285' and field = 'wave285');
+select 'release', 'wave288', 'wave288', null,
+       'Toronto forms and the second consent box: request type toronto-volunteer (Ops Toronto, Tate); volunteer_applications.chapter; wa209_volunteer_apply and crm_form_apply put people in the form''s chapter, tell the consent log the form and the words, and record the text box; the toronto-volunteer form gets the Toronto settings and both boxes; three draft forms; one French word.', 'wave288'
+ where not exists (select 1 from public.change_log where entity_type = 'release' and entity_id = 'wave288' and field = 'wave288');

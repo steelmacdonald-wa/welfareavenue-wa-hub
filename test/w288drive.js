@@ -1,4 +1,4 @@
-/* w285drive.js: the Toronto forms and the second consent box (wave285, CRM slice 1 Phase 5a). Fixture rows are made up for the test (no real
+/* w288drive.js: the Toronto forms and the second consent box (wave288, CRM slice 1 Phase 5a). Fixture rows are made up for the test (no real
    people); every write is recorded on the page (the stub echoes it and never changes the fixture).
    - The form editor: the old "City written on new contacts" box is gone; a Chapter select (the active chapters, or None) and a Campaign select
      (wa_campaigns, or None) are there for a volunteer form and for a newsletter; "Also ask for text consent" sits under the email permission.
@@ -8,7 +8,7 @@
    - The public page (build/f/index.html): a form with consent.sms shows the second box under the email box and sends it as the top-level
      consent_sms (true or false); a form without it shows one box and sends consent_sms false.
    - No page errors; at phone width the editor does not scroll sideways.
-   usage: node test/w285drive.js */
+   usage: node test/w288drive.js */
 const { launch, fresh, loadFixture } = require('./boot');
 const fs = require('fs');
 const path = require('path');
@@ -54,11 +54,11 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
 const tick = (f, s, on) => f.ev(([x, v]) => { const el = document.querySelector(x); if (!el) return false; el.checked = v; el.dispatchEvent(new Event('change', { bubbles: true })); return true; }, [s, on]);
 const editor = f => f.ev(() => {
   const sel = s => { const el = document.querySelector(s); return el ? { value: el.value, options: [...el.options].map(o => o.value + '=' + o.text) } : null; };
-  const sms = document.querySelector('#crm [data-w285sms="ask"]');
+  const sms = document.querySelector('#crm [data-w288sms="ask"]');
   return { city: !!document.querySelector('#crm [data-w156set="city"]') || /City written on new contacts/.test(document.querySelector('#crm .w154card').innerText),
-    chapter: sel('#crm [data-w285set="chapter"]'), campaign: sel('#crm [data-w285set="campaign_id"]'),
+    chapter: sel('#crm [data-w288set="chapter"]'), campaign: sel('#crm [data-w288set="campaign_id"]'),
     sms: sms ? { checked: sms.checked, label: sms.closest('label').innerText.trim(), after: !!sms.closest('.w156box') && !!sms.closest('.w156box').querySelector('[data-w156c="ask"]') } : null,
-    words: (document.querySelector('#crm [data-w285sms="label"]') || {}).value, pv: [...document.querySelectorAll('#crm .w156pv .w156pcons')].map(x => x.innerText.trim()) };
+    words: (document.querySelector('#crm [data-w288sms="label"]') || {}).value, pv: [...document.querySelectorAll('#crm .w156pv .w156pcons')].map(x => x.innerText.trim()) };
 });
 const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t === 'crm_forms' && x.op === 'update'); return u.length ? u[u.length - 1].p : null; });
 
@@ -77,15 +77,15 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
   ok('"Also ask for text consent" sits in the email permission box, unticked, with no words yet', b.sms && !b.sms.checked && b.sms.label === 'Also ask for text consent' && b.sms.after && b.words === undefined, b.sms);
   ok('the preview shows the email box only', b.pv.length === 1, b.pv);
 
-  await setv(f, '#crm [data-w285set="chapter"]', 'toronto'); await f.page.waitForTimeout(300);
-  await setv(f, '#crm [data-w285set="campaign_id"]', '7'); await f.page.waitForTimeout(300);
-  await tick(f, '#crm [data-w285sms="ask"]', true); await f.page.waitForTimeout(300);
+  await setv(f, '#crm [data-w288set="chapter"]', 'toronto'); await f.page.waitForTimeout(300);
+  await setv(f, '#crm [data-w288set="campaign_id"]', '7'); await f.page.waitForTimeout(300);
+  await tick(f, '#crm [data-w288sms="ask"]', true); await f.page.waitForTimeout(300);
   b = await editor(f);
   ok('choosing Toronto and a Campaign keeps them chosen', b.chapter.value === 'toronto' && b.campaign.value === '7', b);
   ok('the chapter line says who joins it', /Everyone who answers joins Toronto\./.test(await f.ev(() => document.querySelector('#crm .w154card').innerText)), null);
   ok('ticking the text box shows its words, the English default', b.sms.checked && b.words === SMS_EN, b);
   ok('the preview shows the second box with those words', b.pv.length === 2 && b.pv[1] === SMS_EN, b.pv);
-  await setv(f, '#crm [data-w285sms="label"]', 'Text me about servings. Reply STOP to stop.'); await f.page.waitForTimeout(600);
+  await setv(f, '#crm [data-w288sms="label"]', 'Text me about servings. Reply STOP to stop.'); await f.page.waitForTimeout(600);
   b = await editor(f);
   ok('the preview follows the words as they are typed', b.pv[1] === 'Text me about servings. Reply STOP to stop.', b.pv);
   await click(f, '#crm [data-w156save]'); await f.page.waitForTimeout(1200);
@@ -95,9 +95,9 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
   ok('Save writes consent.sms with its words next to the email permission', p && p.consent.ask === true && p.consent.label === 'Yes, email me.' && p.consent.sms && p.consent.sms.ask === true
      && p.consent.sms.label === 'Text me about servings. Reply STOP to stop.', p && p.consent);
 
-  await setv(f, '#crm [data-w285set="chapter"]', ''); await f.page.waitForTimeout(300);
-  await setv(f, '#crm [data-w285set="campaign_id"]', ''); await f.page.waitForTimeout(300);
-  await tick(f, '#crm [data-w285sms="ask"]', false); await f.page.waitForTimeout(300);
+  await setv(f, '#crm [data-w288set="chapter"]', ''); await f.page.waitForTimeout(300);
+  await setv(f, '#crm [data-w288set="campaign_id"]', ''); await f.page.waitForTimeout(300);
+  await tick(f, '#crm [data-w288sms="ask"]', false); await f.page.waitForTimeout(300);
   b = await editor(f);
   ok('unticking the text box hides its words', !b.sms.checked && b.words === undefined && b.pv.length === 1, b);
   await click(f, '#crm [data-w156save]'); await f.page.waitForTimeout(1200);
@@ -119,7 +119,7 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
   await click(f, '#crm [data-w156open="3"]'); await f.page.waitForTimeout(900);
   b = await editor(f);
   ok('a newsletter form has the Chapter and Campaign selects too', b.chapter && b.campaign && b.sms, b);
-  await setv(f, '#crm [data-w285set="chapter"]', 'montreal'); await f.page.waitForTimeout(300);
+  await setv(f, '#crm [data-w288set="chapter"]', 'montreal'); await f.page.waitForTimeout(300);
   await click(f, '#crm [data-w156save]'); await f.page.waitForTimeout(1200);
   p = await lastFormUpdate(f);
   ok('a newsletter saves its chapter without a serving location', p && p.settings.chapter === 'montreal' && !('serving_location' in p.settings), p && p.settings);
@@ -127,7 +127,7 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
   /* the French twin: the French default words */
   await click(f, '#crm [data-w156back]'); await f.page.waitForTimeout(700);
   await click(f, '#crm [data-w156open="4"]'); await f.page.waitForTimeout(900);
-  await tick(f, '#crm [data-w285sms="ask"]', true); await f.page.waitForTimeout(300);
+  await tick(f, '#crm [data-w288sms="ask"]', true); await f.page.waitForTimeout(300);
   b = await editor(f);
   ok('on a French form the text box starts with the French words', b.words === SMS_FR && b.pv[1] === SMS_FR, b);
   ok('no page errors in the editor', f.errs.length === 0, f.errs);
@@ -135,7 +135,7 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
   /* phone width */
   const fp = await fresh(browser, { who: 'admin', hash: '#mypage', fixture: fixture(), wait: 4000, width: 390 });
   await fp.hash('#crm/forms/2', 2400);
-  const wide = await fp.ev(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, ch: !!document.querySelector('#crm [data-w285set="chapter"]') }));
+  const wide = await fp.ev(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, ch: !!document.querySelector('#crm [data-w288set="chapter"]') }));
   ok('at phone width the editor shows the selects and nothing scrolls sideways', wide.ch && wide.sw <= wide.cw + 1, wide);
   await fp.close();
   await f.close();
@@ -173,6 +173,6 @@ const lastFormUpdate = f => f.ev(() => { const u = window.__ins.filter(x => x.t 
 
   await browser.close();
   console.log(out.join('\n'));
-  console.log(`\nw285drive: ${pass} passed, ${fail} failed`);
+  console.log(`\nw288drive: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -214,7 +214,7 @@ a{color:var(--green)}
       f.questions.map(function (q) { return field(q, keep); }).join('') +
       (c.ask || (c.sms && c.sms.ask) ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent">' +
         (c.ask ? '<label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' : '') +
-        /* wave285: the second box, may we text you (consent.sms), under the email box; sent as the top-level consent_sms */
+        /* wave288: the second box, may we text you (consent.sms), under the email box; sent as the top-level consent_sms */
         (c.sms && c.sms.ask ? '<label class="choice"><input type="checkbox" id="q__consent_sms" name="_consent_sms"' + (keep && keep._consent_sms ? ' checked' : '') + '><span>' + E(c.sms.label) + '</span></label>' : '') +
         (cerr ? '<p class="err" id="q__consent_e">' + E(cerr) + '</p>' : '') + '<p class="small">' + E((S.org && S.org.address) || 'Welfare Avenue') + ' · ' + E((S.org && S.org.email) || '') + '</p></div>' : '') +
       '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>' +
@@ -254,7 +254,7 @@ a{color:var(--green)}
       else { var el = form.querySelector('[name="' + q.id + '"]'); out[q.id] = el ? el.value : ''; }
     });
     var cb = form.querySelector('input[name="_consent"]'); out._consent = !!(cb && cb.checked);
-    var cs = form.querySelector('input[name="_consent_sms"]'); out._consent_sms = !!(cs && cs.checked);   /* wave285 */
+    var cs = form.querySelector('input[name="_consent_sms"]'); out._consent_sms = !!(cs && cs.checked);   /* wave288 */
     out._hp = (form.querySelector('input[name="website"]') || {}).value || '';
     return out;
   }
