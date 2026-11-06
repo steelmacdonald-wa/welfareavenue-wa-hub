@@ -48,12 +48,18 @@ Each index has a COMMENT: what it holds, that Postgres keeps it and nobody write
   - wave281's text, with the contacts index: 403.5 ms. The stopped-phones view was now the slow part, which is why the second index was added;
   - wave281's text, with the contacts index and 21 marked: 1,118 ms.
 - After run 1, a read-only check found live as before: the function md5 48dadf06, no wave291 or wave281 object, no invented row, no change_log line.
-- **Live rollback run 2**, at 66f28b8 (both indexes), is **not done yet**. The Supabase connector asked a question about the block (a confirmation) and no answer came in time, so it did not run. It is the same block as run 1 plus the digits index and the two list-size timings (nobody marked, and 20 more marked).
+- **Live rollback run 2**, at 57a1dc0 on `claude/open-tasks-review-wy88mn` (both indexes; the same 21 files as the block planned at 66f28b8, fetched from GitHub at the pushed commit, with the 2 s lock limit), through the Supabase connector on 06/11/26: every check passed and it ended with the W291_TIMING report, so everything rolled back. Answers: 3,803 the same before and after, under both texts. A read-only check afterwards found live as before (no wave291 index, `wa171_opted_out` md5 48dadf06 unchanged, no test contacts).
 
 **Performance.** The slice's target is under 300 ms in total, with `crm_in_chapter` and `crm_email_permission` at 155 ms.
 
-- Today's text with the contacts index: 157.5 ms with one invented contact marked. Each marked contact costs about 36 ms over 1,805 calls (from run 1: 20 more took 403.5 ms to 1,118 ms), so with nobody marked, as live is today, it should be near 120 ms. Run 2 measures it.
-- wave281's text: 1,427 ms before, 403.5 ms with the contacts index alone. The digits index takes out most of the rest offline; run 2 gives the live number.
+Run 2 over 1,805 contacts (the best of the runs shown):
+
+| Function text | Before | With both indexes, nobody marked (as live is today) | One marked | 21 marked |
+| --- | --- | --- | --- | --- |
+| Today's | 1,129.8 ms | 20.9 ms | 161.1 ms | 1,012.2 ms |
+| wave281's | 1,437.2 ms | 109.4 ms | 253.8 ms | 983.4 ms |
+
+With wave281 and nobody marked, the three checks together take about 265 ms (109.4 ms plus 155 ms), under the 300 ms target. Each contact marked no texts still adds about 40 ms over 1,805 calls, so the target holds while that list stays small.
 
 ## Release steps (on Steel's yes)
 
