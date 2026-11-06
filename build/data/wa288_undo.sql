@@ -7,8 +7,9 @@
 -- rows (crm_contact_chapters), sms_consent and the consent log rows the forms wrote, and the tags (toronto, toronto student) and custom fields
 -- (gta_area, days_available, age_16_plus, photo_consent) their answers put on contacts, which wave274's Toronto Volunteers reads (the forms
 -- wrote them through crm_form_apply's own tag and field steps, which this undo does not change). The release line stays; an undo line is added.
--- Run it before wave281's undo, never after (the chapter column points at crm_chapters, which wave281's undo drops). With it, put back the page's
--- 152 segment, form-submit v9 and the /f/ page (build/f/index.html) of the commit before wave288, and take the Toronto forms off the website.
+-- Run it before wave281's undo, never after (the undo order is 288, 286, 284, 283, 282, 281: docs/06-11-26 - CRM slice 1 release runbook.md). The page,
+-- the /f/ page and form-submit go back as that runbook says: the page first (bae461b9 rebuilt from origin/wave287-projects-overview 940c905, and
+-- f/index.html efdb9627), form-submit v9 (0c92b53) after the undo files; and take the Toronto forms off the website.
 -- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data, and must keep reading the migration's text.
 -- No transaction control (see the migration). Safe to run twice.
 

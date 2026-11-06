@@ -4,7 +4,7 @@ Phase 1 of Hub CRM slice 1 (design CRM-S1 v2, Part A). Built and tested on 06/11
 
 ## What changes for staff
 
-Nothing visible. There is no page change (the live page stays md5 0b8e0fa6). Later waves build the CRM page, the Import page and the Toronto forms on these rules.
+Nothing visible. wave281 has no page change of its own. (When it was built the live page was 0b8e0fa6; on 06/11/26 it is bae461b9. The slice's one page swap, and its order against this SQL, are in `docs/06-11-26 - CRM slice 1 release runbook.md`.) Later waves build the CRM page, the Import page and the Toronto forms on these rules.
 
 ## What it adds
 
