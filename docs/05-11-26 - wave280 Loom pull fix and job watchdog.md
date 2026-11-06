@@ -53,7 +53,15 @@
 
 Run the tests with `deno run -A --config <dir>/deno.json --node-modules-dir=auto test/<file>` (a `deno.json` with `{"nodeModulesDir": "auto"}`).
 
-## Release (on Steel's yes)
+## Released 06/11/26, 05:00 to 05:03 UTC, on Steel's "Yes, release"; backlog filed normally on his "All normal"
+
+- loom-pull: platform v16, a stub pinned to 5034c60. The live probe picked `listLoomObjects` and `getLoomObjectsContent` and read a 275-line transcript.
+- The backlog of 16 recordings since 26/10, in pull runs 793 (partial, 8 filed) and 794 (ok, 5 filed): 13 filed, 1 needs an admin (Onboarding Fall Cohort, "may hold something sensitive"), and 2 skipped (an 18-second recording with no transcript; Amullya's interview, where Loom named one speaker). No errors.
+- wa280a applied: `wa_edge_calls` logging from the first call, and `wa-job-watch` scheduled at :20.
+- health-check: platform v11, a stub pinned to 5034c60. The first `jobs` run found every job working and sent no alert. All five admin addresses have Slack ids.
+- The Meet attendance sync was failing at release ("Google refused the token… internal_failure", last success 05/11 18:47 UTC). If it is still failing after 13 hours, that will be the watchdog's first real alert.
+
+## Release steps (as run)
 
 1. Deploy loom-pull as a stub pinned to this branch's commit. Run a pull (`{action:'sync', why:'release'}`) and check `loom_pull_runs` and `loom_videos`.
 2. Apply `build/wa280a_watchdog.sql`.
