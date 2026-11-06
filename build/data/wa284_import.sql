@@ -905,15 +905,39 @@ declare
   k_id text := public.wa284_need(f, 'contact_id'); k_type text := public.wa284_need(f, 'contact_type'); k_email text := public.wa284_need(f, 'email');
   k_hist text := public.wa284_need(f, 'subscription_history');
   k_d text := public.wa284_need_in(f, k_hist, 'sub_date'); k_t text := public.wa284_need_in(f, k_hist, 'sub_type'); k_f text := public.wa284_need_in(f, k_hist, 'sub_form');
-  k_c text := public.wa284_key('sub_channel');
+  k_c text := public.wa284_key('sub_channel'); k_phone text := public.wa284_key('phone');   -- optional here: a file without phones matches none
   v_other int := public.wa284_types(f, k_type);
   r record; e record; c public.crm_contacts; oe record; os record; v_id bigint; v_ev public.crm_consent_events; v_at timestamptz; v_kind text; v_occ date; v_form text;
+  v_digits text; pc record;
 begin
   if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
     w := public.wa284_bump(w, '{counts,rows_read}');
     v_id := public.wa284_contact(public.wa284_txt(r.data -> k_id), lower(public.wa284_txt(r.data -> k_email)));
+    -- final review M7: a Keela text opt-out also reaches every other Hub contact holding that phone (the last 10 digits), a person batch 3 matched by
+    -- phone only (listed, never merged) included: sms_opt_out only, never undone, and not when that phone texted START to the Hub after the opt-out
+    v_digits := public.wa171_digits(public.wa284_txt(r.data -> k_phone));
+    if v_digits is not null then
+      select * into os from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'sms');
+      if os.optout is not null then
+        for pc in select x.id, x.sms_opt_out from public.crm_contacts x
+                   where x.merged_into is null and x.id is distinct from v_id
+                     and exists (select 1 from unnest(x.phones) p where public.wa171_digits(p) = v_digits) order by x.id loop
+          if pc.sms_opt_out then w := public.wa284_bump(w, '{counts,skipped,text opt-out by phone: texts already stopped}');
+          elsif exists (select 1 from public.quo_messages q
+                         where q.direction = 'in' and q.handled = 'opted_in' and public.wa171_digits(q.phone) = v_digits
+                           and (os.optout_date is null or (q.created_at at time zone 'America/Toronto')::date > os.optout_date)) then
+            w := public.wa284_bump(w, '{counts,skipped,text opt-out by phone followed by a Hub START}');
+          else
+            perform set_config('wa.consent_source', 'Keela: text opt-out ' || coalesce(to_char(os.optout_date, 'YYYY-MM-DD'), '(undated)') || ', matched by phone', true);
+            perform public.wa284_upd(p_batch, 'crm_contacts', pc.id, 'sms_opt_out', 'true'::jsonb);
+            perform set_config('wa.consent_source', 'Keela import', true);
+            w := public.wa284_push(w, 'text_optout_by_phone', jsonb_build_object('keela_id', public.wa284_txt(r.data -> k_id), 'contact_id', pc.id));
+          end if;
+        end loop;
+      end if;
+    end if;
     if v_id is null then w := public.wa284_bump(w, '{counts,skipped,no Hub contact}'); continue; end if;
     w := public.wa284_bump(w, '{counts,matched}');
     -- every dated event, once, into the consent log (source keela)
@@ -975,7 +999,7 @@ begin
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_consent(bigint, bigint, boolean) is 'wave284: batch 6 (consent). Each dated Keela subscription event goes into crm_consent_events once (source keela, column keela email|sms subscription, the type''s words, the form name, the batch). Express email consent only when the latest dated email event is an opt-in with a form name, there is no email opt-out with an unreadable date, the Hub has no express consent yet, and the address is not unsubscribed, bounced, complained or do-not-contact. A Keela text opt-out (wa284_opt_state, channel sms) sets sms_opt_out, with the consent log source "Keela: text opt-out <date>", unless one of the contact''s phones texted START to the Hub after it. A text opt-in (the latest dated text event, no unreadable text opt-out) becomes sms_consent express, unless texts are stopped. Never undone. The service role only.';
+comment on function public.wa284_w_consent(bigint, bigint, boolean) is 'wave284: batch 6 (consent). Each dated Keela subscription event goes into crm_consent_events once (source keela, column keela email|sms subscription, the type''s words, the form name, the batch). Express email consent only when the latest dated email event is an opt-in with a form name, there is no email opt-out with an unreadable date, the Hub has no express consent yet, and the address is not unsubscribed, bounced, complained or do-not-contact. A Keela text opt-out (wa284_opt_state, channel sms) sets sms_opt_out, with the consent log source "Keela: text opt-out <date>", unless one of the contact''s phones texted START to the Hub after it. Since the final review (M7) the opt-out also reaches every other active Hub contact holding the Keela phone (its last 10 digits), a person batch 3 matched by phone only included: sms_opt_out only (source "Keela: text opt-out <date>, matched by phone"), listed as text_optout_by_phone, and not when that phone texted START to the Hub after it. A text opt-in (the latest dated text event, no unreadable text opt-out) becomes sms_consent express, unless texts are stopped. Never undone. The service role only.';
 
 -- 7. participation: Keela tags by keela_tag_map to Campaign rows, a chapter, skip, or tags[]; adds only
 create or replace function public.wa284_w_participation(p_batch bigint, p_run bigint, p_rehearse boolean)
