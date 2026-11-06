@@ -266,7 +266,9 @@ comment on function public.wa284_w0() is 'wave284: an empty writer result (count
 
 create or replace function public.wa284_bump(j jsonb, p_path text[], n int default 1)
 returns jsonb language sql immutable set search_path to '' as $function$
-  select jsonb_set(j, p_path, to_jsonb(coalesce((j #>> p_path)::int, 0) + n), true)
+  select jsonb_set(case when cardinality(p_path) > 2 and (j #> p_path[1:cardinality(p_path) - 1]) is null
+                        then jsonb_set(j, p_path[1:cardinality(p_path) - 1], '{}'::jsonb, true) else j end,
+                   p_path, to_jsonb(coalesce((j #>> p_path)::int, 0) + n), true)
 $function$;
 comment on function public.wa284_bump(jsonb, text[], int) is 'wave284: adds n to a count in a writer result. The service role only.';
 
@@ -360,26 +362,95 @@ begin
 end $function$;
 comment on function public.wa284_file(bigint, text) is 'wave284: the run''s latest fully staged file of a kind; stops when there is none. The service role only.';
 
+create or replace function public.wa284_ev_kind(p_type text)
+returns text language sql immutable set search_path to '' as $function$
+  select case when x.t ~* 'spam|complain|abuse' then 'complaint'
+              when x.t ~* 'unsubscri|opt(ed)?[ -]?out' then 'unsubscribe'
+              when x.t ~* 'bounce' and x.t !~* 'soft' then 'bounce'
+              when x.t ~* 'opt(ed)?[ -]?in|subscri' then 'optin'
+              else 'other' end
+    from (select coalesce(p_type, '') as t) x
+$function$;
+comment on function public.wa284_ev_kind(text) is 'wave284: the kind of a Keela subscription event from its type''s words: complaint (spam, complaint, abuse), unsubscribe (unsubscribed, opted out), bounce (a bounce that is not soft), optin (opted in, subscribed) or other. The service role only.';
+
 create or replace function public.wa284_events(p_list jsonb, p_kd text, p_kt text, p_kf text, p_kc text)
 returns table (occurred date, at_text text, kind text, channel text, type_text text, form text)
 language sql immutable set search_path to '' as $function$
   select public.wa284_date(public.wa284_txt(x.e -> p_kd)), public.wa284_txt(x.e -> p_kd),
-         case when y.t ~* 'unsubscri|opt(ed)?[ -]?out' then 'unsubscribe'
-              when y.t ~* 'bounce' and y.t !~* 'soft' then 'bounce'
-              when y.t ~* 'opt(ed)?[ -]?in|subscri' then 'optin'
-              else 'other' end,
+         public.wa284_ev_kind(y.t),
          case when coalesce(public.wa284_txt(x.e -> p_kc), y.t) ~* '\m(text|sms)\M' then 'sms' else 'email' end,
          left(y.t, 80), public.wa284_txt(x.e -> p_kf)
     from jsonb_array_elements(case when jsonb_typeof(p_list) = 'array' then p_list else '[]'::jsonb end) as x(e)
     cross join lateral (select coalesce(public.wa284_txt(x.e -> p_kt), '') as t) y
    where jsonb_typeof(x.e) = 'object'
 $function$;
-comment on function public.wa284_events(jsonb, text, text, text, text) is 'wave284: a Keela person''s subscription history as rows: the date (ISO only; anything else is undated), the kind (unsubscribe, bounce (not soft), optin or other, from the event''s type), the channel (sms when the type or channel says text or SMS, else email), the type''s words and the form name. The service role only.';
+comment on function public.wa284_events(jsonb, text, text, text, text) is 'wave284: a Keela person''s subscription history as rows: the date (ISO only; anything else is undated), the kind (wa284_ev_kind: complaint, unsubscribe, bounce, optin or other), the channel (sms when the type or channel says text or SMS, else email), the type''s words and the form name. The service role only.';
+
+-- the opt-out a channel's history says to honour (Steel: every unsubscribe and bounce is honoured)
+create or replace function public.wa284_ev_rows(p_list jsonb, p_kd text, p_kt text, p_kc text, p_channel text)
+returns table (pos bigint, d date, at_text text, kind text)
+language sql immutable set search_path to '' as $function$
+  select x.o, public.wa284_date(public.wa284_txt(x.e -> p_kd)), public.wa284_txt(x.e -> p_kd), public.wa284_ev_kind(public.wa284_txt(x.e -> p_kt))
+    from jsonb_array_elements(case when jsonb_typeof(p_list) = 'array' then p_list else '[]'::jsonb end) with ordinality as x(e, o)
+   where jsonb_typeof(x.e) = 'object'
+     and (case when coalesce(public.wa284_txt(x.e -> p_kc), public.wa284_txt(x.e -> p_kt), '') ~* '\m(text|sms)\M' then 'sms' else 'email' end) = p_channel
+$function$;
+comment on function public.wa284_ev_rows(jsonb, text, text, text, text) is 'wave284: one channel''s events of a Keela subscription history, with their place in the list (pos), date (null when it cannot be read), date text and kind. The service role only.';
+
+create or replace function public.wa284_opt_state(p_list jsonb, p_kd text, p_kt text, p_kc text, p_channel text,
+  out optout text, out optout_date date, out undated int, out undated_optouts int, out overridden int, out latest_kind text, out latest_date date)
+language plpgsql immutable set search_path to '' as $function$
+declare v_lpos bigint; v_order text; u record; v_rank jsonb := '{"unsubscribe": 1, "bounce": 2, "complaint": 3}';
+begin
+  undated := 0; undated_optouts := 0; overridden := 0;
+  select count(*) into undated from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t where t.d is null;
+  -- the latest dated event
+  select t.kind, t.d, t.pos into latest_kind, latest_date, v_lpos from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t
+   where t.d is not null and t.kind <> 'other' order by t.d desc, t.at_text desc, t.pos desc limit 1;
+  if latest_kind in ('unsubscribe', 'bounce', 'complaint') then optout := latest_kind; optout_date := latest_date; end if;
+  -- the list's order, when its dated events tell it: oldest first (asc) or newest first (desc); otherwise unknown
+  select case when bool_and(z.d >= z.pd) and bool_or(z.d > z.pd) then 'asc' when bool_and(z.d <= z.pd) and bool_or(z.d < z.pd) then 'desc' end into v_order
+    from (select t.d, lag(t.d) over (order by t.pos) as pd from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t where t.d is not null) z
+   where z.pd is not null;
+  -- an opt-out with no readable date is honoured, unless the latest dated event is an opt-in that the list's known order puts after it
+  for u in select t.kind, t.pos from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t
+            where t.d is null and t.kind in ('unsubscribe', 'bounce', 'complaint') order by t.pos loop
+    undated_optouts := undated_optouts + 1;
+    if latest_kind = 'optin' and ((v_order = 'asc' and v_lpos > u.pos) or (v_order = 'desc' and v_lpos < u.pos)) then overridden := overridden + 1; continue; end if;
+    if optout is null or (v_rank ->> u.kind)::int > (v_rank ->> optout)::int then optout := u.kind; optout_date := null; end if;
+  end loop;
+end $function$;
+comment on function public.wa284_opt_state(jsonb, text, text, text, text) is 'wave284: what one channel''s Keela history says (email or sms). optout: the opt-out to honour (unsubscribe, bounce or complaint), from the latest dated event, or from any event whose date cannot be read unless the latest dated event is an opt-in that the list''s known order (its dated events oldest first or newest first) puts after it; the strongest wins (complaint, bounce, unsubscribe). optout_date: its date, null when it came from an undated event. Also the counts of undated events, undated opt-outs and undated opt-outs overridden, and the latest dated event''s kind and date. The service role only.';
+
+create or replace function public.wa284_optout_status(p_kind text)
+returns text language sql immutable set search_path to '' as $function$
+  select case p_kind when 'complaint' then 'complained' when 'bounce' then 'bounced' when 'unsubscribe' then 'unsubscribed' end
+$function$;
+comment on function public.wa284_optout_status(text) is 'wave284: the email_status a Keela opt-out sets: complaint complained (A.4: not a working address), bounce bounced, unsubscribe unsubscribed. The service role only.';
+
+create or replace function public.wa284_optout_words(p_kind text, p_date date)
+returns text language sql immutable set search_path to '' as $function$
+  select 'Keela: ' || case p_kind when 'complaint' then 'spam complaint' when 'bounce' then 'hard bounce' else 'unsubscribe' end || ' '
+         || coalesce(to_char(p_date, 'YYYY-MM-DD'), '(undated)')
+$function$;
+comment on function public.wa284_optout_words(text, date) is 'wave284: the consent_source words for a Keela opt-out: "Keela: unsubscribe 2025-06-01", "Keela: hard bounce ...", "Keela: spam complaint ...", or "(undated)" when its date could not be read. The service role only.';
+
+create or replace function public.wa284_types(p_file bigint, p_key text)
+returns int language plpgsql stable security definer set search_path to '' as $function$
+declare n int;
+begin
+  if not exists (select 1 from import_stage.rows r where r.file_id = p_file and lower(coalesce(public.wa284_txt(r.data -> p_key), '')) in ('individual', 'company')) then
+    raise exception 'wa284: no staged row has a % of Individual or Company; check the Keys list and the export', p_key;
+  end if;
+  select count(*) into n from import_stage.rows r where r.file_id = p_file and lower(coalesce(public.wa284_txt(r.data -> p_key), '')) not in ('individual', 'company');
+  return n;
+end $function$;
+comment on function public.wa284_types(bigint, text) is 'wave284: stops a writer loudly when no staged row has a Contact Type of Individual or Company (the values the import knows), so a different spelling can never make a batch read nothing and skip every opt-out in silence; otherwise says how many rows have another type (the report counts them as skipped). The service role only.';
 
 -- ============================================================================================ 6. the writers (B.1), one per kind; no exception blocks of their own
 -- Each returns its counts and lists; every change goes through wa284_upd, wa284_field or an insert recorded with wa284_chg.
 
--- 1. optouts: the latest email-subscription event is an unsubscribe or a hard bounce, and the Hub contact can still be emailed
+-- 1. optouts: the email opt-out the history says to honour (the latest dated one, or one with no readable date), on a Hub contact that can still be emailed
 create or replace function public.wa284_w_optouts(p_batch bigint, p_run bigint, p_rehearse boolean)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare
@@ -389,15 +460,20 @@ declare
   k_hist text := public.wa284_need(f, 'subscription_history');
   k_d text := public.wa284_need_in(f, k_hist, 'sub_date'); k_t text := public.wa284_need_in(f, k_hist, 'sub_type'); k_f text := public.wa284_need_in(f, k_hist, 'sub_form');
   k_c text := public.wa284_key('sub_channel');
-  r record; v_kind text; v_occ date; v_kid text; v_id bigint; v_st text; v_new text;
+  v_other int := public.wa284_types(f, k_type);
+  r record; o record; v_kid text; v_id bigint; v_st text; v_new text;
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
+  w := jsonb_set(w, '{counts,undated_events}', '0'::jsonb);
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
     w := public.wa284_bump(w, '{counts,rows_read}');
-    v_kind := null; v_occ := null;
-    select ev.kind, ev.occurred into v_kind, v_occ from public.wa284_events(r.data -> k_hist, k_d, k_t, k_f, k_c) ev
-     where ev.channel = 'email' and ev.occurred is not null order by ev.occurred desc, ev.at_text desc limit 1;
-    if v_kind is null or v_kind not in ('unsubscribe', 'bounce') then w := public.wa284_bump(w, '{counts,skipped,latest event is not an opt-out}'); continue; end if;
+    select * into o from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'email');
+    if o.undated > 0 then w := public.wa284_bump(w, '{counts,undated_events}', o.undated); end if;
+    if o.optout is null then
+      w := public.wa284_bump(w, case when o.overridden > 0 then '{counts,skipped,undated opt-out followed by an opt-in}' else '{counts,skipped,latest event is not an opt-out}' end::text[]);
+      continue;
+    end if;
     v_kid := public.wa284_txt(r.data -> k_id);
     v_id := public.wa284_contact(v_kid, lower(public.wa284_txt(r.data -> k_email)));
     if v_id is null then
@@ -407,15 +483,16 @@ begin
     end if;
     w := public.wa284_bump(w, '{counts,matched}');
     select c.email_status into v_st from public.crm_contacts c where c.id = v_id;
-    if v_st in ('unsubscribed', 'bounced', 'complained') then w := public.wa284_bump(w, '{counts,skipped,already not emailed}'); continue; end if;
-    v_new := case v_kind when 'bounce' then 'bounced' else 'unsubscribed' end;
+    v_new := public.wa284_optout_status(o.optout);
+    -- already not emailed: kept, unless Keela says complained and the Hub only says unsubscribed (a complaint is the stronger word)
+    if v_st in ('bounced', 'complained') or (v_st = 'unsubscribed' and v_new <> 'complained') then w := public.wa284_bump(w, '{counts,skipped,already not emailed}'); continue; end if;
+    if o.optout_date is null then w := public.wa284_bump(w, '{counts,undated_optouts_honoured}'); end if;
     perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'email_status', to_jsonb(v_new));
-    perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'consent_source',
-      to_jsonb('Keela: ' || case v_kind when 'bounce' then 'hard bounce' else 'unsubscribe' end || ' ' || to_char(v_occ, 'YYYY-MM-DD')));
+    perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'consent_source', to_jsonb(public.wa284_optout_words(o.optout, o.optout_date)));
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_optouts(bigint, bigint, boolean) is 'wave284: batch 1 (optouts). Keela people whose latest dated email-subscription event is an unsubscribe or a hard bounce, matched to a Hub contact that can still be emailed, get email_status unsubscribed or bounced and consent_source "Keela: <event> <date>". The opt-out always applies; it is never undone. The service role only.';
+comment on function public.wa284_w_optouts(bigint, bigint, boolean) is 'wave284: batch 1 (optouts). For each Keela person, the email opt-out wa284_opt_state says to honour: the latest dated event if it is an unsubscribe, a hard bounce or a spam complaint, or any opt-out whose date cannot be read unless a dated opt-in clearly follows it. On a Hub contact that can still be emailed it sets email_status unsubscribed, bounced or complained and consent_source "Keela: <event> <date>" (or "(undated)"). The report counts the events with no readable date (undated_events). The opt-out always applies; it is never undone. The service role only.';
 
 -- 2. legacy_fields: from legacy_refs.keela (no upload); fills empty fields only
 create or replace function public.wa284_w_legacy_fields(p_batch bigint, p_run bigint, p_rehearse boolean)
@@ -514,9 +591,15 @@ declare
   k_street text := public.wa284_need(f, 'street'); k_line2 text := public.wa284_need(f, 'line2'); k_city text := public.wa284_need(f, 'city');
   k_prov text := public.wa284_need(f, 'province'); k_postal text := public.wa284_need(f, 'postal_code'); k_country text := public.wa284_need(f, 'country');
   k_notes text := public.wa284_need(f, 'notes');
-  r record; c public.crm_contacts; v_kid text; v_email text; v_phone text; v_digits text; v_id bigint; v_how text;
+  -- the subscription history too: a new contact starts with the opt-out Keela recorded (Steel: every unsubscribe and bounce is honoured)
+  k_hist text := public.wa284_need(f, 'subscription_history');
+  k_d text := public.wa284_need_in(f, k_hist, 'sub_date'); k_t text := public.wa284_need_in(f, k_hist, 'sub_type');
+  k_c text := public.wa284_key('sub_channel');
+  v_other int := public.wa284_types(f, k_type);
+  r record; c public.crm_contacts; o record; v_kid text; v_email text; v_phone text; v_digits text; v_id bigint; v_how text;
   v_full text; v_first text; v_last text; v_addr text; v_note text; v_refs jsonb; v_k jsonb;
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
     w := public.wa284_bump(w, '{counts,rows_read}');
@@ -553,16 +636,20 @@ begin
         w := public.wa284_push(w, 'keela_ids_skipped', jsonb_build_object('keela_id', v_kid, 'reason', 'no email or phone'));
         continue;
       end if;
-      -- primary_email is generated from emails[1] on live, so it is never written
+      -- primary_email is generated from emails[1] on live, so it is never written. The email opt-out Keela recorded comes with the person
+      -- (batch 1 ran before they existed); it is never undone (the contact is listed for review, never deleted)
+      select * into o from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'email');
       insert into public.crm_contacts (full_name, first_name, last_name, emails, phones, address, city, province, postal_code, country, notes,
-                                       source, legacy_refs, created_by, updated_by)
+                                       email_status, consent_source, source, legacy_refs, created_by, updated_by)
       values (coalesce(v_full, nullif(concat_ws(' ', v_first, v_last), ''), v_email, 'Keela contact ' || v_kid), v_first, v_last,
               case when v_email is null then '{}'::text[] else array[v_email] end, case when v_phone is null then '{}'::text[] else array[v_phone] end,
               v_addr, public.wa284_txt(r.data -> k_city), public.wa284_txt(r.data -> k_prov), public.wa284_txt(r.data -> k_postal), public.wa284_txt(r.data -> k_country),
               case when v_note is null then null else 'From Keela: ' || v_note end,
+              coalesce(public.wa284_optout_status(o.optout), 'unknown'), case when o.optout is not null then public.wa284_optout_words(o.optout, o.optout_date) end,
               'keela', jsonb_build_object('keela', jsonb_build_object('contact_id', v_kid)), 'Keela import', 'Keela import')
       returning * into c;
       perform public.wa284_chg(p_batch, 'crm_contacts', c.id::text, null, null, to_jsonb(c), 'insert');
+      if o.optout is not null then w := public.wa284_bump(w, array['counts', 'created_not_emailed', public.wa284_optout_status(o.optout)]); end if;
       continue;
     end if;
     w := public.wa284_bump(w, '{counts,matched}');
@@ -603,7 +690,7 @@ begin
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_people(bigint, bigint, boolean) is 'wave284: batch 3 (people). Each Keela person (Contact Type Individual) is matched by Keela id (legacy_refs.keela.contact_id or keela_extra_ids), then email, then phone; a phone-only match is listed, never merged. No match with an email or phone: a new contact (source keela). Neither: skipped and listed. Fills empty names and address fields, adds missing phones and emails, appends notes as "From Keela: ...", and keeps duplicate Keela ids in legacy_refs.keela_extra_ids. The Hub wins. Never writes through volunteer_people. The service role only.';
+comment on function public.wa284_w_people(bigint, bigint, boolean) is 'wave284: batch 3 (people). Each Keela person (Contact Type Individual) is matched by Keela id (legacy_refs.keela.contact_id or keela_extra_ids), then email, then phone; a phone-only match is listed, never merged. No match with an email or phone: a new contact (source keela), which starts with the email opt-out its Keela history says to honour (wa284_opt_state: email_status unsubscribed, bounced or complained, consent_source "Keela: ..."; batch 1 ran before it existed; never undone). Neither: skipped and listed. Fills empty names and address fields, adds missing phones and emails, appends notes as "From Keela: ...", and keeps duplicate Keela ids in legacy_refs.keela_extra_ids. The Hub wins. Never writes through volunteer_people. The service role only.';
 
 -- 4. fields: job title, birth date (private, never in a change record), car, LinkedIn, food licence; fills empty fields only
 create or replace function public.wa284_w_fields(p_batch bigint, p_run bigint, p_rehearse boolean)
@@ -615,8 +702,10 @@ declare
   k_job text := public.wa284_need(f, 'job_title'); k_birth text := public.wa284_need(f, 'birth_date'); k_car text := public.wa284_need(f, 'car');
   k_li text := public.wa284_need(f, 'linkedin'); k_food text := public.wa284_need(f, 'food_licence');
   v_fopts jsonb := (select x.options from public.crm_fields x where x.key = 'food_licence');
+  v_other int := public.wa284_types(f, k_type);
   r record; v_id bigint; v_job text; v_b text; v_d date; v_v text; v_opt text; v_res text;
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
   if v_fopts is null or not exists (select 1 from public.crm_fields x where x.key = 'car_make_model') or not exists (select 1 from public.crm_fields x where x.key = 'linkedin') then
     raise exception 'wa284: the custom fields linkedin, car_make_model and food_licence are needed (wave281)';
   end if;
@@ -678,7 +767,22 @@ declare
   v_ok jsonb := coalesce(public.wa284_cfg('keela_org_pairs_ok'), '[]'::jsonb);
   r record; p public.wa_partners; v_kid text; v_name text; v_n text; v_pid bigint; v_goals text[]; v_ctype text; v_category text; v_status text; v_cid bigint;
   v_comp text; v_comps text[]; v_link public.crm_contact_orgs; v_pair record; v_ticked boolean;
+  v_other int := public.wa284_types(f, k_type);
+  v_people jsonb; v_cmap jsonb; v_pmap jsonb; v_kmap jsonb; v_cn text;
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
+  -- the normalised names, worked out once and kept as lookup maps (jsonb keys), so no company or person rescans the staged rows or the contacts
+  select coalesce(jsonb_object_agg(z.n, true), '{}'::jsonb) into v_people
+    from (select public.wa284_norm(c.full_name) as n from public.crm_contacts c where c.merged_into is null
+          union
+          select public.wa284_norm(public.wa284_txt(y.data -> k_full)) from import_stage.rows y
+           where y.file_id = f and lower(coalesce(public.wa284_txt(y.data -> k_type), '')) = 'individual') z
+   where z.n <> '';
+  select coalesce(jsonb_object_agg(z.n, z.ids), '{}'::jsonb) into v_cmap
+    from (select public.wa284_norm(public.wa284_txt(y.data -> k_name)) as n, jsonb_agg(public.wa284_txt(y.data -> k_id) order by y.row_no) as ids
+            from import_stage.rows y where y.file_id = f and lower(coalesce(public.wa284_txt(y.data -> k_type), '')) = 'company'
+           group by 1) z
+   where z.n <> '';
   -- the companies
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'company' order by x.row_no loop
@@ -695,9 +799,7 @@ begin
       w := public.wa284_bump(w, '{counts,skipped,a phone number}');
       w := public.wa284_push(w, 'keela_ids_skipped', jsonb_build_object('keela_id', v_kid, 'reason', 'a phone number')); continue;
     end if;
-    if exists (select 1 from public.crm_contacts c where c.merged_into is null and public.wa284_norm(c.full_name) = v_n)
-       or exists (select 1 from import_stage.rows y where y.file_id = f and lower(coalesce(public.wa284_txt(y.data -> k_type), '')) = 'individual'
-                   and public.wa284_norm(public.wa284_txt(y.data -> k_full)) = v_n) then
+    if v_people ? v_n then
       w := public.wa284_bump(w, '{counts,skipped,a person''s name}');
       w := public.wa284_push(w, 'keela_ids_skipped', jsonb_build_object('keela_id', v_kid, 'reason', 'a person''s name')); continue;
     end if;
@@ -746,26 +848,28 @@ begin
     returning * into p;
     perform public.wa284_chg(p_batch, 'wa_partners', p.id::text, null, null, to_jsonb(p), 'insert');
   end loop;
-  -- people linked to their organisations (crm_contact_orgs)
+  -- people linked to their organisations (crm_contact_orgs); the partners' names and Keela ids as maps, once (after the companies were added)
+  select coalesce(jsonb_object_agg(z.n, z.id), '{}'::jsonb) into v_pmap
+    from (select distinct on (public.wa284_norm(x.name)) public.wa284_norm(x.name) as n, x.id from public.wa_partners x
+           order by public.wa284_norm(x.name), (x.keela_company_id is null), x.id) z
+   where z.n <> '';
+  select coalesce(jsonb_object_agg(x.keela_company_id, x.id), '{}'::jsonb) into v_kmap from public.wa_partners x where x.keela_company_id is not null;
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual'
               and (public.wa284_txt(x.data -> k_comp) is not null or jsonb_typeof(x.data -> k_comp) = 'array')
             order by x.row_no loop
     v_comps := public.wa284_list(r.data -> k_comp);
     if jsonb_typeof(r.data -> k_comp) = 'string' and cardinality(v_comps) > 1
-       and exists (select 1 from public.wa_partners x where public.wa284_norm(x.name) = public.wa284_norm(public.wa284_txt(r.data -> k_comp))) then
+       and v_pmap ? public.wa284_norm(public.wa284_txt(r.data -> k_comp)) then
       v_comps := array[public.wa284_txt(r.data -> k_comp)];   -- one name with a comma in it
     end if;
     if cardinality(v_comps) = 0 then continue; end if;
     v_cid := public.wa284_contact(public.wa284_txt(r.data -> k_id), lower(public.wa284_txt(r.data -> k_email)));
     if v_cid is null then w := public.wa284_bump(w, '{counts,skipped,link: no Hub contact}'); continue; end if;
     foreach v_comp in array v_comps loop
-      select x.id into v_pid from public.wa_partners x
-       where x.keela_company_id in (select public.wa284_txt(y.data -> k_id) from import_stage.rows y
-                                     where y.file_id = f and lower(coalesce(public.wa284_txt(y.data -> k_type), '')) = 'company'
-                                       and public.wa284_norm(public.wa284_txt(y.data -> k_name)) = public.wa284_norm(v_comp))
-          or public.wa284_norm(x.name) = public.wa284_norm(v_comp)
-       order by (x.keela_company_id is null), x.id limit 1;
+      v_cn := public.wa284_norm(v_comp);
+      select min((v_kmap ->> k.v)::bigint) into v_pid from jsonb_array_elements_text(coalesce(v_cmap -> v_cn, '[]'::jsonb)) as k(v) where v_kmap ? k.v;
+      if v_pid is null then v_pid := (v_pmap ->> v_cn)::bigint; end if;
       if v_pid is null then w := public.wa284_bump(w, '{counts,skipped,link: organisation not in the Hub}'); continue; end if;
       if exists (select 1 from public.crm_contact_orgs o where o.contact_id = v_cid and o.partner_id = v_pid) then continue; end if;
       insert into public.crm_contact_orgs (contact_id, partner_id, created_by) values (v_cid, v_pid, 'Keela import') returning * into v_link;
@@ -786,8 +890,10 @@ declare
   k_hist text := public.wa284_need(f, 'subscription_history');
   k_d text := public.wa284_need_in(f, k_hist, 'sub_date'); k_t text := public.wa284_need_in(f, k_hist, 'sub_type'); k_f text := public.wa284_need_in(f, k_hist, 'sub_form');
   k_c text := public.wa284_key('sub_channel');
-  r record; e record; c public.crm_contacts; v_id bigint; v_ev public.crm_consent_events; v_at timestamptz; v_kind text; v_occ date; v_form text;
+  v_other int := public.wa284_types(f, k_type);
+  r record; e record; c public.crm_contacts; oe record; os record; v_id bigint; v_ev public.crm_consent_events; v_at timestamptz; v_kind text; v_occ date; v_form text;
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
     w := public.wa284_bump(w, '{counts,rows_read}');
@@ -806,12 +912,15 @@ begin
       perform public.wa284_chg(p_batch, 'crm_consent_events', v_ev.id::text, null, null, to_jsonb(v_ev), 'insert');
     end loop;
     select * into c from public.crm_contacts x where x.id = v_id;
-    -- express email consent: the latest dated email event is an opt-in with a form name; never for an unsubscribed, bounced or complained address
+    -- express email consent: the latest dated email event is an opt-in with a form name; never for an unsubscribed, bounced or complained address,
+    -- and never past an opt-out whose date cannot be read (it may be the newest)
+    select * into oe from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'email');
     v_kind := null; v_occ := null; v_form := null;
     select ev.kind, ev.occurred, ev.form into v_kind, v_occ, v_form from public.wa284_events(r.data -> k_hist, k_d, k_t, k_f, k_c) ev
      where ev.channel = 'email' and ev.occurred is not null order by ev.occurred desc, ev.at_text desc limit 1;
     if v_kind = 'optin' and v_form is not null then
-      if c.email_status in ('unsubscribed', 'bounced', 'complained') or c.do_not_contact then w := public.wa284_bump(w, '{counts,skipped,opt-in on an address that is not emailed}');
+      if oe.undated_optouts > 0 then w := public.wa284_bump(w, '{counts,skipped,undated opt-out (no express consent)}');
+      elsif c.email_status in ('unsubscribed', 'bounced', 'complained') or c.do_not_contact then w := public.wa284_bump(w, '{counts,skipped,opt-in on an address that is not emailed}');
       elsif c.email_consent = 'express' then w := public.wa284_bump(w, '{counts,kept_hub_value,email_consent}');
       else
         perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'email_consent', to_jsonb('express'::text));
@@ -820,12 +929,25 @@ begin
       end if;
     elsif v_kind = 'optin' then w := public.wa284_bump(w, '{counts,skipped,opt-in with no form name}');
     end if;
-    -- text consent: the latest dated text event is an opt-in
-    v_kind := null; v_occ := null;
-    select ev.kind, ev.occurred into v_kind, v_occ from public.wa284_events(r.data -> k_hist, k_d, k_t, k_f, k_c) ev
-     where ev.channel = 'sms' and ev.occurred is not null order by ev.occurred desc, ev.at_text desc limit 1;
-    if v_kind = 'optin' then
-      if c.sms_opt_out or c.do_not_contact then w := public.wa284_bump(w, '{counts,skipped,text opt-in on a stopped phone}');
+    -- texts: a Keela text opt-out stops texts (sms_opt_out), unless the phone texted START to the Hub after it; a text opt-in becomes text consent
+    select * into os from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'sms');
+    if os.optout is not null then
+      if c.sms_opt_out then w := public.wa284_bump(w, '{counts,skipped,texts already stopped}');
+      elsif exists (select 1 from public.quo_messages q
+                     where q.direction = 'in' and q.handled = 'opted_in'
+                       and public.wa171_digits(q.phone) in (select public.wa171_digits(p) from unnest(c.phones) p where public.wa171_digits(p) is not null)
+                       and (os.optout_date is null or (q.created_at at time zone 'America/Toronto')::date > os.optout_date)) then
+        w := public.wa284_bump(w, '{counts,skipped,text opt-out followed by a Hub START}');
+      else
+        perform set_config('wa.consent_source', 'Keela: text opt-out ' || coalesce(to_char(os.optout_date, 'YYYY-MM-DD'), '(undated)'), true);
+        perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'sms_opt_out', 'true'::jsonb);
+        perform set_config('wa.consent_source', 'Keela import', true);
+      end if;
+    end if;
+    v_kind := os.latest_kind; v_occ := os.latest_date;
+    if os.optout is null and v_kind = 'optin' then
+      if os.undated_optouts > 0 then w := public.wa284_bump(w, '{counts,skipped,undated text opt-out (no text consent)}');
+      elsif c.sms_opt_out or c.do_not_contact then w := public.wa284_bump(w, '{counts,skipped,text opt-in on a stopped phone}');
       elsif c.sms_consent is not null then w := public.wa284_bump(w, '{counts,kept_hub_value,sms_consent}');
       else
         perform public.wa284_upd(p_batch, 'crm_contacts', v_id, 'sms_consent', to_jsonb('express'::text));
@@ -836,7 +958,7 @@ begin
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_consent(bigint, bigint, boolean) is 'wave284: batch 6 (consent). Each dated Keela subscription event goes into crm_consent_events once (source keela, column keela email|sms subscription, the type''s words, the form name, the batch). Express email consent only when the latest dated email event is an opt-in with a form name, the Hub has no express consent yet, and the address is not unsubscribed, bounced, complained or do-not-contact. A text opt-in (the latest dated text event) becomes sms_consent express, unless texts are stopped. Never undone. The service role only.';
+comment on function public.wa284_w_consent(bigint, bigint, boolean) is 'wave284: batch 6 (consent). Each dated Keela subscription event goes into crm_consent_events once (source keela, column keela email|sms subscription, the type''s words, the form name, the batch). Express email consent only when the latest dated email event is an opt-in with a form name, there is no email opt-out with an unreadable date, the Hub has no express consent yet, and the address is not unsubscribed, bounced, complained or do-not-contact. A Keela text opt-out (wa284_opt_state, channel sms) sets sms_opt_out, with the consent log source "Keela: text opt-out <date>", unless one of the contact''s phones texted START to the Hub after it. A text opt-in (the latest dated text event, no unreadable text opt-out) becomes sms_consent express, unless texts are stopped. Never undone. The service role only.';
 
 -- 7. participation: Keela tags by keela_tag_map to Campaign rows, a chapter, skip, or tags[]; adds only
 create or replace function public.wa284_w_participation(p_batch bigint, p_run bigint, p_rehearse boolean)
@@ -850,7 +972,9 @@ declare
   v_types jsonb := coalesce(public.wa284_cfg('keela_campaign_types'), '{}'::jsonb);
   r record; v_id bigint; v_tag text; m jsonb; v_camp public.wa_campaigns; v_cname text; v_type text; v_part text; v_cp public.wa_campaign_people;
   v_ch public.crm_contact_chapters; v_tags text[]; v_add text[]; v_mark text := 'Keela import batch ' || p_batch;
+  v_other int := public.wa284_types(f, k_type);
 begin
+  if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
   if jsonb_typeof(v_map) <> 'object' then raise exception 'wa284: app_config keela_tag_map is not a map'; end if;
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
@@ -917,7 +1041,7 @@ declare
   k_rid text := public.wa284_need(f, 'resp_id'); k_form text := public.wa284_need(f, 'resp_form'); k_cid text := public.wa284_need(f, 'resp_contact');
   k_email text := public.wa284_need(f, 'resp_email', false); k_date text := public.wa284_need(f, 'resp_date'); k_ans text := public.wa284_need(f, 'resp_answers');
   k_q text := public.wa284_key('ans_q'); k_a text := public.wa284_key('ans_a');
-  v_sens text := '(birth|naissance|health|sant[eé]|medical|m[eé]dical|allerg|address|adresse|street|postal)';
+  v_sens text := '(birth|naissance|\mdob\M|\mddn\M|health|sant[eé]|medical|m[eé]dical|medicat|m[eé]dicament|condition|disabilit|handicap|dietary|di[eé]t|injur|blessure|allerg|address|adresse|street|postal)';
   r record; v_rid text; v_form text; v_id bigint; v_d date; v_body text; v_lines text[]; v_skipped int; q record; v_i public.crm_interactions; v_ch public.crm_contact_chapters;
 begin
   for r in select x.row_no, x.data from import_stage.rows x where x.file_id = f order by x.row_no loop
@@ -966,7 +1090,7 @@ begin
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_form_answers(bigint, bigint, boolean) is 'wave284: batch 8 (form_answers). Keela responses with no Hub interaction of the same response id (source keela, source_ref keela:<id>, as the first import wrote them) become crm_interactions rows: kind form, direction in, channel website, the form name as subject, the answers as "Question: answer" lines (birth date, health and home address answers left out), the day it was given. A Toronto form adds the Toronto chapter. Adds only. The service role only.';
+comment on function public.wa284_w_form_answers(bigint, bigint, boolean) is 'wave284: batch 8 (form_answers). Keela responses with no Hub interaction of the same response id (source keela, source_ref keela:<id>, as the first import wrote them) become crm_interactions rows: kind form, direction in, channel website, the form name as subject, the answers as "Question: answer" lines (answers about a birth date or DOB, health, a medical matter, medication, a condition, a disability, diet, an injury, allergies or a home address left out), the day it was given. A Toronto form adds the Toronto chapter. Adds only. The service role only.';
 
 -- ============================================================================================ 7. dispatch, report, compare, apply, undo, purge
 create or replace function public.wa284_write(p_batch bigint, p_rehearse boolean)
@@ -1001,7 +1125,9 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
                                                                       where c.batch_id = p_batch and not (c.action = 'insert' and c.table_name in ('crm_contacts', 'wa_partners', 'wa_campaigns'))
                                                                       group by 1) g), '{}'::jsonb),
       'kept_hub_value', coalesce(p_w #> '{counts,kept_hub_value}', '{}'::jsonb),
-      'skipped', coalesce(p_w #> '{counts,skipped}', '{}'::jsonb)),
+      'skipped', coalesce(p_w #> '{counts,skipped}', '{}'::jsonb))
+      || jsonb_strip_nulls(jsonb_build_object('undated_events', p_w #> '{counts,undated_events}', 'undated_optouts_honoured', p_w #> '{counts,undated_optouts_honoured}',
+                                   'created_not_emailed', p_w #> '{counts,created_not_emailed}')),
     'lists', '{"keela_ids_skipped": [], "org_pairs": [], "assignees_unmapped": [], "campaigns_to_create": [], "changed_since_kept": [], "created_review": []}'::jsonb
              || coalesce(p_w -> 'lists', '{}'::jsonb),
     'changes', (select count(*) from public.crm_import_changes c where c.batch_id = p_batch))
@@ -1040,6 +1166,24 @@ begin
   end loop;
 end $wa284$;
 
+create or replace function public.wa284_basis(p_batch bigint)
+returns jsonb language plpgsql stable security definer set search_path to '' as $function$
+declare b public.crm_import_batches; v_kind text; v_keys text[]; f import_stage.files;
+begin
+  select * into b from public.crm_import_batches x where x.id = p_batch;
+  v_kind := case b.kind when 'legacy_fields' then null when 'form_answers' then 'keela_responses_json' else 'keela_contacts_json' end;
+  if v_kind is not null then
+    select * into f from import_stage.files x where x.run_id = b.run_id and x.kind = v_kind and x.rows is not null and x.staged_through = x.rows order by x.id desc limit 1;
+  end if;
+  v_keys := case b.kind when 'legacy_fields' then array['keela_assignee_map']
+                        when 'orgs' then array['keela_keys', 'keela_org_pairs_ok', 'keela_company_category_map', 'keela_status_map']
+                        when 'participation' then array['keela_keys', 'keela_tag_map', 'keela_campaign_types']
+                        else array['keela_keys'] end;
+  return jsonb_build_object('file_id', f.id, 'rows', f.rows, 'staged_at', extract(epoch from f.staged_at),   -- as a number: the same whatever the session's time zone
+    'settings', (select md5(string_agg(k.k || '=' || coalesce(c.value, ''), '|' order by k.k)) from unnest(v_keys) as k(k) left join public.app_config c on c.key = k.k));
+end $function$;
+comment on function public.wa284_basis(bigint) is 'wave284: what a batch''s compare was based on: the staged file it read (id, rows, when it was staged) and a checksum of the settings it uses (keela_keys; the assignee map for legacy_fields; the pairs, category and status maps for orgs; the tag map and campaign types for participation). wa284_compare keeps it in the report as basis, and wa284_apply refuses when it has changed since, so what is applied is what was compared. The service role only.';
+
 create or replace function public.wa284_compare(p_batch bigint, p_by text default null)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare b public.crm_import_batches; v_w jsonb; v_report jsonb; v_err text; v_state text; v_table text; v_col text; v_con text;
@@ -1054,7 +1198,7 @@ begin
     perform set_config('wa.consent_source', 'Keela import', true);
     delete from public.crm_import_changes c where c.batch_id = p_batch;   -- the records of an earlier, undone apply (back after the rollback)
     v_w := public.wa284_write(p_batch, true);
-    v_report := public.wa284_report(p_batch, v_w);
+    v_report := public.wa284_report(p_batch, v_w) || jsonb_build_object('basis', public.wa284_basis(p_batch));
     raise exception using errcode = 'WA284', message = 'wa284: compare rolled back';
   exception
     when sqlstate 'WA284' then
@@ -1079,20 +1223,24 @@ begin
   if b.id is null then raise exception 'wa284: there is no batch %', p_batch; end if;
   if b.status <> 'compared' then raise exception 'wa284: compare this batch first (it is %)', b.status; end if;
   if (select r.purged_at from public.crm_import_runs r where r.id = b.run_id) is not null then raise exception 'wa284: this run was purged; start a new run'; end if;
+  -- what is applied is what was compared: the same staged file and the same settings
+  if (b.report -> 'basis') is distinct from public.wa284_basis(p_batch) then
+    raise exception 'wa284: the staged file or the settings changed since the compare; compare again';
+  end if;
   perform set_config('wa.no_automations', 'on', true);
   perform set_config('wa.import_batch', p_batch::text, true);
   perform set_config('wa.consent_source', 'Keela import', true);
   delete from public.crm_import_changes c where c.batch_id = p_batch;   -- the records of an earlier apply that was undone
   v_w := public.wa284_write(p_batch, false);
   perform public.wa284_guard();
-  v_report := public.wa284_report(p_batch, v_w);
+  v_report := public.wa284_report(p_batch, v_w) || jsonb_build_object('basis', b.report -> 'basis');
   update public.crm_import_batches x set status = 'applied', report = v_report, error = null, applied_at = now(), applied_by = coalesce(nullif(p_by, ''), 'service'),
          undone_at = null, undone_by = null
    where x.id = p_batch;
   update public.crm_import_runs r set last_applied_at = now() where r.id = b.run_id;
   return v_report;
 end $function$;
-comment on function public.wa284_apply(bigint, text) is 'wave284: Apply, on an admin''s yes after a compare. In one transaction: wa.no_automations on, wa.import_batch the batch and wa.consent_source Keela import; the writer; the side-effect guard (wa284_guard, and the trigger trg_wa284_import_guard on nine tables); then status applied, the report, who and when, and crm_import_runs.last_applied_at. Any error rolls all of it back (crm-import then records it with wa284_fail). The service role only.';
+comment on function public.wa284_apply(bigint, text) is 'wave284: Apply, on an admin''s yes after a compare. It refuses when the staged file or the settings the compare read have changed since (wa284_basis). In one transaction: wa.no_automations on, wa.import_batch the batch and wa.consent_source Keela import; the writer; the side-effect guard (wa284_guard, and the trigger trg_wa284_import_guard on nine tables); then status applied, the report, who and when, and crm_import_runs.last_applied_at. Any error rolls all of it back (crm-import then records it with wa284_fail). The service role only.';
 
 create or replace function public.wa284_fail(p_batch bigint, p_error text)
 returns void language sql security definer set search_path to '' as $function$

@@ -45,8 +45,14 @@ insert into public.crm_fields (key, label, type, options, sort, created_by) valu
 insert into public.crm_contacts (id, full_name, first_name, emails, email_status, notes, legacy_refs) overriding system value values
   (3001, 'Test Alpha Keela', null, array['alpha@example.com'], 'subscribed', 'A Hub note',
    '{"keela": {"contact_id": "KT001", "positions": ["Volunteer Cook, Volunteer Server", "Juggler"], "availability": ["Sundays May to August"], "dates_volunteered": ["2025-06-01", "2025-07-06"], "rally_paper_team": "Quest", "donor_readiness": "Shows potential", "assignee": "Test Staff One"}}');
-insert into public.crm_contacts (id, full_name, first_name, emails, city, legacy_refs) overriding system value values
-  (3002, 'Test Beta', 'Beta', array['beta@example.com'], 'Montreal', '{}');
+insert into public.crm_contacts (id, full_name, first_name, emails, phones, city, legacy_refs) overriding system value values
+  (3002, 'Test Beta', 'Beta', array['beta@example.com'], array['+1 514 555 0202'], 'Montreal', '{}');
+-- that phone texted START to the Hub on 01/06/25, after its Keela text opt-out (batch 6 keeps texts on)
+insert into public.quo_messages (batch_id, phone, body, status, direction, kind, handled, created_at) values
+  (gen_random_uuid(), '+15145550202', 'START', 'received', 'in', 'inbound', 'opted_in', '2025-06-01 12:00:00+00');
+-- a Keela person whose history has an undated unsubscribe that a dated opt-in clearly follows (the list runs oldest first)
+insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
+  (3006, 'Test Theta Order', array['theta@example.com'], 'subscribed', '{"keela": {"contact_id": "KT010"}}');
 insert into public.crm_contacts (id, full_name, phones, legacy_refs) overriding system value values
   (3003, 'gamma@example.com', array['+1 514 555 0303'], '{}');
 insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values

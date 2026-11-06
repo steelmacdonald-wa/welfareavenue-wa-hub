@@ -92,7 +92,7 @@ try {
       do $$ declare v_run bigint; v_file bigint; v_b bigint; begin
         v_run := public.wa284_new_run('Test net guard', 'test');
         v_file := public.wa284_register(v_run, v_run || '/net.json', 'keela_contacts_json');
-        perform public.wa284_stage_rows(v_file, 0, '[{"Contact Id": "KTNET", "Contact Type": "Individual", "Full Name": "Test Net Guard", "First Name": "", "Last Name": "", "Primary Email": "net.guard@example.com", "Primary Phone": "", "Street": "", "Street Line 2": "", "City": "", "Province": "", "Postal Code": "", "Country": "", "Notes": ""}]'::jsonb, 1);
+        perform public.wa284_stage_rows(v_file, 0, '[{"Contact Id": "KTNET", "Contact Type": "Individual", "Full Name": "Test Net Guard", "First Name": "", "Last Name": "", "Primary Email": "net.guard@example.com", "Primary Phone": "", "Street": "", "Street Line 2": "", "City": "", "Province": "", "Postal Code": "", "Country": "", "Notes": "", "Subscription History": [{"date": "2025-01-01", "type": "Email Opted In", "form_name": "Test Form"}]}]'::jsonb, 1);
         v_b := public.wa284_new_batch(v_run, 'people');
         perform public.wa284_compare(v_b);
         insert into w284_ids values ('b', v_b);
