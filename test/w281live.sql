@@ -75,7 +75,11 @@ begin
   -- grants and row security
   if exists (select 1 from unnest(array['public.crm_add_chapter(bigint,text,text,text)', 'public.crm_in_chapter(bigint,text)', 'public.crm_consent_log()', 'public.crm_consent_guard()',
                'public.crm_set_do_not_contact(bigint,text)', 'public.crm_age_band(bigint)', 'public.wa_can(text)', 'public.wa_my_caps()', 'public.crm_gift_campaign_id(text)',
-               'public.wa281_gift_campaign()']) f where has_function_privilege('anon', f, 'execute')) then raise exception 'w281live: anon can run a new function'; end if;
+               'public.wa281_gift_campaign()', 'public.crm_dnc_hold()']) f where has_function_privilege('anon', f, 'execute')) then raise exception 'w281live: anon can run a new function'; end if;
+  if exists (select 1 from unnest(array['anon', 'authenticated', 'service_role']) ro where has_function_privilege(ro, 'public.crm_dnc_hold()', 'execute'))
+     or not exists (select 1 from pg_trigger where tgname = 'trg_wa281_dnc_hold' and tgrelid = 'public.crm_contacts'::regclass and tgenabled = 'O') then
+    raise exception 'w281live: the do-not-contact hold trigger is missing, or its function can be run directly';
+  end if;
   if has_function_privilege('authenticated', 'public.crm_add_chapter(bigint,text,text,text)', 'execute') or has_function_privilege('authenticated', 'public.crm_gift_campaign_id(text)', 'execute')
      or has_table_privilege('authenticated', 'public.wa_stopped_phones_v', 'select') then raise exception 'w281live: a service-role-only object is open to signed-in users'; end if;
   if exists (select 1 from pg_class where relname in ('crm_chapters', 'crm_contact_chapters', 'crm_consent_events', 'crm_contact_private', 'wa_campaigns', 'wa_campaign_people')
@@ -123,6 +127,11 @@ begin
     select * into r from public.crm_email_permission(v_drop, k);
     if r.allowed or r.basis <> 'do not contact' then raise exception 'w281live: crm_email_permission let the % kind through', k; end if;
   end loop;
+  -- final review I1: while do-not-contact is on, a write cannot turn texts, WhatsApp or email back on, and a value it holds writes no log row
+  select count(*) into n from public.crm_consent_events where contact_id = v_drop;
+  update public.crm_contacts set sms_opt_out = false, whatsapp_opt_out = false, email_status = 'unknown' where id = v_drop;
+  if not (select sms_opt_out and whatsapp_opt_out and email_status = 'unsubscribed' from public.crm_contacts where id = v_drop) then raise exception 'w281live: do-not-contact did not hold the opt-outs'; end if;
+  if (select count(*) from public.crm_consent_events where contact_id = v_drop) <> n then raise exception 'w281live: a held opt-out wrote a log row'; end if;
   insert into public.crm_contact_chapters (contact_id, chapter, source) values (v_drop, 'toronto', 'hand');
   insert into public.wa_campaign_people (campaign_id, contact_id, part, source) values (c_gbd, v_drop, 'donor', 'hand');
   insert into public.crm_contact_private (contact_id, birth_date, source) values (v_drop, ((now() at time zone 'America/Toronto')::date - interval '17 years')::date, 'test');

@@ -252,14 +252,16 @@ end $$;
 
 -- 6 to 10 (fix round 1): who the text box counts for
 do $$
-declare s bigint; c bigint; d record;
+declare s bigint; c bigint; d record; n int;
 begin
-  -- 6. do-not-contact (not stopped, the same phone): no text consent
+  -- 6. do-not-contact (the same phone): no text consent. Since the final review (I1) do-not-contact holds texts off (trg_wa281_dnc_hold), so the
+  --    contact is stopped from the insert on and the log has that row; the answer adds nothing to it.
   insert into public.crm_contacts (full_name, emails, phones, do_not_contact) values ('Fixture Dnc', array['fixture.dnc@toronto-fixture.ca'], array['+14165550111'], true) returning id into c;
+  n := (select count(*) from public.crm_consent_events where contact_id = c and channel = 'sms');
   s := pg_temp.w288_answer('fixture.dnc@toronto-fixture.ca', '+1 416 555 0111', '2026-11-06 19:10:00+00');
   select * into d from public.crm_contacts where id = c;
-  assert (select contact_id from public.crm_form_submissions where id = s) = c and d.sms_consent is null and not d.sms_opt_out
-     and not exists (select 1 from public.crm_consent_events where contact_id = c and channel = 'sms'), 'do-not-contact: no text consent, sms_opt_out untouched, nothing in the log';
+  assert (select contact_id from public.crm_form_submissions where id = s) = c and d.sms_consent is null and d.sms_opt_out
+     and (select count(*) from public.crm_consent_events where contact_id = c and channel = 'sms') = n, 'do-not-contact: no text consent, texts stay off, nothing new in the log';
   assert (select consent -> 'sms' ->> 'given' from public.crm_form_submissions where id = s) = 'true', 'do-not-contact: the tick stays in the answer';
   -- 7. a different phone typed than the one on file: no text consent, the phone on file kept
   insert into public.crm_contacts (full_name, emails, phones) values ('Fixture Otherphone', array['fixture.otherphone@toronto-fixture.ca'], array['+14165550120']) returning id into c;

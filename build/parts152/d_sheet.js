@@ -420,8 +420,10 @@
       field('Implied consent runs until', inp('implied_consent_until', until, '', 'date'), false, 'two years after the last gift, membership or volunteering') +
       '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + '> They unsubscribed: no newsletters or campaigns</label>' +
       '<label class="chk full"><input type="checkbox" data-f="sms_opt_out"' + (c.sms_opt_out ? ' checked' : '') + '> No text messages</label>' +
+      (c.do_not_contact ? '<div class="note" data-w281dnc>Do not contact is on. Clear it first to change these.</div>' : '') +
       '<div class="note">Implied consent under CASL: an existing relationship in the last two years, such as a gift or volunteering for a registered charity, or a membership. It runs out two years after the last one. When in doubt, ask for express consent.</div>' +
-      '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button><button class="w152btn" data-w152savep="' + E(id) + '">' + I('check') + ' Save</button></div>';
+      '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button>' + (c.do_not_contact ? '' : '<button class="w152btn" data-w152savep="' + E(id) + '">' + I('check') + ' Save</button>') + '</div>';
+    if (c.do_not_contact) html = html.replace(/<(input|select) /g, '<$1 disabled ');   /* final review I1: do not contact holds these (the database too), so the form only shows them */
     openSheet(html, 'perm:' + id, true);
   }
   function orgForm(id) {
@@ -534,6 +536,7 @@
   }
   async function savePerm(id) {
     var c = contact(id); if (!c) return;
+    if (c.do_not_contact) { showErr('Do not contact is on. Clear it first to change these.'); return; }   /* final review I1 */
     var v = formVals();
     var row = { email_consent: v.email_consent || null, consent_source: v.consent_source || null, updated_by: actor(), sms_opt_out: !!v.sms_opt_out };
     if (v.email_consent === 'express') row.consent_at = v.consent_at ? v.consent_at + 'T12:00:00Z' : (c.consent_at || new Date().toISOString());

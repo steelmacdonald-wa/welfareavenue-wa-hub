@@ -134,6 +134,18 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   await f.hash('#crm/c/5002', 2000);
   b = await f.ev(() => ({ banner: (document.querySelector('#w152sheet .w283dnc') || {}).innerText || '', ask: !!document.querySelector('#w152sheet [data-w283dncask]') }));
   ok('a do-not-contact contact shows "Do not contact (asked)" under their name, with a way to clear it', /Do not contact \(asked\)/.test(b.banner) && b.ask, b);
+  /* final review I1: while do not contact is on, the Email permission form shows the email and text boxes disabled, says why, and has no Save */
+  await click(f, '#w152sheet [data-w152perm-edit="5002"]'); await f.page.waitForTimeout(500);
+  b = await f.ev(() => { const q = (s) => document.querySelector('#w152sheet ' + s) || {}; return { unsub: [q('[data-f="unsub"]').disabled, q('[data-f="unsub"]').checked], sms: [q('[data-f="sms_opt_out"]').disabled, q('[data-f="sms_opt_out"]').checked],
+    perm: q('[data-f="email_consent"]').disabled, line: (q('[data-w281dnc]').textContent || ''), save: !!document.querySelector('#w152sheet [data-w152savep]') }; });
+  ok('do not contact: the email and text boxes show (ticked) but disabled, with "Do not contact is on. Clear it first to change these."',
+    b.unsub[0] === true && b.unsub[1] === true && b.sms[0] === true && b.sms[1] === true && b.line === 'Do not contact is on. Clear it first to change these.', b);
+  ok('do not contact: the rest of the form is read-only too, and there is no Save', b.perm === true && !b.save, b);
+  b = await f.ev(async () => { let n = 0; const f0 = db.from; db.from = function (t) { if (t === 'crm_contacts') n++; return f0.apply(db, arguments); };
+    try { await window.w152.savePerm('5002'); } finally { db.from = f0; }
+    return { err: (document.querySelector('#w152sheet [data-w152err]') || {}).textContent || '', calls: n }; });
+  ok('a save forced anyway writes nothing and says why', b.err === 'Do not contact is on. Clear it first to change these.' && b.calls === 0, b);
+  await click(f, '#w152sheet [data-w152back="5002"]'); await f.page.waitForTimeout(400);
   await click(f, '#w152sheet [data-w283dncask]'); await f.page.waitForTimeout(300);
   b = await text(f, '#w152sheet .w283cf');
   ok('clearing asks first and says it does not resubscribe them', /Clear do not contact for Bea Testasked\?/.test(b || '') && /This does not resubscribe them\./.test(b || ''), b);

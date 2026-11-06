@@ -238,6 +238,88 @@ begin
   perform set_config('wa.consent_source', '', true);
 end $$;
 
+-- ---------------------------------------------------------------- do-not-contact holds the opt-outs on its own (final review I1, trg_wa281_dnc_hold)
+do $$
+declare r record;
+begin
+  perform set_config('request.jwt.claims', '', true);
+  -- an insert with do-not-contact already on: the three opt-outs, each logged once; a bounce stays a bounce
+  insert into public.crm_contacts (id, full_name, emails, phones, email_status, do_not_contact, dnc_reason) overriding system value values
+    (1711, 'Test Dnc Insert', array['w281.dnc.insert@example.invalid'], array['+1 514 555 0711'], 'subscribed', true, 'asked'),
+    (1712, 'Test Dnc Bounced', array['w281.dnc.bounced@example.invalid'], '{}', 'bounced', true, 'other'),
+    (1713, 'Test Dnc Complained', array['w281.dnc.complained@example.invalid'], '{}', 'complained', true, 'asked');
+  select * into r from public.crm_contacts where id = 1711;
+  assert r.sms_opt_out and r.whatsapp_opt_out and r.email_status = 'unsubscribed', 'an insert with do-not-contact on gets texts, WhatsApp and email off';
+  assert (select string_agg(column_name || '=' || new_value, ',' order by column_name) from public.crm_consent_events where contact_id = 1711)
+    = 'email_status=unsubscribed,sms_opt_out=true,whatsapp_opt_out=true', 'and the log records each once';
+  assert (select string_agg(id || ':' || email_status, ',' order by id) from public.crm_contacts where id in (1712, 1713)) = '1712:bounced,1713:complained',
+    'an insert keeps bounced and complained';
+end $$;
+
+-- a staff member's update (the page's Email permission form) cannot turn them back on, and writes no false change rows
+select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.member@example.invalid","sub":"00000000-0000-0000-0000-000000000001"}', true);
+set local role authenticated;
+do $$
+declare r record; n int := (select count(*) from public.crm_consent_events where contact_id in (1711, 1712, 1713));
+begin
+  update public.crm_contacts set sms_opt_out = false, whatsapp_opt_out = false, email_status = 'unknown' where id = 1711;
+  select * into r from public.crm_contacts where id = 1711;
+  assert r.sms_opt_out and r.whatsapp_opt_out and r.email_status = 'unsubscribed', 'a staff update setting the opt-outs off on a do-not-contact contact leaves them on';
+  update public.crm_contacts set email_status = 'unknown' where id = 1712;
+  update public.crm_contacts set email_status = 'unsubscribed' where id = 1713;
+  assert (select string_agg(id || ':' || email_status, ',' order by id) from public.crm_contacts where id in (1712, 1713)) = '1712:bounced,1713:complained',
+    'bounced and complained are not overwritten';
+  assert (select count(*) from public.crm_consent_events where contact_id in (1711, 1712, 1713)) = n, 'and no consent row is written for a value that did not change';
+end $$;
+reset role;
+
+do $$
+declare r record; v jsonb; n int;
+begin
+  perform set_config('request.jwt.claims', '', true);
+  -- a START from the contact's own phone (sms_mode is live since the block above): handled, the phone leaves the stopped list, the contact stays stopped
+  n := (select count(*) from public.crm_consent_events where contact_id = 1711);
+  v := public.wa171_inbound('{"phone": "+15145550711", "text": "START", "quo_id": "w281-q11", "at": "2026-11-06T13:00:00Z"}');
+  perform set_config('wa.consent_source', '', true);
+  assert v ->> 'handled' = 'opted_in', 'START from a do-not-contact contact''s phone is handled';
+  assert (select sms_opt_out from public.crm_contacts where id = 1711), 'and their texts stay stopped';
+  assert (select count(*) from public.crm_consent_events where contact_id = 1711) = n, 'with no START text row in their log';
+  assert public.wa171_opted_out(null, '5145550711') = true, 'wa171_opted_out still says stopped';
+
+  -- a merge that brings in a do-not-contact contact; the dropped record's opt-outs predate this rule (texts and email back on, set with triggers off)
+  insert into public.crm_contacts (id, full_name, emails, email_status) overriding system value values (1714, 'Test Dnc Keep', array['w281.dnc.keep@example.invalid'], 'subscribed');
+  perform set_config('session_replication_role', 'replica', true);
+  insert into public.crm_contacts (id, full_name, emails, email_status, do_not_contact, dnc_reason, dnc_at, dnc_by) overriding system value
+    values (1715, 'Test Dnc Drop', array['w281.dnc.drop@example.invalid'], 'subscribed', true, 'asked', now(), 'w281.member@example.invalid');
+  perform set_config('session_replication_role', 'origin', true);
+  assert (select not sms_opt_out and email_status = 'subscribed' from public.crm_contacts where id = 1715), 'the dropped record starts with texts and email on';
+  n := (select max(id) from public.crm_consent_events);
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.member@example.invalid","sub":"00000000-0000-0000-0000-000000000001"}', true);
+  perform public.crm_merge_contacts(1714, 1715);
+  perform set_config('request.jwt.claims', '', true);
+  select * into r from public.crm_contacts where id = 1714;
+  assert r.do_not_contact and r.sms_opt_out and r.whatsapp_opt_out and r.email_status = 'unsubscribed', 'the kept contact takes do-not-contact, and with it texts, WhatsApp and email off';
+  assert (select string_agg(column_name || '=' || new_value, ',' order by column_name) from public.crm_consent_events where contact_id = 1714 and id > n)
+    = 'email_status=unsubscribed,sms_opt_out=true,whatsapp_opt_out=true', 'and the log records the three changes on the kept contact';
+
+  -- writing do_not_contact alone (as the service role or a direct API write could): the opt-outs follow, and the log records them
+  insert into public.crm_contacts (id, full_name, emails) overriding system value values (1716, 'Test Dnc Direct', array['w281.dnc.direct@example.invalid']);
+  update public.crm_contacts set do_not_contact = true, dnc_reason = 'other' where id = 1716;
+  select * into r from public.crm_contacts where id = 1716;
+  assert r.sms_opt_out and r.whatsapp_opt_out and r.email_status = 'unsubscribed', 'setting do_not_contact alone turns the three off';
+  assert (select count(*) from public.crm_consent_events where contact_id = 1716 and column_name in ('email_status', 'sms_opt_out', 'whatsapp_opt_out')) = 3, 'and the log has a row for each';
+
+  -- clearing do-not-contact leaves the opt-outs as they were; after that, the usual rules apply again
+  perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.member@example.invalid","sub":"00000000-0000-0000-0000-000000000001"}', true);
+  perform public.crm_set_do_not_contact(1711, null);
+  perform set_config('wa.consent_source', '', true);
+  select * into r from public.crm_contacts where id = 1711;
+  assert not r.do_not_contact and r.sms_opt_out and r.whatsapp_opt_out and r.email_status = 'unsubscribed', 'clearing do-not-contact leaves the opt-outs as they were';
+  update public.crm_contacts set sms_opt_out = false where id = 1711;
+  assert not (select sms_opt_out from public.crm_contacts where id = 1711), 'once it is cleared, staff can turn texts back on';
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+
 -- ---------------------------------------------------------------- access
 do $$
 declare v_caps jsonb;

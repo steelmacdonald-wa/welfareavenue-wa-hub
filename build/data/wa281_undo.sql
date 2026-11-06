@@ -587,6 +587,9 @@ drop index if exists public.quo_messages_wa281_keyword_idx;
 drop index if exists public.whatsapp_messages_wa281_keyword_idx;
 
 -- ============================================================================================ 9. do-not-contact
+drop trigger if exists trg_wa281_dnc_hold on public.crm_contacts;
+drop function if exists public.crm_dnc_hold();
+drop trigger if exists trg_wa281_consent_log on public.crm_contacts;   -- it fires on do_not_contact too
 drop function if exists public.crm_set_do_not_contact(bigint, text);
 alter table public.crm_contacts drop column if exists dnc_by;
 alter table public.crm_contacts drop column if exists dnc_at;

@@ -206,10 +206,7 @@ begin
 end $function$;
 revoke all on function public.crm_consent_log() from public, anon, authenticated;
 comment on function public.crm_consent_log() is 'wave281: trigger function on crm_contacts (trg_wa281_consent_log). Writes one crm_consent_events row for each of email_status, email_consent, sms_opt_out, sms_consent and whatsapp_opt_out whose value changed (on insert: each that differs from the column default, so a plain new contact writes nothing). Source: wa.consent_source, else a changed consent_source, else staff, else website account (a signed-in person who is not staff), else system. Actor: the signed-in email, or system.';
-drop trigger if exists trg_wa281_consent_log on public.crm_contacts;
-create trigger trg_wa281_consent_log after insert or update of email_status, email_consent, sms_opt_out, sms_consent, whatsapp_opt_out on public.crm_contacts
-  for each row execute function public.crm_consent_log();
-comment on trigger trg_wa281_consent_log on public.crm_contacts is 'wave281: writes the consent log (crm_consent_events) when a consent column changes.';
+-- its trigger, trg_wa281_consent_log, is created in 1.3, after the do_not_contact column it also fires on
 
 create or replace function public.crm_consent_guard()
 returns trigger language plpgsql security definer set search_path to '' as $function$
@@ -259,7 +256,7 @@ alter table public.crm_contacts add column if not exists do_not_contact boolean 
 alter table public.crm_contacts add column if not exists dnc_reason text check (dnc_reason in ('deceased', 'asked', 'other'));
 alter table public.crm_contacts add column if not exists dnc_at timestamptz;
 alter table public.crm_contacts add column if not exists dnc_by text;
-comment on column public.crm_contacts.do_not_contact is 'wave281: true when nobody may contact this person by any channel (crm_set_do_not_contact). crm_email_permission refuses every kind of email, transactional included; setting it also unsubscribes the email and stops texts and WhatsApp. Receipts are still issued and stored, not emailed.';
+comment on column public.crm_contacts.do_not_contact is 'wave281: true when nobody may contact this person by any channel (crm_set_do_not_contact). crm_email_permission refuses every kind of email, transactional included; setting it also unsubscribes the email and stops texts and WhatsApp, and while it is on trg_wa281_dnc_hold keeps them that way. Receipts are still issued and stored, not emailed.';
 comment on column public.crm_contacts.dnc_reason is 'wave281: why the person is do-not-contact: deceased, asked or other.';
 comment on column public.crm_contacts.dnc_at is 'wave281: when do-not-contact was set.';
 comment on column public.crm_contacts.dnc_by is 'wave281: the signed-in email that set do-not-contact.';
@@ -288,6 +285,46 @@ end $function$;
 revoke all on function public.crm_set_do_not_contact(bigint, text) from public, anon;
 grant execute on function public.crm_set_do_not_contact(bigint, text) to authenticated, service_role;
 comment on function public.crm_set_do_not_contact(bigint, text) is 'wave281: sets or clears do-not-contact for one person. CRM staff only. With a reason (deceased, asked, other): the flag, reason, time and who, email_status unsubscribed (bounced or complained are kept), sms_opt_out and whatsapp_opt_out true, consent_source do not contact: <reason>; the consent log records each change. With a null reason: clears the four do-not-contact fields only (never resubscribes anyone) and writes a change_log line, do not contact cleared.';
+
+-- do-not-contact holds the opt-outs on its own (final review, 06/11/26). Whoever writes the row (the page, a START text, a merge, an import), while
+-- do_not_contact is true texts and WhatsApp stay stopped and the email stays unsubscribed; a bounce or a complaint stays as it is. Clearing it changes
+-- nothing, so nobody is resubscribed. It runs before the row is written and the consent log (after) compares the final values, so a value it holds
+-- that was already on writes no log row.
+create or replace function public.crm_dnc_hold()
+returns trigger language plpgsql security definer set search_path to '' as $function$
+begin
+  if new.do_not_contact then
+    new.sms_opt_out := true;
+    new.whatsapp_opt_out := true;
+    if new.email_status is null or new.email_status not in ('unsubscribed', 'bounced', 'complained') then new.email_status := 'unsubscribed'; end if;
+    if tg_op = 'UPDATE' then
+      if old.email_status in ('bounced', 'complained') and new.email_status not in ('bounced', 'complained') then new.email_status := old.email_status; end if;
+    end if;
+  end if;
+  return new;
+end $function$;
+revoke all on function public.crm_dnc_hold() from public, anon, authenticated, service_role;
+comment on function public.crm_dnc_hold() is 'wave281 (final review, 06/11/26): trigger function on crm_contacts (trg_wa281_dnc_hold). While do_not_contact is true it keeps sms_opt_out and whatsapp_opt_out true and email_status unsubscribed (bounced or complained stay as they are), whoever writes the row: the page, a START text through wa171_inbound, a merge, an import. Clearing do_not_contact changes nothing, so nobody is resubscribed. No direct execute grant.';
+drop trigger if exists trg_wa281_dnc_hold on public.crm_contacts;
+create trigger trg_wa281_dnc_hold before insert or update of do_not_contact, sms_opt_out, whatsapp_opt_out, email_status on public.crm_contacts
+  for each row execute function public.crm_dnc_hold();
+comment on trigger trg_wa281_dnc_hold on public.crm_contacts is 'wave281: while do-not-contact is on, texts, WhatsApp and email stay off (crm_dnc_hold).';
+-- the consent log's trigger (1.2): it also fires when do_not_contact is written, so the opt-outs trg_wa281_dnc_hold sets are recorded
+drop trigger if exists trg_wa281_consent_log on public.crm_contacts;
+create trigger trg_wa281_consent_log after insert or update of email_status, email_consent, sms_opt_out, sms_consent, whatsapp_opt_out, do_not_contact on public.crm_contacts
+  for each row execute function public.crm_consent_log();
+comment on trigger trg_wa281_consent_log on public.crm_contacts is 'wave281: writes the consent log (crm_consent_events) when a consent column changes; it also fires when do_not_contact is written, so the opt-outs trg_wa281_dnc_hold sets are recorded.';
+-- a do-not-contact person whose opt-outs moved while this rule was off (the undo keeps the flag) is put right; the consent log records it
+do $wa281dnc$
+declare r record;
+begin
+  for r in select c.id, c.dnc_reason from public.crm_contacts c
+            where c.do_not_contact and (not c.sms_opt_out or not c.whatsapp_opt_out or coalesce(c.email_status, '') not in ('unsubscribed', 'bounced', 'complained')) loop
+    perform set_config('wa.consent_source', 'do not contact: ' || coalesce(r.dnc_reason, 'other'), true);
+    update public.crm_contacts set sms_opt_out = true where id = r.id;
+  end loop;
+  perform set_config('wa.consent_source', '', true);
+end $wa281dnc$;
 
 -- ============================================================================================ 1.4 STOP sticks to the phone number
 create index if not exists quo_messages_wa281_keyword_idx on public.quo_messages (phone, created_at) where direction = 'in' and handled in ('opted_out', 'opted_in');

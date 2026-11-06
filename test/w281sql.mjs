@@ -44,7 +44,8 @@ const MATCH_MD5 = 'd21db1e35fb6e0a8f65d766db3a1d618';
 const VIEW_MD5 = '326f39ce0495c38c50c81273ee58fd9f';
 const PATCHED = Object.keys(LIVE);
 const ADDED_FNS = ['public.crm_add_chapter(bigint,text,text,text)', 'public.crm_in_chapter(bigint,text)', 'public.crm_consent_log()', 'public.crm_consent_guard()',
-  'public.crm_set_do_not_contact(bigint,text)', 'public.crm_age_band(bigint)', 'public.wa_can(text)', 'public.wa_my_caps()', 'public.crm_gift_campaign_id(text)', 'public.wa281_gift_campaign()'];
+  'public.crm_set_do_not_contact(bigint,text)', 'public.crm_age_band(bigint)', 'public.wa_can(text)', 'public.wa_my_caps()', 'public.crm_gift_campaign_id(text)', 'public.wa281_gift_campaign()',
+  'public.crm_dnc_hold()'];
 const ADDED_TABLES = ['crm_chapters', 'crm_contact_chapters', 'crm_consent_events', 'crm_contact_private', 'wa_campaigns', 'wa_campaign_people'];
 const ADDED_COLUMNS = [['crm_contacts', 'sms_consent'], ['crm_contacts', 'sms_consent_source'], ['crm_contacts', 'sms_consent_at'], ['crm_contacts', 'do_not_contact'],
   ['crm_contacts', 'dnc_reason'], ['crm_contacts', 'dnc_at'], ['crm_contacts', 'dnc_by'], ['crm_contacts', 'job_title'], ['hub_roles', 'caps'], ['crm_donations', 'campaign_id'],
@@ -128,7 +129,7 @@ try {
       from pg_attribute a where a.attrelid = 'public.${t}'::regclass and a.attnum > 0 and not a.attisdropped`);
     ok(r.n > 0 && r.missing === null, 'every column of ' + t + ' has a comment (' + r.n + ' columns; missing: ' + r.missing + ')');
   }
-  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname in ('trg_wa281_consent_log', 'trg_wa281_consent_guard', 'trg_wa281_gift_campaign') and not tgisinternal`)).n === 3, 'three triggers after two runs');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname in ('trg_wa281_consent_log', 'trg_wa281_consent_guard', 'trg_wa281_gift_campaign', 'trg_wa281_dnc_hold') and not tgisinternal`)).n === 4, 'four triggers after two runs');
 
   await runAssertions(db, 'assertions');
   await runAssertions(db, 'assertions (second run)');
