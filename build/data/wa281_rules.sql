@@ -347,7 +347,7 @@ create or replace view public.wa_stopped_phones_v with (security_invoker = on) a
    where w.handled = 'opted_out';
 revoke all on table public.wa_stopped_phones_v from public, anon, authenticated;
 grant select on table public.wa_stopped_phones_v to service_role;
-comment on view public.wa_stopped_phones_v is 'wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (whatsapp).';
+comment on view public.wa_stopped_phones_v is 'wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (both channels: nobody who said STOP on WhatsApp or by SMS gets a WhatsApp message).';
 comment on column public.wa_stopped_phones_v.phone_digits is 'wave281: the phone number''s last 10 digits (wa171_digits).';
 comment on column public.wa_stopped_phones_v.channel is 'wave281: sms for a STOP texted to the ops line (quo_messages), whatsapp for a STOP sent on WhatsApp (whatsapp_messages).';
 

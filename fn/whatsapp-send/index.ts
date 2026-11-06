@@ -1,6 +1,7 @@
 // Welfare Avenue: whatsapp-send (v2, 06/11/26, wave281)
-// v2 (wave281): STOP sticks to the phone number. The drain also leaves out every phone in wa_stopped_phones_v with
-// channel whatsapp (its latest WhatsApp STOP keyword reply was a STOP), even when no contact holds it ('they said STOP').
+// v2 (wave281): STOP sticks to the phone number. The drain also leaves out every phone in wa_stopped_phones_v, on either
+// channel (its latest WhatsApp or SMS STOP/START keyword message was a STOP), even when no contact holds it ('they said STOP'):
+// nobody who said STOP on WhatsApp or SMS (final review M3, 06/11/26: the SMS channel too).
 // Steel, 14/10/26 (the Meta additions): "WhatsApp — reminders and re-confirm texts as a second channel next to Quo SMS ...
 // Build it against the test number; production waits on Steel's three items" (a dedicated number, business verification,
 // a payment method). WhatsApp Cloud API through the HUB-Analytics app (WABA 984036304713487; the test number
@@ -101,8 +102,8 @@ async function sendOne(token: string, phoneId: string, row: Any): Promise<{ ok: 
 async function optedOut(): Promise<Set<string>> {
   const { data } = await svc.from('crm_contacts').select('phones').or('whatsapp_opt_out.eq.true,sms_opt_out.eq.true').is('merged_into', null);
   const s = new Set<string>(); for (const c of ((data || []) as Any[])) for (const p of (c.phones || [])) { const d = digits(p); if (d) s.add(d); }
-  // wave281: a phone whose latest WhatsApp keyword reply was STOP stays out, held by a contact or not (empty if the view cannot be read)
-  const { data: stopped } = await svc.from('wa_stopped_phones_v').select('phone_digits').eq('channel', 'whatsapp');
+  // wave281: a phone whose latest keyword message was STOP, on WhatsApp or by SMS, stays out, held by a contact or not (empty if the view cannot be read)
+  const { data: stopped } = await svc.from('wa_stopped_phones_v').select('phone_digits').in('channel', ['whatsapp', 'sms']);
   for (const r of ((stopped || []) as Any[])) { const d = digits(r.phone_digits); if (d) s.add(d); }
   return s;
 }

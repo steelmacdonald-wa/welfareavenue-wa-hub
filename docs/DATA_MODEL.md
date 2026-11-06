@@ -2308,7 +2308,7 @@ wave281: the consent log, one row per changed consent column of a person (email_
 
 ### `wa_stopped_phones_v` (view)
 
-wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (whatsapp).
+wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (both channels: nobody who said STOP on WhatsApp or by SMS gets a WhatsApp message).
 
 - `phone_digits`: wave281: the phone number's last 10 digits (wa171_digits).
 - `channel`: wave281: sms for a STOP texted to the ops line (quo_messages), whatsapp for a STOP sent on WhatsApp (whatsapp_messages).

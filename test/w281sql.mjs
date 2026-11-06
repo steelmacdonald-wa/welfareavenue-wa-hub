@@ -250,6 +250,15 @@ try {
     await db5.close();
   }
 
+  // ---- the two senders read the stopped phones (no deno on this PC, so a check of the source): quo-send the sms channel, whatsapp-send both (final review M3)
+  {
+    const wa = read('../fn/whatsapp-send/index.ts'), quo = read('../fn/quo-send/index.ts');
+    ok(wa.includes(`from('wa_stopped_phones_v').select('phone_digits').in('channel', ['whatsapp', 'sms'])`) && wa.includes(`.or('whatsapp_opt_out.eq.true,sms_opt_out.eq.true')`),
+      'whatsapp-send leaves out phones stopped on WhatsApp or by SMS, and contacts with either opt-out');
+    ok(quo.includes(`from('wa_stopped_phones_v').select('phone_digits').eq('channel', 'sms')`), 'quo-send leaves out phones stopped by SMS');
+    console.log('senders: whatsapp-send reads both channels of the stopped phones, quo-send the sms one');
+  }
+
   console.log(`w281sql.mjs: OK (${checks} runner checks, plus the assertion runs)`);
   process.exit(0);
 } catch (e) {
