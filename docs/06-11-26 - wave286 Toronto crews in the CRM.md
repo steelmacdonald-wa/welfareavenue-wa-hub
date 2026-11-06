@@ -48,7 +48,7 @@ Nothing on any page. In the CRM, someone put on a Toronto event's crew now count
   - the undo, run twice, removes only wave286's rows and leaves every earlier chapter row alone (including a Toronto row added by hand);
   - the migration refuses to run without wave281;
   - with wave281 undone first, crew adds keep working.
-- **Live, in a block that rolls back** (`build/sql_rollback_test.py` at `2e9fae1`):
+- **Live, in a block that rolls back** (`build/sql_rollback_test.py` at `3b53d6b`, after the review fixes; first run at `2e9fae1`):
   - wave281, then the before file, the migration twice and the live checks: **ROLLBACK_OK** (5 files). The backfill added the expected number of people (0), every earlier chapter row was still there, and a crew add on a test Toronto event made inside the block added the Toronto row, while one on a Montreal serving added nothing.
   - wave281, the before file, the migration, the undo twice and the undo checks: **ROLLBACK_OK** (6 files). Every chapter row was back as it was, and the trigger and both functions were gone.
   - Afterwards live showed nothing kept.
