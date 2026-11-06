@@ -735,7 +735,7 @@
       var sd = smartOf(L) || SMART[2]; name = sd.n; c = sd.c; sub = E(sd.sub);
       icon = '<span class="w287hic" style="background:' + c + '">' + svg(sd.ic) + '</span>';
     }
-    return '<div class="w287lhead" style="--c:' + ink(c) + '"><div class="w287lrow"><h3>' + icon + '<span class="nm">' + E(name) + '<span class="w287lc" title="' + (L === 'completed' ? 'completed' : 'open') + '">' + n + '</span></span></h3>' +
+    return '<div class="w287lhead" style="--c:' + ink(c) + '"><div class="w287lrow"><h3' + (String(name).length > 44 ? ' class="long"' : '') + '>' + icon + '<span class="nm">' + E(name) + '<span class="w287lc" title="' + (L === 'completed' ? 'completed' : 'open') + '">' + n + '</span></span></h3>' +
       (L === 'completed' ? '' : '<button type="button" class="new w287new" data-act="new">' + svg('plus') + 'New task</button>') + '</div><p class="w287lsub">' + sub + '</p></div>';
   }
   function emptyHtml(L) {

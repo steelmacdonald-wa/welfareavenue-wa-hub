@@ -1749,9 +1749,11 @@
       S('#w262homebar', 'Show everything on Home', 'Home shows what matters first. In the loop, Updates for you, time commitments, Slack notifications and time off wait behind this button; one click shows them, another hides them again.', OPT)   /* wave262 */
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
-      S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together the team\u2019s pulse, decisions, updates and meetings. The line under the name is the Hub\u2019s read of how the team is doing, from recent meetings.'),
+      S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together what needs the team now, its projects, requests, updates and meetings. The line under the name is the Hub\u2019s read of how the team is doing, from recent meetings; More shows all of it.'),   /* wave287: the steps follow the rebuilt Overview */
       S('#w116host .w116seg', 'The team\u2019s pages', 'Switch between Overview, Agenda, Tasks and any boards the team runs, like Volunteering or the Content calendar.', OPT),
-      S('#w116host .w116kpis', 'Key numbers', 'Open and overdue tasks, work finished in the last 30 days, active projects and meetings coming up. Click a number to open the list behind it.', OPT),
+      S('#w116host .w116kpis', 'Now', 'One line on where the team stands, then open tasks, overdue and due this week. Click a tile to open that list on the Tasks page.', OPT),
+      S('#w287need', 'Needs attention', 'Overdue tasks and the ones due in the next seven days. Tick one to complete it (Undo is right there), or click it for its details.', OPT),
+      S('#w287proj', 'Projects', 'Every project of the team, General first: what is open, what is overdue and the next task due. Click a card to open that project\u2019s list.', OPT),
       H(/^Where the team is/i, '.w116card', 'Where the team is', 'The pulse score and the high priority list, rebuilt from the latest transcripts. Re-run it after a big meeting.', OPT),
       H(/^Executive decisions for this team/i, '.w116card', 'Decisions for this team', 'Calls waiting on an executive, with who decides and the Hub\u2019s recommendation. Decide them on the Executive dashboard.', OPT),
       S('#w123tcard', 'Team inbox', 'Requests to this team, emails the Hub inbox filed for it (Jev pings the team\u2019s Slack channel only when one needs you soon) and asks spotted in its meetings. Open one to set its status, hand it on or mark it done.', OPT),
@@ -1759,14 +1761,14 @@
       H(/^Mentions from other teams/i, '.w116card', 'Mentions from other teams', 'Where other teams talked about your people or your work, so nothing falls between teams.', OPT),
       S('#w116meet', 'Upcoming meetings', 'The team\u2019s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
-      H(/^Projects/i, '.w116card', 'Projects', 'The team\u2019s projects with their open tasks. Add a project here, or open All projects.', OPT),
       S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Avenue Academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
     tasks: { tab: 'dept', icon: 'list', hash: function () { return '#team/' + deptTab() + '/tasks'; }, steps: [
-      S('#w116tasks .w116tb', 'Pick your view', 'See the team\u2019s work as a List, a Board, a Calendar or a Tree, grouped by project, workstream, status or owner.'),
-      S('#w116tasks .w116g', 'Groups', 'Each group folds open. Use + Add task inside a group to add a task straight into it.', OPT),
+      S('#w116tasks .w287side', 'Lists and projects', 'Smart lists (Today, Scheduled, All, Flagged, Mine, Completed) and the team\u2019s projects, General first. Pick one to see its tasks; drop a task on a project to move it there.', OPT),
+      S('#w116tasks .w116tb', 'Pick your view', 'See the list as a List, a Board, a Calendar or a Tree, grouped by project, due date, status or owner. Filters folds the rest away.'),
+      S('#w116tasks .w116g', 'Groups', 'Each group folds open. New task at the end of a group adds a task straight into it; the round tick completes one.', OPT),
       S('#w116tasks .w116note', 'Working with tasks', 'Click a task for its details, comments and history. Type @ and a name in a comment to bring someone in: they get a Slack message with a link. Drag to reorder a task or move it to another group.', OPT),
       S('#w116agHost || #w116host .w116agnote', 'The team agenda', 'Agendas for this team\u2019s meetings, drafted from transcripts and open work. Tick items off during the meeting.', { opt: 1, hash: function () { return '#team/' + deptTab() + '/agenda'; } })
     ] },

@@ -489,8 +489,8 @@
     return '#' + rgb.map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
   }
   /* a project that lives on its own page: Grants (wave258) is left out of the Fundraising team page and has #grants */
-  function grantsOk() { try { if (typeof wa40Allowed === 'function') { var a = wa40Allowed(); return !a || a.indexOf('grants') >= 0; } } catch (e) { /* fine */ } return tabVisible('grants'); }   /* wave258's own rule (canSee) */
-  function elsewhere(p, board) { if (!p || board) return null; if (p.department === 'fundraising' && boardKeyOf(p) === 'grants' && grantsOk()) return '#grants'; return null; }
+  /* only while wave258's filter is on (it marks the published w116TasksFor), which is what keeps grants off the team page */
+  function elsewhere(p, board) { if (!p || board) return null; if (p.department === 'fundraising' && boardKeyOf(p) === 'grants' && window.w116TasksFor && window.w116TasksFor.__w258) return '#grants'; return null; }
   /* an old #team/<d>/tasks/<workstream> link: the project that replaced the workstream (projects.workstream), else null */
   function projForWs(d, ws) {
     var l = lower(ws); if (!l) return null;

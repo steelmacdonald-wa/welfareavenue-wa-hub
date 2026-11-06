@@ -88,8 +88,9 @@
     FINE + '{.w287sl:hover{box-shadow:0 0 0 1px rgba(16,63,57,.16),0 4px 12px rgba(16,63,57,.08);}.w287sl.on:hover{box-shadow:0 6px 16px -8px var(--c);}.w287pr:hover{background:rgba(16,63,57,.05);}.w287pr.on:hover{background:rgba(16,63,57,.12);}.w287newp:hover{color:' + GREEN + ';}}' +
     '.w287main{min-width:0;background:var(--wa-card);border:1px solid rgba(16,63,57,.07);border-radius:20px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 12px 32px rgba(16,63,57,.06);padding:22px 24px 16px;}' +
     '.w287lhead{margin:0 0 14px;}' +
-    '.w287lhead h3{display:flex;align-items:center;gap:12px;margin:0;font-family:' + HEAD + ';font-weight:600;font-size:34px;line-height:1.02;letter-spacing:.2px;text-transform:uppercase;color:var(--c);}' +
+    '.w287lhead h3{display:flex;align-items:center;gap:12px;margin:0;font-family:' + HEAD + ';font-weight:600;font-size:31px;line-height:1.02;letter-spacing:.2px;text-transform:uppercase;color:var(--c);}' +
     '.w287lhead .nm{min-width:0;overflow-wrap:anywhere;}' +
+    '.w287lhead h3.long{font-size:22px;line-height:1.12;align-items:flex-start;}' +
     '.w287lrow{display:flex;align-items:center;gap:12px;}' +
     '.w287lrow h3{flex:1 1 auto;min-width:0;}' +
     '.w287lc{margin-left:.32em;font-weight:500;color:var(--c);opacity:.5;font-variant-numeric:tabular-nums;white-space:nowrap;}' +
@@ -114,7 +115,7 @@
     '.w287 .w116tb .flt{display:none;flex:1 0 100%;flex-wrap:wrap;gap:6px;order:10;padding:4px 0 0;}' +
     '.w287 .w116tb.showf .flt{display:flex;}' +
     '.w287 .w116tb .sp{display:block;}' +
-    '.w287 .w116tb input[type=search]{flex:0 1 200px;min-width:110px;padding:7px 10px;}' +
+    '.w287 .w116tb input[type=search]{flex:0 1 160px;min-width:110px;padding:7px 10px;}' +
     '.w287grp{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--wa-muted);}' +
     '.w287fn{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ';font-size:11px;font-weight:700;margin-left:2px;}' +
     '.w287chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;}' +
@@ -234,6 +235,7 @@
     '.w287read.open{display:block;-webkit-line-clamp:unset;}' +
     '.w287more{appearance:none;border:0;background:none;margin:2px 0 0;padding:2px 0;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
     '.w287tabs{position:relative;isolation:isolate;}' +
+    '@media (max-width: 740px){#w116host > .w287tabs{display:flex;flex-wrap:nowrap;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;}#w116host > .w287tabs::-webkit-scrollbar{display:none;}#w116host > .w287tabs a{flex:0 0 auto;}}' +
     '.w287thumb{position:absolute;left:0;top:0;width:0;height:0;border-radius:9px;background:var(--wa-card);box-shadow:0 1px 2px rgba(16,63,57,.14),0 0 0 .5px rgba(16,63,57,.06);z-index:-1;opacity:0;pointer-events:none;transform-origin:0 0;}' +
     '.w287tabs.w287th .w287thumb{opacity:1;}' +
     '.w287tabs.w287th a.on{background:none;box-shadow:none;}' +
@@ -255,6 +257,7 @@
     '#w116host.w287ov .w116grid > .w116col:first-child > #w287need{order:-3;}' +
     '#w116host.w287ov .w116grid > .w116col:first-child > #w287proj{order:-2;}' +
     '#w116host.w287ov .w116grid > .w116col:first-child > #w123tcard{order:-1;}' +
+    '#w116host.w287ov .w116grid > .w116col > .w287tools{order:1;}' +   /* Tools closes the right column, after the cards later waves add (SOPs, the bank) */
     '.w287need .w287rows{display:flex;flex-direction:column;margin:0 -6px;}' +
     '.w287calm{display:flex;align-items:center;gap:10px;margin:2px 0;font-size:13.5px;color:var(--wa-muted);}' +
     '.w287calm .ic{width:26px;height:26px;border-radius:50%;background:rgba(16,63,57,.07);color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto;}' +
@@ -321,6 +324,7 @@
     var th = seg.querySelector('.w287thumb'), on = seg.querySelector('a.on');
     if (!th) return;
     if (!on || !on.offsetWidth) { seg.classList.remove('w287th'); return; }
+    if (seg.scrollWidth > seg.clientWidth + 2 && (on.offsetLeft < seg.scrollLeft || on.offsetLeft + on.offsetWidth > seg.scrollLeft + seg.clientWidth)) seg.scrollLeft = Math.max(0, on.offsetLeft - 8);   /* the phone's scrolling tabs keep the current one in view */
     var pos = { d: seg.getAttribute('data-d'), x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
     var key = [pos.d, pos.x, pos.y, pos.w, pos.h].join('|');
     if (!force && th.getAttribute('data-k') === key) return;
