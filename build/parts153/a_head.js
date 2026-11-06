@@ -128,10 +128,11 @@
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
           { h: '#partners', l: 'Partners', ic: 'link', page: 'partners' },
           { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
-          { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' },
+          { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' }
+        ].concat(importsOk() ? [{ h: '#crm/settings/imports', l: 'Imports', ic: 'box', page: 'crm' }] : []).concat([   /* wave284: the Import page, admins only (import_admin) */
           { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' },
           { h: '#crm/forms', l: 'Forms', ic: 'form', page: 'crm' }
-        ] }, { label: 'Giving', items: [
+        ]) }, { label: 'Giving', items: [
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
         ] }, { label: 'Email', items: [
           { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' },
@@ -267,6 +268,8 @@
      the CRM is now theirs.
      wave283 (CRM slice 1, Phase 3): Marketing also has the CRM, and Toronto also has the Volunteer Manager. */
   var TEAM_APPS = { marketing: ['studio', 'crm'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };
+  /* wave284: the CRM rail's Imports item, for import_admin (admins) only, as the CRM page knows it (wa_my_caps through window.w152.can) */
+  function importsOk() { try { return !!(window.w152 && window.w152.can && window.w152.can('import_admin')); } catch (e) { return false; } }
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
