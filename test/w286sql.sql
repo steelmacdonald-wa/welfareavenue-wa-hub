@@ -61,6 +61,23 @@ begin
   assert (select count(*) from public.crm_contact_chapters where chapter = 'montreal') = n_mtl, 'no montreal row was added';
 end $$;
 
+-- ---------------------------------------------------------------- the CRM side never fails a crew add
+do $$
+declare v_id bigint;
+begin
+  -- the toronto chapter is missing (its rows go first, so the chapter can go): the chapter write fails, the crew add stands
+  delete from public.crm_contact_chapters where chapter = 'toronto';
+  delete from public.crm_chapters where code = 'toronto';
+  insert into public.event_roster (event_id, person_id, person_name, role, status, detail) values (8612, null, 'Test New Crew', 'driver', 'TBD', '{"contact_id": 8608}') returning id into v_id;
+  assert v_id is not null and exists (select 1 from public.event_roster where id = v_id), 'with no toronto chapter, a Toronto crew add still succeeds';
+  assert not exists (select 1 from public.crm_contact_chapters where chapter = 'toronto'), 'and adds no chapter row';
+  -- a forced error in the chapter write (as a later trigger could raise): the same
+  insert into public.crm_chapters (code, name_en, name_fr, active, mail_route, ops_team, sort) values ('toronto', 'Toronto', 'Toronto', true, 'toronto', 'opsto', 2);
+  execute $f$create or replace function public.crm_add_chapter(p_contact bigint, p_chapter text, p_source text, p_ref text) returns boolean language plpgsql security definer set search_path to '' as $b$ begin raise exception 'forced for the test'; end $b$ $f$;
+  insert into public.event_roster (event_id, person_id, person_name, role, status, detail) values (8612, null, 'Test New Crew', 'server', 'TBD', '{"contact_id": 8608}') returning id into v_id;
+  assert v_id is not null and not exists (select 1 from public.crm_contact_chapters where contact_id = 8608), 'with the chapter write failing, a Toronto crew add still succeeds and adds no row';
+end $$;
+
 -- ---------------------------------------------------------------- grants, security, comments
 do $$
 begin

@@ -2,10 +2,10 @@
 -- It drops the trigger and its two functions, then removes the chapter rows wave286 added: Toronto rows with source serving whose source note starts
 -- "Toronto crew:" (the trigger's and the backfill's; no other writer uses that note). Every other chapter row stays, including a Toronto row a person
 -- had before wave286. One case to know: a row wave286 added stays tagged as wave286's even if other Toronto evidence (a Toronto form, the import)
--- came later, because crm_add_chapter keeps the row already there; the undo removes it too, and that evidence adds it again the next time it is
--- applied. What stays: the release line in change_log (an undo line is added). Nothing here touches Montreal, a serving or a roster row.
--- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data and must keep reading the migration's
--- text. No transaction control (see the migration). Safe to run twice, and safe after wave281's undo (it then has nothing to remove).
+-- came later, because crm_add_chapter keeps the row already there; the undo removes it too, and a later Toronto form, application or import run
+-- adds it again (evidence that came before is not replayed). What stays: the release line in change_log (an undo line is added). Nothing here
+-- touches Montreal, a serving or a roster row. No transaction control (see the migration). Safe to run twice, and safe after wave281's undo (it then
+-- has nothing to remove).
 
 drop trigger if exists trg_wa286_toronto_crew on public.event_roster;
 drop function if exists public.wa286_toronto_crew();

@@ -22,7 +22,8 @@ Nothing on any page. In the CRM, someone put on a Toronto event's crew now count
 ## What it changes
 
 - **`wa286_crew_contact(detail, person)`:** finds the crew member's CRM contact. It uses the contact named in the roster row's `detail.contact_id` first (as `wa274_crew_add` writes it), then the contact whose `volunteer_id` is the row's `person_id`. It never picks a merged contact. Service role only.
-- **The trigger `trg_wa286_toronto_crew` on `event_roster`:** runs after a row is added, and after a row's `event_id` or `person_id` changes. When the row's event is a Toronto event in wave274's sense, the contact joins the Toronto chapter through wave281's `crm_add_chapter`. The source is `serving` (wave281's source for being on a Toronto serving) and the source note is `Toronto crew: <event code>`. A Toronto row that is already there is kept as it was. The trigger function is security definer with an empty search path, and has no grant. If wave281 has been undone first, the trigger does nothing, so it never blocks a crew add.
+- **The trigger `trg_wa286_toronto_crew` on `event_roster`:** runs after a row is added, and after a row's `event_id` or `person_id` changes. When the row's event is a Toronto event in wave274's sense, the contact joins the Toronto chapter through wave281's `crm_add_chapter`. The source is `serving` (wave281's source for being on a Toronto serving) and the source note is `Toronto crew: <event code>`. A Toronto row that is already there is kept as it was. The trigger function is security definer with an empty search path, and has no grant. If wave281 has been undone first, the trigger does nothing, so it never blocks a crew add. Any error on the CRM side (a deleted contact, a missing Toronto chapter, a later trigger) becomes a warning, and the crew add in wave274's app still goes through.
+- **The Toronto test is exact.** The trigger and the backfill match `location = 'Toronto'` exactly, while wave274's page recognises a Toronto event with `/toronto/i`. They agree today because the page always writes exactly `Toronto`.
 - **A backfill** does the same for the crews already on Toronto events, once. It adds only people who are not in Toronto yet. On live today it adds nobody: there are no Toronto events yet (checked read-only on 06/11/26: wave274's `wa274_next_code`, `wa274_crew_add` and `volunteer_event_recipients` are live; 0 Toronto meal events; 0 roster rows on them). The release line in `change_log` records the count.
 - **A crew row with status TBD counts.** `wa274_crew_add` adds crew as TBD, and being put on a Toronto crew is the evidence. Removing a crew member later leaves their Toronto row, because a chapter row is never removed.
 
@@ -37,6 +38,7 @@ Nothing on any page. In the CRM, someone put on a Toronto event's crew now count
 ## Checks (06/11/26)
 
 - `node test/w286sql.mjs`: **OK**, 23 runner checks plus the assertion script, run three times. It covers:
+  - with no Toronto chapter, or with the chapter write forced to fail, a Toronto crew add still succeeds and adds no chapter row;
   - a crew add on a Toronto event adds the Toronto row (by `detail.contact_id`, or through the volunteer record);
   - a Montreal serving, even one held in Toronto, adds nothing;
   - running the migration twice adds nothing more;
@@ -62,4 +64,4 @@ Nothing on any page. In the CRM, someone put on a Toronto event's crew now count
 
 Run `build/data/wa286_undo.sql`. It drops the trigger and both functions, then removes only the Toronto rows whose source note starts with `Toronto crew:`. Undo wave286 before wave281. Run the other way round, wave286's undo is still harmless, and crew adds keep working in between.
 
-One case to know: if a person joined Toronto through a crew and later gave other Toronto evidence (a Toronto form, the import), their row still carries wave286's note, because `crm_add_chapter` keeps the row already there. The undo removes that row too, and the other evidence adds it back the next time it is applied.
+One case to know: if a person joined Toronto through a crew and later gave other Toronto evidence (a Toronto form, the import), their row still carries wave286's note, because `crm_add_chapter` keeps the row already there. The undo removes that row too, and a later Toronto form, application or import run adds it again. Evidence that came before is not replayed.

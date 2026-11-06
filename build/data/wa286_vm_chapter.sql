@@ -43,13 +43,18 @@ begin
   if to_regprocedure('public.crm_add_chapter(bigint,text,text,text)') is null then return null; end if;   -- wave281 undone first: never block a crew add
   select coalesce(e.code, e.id::text) into v_code from public.volunteer_events e where e.id = new.event_id and e.kind = 'meal' and e.location = 'Toronto';
   if v_code is null then return null; end if;   -- not a Toronto event (every Montreal serving ends here)
-  v_contact := public.wa286_crew_contact(new.detail, new.person_id);
-  if v_contact is null then return null; end if;
-  perform public.crm_add_chapter(v_contact, 'toronto', 'serving', 'Toronto crew: ' || v_code);
+  -- the CRM side never fails a crew add in wave274's app (a deleted contact, a missing chapter, a later trigger): a warning, and the crew row stands
+  begin
+    v_contact := public.wa286_crew_contact(new.detail, new.person_id);
+    if v_contact is null then return null; end if;
+    perform public.crm_add_chapter(v_contact, 'toronto', 'serving', 'Toronto crew: ' || v_code);
+  exception when others then
+    raise warning 'wave286: %', sqlerrm;
+  end;
   return null;
 end $function$;
 revoke all on function public.wa286_toronto_crew() from public, anon, authenticated;
-comment on function public.wa286_toronto_crew() is 'wave286: trigger function on event_roster (trg_wa286_toronto_crew). When the row is on a Toronto event (wave274: kind meal, location Toronto), the crew member''s contact (wa286_crew_contact) joins the Toronto chapter through crm_add_chapter (source serving, source note Toronto crew: <event code>); a row already there is kept. It never removes a chapter row and never adds montreal. Security definer: crm_add_chapter is service role only.';
+comment on function public.wa286_toronto_crew() is 'wave286: trigger function on event_roster (trg_wa286_toronto_crew). When the row is on a Toronto event (wave274: kind meal, location Toronto), the crew member''s contact (wa286_crew_contact) joins the Toronto chapter through crm_add_chapter (source serving, source note Toronto crew: <event code>); a row already there is kept. It never removes a chapter row and never adds montreal, and it never fails the crew add: an error on the CRM side is raised as a warning and the roster row stands. Security definer: crm_add_chapter is service role only.';
 drop trigger if exists trg_wa286_toronto_crew on public.event_roster;
 create trigger trg_wa286_toronto_crew after insert or update of event_id, person_id on public.event_roster
   for each row execute function public.wa286_toronto_crew();
