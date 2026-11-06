@@ -1,4 +1,4 @@
-// Welfare Avenue: crm-import (v1, 06/11/26, wave284; built, not deployed)
+// Welfare Avenue: crm-import (v1, 06/11/26, wave284; built, not deployed; review fix round: compare, apply and undo over a direct connection)
 // The Import page (#crm/settings/imports, CRM slice 1 Phase 4): an admin stages Keela's exports, compares each kind of import with the Hub,
 // applies it in reviewed batches and undoes what can be undone. The database does the work (the wa284_* functions, the service role only);
 // this function checks the caller and moves the files.
@@ -16,6 +16,10 @@
 //   compare {batch_id}            -> {report}: runs the writer and rolls it back, keeping only the report
 //   apply {batch_id}              -> {report}: one transaction, automations off, the side-effect guard on; a stop is recorded on the batch
 //   undo {batch_id}               -> {report}: value-checked; never for optouts or consent
+//   These three can take minutes on the full export, longer than the API's 8-second statement_timeout (the authenticator role). They run
+//   over a direct Postgres connection (the built-in SUPABASE_DB_URL; deno-postgres v0.17.0, pinned), in one transaction that first sets
+//   statement_timeout to 300s for itself (set local; no role is altered). Without SUPABASE_DB_URL they fall back to the API and the reply
+//   says so (note).
 //   purge {run_id}                -> {removed}: deletes the run's staged rows, change records and uploaded files
 // Tables: crm_import_runs, crm_import_batches, crm_import_changes, import_stage.files, import_stage.rows (all through the wa284_* functions);
 // storage bucket imports. Side effects: none outside these (the database's guard refuses requests, emails, texts, automations, notifications,
@@ -25,6 +29,7 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { parse as csvParse } from 'jsr:@std/csv@1.0.6';
+import { Pool } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 import { stageStep, KINDS } from './stage.mjs';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -34,6 +39,8 @@ const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: fa
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app'];
 const BUCKET = 'imports';
 const BATCHES = ['optouts', 'legacy_fields', 'people', 'fields', 'orgs', 'consent', 'participation', 'form_answers'];
+const DB_URL = Deno.env.get('SUPABASE_DB_URL') || '';
+let pool = null;
 
 function cors(req) {
   const o = req.headers.get('origin') || '';
@@ -56,9 +63,28 @@ function emailOf(token) {
 }
 // a database message passes only when it is one of ours (they name keys and row numbers, never values); anything else becomes its code
 function clean(err) {
-  const m = String((err && err.message) || err || '');
+  const f = (err && err.fields) || {};   // deno-postgres keeps the server's message and code in fields
+  const m = String(f.message || (err && err.message) || err || '');
   if (/^(missing key|wa284:|import side effect blocked)/.test(m)) return m.slice(0, 300);
-  return 'stopped by the database (' + String((err && err.code) || 'error') + ')';
+  return 'stopped by the database (' + String(f.code || (err && err.code) || 'error') + ')';
+}
+// compare, apply and undo over a direct connection: one transaction that allows itself 300 seconds (the API stops statements at 8)
+async function direct(name, batch, by) {
+  pool = pool || new Pool(DB_URL, 1, true);
+  const client = await pool.connect();
+  const tx = client.createTransaction('wa284_' + name + '_' + batch);
+  try {
+    await tx.begin();
+    await tx.queryArray("set local statement_timeout = '300s'");
+    const r = await tx.queryObject({ text: 'select public.wa284_' + name + '($1::bigint, $2::text) as report', args: [batch, by] });
+    await tx.commit();
+    return r.rows[0] ? r.rows[0].report : null;
+  } catch (e) {
+    try { await tx.rollback(); } catch (_) { /* the transaction is already over */ }
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 const id = (v) => { const n = Number(v); return Number.isInteger(n) && n > 0 ? n : null; };
 async function rpc(name, args) {
@@ -119,9 +145,11 @@ Deno.serve(async (req) => {
       const bid = id(body.batch_id);
       if (!bid) return reply(req, { error: 'wa284: which batch?' }, 400);
       try {
-        const report = await rpc('wa284_' + a, { p_batch: bid, p_by: by });
-        if (report && report.error) return reply(req, { error: String(report.error), report: null });   // a compare that stopped (recorded on the batch)
-        return reply(req, { report });
+        const viaApi = !DB_URL;
+        const report = viaApi ? await rpc('wa284_' + a, { p_batch: bid, p_by: by }) : await direct(a, bid, by);
+        const note = viaApi ? 'SUPABASE_DB_URL is missing, so this ran through the API, which stops a statement after 8 seconds.' : undefined;
+        if (report && report.error) return reply(req, { error: String(report.error), report: null, note });   // a compare that stopped (recorded on the batch)
+        return reply(req, { report, note });
       } catch (e) {
         const msg = clean(e);
         if (a === 'apply') await svc.rpc('wa284_fail', { p_batch: bid, p_error: msg });   // the apply rolled back; the batch says why
