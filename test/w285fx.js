@@ -117,7 +117,9 @@ function leadSteps(plan) {
     .map((r) => ({ id: r.s.id, name: r.x.name, section: r.x.section, child: r.child, done: r.s.done, due: r.s.due_date, academy: !!(r.x.training_id || r.x.academy_path), important: false }));
 }
 
-const MEMBER = (id, name, dept, role, email) => ({ id, name, email: email || name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.invalid', active: true, department: dept, role, responsibilities: [] });
+/* created_at: before automatic setup began (V2) unless said otherwise: an existing member, so their plan's setup steps count */
+const V2 = '2026-09-01T00:00:00Z', BEFORE = '2026-07-01T12:00:00Z', AFTER = '2026-09-20T12:00:00Z';
+const MEMBER = (id, name, dept, role, email, made) => ({ id, name, email: email || name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.invalid', active: true, department: dept, role, responsibilities: [], created_at: made || BEFORE });
 const STEP = (flow, step, status, detail) => ({ flow_id: flow, step, status, detail: detail || null, practice: false, at: '2026-09-25T18:00:00Z', by: 'hr@example.invalid' });
 const ALL = ['roster', 'google', 'hub', 'plan', 'invites', 'manager', 'welcome', 'groups', 'drives', 'meeting'];
 function startedSteps(flow, over) { return ALL.map((k) => STEP(flow, k, (over && over[k] && over[k][0]) || 'done', (over && over[k] && over[k][1]) || 'Done.')).concat([STEP(flow, 'slack', (over && over.slack && over.slack[0]) || 'hr_task', 'Create their onboarding channel in Slack, add the manager and HR, and post the welcome message.'), STEP(flow, 'channel', 'pending', 'waiting for them to join Slack')]); }
@@ -145,7 +147,8 @@ function base(o) {
   fx.hub_onboard_flows = []; fx.hub_onboard_steps = [];
   fx.org_positions = [];
   fx.team_members = (fx.team_members || []).filter((m) => !/joy\.dumansi/i.test(m.email || ''));
-  fx.team_members.push(MEMBER(9104, 'Joy Dumansi', 'marketing', 'Coordinator', 'joy.dumansi@welfareavenue.com'));
+  fx.team_members.push(MEMBER(9104, 'Joy Dumansi', 'marketing', 'Coordinator', 'joy.dumansi@welfareavenue.com', o && o.joyNew ? '2026-09-15T12:00:00Z' : BEFORE));
+  fx.app_config = (fx.app_config || []).filter((x) => x.key !== 'onboard_v2_since').concat([{ key: 'onboard_v2_since', value: V2 }]);
   /* the Academy: "Your onboarding" (10 trainings) for Alix's Academy tab, and one more for the rules set */
   fx.academy_paths = (fx.academy_paths || []).concat([{ id: 9701, key: 'firstweek', name: 'Your onboarding', title: 'Your onboarding', active: true, required: true, sort: 0, dept: null }]);
   fx.trainings = (fx.trainings || []).concat(Array.from({ length: 10 }, (_, i) => ({ id: 9601 + i, title: 'Your onboarding ' + (i + 1), path_group: 'Your onboarding', active: true, kind: 'video', category: 'Onboarding', minutes: 5, sort: 900 + i, body: null, source: 'hub' })));
@@ -159,12 +162,12 @@ function addStarted(fx, o) {
     one_on_one_at: o.one || '2026-09-30T14:00:00Z', group_session: null, onboarding_id: o.onb || null, started_at: '2026-09-24T15:00:00Z', roster_created: true, created_at: '2026-09-20T15:00:00Z', setup_ticks: TICKS(o.ticks || 0),
     welcome_sent_at: '2026-09-24T16:00:00Z', proposed_at: '2026-09-22T15:00:00Z', leader: false, updated_at: o.updated_at || '2026-09-24T15:00:00Z', slack_channel_id: o.slack || null }, o.extra || {}));
   fx.hub_onboard_steps = fx.hub_onboard_steps.concat(o.steps || startedSteps(o.flow));
-  if (o.mid) { fx.team_members.push(MEMBER(o.mid, o.name, o.dept || 'progdev', o.role || null, o.wa_email || null)); }
+  if (o.mid) { fx.team_members.push(MEMBER(o.mid, o.name, o.dept || 'progdev', o.role || null, o.wa_email || null, o.made || AFTER)); }
 }
 function pos(fx, id, mid, title, reportsTo) { fx.org_positions.push({ id, member_id: mid, title, department: null, reports_to: reportsTo || null, kind: 'role', status: 'filled', note: null, sort: id }); }
 
 function fx285(name) {
-  const fx = base({ keepSteel: name === 'demo' }), ready = [], extra = {};
+  const fx = base({ keepSteel: name === 'demo', joyNew: name === 'rules' }), ready = [], extra = {};
   const tp = (fx.training_progress = fx.training_progress || []);
   const MG = { sima: 9801, vera: 9802, amina: 9803, ahmet: 9804 };
   [[MG.sima, 'Sima Hale', 'progdev', 'Program Development Lead'], [MG.vera, 'Vera Lund', 'hr', 'HR Lead'], [MG.amina, 'Amina Dorr', 'fundraising', 'Director of Fundraising'], [MG.ahmet, 'Ahmet Fakir', 'opsmtl', 'Operations lead']]
@@ -189,6 +192,7 @@ function fx285(name) {
     fx.team_members.push(MEMBER(9812, 'Zak Leon', 'progdev', 'Community team lead', 'zak.leon@example.invalid'));
     pos(fx, 9712, 9812, 'Community team lead', 9701);
     addPlan(fx, planRows(702, 9812, 'Zak Leon', '2026-08-20', false));
+    fx.onboarding_help = [{ id: 7701, onboarding_id: 701, step_name: 'Loom', note: 'I cannot find the Loom invite', status: 'open', created_at: '2026-09-24T15:00:00Z' }];
     fx.team_members.push(MEMBER(9813, 'Fin Ished', 'marketing', 'Writer'));
     addPlan(fx, planRows(703, 9813, 'Fin Ished', '2026-06-10', true, { status: 'completed', completed_at: '2026-09-10T15:00:00Z' }));
   }
@@ -200,6 +204,13 @@ function fx285(name) {
     addPlan(fx, planRows(706, 9816, 'Sam Setup', '2026-09-22', false, { only: ['86e1cj9gj', '86e1cj9gp', '86e1cj9gy', '86e1cj9h3', 'w285a3'] }));
     addPlan(fx, planRows(716, 9817, 'Fay Flow', '2026-09-21', false, { only: ['86e1cj9gj', '86e1cj9gp', '86e1cj9gy', 'w285a3'] }));
     addStarted(fx, { flow: 816, cand: 8816, mid: 9817, name: 'Fay Flow', role: 'Writer', mgr: MG.vera, ticks: 5, onb: 716, call_at: '2026-09-21T14:00:00Z', steps: startedSteps(816, { slack: ['done'] }) });
+    /* never complete early (review finding 1): every row ticked but the setup steps, and one step left that the drive ticks */
+    const allBut = (open) => (t) => !(t[6] && HEADERS.indexOf(t[0]) < 0) && t[0] !== open;
+    fx.team_members.push(MEMBER(9818, 'Hana Hire', 'marketing', 'Writer', 'hana@example.invalid', '2026-09-10T12:00:00Z'));   /* made after automatic setup began, no flow in memory */
+    addPlan(fx, planRows(718, 9818, 'Hana Hire', '2026-09-12', allBut('86e1cj9hh')));
+    addPlan(fx, planRows(719, 9819, 'Otto Oldflow', '2026-08-12', allBut('86e1cj9hh')));
+    addStarted(fx, { flow: 819, cand: 8819, mid: 9819, name: 'Otto Oldflow', role: 'Writer', mgr: MG.vera, ticks: 3, onb: 719, call_at: '2026-08-12T14:00:00Z', made: '2026-09-02T12:00:00Z', steps: startedSteps(819, { slack: ['done'] }) });   /* call 44 days ago: wave271 drops it */
+    addPlan(fx, planRows(720, 9104, 'Joy Dumansi', '2026-09-16', allBut('86e1cj9hh')));   /* the hire's own view: Joy made 15/09, after automatic setup began */
     fx.team_members.push(MEMBER(9814, 'Kofi Late', 'marketing', 'Writer'));
     let k = 0;
     addPlan(fx, planRows(704, 9814, 'Kofi Late', '2026-09-14', (t) => t[2] !== 'WEEK 1' ? false : (HEADERS.indexOf(t[0]) >= 0 || t[3] || ++k > 2)));
@@ -245,6 +256,7 @@ function fx285(name) {
   }
   if (name === 'home') {
     alix();
+    tp.push({ id: 99200, training_id: 224, person_name: 'Alix Denby', email: 'alix.denby@example.invalid', status: 'done', done_at: '2026-09-24T12:00:00Z' });   /* week 3's lesson, finished, not ticked */
     fx.team_members.push(MEMBER(9861, 'Lee Starter', 'marketing', 'Designer', 'lee@example.invalid'));
     addPlan(fx, planRows(761, 9861, 'Lee Starter', '2026-09-29', false));
   }
@@ -258,7 +270,7 @@ function fx285(name) {
     return { people: [{ onboarding_id: 701, member_id: 9811, name: 'Alix Denby', email: 'alix.denby@example.invalid', department: 'fundraising', title: 'Fundraising Associate', via: 'reports to you', avatar_url: null, started_at: '2026-09-23', day: 3, starts_on: null,
       done: 26, total: 61, sections: [], late_count: 0, late: [], next: null, last_done_at: null, steps: leadSteps({ steps: p }), quizzes_done: 0, help: [],
       lead_steps: [{ id: 5101, name: 'Introduce them to the team', description: '', due: '2026-09-26', done: false }, { id: 5102, name: 'Give them a first task', description: '', due: '2026-09-30', done: false }, { id: 5103, name: 'The two-week check-in', description: '', due: '2026-10-07', done: false }],
-      academy: [{ key: 'firstweek', title: 'Your onboarding', done: 8, total: 10, complete: false }] }] };
+      academy: [{ key: 'firstweek', title: 'Your onboarding', done: 8, total: 10, complete: false }], help: [{ id: 7702, step: 'Loom', note: 'The Loom invite never came', at: '2026-09-24T15:00:00Z' }] }] };
   })() : { people: [] };
   const rpcs = { wa271_ready_list: ready, wa275_my_cards: homeRows, onboarding_lead_view: lead, onboarding_assign: 4242, wa_org_editor: false, wa279_my_hires: [] };
   const init = INIT + '\n' + INIT275 + '\nwindow.__O271_PW = ' + JSON.stringify(pw) + ';' + (name === 'home' ? '\n' + NOT_HR : '');
