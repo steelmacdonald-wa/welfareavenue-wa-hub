@@ -37,7 +37,7 @@ begin
   assert position($q$f.settings ->> 'city'$q$ in v) = 0, 'crm_form_apply no longer reads the form''s settings.city';
   assert position($q$v_city := nullif(btrim(coalesce(m #>> '{contact,city}', '')), '');$q$ in v) > 0, 'crm_form_apply: the city comes from the answers only';
   assert position($q$perform public.crm_add_chapter(v_cid, f.settings ->> 'chapter', 'form', s.id::text);$q$ in v) > 0, 'crm_form_apply puts the person in the form''s chapter';
-  assert position($q$'by', v_src, 'chapter', f.settings ->> 'chapter'));$q$ in v) > 0, 'crm_form_apply passes the chapter to wa209_volunteer_apply';
+  assert position($q$'by', v_src, 'chapter', (select ch.code from public.crm_chapters ch where ch.code = f.settings ->> 'chapter')));$q$ in v) > 0, 'crm_form_apply passes the chapter to wa209_volunteer_apply, only a known one';
   assert position($q$perform set_config('wa.consent_words', coalesce(s.consent ->> 'asked', ''), true);
     update public.crm_contacts set email_consent = 'express',$q$ in v) > 0, 'crm_form_apply tells the consent log the words before writing the email permission';
   assert v !~ 'sms_opt_out\s*=', 'crm_form_apply never sets sms_opt_out';
@@ -319,6 +319,24 @@ begin
        and (select cf.value from public.crm_contact_fields cf join public.crm_fields f on f.id = cf.field_id where cf.contact_id = c and f.key = 'gta_area') = '"North York"'::jsonb,
       v || ': applying again and a second answer add no tag or row (the latest area wins)';
   end loop;
+end $$;
+-- 12. (final review M2) a form whose settings.chapter is no known chapter: the answer is applied, no row for that code, and the application is
+--     filed for Montreal (the default), so the code never reaches volunteer_applications.chapter (its foreign key would refuse the whole answer)
+do $$
+declare s bigint; r jsonb; c bigint;
+begin
+  update public.crm_forms set settings = (settings - 'request') || '{"chapter": "ottawa"}' where slug = 'toronto-student';
+  insert into public.crm_form_submissions (form_id, status, answers, display, mapped, consent, lang, created_at)
+  select f.id, 'received', '{}', '[]',
+    jsonb_build_object('contact', jsonb_build_object('first_name', 'Fixture', 'last_name', 'Elsewhere', 'email', 'fixture.elsewhere@toronto-fixture.ca'), 'roles', jsonb_build_array('server'), 'consent', false),
+    jsonb_build_object('asked', f.consent ->> 'label', 'given', false, 'form', f.slug), f.lang, '2026-11-06 21:00:00+00'
+    from public.crm_forms f where f.slug = 'toronto-student'
+  returning id into s;
+  r := public.crm_form_apply(s);
+  c := (r ->> 'contact_id')::bigint;
+  assert c is not null and (select status from public.crm_form_submissions where id = s) = 'processed', 'an unknown chapter code: the answer is still applied (' || r::text || ')';
+  assert (select chapter from public.volunteer_applications where lower(email) = 'fixture.elsewhere@toronto-fixture.ca') = 'montreal', 'an unknown chapter code: the application is filed for Montreal';
+  assert not exists (select 1 from public.crm_contact_chapters where contact_id = c and chapter not in ('montreal', 'toronto')), 'and no row for the unknown code';
 end $$;
 
 select set_config('request.jwt.claims', '', true);
