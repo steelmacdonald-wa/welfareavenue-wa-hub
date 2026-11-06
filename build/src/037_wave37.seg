@@ -213,13 +213,24 @@ if (typeof wa36Render === 'function') {
         var row = null;
         WA37.steps.forEach(function (s) { if (String(s.id) === String(sid)) { s.done = patch.done; s.done_at = patch.done_at; s.done_by = patch.done_by; row = s; } });
         if (row) {
-          var p = wa37Pct(row.onboarding_id);
+          var p = (typeof window.wa37PctRaw === 'function' ? window.wa37PctRaw : wa37Pct)(row.onboarding_id);
           var o = WA37.onbs.filter(function (x) { return String(x.id) === String(row.onboarding_id); })[0];
-          if (o && p.total > 0 && p.done === p.total && o.status === 'active') {
+          /* wave285: complete when every row is ticked, or when the one progress rule's facts are all known and every real step is done (window.w285.completeKnown) */
+          var W285 = window.w285, full = W285 && typeof W285.completeKnown === 'function' ? W285.completeKnown(row.onboarding_id) : (p.total > 0 && p.done === p.total);
+          if (o && full && o.status === 'active') {
+            /* wave285: the rows the rule counted (a header whose steps are done, a step setup covered or done in the Academy) are written done first, so the table says what people saw */
+            try {
+              var fill = W285 && typeof W285.derivedRows === 'function' ? W285.derivedRows(row.onboarding_id) : [];
+              for (var fi = 0; fi < fill.length; fi++) {
+                var fp = { done: true, done_at: new Date().toISOString(), done_by: fill[fi].by };
+                var fr = await db.from('onboarding_steps').update(fp).eq('id', fill[fi].id);
+                if (!fr.error) WA37.steps.forEach(function (s) { if (String(s.id) === String(fill[fi].id)) { s.done = true; s.done_at = fp.done_at; s.done_by = fp.done_by; } });
+              }
+            } catch (e3) { /* the plan is still complete by the rule */ }
             await db.from('onboardings').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', o.id);
             o.status = 'completed';
             toast('Onboarding complete. Congratulations!');
-          } else if (o && o.status === 'completed' && p.done < p.total) {
+          } else if (o && o.status === 'completed' && !full && p.done < p.total) {
             await db.from('onboardings').update({ status: 'active', completed_at: null }).eq('id', o.id);
             o.status = 'active';
             toast('Saved');

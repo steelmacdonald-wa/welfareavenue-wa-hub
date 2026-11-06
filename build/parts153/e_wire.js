@@ -7,6 +7,7 @@
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
     if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
     if ((el = t.closest('[data-w153back]'))) { ev.preventDefault(); close(); return; }
+    if ((el = t.closest('[data-w153city]'))) { ev.preventDefault(); toCity(el.getAttribute('data-w153city')); return; }   /* wave274 (one app): the city switch (the rail and the phone's menu) */
     if ((el = t.closest('[data-w153go]'))) { ev.preventDefault(); go(el.getAttribute('data-w153go'), el.getAttribute('data-w153sec')); return; }
     if ((el = t.closest('[data-w153menu]'))) { ev.preventDefault(); document.body.classList.toggle('wa-mob-open'); return; }
     if ((el = t.closest('[data-w153act]'))) { ev.preventDefault(); act(el.getAttribute('data-w153act')); return; }
@@ -57,6 +58,7 @@
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS, yours: yours, teamApps: TEAM_APPS };   /* wave262: yours() for the launcher and the What's changed tour */   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS, yours: yours, teamApps: TEAM_APPS,
+    tileOf: tileOf, cities: cities, cityFor: cityFor, switchHtml: switchHtml, toCity: toCity, frames: FRAMES, cityKey: KEY_CITY };   /* wave274 (one app): the Volunteer Manager's cities, for the phone's menu and the tests */   /* wave262: yours() for the launcher and the What's changed tour */   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();

@@ -798,6 +798,7 @@ Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind serv
 - `itinerary_channels`: wave182: how the automatic itinerary goes: text, email or both (each person by what we have for them).
 - `photos_album_url`: wave240: the serving's Google Photos album (made by hand); the photographer's page and text use it
 - `content_brief`: wave240: {linkedin, social, notes, updated_by, updated_at}: the questions and shot notes for the photographer and videographer
+- `budget`: wave274b: the anticipated spend for this event in Canadian dollars, set in the Toronto Volunteers app, shown on the Hub calendar
 
 ### `event_roster`
 
@@ -2233,6 +2234,10 @@ wave265: a guest's conversation with the Hub. Only its owner writes in it; delet
 
 wave265: sign-in attempts with a personal code, by a hash of the address (never the address), to slow down guessing. Pruned after 7 days by ask-guest.
 
+### `volunteer_event_recipients`
+
+wave274: who the meals of a Toronto event (volunteer_events kind meal) go to, one row per organization: name (or wa_partners), meals asked for, meals_delivered (Wrap up), dietary {halal, nut_free, vegetarian: n, vegan: n, other: text}, drop_off (a time or a window, as said), contact, private (supported but not to be named publicly, as for the TDPM in 08/26). Staff read and write.
+
 ### `hub_team_avail`
 
 wave276: when each team member is usually free to meet, one row per person, team and start date. Written only through wa_avail_save and wa_avail_snooze (the browser has no insert or update on the table, so it cannot set hours, dates or someone else's row). The current grid is the newest row whose effective_from is today or earlier; a row with a later date waits for its day. A person reads their own rows and the rows of a team they are on or manage.
@@ -2778,6 +2783,7 @@ Functions:
 - `wa262_hashtag_review(bigint, text, text)`: wave262c: the marketing team marks a hashtag post looked at (ok), needing attention (flagged) or reported, with an optional note; a change_log line each. Checked inside (wa225_marketing). Access: authenticated.
 - `ask_guest_stats(bigint)`: wave265: usage of one guest space for its managers (spend this month and in all, answers today and in all, refusals, thumbs, and per person). Service role only (ask-guest).
 - `wa273_ask_signup(bigint, boolean)`: wave273: Ask to sign up on Applicants received. p_send false returns the email to preview; true sends it from volunteer@ with replies to the sender and moves the application to Contacted. Same people as wa256_can_text.
+- `wa274_crew_add(bigint, bigint, text)`: wave274: put a CRM contact on a Toronto event's crew (team_leader, cook, server, driver, photographer, videographer), giving the contact a volunteer record first when it has none (crm_contacts.volunteer_id). Returns {ok, roster_id, person_id, already}. Staff only.
 - `wa_avail_setting(text)`: wave276: an avail_ setting from app_config as a number, with the wave's default (10 hours, 480, 1320, 30 minutes) when it is missing. Used inside the wa_avail_ functions only.
 - `wa_avail_can_manage(text)`: wave276: true when the signed-in person manages the team: an admin, HR, any leader of the team (wa_leads_team), or the person a team member's seat reports to in org_positions. Managers see who has not entered a week, ask the team again and propose meeting times.
 - `wa_avail_can_see(text)`: wave276: true when the signed-in person may see the team's availability: they are on the team (wa_in_team) or manage it (wa_avail_can_manage).
