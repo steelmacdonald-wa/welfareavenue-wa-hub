@@ -10939,7 +10939,7 @@ if (typeof waVolRender === 'function') {
    ===================================================================== */
 
 var WA37 = { tmpl: [], onbs: [], steps: [], loaded: false };
-var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 DAYS': 5 };
+var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 DAYS': 5, '90 DAYS': 6 };   /* wave279: 90 DAYS is part of every plan */
 
 (function () {
   if (document.getElementById('wa37css')) return;
@@ -11541,7 +11541,7 @@ async function wa39OnbLoad() {
 function wa39Pace(o) {
   if (o.status === 'completed') return null;
   var days = Math.max(0, (Date.now() - new Date(String(o.started_at) + 'T12:00:00').getTime()) / 86400000);
-  var expected = Math.min(100, Math.round(days / 60 * 100));
+  var expected = Math.min(100, Math.round(days / 90 * 100));   /* wave279: the plan runs 90 days */
   var p = wa37Pct(o.id).pct;
   if (p >= Math.min(99, expected + 10)) return ['ahead', '#103F39'];
   if (p + 15 < expected) return ['falling behind', '#b3402f'];
@@ -11865,6 +11865,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       await wa40Load();
       wa40Enforce();
     } catch (e) { /* non-fatal */ }
+    /* wave278 (04/11/26): the "Sign in to the Hub" tick of a new hire's setup page (/o/<token>?setup). Once per page load, after the role is
+       known (WA40_MINE); wa278_hub_seen() ticks rd_hub only on the onboarding flow whose wa_email is this sign-in, so for everyone else it does
+       nothing. Not awaited, errors ignored, the result unused. */
+    if (!window.__wa278Seen) {
+      window.__wa278Seen = true;
+      try { db.rpc('wa278_hub_seen').then(function () {}, function () {}); } catch (e) { /* fine */ }
+    }
   };
 })();
 /* =====================================================================
@@ -13190,7 +13197,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     act.forEach(function (o) {
       var p = wa37Pct(o.id).pct;
       pctSum += p;
-      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 90 * 100));   /* wave279: the plan runs 90 days */
       if (p < expected - 15) late++;
     });
     var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
@@ -13210,7 +13217,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!act.length) html += '<p class="m-sub">Nobody is mid-onboarding right now.</p>';
     act.forEach(function (o) {
       var p = wa37Pct(o.id);
-      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 90 * 100));   /* wave279: the plan runs 90 days */
       var isLate = p.pct < expected - 15;
       var helpN = (typeof WA39_HELP !== 'undefined' ? WA39_HELP : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); }).length;
       var hrMine = (typeof WA39_HRS !== 'undefined' ? WA39_HRS : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); });
@@ -13219,6 +13226,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         + '<span class="w37bar" style="max-width:150px"><i style="width:' + p.pct + '%"></i></span>'
         + '<span style="font-size:12px;color:#103F39;font-weight:700">' + p.pct + '%</span>'
         + '<span class="w46days' + (isLate ? ' late' : '') + '">day ' + wa46Days(o.started_at) + (isLate ? ' &middot; behind pace' : '') + '</span>'
+        + '<span class="w46days" data-w279acad="' + o.id + '">' + esc(window.wa279Acad ? window.wa279Acad.text(o.id) : '') + '</span>'   /* wave279: Academy trainings d of t (parts279/b_hooks.js) */
         + (helpN ? '<span class="w46stage" style="background:#b3402f;color:#FFFAF2">' + helpN + ' asking for help</span>' : '')
         + '<a class="w37edit" data-w37open="' + o.id + '">checklist</a>'
         + (hrMine.length ? '<a class="w37edit" data-w39hr="' + o.id + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>' : '')
@@ -25754,7 +25762,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         if (mine[p.key]) {
           html += '<div class="w105sign"><b>' + esc(p.title) + '</b> <span class="w105ok">signed ' + esc(String(mine[p.key]).slice(0, 10)) + '</span> <a class="w105mut" href="' + esc(p.url) + '" target="_blank" rel="noopener">read again</a></div>';
         } else {
-          html += '<div class="w105sign"><b>' + esc(p.title) + '</b><div style="margin-top:6px"><a class="btn ghost mini" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="text-decoration:none">Open and read</a> <button class="btn mini" data-w105sk="' + esc(p.key) + '">I have read and reviewed this</button></div></div>';
+          /* wave279: the button waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then the old label */
+          var W = window.wa279Pol, OK = 'I have read and reviewed this', v = W ? W.view(p.key, OK, true) : { dis: false, txt: OK };
+          html += '<div class="w105sign"><b>' + esc(p.title) + '</b><div style="margin-top:6px"><a class="btn ghost mini" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="text-decoration:none" data-w279polopen="' + esc(p.key) + '">Open and read</a> <button class="btn mini" data-w105sk="' + esc(p.key) + '"' + (W ? W.attrs(p.key, OK, true) : '') + (v.dis ? ' disabled' : '') + '>' + esc(v.txt) + '</button></div></div>';
         }
       });
       card.innerHTML = html;
@@ -25762,9 +25772,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       else panel.appendChild(card);
       card.querySelectorAll('[data-w105sk]').forEach(function (b) {
         b.addEventListener('click', async function () {
-          this.disabled = true;
+          this.disabled = true; this.setAttribute('aria-busy', 'true');
           var ins = await db.from('wa_policy_signoffs').insert({ email: me.email, name: me.name, policy_key: this.getAttribute('data-w105sk') });
-          if (ins.error) { this.disabled = false; toast('Could not record the sign-off'); return; }
+          /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is */
+          if (ins.error) { this.disabled = false; this.removeAttribute('aria-busy'); toast(String(ins.error.message || '') || 'Could not record the sign-off'); if (window.wa279Pol) { window.wa279Pol.reload(); window.wa279Pol.refresh(); } return; }
           toast('Sign-off recorded, thank you');
           card.remove();
           w105SignCard(panel, id, prepend);
@@ -40020,12 +40031,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     h += '<div class="foot"><button class="w122btn soft sm" data-w122tour="chrome">' + ic('map') + ' Take the 2 minute tour</button></div></div>';
     /* 3. policies */
     var p = o.pol;
+    /* wave279: the button waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then "I have read it" */
+    function polSignBtn(k) { var W = window.wa279Pol, v = W ? W.view(k, 'I have read it', true) : { dis: false, txt: 'I have read it' }; return '<button class="go dark" data-w122sign="' + E(k) + '"' + (W ? W.attrs(k, 'I have read it', true) : '') + (v.dis ? ' disabled' : '') + '>' + E(v.txt) + '</button>'; }
     h += '<div class="w122trk" data-trk="policies"><div class="th"><div class="rg">' + ring(p.has ? p.pct : 0, 48, 5, PURPLE) + '<i>' + (p.has ? p.signed + '/' + p.total : '\u2013') + '</i></div><div><h3>Policies to sign</h3><div class="m">' + (p.has ? (p.all ? 'All signed' : 'Read each one, then sign off') : 'Nothing to sign') + '</div></div></div>';
     if (p.has) {
       h += '<div class="lst">' + p.list.map(function (x) {
         return '<div class="it' + (x.at ? ' done' : '') + '"><span class="ck' + (x.at ? ' on' : '') + '">' + ic('check') + '</span><div class="tx"><b>' + E(x.t) + '</b><span>' + (x.at ? 'Signed ' + E(fmtShort(x.at)) : 'Your sign-off is recorded for HR with the date') + '</span><div class="ia">' +
-          (x.url ? '<a class="go" href="' + E(x.url) + '" target="_blank" rel="noopener">' + (x.at ? 'Read again' : 'Open and read') + '</a>' : '') +
-          (x.at ? '' : '<button class="go dark" data-w122sign="' + E(x.key) + '">I have read it</button>') + '</div></div></div>';
+          (x.url ? '<a class="go" href="' + E(x.url) + '" target="_blank" rel="noopener"' + (x.at ? '' : ' data-w279polopen="' + E(x.key) + '"') + '>' + (x.at ? 'Read again' : 'Open and read') + '</a>' : '') +
+          (x.at ? '' : polSignBtn(x.key)) + '</div></div></div>';
       }).join('') + '</div>';
     } else h += '<div class="empty">There are no policies waiting for you.</div>';
     h += '</div></div>';
@@ -41340,15 +41353,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function hubGo(id) { var api = window.w112Api; if (api && api.go) { try { api.go(id); } catch (e) { /* fine */ } } }
   async function signPolicy(key, btn) {
     var m = me(); if (!m.email) return;
-    if (btn) btn.disabled = true;
+    if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
     try {
       var r = await db.from('wa_policy_signoffs').insert({ email: m.email, name: m.full || m.name, policy_key: key });
-      if (r && r.error && !/duplicate|unique/i.test(String(r.error.message || ''))) throw r.error;
+      if (r && r.error && !/duplicate|unique/i.test(String(r.error.message || ''))) throw { db: String(r.error.message || '') };
       A.signs[key] = nowIso();
       ['w105sign', 'w105signt'].forEach(function (id) { var el = document.getElementById(id); if (el) el.remove(); });
       toastS('Sign-off recorded, thank you');
       afterChange();
-    } catch (e) { if (btn) btn.disabled = false; toastS('Could not record the sign-off'); }
+    } catch (e) {
+      /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is, and the count is read again */
+      if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); }
+      toastS((e && e.db) || 'Could not record the sign-off');
+      if (window.wa279Pol) { window.wa279Pol.reload(); window.wa279Pol.refresh(); }
+    }
   }
   async function ackStep(el) {
     var g = orgState(); if (!g.has) return;
@@ -50017,7 +50035,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var btns = document.querySelectorAll('[data-w105sk],[data-w122sign]'); if (!btns.length) return;
     var o = polOpened();
     for (var i = 0; i < btns.length; i++) {
-      var b = btns[i], k = polKeyOf(b), lock = !!(k && !o[k] && !POL_MEM[k] && polLink(b));
+      /* wave279: when the database keeps the opens (wa279Pol, parts279/b_hooks.js), its Sign button rule stands and this lock steps aside */
+      var b = btns[i], k = polKeyOf(b), W = window.wa279Pol, known = !!(k && W && W.left(k) !== 'unknown'), lock = !!(k && !known && !o[k] && !POL_MEM[k] && polLink(b));
       if (lock && !b.hasAttribute('data-w130lock')) { b.setAttribute('data-w130lock', '1'); b.setAttribute('title', 'Open and read it first'); b.setAttribute('aria-disabled', 'true'); }
       else if (!lock && b.hasAttribute('data-w130lock')) { b.removeAttribute('data-w130lock'); b.removeAttribute('title'); b.removeAttribute('aria-disabled'); }
     }
@@ -62059,8 +62078,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function allowed(id) { var t = tab(id); return !!t && t.style.display !== 'none' && !!document.getElementById(id); }
   /* wave262 (Steel, 20/10/26: "allow them to look through the apps that are available to them"): the apps that belong to a
      person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
-     Admins and the Executive profile have every app as theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: [], board: [] };
+     Admins and the Executive profile have every app as theirs.
+     wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
+     the CRM is now theirs. */
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['crm'], board: [] };
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
@@ -63069,7 +63090,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     return null;
   }
-  function chipHtml(t, ls) {
+  function chipHtml(t, ls, onb) {
+    if (/^role(60|90)$/.test(t.academy_path || '') && window.w279 && typeof window.w279.roleStep === 'function') return window.w279.roleStep(t, onb);   /* wave279: the role step lists the manager's picks */
     if (!t.training_id && !t.academy_path) return '';
     if (!ls) return '<div><span class="w166acad">Avenue Academy</span></div>';
     var open = (ls.asked === 'team' || ls.asked === 'any') && !ls.n && !ls.done;   /* nothing started yet: they choose */
@@ -63112,7 +63134,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
           + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
           + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
-          + chipHtml(t, ls)
+          + chipHtml(t, ls, onb)
           + (t.description ? '<div class="ds">' + ((typeof wa37Md === 'function') ? wa37Md(t.description) : E(t.description)) + '</div>' : '')
           + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + E(s.done_by) + '</div>' : (done && !s.done ? '<div class="ds" style="opacity:.6">done in the Avenue Academy</div>' : ''))
           + '</div></div>';
@@ -63221,7 +63243,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return S.loading;
   }
   var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
-  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; if (day <= 90) return 'Up to 90 days'; return 'Past 90 days'; }   /* wave279: day is day one = 1, so 0 to 27 days in is Week n of 4, then 60 and 90 days */
   function leadStepsHtml(p) {
     var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
     var steps = (p.lead_steps || []).slice();
@@ -92793,13 +92815,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function opened(key) { try { return (JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]')).indexOf(key) >= 0; } catch (e) { return false; } }
   function markOpened(key) { try { var a = JSON.parse(sessionStorage.getItem(KEY_OPENED) || '[]'); if (a.indexOf(key) < 0) a.push(key); sessionStorage.setItem(KEY_OPENED, JSON.stringify(a)); } catch (e) { /* fine */ } }
   async function signPolicy(key, btn) {
-    if (S.polBusy[key]) return; S.polBusy[key] = true; if (btn) btn.disabled = true;
+    if (S.polBusy[key]) return; S.polBusy[key] = true; if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
     try {
       var ins = await db.from('wa_policy_signoffs').insert({ email: meEmail(), name: meName(), policy_key: key });
-      if (ins && ins.error) throw ins.error;
+      if (ins && ins.error) throw { db: String(ins.error.message || '') };
       say('Sign-off recorded, thank you');
       S.pols = (S.pols || []).filter(function (p) { return p.key !== key; }); S.polsPending = S.pols.length;
-    } catch (e) { say('Could not record the sign-off'); }
+    } catch (e) { say((e && e.db) || 'Could not record the sign-off'); if (window.wa279Pol) window.wa279Pol.reload(); }   /* wave279: the database's refusal ("Read it for N more minutes first") shows as it is */
     S.polBusy[key] = false; paintSetup();
   }
 
@@ -92842,9 +92864,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function rowsPolicies(n0) {
     return (S.pols || []).map(function (p, i) {
-      var canSign = opened(p.key), busy = !!S.polBusy[p.key];
-      return { k: 'pol:' + p.key, ok: false, n: String(n0 + i), t: 'Read and sign: ' + p.title, s: canSign ? 'Read it? Then sign here. HR keeps the date.' : 'Open it, read it, then sign here. HR keeps the date.',
-        act: '<a class="lnk" href="' + E(p.url) + '" target="_blank" rel="noopener" data-w272pol="open" data-key="' + E(p.key) + '">Open</a><button type="button" class="go" data-w272pol="sign" data-key="' + E(p.key) + '"' + (canSign && !busy ? '' : ' disabled') + '>' + (busy ? 'Saving\u2026' : 'Sign') + '</button>' };
+      /* wave279: Sign waits for the reading time (wa279Pol, parts279/b_hooks.js): "Sign in N min", then Sign */
+      var W = window.wa279Pol, seen = opened(p.key) || !!(W && W.opened(p.key)), busy = !!S.polBusy[p.key], v = W ? W.view(p.key, 'Sign', seen) : { dis: !seen, txt: 'Sign' };
+      return { k: 'pol:' + p.key, ok: false, n: String(n0 + i), t: 'Read and sign: ' + p.title, s: seen ? 'Read it? Then sign here. HR keeps the date.' : 'Open it, read it, then sign here. HR keeps the date.',
+        act: '<a class="lnk" href="' + E(p.url) + '" target="_blank" rel="noopener" data-w272pol="open" data-w279polopen="' + E(p.key) + '" data-key="' + E(p.key) + '">Open</a><button type="button" class="go" data-w272pol="sign" data-key="' + E(p.key) + '"' + (busy ? ' aria-busy="true" disabled' : (W ? W.attrs(p.key, 'Sign', seen) : '') + (v.dis ? ' disabled' : '')) + '>' + (busy ? 'Saving\u2026' : E(v.txt)) + '</button>' };
     });
   }
   function rowHtml(r) {
@@ -94052,7 +94075,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var TZ = 'America/Toronto', GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RED = '#B3402F', LINE = '#DEE0D8', MUTE = '#797773';
   var E = esc;
   var ADDR = /^[a-z0-9][a-z0-9.-]*@welfareavenue\.com$/;
-  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: the last five, for the rundown ticks on a started card */
+  var FLOW_COLS = 'id, candidate_id, practice, status, manager_member_id, wa_email, call_at, one_on_one_at, group_session, welcome_subject, welcome_text, onboarding_id, slack_channel_id, roster_created, canva_link, started_at, updated_at, created_at, setup_ticks, welcome_sent_at, accounts_at, proposed_at, leader';   /* named: pw_nonce is withheld from the browser. wave275 Task 6: setup_ticks to proposed_at, for the rundown ticks on a started card. wave278 Task 6: leader (wa278a grants it), for the leader line on HR's started cards */
   var STEP_COLS = 'flow_id, step, status, detail, practice, at';
   var CAND_COLS = 'id, name, role, email, member_id';
   var OFFER_COLS = 'id, name, role, status, offer_sent_at, accepted_on';
@@ -94077,7 +94100,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   };
   /* wave275 Task 6: the doors a later wave wraps (docs/ARCHITECTURE.md section 5). This wave calls its loader, painter, cards, change panel and the picker's
      data through R, so wave275 can add the manager's cards and its own card for a flow on the new path without copying this one. */
-  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; },
+  var R = window.o271R = { readyStatuses: ['waiting', 'ready'], startedMore: function () { return ''; }, startedAfter: function () { return ''; },   /* wave278: startedAfter, under a started card's steps */
     hrTools: function () { return true; } };   /* false: the person is not HR (wave275's manager view), so HR's own buttons (the link, the preview, I created it) stay off */
 
   /* ---------- style ---------- */
@@ -94671,6 +94694,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + R.startedMore(f)   /* wave275: the setup rundown ticks */
       + noteHtml(id)
       + '<ol class="o271st">' + STEPS.map(function (s, i) { return stepHtml(f, s[0], s[1], i + 1); }).join('') + '</ol>'
+      + R.startedAfter(f)   /* wave278: the access steps, the leader line and Re-check, after these eight */
       + '<div class="o271btns">'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="time" data-f="' + E(id) + '"' + (acting === 'time' ? ' disabled' : '') + '>Change time</button>'
       + '<button type="button" class="o271b" data-o271a="act" data-kind="manager" data-f="' + E(id) + '"' + (acting === 'manager' ? ' disabled' : '') + '>Change manager</button>'
@@ -94954,7 +94978,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    A manager who is not HR sees only their own hires' cards (wa275_my_cards), as "Your new hires" on Home and on their team page; HR and admins see
    every card in HR Center > Onboarding, and their own hires on Home as short lines. Every write goes through onboard-run, which checks who may
    (wa275_manager_of); the menu is not the lock. Wraps wave271's doors (window.o271R: load, paint, readyCard, panelHtml, startedMore, preview) and reuses
-   its words, grid and steps (window.o271). Times are America/Toronto wall clock, through Intl only. */
+   its words, grid and steps (window.o271). Times are America/Toronto wall clock, through Intl only.
+   wave275b (03/11/26, Steel: "Can we make the availability check for onboarding optional"): the card row's manager_hours (wa275b's wa275_flow_row, from
+   onboard_manager_hours) and the times answer's manager_hours. False: the week line is one quiet line of information ("<first> has not set their week
+   on Home; times are not limited to it"), and the picker offers every cell of the window ("Open to pick"), greying only hub@ meetings, other hires and
+   too-soon cells. Missing (an older row or function): today's rule. The page never reads app_config for it.
+   wave278 (04/11/26, Task 6): the rundown counts twelve steps, and the card gains the access block (c_access.js): the groups, drives, meeting and channel
+   steps, the leader decision with Change, Re-check Drives and Groups, and the welcome's copies with Add people. c_access.js closes this wrapper. */
 (function () {
   if (window.__wa275) return; window.__wa275 = true;
   var O = window.o271, R = window.o271R;
@@ -94963,8 +94993,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var GREEN = '#103F39', GROUND = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2';
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'], WDN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], WDK = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   var DEFAULT_WEEK = { mon: [['09:00', '17:00']], tue: [['09:00', '17:00']], wed: [['09:00', '17:00']], thu: [['09:00', '17:00']], fri: [['09:00', '17:00']] };
-  /* the hire's setup rundown (onboard-link SETUP, 9 steps); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
-  var RUNDOWN = [['profile', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['hub', 'the Hub'], ['slack', 'Slack'], ['academy', 'the Academy'], ['loom', 'Loom'], ['canva', 'Canva'], ['drives', 'Drives and Groups'], ['weekly', 'the weekly meeting']];
+  /* the hire's setup rundown (onboard-link SETUP, 12 steps since wave278; wa278a carried the old ticks over: profile to chrome, drives to drive, loom
+     dropped); ticks are setup_ticks.rd_<key> only, never the Hub's own keys kept beside them */
+  var RUNDOWN = [['google', 'their Google account'], ['chrome', 'Chrome'], ['bookmarks', 'Gmail and Calendar'], ['drive', 'Drive'], ['groups', 'Groups'], ['hub', 'the Hub'], ['slack', 'Slack'],
+    ['canva', 'Canva'], ['academy', 'the Academy'], ['jd', 'the job description'], ['weekly', 'the weekly meeting'], ['phone', 'the phone apps']];
   var MINE_KINDS = { propose: 1, bookg: 1, gridfor: 1, exc: 1, welcome: 1, mgr: 1 };
   R.readyStatuses.push('offered');   /* a card runs from the offer (wa271_ready_list lists offered flows since wa275a) */
 
@@ -95116,6 +95148,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function mgrLine(x) {
     if (!x.manager_member_id) return 'Manager: not chosen yet. Choose one with Change manager.';
     var name = x.manager_name || O.nameOf(x.manager_member_id), first = firstOf(name);
+    if (x.manager_hours === false) {   /* wave275b: the week is information, not a rule, so no prompt */
+      var info = x.manager_no_week ? first + ' has not set their week on Home; times are not limited to it'
+        : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) + '; times are not limited to it' : 'times are not limited to their week';
+      return 'Manager: ' + E(name) + ' &middot; ' + E(info);
+    }
     var week = x.manager_no_week ? first + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used'
       : x.manager_week_stale ? first + '\'s team asked for their week again' + (x.manager_availability_at ? ' since they set it on ' + day(x.manager_availability_at) : '') + ': they are asked on Home'
       : x.manager_availability_at ? 'their week was set on ' + day(x.manager_availability_at) : '';
@@ -95170,6 +95207,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + (booked ? '' : switchHtml(x))
       + (x.accepted_on ? ticksHtml(x) : '')
       + stepsHtml(x)
+      + accessHtml(x, id)   /* wave278: c_access.js */
       + (booked ? '' : canvaHtml(x))
       + O.noteHtml(id)
       + buttonsHtml(x)
@@ -95179,10 +95217,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the panels: open, draw, go ---------- */
   /* the picker's data in the shape wave271's grid takes: the hire's marks, the manager's free cells (their hours over the window), their hub@ meetings */
+  function hoursRule(tv) { return !(tv && tv.manager_hours === false); }   /* wave275b: onboard_manager_hours, as times says; missing means on */
   function pvOf(tv) {
-    var av = (tv && tv.availability) || { weekly: DEFAULT_WEEK, except: [] }, len = S.cfg.cell * 60000;
+    var av = (tv && tv.availability) || { weekly: DEFAULT_WEEK, except: [] }, len = S.cfg.cell * 60000, rule = hoursRule(tv);
     var g = O.newGrid('z0', { grids: {}, hub_events: [] }, 'call'), free = [];
-    g.days.forEach(function (d) { Object.keys(d.cells).forEach(function (k) { var t = d.cells[k]; if (inside(av, t, t + len)) free.push(new Date(t).toISOString()); }); });
+    g.days.forEach(function (d) { Object.keys(d.cells).forEach(function (k) { var t = d.cells[k]; if (!rule || inside(av, t, t + len)) free.push(new Date(t).toISOString()); }); });   /* off: every cell of the window */
     return { grids: { hire: (tv && tv.hire_slots) || [], manager: free }, hub_events: ((tv && tv.busy) || []).map(function (e) { return { start_at: e.start, end_at: e.end, summary: e.summary || 'A meeting', who: ['hire', 'manager'] }; }) };
   }
   function markOf(tv, kind) {
@@ -95211,7 +95250,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         if (kind === 'propose' || kind === 'bookg') {
           var g = O.newGrid('q' + id, pvOf(tv), 'call');
           g.both = true; g.mark = markOf(tv, kind);
-          g.words = { h: 'New hire marked', m: firstOf(A.mname) + ' is free', mTip: firstOf(A.mname) + ' is free', busy: 'A meeting, another new hire, or too soon' };
+          g.words = hoursRule(tv) ? { h: 'New hire marked', m: firstOf(A.mname) + ' is free', mTip: firstOf(A.mname) + ' is free', busy: 'A meeting, another new hire, or too soon' }
+            : { h: 'New hire marked', m: 'Open to pick', mTip: 'open to pick', busy: 'A hub@ meeting, another new hire, or too soon' };   /* wave275b: the week is not a rule */
           if (kind === 'propose' && tv.proposal && !tv.hire_answer) { g.vals.call = O.toLocal(tv.proposal.call_at); g.vals.one = O.toLocal(tv.proposal.one_on_one_at); }
           A.g = g;
         } else if (kind === 'gridfor') {
@@ -95245,10 +95285,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var first = firstOf(x.name), mgr = firstOf(A.mname || x.manager_name);
     if (A.kind === 'propose' || A.kind === 'bookg') {
       var g = A.g, isBook = A.kind === 'bookg';
+      var rule = hoursRule(A.tv);   /* wave275b: off, the manager's week does not limit the times */
       h += '<div class="o271ln">' + E(isBook
-          ? 'Pick both times from ' + first + '\'s marks over ' + mgr + '\'s hours. The Hub books them at once: the invites, the plan and the welcome email follow.'
-          : 'Pick both times inside ' + mgr + '\'s hours. ' + first + ' is emailed them to say yes or no' + (x.accepted_on ? '.' : ', once they accept the offer.')) + '</div>'
-        + (A.tv && A.tv.no_week ? '<div class="o271warn">' + E(mgr + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used.') + '</div>' : '')
+          ? 'Pick both times from ' + first + '\'s marks' + (rule ? ' over ' + mgr + '\'s hours' : '') + '. The Hub books them at once: the invites, the plan and the welcome email follow.'
+          : (rule ? 'Pick both times inside ' + mgr + '\'s hours. ' : 'Pick both times; ' + mgr + '\'s week does not limit them. ') + first + ' is emailed them to say yes or no' + (x.accepted_on ? '.' : ', once they accept the offer.')) + '</div>'
+        + (rule && A.tv && A.tv.no_week ? '<div class="o271warn">' + E(mgr + ' has not set their week on the Hub\'s Home page yet, so Monday to Friday, 9 to 5 is used.') + '</div>' : '')
         + '<div class="o271md" role="group" aria-label="Which meeting you are picking"><button type="button" class="' + (g.mode === 'call' ? 'on' : '') + '" data-o275a="mode" data-mode="call" data-f="' + E(id) + '">Onboarding call</button><button type="button" class="' + (g.mode === 'one' ? 'on' : '') + '" data-o275a="mode" data-mode="one" data-f="' + E(id) + '">1-on-1</button></div>'
         + O.gridHtml(g)
         + '<div class="o271two"><div><label class="o271f">Onboarding call (Toronto time)</label><input type="datetime-local" data-o275i="call" data-f="' + E(id) + '" value="' + E(g.vals.call) + '"><div class="o271said" data-o275said="call">' + E(saidOf(g, 'call')) + '</div></div>'
@@ -95525,6 +95566,681 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '';
   }
   function excClean(list) { return list.map(function (d) { return { date: d.date, free: d.free.map(function (b) { return [b[0], b[1]]; }) }; }); }
+
+  /* ---------- wave278 (04/11/26, Task 6): the access steps, the leader decision, Re-check, and the welcome copies ----------
+     Steel (04/11/26): the Hub itself adds a new hire to their Google Groups, shared drives, weekly meeting and Slack onboarding channel (onboard-run's steps
+     groups, drives, meeting, channel). The card shows those four rows through wave271's own step row (O.stepHtml: Retry, and Done for an HR task), numbered
+     after wave271's eight; the channel step while pending reads "Waiting for them to join Slack" (the hourly job tries again, so nothing to retry). Above
+     them the leader decision from the card row (wa278a's wa275_flow_row: leader true, false or null): "Joining as a member" / "Joining as a leader" with
+     Change (set_leader with the other value), "Joining as: not decided yet" with both; while set_leader or recheck_access runs, the Groups and Drives rows
+     say "Re-running", then the card reloads and the rows re-paint from onboard-run's answer. Re-check Drives and Groups (recheck_access) shows once either
+     row exists. Under them, until the welcome is sent: "Welcome email: from <sender>, copied to <owner> and <n> others" (the sender as Task 4 picks it: who
+     pressed Send on the offer, then the candidate's owner, then hub@) and Add people, a picker of active staff from the roster (never the hire, never
+     someone who left; the owner always gets a copy), saved by set_welcome_cc. onboard-run checks who may (HR, admins, or the hire's own manager through
+     wa275_manager_of) and refuses copies once the welcome is sent; the card only shows. What onboard-run answers is kept: its warnings ("nothing to run
+     yet", a step already running, the leaders' groups to take them out of by hand) show under the note, and a refusal shows as the error.
+     A started card gets the block under its eight steps (wave271's R.startedAfter), the rundown ticks staying above them. HR reads its started flows
+     from the table (wave271's FLOW_COLS, which carries leader since wave278), without offer_sent_by and owner_email, so the copies line stays off there:
+     without them it would name hub@ as the sender wrongly (the welcome has normally gone by then anyway).
+     Fix wave (04/11/26, after the whole-branch review): Re-check and the leader line show on every accepted or started new-path card, also one with no
+     Groups or Drives rows yet (accepted before the release: onboard-run makes the rows and runs them; before Accept it says there is nothing to run).
+     Only HR and admins may make a hire a leader (Steel's ruling): a manager who is not HR (R.hrTools false) is offered "As a member" and, on a leader,
+     Change to member, never the way up; onboard-run is the lock (403). The welcome line names the sender onboard-run works out (times {only:
+     'welcome_from'}, welcomeSender's rule: an active Welfare Avenue sender, else the active owner, else hub@), asked once per card; until it answers, or
+     when it cannot tell, the line says "from the offer's sender or hub@welfareavenue.com" and names nobody. From leader to member the note no longer adds
+     its own "never removes" sentence: onboard-run's warning says it, with the groups. */
+  var ACCESS = [['groups', 'Google Groups'], ['drives', 'Shared drives'], ['meeting', 'Weekly meeting'], ['channel', 'Slack onboarding channel']];
+  var HUB_FROM = 'hub@welfareavenue.com';
+  var st278 = document.createElement('style'); st278.id = 'o278css';
+  st278.textContent =
+    '.o278acc{min-width:0;margin:4px 0;}' +
+    '.o278ln{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;color:' + GROUND + ';margin:8px 0 4px;min-width:0;overflow-wrap:anywhere;}' +
+    '.o278ln > span{min-width:0;}' +
+    '.o278ln .o271b{min-height:32px;}' +
+    '.o278hint{color:' + MUTE + ';font-size:12.5px;}' +
+    '.o278pk{border:1px solid ' + LINE + ';border-radius:10px;padding:8px 10px;margin:6px 0;background:' + CREAM + ';min-width:0;}' +
+    '.o278pk label{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;padding:4px 0;color:' + GROUND + ';min-width:0;cursor:pointer;}' +
+    '.o278pk label > div{min-width:0;overflow-wrap:anywhere;}' +
+    '.o278pk label span{color:' + MUTE + ';font-size:12.5px;}' +
+    '.o278pk input{margin-top:3px;flex:none;}';
+  document.head.appendChild(st278);
+  var CC = {};   /* the open copies pickers: flow id -> { sel: { email: true } } */
+
+  function lower(e) { return String(e || '').trim().toLowerCase(); }
+  function hasAccess(x) { return (x.steps || []).some(function (r) { return ACCESS.some(function (a) { return a[0] === r.step; }); }); }
+  function rerunning(id) { return !!(S.busy['w278l' + id] || S.busy['w278c' + id]); }
+  function accessRow(f, key, label, n) {
+    var r = (f.steps || []).filter(function (s) { return s.step === key; })[0];
+    if (!r) return '';
+    var shown = r;
+    /* wave271's row prints a status it has no word for as it is, and offers Retry only for failed or stuck running rows: so neither of these offers one */
+    if (rerunning(f.id) && (key === 'groups' || key === 'drives')) shown = Object.assign({}, r, { status: 'Re-running', detail: null });
+    else if (key === 'channel' && r.status === 'pending') shown = Object.assign({}, r, { status: 'waiting', detail: 'Waiting for them to join Slack' });
+    return O.stepHtml(Object.assign({}, f, { steps: [shown] }), key, label, n);
+  }
+  function leaderHtml(x, id) {
+    if (x.leader === undefined) return '';   /* a row without the decision (HR's started cards): nothing to say */
+    var busy = S.busy['w278l' + id] ? ' disabled' : '', up = R.hrTools();   /* fix wave (I3): the way up (leader) is HR's and admins' */
+    function b(on, label) { return '<button type="button" class="o271b" data-o278a="leader" data-on="' + on + '" data-f="' + E(id) + '"' + busy + '>' + E(label) + '</button>'; }
+    var line = x.leader === true ? 'Joining as a leader' : x.leader === false ? 'Joining as a member' : 'Joining as: not decided yet';
+    var btns = x.leader == null ? b(0, 'As a member') + (up ? b(1, 'As a leader') : '') : x.leader ? b(0, 'Change') : up ? b(1, 'Change') : '';
+    var hint = up || x.leader === true ? '' : '<span class="o278hint">' + E('HR or an admin decides if they join as a leader.') + '</span>';
+    return '<div class="o278ln" data-o278lead><span>' + E(line) + '</span>' + btns + hint + '</div>';
+  }
+  /* the staff who may get a copy: active roster rows with an email (active true, as onboard-run requires), never the hire's own row, and not the owner (who always gets one) */
+  function staffFor(x) {
+    var owner = lower(x.owner_email), hire = lower(x.wa_email);
+    return S.people.filter(function (p) {
+      var e = lower(p.email);
+      return p.active === true && e && e.indexOf('@') > 0 && e !== owner && e !== hire && !(x.member_id != null && String(p.id) === String(x.member_id));
+    });
+  }
+  /* fix wave (M2): who the welcome comes from, as onboard-run works it out (times {only: 'welcome_from'}), asked once per card and asked again only when
+     the row's sender or owner changes; null until it answers, and when it cannot tell (then the line names nobody) */
+  var FROM = {};   /* flow id -> { key, done, email } */
+  function fromOf(x, id) {
+    var key = lower(x.offer_sent_by) + '|' + lower(x.owner_email), F0 = FROM[id];
+    if (F0 && F0.key === key) return F0.done ? F0.email : null;
+    var me = FROM[id] = { key: key, done: false, email: null };
+    setTimeout(function () {
+      run('times', { flow_id: Number(id), only: 'welcome_from' }).then(function (r) { var e = lower(r && r.welcome_from); me.email = e.indexOf('@') > 0 ? e : null; })
+        .catch(function () { me.email = null; })
+        .then(function () { me.done = true; if (FROM[id] === me && me.email) R.paint(); });
+    }, 0);
+    return null;
+  }
+  function welcomeHtml(x, id) {
+    /* sent (its copy is under the welcome step), or a row without the copies or without the owner (HR's started cards: see the top) */
+    if (x.welcome_sent_at || !Array.isArray(x.welcome_cc) || x.owner_email === undefined) return '';
+    var owner = lower(x.owner_email), from = fromOf(x, id);
+    var cc = x.welcome_cc.map(lower).filter(function (e) { return e && e !== owner; });
+    var all = (owner ? [owner] : []).concat(cc);
+    var to = !all.length ? ', with no copies' : ', copied to ' + personName(all[0]) + (all.length > 1 ? ' and ' + (all.length - 1) + (all.length === 2 ? ' other' : ' others') : '');
+    var P = CC[id];
+    return '<div class="o278ln" data-o278wel><span>' + E('Welcome email: from ' + (from ? personName(from) : 'the offer\'s sender or ' + HUB_FROM) + to) + '</span>'
+      + (P ? '' : '<button type="button" class="o271b" data-o278a="ccopen" data-f="' + E(id) + '">Add people</button>') + '</div>'
+      + (P ? pickerHtml(x, id, P) : '');
+  }
+  function pickerHtml(x, id, P) {
+    var list = staffFor(x), owner = lower(x.owner_email), busy = S.busy['w278w' + id];
+    return '<div class="o278pk" data-o278pk>'
+      + '<div class="o271ln">' + E('Tick the staff who get a copy of the welcome email. ' + (owner ? personName(owner) + ' always gets a copy. ' : '') + 'Their copy has no password in it. Someone who has left the roster is taken off the copies when you save.') + '</div>'
+      + (list.length ? list.map(function (p) {
+          var e = lower(p.email);
+          return '<label><input type="checkbox" data-o278cc="' + E(e) + '" data-f="' + E(id) + '"' + (P.sel[e] ? ' checked' : '') + '><div>' + E(p.name) + ' <span>' + E(p.email) + '</span></div></label>';
+        }).join('') : '<div class="o271ln">No one else on the roster.</div>')
+      + '<div class="o271btns"><button type="button" class="o271b pri" data-o278a="ccsave" data-f="' + E(id) + '"' + (busy ? ' disabled' : '') + '>' + E(busy ? 'Working...' : 'Save the copies') + '</button>'
+      + '<button type="button" class="o271b" data-o278a="ccshut" data-f="' + E(id) + '">Cancel</button></div></div>';
+  }
+  function accessHtml(x, id, started) {
+    var f = { id: id, steps: x.steps || [], wa_email: x.wa_email, canva_link: x.canva_link };
+    var rows = ACCESS.map(function (a, i) { return accessRow(f, a[0], a[1], O.STEPS.length + i + 1); }).join('');
+    /* fix wave (I2): every accepted or started card on the new path, rows or not (onboard-run makes them for a flow accepted before the release) */
+    var again = !!(started || x.accepted_on) || (x.steps || []).some(function (r) { return r.step === 'groups' || r.step === 'drives'; });
+    return '<div class="o278acc" data-o278acc="' + E(id) + '">' + leaderHtml(x, id)
+      + (rows ? '<ol class="o271st o278st">' + rows + '</ol>' : '')
+      + (again ? '<div class="o271btns"><button type="button" class="o271b" data-o278a="recheck" data-f="' + E(id) + '"' + (rerunning(id) ? ' disabled' : '') + '>Re-check Drives and Groups</button></div>' : '')
+      + welcomeHtml(x, id) + '</div>';
+  }
+  /* a started card on the new path gets the same block under its eight steps: one whose access steps ran, whose leader is decided, or (fix wave, I2)
+     any other on the new path (proposed, or wa275_my_cards' propose_path), so a flow started before the release gets Re-check too. A wave271 flow
+     (none of these) keeps its card as it was. */
+  R.startedAfter = function (f) { return hasAccess(f) || f.leader != null || f.propose_path || f.proposed_at ? accessHtml(f, f.id, true) : ''; };
+
+  /* ---------- the calls: each one reloads the card, so what shows is onboard-run's answer, with its warnings ---------- */
+  function warningsOf(r) { return ((r && r.warnings) || []).map(String).filter(Boolean); }
+  function idle(w) { return w.some(function (m) { return /nothing to run/i.test(m); }); }   /* onboard-run ran nothing (before Accept, or an older flow) */
+  async function setLeader(id, on) {
+    var key = 'w278l' + id, x = rowOf(id); if (!x || S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('set_leader', { flow_id: Number(id), leader: on })), ran = !idle(w);
+      delete S.busy[key];
+      S.note[id] = { ok: firstOf(x.name) + (on ? ' joins as a leader now.' + (ran ? ' The Hub ran Groups and Drives again: the rows say what was added.' : '')
+        : ' joins as a member now.' + (ran ? ' The Hub ran Groups and Drives again.' : '')), warnings: w };   /* fix wave (M4): from leader to member onboard-run's warning names the groups to take them out of */
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+  }
+  async function recheck(id) {
+    var key = 'w278c' + id; if (!rowOf(id) || S.busy[key]) return;
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('recheck_access', { flow_id: Number(id) }));
+      delete S.busy[key];
+      S.note[id] = { ok: idle(w) ? '' : 'Drives and Groups were checked again: the rows say what changed.', warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; R.paint(); }
+  }
+  async function openCc(id) {
+    var x = rowOf(id); if (!x) return;
+    var sel = {}, owner = lower(x.owner_email);
+    (x.welcome_cc || []).forEach(function (e) { e = lower(e); if (e && e !== owner) sel[e] = true; });
+    CC[id] = { sel: sel }; delete S.note[id];
+    await O.readPeople();
+    R.paint();
+  }
+  async function saveCc(id) {
+    var P = CC[id], key = 'w278w' + id; if (!P || !rowOf(id) || S.busy[key]) return;
+    var emails = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
+    S.busy[key] = true; delete S.note[id]; R.paint();
+    try {
+      var w = warningsOf(await run('set_welcome_cc', { flow_id: Number(id), emails: emails }));
+      delete CC[id]; delete S.busy[key];
+      S.note[id] = { ok: emails.length ? 'Saved: ' + emails.length + (emails.length === 1 ? ' person gets' : ' people get') + ' a copy of the welcome email.' : 'Saved: no copies besides the owner\'s.', warnings: w };
+      await R.load();
+    } catch (e) { delete S.busy[key]; S.note[id] = { err: e.message }; try { toast(e.message); } catch (x2) { /* no toast */ } R.paint(); }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-o278a]'); if (!b || b.disabled) return;
+    var a = b.getAttribute('data-o278a'), id = b.getAttribute('data-f');
+    if (a === 'leader') setLeader(id, b.getAttribute('data-on') === '1');
+    else if (a === 'recheck') recheck(id);
+    else if (a === 'ccopen') openCc(id);
+    else if (a === 'ccsave') saveCc(id);
+    else if (a === 'ccshut') { delete CC[id]; R.paint(); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.getAttribute || !t.hasAttribute('data-o278cc')) return;
+    var P = CC[t.getAttribute('data-f')]; if (P) P.sel[t.getAttribute('data-o278cc')] = !!t.checked;
+  });
+})();
+/* =====================================================================
+   WA v279 The onboarding plan revamp: the manager's role-pick pop-up and the plan's role steps (04/11/26, Task 7)
+   =====================================================================
+   Steel (04/11/26): the manager chooses each hire's role trainings in a pop-up that recommends trainings for that person's role or
+   department: 2 or 3 for 60 days and 5 or 6 for 90 days.
+   - Home: a manager whose hire is at day 21 or later (the database's count: today minus day one) and still has a short list sees
+     "Pick <first name>'s role trainings". The hires come from the lead's card (wave166, onboarding_lead_view) and from wa279_my_hires
+     (the plans the database says this person manages, the flow's named manager first), each plan once; wa279_role_options is asked
+     only for the hires at day 21 or later, and the card shows only where the database says this person may pick.
+   - The pop-up (its own layer, so it opens over HR's checklist too): two lists, 60 days and 90 days. Recommended modules first, in
+     the database's order, then the ones already picked; a search over every active Academy module (the trainings table, as the
+     Academy reads it; planned ones left out). Modules the hire finished (done_ids, search results included) are greyed and cannot
+     be picked; a module picked in the other list cannot be picked here. Save is on only inside 2 to 3 and 5 to 6, and sends one
+     wa279_role_save per list. The database's refusal shows as it is. A list whose picks are all finished (the section's done) is
+     read only: "Done", no search, no Save.
+   - HR centre: the person's checklist (wa37OpenModal) gets a Role trainings button that opens the same pop-up.
+   - The plan: wave166's checklist hands the role60 / role90 steps to roleStep (one call-site line in parts166/c_plan.js): the
+     picked modules with a tick each and who picked them, or "Your manager picks these in week 3."
+   Data: build/wa279a_rules.sql (wa279_role_options, wa279_role_save, wa279_my_hires). Test: test/w279drive.js with test/w279fx.js. */
+(function () {
+  if (window.__wa279) return; window.__wa279 = true;
+  var GREEN = '#103F39', INK = '#1F201E', MUTE = '#797773', LINE = '#DEE0D8', CREAM = '#FFFAF2', FLAG = '#B3402F', GOLD = '#DCA527';
+  var SECS = [{ key: '60 DAYS', head: '60 days: pick 2 or 3', word: '60 days' }, { key: '90 DAYS', head: '90 days: pick 5 or 6', word: '90 days' }];
+  var FRESH = 60000;
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function errText(e) { return String((e && e.message) || e || 'That did not work. Try again.'); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || 'them'; }
+  function fmtDay(iso) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); } }
+  function secOf(d, key) { return (d && d.sections && d.sections[key]) || { min: key === '60 DAYS' ? 2 : 5, max: key === '60 DAYS' ? 3 : 6, picked: [] }; }
+  function isShort(d) { return SECS.some(function (s) { var x = secOf(d, s.key); return (x.picked || []).length < x.min; }); }
+
+  /* ---------- style ---------- */
+  var st = document.createElement('style'); st.id = 'w279css';
+  st.textContent =
+    '#mypage.w272 #mpBody > #w279home{order:5;grid-column:1 / -1;}' +
+    '#w279home h3{margin:0 0 6px;font:500 22px/1.05 \'Barlow Condensed\',\'Arial Narrow\',\'Helvetica Neue\',Arial,sans-serif;letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';overflow-wrap:anywhere;}' +   /* as wave272's Home headings */
+    '#w279home p{margin:0 0 10px;font-size:14px;color:#4a5551;}' +
+    '#w279home .w279hc + .w279hc{border-top:1px solid ' + LINE + ';margin-top:12px;padding-top:12px;}' +
+    '.w279btn{font:inherit;font-size:14px;font-weight:700;min-height:38px;padding:6px 16px;border-radius:999px;border:1px solid ' + GREEN + ';background:' + GREEN + ';color:' + CREAM + ';cursor:pointer;}' +
+    '.w279btn.ghost{background:' + CREAM + ';color:' + GREEN + ';}' +
+    '.w279btn:disabled{opacity:.45;cursor:not-allowed;}' +
+    '.w279hr{margin:0 0 10px;}' +
+    '#w279sheet{position:fixed;inset:0;z-index:2147480500;background:rgba(16,63,57,.45);display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;box-sizing:border-box;overflow-y:auto;}' +
+    '#w279sheet .w279pan{background:' + CREAM + ';color:' + INK + ';border-radius:18px;width:100%;max-width:640px;box-sizing:border-box;padding:18px 18px 16px;min-width:0;box-shadow:0 18px 40px rgba(16,63,57,.25);}' +
+    '#w279sheet .w279top{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;}' +
+    '#w279sheet h3{margin:0;font-size:22px;line-height:1.15;color:' + GREEN + ';overflow-wrap:anywhere;min-width:0;}' +
+    '#w279sheet .w279x{font:inherit;font-size:22px;line-height:1;background:none;border:0;color:' + GREEN + ';cursor:pointer;padding:2px 6px;min-height:36px;}' +
+    '#w279sheet .w279lead{font-size:13.5px;color:#4a5551;margin:6px 0 4px;}' +
+    '#w279sheet .w279sec{border-top:1px solid ' + LINE + ';margin-top:14px;padding-top:12px;min-width:0;}' +
+    '#w279sheet h4{margin:0;font-size:16px;color:' + GREEN + ';}' +
+    '#w279sheet .w279sh{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
+    '#w279sheet .w279badge{font-size:12px;font-weight:700;color:' + CREAM + ';background:' + GREEN + ';border-radius:999px;padding:2px 10px;}' +
+    '#w279sheet .w279due{font-size:12.5px;color:' + MUTE + ';margin:2px 0 8px;}' +
+    '#w279sheet .w279opt{display:flex;gap:10px;align-items:flex-start;padding:7px 4px;border-radius:8px;cursor:pointer;min-width:0;}' +
+    '#w279sheet .w279opt input{margin:3px 0 0;flex:0 0 auto;width:18px;height:18px;accent-color:' + GREEN + ';}' +
+    '#w279sheet .w279opt span{min-width:0;overflow-wrap:anywhere;font-size:14px;}' +
+    '#w279sheet .w279opt small{display:block;color:' + MUTE + ';font-size:12px;}' +
+    '#w279sheet .w279opt.off{opacity:.5;cursor:not-allowed;}' +
+    '#w279sheet .w279grp{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:' + MUTE + ';margin:8px 0 2px;}' +
+    '#w279sheet .w279q{display:block;font-size:12.5px;font-weight:700;color:' + GREEN + ';margin:8px 0 0;}' +
+    '#w279sheet .w279q input{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit;font-size:14px;min-height:38px;padding:6px 10px;border:1px solid ' + LINE + ';border-radius:8px;background:' + CREAM + ';color:' + INK + ';}' +
+    '#w279sheet .w279foot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;}' +
+    '#w279sheet .w279cnt{font-size:13px;color:' + INK + ';}' +
+    '#w279sheet .w279cnt.bad{color:' + FLAG + ';}' +
+    '#w279sheet .w279err{flex-basis:100%;font-size:13px;color:' + FLAG + ';background:#FBEDEA;border-radius:8px;padding:6px 10px;overflow-wrap:anywhere;}' +
+    '#w279sheet .w279ok{font-size:13px;color:' + GREEN + ';font-weight:700;}' +
+    '.w279step{margin:4px 0 2px;min-width:0;}' +
+    '.w279step ul{list-style:none;margin:4px 0 0;padding:0;}' +
+    '.w279step li{display:flex;gap:8px;align-items:flex-start;margin:4px 0;min-width:0;}' +
+    '.w279step li > span:last-child{min-width:0;flex:1 1 auto;line-height:1.35;}' +
+    '.w279step .w279tick{flex:0 0 auto;margin-top:2px;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:4px;border:1.5px solid ' + LINE + ';color:' + LINE + ';font-size:11px;line-height:1;}' +
+    '.w279step li.ok .w279tick{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}' +
+    '.w279step .w279mod{font:inherit;font-size:13.5px;font-weight:600;color:' + GREEN + ';background:none;border:0;padding:0;cursor:pointer;text-align:left;overflow-wrap:anywhere;min-width:0;}' +
+    '.w279step small{font-size:12px;color:' + MUTE + ';margin-left:6px;white-space:nowrap;}' +
+    '.w279step .w279none{font-size:13px;color:' + MUTE + ';}';
+  document.head.appendChild(st);
+
+  /* ---------- data ---------- */
+  var OPT = {};   /* onboarding id -> { at, data | err, p } */
+  function options(onb, force) {
+    var k = String(onb), c = OPT[k];
+    if (c && c.p) return c.p;
+    if (c && !force && Date.now() - c.at < FRESH) return c.err ? Promise.reject(new Error(c.err)) : Promise.resolve(c.data);
+    var p = Promise.resolve(db.rpc('wa279_role_options', { p_onb: Number(onb) })).then(function (r) {
+      if (r && r.error) throw r.error;
+      OPT[k] = { at: Date.now(), data: (r && r.data) || null };
+      return OPT[k].data;
+    }).catch(function (e) { OPT[k] = { at: Date.now(), err: errText(e) }; throw e; });
+    OPT[k] = { at: 0, p: p };
+    return p;
+  }
+  var MODS = null, modsP = null;
+  function modules() {
+    if (MODS) return Promise.resolve(MODS);
+    if (modsP) return modsP;
+    modsP = Promise.resolve(db.from('trainings').select('id, title, path_group, kind, body, active').eq('active', true).order('sort').order('id')).then(function (r) {
+      if (r && r.error) throw r.error;
+      MODS = ((r && r.data) || []).filter(function (t) { return t && t.title && t.active !== false && !(t.body && t.body.planned); });
+      modsP = null; return MODS;
+    }).catch(function () { modsP = null; return []; });
+    return modsP;
+  }
+
+  /* ---------- the plan's role steps ---------- */
+  function pickedBy(p) { return (p.auto || /^the hub$/i.test(String(p.picked_by || '')) || !p.picked_by) ? 'Picked by the Hub' : 'Picked by ' + p.picked_by; }
+  function stepInner(d, key) {
+    var picks = secOf(d, key).picked || [];
+    if (!picks.length) return '<div class="w279none">Your manager picks these in week 3.</div>';
+    return '<ul>' + picks.map(function (p) {
+      return '<li class="' + (p.done ? 'ok' : '') + '"><span class="w279tick" aria-label="' + (p.done ? 'Done' : 'Not done yet') + '">&#10003;</span>'
+        + '<span><button type="button" class="w279mod" data-w166open="t:' + E(p.training_id) + '">' + E(p.title) + '</button> <small>' + E(pickedBy(p)) + '</small></span></li>';
+    }).join('') + '</ul>';
+  }
+  function fillSteps(onb) {
+    var c = OPT[String(onb)];
+    document.querySelectorAll('.w279step[data-w279onb="' + String(onb).replace(/"/g, '') + '"]').forEach(function (el) {
+      var h = c && c.data ? stepInner(c.data, el.getAttribute('data-w279sec')) : '';
+      if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+    });
+  }
+  function roleStep(t, onb) {
+    var key = t.academy_path === 'role60' ? '60 DAYS' : '90 DAYS', id = onb && onb.id;
+    if (!id) return '';
+    var c = OPT[String(id)], fresh = c && !c.p && Date.now() - c.at < FRESH;
+    if (!fresh) options(id).then(function () { fillSteps(id); }, function () { fillSteps(id); });
+    var inner = c && c.data ? stepInner(c.data, key) : '';
+    return '<div class="w279step" data-w279onb="' + E(id) + '" data-w279sec="' + E(key) + '">' + inner + '</div>';
+  }
+
+  /* ---------- the pop-up ---------- */
+  var SH = null;   /* { onb, d, sel: {key: [ids]}, q: {key: ''}, busy: {}, err: {}, ok: {} } */
+  function selFrom(d) { var o = {}; SECS.forEach(function (s) { o[s.key] = (secOf(d, s.key).picked || []).map(function (p) { return Number(p.training_id); }); }); return o; }
+  function sheetEl() { return document.getElementById('w279sheet'); }
+  function close() { var el = sheetEl(); if (el) el.remove(); SH = null; }
+  function other(key) { return key === '60 DAYS' ? '90 DAYS' : '60 DAYS'; }
+  /* fix round 1: done_ids (every module the hire finished) covers what the search finds too */
+  function doneOf(id) {
+    var d = SH.d, hit = null;
+    if ((d.done_ids || []).some(function (x) { return Number(x) === id; })) return true;
+    (d.recommended || []).forEach(function (r) { if (Number(r.training_id) === id) hit = r; });
+    SECS.forEach(function (s) { (secOf(d, s.key).picked || []).forEach(function (p) { if (Number(p.training_id) === id) hit = hit || p; }); });
+    return !!(hit && hit.done);
+  }
+  /* fix round 1: a section is done when it has picks and every one is finished (wa279_role_save refuses a change then) */
+  function secDone(key) { return !!secOf(SH.d, key).done; }
+  function canEdit(key) { return !!SH.d.can_pick && !secDone(key); }
+  function optHtml(key, m, can) {
+    var id = Number(m.training_id != null ? m.training_id : m.id), on = SH.sel[key].indexOf(id) >= 0;
+    var done = doneOf(id), there = SH.sel[other(key)].indexOf(id) >= 0;
+    var off = !can || there || done;
+    var note = done ? first(SH.d.member) + ' finished it already' : (there ? 'Picked for ' + (key === '60 DAYS' ? '90 days' : '60 days') : (m.path || m.path_group || ''));
+    return '<label class="w279opt' + (off ? ' off' : '') + '"><input type="checkbox" data-w279pick="' + E(key) + '" value="' + E(id) + '"' + (on ? ' checked' : '') + (off ? ' disabled' : '') + ' />'
+      + '<span>' + E(m.title) + (note ? '<small>' + E(note) + '</small>' : '') + '</span></label>';
+  }
+  function listHtml(key) {
+    var d = SH.d, can = canEdit(key), seen = {}, h = '';
+    if (secDone(key)) return (secOf(d, key).picked || []).map(function (p) { return optHtml(key, p, false); }).join('');   /* a done list shows only its picks */
+    var rec = (d.recommended || []).filter(function (r) { var k = Number(r.training_id); if (seen[k]) return false; seen[k] = 1; return true; });
+    if (rec.length) h += '<div class="w279grp">Recommended</div>' + rec.map(function (r) { return optHtml(key, r, can); }).join('');
+    /* what is picked, or ticked from the search, and not in the recommended list */
+    var more = SH.sel[key].filter(function (id) { return !seen[id]; }).map(function (id) {
+      seen[id] = 1;
+      var p = null; (secOf(d, key).picked || []).forEach(function (x) { if (Number(x.training_id) === id) p = x; });
+      var m = null; (MODS || []).forEach(function (x) { if (Number(x.id) === id) m = x; });
+      return { training_id: id, title: (p && p.title) || (m && m.title) || 'Module ' + id, path: m && m.path_group };
+    });
+    if (more.length) h += '<div class="w279grp">Also picked</div>' + more.map(function (m) { return optHtml(key, m, can); }).join('');
+    if (!rec.length && !more.length) h += '<div class="w279due">Nothing is recommended for this team yet. Search for a module below.</div>';
+    return h;
+  }
+  function resHtml(key) {
+    var q = String(SH.q[key] || '').trim().toLowerCase();
+    if (!q) return '';
+    if (!MODS) return '<div class="w279due">Loading the modules...</div>';
+    var shown = {};
+    (SH.d.recommended || []).forEach(function (r) { shown[Number(r.training_id)] = 1; });
+    SH.sel[key].forEach(function (id) { shown[id] = 1; });
+    var hits = MODS.filter(function (m) { return !shown[Number(m.id)] && String(m.title).toLowerCase().indexOf(q) >= 0; });
+    if (!hits.length) return '<div class="w279due">No module matches that.</div>';
+    return hits.slice(0, 8).map(function (m) { return optHtml(key, m, canEdit(key)); }).join('')
+      + (hits.length > 8 ? '<div class="w279due">' + (hits.length - 8) + ' more. Type more of the name.</div>' : '');
+  }
+  function footHtml(key) {
+    var x = secOf(SH.d, key), n = SH.sel[key].length, inRange = n >= x.min && n <= x.max;
+    if (secDone(key)) return '<span class="w279cnt">' + (n === 1 ? 'It is' : 'All ' + n + ' are') + ' finished, so this list can&rsquo;t change now.</span>';
+    if (!SH.d.can_pick) return '<span class="w279cnt">' + n + ' picked</span>';
+    var cnt = n + ' picked' + (n < x.min ? '. Pick ' + x.min + ' or ' + x.max + '.' : (n > x.max ? '. That is too many: pick ' + x.min + ' or ' + x.max + '.' : '.'));
+    return '<span class="w279cnt' + (inRange ? '' : ' bad') + '">' + cnt + '</span>'
+      + '<button type="button" class="w279btn" data-w279save="' + E(key) + '"' + (inRange && !SH.busy[key] ? '' : ' disabled') + '>' + (SH.busy[key] ? 'Saving...' : 'Save') + '</button>'
+      + (SH.ok[key] ? '<span class="w279ok">Saved.</span>' : '')
+      + (SH.err[key] ? '<div class="w279err" role="alert">' + E(SH.err[key]) + '</div>' : '');
+  }
+  function paintSec(key) {
+    var el = sheetEl(); if (!el || !SH) return;
+    var box = el.querySelector('.w279sec[data-w279sec="' + key + '"]'); if (!box) return;
+    var done = secDone(key);
+    box.querySelector('[data-w279part="state"]').innerHTML = done ? '<span class="w279badge">Done</span>' : '';
+    box.querySelector('[data-w279part="list"]').innerHTML = listHtml(key);
+    var q = box.querySelector('.w279q'); if (q) q.style.display = done ? 'none' : '';
+    var r = box.querySelector('[data-w279part="res"]'); if (r) r.innerHTML = done ? '' : resHtml(key);
+    box.querySelector('[data-w279part="foot"]').innerHTML = footHtml(key);
+  }
+  function paintAll() { SECS.forEach(function (s) { paintSec(s.key); }); }
+  function sheetHtml() {
+    var d = SH.d, nm = first(d.member);
+    return '<div class="w279pan" role="dialog" aria-modal="true" aria-labelledby="w279h">'
+      + '<div class="w279top"><h3 id="w279h">Pick ' + E(nm) + '&#39;s role trainings</h3><button type="button" class="w279x" data-w279x="1" aria-label="Close">&times;</button></div>'
+      + '<p class="w279lead">' + (d.can_pick
+        ? 'Recommended modules for ' + E(nm) + '&#39;s team come first. Search for any other module. Modules ' + E(nm) + ' finished already are greyed out.'
+        : 'Only their manager, HR or an admin can pick these.') + '</p>'
+      + SECS.map(function (s) {
+        var x = secOf(d, s.key);
+        return '<div class="w279sec" data-w279sec="' + E(s.key) + '"><div class="w279sh"><h4>' + E(s.head) + '</h4><span data-w279part="state"></span></div>'
+          + (x.due ? '<div class="w279due">Due ' + E(fmtDay(x.due)) + '</div>' : '')
+          + '<div data-w279part="list"></div>'
+          + (d.can_pick ? '<label class="w279q">Search all modules<input type="search" data-w279q="' + E(s.key) + '" placeholder="Type a module name" autocomplete="off" /></label><div data-w279part="res"></div>' : '')
+          + '<div class="w279foot" data-w279part="foot"></div></div>';
+      }).join('')
+      + '</div>';
+  }
+  async function openSheet(onb) {
+    close();
+    var d;
+    try { d = await options(onb, true); } catch (e) { T(errText(e)); return; }
+    if (!d) { T('That onboarding plan was not found'); return; }
+    SH = { onb: Number(onb), d: d, sel: selFrom(d), q: { '60 DAYS': '', '90 DAYS': '' }, busy: {}, err: {}, ok: {} };
+    var el = document.createElement('div'); el.id = 'w279sheet'; el.innerHTML = sheetHtml();
+    document.body.appendChild(el);
+    paintAll();
+    try { el.querySelector('[data-w279x]').focus(); } catch (e) { /* fine */ }
+    modules().then(function () { if (SH) paintAll(); });
+  }
+  async function save(key) {
+    if (!SH || SH.busy[key]) return;
+    var onb = SH.onb, ids = SH.sel[key].slice();
+    SH.busy[key] = true; SH.err[key] = ''; SH.ok[key] = false; paintSec(key);
+    try {
+      var r = await db.rpc('wa279_role_save', { p_onb: onb, p_section: key, p_training_ids: ids });
+      if (r && r.error) throw r.error;
+      var d = (r && r.data) || null;
+      if (d) { OPT[String(onb)] = { at: Date.now(), data: d }; }
+      if (SH && SH.onb === onb) {
+        if (d) { SH.d = d; SH.sel[key] = selFrom(d)[key]; }
+        SH.busy[key] = false; SH.ok[key] = true; paintAll();
+      }
+      T('Saved the ' + (key === '60 DAYS' ? '60-day' : '90-day') + ' role trainings');
+      fillSteps(onb); paintHome();
+    } catch (e) {
+      if (SH && SH.onb === onb) { SH.busy[key] = false; SH.err[key] = errText(e); paintSec(key); }
+    }
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var o = t.closest('[data-w279open]');
+    if (o) { e.preventDefault(); openSheet(o.getAttribute('data-w279open')); return; }
+    if (!SH) return;
+    if (t.id === 'w279sheet' || t.closest('[data-w279x]')) { e.preventDefault(); close(); return; }
+    var s = t.closest('[data-w279save]');
+    if (s && !s.disabled) { e.preventDefault(); save(s.getAttribute('data-w279save')); }
+  });
+  document.addEventListener('change', function (e) {
+    var c = e.target; if (!SH || !c || !c.getAttribute || !c.getAttribute('data-w279pick')) return;
+    var key = c.getAttribute('data-w279pick'), id = Number(c.value), list = SH.sel[key];
+    if (c.checked) { if (list.indexOf(id) < 0) list.push(id); } else SH.sel[key] = list.filter(function (x) { return x !== id; });
+    SH.ok[key] = false; SH.err[key] = '';
+    paintAll();
+  });
+  document.addEventListener('input', function (e) {
+    var q = e.target; if (!SH || !q || !q.getAttribute || !q.getAttribute('data-w279q')) return;
+    var key = q.getAttribute('data-w279q'); SH.q[key] = q.value;
+    var box = sheetEl() && sheetEl().querySelector('.w279sec[data-w279sec="' + key + '"] [data-w279part="res"]');
+    if (box) box.innerHTML = resHtml(key);
+  });
+  document.addEventListener('keydown', function (e) { if (SH && e.key === 'Escape') close(); });
+
+  /* ---------- Home: the hires whose role trainings are still to pick ---------- */
+  var HOME = [];   /* [{ onb, d }] */
+  function homeHtml() {
+    return HOME.map(function (h) {
+      var nm = first(h.d.member), left = SECS.filter(function (s) { var x = secOf(h.d, s.key); return (x.picked || []).length < x.min; }).map(function (s) { return s.word; });
+      return '<div class="w279hc" data-w279home="' + E(h.onb) + '"><h3>Pick ' + E(nm) + '&#39;s role trainings</h3>'
+        + '<p>' + E(nm) + ' is on day ' + E(h.d.day) + '. Choose 2 or 3 trainings for 60 days and 5 or 6 for 90 days. Still to pick: ' + E(left.join(' and ')) + '.</p>'
+        + '<button type="button" class="w279btn" data-w279open="' + E(h.onb) + '">Pick them</button></div>';
+    }).join('');
+  }
+  function paintHome() {
+    HOME = HOME.map(function (h) { var c = OPT[String(h.onb)]; return c && c.data ? { onb: h.onb, d: c.data } : h; }).filter(function (h) { return h.d.can_pick && isShort(h.d); });
+    var body = document.getElementById('mpBody'), el = document.getElementById('w279home');
+    if (!body || !HOME.length) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = 'w279home'; el.className = 'mp-sec'; body.insertBefore(el, body.firstChild); }
+    var h = homeHtml(); if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+  }
+  var homeQ = null;
+  function homeRefresh() {
+    if (homeQ) return homeQ;
+    homeQ = (async function () {
+      try {
+        if (!document.getElementById('mpBody')) return;
+        var W = window.w166, seen = {}, ppl = [];
+        /* the hires on the lead's card (onboarding_lead_view). It counts day one as day 1; the database counts today minus day one, so a lead day
+           of 21 or more is the wider net */
+        if (W && typeof W.load === 'function') {
+          try {
+            var lead = await W.load(false);
+            ((lead && lead.people) || []).forEach(function (p) {
+              if (p && p.onboarding_id && !p.starts_on && Number(p.day) >= 21 && !seen[p.onboarding_id]) { seen[p.onboarding_id] = 1; ppl.push(p); }
+            });
+          } catch (e) { /* the other list still counts */ }
+        }
+        /* final review: plus the plans the database says this person manages (wa279_my_hires), so a flow's named manager who is not on the lead's
+           card still sees the card. Day as the database counts it. */
+        try {
+          var mh = await db.rpc('wa279_my_hires');
+          if (mh && !mh.error) (mh.data || []).forEach(function (p) {
+            if (p && p.onboarding_id && Number(p.day) >= 21 && !seen[p.onboarding_id]) { seen[p.onboarding_id] = 1; ppl.push(p); }
+          });
+        } catch (e) { /* the lead's card still counts */ }
+        var out = [];
+        for (var i = 0; i < ppl.length; i++) {
+          try { var d = await options(ppl[i].onboarding_id); if (d && Number(d.day) >= 21 && d.can_pick && isShort(d)) out.push({ onb: ppl[i].onboarding_id, d: d }); } catch (e) { /* not theirs to pick */ }
+        }
+        HOME = out; paintHome();
+      } finally { homeQ = null; }
+    })();
+    return homeQ;
+  }
+  if (typeof renderMyPage === 'function') {
+    var __rm279 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm279.apply(this, arguments);
+      try { paintHome(); homeRefresh(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  /* ---------- HR centre: the person's checklist gets Role trainings ---------- */
+  if (typeof wa37OpenModal === 'function') {
+    var __om279 = wa37OpenModal;
+    wa37OpenModal = function (onbId) {
+      var out = __om279.apply(this, arguments);
+      try {
+        var o = (typeof WA37 !== 'undefined' && WA37.onbs) ? WA37.onbs.filter(function (x) { return String(x.id) === String(onbId); })[0] : null;
+        var m = document.getElementById('w37modal');
+        if (o && o.status === 'active' && m && !document.querySelector('[data-w279hr]')) {
+          m.insertAdjacentHTML('beforebegin', '<div class="w279hr" data-w279hr="1"><button type="button" class="w279btn ghost" data-w279open="' + E(o.id) + '">Role trainings</button></div>');
+        }
+      } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w279 = { roleStep: roleStep, open: openSheet, close: close, home: homeRefresh, options: options, state: function () { return { SH: SH, OPT: OPT, HOME: HOME }; } };
+})();
+
+/* ---------- wave279 Task 8: the policy reading timer and the HR board's Academy trainings count ----------
+   window.wa279Pol: a required policy can be signed only 10 minutes (app_config policy_read_minutes) after it was first opened. The rule itself is
+     the database's (trg_wa279_policy_read on wa_policy_signoffs); this is the page's side of it, shared by the three sign paths (Home's Set up
+     your Hub in parts272/c_setup.js, the Academy's Onboarding in parts122/d_home.js, the classic training page's card in 105_wave105.seg).
+     - A link with data-w279polopen="<key>" calls wa279_policy_open(key) when clicked; its {unlock_at} is kept.
+     - wa279_policy_state() (the person's own opens) is read once, the first time a Sign button is drawn.
+     - view(key, label, seen) says how a Sign button looks: "Sign in N min" (N = whole minutes left, rounded up) and disabled until unlock_at,
+       then the page's own label. With no open recorded it is disabled, and the opens are read again when they are more than a minute old
+       (an open on another device shows without a reload); they are also read again whenever the tab comes back into view. When the database could not say (the call failed or gave nothing),
+       the page's old rule stands: enabled when seen (Home: opened in this tab; the Academy: always).
+     - attrs(key, label, seen) marks the button (data-w279polsign) so refresh() can redraw it in place: after each answer, and every 30
+       seconds while a counting button is on screen. When none is, the timer stops. A first draw asks for one redraw (0 ms) to start that
+       timer; refresh() itself never asks again, so nothing else repeats.
+   window.wa279Acad: "Academy trainings d of t" on each row of the HR centre's onboarding board (046_wave46.seg). t = the plan's steps that have a
+     training_id or an academy_path (the policies step counts once), with the role steps (role60, role90) counted as their picks. d = the done
+     ones: a step's own done flag; a pick is done when its Academy progress says so (or the whole role step is done). The picks are the role
+     trainings' Academy assignments (note "Role training (60 days)" / "(90 days)", see wa279_pick_add), read in one query for every plan. */
+(function () {
+  if (window.wa279Pol) return;
+  var P = { st: null, at: 0, load: null, fail: false, unk: {}, tick: null, soon: null };
+  var TICK = 30000, STALE = 60000;
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function client() { try { return (typeof db !== 'undefined' && db && typeof db.rpc === 'function') ? db : null; } catch (e) { return null; } }
+  function when(x) { var t = Date.parse(x); return isNaN(t) ? null : t; }
+  function loadState() {
+    if (P.load) return P.load;
+    var d = client(); if (!d) { P.fail = true; return Promise.resolve(); }
+    P.load = Promise.resolve(d.rpc('wa279_policy_state')).then(function (r) {
+      if (!r || r.error || !r.data || typeof r.data !== 'object') throw (r && r.error) || new Error('no answer');
+      var m = P.st || {};
+      Object.keys(r.data).forEach(function (k) { var u = when(r.data[k] && r.data[k].unlock_at); if (u !== null) { m[k] = u; delete P.unk[k]; } });
+      P.st = m; P.fail = false;
+    }).catch(function () { P.fail = true; }).then(function () { P.load = null; P.at = Date.now(); refresh(); });
+    return P.load;
+  }
+  function open(key) {
+    var d = client(); if (!d || !key) return Promise.resolve();
+    return Promise.resolve(d.rpc('wa279_policy_open', { p_key: key })).then(function (r) {
+      var u = when(r && !r.error && r.data && r.data.unlock_at);
+      if (u === null) throw (r && r.error) || new Error('no answer');
+      P.st = P.st || {}; P.st[key] = u; delete P.unk[key];
+    }).catch(function () { P.unk[key] = true; }).then(refresh);
+  }
+  /* minutes left (0 = unlocked), 'none' (no open recorded, or not known yet) or 'unknown' (the database could not say) */
+  function left(key) {
+    if (P.unk[key]) return 'unknown';
+    if (P.st && Object.prototype.hasOwnProperty.call(P.st, key)) return Math.max(0, Math.ceil((P.st[key] - Date.now()) / 60000));
+    if (P.fail) return 'unknown';
+    return 'none';
+  }
+  /* inRefresh: called by refresh(), which must not ask for another redraw (the 30 second tick is the only timer that repeats) */
+  function view(key, label, seen, inRefresh) {
+    if (!P.load && !P.fail && (!P.st || (left(key) === 'none' && Date.now() - P.at > STALE))) loadState();
+    var n = left(key), v;
+    if (typeof n === 'number') v = n > 0 ? { dis: true, txt: 'Sign in ' + n + ' min', wait: true } : { dis: false, txt: label };
+    else if (n === 'unknown') v = { dis: !seen, txt: label };
+    else v = { dis: true, txt: label };
+    if (v.wait && !inRefresh) later();
+    return v;
+  }
+  function attrs(key, label, seen) { return ' data-w279polsign="' + E(key) + '" data-w279ok="' + E(label) + '"' + (seen ? ' data-w279seen="1"' : ''); }
+  function opened(key) { return typeof left(key) === 'number'; }
+  function later() { if (!P.soon) P.soon = setTimeout(function () { P.soon = null; refresh(); }, 0); }
+  function refresh() {
+    var live = false, any = false;
+    [].forEach.call(document.querySelectorAll('[data-w279polsign]'), function (b) {
+      any = true;
+      if (b.getAttribute('aria-busy') === 'true') return;
+      var v = view(b.getAttribute('data-w279polsign'), b.getAttribute('data-w279ok') || 'Sign', b.getAttribute('data-w279seen') === '1', true);
+      if (b.textContent !== v.txt) b.textContent = v.txt;
+      b.disabled = v.dis;
+      if (v.wait && b.getClientRects().length) live = true;
+    });
+    if (live && !P.tick) P.tick = setInterval(refresh, TICK);
+    else if (!live && P.tick) { clearInterval(P.tick); P.tick = null; }
+    /* wave130's "open it first" lock on the Academy and wave105 buttons looks again (it steps aside when the database keeps the opens) */
+    if (any && window.w130 && typeof window.w130.paint === 'function') { try { window.w130.paint(); } catch (e) { /* fine */ } }
+  }
+  /* a refused sign-off: read the opens again, so the count is the database's */
+  function reload() { if (P.load) return P.load; return loadState(); }
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('[data-w279polopen]');
+    if (a) open(a.getAttribute('data-w279polopen'));
+  }, true);
+  window.addEventListener('hashchange', function () { setTimeout(refresh, 400); });
+  /* back in view: the opens may have changed on another device, so read them again (loadState redraws when they arrive) */
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState !== 'visible') return; refresh(); if (document.querySelector('[data-w279polsign]')) reload(); });
+  window.wa279Pol = { view: view, attrs: attrs, opened: opened, open: open, refresh: refresh, reload: reload, left: left, ticking: function () { return !!P.tick; } };
+
+  /* ---------- the HR board's Academy trainings count ---------- */
+  var A = { picks: null, at: 0, load: null };
+  var NOTE = { 'Role training (60 days)': 'role60', 'Role training (90 days)': 'role90' };
+  function loadPicks() {
+    if (A.load) return A.load;
+    if (typeof db === 'undefined' || !db || typeof db.from !== 'function') return Promise.resolve();
+    A.load = Promise.resolve(db.from('academy_assignments').select('id,training_id,member_ids,note,training_progress(status)')
+      .eq('active', true).in('note', Object.keys(NOTE))).then(function (r) {
+      if (r && r.error) throw r.error;
+      var m = {};
+      ((r && r.data) || []).forEach(function (a) {
+        var k = NOTE[a.note]; if (!k) return;
+        var done = (a.training_progress || []).some(function (p) { return p && p.status === 'done'; });
+        (a.member_ids || []).forEach(function (mid) { var x = m[String(mid)] = m[String(mid)] || { role60: [], role90: [] }; x[k].push({ training_id: a.training_id, done: done }); });
+      });
+      A.picks = m;
+    }).catch(function () { A.picks = A.picks || {}; }).then(function () { A.at = Date.now(); A.load = null; fill(); });
+    return A.load;
+  }
+  function count(onbId) {
+    var W = (typeof WA37 !== 'undefined' && WA37) || null; if (!W || !A.picks) return null;
+    var onb = (W.onbs || []).filter(function (o) { return String(o.id) === String(onbId); })[0]; if (!onb) return null;
+    var tpl = {}; (W.tmpl || []).forEach(function (t) { tpl[String(t.id)] = t; });
+    var mine = A.picks[String(onb.member_id)] || { role60: [], role90: [] }, d = 0, t = 0;
+    (W.steps || []).forEach(function (s) {
+      if (String(s.onboarding_id) !== String(onbId)) return;
+      var tp = tpl[String(s.template_id)]; if (!tp || !(tp.training_id || tp.academy_path)) return;
+      if (tp.academy_path === 'role60' || tp.academy_path === 'role90') {
+        var ps = mine[tp.academy_path] || [];
+        t += ps.length; d += s.done ? ps.length : ps.filter(function (p) { return p.done; }).length;
+        return;
+      }
+      t++; if (s.done) d++;
+    });
+    return { done: d, total: t };
+  }
+  function acadText(onbId) {
+    if (!A.picks || Date.now() - A.at > 60000) loadPicks();
+    var c = count(onbId);
+    return c && c.total ? 'Academy trainings ' + c.done + ' of ' + c.total : '';
+  }
+  function fill() {
+    [].forEach.call(document.querySelectorAll('[data-w279acad]'), function (el) { var t = acadText(el.getAttribute('data-w279acad')); if (el.textContent !== t) el.textContent = t; });
+  }
+  (function () {
+    if (document.getElementById('w279hookcss')) return;
+    var st = document.createElement('style'); st.id = 'w279hookcss';
+    st.textContent = '[data-w279acad]:empty{display:none;}';
+    document.head.appendChild(st);
+  })();
+  window.wa279Acad = { text: acadText, count: count, fill: fill, load: loadPicks };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)
