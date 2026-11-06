@@ -31,6 +31,15 @@
       read the synced cache instead of each person's own Google Calendar,
       and Home gains "Your upcoming meetings" (who accepted, join link).
    The task boards themselves live in wave116b (w116Board).
+   wave287 (06/11/26, edited here; the CSS and motion are in
+   287_wave287): projects replace workstreams. The project helpers are
+   published (w116IsGeneral, w116GeneralOf, w116ProjOf, w116ProjColor,
+   w116Ink, w116Elsewhere, w116ProjForWs); the Overview is rebuilt in
+   reading order (header with the clamped read and the tabs' thumb;
+   Now: a sentence and three tiles; Needs attention; project cards;
+   the Team inbox, Updates, Mentions, decisions; meetings, KPIs, team,
+   the pulse, tools); #team/<d>/tasks/<workstream> opens the project
+   that replaced the workstream.
    ===================================================================== */
 (function () {
   if (window.__wa116) return; window.__wa116 = true;
@@ -446,6 +455,59 @@
   window.w116TasksFor = tasksFor;
   window.w116ProjectsFor = projectsFor;
 
+  /* ---------- wave287: projects replace workstreams ---------- */
+  /* the team's catch-all: projects.is_general (wa287a_projects.sql); before that column exists, the top-level "General <team>" project */
+  function isGeneral(p) {
+    if (!p) return false;
+    if (p.is_general === true) return true;
+    if (p.is_general === false) return false;
+    var m = /^general\s+(.+)$/i.exec(String(p.name || '').trim()); if (!m || p.parent_id) return false;
+    var rest = lower(m[1]);
+    return lower(label(p.department)).indexOf(rest) >= 0 || lower(T.short[p.department] || '').indexOf(rest) >= 0 || rest === lower(p.department);
+  }
+  function generalOf(d) { return window.w116Projects().filter(function (p) { return p.department === d && (p.status || 'active') === 'active' && isGeneral(p); })[0] || null; }
+  function projById(id) { return window.w116Projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
+  /* the project a task counts in: its own, else its team's General (null when the team has none) */
+  function projOf(t) { if (!t) return null; var p = t.project_id ? projById(t.project_id) : null; return p || generalOf(t.department); }
+  /* colours from the brand set and the Hub's team palette; General wears the team's colour */
+  var PCOL = ['#6F64AB', '#DCA527', '#2A8C7A', '#103F39', '#c87a2f', '#3a6ea5', '#b9851b', '#4a4f57'];
+  function projColor(p) {
+    if (!p) return '#797773';
+    if (p.color && /^#[0-9a-f]{6}$/i.test(p.color)) return p.color;
+    if (isGeneral(p)) return color(p.department);
+    var i = (Number(p.id) || 0) * 5 % PCOL.length, c = PCOL[i];
+    if (lower(c) === lower(color(p.department))) c = PCOL[(i + 1) % PCOL.length];
+    return c;
+  }
+  /* a colour dark enough to set text in on cream (gold and the lighter team colours are darkened) */
+  function ink(c) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c || '')); if (!m) return GREEN;
+    var rgb = [0, 2, 4].map(function (i) { return parseInt(m[1].slice(i, i + 2), 16); });
+    function lum(a) { var v = a.map(function (x) { x = x / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
+    /* contrast against cream (luminance about 0.955); 4:1 is enough for large titles and small bold labels */
+    for (var k = 0; k < 14 && (0.955 + 0.05) / (lum(rgb) + 0.05) < 4; k++) rgb = rgb.map(function (x, j) { return Math.round(x * 0.86 + [31, 32, 30][j] * 0.14); });
+    return '#' + rgb.map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  /* a project that lives on its own page: Grants (wave258) is left out of the Fundraising team page and has #grants */
+  function grantsOk() { try { if (typeof wa40Allowed === 'function') { var a = wa40Allowed(); return !a || a.indexOf('grants') >= 0; } } catch (e) { /* fine */ } return tabVisible('grants'); }   /* wave258's own rule (canSee) */
+  function elsewhere(p, board) { if (!p || board) return null; if (p.department === 'fundraising' && boardKeyOf(p) === 'grants' && grantsOk()) return '#grants'; return null; }
+  /* an old #team/<d>/tasks/<workstream> link: the project that replaced the workstream (projects.workstream), else null */
+  function projForWs(d, ws) {
+    var l = lower(ws); if (!l) return null;
+    var hit = window.w116Projects().filter(function (p) { return p.department === d && (p.status || 'active') === 'active' && lower(p.workstream) === l; })
+      .sort(function (a, b) { return (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0) || Number(a.id) - Number(b.id); });
+    if (hit[0]) return hit[0];
+    if (l === 'general') return generalOf(d);
+    return null;
+  }
+  window.w116IsGeneral = isGeneral;
+  window.w116GeneralOf = generalOf;
+  window.w116ProjOf = projOf;
+  window.w116ProjColor = projColor;
+  window.w116Ink = ink;
+  window.w116Elsewhere = elsewhere;
+  window.w116ProjForWs = projForWs;
+
   /* ---------- the panel ---------- */
   function host() {
     var sec = document.getElementById('team');
@@ -478,11 +540,12 @@
     var ms = members(d);
     var next = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(); })[0];
     return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/' + E(d) + '">' + E(label(d)) + '</a>' + (title ? ' &middot; ' + E(title) : '') + '</div>' +
-      '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + '</div>' +
+      /* wave287: the Overview's read is clamped to two lines with More (287 shows More only when the text is cut); the tabs get a sliding thumb */
+      '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub' + (cur === 'overview' ? ' w287read' : '') + '" id="w287read-' + E(d) + '">' + sub + '</p>' + (cur === 'overview' ? '<button type="button" class="w287more" data-w287more="1" aria-controls="w287read-' + E(d) + '" aria-expanded="false" hidden>More</button>' : '') : '') + '</div>' +
       '<div class="w116right">' + (ms.length ? '<span title="' + E(ms.map(function (m) { return m.name; }).join(', ')) + '" data-w116go="#orgchart" style="cursor:pointer">' + stack(ms, 28, 6) + '</span>' : '') +
       (next ? '<span class="w116next"><span class="ic">&#9200;</span><span><b>' + E(relDay(next.start_at)) + '</b> ' + E(next.all_day ? '' : fmtTime(next.start_at)) + ' &middot; ' + E(next.summary) + (next.meet_link ? ' &middot; <a href="' + E(next.meet_link) + '" target="_blank" rel="noopener">Join</a>' : '') + '</span></span>' : '') +
       '</div></div>' +
-      '<div class="w116seg" style="margin:0 0 18px">' + pages.map(function (p) { return '<a data-w116go="' + E(p.hash) + '" class="' + (p.key === cur ? 'on' : '') + '">' + E(p.label) + '</a>'; }).join('') + '</div>';
+      '<div class="w116seg w287tabs" data-d="' + E(d) + '" style="margin:0 0 18px"><span class="w287thumb" aria-hidden="true"></span>' + pages.map(function (p) { return '<a data-w116go="' + E(p.hash) + '" class="' + (p.key === cur ? 'on' : '') + '"' + (p.key === cur ? ' aria-current="page"' : '') + '>' + E(p.label) + '</a>'; }).join('') + '</div>';
   }
   function markNav(d, page) {
     try {
@@ -726,30 +789,123 @@
         '<div class="k"><span><b>' + open.length + '</b> open</span>' + (od.length ? '<span style="color:' + FLAG + '"><b style="color:' + FLAG + '">' + od.length + '</b> overdue</span>' : '') + '<span><b>' + pr.length + '</b> projects</span>' + (b.tool ? '<span>+ ' + E(b.toolLabel || 'tool') + '</span>' : '') + '</div></div>';
     }).join('') + '</div>';
   }
+  /* ---------- wave287: the Overview, in the order a lead reads it ---------- */
+  function todayKey() { return dayKey(new Date().toISOString()); }
+  function plus(iso, n) { var x = new Date(iso + 'T12:00:00'); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+  function teamRows(d) { return window.w116TasksFor ? window.w116TasksFor(d, null, null) : tasksFor(d, null, null); }   /* the published one: wave258 leaves grants out of Fundraising */
+  function requestsOpen(d) {
+    try { if (!staff() || !window.w123 || !window.w123.loaded || !window.w123.loaded()) return null; return (window.w123.items(d, 'open') || []).filter(function (it) { return it.k === 'r'; }).length; } catch (e) { return null; }
+  }
+  function nowNumbers(d) {
+    var rows = teamRows(d), tdy = todayKey(), wk = plus(tdy, 7), since = new Date(Date.now() - 30 * 86400000).toISOString();
+    var open = rows.filter(function (t) { return !t.done; });
+    return {
+      open: open.length,
+      overdue: open.filter(function (t) { return t.due_date && t.due_date < tdy; }).length,
+      week: open.filter(function (t) { return t.due_date && t.due_date >= tdy && t.due_date <= wk; }).length,
+      done30: rows.filter(function (t) { return t.done && ((t.closed_at && t.closed_at >= since) || (!t.closed_at && t.updated_at && t.updated_at >= since)); }).length,
+      req: requestsOpen(d)
+    };
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function nowSentence(d) {
+    var n = nowNumbers(d), parts = [];
+    if (n.req) parts.push(plural(n.req, 'open request', 'open requests'));
+    if (!n.open && !n.done30) return (parts.length ? parts[0] + '. ' : '') + 'No open tasks yet.';
+    parts.push(n.overdue ? plural(n.overdue, 'task overdue', 'tasks overdue') : 'nothing overdue');
+    if (n.week) parts.push(n.week + ' due this week');
+    if (n.done30) parts.push(n.done30 + ' done in the last 30 days');
+    var s = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0];
+    return s.charAt(0).toUpperCase() + s.slice(1) + '.';
+  }
+  function nowHtml(d) {
+    var n = nowNumbers(d), base = '#team/' + E(d) + '/tasks';
+    function tile(q, num, lab, zero, warn) {
+      return '<div class="w116kpi w287tile' + (num ? '' : ' zero') + (warn && num ? ' warn' : '') + '" data-w116go="' + base + '" data-w116q="' + q + '" role="link" tabindex="0">' +
+        (num ? '<b>' + num + '</b><span>' + lab + '</span>' : '<span class="z">' + zero + '</span>') + '</div>';
+    }
+    return '<div class="w287now" id="w287now"><p class="w287sent" data-d="' + E(d) + '">' + E(nowSentence(d)) + '</p>' +
+      '<div class="w116kpis w287tiles">' + tile('all', n.open, 'Open', 'No open tasks') + tile('overdue', n.overdue, 'Overdue', 'Nothing overdue', true) + tile('week', n.week, 'Due this week', 'Nothing due this week') + '</div></div>';
+  }
+  /* Needs attention: up to six overdue or due within seven days, in the task-row style with a working tick */
+  function needHtml(d) {
+    var tdy = todayKey(), wk = plus(tdy, 7);
+    var rows = teamRows(d).filter(function (t) { return !t.done && t.due_date && t.due_date <= wk; })
+      .sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)) || (b.flag ? 1 : 0) - (a.flag ? 1 : 0) || Number(a.id) - Number(b.id); });
+    var shown = rows.slice(0, 6);
+    var body = !shown.length ? '<p class="w287calm"><span class="ic">&#10003;</span>Nothing overdue or due in the next seven days.</p>'
+      : '<div class="w287rows">' + shown.map(function (t) { return window.w116RowHtml ? window.w116RowHtml(t, { dept: d }) : '<div class="w116r" data-tid="' + E(t.id) + '">' + E(t.title) + '</div>'; }).join('') + '</div>' +
+        (rows.length > shown.length ? '<p class="w287more2">And ' + (rows.length - shown.length) + ' more.</p>' : '');
+    return '<div class="w116card w287need" id="w287need"><h3>Needs attention <span class="lnk" data-w116go="#team/' + E(d) + '/tasks" data-w116q="today">see all</span></h3>' + body + '</div>';
+  }
+  /* Projects: a card per project (General first and quieter; sub-projects after their parent) */
+  function ring(done, total, c) {
+    var r = 15, C = 2 * Math.PI * r, f = total ? done / total : 0;
+    return '<svg class="w287ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="' + r + '" fill="none" stroke="rgba(16,63,57,.10)" stroke-width="3.2"/>' +
+      (f ? '<circle cx="18" cy="18" r="' + r + '" fill="none" stroke="' + c + '" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="' + (C * f).toFixed(2) + ' ' + C.toFixed(2) + '" transform="rotate(-90 18 18)"/>' : '') + '</svg>';
+  }
+  function projCardsHtml(d) {
+    var all = projectsFor(d, null).filter(function (p) { return (p.status || 'active') === 'active'; });
+    var ids = {}; all.forEach(function (p) { ids[Number(p.id)] = 1; });
+    var gen = all.filter(isGeneral)[0] || null, kids = {}, tops = [];
+    all.forEach(function (p) { if (p === gen) return; var par = p.parent_id && ids[Number(p.parent_id)] ? Number(p.parent_id) : 0; if (par) (kids[par] = kids[par] || []).push(p); else tops.push(p); });
+    var srt = function (a, b) { return (Number(a.sort == null ? 999 : a.sort) - Number(b.sort == null ? 999 : b.sort)) || String(a.name).localeCompare(String(b.name)); };
+    var order = gen ? [gen] : [];
+    (function walk(list, depth) { list.sort(srt).forEach(function (p) { order.push(p); if (kids[Number(p.id)] && depth < 4) walk(kids[Number(p.id)], depth + 1); }); })(tops, 0);
+    var tdy = todayKey(), tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
+    var cards = order.map(function (p) {
+      var pid = Number(p.id), gp = isGeneral(p);
+      var ts = tasks.filter(function (t) { var e = projOf(t); return e && Number(e.id) === pid; });
+      var open = ts.filter(function (t) { return !t.done; }), done = ts.length - open.length;
+      var od = open.filter(function (t) { return t.due_date && t.due_date < tdy; }).length;
+      var next = open.filter(function (t) { return t.due_date; }).sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)); })[0];
+      var c = projColor(p), away = elsewhere(p, null);
+      var par = p.parent_id && ids[Number(p.parent_id)] ? projById(p.parent_id) : null;
+      var leads = (Array.isArray(p.leads) ? p.leads : []).map(function (n) { return memberByName(n) || { name: n }; });
+      var du = next && window.w116DueChip ? window.w116DueChip(next) : null;
+      return '<div class="w287pc' + (gp ? ' gen' : '') + (par ? ' sub' : '') + '" role="link" tabindex="0" style="--c:' + c + '" ' + (away ? 'data-w116go="' + E(away) + '"' : 'data-w116go="#team/' + E(d) + '/tasks" data-w116q="project:' + pid + '"') + ' title="' + E(p.name) + '">' +
+        '<div class="hd"><div class="tl">' + (par ? '<span class="ov">' + E(par.name) + '</span>' : (gp ? '<span class="ov">Catch-all</span>' : '')) + '<b class="nm"><i class="dot"></i>' + E(p.name) + '</b></div>' + ring(done, ts.length, c) + '</div>' +
+        '<div class="ct"><span>' + (ts.length ? (open.length ? '<b>' + open.length + '</b> open' : 'All done') + (od ? ', <span class="od">' + od + ' overdue</span>' : '') : 'No tasks yet') + '</span>' + (done ? '<span class="dn">' + done + ' of ' + ts.length + ' done</span>' : '') + '</div>' +
+        (next ? '<div class="nx"><span class="w287due ' + (du ? du.cls : '') + '">' + E(du ? du.txt : next.due_date) + '</span><span class="t">' + E(next.title) + '</span></div>' : '') +
+        (leads.length ? '<div class="ld">' + stack(leads, 22, 4) + '<span>' + E(leads.map(function (x) { return String(x.name).split(' ')[0]; }).join(', ')) + '</span></div>' : '') + '</div>';
+    });
+    if (staff()) cards.push('<div class="w287pc new" role="button" tabindex="0" data-w116act="addproj" data-d="' + E(d) + '"><span class="pl">+</span>New project</div>');
+    return '<div class="w116card w287proj" id="w287proj"><h3>Projects <span class="lnk" data-w116go="#projects">all projects</span></h3>' +
+      (order.length || staff() ? '<div class="w287pgrid">' + cards.join('') + '</div>' : '<p class="w116empty">No active projects.</p>') + '</div>';
+  }
   async function renderOverview(d) {
     var h = host(); if (!h) return;
     var meta = (typeof DB_META !== 'undefined' && DB_META[d]) || {};
     h.innerHTML = header(d, 'overview', null, meta.read ? E(meta.read) : '') + '<p class="w116empty">Loading...</p>';
     await Promise.all([loadEvents(), loadMentions(), loadProjects(), loadMetrics()]);
     if (!W116.cur || W116.cur.d !== d || W116.cur.page !== 'overview') return;
+    /* wave287: header, Now (a sentence and three tiles), then the left column (Needs attention, Projects, the Team inbox that wave123
+       puts first in the DOM and 287 orders third, Updates, Mentions, Executive decisions) and the right (meetings, KPIs, Team, Where the
+       team is, Tools). The ids and classes later waves inject into stay: .w116kpis, .w116grid, .w116col, #w116meet, #w116updcard, .w116dec */
     var html = header(d, 'overview', null, meta.read ? E(meta.read) : '') +
       (d === 'fundraising' ? '' : boardsHtml(d)) +   /* wave232 (Steel, 12/10/26): Fundraising's sub-team cards repeated the Fundraising app; gone */
-      kpiTiles(d, null) +
-      '<div class="w116grid"><div class="w116col">' +
-      '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
-      decisionsHtml(d) +
-      '<div class="w116card" id="w116updcard"><h3>Updates <span class="lnk" data-w116act="allupd" data-d="' + E(d) + '">show all</span></h3>' + updatesHtml(d, 6) + (staff() ? '<div class="w116addrow"><a data-w116act="addupd" data-d="' + E(d) + '">+ Add an update</a><a data-w116act="addtask" data-d="' + E(d) + '">+ Add a task</a></div>' : '') + '</div>' +
+      nowHtml(d) +
+      '<div class="w116grid w287grid"><div class="w116col">' +
+      needHtml(d) +
+      projCardsHtml(d) +
+      '<div class="w116card" id="w116updcard"><h3>Updates <span class="lnk" data-w116act="allupd" data-d="' + E(d) + '">show all</span></h3>' + updatesHtml(d, 4) + (staff() ? '<div class="w116addrow"><a data-w116act="addupd" data-d="' + E(d) + '">+ Add an update</a><a data-w116act="addtask" data-d="' + E(d) + '">+ Add a task</a></div>' : '') + '</div>' +
       '<div class="w116card"><h3>Mentions from other teams</h3>' + mentionsHtml(d) + '</div>' +
+      decisionsHtml(d) +
       '</div><div class="w116col">' +
       '<div class="w116card" id="w116meet"><h3>Upcoming meetings <span class="lnk" data-w116go="#team/' + E(d) + '/agenda">agenda</span></h3>' + eventsHtml(d) + '</div>' +
       '<div class="w116card"><h3>KPIs we track</h3>' + metricsHtml(d) + '</div>' +
-      '<div class="w116card"><h3>Projects <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">tasks</span></h3>' + projectsHtml(d, null) + (staff() ? '<div class="w116addrow"><a data-w116act="addproj" data-d="' + E(d) + '">+ Add a project</a><a data-w116go="#projects">All projects</a></div>' : '') + '</div>' +
       '<div class="w116card"><h3>Team <span class="lnk" data-w116go="#orgchart">org chart</span></h3>' + teamHtml(d) + (canInvite(d) ? '<div class="w116addrow"><a data-w113deptinv="' + E(d) + '">+ Invite a team member</a></div>' : '') + '</div>' +
-      '<div class="w116card"><h3>Tools</h3>' + toolsHtml(d) + '</div>' +
+      '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
+      '<div class="w116card w287tools"><h3>Tools</h3>' + toolsHtml(d) + '</div>' +
       '</div></div>';
     h.innerHTML = html;
     if (d === 'opsmtl') volunteeringTiles(d);
+    /* the requests count arrives with wave123's inbox; the sentence picks it up when it does */
+    if (requestsOpen(d) == null && staff() && window.w123 && window.w123.load && window.w123.loaded && !window.w123.loaded()) {
+      Promise.resolve(window.w123.load()).then(function () { var s = document.querySelector('#w116host .w287sent[data-d="' + d + '"]'); if (s) s.textContent = nowSentence(d); }, function () { /* fine */ });
+    }
   }
+  window.w116NowSentence = nowSentence;
   async function volunteeringTiles(d) {
     try {
       var today = dayKey(new Date().toISOString());
@@ -801,7 +957,16 @@
   function renderTasks(d, board, ws) {
     var h = host(); if (!h) return;
     var title = board ? board.label : 'Tasks';
-    var sub = board ? E(board.blurb || '') : 'Every open task for ' + E(label(d)) + ', grouped the way you want it.';
+    var sub = board ? E(board.blurb || '') : 'Every task for ' + E(label(d)) + ', by list and by project.';
+    /* wave287: an old #team/<d>/tasks/<workstream> link opens the project that replaced the workstream (else All); the address loses the workstream */
+    if (ws && !board) {
+      var wp = projForWs(d, ws), away = wp ? elsewhere(wp, null) : null;
+      if (away) { try { location.replace(away); } catch (e) { go(away); } return; }
+      if (window.w116Board && window.w116Board.preset) window.w116Board.preset(wp ? 'project:' + wp.id : 'all');
+      try { history.replaceState(null, '', '#team/' + d + '/tasks'); } catch (e) { /* fine */ }
+      if (W116.cur) W116.cur.sub = '';
+      ws = null;
+    }
     var extra = '';
     if (board && board.tool) {
       extra = '<div class="w116seg" style="margin:-8px 0 16px"><a class="on">Tasks by project</a><a data-w116go="#' + E(board.tool) + '">' + E(board.toolLabel || 'Tool') + ' (QuickBooks, statements, forecast) &#8594;</a></div>';
@@ -830,6 +995,7 @@
     var key = board ? page : page;
     if (page !== 'agenda') unmountAgenda();
     W116.cur = { d: d, page: board ? 'board' : page, key: key, sub: sub, board: board };
+    try { var hh = host(); if (hh) { hh.classList.toggle('w287ov', !board && page !== 'agenda' && page !== 'tasks'); hh.classList.toggle('w287tasks', !!board || page === 'tasks'); } } catch (e) { /* fine */ }   /* wave287 */
     markNav(d, key);
     try { document.title = label(d) + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
     if (board) renderTasks(d, board, null);
