@@ -25,7 +25,7 @@ The candidate is the page built from the release commit with `python3 ".superpow
 
 **The old candidates are history, not release instructions.** Each wave's document names the candidate it was tested on, on the older live page 0b8e0fa6: dac9bf9d (wave283), 39bbf0b8 (wave284), be00054e (wave288). The integration onto today's live page gave 64bbeaf6 and then a0cab8b7. None of them is the page to publish. Only the candidate above is, and only while live is still bae461b9.
 
-**The release commit** is the tip of `crm-slice1-280-284` on the day, once Steel says yes to it. Every SQL file is fetched inside the database at that commit, and every function is a one-line stub importing `fn/<name>/index.ts` at that commit (as wave273 set out: `build/fn.py`'s token is not used).
+**The release commit** is the tip of `crm-slice1-280-284` on the day, once Steel says yes to it. Every SQL file is fetched inside the database at that commit, and every function is a one-line stub importing `fn/<name>/index.ts` at that commit (the house rule since wave273, while the vault's access token that `build/fn.py` needs is invalid; crm-import may instead go up with the connector's `files` array).
 
 ## 0. Before anything: is live still where this plan expects it?
 
