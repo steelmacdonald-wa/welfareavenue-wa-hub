@@ -95,13 +95,17 @@
   function checklist(onb, canTick) {
     var today = todayIso(), html = '', firstOpen = false;
     planStates(onb).forEach(function (wk) {
-      var d = wk.steps.filter(function (x) { return x.done; }).length;
-      var open = !firstOpen && d < wk.steps.length; if (open) firstOpen = true;
+      var d = wk.steps.filter(function (x) { return x.done; }).length, n = wk.steps.length;
+      /* wave285: the week's count follows the one progress rule (real steps only; a header is done when its steps are; setup and Academy steps count) */
+      var w285c = (window.w285 && typeof window.w285.secCount === 'function') ? window.w285.secCount(onb.id, wk.name) : null;
+      if (w285c && w285c.total) { d = w285c.done; n = w285c.total; }
+      var open = !firstOpen && d < n; if (open) firstOpen = true;
       html += '<details class="w37week"' + (open ? ' open' : '') + '><summary>' + E(wk.name)
-        + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / wk.steps.length) + '%"></i></span>'
-        + '<span style="font-size:11.5px;color:#797773;font-weight:500">' + d + ' of ' + wk.steps.length + '</span></summary><div class="w37wbody">';
+        + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / Math.max(1, n)) + '%"></i></span>'
+        + '<span style="font-size:11.5px;color:#797773;font-weight:500">' + d + ' of ' + n + '</span></summary><div class="w37wbody">';
       wk.steps.forEach(function (x) {
         var t = x.t, s = x.s, ls = x.ls, done = x.done, acad = !!(t.training_id || t.academy_path);
+        var w285d = (window.w285 && typeof window.w285.stepDone === 'function') ? window.w285.stepDone(onb.id, t.id) : null; if (w285d != null) done = w285d;   /* wave285 */
         var due = '';
         if (!done && s.due_date) due = '<span class="w44due' + (String(s.due_date) < today ? ' late' : '') + '">due ' + E(String(s.due_date)) + '</span>';
         html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (done ? ' done' : '') + '" data-w166t="' + E(t.id) + '" data-w57id="' + E(t.id) + '">'
@@ -146,6 +150,7 @@
     var o = planOnb(); if (!o) return;
     var total = 0, done = 0;
     planStates(o).forEach(function (wk) { wk.steps.forEach(function (x) { total++; if (x.done) done++; }); });
+    try { var w285p = window.w285 && window.w285.plan ? window.w285.plan(o.id) : null; if (w285p && w285p.total) { total = w285p.total; done = w285p.done; } } catch (e) { /* the count above */ }   /* wave285: the one progress rule */
     if (!total) return;
     var kk = sh.querySelector('.hd .kk span:last-child'); if (kk && / steps$/.test(kk.textContent)) kk.textContent = done + ' of ' + total + ' steps';
     var bar = sh.querySelector(':scope > .pr > i'); if (bar) bar.style.width = Math.round(100 * done / total) + '%';
