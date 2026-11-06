@@ -1,4 +1,7 @@
-// Welfare Avenue: quo-send (v8, wave266, 26/10/26)
+// Welfare Avenue: quo-send (v9, wave281, 06/11/26)
+// v9 (wave281): STOP sticks to the phone number. The drain and Text volunteers also leave out every phone in
+// wa_stopped_phones_v with channel sms (its latest STOP/START keyword text was a STOP), even when no contact holds it,
+// so a STOP from a number the CRM does not know (the 2 Oct 2026 case) is honoured. Skipped as before: 'they texted STOP'.
 // v8 (wave266): drain stops the silent loop. A Quo 402 (no prepaid credits, the whole account) puts the text back in the
 // queue (error 'waiting: Quo has no prepaid credits'), notes app_config sms_credit_hold (once, when the hold starts) and
 // stops that drain: the queue functions see the queued text and add no more, and it goes by itself after a top-up. A
@@ -49,7 +52,8 @@
 //                    was typed in the Quo app included), for the Hub's conversations.
 //   'sync_threads'   trigger secret only: the replies typed in the Quo app, copied into the Hub (see v6 above).
 // Tables: quo_messages (insert, update), event_roster (confirm_token, only for the manual {{confirm_link}}), app_config (read;
-//   quo_webhook_id), volunteer_people (read), vault via wa_vault_set. Side effects: texts through Quo.
+//   quo_webhook_id), volunteer_people (read), crm_contacts and wa_stopped_phones_v (read: STOP), vault via wa_vault_set.
+//   Side effects: texts through Quo.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -120,9 +124,15 @@ async function windowOpen(): Promise<boolean> {
   return h >= start && h < end;
 }
 const PERSON_KINDS = ['manual', 'reply'];
+// wave281: the phones whose latest STOP/START keyword text was a STOP, held by a contact or not (wa_stopped_phones_v, sms).
+// If the view cannot be read (the release applies the SQL first), the set is empty and the contact opt-outs still apply.
+async function stoppedPhones(): Promise<Set<string>> {
+  const { data } = await svc.from('wa_stopped_phones_v').select('phone_digits').eq('channel', 'sms');
+  return new Set<string>((data || []).map((r: any) => normPhone(r.phone_digits)).filter(Boolean));
+}
 async function optedOutPhones(): Promise<Set<string>> {
   const { data } = await svc.from('crm_contacts').select('phones').eq('sms_opt_out', true).is('merged_into', null);
-  const out = new Set<string>();
+  const out = await stoppedPhones();
   (data || []).forEach((c: any) => (c.phones || []).map(normPhone).filter(Boolean).forEach((x: string) => out.add(x)));
   return out;
 }
@@ -420,7 +430,7 @@ async function manual(body: any, auth: Who): Promise<Response> {
   const skippedNoPhone = personIds.length - recips.filter(r => r.person_id !== null).length;
   // wave171 (planned as wave169a): no one who opted out (STOP) gets a text
   const { data: outs } = await svc.from('crm_contacts').select('volunteer_id, phones').eq('sms_opt_out', true).is('merged_into', null);
-  const outPhones = new Set<string>(); const outPeople = new Set<number>();
+  const outPhones = await stoppedPhones(); const outPeople = new Set<number>();   // wave281: stopped phones too, held by a contact or not
   (outs || []).forEach((c: any) => { if (c.volunteer_id) outPeople.add(c.volunteer_id); (c.phones || []).map(normPhone).filter(Boolean).forEach((x: string) => outPhones.add(x)); });
   const beforeOut = finalRecips.length;
   finalRecips = finalRecips.filter(r => !outPhones.has(r.phone) && !(r.person_id && outPeople.has(r.person_id)));

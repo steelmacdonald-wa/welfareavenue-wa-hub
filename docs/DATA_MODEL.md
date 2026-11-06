@@ -492,6 +492,7 @@ Hub access per email. role decides the tier; profile picks the page set from hub
 - `role`: admin, leader, member, viewer or blocked (CHECK). blocked denies access even for a welfareavenue.com email.
 - `profile`: hub_access_profiles.key. NULL means no profile. Foreign key (on delete set null).
 - `tabs`: Legacy per-person page list (NULL in every row). wa_page_ok() still defers to it when it is a non-empty array.
+- `caps`: wave281: extra capabilities given to one person, as {"name": true}. Today only gifts_edit (named finance people). Read through wa_can(). Only admins set it (hub_roles_admin_write); a member's self-added row must leave it empty.
 
 ### `hub_access_profiles`
 
@@ -1339,6 +1340,8 @@ Partners (page #partners): every organisation Welfare Avenue has worked with, sp
 - `status`: active: working together now; past: worked together before; prospect: approached or planned, nothing yet; declined: said no.
 - `category`: What kind of relationship it is (wave163), as the Avenue Academy lesson Our partners and how we work with them defines it: partner (works with us toward a shared goal through joint programs or initiatives, over time, ideally in an MOU or a project agreement), collaborator (joins us for an event or initiative without a formal agreement) or sponsor (gives money or in-kind support and gets recognition). The Partners page groups by it; relationship keeps the finer detail.
 - `relationship`: How they help, the finer detail under category: partner, collaborator, sponsor, funder, donor organisation, supplier or venue (a funder or a donor organisation is a sponsor; a supplier or a venue can be any of the three).
+- `keela_company_id`: wave281: the organisation's company id in Keela, for the import (unique).
+- `goals`: wave281: what the partnership is for, as short phrases (from Keela).
 
 ### `wa_lessons`
 
@@ -1433,6 +1436,14 @@ The CRM (wave150/152): one row per person Welfare Avenue knows (volunteers, dono
 - `organization`: wave176: the organization the person gave (free text, for example a school or employer), shared with the Volunteer Manager. Partners with a record are in crm_contact_orgs.
 - `pronouns`: wave194: the pronouns the person gave on their welfareavenue.com profile (optional, up to 40 characters). Written by account_update(); read with the contact.
 - `whatsapp_opt_out`: wave254: the person replied STOP on WhatsApp; whatsapp-send never messages them (sms_opt_out stops WhatsApp too).
+- `sms_consent`: wave281: express when the person said yes to texts (a form's text box, a Keela text opt-in); otherwise null. sms_opt_out stays the stop switch.
+- `sms_consent_source`: wave281: where the text consent came from (form: <slug>, Keela import).
+- `sms_consent_at`: wave281: when the text consent was given.
+- `do_not_contact`: wave281: true when nobody may contact this person by any channel (crm_set_do_not_contact). crm_email_permission refuses every kind of email, transactional included; setting it also unsubscribes the email and stops texts and WhatsApp. Receipts are still issued and stored, not emailed.
+- `dnc_reason`: wave281: why the person is do-not-contact: deceased, asked or other.
+- `dnc_at`: wave281: when do-not-contact was set.
+- `dnc_by`: wave281: the signed-in email that set do-not-contact.
+- `job_title`: wave281: the person's job title (Keela has 21).
 
 ### `crm_contact_orgs`
 
@@ -1461,6 +1472,7 @@ Gifts: amount, date, platform (zeffy, keela, stripe, cash), campaign, and the ta
 - `refunded_amount`: Money given back to the donor (wave161). While a gift has no receipt, amount is what was kept (the gift less its refunds), so totals, reports and receipts use it as it is, and a gift refunded in full keeps amount 0 and counts nowhere. A gift refunded after its receipt was issued keeps its amount, and its notes say the receipt must be cancelled or replaced.
 - `refunded_at`: When the last refund came through (wave161).
 - `plan_id`: The monthly gift (crm_gift_plans) this payment belongs to (wave161).
+- `campaign_id`: wave281: the Campaign (wa_campaigns) this gift belongs to, next to the free-text campaign. Set from the text by crm_gift_campaign_id (the wave281 backfill, then trg_wa281_gift_campaign on every new gift or changed campaign text).
 
 ### `crm_volunteer_history`
 
@@ -1474,7 +1486,7 @@ Pairs of contacts someone marked as different people on the CRM page (family mem
 
 ### `crm_contacts_v` (view)
 
-The live contacts (not merged) with their volunteer roles and tags, Hub servings (confirmed at completed events, the old website's events included since wave 152), the old website's servings not yet in the Hub and its recorded hours, gift totals and organization names. The CRM page reads this.
+The live contacts (not merged) with their volunteer roles and tags, Hub servings (confirmed at completed events, the old website's events included since wave 152), the old website's servings not yet in the Hub and its recorded hours, gift totals and organization names; since wave281 also job_title, do_not_contact and dnc_reason. The CRM page reads this.
 
 ### `crm_duplicates_v` (view)
 
@@ -2246,6 +2258,60 @@ wave276: the dates a team asks everyone for their typical week again. On and aft
 - `note`: A short reason the manager typed, for example term. May be empty.
 - `created_at`: When the ask was written.
 
+### `studio_platforms`
+
+wave277: the Content Studio platform registry (labels, colours, connect steps, caps, scopes, posting modes). Staff read; admins write.
+
+### `crm_chapters`
+
+wave281: the chapters (Montreal, Toronto; Ottawa may be added later). Staff read; admins write.
+
+- `mail_route`: wave281: the app_config mail_senders route this chapter's volunteer email goes from: volunteer (volunteer@) for Montreal, toronto (toronto@) for Toronto.
+- `ops_team`: wave281: the chapter's operations team code (dept_meta): opsmtl or opsto.
+
+### `crm_contact_chapters`
+
+wave281: which chapter a person belongs to, one row per person per chapter (a person can have both). Rows come only from evidence: a form answer, a confirmed serving, an application, the Keela import, set by hand, or the wave281 backfill (source evidence). crm_in_chapter() holds the filter rule. CRM staff read, add and remove rows; security-definer writers use crm_add_chapter; crm_merge_contacts moves them.
+
+- `source`: wave281: where the row came from: form, serving, application, import, hand, or evidence (the wave281 backfill from tags and history).
+- `source_ref`: wave281: what the source was, in a few words (for the backfill: tag, keela tag, serving, old website serving, form, application).
+
+### `crm_consent_events`
+
+wave281: the consent log, one row per changed consent column of a person (email_status, email_consent: email; sms_opt_out, sms_consent: sms; whatsapp_opt_out: whatsapp), written by the trigger trg_wa281_consent_log, plus the wave281 backfill (form consent answers, change_log rows). Append-only: CRM staff read it and nobody writes it directly; an update or delete is refused unless wa.consent_merge is on (crm_merge_contacts) or, for a delete, the contact itself is being deleted.
+
+- `column_name`: wave281: the crm_contacts column that changed (email_status, email_consent, sms_opt_out, sms_consent, whatsapp_opt_out), or form consent for a form answer loaded by the backfill.
+- `source`: wave281: who or what made the change: the setting wa.consent_source if the writer set it (form: <slug>, STOP text, START text, daily implied-consent refresh, do not contact: <reason>, Keela import), else the new consent_source text if it changed in the same update, else staff for a signed-in staff member, else website account for any other signed-in person, else system. change_log for rows copied from change_log.
+- `words`: wave281: the words the person saw or wrote (the setting wa.consent_words; for a form answer, the consent sentence).
+- `actor`: wave281: the signed-in email that made the change, or system (wave281 backfill for the form answers loaded once).
+- `import_batch_id`: wave281: the import batch (crm_import_batches, a later wave) when the import made the change (the setting wa.import_batch).
+
+### `wa_stopped_phones_v` (view)
+
+wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (whatsapp).
+
+### `crm_contact_private`
+
+wave281: private data about a person, one row per contact: the birth date (from Keela only; Hub forms ask "Are you 16 or older?" instead). Only HR and admins read or write it; staff see crm_age_band(). crm_merge_contacts moves it.
+
+- `birth_date`: wave281: the date of birth. Never copied into the timeline, change_log or the import's change records.
+
+### `wa_campaigns`
+
+wave281: a Campaign: a fundraising event, drive, appeal or program (not a Send, which is crm_campaigns). CRM staff read; leaders and admins write.
+
+- `type`: wave281: fundraising_event, drive, appeal or program.
+- `goal_amount`: wave281: the money goal in dollars, if any.
+- `status`: wave281: planned, active, done or archived.
+- `donate_key`: wave281: the key the donation page and forms use for this campaign (crm_forms.settings.campaign, for example gift-basket-drive).
+- `keela_name`: wave281: the campaign's name in Keela, for the import.
+
+### `wa_campaign_people`
+
+wave281: who took part in a Campaign and how (participant, registrant, volunteer, donor, sponsor), shown as "<campaign>, <part>". CRM staff read and write; crm_merge_contacts moves the rows.
+
+- `source`: wave281: where the row came from (for example form, import, hand).
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
 - `ask_guest_spaces.status`: testing = only testers and organizers can sign in; open = delegates too (from opens_at if set); closed = nobody.
@@ -2299,10 +2365,10 @@ Functions:
 - `hub_reel_hide(bigint, boolean)`: Takes a loading screen line or a news banner item off (p_hidden true) or puts it back. Admins only; logged in change_log.
 - `hub_news_add(text, text, date)`: Adds an admin's update to the news banner at the top of Home (under 140 characters; link a Hub page #... or an https address; shown until p_until, two weeks by default, 90 days at most). Admins only; logged in change_log.
 - `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
-- `crm_merge_contacts(bigint, bigint)`: Keep one contact and merge the other into it: the history, gifts, old website history and organizations move, the lists join up, the copy fills the gaps in the details, two volunteer records become one (volunteer_merge). Staff with the CRM page; logged in change_log.
+- `crm_merge_contacts(bigint, bigint)`: Keep one contact and merge the other into it: the history, gifts, old website history and organizations move, the lists join up, the copy fills the gaps in the details, two volunteer records become one (volunteer_merge). Since wave281 also the chapters, the consent log, Campaign rows and private data move, and the kept contact takes from the other what it lacks: do-not-contact with its reason, time and author (on wins), text consent with its source and date, the job title, and the WhatsApp opt-out (on wins). Staff with the CRM page; logged in change_log.
 - `crm_sync_from_volunteer()`: Trigger on volunteer_people: a new or changed volunteer creates or updates their CRM contact (linking an existing contact with the same email instead of duplicating).
-- `crm_email_permission(bigint, text)`: The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising: express consent, or implied consent within two years of a gift or a serving; fundraising also under the exemption setting. Bounced and complained get nothing.
-- `crm_refresh_implied_consent()`: Writes implied consent onto the contacts (wave154): every live contact who is not express, unsubscribed, bounced or complained and who gave or served within two years gets email_consent implied, implied_consent_until two years after that last gift or serving, and a consent_source that says so. Never shortens a consent recorded by the team. Admins (the Email tab) and the daily cron job wa-crm-consent run it; returns the counts.
+- `crm_email_permission(bigint, text)`: The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising: express consent, or implied consent within two years of a gift or a serving; fundraising also under the exemption setting. Bounced and complained get nothing; since wave281 a do-not-contact person gets nothing either, transactional included (basis do not contact).
+- `crm_refresh_implied_consent()`: Writes implied consent onto the contacts (wave154): every live contact who is not express, unsubscribed, bounced or complained and who gave or served within two years gets email_consent implied, implied_consent_until two years after that last gift or serving, and a consent_source that says so. Never shortens a consent recorded by the team. Admins (the Email tab) and the daily cron job wa-crm-consent run it; returns the counts. The consent log records it as daily implied-consent refresh (wave281).
 - `wa_vault_set(text, text, text)`: Creates or replaces a vault secret by name (wave154). Only the service role may call it: the edge functions store secrets they receive (the Resend webhook signing secret) without the value ever leaving the platform.
 - `crm_perm_key(text, text, date)`: The email permission as the CRM page shows it (wave155): unsub, bounced, express, implied (not run out), none, unknown. The same rule as permKey in the page; crm_email_permission() is the one to trust before a send.
 - `crm_fold(text)`: Lower case with the common accents removed, for matching names and searches (wave155); the page's fold() in SQL.
@@ -2330,7 +2396,7 @@ Functions:
 - `crm_automation_stop(bigint)`: Stops one person's run (wave157), cancelling its email still waiting in the queue. Staff with the CRM page.
 - `crm_claim_queued(integer)`: mail-send v6's claim (wave155), campaign rows only since wave157 so an older pump never touches an automation's email.
 - `crm_claim_queued(integer, text)`: Claims queued sends for mail-send's pump (FOR UPDATE SKIP LOCKED): automation (automation_run_id set), campaign (campaign_id set), itinerary (wave182: meta.source itinerary), or any. Sends stuck in sending for 10 minutes go back to the queue.
-- `wa_app_config_guard()`: Trigger on app_config: only admins (or the service role) change the mail_, receipt_, donate_, loom_, sms_ and cert_ settings and, since wave260, dashboard_people, page_gate, page_gate_exempt and page_gate_map. Other staff keep their existing app_config rights.
+- `wa_app_config_guard()`: Trigger on app_config: only admins (or the service role) change the mail_, receipt_, donate_, loom_, sms_ and cert_ settings and, since wave260, dashboard_people, page_gate, page_gate_exempt and page_gate_map, and since wave281 the keela_ settings. Other staff keep their existing app_config rights.
 - `crm_receipt_config()`: The receipt settings for the Gifts tab (wave158, wave158b): the mode (off until the treasurer and Steel say go), the charity's name and address as on file with the CRA, the registration number, where receipts are issued, the numbering (prefix and next number), the signatory; whether the caller is an admin, whether a signature image is uploaded, what is still missing in words, and how many receipts are issued.
 - `crm_receipt_config_set(jsonb)`: Saves the receipt settings (wave158), admins only, each change in change_log. receipt_mode is not among them: switching receipts on comes with wave158b (the numbering, the PDF, the signature), once the treasurer and Steel agree.
 - `crm_receipt_sample(bigint)`: A sample CRA receipt for one gift (wave158, wave185): every field the CRA requires (the statement, the charity's name, address and registration number, a serial number, where and when it is issued, the date of the gift, the donor's name and address, the amount, the advantage and its description, the eligible amount, the signatory, the CRA's name and website), how the gift came, any tribute, the donor's language, with what is missing in words. Never numbered, never stored, never sent. Staff with the CRM page.
@@ -2387,7 +2453,7 @@ Functions:
 - `wa171_digits(text)`: wave171: a phone number's last 10 digits (how every Hub table matches numbers), or null.
 - `wa171_test_phone(text)`: wave171: true when the number is one of app_config sms_test_phones (the only numbers texted while sms_mode is test).
 - `wa171_lang(bigint)`: wave171: the language to text a volunteer in (fr when their CRM contact says so, else en).
-- `wa171_opted_out(bigint, text)`: wave171: true when the volunteer (or anyone with that number) replied STOP or was marked no texts in the CRM (crm_contacts.sms_opt_out).
+- `wa171_opted_out(bigint, text)`: wave171: true when the volunteer (or anyone with that number) replied STOP or was marked no texts in the CRM (crm_contacts.sms_opt_out); since wave281 also when the number's latest SMS keyword text was a STOP (wa_stopped_phones_v, channel sms), even if no contact holds it.
 - `wa171_roster_phone(bigint)`: wave171: the number to text for a roster row (the volunteer's first phone, else the phone on the row), 10 digits.
 - `wa171_confirm_text(bigint, boolean)`: wave171, wave240, wave258: the confirmation text for one roster row (English or French): the role, the date, the personal link (a cook is asked for the dish and pick-up or drop-off, a Community lead to read the briefing), YES or NO, and (wave258) the rule for every role: tell us at least 4 days before (app_config cancel_notice_days) if you cannot come, with that date. Internal.
 - `volunteer_confirm_get(text)`: wave31, wave171, wave172, wave173: what the public confirm page (hub.welfareavenue.com/c/<token>) shows for one roster row: first name, role (both languages), date, place, the format, the state (early: more than 7 days away, confirming opens 7 days before; open; confirmed; declined), the role's ready photo, what to expect and its links, the role's own details (a cook's recipe choices and how their food reaches us: pickup from their address in the pickup areas, or drop-off at the serving and whether they stay to serve; a driver's car on file; a server's donations), the same person's other upcoming servings and, after the serving, the survey. Anonymous by design; the unguessable token is the key. Returns the person's own address only for a cook (to confirm their pickup); never a phone, an email or anyone else's name.
@@ -2396,7 +2462,7 @@ Functions:
 - `wa171_sms_tick()`: wave171, wave191e, wave258: the quarter-hour text tick (cron wa-sms-tick), 9 am to 7 pm only: queues the confirmations (10 days before), sign-up notices, surveys, itineraries, and (wave258) the Monday reminders and Thursday check-ins; drains the queue through quo-send; then the round notices and the delivery check (quo-send delivery).
 - `wa171_text_to_confirm(bigint, bigint[])`: wave171: Text to confirm on an event page: queues the confirmation text now for the chosen roster rows (or everyone on the serving not yet confirmed and never texted) and asks quo-send to send. Leaders, HR and admins only; sms_mode still decides (off: nothing; test: the test phones only). Logged.
 - `wa171_sms_mode_set(text)`: wave171: an admin switches the volunteer texts off, test (only sms_test_phones get texts) or live; logged in change_log. Switching off skips anything still queued. The assistant never calls it.
-- `wa171_inbound(jsonb)`: wave171: files an incoming text ({phone, text, quo_id, at}) in quo_messages (direction in, once per quo_id) matched to the volunteer and their next serving, then acts on keywords: STOP/ARRET always sets crm_contacts.sms_opt_out; while sms_mode is live (or test, for the test phones) YES/OUI confirms the roster row, NO/NON marks it Unavailable (both queue a short thank-you, kind ack), START opts back in; anything else is a question for the team (wave169b). Service role only (quo-events).
+- `wa171_inbound(jsonb)`: wave171: files an incoming text ({phone, text, quo_id, at}) in quo_messages (direction in, once per quo_id) matched to the volunteer and their next serving, then acts on keywords: STOP/ARRET always sets crm_contacts.sms_opt_out; while sms_mode is live (or test, for the test phones) YES/OUI confirms the roster row, NO/NON marks it Unavailable (both queue a short thank-you, kind ack), START opts back in; anything else is a question for the team (wave169b). The consent log records STOP text and START text (wave281). Service role only (quo-events).
 - `volunteer_confirm_details(text, jsonb)`: wave172, wave173: the role's own answers from the confirm page, any time before the serving: a cook's recipe (event_roster.recipe_id) and how their food reaches us (pickup: a street address and a neighbourhood from app_config cook_pickup_areas, a postal code if given, kept on the volunteer's record and as confirm.cook_location home, which the event summary's pickup route reads; drop-off at app_config cook_dropoff_place by cook_dropoff_time, with whether they stay to serve), a server's donations, a driver's car type and model (also volunteer_people.car_type), how a photographer will share, a note (all in event_roster.confirm). Anonymous by design; the token is the key; logged.
 - `wa172_queue_signups()`: wave172: the sign-up text (thanks, you are on the list for these servings, with the link) to people added to a roster in the last 3 days for servings more than sms_confirm_days out; test mode: test phones only. Never for rows from the operations sheet (wave191c) or invitations from Find volunteers (wave191e).
 - `wa172_queue_surveys()`: wave172, wave174: after the serving, a thank-you text with the volunteer's own link (their survey, tailored to their role, is on it) to the confirmed volunteers in app_config sms_survey_roles (* for every role), from sms_survey_hour on the day or the next day. Once per roster row; test mode texts the test phones only; STOP respected.
@@ -2605,7 +2671,7 @@ Functions:
 - `meta_verify_token()`: wave250: the Meta webhook verify token, for an admin to paste into the HUB-Analytics app (Webhooks, Verify token). Admins only; each read lands in change_log (vault, META_VERIFY_TOKEN, read). Not a credential: it only lets Meta confirm the callback URL is ours.
 - `wa254_role_words(text, text)`: wave254: a roster role key in words for the WhatsApp templates (a server, a cook, team leader...; French: serveur·se, cuisinier·ère...).
 - `wa254_mirror()`: wave254: trigger on quo_messages: a queued confirmation (confirm) or "still in?" (reconfirm) text is copied into whatsapp_messages as the matching template (wa_serving_reminder or wa_still_in, in the person's language), only while sms_whatsapp_mode is test or live and sms_whatsapp_channel is also. Errors never block the SMS.
-- `wa254_inbound(jsonb)`: wave254: files a WhatsApp reply ({phone, text, button, wamid, at}) from whatsapp-send: stored in whatsapp_messages, STOP always honoured (crm_contacts.whatsapp_opt_out); YES / NO (or the template's buttons) act on the last template sent to that number in 14 days (a serving confirmation through volunteer_confirm_submit, a "still in?" through wa239_pool_answer) only when sms_whatsapp_mode is live, or test and the number is a test phone; a thank-you is queued on WhatsApp. Service role only.
+- `wa254_inbound(jsonb)`: wave254: files a WhatsApp reply ({phone, text, button, wamid, at}) from whatsapp-send: stored in whatsapp_messages, STOP always honoured (crm_contacts.whatsapp_opt_out); YES / NO (or the template's buttons) act on the last template sent to that number in 14 days (a serving confirmation through volunteer_confirm_submit, a "still in?" through wa239_pool_answer) only when sms_whatsapp_mode is live, or test and the number is a test phone; a thank-you is queued on WhatsApp. The consent log records WhatsApp STOP (wave281). Service role only.
 - `wa256_missed_open(text)`: wave256: how many missed calls from one number still wait for a call back (internal; used by wa256_phone_inbox).
 - `wa256_can_text()`: wave256, wave258: may the signed-in person text volunteers from the Hub (Text to confirm, replies, Find volunteers, Still in?, itineraries, Assign to servings): leaders, HR, admins, and the emails in app_config text_staff (wave258: Ibrahim, Mary, Terry). Every texting function asks it; quo-send v7 too.
 - `wa256_phone_inbox(int)`: wave256: the Phone page's list (staff): {texts: wa191_recruit_inbox over p_days, calls: one row a number (last call, counts, missed calls still open), can (may text), synced_at, window (texts send now)}.
@@ -2650,4 +2716,14 @@ Functions:
 - `wa_avail_snooze(text)`: wave276: Ask me later. The Home pop-up stays away for 3 days for that team. Sets snoozed_until on the person's newest row, or adds an empty row (with no save time, so it is not an answer) if they have none. Refuses a team the person is not on.
 - `wa_avail_team(text)`: wave276: a team's availability for its Agenda tab, for the team and its managers only. Returns {can_manage, cell_min, start, end, min_hours, ask_date, me, members:[{email, name, slots, hours, updated_at, since_ask}], missing:[{email, name, since_ask}], clashes:[{email, slot}]}. me is the caller's own address (mybox_me(), so an alias reads as the Welfare Avenue address the roster uses); ask_date the latest ask dated today or earlier. members are the active roster with a current saved grid; missing the rest of the active roster with an email; since_ask is true when the person saved a grid (any date) on or after ask_date, or there is no ask, the rule Ask the team and the Home pop-up use (false on missing unless a later-dated grid was saved since); clashes the grid cells where a member is in a confirmed hub_events meeting in 3 or more of the next 4 weeks (Toronto time, events of 12 hours or more left out).
 - `wa_avail_ask_set(text, date, text)`: wave276: a manager asks the team for its typical week again from a date (today when empty), with an optional note. From that date, everyone whose grid was saved before it sees the Home pop-up. Returns {ask_date, missing}: the emails of active members with an email who have not saved their week since the latest ask (this one included, even if dated later): never saved, or last saved before that ask date. The notify function uses the same rule for meet_avail_ask. For the message the page sends next. Refuses anyone who does not manage the team.
+- `crm_add_chapter(bigint, text, text, text)`: wave281: adds a person to a chapter (contact, chapter code, source, source note); does nothing when the row is already there, and says true when it added one. Service role only: its callers are security-definer functions and triggers (forms, servings, applications, the import). The page writes crm_contact_chapters directly under its policies.
+- `crm_in_chapter(bigint, text)`: wave281: the chapter filter rule. toronto: the person has a toronto row. montreal: a montreal row, or no chapter row at all (so Montreal lists stay as they were). all: everyone. Any other code: a row for that code. Security invoker: it reads crm_contact_chapters as the caller, under its row security.
+- `crm_consent_log()`: wave281: trigger function on crm_contacts (trg_wa281_consent_log). Writes one crm_consent_events row for each of email_status, email_consent, sms_opt_out, sms_consent and whatsapp_opt_out whose value changed (on insert: each that differs from the column default, so a plain new contact writes nothing). Source: wa.consent_source, else a changed consent_source, else staff, else website account (a signed-in person who is not staff), else system. Actor: the signed-in email, or system.
+- `crm_consent_guard()`: wave281: trigger function on crm_consent_events (trg_wa281_consent_guard). Refuses any update or delete unless the setting wa.consent_merge is on (only crm_merge_contacts sets it, while it moves rows to the kept contact) or, for a delete, the contact no longer exists (its removal cascades).
+- `crm_set_do_not_contact(bigint, text)`: wave281: sets or clears do-not-contact for one person. CRM staff only. With a reason (deceased, asked, other): the flag, reason, time and who, email_status unsubscribed (bounced or complained are kept), sms_opt_out and whatsapp_opt_out true, consent_source do not contact: <reason>; the consent log records each change. With a null reason: clears the four do-not-contact fields only (never resubscribes anyone) and writes a change_log line, do not contact cleared.
+- `crm_age_band(bigint)`: wave281: a person's age band on today's date in Toronto: under 16, 16 to 17, 18 or older, or null when no birth date is stored. Never returns the date. Null for anyone who is not CRM staff.
+- `wa_can(text)`: wave281: true when the signed-in person has a capability. gifts_edit: leaders and admins, or hub_roles.caps gifts_edit true (named finance people). import_admin: admins. hr_private: HR or admins. False for an unknown capability and for anyone without a hub_roles row or with role blocked.
+- `wa_my_caps()`: wave281: the signed-in person's three capabilities, {gifts_edit, import_admin, hr_private}, each true or false (wa_can).
+- `crm_gift_campaign_id(text)`: wave281: the Campaign a gift's campaign text means: the wa_campaigns row whose name or keela_name equals it, ignoring case; Holiday Gift Basket Drive 2026 means Gift Basket Drive 2026. Anything else (fundraising campaign included) gives null. Service role only; the trigger trg_wa281_gift_campaign uses it.
+- `wa281_gift_campaign()`: wave281: trigger function on crm_donations (trg_wa281_gift_campaign). A new gift, or a changed campaign text, gets campaign_id from crm_gift_campaign_id, unless the writer set campaign_id itself in the same statement.
 
