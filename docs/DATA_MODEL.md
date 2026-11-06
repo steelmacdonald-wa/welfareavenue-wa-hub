@@ -2344,6 +2344,46 @@ wave281: who took part in a Campaign and how (participant, registrant, volunteer
 - `source_ref`: wave281: what the source was, in a few words (for example the form slug or the import batch).
 - `added_at`: wave281: when the row was added.
 
+### `crm_import_runs`
+
+wave284: one Keela import run on the Import page (#crm/settings/imports): its staged files (import_stage.files), its batches (crm_import_batches) and their change records. Admins (wa_can import_admin) read it; only the wa284_* functions write it (the crm-import edge function).
+
+- `id`: wave284: the run's number.
+- `label`: wave284: a name for the run, typed by the admin who started it (for example Keela final export).
+- `created_by`: wave284: the email of the admin who started the run.
+- `created_at`: wave284: when the run was started.
+- `last_applied_at`: wave284: when a batch of this run was last applied. The page reminds the admin to purge the run 30 days after it.
+- `purged_at`: wave284: when the run was purged (wa284_purge): its staged rows, uploaded files and change records are gone, so its batches can no longer be compared, applied or undone.
+
+### `crm_import_batches`
+
+wave284: one kind of import applied once in a run (B.1): optouts, legacy_fields, people, fields, orgs, consent, participation, form_answers, run in that order. Compare runs the writer and rolls it back, keeping only the report; Apply runs it for real with automations off and the side-effect guard on; Undo puts back what is unchanged since (never for optouts and consent). Admins read it; only the wa284_* functions write it.
+
+- `id`: wave284: the batch's number (wa.import_batch while it runs; crm_consent_events.import_batch_id).
+- `run_id`: wave284: the run (crm_import_runs). One batch per kind per run.
+- `kind`: wave284: which import: optouts, legacy_fields, people, fields, orgs, consent, participation or form_answers (the B.1 table).
+- `status`: wave284: new, compared (a report is ready), applied, undone, or failed (the error says why, with row numbers, never values).
+- `report`: wave284: the report of the last compare, apply or undo: {kind, counts {rows_read, matched, created, updated {field: n}, kept_hub_value {field: n}, skipped {reason: n}}, lists {keela_ids_skipped, org_pairs, assignees_unmapped, campaigns_to_create, changed_since_kept, created_review, ...}, changes}. Lists hold Keela ids, Hub ids, staff names, organisation names and Keela option labels only: never an email, phone, address, birth date or note.
+- `error`: wave284: why the last compare or apply stopped (missing key <name>, a row number, or the database's error code); never a value from the data.
+- `applied_at`: wave284: when the batch was applied.
+- `applied_by`: wave284: the email of the admin who applied it.
+- `undone_at`: wave284: when the batch was undone.
+- `undone_by`: wave284: the email of the admin who undid it.
+
+### `crm_import_changes`
+
+wave284: every change an applied import batch made, one row per changed column or inserted row, in order: what wa284_undo reads. A birth date is never kept here (sensitive rows store "set"). Deleted by wa284_purge. Admins read it; only the wa284_* functions write it.
+
+- `id`: wave284: the order the changes were made in (undo walks it backwards).
+- `batch_id`: wave284: the batch (crm_import_batches).
+- `table_name`: wave284: the table changed (crm_contacts, wa_partners, wa_campaigns, crm_contact_fields, crm_contact_private, crm_contact_orgs, crm_contact_chapters, wa_campaign_people, crm_interactions, crm_consent_events).
+- `row_id`: wave284: the row: its id, or its key parts joined by colons (crm_contact_fields contact:field, crm_contact_chapters contact:chapter, wa_campaign_people campaign:contact:part).
+- `column_name`: wave284: the column changed (for an update), or the custom field or column written (for an insert).
+- `old_value`: wave284: the value before an update, as JSON; null for an insert.
+- `new_value`: wave284: the value after an update, or the whole inserted row, as JSON; "set" for a sensitive row (a birth date), whose value is never kept.
+- `action`: wave284: insert or update.
+- `sensitive`: wave284: true for a birth date: new_value says "set" and holds no value.
+
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
 - `ask_guest_spaces.status`: testing = only testers and organizers can sign in; open = delegates too (from opens_at if set); closed = nobody.
@@ -2759,4 +2799,47 @@ Functions:
 - `crm_gift_campaign_id(text)`: wave281: the Campaign a gift's campaign text means: the wa_campaigns row whose name or keela_name equals it, ignoring case; Holiday Gift Basket Drive 2026 means Gift Basket Drive 2026. Anything else (fundraising campaign included) gives null. Service role only; the trigger trg_wa281_gift_campaign uses it.
 - `wa281_gift_campaign()`: wave281: trigger function on crm_donations (trg_wa281_gift_campaign). A new gift, or a changed campaign text, gets campaign_id from crm_gift_campaign_id, unless the writer set campaign_id itself in the same statement.
 - `wa283_gift_audit()`: wave283: trigger function on crm_donations (trg_wa283_gift_audit). Writes one change_log row for every gift recorded, changed or deleted: entity_type crm_donations, entity_id the gift id, field gift, old_value and new_value the amount, date (in Toronto), kind, campaign and contact as JSON text (old is null for a new gift, new is null for a deleted one), changed_by the signed-in email or system.
+- `wa284_cfg(text)`: wave284: an app_config value read as JSON (null when missing or empty). The service role only.
+- `wa284_key(text)`: wave284: the key in Keela's export that holds a field (contact_id, email, birth_date, subscription_history, ...): app_config keela_keys when it names the field, else the [FIELDS] name. subscription_history has no default. A key set to "" means the export has no such key. The service role only.
+- `wa284_need(bigint, text, boolean)`: wave284: the key a writer reads for a field, checked against the staged file: it stops the writer with "missing key <name>" when no row has it (a field marked "" in keela_keys, or an optional one, is skipped instead). The service role only.
+- `wa284_need_in(bigint, text, text)`: wave284: like wa284_need for a key inside the objects of a list (the subscription history's date, type and form name). The service role only.
+- `wa284_txt(jsonb)`: wave284: a staged value as trimmed text; null for blank, "-", null, lists and objects. The service role only.
+- `wa284_list(jsonb)`: wave284: a staged value as a list of text: a JSON list as it is (an object's name or label), a text split on ", ". The service role only.
+- `wa284_date(text)`: wave284: an ISO date (YYYY-MM-DD, with or without a time) as a date, or null when it is anything else or not a real day. Never raises, so no error names a value. The service role only.
+- `wa284_norm(text)`: wave284: an organisation name normalised for matching: lower case, no punctuation, without the words inc, ltd and corp. The service role only.
+- `wa284_w0()`: wave284: an empty writer result (counts and lists) that each writer fills in. The service role only.
+- `wa284_bump(jsonb, text[], int)`: wave284: adds n to a count in a writer result. The service role only.
+- `wa284_push(jsonb, text, jsonb)`: wave284: adds an item (a Keela id, a Hub id, a staff or organisation name) to a list in a writer result, once. The service role only.
+- `wa284_chg(bigint, text, text, text, jsonb, jsonb, text, boolean)`: wave284: records one change of an import batch in crm_import_changes; a sensitive change keeps "set" and never the value. The service role only.
+- `wa284_set(text, bigint, text, jsonb)`: wave284: writes one column of one crm_contacts or wa_partners row from a JSON value (any column type). The service role only.
+- `wa284_upd(bigint, text, bigint, text, jsonb)`: wave284: changes one column of one crm_contacts or wa_partners row and records the old and new value in crm_import_changes; does nothing when the value is already that. The service role only.
+- `wa284_fill(bigint, text, bigint, text, text, text, jsonb)`: wave284: fills an empty text column from Keela; when the Hub already holds a different value the Hub wins and kept_hub_value counts it. The service role only.
+- `wa284_field(bigint, bigint, text, jsonb)`: wave284: sets a custom field (crm_contact_fields) for a contact only when it has no value yet, and records the insert; says set, same or kept (the Hub's value wins). The service role only.
+- `wa284_contact(text, text)`: wave284: the active Hub contact for a Keela person: by Keela id (legacy_refs.keela.contact_id or keela_extra_ids), then by email (lower case, trimmed). Never by phone alone. The service role only.
+- `wa284_file(bigint, text)`: wave284: the run's latest fully staged file of a kind; stops when there is none. The service role only.
+- `wa284_events(jsonb, text, text, text, text)`: wave284: a Keela person's subscription history as rows: the date (ISO only; anything else is undated), the kind (unsubscribe, bounce (not soft), optin or other, from the event's type), the channel (sms when the type or channel says text or SMS, else email), the type's words and the form name. The service role only.
+- `wa284_w_optouts(bigint, bigint, boolean)`: wave284: batch 1 (optouts). Keela people whose latest dated email-subscription event is an unsubscribe or a hard bounce, matched to a Hub contact that can still be emailed, get email_status unsubscribed or bounced and consent_source "Keela: <event> <date>". The opt-out always applies; it is never undone. The service role only.
+- `wa284_w_legacy_fields(bigint, bigint, boolean)`: wave284: batch 2 (legacy_fields), from legacy_refs.keela with no upload: positions split on ", " and mapped to volunteer_positions by label (unmapped ones listed), availability, dates volunteered (a field, not servings), the Rally Paper team, donor readiness (Ready R, Shows potential SP, Not ready NR), and the assignee as owner_member_id through app_config keela_assignee_map (unmapped ones listed). Fills empty fields only. The service role only.
+- `wa284_w_people(bigint, bigint, boolean)`: wave284: batch 3 (people). Each Keela person (Contact Type Individual) is matched by Keela id (legacy_refs.keela.contact_id or keela_extra_ids), then email, then phone; a phone-only match is listed, never merged. No match with an email or phone: a new contact (source keela). Neither: skipped and listed. Fills empty names and address fields, adds missing phones and emails, appends notes as "From Keela: ...", and keeps duplicate Keela ids in legacy_refs.keela_extra_ids. The Hub wins. Never writes through volunteer_people. The service role only.
+- `wa284_w_fields(bigint, bigint, boolean)`: wave284: batch 4 (fields): the job title; the birth date into crm_contact_private only (the change record says "set", never the date; only ISO dates; a person who already has a private row keeps it); the car, LinkedIn and food licence custom fields. Fills empty fields only. The service role only.
+- `wa284_w_orgs(bigint, bigint, boolean)`: wave284: batch 5 (orgs). Keela companies (Contact Type Company) matched to wa_partners by keela_company_id, then by normalised name or aka (lower case, no punctuation, no inc, ltd or corp): exact matches are linked (keela_company_id and empty goals filled). A pair where one name contains the other is listed (org_pairs) and linked only once an admin ticks it (app_config keela_org_pairs_ok); an unticked pair is skipped. Other real organisations are created (category from keela_company_category_map, else partner (the column's default) with the type listed; status from keela_status_map, else past (the column's default); visibility everyone; Keela Goal into goals). A person's name, a phone number or Welfare Avenue is skipped and listed by Keela id only. People are linked through crm_contact_orgs. The Hub wins. The service role only.
+- `wa284_w_consent(bigint, bigint, boolean)`: wave284: batch 6 (consent). Each dated Keela subscription event goes into crm_consent_events once (source keela, column keela email|sms subscription, the type's words, the form name, the batch). Express email consent only when the latest dated email event is an opt-in with a form name, the Hub has no express consent yet, and the address is not unsubscribed, bounced, complained or do-not-contact. A text opt-in (the latest dated text event) becomes sms_consent express, unless texts are stopped. Never undone. The service role only.
+- `wa284_w_participation(bigint, bigint, boolean)`: wave284: batch 7 (participation). Each Keela tag goes by app_config keela_tag_map: to wa_campaign_people (the campaign by keela_name, else by name, with its part), to a chapter (the Toronto tags), to skip (the welcome-series and donor tags), or to tags[] for the rest. A campaign not yet in the Hub is created with the type an admin picked on the Import page (keela_campaign_types), else listed in campaigns_to_create. Adds only. The service role only.
+- `wa284_w_form_answers(bigint, bigint, boolean)`: wave284: batch 8 (form_answers). Keela responses with no Hub interaction of the same response id (source keela, source_ref keela:<id>, as the first import wrote them) become crm_interactions rows: kind form, direction in, channel website, the form name as subject, the answers as "Question: answer" lines (birth date, health and home address answers left out), the day it was given. A Toronto form adds the Toronto chapter. Adds only. The service role only.
+- `wa284_write(bigint, boolean)`: wave284: runs the writer for a batch's kind (wa284_w_<kind>) and returns its counts and lists. Compare and Apply both call it, so a compare's report is exactly what Apply will do. The service role only.
+- `wa284_report(bigint, jsonb)`: wave284: a batch's report: the writer's counts and lists, plus created and updated counted from the batch's crm_import_changes rows. Never holds an email, phone, address, birth date or note. The service role only.
+- `wa284_guard()`: wave284: the side-effect guard's last check after a writer runs in wa284_apply: any web call this transaction queued (net.http_request_queue rows whose xmin is this transaction) stops the batch. The nine guarded tables are covered by trg_wa284_import_guard. The service role only.
+- `wa284_import_guard()`: wave284: trigger function (trg_wa284_import_guard, before insert) on dept_requests, crm_email_sends, quo_messages, whatsapp_messages, crm_automation_runs, hub_notifications_sent, volunteer_applications, crm_form_submissions and event_roster: refuses the row with "import side effect blocked" whenever wa.import_batch is set (an import batch is comparing, applying or undoing), even inside a subtransaction.
+- `wa284_compare(bigint, text)`: wave284: Compare. Runs the batch's writer with the same settings as Apply (automations off, the guard on), builds the report from its change records, then raises WA284 so the exception block rolls every change back; the handler stores the report and sets status compared. Any other error sets status failed with a message that names a key, a row number or the database's error code, never a value. The service role only.
+- `wa284_apply(bigint, text)`: wave284: Apply, on an admin's yes after a compare. In one transaction: wa.no_automations on, wa.import_batch the batch and wa.consent_source Keela import; the writer; the side-effect guard (wa284_guard, and the trigger trg_wa284_import_guard on nine tables); then status applied, the report, who and when, and crm_import_runs.last_applied_at. Any error rolls all of it back (crm-import then records it with wa284_fail). The service role only.
+- `wa284_fail(bigint, text)`: wave284: records that an apply stopped (crm-import passes the cleaned message: a key, a row number or an error code, never a value). The service role only.
+- `wa284_unrow(text, text, jsonb)`: wave284: removes a row an import inserted (crm_contact_fields, wa_campaign_people, crm_contact_chapters, crm_interactions, crm_contact_orgs) only when it is unchanged since (every column but its timestamps equals the recorded row); says how many it removed (0 or 1). The service role only.
+- `wa284_undo(bigint, text)`: wave284: Undo an applied batch (never optouts or consent). Walks its changes backwards: an update whose column still holds the new value gets its old value back, otherwise it is kept and listed (changed_since_kept); consent and opt-out columns are never put back. A new contact, organisation or campaign is listed for review by hand (created_review), never deleted. A row the import added (custom field, Campaign row, chapter, timeline item, organisation link) is removed only when unchanged since; a birth-date row only when its source and time are still the import's. Status undone. The service role only.
+- `wa284_purge(bigint)`: wave284: Purge a run: deletes its staged rows, its file records and its change records (so its batches can no longer be undone), marks it purged, and returns the storage paths crm-import then deletes from the imports bucket. The service role only.
+- `wa284_new_run(text, text)`: wave284: starts a run with a label (at most 120 characters) and who started it; returns its id. The service role only.
+- `wa284_register(bigint, text, text)`: wave284: records an uploaded file (its path in the imports bucket, inside the run's folder <run>/, and its kind) for a run that is not purged; returns its id. The service role only.
+- `wa284_stage_rows(bigint, int, jsonb, int)`: wave284: stages one chunk of a file's rows (a list of objects) from row p_from: from 0 it first deletes the file's rows and sets the total; later chunks must follow on. Rows are numbered from 1. Returns the file's rows and staged_through. The service role only.
+- `wa284_files(bigint, bigint)`: wave284: a run's files (or one file): id, path, kind, rows and how many are staged. No values. The service role only.
+- `wa284_keys(bigint)`: wave284: a staged file's keys (the CSV headers or the JSON keys) with how many rows have a value for each, and the keys inside lists of objects as <key>[].<inner key>. Never a value. The Import page shows it before the first compare. The service role only.
+- `wa284_new_batch(bigint, text)`: wave284: the run's batch of a kind, created (status new) the first time; one per kind per run. The service role only.
 
