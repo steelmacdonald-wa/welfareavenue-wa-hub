@@ -74,7 +74,8 @@ begin
   if not found or x.status <> 'Confirmed' or x.confirm_status <> 'confirmed' or x.confirm->>'via' <> 'home' or x.detail->>'source' <> 'home' then raise exception 'w290live 4: the roster row is not Confirmed from Home'; end if;
   v_pid := x.person_id;
   if not exists (select 1 from public.change_log c where c.entity_type = 'event_roster' and c.entity_id = x.id::text and c.new_value like '% (Home)') then raise exception 'w290live 4: no change_log line ending (Home)'; end if;
-  if not exists (select 1 from public.volunteer_people vp where vp.id = v_pid and vp.joined_note like '%from Home (wave290)%') then raise exception 'w290live 4: the new volunteer record does not say it came from Home'; end if;
+  -- adding a team member already gives them a volunteer record (wave220's trigger), so the sign-up only labels one it creates itself
+  if exists (select 1 from public.volunteer_people vp where vp.id = v_pid and vp.joined_note like 'Team member; signed up for a serving%' and vp.joined_note not like '%from Home (wave290)%') then raise exception 'w290live 4: a volunteer record made from Home says the onboarding'; end if;
   r := public.wa290_home_servings();
   if (r#>>'{year,done}')::int <> 1 or r->>'state' <> 'todo' then raise exception 'w290live 4: after one sign-up: done %, state %', r#>>'{year,done}', r->>'state'; end if;
   if not exists (select 1 from jsonb_array_elements(r->'servings') s where (s->>'id')::bigint = v_ev[1] and (s#>>'{mine,confirmed}')::boolean) then raise exception 'w290live 4: the serving they chose does not say it is theirs'; end if;
