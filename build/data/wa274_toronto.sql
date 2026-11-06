@@ -1,4 +1,4 @@
--- wa274_toronto (05/11/26): the Toronto Volunteers app, its data. Applied 05/11/26 with Steel's approval (migration wa274_toronto).
+-- wa274_toronto (05/11/26): the Toronto Volunteers app, its data. Applied 06/11/26 by Steel in the SQL editor (the Supabase connector's confirmation did not reach the Android app).
 -- Steel (05/11/26): "a volunteer manager for Toronto ... a robust, easy to use volunteer management tool for Toronto ...
 -- It also should integrate with the CRM as well in the hub, like the Montreal volunteer manager does."
 -- The plan: docs/05-11-26 - the Toronto Volunteer Manager plan.md (sections 4 and 9).

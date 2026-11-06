@@ -163,3 +163,42 @@ On the same build, before and after: `w274drive` 222 and 222, `w274break` 238 an
 - wave274f: Prep (the recipe scaled to the headcount and dietary needs, groceries, the kit) and Setup.
 - wave274g: the Toronto SOP, the page tour, an Avenue Academy lesson.
 - Applying `build/data/wa274_toronto.sql` (Steel).
+
+## Released 06/11/26
+
+Released on Steel's "Go" (06/11/26). This release includes wave274, wave274b (the anticipated spend) and wave274 (one app).
+
+1. **Base:** live was index.html 0b8e0fa6 (wave279b, another session, 05/11/26). This branch merges `wave279b-toronto-crm`, and that branch rebuilds live byte for byte.
+2. **Candidate:** index.html b8082fba (8,178,210 bytes, LF).
+   - It differs from live only in the segments of waves 274, 274b and the one app: 110, 118, 124, 127, 131, 134, 153, 163, 274 and MANIFEST.
+   - `check_remaps` is clean.
+   - All regressions match live: w274drive 222, w274break 238, w274bdrive 134, w274onedrive 163, w259 22, w191 39, w272 152, w195 52, w271 159, w275 138, w276 26, w277 56, w279 113.
+   - The checks that also fail on live fail the same way: w153 45 of 46, w124 34 of 35.
+3. **Database:** Steel ran `build/data/wa274_toronto.sql` and `build/data/wa274b_budget.sql` in the Supabase SQL editor. The Supabase connector's confirmation for writes never reached the Android app; four attempts timed out at 60 s with nothing applied. The checks after:
+   - `volunteer_event_recipients` exists.
+   - `volunteer_events.budget` exists.
+   - `wa274_crew_add`, `wa274_next_code` and `wa274_recipients_touch` exist.
+   - Every profile has `toronto`: admin all, board none, executive all, fundraising lead, hr all, marketing lead, opsmtl all, opsto all, progdev all.
+   - There are 9 change_log rows ("Hub release (wave274)").
+4. **Staging:** the build went to `wa_stage274` in 10 parts. Part 8 was refused once by the WAF and re-posted base64 as part 108. All 10 matched the manifest.
+5. **Swap:** Steel ran the gated block in the SQL editor:
+   - The anon grant was revoked first.
+   - The guard checked that live was 0b8e0fa6, with the markers `window.__wa274 = true`, `wave274 (one app)` and `wave279b (Steel`.
+   - The page was swapped; `site_files` index.html is b8082fba (updated 06:51:06 UTC).
+   - host-sync answered 200 ("ok": true, 8,178,034 characters).
+   - `wa_stage274` was dropped.
+6. **Not seen from here:** hub.welfareavenue.com itself; the session's network does not reach it. Steel or Edison should open the Hub signed in, as an admin and as a Toronto member, and check the one Volunteer Manager and its city switch.
+
+### Undo
+
+- **The page:** put back index.html 0b8e0fa6.
+  1. Build `wave279b-toronto-crm` at b3d0dde.
+  2. Stage and gate it with the expected live b8082fba.
+  3. Run host-sync.
+- **The database, only if it must go:**
+  - Run `drop table public.volunteer_event_recipients;`.
+  - Drop the three `wa274_*` functions.
+  - Run `alter table public.volunteer_events drop column budget;`.
+  - Run `update public.hub_access_profiles set pages = pages - 'toronto';`.
+
+  The page works without them through its fallbacks.

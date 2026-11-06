@@ -1,4 +1,4 @@
--- wa274b_budget (05/11/26): the anticipated spend of a volunteering event. Not applied yet (Steel applies it).
+-- wa274b_budget (05/11/26): the anticipated spend of a volunteering event. Applied 06/11/26 by Steel in the SQL editor, with wa274_toronto.sql.
 -- Steel (05/11/26): "they technically have the same calendar, and it would be good to see on the calendar how much we
 -- anticipate spending for these events."
 -- The brief: docs/toronto/wave274b brief.md. The release note: docs/05-11-26 - wave274b anticipated spend on the calendar.md.
