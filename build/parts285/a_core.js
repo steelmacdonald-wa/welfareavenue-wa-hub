@@ -283,6 +283,40 @@
       return __pct37(onbId);
     };
   }
+  /* ---------- when a plan is complete (the decisions that write: wave37's "completed", wave122's certificate and XP) ----------
+     Complete when the raw count is (every row ticked in the table), or when the rule's facts are all known and every real step is done:
+     the plan's rows are in the tables, a step counted at setup was counted from data (setupCovered never counts from what is unknown), and a
+     step counted in the Academy was counted from training_progress rows this viewer loaded (the Academy's data is loaded). Anything else: raw only. */
+  function completeKnown(onbId) {
+    try {
+      var raw = typeof __pct37 === 'function' ? __pct37(onbId) : null;
+      if (raw && raw.total > 0 && raw.done === raw.total) return true;
+      var onb = onbById(onbId), W = W37();
+      if (!onb || !(W.steps || []).some(function (s) { return String(s.onboarding_id) === String(onbId); })) return false;
+      var p = planOf(onb); if (!p || p.src !== 'tables' || !p.total || p.done < p.total) return false;
+      var leaves = p.sections.reduce(function (a, s) { return a.concat(s.leaves); }, []);
+      if (leaves.some(function (l) { return l.how === 'academy'; }) && !academy()) return false;
+      if (leaves.some(function (l) { return l.how === 'setup'; }) && !setupCovered(onb)) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  /* the rows a completed plan still has open in the table, and why the rule counted them: headers whose steps are all done, steps setup covered,
+     steps finished in the Academy. wave37's tick handler writes them done (its own write, onboarding_steps) before it marks the plan completed. */
+  function derivedRows(onbId) {
+    var onb = onbById(onbId), W = W37(); if (!onb) return [];
+    var p = planOf(onb); if (!p || p.src !== 'tables') return [];
+    var mine = (W.steps || []).filter(function (s) { return String(s.onboarding_id) === String(onbId); }), out = [];
+    mine.forEach(function (s) {
+      if (s.done) return;
+      var tid = String(s.template_id);
+      if (p.heads && Object.prototype.hasOwnProperty.call(p.heads, tid)) { if (p.heads[tid]) out.push({ id: s.id, by: 'Hub: done when its steps were' }); return; }
+      var l = p.sections.reduce(function (a, x) { return a.concat(x.leaves); }, []).filter(function (x) { return String(x.tid) === tid; })[0];
+      if (l && l.done && l.how === 'setup') out.push({ id: s.id, by: 'Hub: done at setup' });
+      else if (l && l.done && l.how === 'academy') out.push({ id: s.id, by: 'Hub: done in the Avenue Academy' });
+    });
+    return out;
+  }
+
   /* wave166's planStates as other waves read it (wave167's journey: its ring, its week counts and the next step): headers out, the rule's done */
   (function wrap166(tries) {
     var W = window.w166;
@@ -563,7 +597,7 @@
 
   window.w285 = {
     /* the rule and the facts */
-    planOf: planOf, planFromLead: planFromLead, plan: plan, secCount: secCount, stepDone: stepDone, stepWhy: stepWhy, firstOpen: firstOpen, setupCovered: setupCovered, ticks: ticks, setupCount: setupCount,
+    planOf: planOf, planFromLead: planFromLead, plan: plan, secCount: secCount, stepDone: stepDone, stepWhy: stepWhy, firstOpen: firstOpen, completeKnown: completeKnown, derivedRows: derivedRows, setupCovered: setupCovered, ticks: ticks, setupCount: setupCount,
     collect: collect, lookup: lookup, derive: derive, avenues: avenues, doneSet: doneSet, loadPositions: loadPositions, leadPerson: leadPerson,
     /* the helpers the other parts share */
     h: { E: E, lower: lower, plain: plain, first: first, plural: plural, today: today, dayOf: dayOf, addDays: addDays, diffDays: diffDays, fmtDay: fmtDay, secName: secName, secRank: secRank,
