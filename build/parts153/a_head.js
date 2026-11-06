@@ -177,7 +177,11 @@
     },
     /* wave176: Steel (30/09/26): "I'd like the MTL Volunteering to be it's own app now, it's big enough that it should be it's own app."
        The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
-    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
+    /* wave274 (one app): Steel (06/11/26): "there should only be one CRM ... we could definitely combine both Montreal and Toronto
+       in one app but keep procedures made differently." The Volunteer Manager is one tile with a city switch (cities): Montreal is
+       this entry (page volunteering), Toronto is APPS.toronto (page toronto, of: 'volunteer'). Each city keeps its own rail, pages,
+       words, stages, actions and body class (w153volunteer, w153toronto); blurb is the tile's, line the rail's (the city's own). */
+    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'Servings and events in Montreal and Toronto', line: 'MTL servings, rosters, texts and volunteers', city: 'Montreal', team: 'opsmtl', cities: ['volunteer', 'toronto'], pages: ['volunteering'], home: '#volunteering',
       groups: function () {
         /* wave259 (Steel, 15/10/26: "the UI is just getting really messy ... some sort of refresh"): five places. Servings and
            Calendar; People (Volunteers, New applicants and Sign-offs as tabs of one page); Messages (the ops line: every
@@ -194,6 +198,19 @@
         ] }];
       },
       actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]
+    },
+    /* wave274: Steel (05/11/26): "a volunteer manager for Toronto ... this new app in the hub". Toronto Volunteers: the Toronto team's
+       events (a community kitchen, one or two organizations the meals go to, a crew), on the Volunteer Manager's tables (page #toronto) */
+    /* wave274 (one app): Toronto is now a city of the Volunteer Manager (of), named by it, in Toronto's purple: the colour says the city */
+    toronto: { id: 'toronto', label: 'Volunteer Manager', color: PURPLE, ic: 'heart', blurb: 'Toronto events, crews and volunteers', line: 'Toronto events, crews and volunteers', city: 'Toronto', team: 'opsto', of: 'volunteer', pages: ['toronto'], home: '#toronto',
+      groups: function () {
+        return [{ label: 'Events', items: [
+          { h: '#toronto', l: 'Events', ic: 'list', page: 'toronto' }
+        ] }, { label: 'People', solo: true, items: [
+          { h: '#toronto/people', l: 'Volunteers', ic: 'people', page: 'toronto' }
+        ] }];
+      },
+      actions: [{ k: 'newevent', l: 'New event', ic: 'plus', page: 'toronto' }]
     },
     /* wave193: Steel (01/10/26): "a new app called Fundraising that holds: Fundraising Events, Donor relations (Donor Program), Events
        Calendar, Fundraising Event Sops (as it's own page), Grants". One page (#fund) with sections by address, plus wave124's Events page */
@@ -251,7 +268,10 @@
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */
+  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */   /* wave274 (one app): Toronto is a city of the Volunteer Manager, no longer a tile of its own */
+  /* wave274 (one app): every app that frames pages, in the launcher's order with each app's cities in its place
+     (hub, strategy, volunteer, toronto, crm, ...): who owns a page, and the body class each one sets */
+  var FRAMES = []; ORDER.forEach(function (id) { (APPS[id].cities || [id]).forEach(function (c) { if (APPS[c] && FRAMES.indexOf(c) < 0) FRAMES.push(c); }); });
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
@@ -265,7 +285,7 @@
      Admins and the Executive profile have every app as theirs.
      wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
      the CRM is now theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['crm'], board: [] };
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };   /* wave274 (one app): the Toronto team's apps are the Volunteer Manager (it opens Toronto for them) and wave279b's CRM, as the CRM rebuild plans for wave282 */
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
@@ -281,8 +301,30 @@
     if (boardMode() || !staffOk()) return false;
     var a = APPS[id]; if (!a) return false;
     if (id === 'hub') return true;
+    if (a.cities) return a.cities.some(ownOk);   /* wave274 (one app): the Volunteer Manager is there when either city is */
+    return ownOk(id);
+  }
+  /* an app's (or a city's) own pages, the launcher's rule before wave274 (one app) */
+  function ownOk(id) {
+    if (boardMode() || !staffOk()) return false;
+    var a = APPS[id]; if (!a) return false;
+    if (id === 'hub') return true;
     if (a.need) return allowed(a.need);   /* wave193: the Fundraising app needs its own page; the Events calendar alone (finance staff, wave124) opens no app */
     return a.pages.some(allowed);
+  }
+  /* ---------- wave274 (one app): the cities of an app ----------
+     A city is offered when the person may open its page (the menu's rule: wa40Allowed and wave127's profiles decide). With two
+     the rail and the phone's menu show the switch; with one there is no switch and the tile opens it. */
+  var KEY_CITY = 'wa274.city';   /* the last city this person used (a convenience of this browser only) */
+  function tileOf(id) { var a = APPS[id]; return a && a.of && APPS[a.of] ? a.of : id; }
+  function citiesOf(id) { var t = APPS[tileOf(id)]; return t ? (t.cities || [t.id]) : []; }
+  function cities(id) { return citiesOf(id).filter(ownOk); }
+  /* where the tile opens: the last city used, else the profile's own city (opsto: Toronto), else the first (Montreal) */
+  function cityFor(id) {
+    var cs = cities(id); if (cs.length < 2) return cs[0] || id;
+    var last = read(KEY_CITY); if (last && cs.indexOf(last) >= 0) return last;
+    var p = myProfile(), mine = cs.filter(function (c) { return APPS[c].team && APPS[c].team === p; })[0];
+    return mine || cs[0];
   }
   function items(app) {
     var a = APPS[app]; if (!a || !a.groups) return [];
@@ -297,10 +339,10 @@
   function hashNow() { try { return decodeURIComponent(location.hash || ''); } catch (e) { return location.hash || ''; } }
   function pageOf(h) { return String(h || '').replace(/^#/, '').split('/')[0]; }
   /* the app that owns a page (every app page opens its app's frame; the Hub keeps the rest) */
-  function ownerOf(pg) { for (var i = 0; i < ORDER.length; i++) { var a = APPS[ORDER[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }
+  function ownerOf(pg) { for (var i = 0; i < FRAMES.length; i++) { var a = APPS[FRAMES[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }   /* wave274 (one app): the cities too (Toronto owns #toronto) */
   function current() {
     var pg = pageOf(hashNow());
     if (boardMode() || !staffOk()) return null;
     var id = ownerOf(pg);
-    return id && appOk(id) ? id : null;
+    return id && ownOk(id) ? id : null;   /* wave274 (one app): the city's own pages, not its tile's (Toronto alone never frames #volunteering) */
   }

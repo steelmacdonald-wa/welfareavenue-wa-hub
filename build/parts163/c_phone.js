@@ -259,20 +259,26 @@
         list.push(it);
         (it.sub || []).forEach(function (sb) { list.push({ k: sb.k, l: sb.l, sec: it.l, el: sb.el, on: sb.on }); });
       });
-      apps.forEach(function (a) { if (a.id !== 'hub') appItems(a.id).forEach(function (it) { it.hint = a.label; list.push(it); }); });
+      apps.forEach(function (a) {
+        if (a.id === 'hub') return;
+        /* wave274 (one app): the Volunteer Manager's pages in each city this person can open, said with the city */
+        var cs = []; try { cs = A.cities ? A.cities(a.id) : []; } catch (e) { cs = []; } if (!cs.length) cs = [a.id];
+        cs.forEach(function (c) { appItems(c).forEach(function (it) { it.hint = a.label + (cs.length > 1 && A.apps[c] && A.apps[c].city ? ', ' + A.apps[c].city : ''); list.push(it); }); });
+      });
       var words = q.split(/\s+/).filter(Boolean);
       list = list.filter(function (it) { var hay = foldS(it.l + ' ' + (it.sec || '') + ' ' + (it.hint || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
       list.forEach(function (it) { if (!it.hint) it.hint = it.sec || ''; });
       html = list.length ? list.map(rowHtml).join('') : '<div class="none">No page is called that. Try another word.</div>';
     } else {
       html += apps.length > 1 ? '<div class="sh">Apps</div><div class="apps" role="list">' + apps.map(function (a) {
-        var on = (app || 'hub') === a.id;
+        var on = (A.tileOf ? A.tileOf(app || 'hub') : (app || 'hub')) === a.id;   /* wave274 (one app): in Toronto the Volunteer Manager's tile is lit */
         return '<button type="button" class="app' + (on ? ' on' : '') + '" role="listitem" data-w163app="' + Esc(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="t" style="background:' + Esc(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + Esc(a.label) + '</button>';
       }).join('') + linkList().map(function (l) {
         return '<div class="appx" role="listitem"><a class="app ext" href="' + Esc(l.url) + '" target="_blank" rel="noopener" data-w163ext="' + Esc(l.id) + '" aria-label="' + Esc(l.label + ', opens in a new tab') + '"><span class="t" style="background:' + Esc(l.color) + '">' + (A.icon ? A.icon(l.ic) : '') + '</span><span class="xl">' + Esc(l.label) + (A.icon ? A.icon('ext', 'w163xi') : '') + '</span></a></div>';
       }).join('') + '</div>' : '';
       if (app) {
         html += '<button type="button" class="back" data-w163back="1">' + PIc('back') + ' Back to the Hub</button>';
+        try { if (A.switchHtml) html += A.switchHtml(app); } catch (e) { /* fine */ }   /* wave274 (one app): Montreal | Toronto, at the top of the app's own menu (wave153's buttons and click) */
         list = appItems(app);
       } else list = hubItems();
       var sec = null;

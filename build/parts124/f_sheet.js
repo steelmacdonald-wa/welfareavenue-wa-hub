@@ -56,7 +56,9 @@
       rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' })) + (it.cancelled ? ' (cancelled)' : '')));
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
-      acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+      if (it.budget != null) rows.push(kv('cash', 'Anticipated spend <b>' + E(spend(it.budget)) + '</b>'));   /* wave274b: its own line */
+      var toEv = String(r.kind || '').toLowerCase() === 'meal' && /toronto/i.test(String(r.location || ''));   /* wave274b: a Toronto event opens in the Toronto app */
+      acts.push('<a class="w124btn" data-w124go="' + (toEv ? '#toronto/e/' : '#volunteering/e/') + E(r.id) + '">Open the event</a>');
     } else if (it.k === 'board') {
       if (it.fy) {
         rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));
