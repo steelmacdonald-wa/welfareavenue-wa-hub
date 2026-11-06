@@ -14,6 +14,8 @@ const { chromium } = require('playwright');
 const { fresh } = require('./boot');
 const { fx287, EXPECT } = require('./w287fx');
 const SHOTS = process.env.SHOTS || '';
+const ONLY = process.env.ONLY || '';   /* ONLY=13 runs sections 1 and 3 */
+const run = (n) => !ONLY || ONLY.indexOf(String(n)) >= 0;
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 let pass = 0, fail = 0;
 function ok(name, cond, info) { if (cond) { pass++; console.log('PASS ' + name); } else { fail++; console.log('FAIL ' + name + (info !== undefined ? '  ' + JSON.stringify(info).slice(0, 900) : '')); } }
@@ -53,7 +55,7 @@ const ADMIN = { name: 'Steel', id: 37 };
   const list = async (f, l) => { await click(f, '#w116tasks .w287side [data-l="' + l + '"]', 500); };
 
   /* ---------- 1. Marketing's task page at 1280: the sidebar, lists, the tick, the drawer, quick add ---------- */
-  {
+  if (run(1)) {
     const f = await go({ width: 1280, height: 1200 });
     await toTasks(f, 'marketing');
     await f.ev(() => { try { localStorage.clear(); } catch (e) { /* fine */ } });
@@ -183,12 +185,13 @@ const ADMIN = { name: 'Steel', id: 37 };
     await f.hash('#team/marketing', 2600);
     ok('a renamed project shows on the Overview’s card', await f.ev(() => [].some.call(document.querySelectorAll('#w287proj .w287pc .nm'), (n) => /Website Redesign \(renamed\)/.test(n.textContent))));
     await f.hash('#team/marketing/tasks', 2600);
+    await f.page.waitForSelector('#w258req', { timeout: 5000 }).catch(() => {});   /* wave258 places it from its own observer */
     ok('the "Asked of" banner stays on Tasks', await f.ev(() => !!document.getElementById('w258req')) || await f.ev(() => !(window.w123 && window.w123.items && window.w123.items('marketing', 'open').some((x) => x.k === 'r'))));
     await done(f);
   }
 
   /* ---------- 2. Fundraising: cross-team counts, sub-projects, the boards, #grants, Finance ---------- */
-  {
+  if (run(2)) {
     const f = await go({ width: 1280, height: 1200, hash: '#team/fundraising/tasks' });
     await toTasks(f, 'fundraising');
     const sc = await sideCounts(f);
@@ -220,7 +223,7 @@ const ADMIN = { name: 'Steel', id: 37 };
   }
 
   /* ---------- 3. The Overview at 1280 ---------- */
-  {
+  if (run(3)) {
     const f = await go({ width: 1280, height: 1400, hash: '#team/marketing' });
     await f.hash('#team/opsmtl', 1500); await f.hash('#team/marketing', 2800);
     await f.page.waitForSelector('#w116host .w287now', { timeout: 10000 }).catch(() => {});
@@ -283,7 +286,7 @@ const ADMIN = { name: 'Steel', id: 37 };
   }
 
   /* ---------- 4. Widths 390 and 768, and 1280 at a 200% root font ---------- */
-  for (const w of [390, 768, 1280]) {
+  if (run(4)) for (const w of [390, 768, 1280]) {
     const f = await go({ width: w, height: w < 700 ? 900 : 1000, hash: '#team/marketing' });
     if (w === 1280) { await f.ev(() => { document.documentElement.style.fontSize = '200%'; }); await f.page.waitForTimeout(400); }
     const tag = w === 1280 ? '1280 at 200% root font' : String(w);
@@ -312,7 +315,7 @@ const ADMIN = { name: 'Steel', id: 37 };
   }
 
   /* ---------- 5. Reduced motion: slides become short fades ---------- */
-  {
+  if (run(5)) {
     const f = await go({ width: 1280, height: 1000, ctx: { reducedMotion: 'reduce' } });
     await toTasks(f, 'marketing');
     await click(f, '#w116tasks .w116r[data-tid="5002"] .ttl', 400);
