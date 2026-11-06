@@ -42,6 +42,7 @@
     { k: 'keela_transactions_csv', t: 'Keela transactions (CSV)', type: 'text/csv' }
   ];
   var TYPES = [['fundraising_event', 'Fundraising event'], ['drive', 'Drive'], ['appeal', 'Appeal'], ['program', 'Program']];
+  var READ_AS = { optin: 'opt-in', unsubscribe: 'opt-out (unsubscribed)', bounce: 'bounce', complaint: 'complaint (complained)', other: 'other (not acted on)' };
   var CFG = ['keela_keys', 'keela_assignee_map', 'keela_org_pairs_ok', 'keela_campaign_types'];
   var LISTS = { keela_ids_skipped: 'Skipped (Keela ids)', phone_only: 'Phone-only matches, listed and not merged', org_pairs: 'Close organisation pairs',
     assignees_unmapped: 'Keela assignees with no Hub person yet', campaigns_to_create: 'Campaigns to create (pick a type)', campaigns_created: 'Campaigns created',
@@ -148,7 +149,12 @@
     if (Object.keys(sk).length) parts.push('<div class="w284ls"><b>Skipped</b><ul>' + Object.keys(sk).map(function (k) { return '<li>' + E(k) + ': ' + num(sk[k]) + '</li>'; }).join('') + '</ul></div>');
     var kept = (r.counts && r.counts.kept_hub_value) || {};
     if (Object.keys(kept).length) parts.push('<div class="w284ls"><b>The Hub kept its value</b><ul>' + Object.keys(kept).map(function (k) { return '<li>' + E(FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ': ' + num(kept[k]) + '</li>'; }).join('') + '</ul></div>');
+    /* round 3: every Keela event wording with how the import read it, so staff can check the reading before Apply (event types, not personal data) */
+    var ew = l.event_words || [];
+    if (ew.length) parts.push('<div class="w284ls"><table class="w284keys w284words"><caption>Event words and how the import read them</caption><thead><tr><th scope="col">Words</th><th scope="col">Read as</th><th scope="col">Events</th></tr></thead><tbody>'
+      + ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td>' + E(READ_AS[x.read_as] || x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join('') + '</tbody></table></div>');
     Object.keys(l).forEach(function (k) {
+      if (k === 'event_words') return;
       var arr = l[k] || []; if (!arr.length) return;
       parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + ' (' + num(arr.length) + ')</b><ul>' + arr.slice(0, 200).map(function (x) { return '<li>' + E(itemText(x)) + '</li>'; }).join('')
         + (arr.length > 200 ? '<li class="m">and ' + num(arr.length - 200) + ' more</li>' : '') + '</ul></div>');

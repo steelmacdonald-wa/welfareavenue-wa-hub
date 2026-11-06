@@ -29,7 +29,8 @@ function fixture() {
   fx.crm_import_runs = [{ id: 7, label: 'Test Keela run', created_by: 'test@example.com', created_at: '2026-08-10T12:00:00Z', last_applied_at: '2026-08-20T12:00:00Z', purged_at: null },
                         { id: 6, label: 'Test older run', created_by: 'test@example.com', created_at: '2026-08-01T12:00:00Z', last_applied_at: null, purged_at: '2026-08-05T12:00:00Z' }];
   fx.crm_import_batches = [
-    { id: 71, run_id: 7, kind: 'optouts', status: 'applied', report: REP('optouts', { rows_read: 1510, matched: 8, updated: { email_status: 8, consent_source: 8 }, skipped: { 'latest event is not an opt-out': 1502 }, undated_events: 2, undated_optouts_honoured: 1 }), error: null, applied_at: '2026-08-20T12:00:00Z', applied_by: 'test@example.com' },
+    { id: 71, run_id: 7, kind: 'optouts', status: 'applied', report: REP('optouts', { rows_read: 1510, matched: 8, updated: { email_status: 8, consent_source: 8 }, skipped: { 'latest event is not an opt-out': 1502 }, undated_events: 2, undated_optouts_honoured: 1 },
+      { event_words: [{ words: 'Email Unsubscribed', read_as: 'unsubscribe', count: 7 }, { words: 'Profile updated', read_as: 'other', count: 1 }], unrecognised_event_types: ['Profile updated'] }), error: null, applied_at: '2026-08-20T12:00:00Z', applied_by: 'test@example.com' },
     { id: 72, run_id: 7, kind: 'legacy_fields', status: 'compared', report: REP('legacy_fields', { rows_read: 1468, matched: 1468, updated: { crm_contact_fields: 600, owner_member_id: 0 }, skipped: { 'assignee not mapped': 125 } }, { assignees_unmapped: ['Test Keela User'], positions_unmapped: ['Juggler'] }), error: null },
     { id: 73, run_id: 7, kind: 'people', status: 'applied', report: REP('people', { rows_read: 1510, matched: 1457, created: 31, updated: { city: 40, phones: 12 }, kept_hub_value: { city: 3 } }, { keela_ids_skipped: [{ keela_id: 'KT007', reason: 'no email or phone' }] }), error: null, applied_at: '2026-08-20T12:00:00Z' },
     { id: 74, run_id: 7, kind: 'fields', status: 'failed', report: null, error: 'missing key Birth Date' },
@@ -105,6 +106,11 @@ const rail = (f) => f.ev(() => [...document.querySelectorAll('#w153rail [data-w1
   ok('a card waits for its file (no responses file staged)', /Stage the Keela form responses/.test(b.formsNote) && JSON.stringify(b.forms) === '["Compare"]', b.formsNote);
   b2 = await f.ev(() => ({ guard: window.__wa284, old: window.__w284, opt: (document.querySelector('#w284root [data-w284card="optouts"] .w284sum') || {}).innerText || '' }));
   ok('the segment\'s guard is window.__wa284', b2.guard === true && b2.old === undefined, b2);
+  b2.words = await f.ev(() => { const d = document.querySelector('#w284root [data-w284card="optouts"] details'); if (d) d.open = true; const t = d && d.querySelector('table.w284words');
+    return t ? { th: [...t.querySelectorAll('thead th')].map(x => x.textContent.trim()), scope: [...t.querySelectorAll('thead th')].every(x => x.getAttribute('scope') === 'col'),
+      rows: [...t.querySelectorAll('tbody tr')].map(r => r.textContent.replace(/\s+/g, ' ').trim()), unknown: /Event words the import does not know/.test(d.innerText) } : null; });
+  ok('the opt-outs lists show every event wording with how it was read (a table with real headers), next to the unknown words', b2.words && JSON.stringify(b2.words.th) === '["Words","Read as","Events"]' && b2.words.scope
+     && b2.words.rows.length === 2 && /Email Unsubscribed\s*opt-out \(unsubscribed\)\s*7/.test(b2.words.rows[0]) && /Profile updated\s*other \(not acted on\)\s*1/.test(b2.words.rows[1]) && b2.words.unknown, b2.words);
   ok('the opt-outs sentence counts the events with no readable date', /2 events with no readable date \(1 opt-out among them honoured\)/.test(b2.opt), b2.opt);
   ok('the report\'s counts in a sentence', /^Applied: Read 1,510 rows; 1,457 matched; 31 new; 52 changes \(city 40, phones 12\); the Hub kept its own value 3 times\.$/.test(b.peopleSum), b.peopleSum);
   b = await f.ev(() => { const d = document.querySelector('#w284root [data-w284card="people"] details'); if (d) d.open = true; return d ? d.innerText : ''; });
