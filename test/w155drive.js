@@ -184,7 +184,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   ok('Copy into a new draft opens the editor with the words of the sent campaign', dup.name === 'September news (copy)' && dup.hash === '#crm/campaigns/new', dup);
   /* the rail */
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
-  ok('the CRM rail lists Lists (and Forms since wave156) under Contacts and Sends (wave283) under Email', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Studio|Sends|Automations|Reports', rail);   /* wave163: Partners */
+  ok('the CRM rail lists Lists (and Forms since wave156) under Contacts and Sends (wave283) under Email (Imports for admins since wave284)', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Imports|Lists|Forms|Gifts|Email|Studio|Sends|Automations|Reports', rail);   /* wave163: Partners */
   ok('no page errors (admin)', f.errs.length === 0, f.errs);
   await f.close();
 
