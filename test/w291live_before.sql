@@ -1,18 +1,18 @@
 -- wave291: the live state before the migration, kept in temp tables for test/w291live.sql, test/w291live_undo.sql and test/w291live_report.sql.
 -- Runs only inside the block build/sql_rollback_test.py prints, so everything rolls back. No transaction control.
 -- The first time: adds one invented volunteer and four invented contacts (Test W291 Live ..., 555 291 numbers: one marked no texts, one merged into
--- it and marked too, one holding the same number written another way, one not marked), keeps every index on crm_contacts, and makes the temp
--- tables, pg_temp.w291_plan() (the plan of the function's own query) and pg_temp.w291_scan() (its lines on crm_contacts) that the later files
--- use. Each time: keeps wa171_opted_out's definition
--- md5, comment, grants and plan, and its answer for every contact, every number and every volunteer, under the text that is loaded (today's, or
--- wave281's after test/w291_w281text.sql). Always without the wave291 index, so these are the answers before the fix.
+-- it and marked too, one holding the same number written another way, one not marked), keeps the indexes on crm_contacts and quo_messages, and
+-- makes the temp tables, pg_temp.w291_plan() (the plan of the function's own query) and pg_temp.w291_scan() (its scan lines) that the later
+-- files use. Each time: keeps wa171_opted_out's definition md5, comment, grants and plan, and its answer for every contact, every number and every
+-- volunteer, under the text that is loaded (today's, or wave281's after test/w291_w281text.sql). Always without the wave291 indexes, so these are
+-- the answers before the fix.
 -- Personal data stays in the database: the later files compare inside it and raise only counts and names of checks.
 
 do $before$
 declare v_text text; v_vol bigint; v_stop bigint; n bigint;
 begin
-  if to_regclass('public.crm_contacts_wa291_opted_out_idx') is not null then
-    raise exception 'w291live_before: the wave291 index is already there; the answers must be kept without it';
+  if to_regclass('public.crm_contacts_wa291_opted_out_idx') is not null or to_regclass('public.quo_messages_wa291_stop_digits_idx') is not null then
+    raise exception 'w291live_before: a wave291 index is already there; the answers must be kept without it';
   end if;
   v_text := case when position('wa_stopped_phones_v' in pg_get_functiondef('public.wa171_opted_out(bigint,text)'::regprocedure)) > 0 then 'wave281' else 'today' end;
 
@@ -34,17 +34,20 @@ begin
       end loop;
       return v_plan;
     end $plan$;
-    -- the lines of a plan that read crm_contacts (the scan, and the index line under a bitmap scan)
+    -- the lines of a plan that read crm_contacts or quo_messages (the scans, and the index line under a bitmap scan)
     create function pg_temp.w291_scan(p text) returns text language sql immutable as $scan$
       select string_agg(btrim(regexp_replace(l, '^\s*->\s*', '')), ' / ' order by o)
         from regexp_split_to_table(p, E'\n') with ordinality t(l, o)
-       where l ~ ' on crm_contacts( |$)' or l ~ 'Bitmap Index Scan on crm_contacts';
+       where l ~ ' on (crm_contacts|quo_messages)( |$)' or l ~ 'Bitmap Index Scan on (crm_contacts|quo_messages)';
     $scan$;
     create temp table w291_ids (vol bigint, stop_id bigint);
     insert into pg_temp.w291_ids values (v_vol, v_stop);
-    create temp table w291_idx_before (idx text);
+    -- every index on crm_contacts, and on quo_messages apart from wave281's keyword index (so the snapshot is the same before and after wave281)
+    create temp table w291_idx_before (idx text, quo text);
     insert into pg_temp.w291_idx_before
-      select string_agg(pg_get_indexdef(i.indexrelid), E'\n' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = 'public.crm_contacts'::regclass;
+      select (select string_agg(pg_get_indexdef(i.indexrelid), E'\n' order by pg_get_indexdef(i.indexrelid)) from pg_index i where i.indrelid = 'public.crm_contacts'::regclass),
+             (select string_agg(pg_get_indexdef(i.indexrelid), E'\n' order by pg_get_indexdef(i.indexrelid)) from pg_index i
+               where i.indrelid = 'public.quo_messages'::regclass and i.indexrelid is distinct from to_regclass('public.quo_messages_wa281_keyword_idx'));
     create temp table w291_fn_before (txt text, def_md5 text, cmt text, anon_x boolean, auth_x boolean, svc_x boolean, plan text);
     create temp table w291_answers (txt text, kind text, person bigint, phone text, answer boolean);
     create temp table w291_checked (id serial, txt text, idx boolean, answers bigint);

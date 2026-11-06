@@ -8,7 +8,7 @@ begin
   select string_agg(label || ' ' || ms || ' ms (' || runs || case when runs > 1 then ' runs, the best' else ' run' end || '; ' || coalesce(plan, '?') || ')', '; ' order by id)
     into v_t from pg_temp.w291_timing;
   select contacts into n from pg_temp.w291_timing order by id limit 1;
-  select string_agg(case when txt = 'today' then 'today''s text' else 'wave281''s text' end || case when idx then ' with the index ' else ' kept before the fix ' end || answers,
+  select string_agg(case when txt = 'today' then 'today''s text' else 'wave281''s text' end || case when idx then ' with the indexes ' else ' kept before the fix ' end || answers,
                     ', ' order by id)
     into v_c from pg_temp.w291_checked;
   select string_agg(txt || ' ' || def_md5, ', ' order by txt) into v_k from pg_temp.w291_fn_before;
