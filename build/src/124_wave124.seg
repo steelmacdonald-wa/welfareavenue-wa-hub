@@ -28,6 +28,8 @@
    Data: wa124_calendar (fund_events, hub_settings fund_goals,
    hub_birthdays, hub_directory.aliases, my_emails(),
    calendar_my_meetings()); directory-sync v1.4 keeps the aliases.
+   wave274b: a volunteering event's anticipated spend (volunteer_events.budget, wa274b_budget.sql) on its item, in its sheet and
+   in the month's total, Toronto and Montreal alike; read again without it until the column exists.
    ===================================================================== */
 (function () {
   if (window.__wa124) return; window.__wa124 = true;
@@ -73,7 +75,8 @@
     list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
     doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
-    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>',
+    cash: '<rect x="3" y="6.5" width="18" height="11" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 10v4M17.5 10v4"/>'   /* wave274b: an anticipated spend */
   };
   function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -94,6 +97,9 @@
   function fmtDate(d, opt) { return d.toLocaleDateString('en-CA', opt || { weekday: 'short', month: 'short', day: 'numeric' }); }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-CA', { maximumFractionDigits: 0 }); }
   function kMoney(n) { n = Number(n || 0); return n >= 1000 ? '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'K' : money(n); }
+  /* wave274b: an anticipated spend, cents only when there are cents ($250, $1,250.50) */
+  function spend(n) { n = Number(n || 0); var c = Math.round(n * 100) % 100 !== 0; return '$' + n.toLocaleString('en-CA', { minimumFractionDigits: c ? 2 : 0, maximumFractionDigits: c ? 2 : 0 }); }
+  function budgetOf(v) { var b = v ? v.budget : null; if (b === null || b === undefined || b === '') return null; b = Number(b); return isFinite(b) ? b : null; }   /* wave274b */
   function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
   function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
@@ -132,6 +138,10 @@
     + '.w124bar .sp{flex:1 1 auto;}'
     + '.w124bar h2{font-size:26px;font-weight:700;letter-spacing:-.4px;margin:0 6px;color:var(--wa-text,' + INK + ');text-transform:none;min-width:190px;}'
     + '.w124layers{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}'
+    /* wave274b: the month's anticipated spend, in the Volunteering layer's ink (5.7:1 on the page) with its dot */
+    + '.w124spend{display:flex;align-items:flex-start;gap:8px;margin:-4px 0 14px;font-size:13px;line-height:1.45;color:' + LAYER.vol.ink + ';}'
+    + '.w124spend i{width:9px;height:9px;margin-top:5px;border-radius:50%;background:' + LAYER.vol.c + ';flex:0 0 auto;}'
+    + '.w124spend b{font-weight:700;font-variant-numeric:tabular-nums;}'
     + '.w124wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}'
     + '.w124band{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:10px 12px;border-radius:14px;background:rgba(220,165,39,.09);}'
     + '.w124band .lb{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b4d05;margin-right:4px;}'
@@ -152,6 +162,12 @@
     + '.w124ev.past{opacity:.62;}'
     + '.w124ev.x{text-decoration:line-through;opacity:.5;}'
     + '.w124ev .w124i{width:12px;height:12px;flex:0 0 auto;}'
+    /* wave274b: a volunteering event's anticipated spend, a short tag after the title, only where the pill has 70 px for its text
+       (the tag and a few letters of the title: 1366 px yes, 1280 px no; each pill is its own container, so a cell never widens);
+       on a phone the pills are bars and show no text at all */
+    + '.w124ev{container-type:inline-size;}'
+    + '.w124ev .w124amt{flex:0 0 auto;margin-left:auto;font-style:normal;font-weight:700;font-variant-numeric:tabular-nums;}'
+    + '@container (max-width:69.98px){.w124ev .w124amt{display:none;}}'
     + '.w124more{font-size:11px;font-weight:700;color:var(--wa-muted);cursor:pointer;padding:1px 6px;}'
     + '.w124more:hover{color:' + GREEN + ';}'
     /* agenda */
@@ -288,7 +304,7 @@
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
     fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
-    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
+    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null, budgetOk: null,   /* wave274b: false once the database said it has no volunteer_events.budget */
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
   function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
@@ -355,7 +371,7 @@
         q(db.rpc('calendar_my_meetings', { p_from: fromIso, p_to: toIso })),
         staffOk() || boardOk() ? q(db.from('social_posts').select('id, platform, url, kind, caption, published_at, views, likes, comments').gte('published_at', fromIso).lt('published_at', toIso).in('platform', ['instagram', 'facebook', 'linkedin', 'tiktok']).order('published_at').limit(400)) : Promise.resolve({ data: [] }),
         staffOk() || boardOk() ? q(db.from('content_posts').select('id, title, platforms, format, scheduled_at, status, published_at, campaign, owner').gte('scheduled_at', fromIso).lt('scheduled_at', toIso).order('scheduled_at').limit(300)) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('volunteer_events').select('id, code, event_date, title, kind, location, status, planned_meals').gte('event_date', ymd(r.qFrom)).lt('event_date', ymd(r.qTo)).order('event_date').limit(200)) : Promise.resolve({ data: [] })
+        staffOk() ? volRange(ymd(r.qFrom), ymd(r.qTo)) : Promise.resolve({ data: [] })   /* wave274b: with the anticipated spend */
       ]);
       var meet = a[0].data;
       if (!Array.isArray(meet) || a[0].error) meet = await myMeetingsFallback(fromIso, toIso);
@@ -367,6 +383,21 @@
     })();
     try { await C.loadingRange; } finally { C.loadingRange = null; }
   }
+  /* wave274b: the volunteering events with their anticipated spend (volunteer_events.budget, wa274b_budget.sql). Before the
+     column exists the database answers 42703 (or PGRST204): ask again without it, and not again in this page load */
+  var VOL_COLS = 'id, code, event_date, title, kind, location, status, planned_meals';
+  function missingCol(e) { var s = String((e && e.code) || '') + ' ' + String((e && (e.message || e.details)) || e || ''); return /42703|PGRST204|column .*does not exist|could not find the .*column/i.test(s); }
+  async function volRange(fromD, toD) {
+    var ask = function (cols) { return q(db.from('volunteer_events').select(cols).gte('event_date', fromD).lt('event_date', toD).order('event_date').limit(200)); };
+    if (C.budgetOk !== false) {
+      var a = await ask(VOL_COLS + ', budget');
+      if (!(a.error && missingCol(a.error))) { if (!a.error) C.budgetOk = true; return a; }
+      C.budgetOk = false;
+    }
+    return ask(VOL_COLS);
+  }
+  /* wave274b: an app changed a volunteering event (the Toronto app's spend, date or status): read the range again on the next draw */
+  document.addEventListener('wa:volevents', function () { C.rangeKey = ''; });
   /* before calendar_my_meetings exists (or in the offline harness): the same filter on this side */
   async function myMeetingsFallback(fromIso, toIso) {
     var res = await q(db.from('hub_events').select('*').gte('start_at', fromIso).lt('start_at', toIso).order('start_at').limit(500));
@@ -409,7 +440,7 @@
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0, budget: budgetOf(v) });   /* wave274b: budget */
     });
     if (L.board && hasBoard()) {
       C.boardMeets.forEach(function (m) {
@@ -468,8 +499,9 @@
   function chipCounts(list) { var c = {}; list.forEach(function (x) { c[x.k] = (c[x.k] || 0) + 1; }); return c; }
   function evPill(it, compact) {
     var L = LAYER[it.k];
-    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '')) + '" tabindex="0" role="button">'
-      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span></div>';
+    var amt = it.budget != null ? spend(it.budget) : '';   /* wave274b: the anticipated spend: in full in the tooltip, as a short tag ($750, $1.3K) after the title where it fits (b_css.js) */
+    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '') + (amt ? ', anticipated spend ' + amt : '')) + '" tabindex="0" role="button">'
+      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span>' + (amt ? '<em class="w124amt">' + E(kMoney(it.budget)) + '</em>' : '') + '</div>';
   }
   function monthHtml(list) {
     var s = monthStart(C.anchor), dow = (s.getDay() + 6) % 7, start = addDays(s, -dow), t = today();
@@ -488,7 +520,9 @@
   }
   function rowHtml(it) {
     var L = LAYER[it.k];
-    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (it.sub ? '<div class="mm">' + E(clip(it.sub, 120)) + '</div>' : '') + '</div></div>';
+    /* wave274b: the anticipated spend on its line; a cancelled event says so, since the month's total leaves it out */
+    var mm = [it.sub ? clip(it.sub, 120) : '', it.budget != null && it.cancelled ? 'Cancelled' : '', it.budget != null ? 'Anticipated spend ' + spend(it.budget) : ''].filter(Boolean).join(' \u00b7 ');
+    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (mm ? '<div class="mm">' + E(mm) + '</div>' : '') + '</div></div>';
   }
   function agendaHtml(list) {
     var t = today(), tk = ymd(t), byDay = {}, days = [];
@@ -525,6 +559,23 @@
     var next = C.fund.filter(function (f) { var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; return s && e >= t && f.status !== 'cancelled' && f.status !== 'idea' && f.precision !== 'none'; }).sort(function (a, b) { return String(a.start_date).localeCompare(String(b.start_date)); }).slice(0, 4);
     return '<div class="w124card"><h3>Fundraising next<span class="lnk" data-w124go="#fundevents">events calendar</span></h3>' + (next.length ? next.map(function (f) { return '<div class="w124row" data-w124fund="' + f.id + '" style="--c:' + LAYER.fund.c + ';grid-template-columns:1fr"><div><div class="tt"><i></i>' + E(f.title) + '</div><div class="mm">' + E(fundWhen(f)) + (f.target_min ? ' \u00b7 target ' + E(kMoney(f.target_min)) + (f.target_max ? ' to ' + E(kMoney(f.target_max)) : '') : '') + '</div></div></div>'; }).join('') : '<p class="w124empty">No fundraising events ahead.</p>') + '</div>';
   }
+  /* wave274b: the month's anticipated spend, one quiet line under the layers while Volunteering is on: "Anticipated spend this
+     month: $1,250 on 3 events (Toronto $750, Montreal $500)". Cancelled events are left out; a city is Toronto when its location
+     says so, otherwise Montreal; the cities are named only when both have one. Nothing until the shown month is loaded. */
+  function spendLine() {
+    if (!C.layers.vol || !staffOk()) return '';
+    var y = C.anchor.getFullYear(), m = C.anchor.getMonth(), k = String(C.rangeKey || '').split('/');
+    if (!(k[0] && k[1] && k[0] <= ymd(monthStart(C.anchor)) && k[1] >= ymd(addMonths(C.anchor, 1)))) return '';
+    var tor = { n: 0, s: 0 }, mtl = { n: 0, s: 0 };
+    C.vol.forEach(function (v) {
+      var d = parseDay(v.event_date), b = budgetOf(v);
+      if (!d || b == null || d.getFullYear() !== y || d.getMonth() !== m || lower(v.status) === 'cancelled') return;
+      var c = /toronto/i.test(String(v.location || '')) ? tor : mtl; c.n++; c.s = Math.round((c.s + b) * 100) / 100;
+    });
+    var n = tor.n + mtl.n; if (!n) return '';
+    return '<p class="w124spend"><i aria-hidden="true"></i><span>Anticipated spend this month: <b>' + E(spend(Math.round((tor.s + mtl.s) * 100) / 100)) + '</b> on ' + n + (n === 1 ? ' event' : ' events')
+      + (tor.n && mtl.n ? ' (Toronto ' + E(spend(tor.s)) + ', Montreal ' + E(spend(mtl.s)) + ')' : '') + '</span></p>';
+  }
   function calPaint() {
     var h = calHost(); if (!h) return;
     var r = rangeFor(), grid = C.view === 'month';
@@ -537,7 +588,7 @@
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
-      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>'
+      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>' + spendLine()   /* wave274b */
       + '<div class="w124wrap"><div style="min-width:0">' + bandHtml(monthStart(C.anchor), addMonths(C.anchor, 1)) + (grid ? monthHtml(list) : agendaHtml(monthOnly)) + '</div>'
       + '<div class="w124side"><div class="w124card"><h3>Up next</h3>' + upNext() + '</div>' + fundSideHtml() + (staffOk() ? bdaysHtml() : '') + '</div></div>';
     h.innerHTML = html;
@@ -801,7 +852,9 @@
       rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' })) + (it.cancelled ? ' (cancelled)' : '')));
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
-      acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+      if (it.budget != null) rows.push(kv('cash', 'Anticipated spend <b>' + E(spend(it.budget)) + '</b>'));   /* wave274b: its own line */
+      var toEv = String(r.kind || '').toLowerCase() === 'meal' && /toronto/i.test(String(r.location || ''));   /* wave274b: a Toronto event opens in the Toronto app */
+      acts.push('<a class="w124btn" data-w124go="' + (toEv ? '#toronto/e/' : '#volunteering/e/') + E(r.id) + '">Open the event</a>');
     } else if (it.k === 'board') {
       if (it.fy) {
         rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));

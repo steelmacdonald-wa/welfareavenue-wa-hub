@@ -68,6 +68,10 @@
   function overview(P, C) {
     var html = '<p class="w285now' + (P.turn.cls === 'late' ? ' late' : '') + '">Now: <b>' + E(P.turn.t) + '</b></p>';
     if (C) html += outer(C.notes);
+    /* a help request from the hire, with wave166's own Dealt with */
+    (P.onb && W.helpOf ? W.helpOf(P.onb.id) : []).forEach(function (q) {
+      html += '<div class="o271warn" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span style="flex:1 1 200px;min-width:0;overflow-wrap:anywhere"><b>Asked for help</b>' + (q.step ? ' with ' + E(q.step) : '') + (q.note ? ': “' + E(q.note) + '”' : '.') + '</span><button type="button" class="o271b" data-w166resolve="' + E(q.id) + '">Dealt with</button></div>';
+    });
     if (P.kind === 'backed') {
       var src = document.querySelector('#o271 [data-o271backed="' + String(P.fid).replace(/"/g, '') + '"]');
       return html + (src ? src.outerHTML : '<p class="w285line">They backed out' + (P.flow && P.flow.updated_at ? ' on ' + E(fmtDay(P.flow.updated_at)) : '') + '. Nothing else to do here.</p>');
@@ -124,7 +128,7 @@
     var p = P.plan;
     if (!p || !p.total) {
       if (P.flow && !P.onb) return '<p class="w285line">Their plan is made when the times are booked.</p>';
-      var active = P.mid != null && (h.W37().onbs || []).some(function (o) { return String(o.member_id) === String(P.mid) && o.status === 'active'; });
+      var active = !!W.openPlanOf(P.mid);
       return '<p class="w285line">' + (p ? 'Their plan has no steps yet.' : 'No plan yet.') + '</p>' + (!active ? startBtn(P) : '');
     }
     var html = '<p class="w285line"><b>Plan: ' + p.done + ' of ' + p.total + ' done</b>' + (p.w14.total ? ' &middot; Weeks 1 to 4: ' + p.w14.done + ' of ' + p.w14.total : '') + (p.behind ? ' &middot; <span style="color:#B3402F;font-weight:700">Behind: ' + plural(p.behind, 'step') + '</span>' : '') + '</p>'
@@ -242,8 +246,12 @@
 
   /* ---------- starting a plan for someone who joined without recruitment (the Team profile and the Plan tab): onboarding_assign, as wave46 did ---------- */
   async function startPlan(mid, name) {
-    if (PAN.asked[mid]) return;
+    if (PAN.asked[mid] || !h.isHr()) return;
     PAN.asked[mid] = true; paintPanel(); if (W.paintProfile) W.paintProfile();
+    /* the server lets any staff member assign one and keeps no guard against a second: the page asks HR only, and reads the plans again first */
+    try { if (typeof wa37Load === 'function') await wa37Load(true); } catch (e) { /* the list in memory */ }
+    var had = W.openPlanOf(mid);
+    if (had) { h.toast('They already have an onboarding plan (' + had.status + '), so no second one was started.'); delete PAN.asked[mid]; delete PAN.ask[mid]; W.paintAll(); if (W.paintProfile) W.paintProfile(); return; }
     try {
       var r = await db.rpc('onboarding_assign', { p_member_id: Number(mid), p_by: (typeof who === 'function') ? who() : 'HR' });
       if (r && r.error) throw r.error;
@@ -254,6 +262,8 @@
     W.paintAll(); if (W.paintProfile) W.paintProfile();
   }
   W.startPlan = startPlan; W.askStart = PAN.ask;
+  /* a plan that is not finished (active, or any other state but completed and cancelled) */
+  W.openPlanOf = function (mid) { if (mid == null) return null; return (h.W37().onbs || []).filter(function (o) { return String(o.member_id) === String(mid) && o.status !== 'completed' && o.status !== 'cancelled'; })[0] || null; };
 
   /* ---------- events ---------- */
   document.addEventListener('click', function (e) {

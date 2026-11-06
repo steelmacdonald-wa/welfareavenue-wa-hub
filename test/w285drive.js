@@ -28,6 +28,7 @@ const vis = (f, sel) => f.ev((s) => { const e = document.querySelector(s); if (!
 const press = async (f, sel, ms) => { await f.ev((s) => document.querySelector(s).click(), sel); await f.page.waitForTimeout(ms || 450); };
 const hasScroll = (f) => f.ev(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 const consoleErrs = (f) => { const out = []; f.page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource|net::ERR/.test(m.text())) out.push(m.text().slice(0, 240)); }); return out; };
+let homeFig = '';
 const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
 
 (async () => {
@@ -83,6 +84,10 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
       ok('demo: Needs you: Sima has not proposed times, with Ask Sima again', /Samir Aubert: Sima has not proposed times/.test(need) && /Ask Sima again/.test(need), need);
       ok('demo: Needs you: Zak is behind by more than a week, with Message Zak', /Zak Leon: 38 steps overdue/.test(need) && /Message Zak/.test(need), need);
       ok('demo: Needs you has no first password line when it is set', !/first password/i.test(need));
+      ok('demo: Needs you: a hire asking for help (wave39), with Dealt with', /Alix Denby asked for help with Loom: .I cannot find the Loom invite./.test(need) && await has(f, '#w285 [data-w166resolve="7701"]'), need);
+      await f.ev(() => { window.__RPC0 = []; const r0 = db.rpc.bind(db); db.rpc = function (fn, a) { window.__RPC0.push({ fn, a }); return r0(fn, a); }; });
+      await press(f, '#w285 [data-w166resolve="7701"]', 1600);
+      ok('demo: Dealt with calls onboarding_help_resolve (wave166\'s handler)', (await f.ev(() => window.__RPC0.filter((x) => x.fn === 'onboarding_help_resolve' && x.a.p_id === 7701).length)) === 1);
       ok('demo: the finished count line', /2 members finished their onboarding\. See them/.test(t), t.slice(-300));
       await press(f, '#w285 [data-w285fold="t' + 'slack"]');
       ok('demo: Open the list shows the five, each with Open', (await f.ev(() => document.querySelectorAll('#w285 .w285sec .w285it [data-w285open][data-tab="su"]').length)) === 5);
@@ -212,6 +217,68 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
     await press(f, rowOf('m9816') + ' [data-w285open]', 600);
     await press(f, '#w285pan [data-w285tab="pl"]');
     ok('rule: the panel says which steps setup covered', /done at setup/.test(await txt(f, '#w285pan .pn')));
+    await press(f, '#w285pan .x');
+    /* wave166's checklist: a step the rule counts is ticked and locked, with why; a header is locked */
+    const ck = await f.ev(() => { const d = document.createElement('div'); d.innerHTML = wa37Checklist(WA37.onbs.filter((o) => o.id === 706)[0], true);
+      const row = (tid) => d.querySelector('[data-w166t="' + tid + '"]'), box = (tid) => row(tid).querySelector('input[type=checkbox]');
+      return { setupOn: box('86e1cj9gp').checked, setupOff: box('86e1cj9gp').disabled, setupWhy: row('86e1cj9gp').textContent, headOff: box('86e1cj9gj').disabled, headWhy: row('86e1cj9gj').textContent, openOff: box('w285a3').disabled }; });
+    ok('checklist: a setup-covered step is ticked, locked and says "done at setup"', ck.setupOn && ck.setupOff && /done at setup/.test(ck.setupWhy) && !/Avenue Academy<|done in the Avenue Academy/.test(ck.setupWhy), ck);
+    ok('checklist: a header is locked and says "done when its steps are"', ck.headOff && /done when its steps are/.test(ck.headWhy), ck);
+    ok('checklist: an open step can still be ticked', !ck.openOff, ck);
+    await done(f);
+  }
+  /* never complete or certify early (review finding 1): HR on the Plan template page, before wave271 has loaded anything */
+  {
+    const f = await go('rules', { width: 1280, hash: '#hrcentre/plan' });
+    await f.hash('#hrcentre/plan', 2500);
+    let r2 = await f.ev(() => ({ hana: wa37Pct(718), otto: wa37Pct(719), ottoRaw: wa37PctRaw(719), loaded: !!(window.o271 && o271.state().loaded) }));
+    ok('never early: HR before wave271 loads, a hire made after automatic setup began: the setup steps do not count (Hana)', !r2.loaded && r2.hana.done < r2.hana.total && r2.hana.total - r2.hana.done === 4, r2);
+    ok('never early: a flow more than 30 days past its call (wave271 drops it): not counted as covered (Otto)', r2.otto.done < r2.otto.total && r2.otto.total - r2.otto.done === 4, r2);
+    await f.ev(() => {
+      window.__UPD = []; const f0 = db.from.bind(db);
+      db.from = function (t) { const b = f0(t); if (t === 'onboardings') { const u = b.update.bind(b); b.update = function (p) { window.__UPD.push(p); return u(p); }; } return b; };
+      const s = WA37.steps.filter((x) => x.onboarding_id === 718 && x.template_id === '86e1cj9hh')[0];
+      const c = document.createElement('input'); c.type = 'checkbox'; c.setAttribute('data-w37chk', s.id); c.checked = true; document.body.appendChild(c);
+      c.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await f.page.waitForTimeout(1200);
+    r2 = await f.ev(() => ({ upd: window.__UPD, st: WA37.onbs.filter((o) => o.id === 718)[0].status, pct: wa37Pct(718), raw: wa37PctRaw(718) }));
+    ok('never early: ticking the last open step does not complete a plan whose setup steps are open (no onboardings update)', r2.upd.length === 0 && r2.st === 'active', r2);
+    await toPage(f);
+    r2 = await f.ev(() => ({ otto: wa37Pct(719), loaded: !!(window.o271 && o271.state().loaded) }));
+    ok('never early: Otto still not covered with wave271 loaded', r2.loaded && r2.otto.total - r2.otto.done === 4, r2);
+    r2 = await f.ev(() => ({ uma: wa37Pct(722), known: w285.completeKnown(722) }));
+    ok('never early: a flow more than 30 days old whose cover is unknown (no created_at) does not complete', r2.known === false && r2.uma.total - r2.uma.done === 3, r2);
+    /* completing for real: the last real step, with headers and covered setup steps open in the table */
+    r2 = await f.ev(() => ({ before: w285.completeKnown(721), raw: wa37PctRaw(721), rows: w285.derivedRows(721).length }));
+    ok('complete: Cara is one real step short, so not complete yet', r2.before === false, r2);
+    await f.ev(() => {
+      window.__STEPW = []; window.__ONBW = []; const f0 = db.from.bind(db);
+      db.from = function (t) { const b = f0(t); const u = b.update.bind(b);
+        if (t === 'onboarding_steps') b.update = function (p) { const q = u(p), e0 = q.eq.bind(q); q.eq = function (c, v) { window.__STEPW.push({ p, id: v }); return e0(c, v); }; return q; };
+        if (t === 'onboardings') b.update = function (p) { window.__ONBW.push(p); return u(p); };
+        return b; };
+      const s = WA37.steps.filter((x) => x.onboarding_id === 721 && x.template_id === '86e1cj9hh')[0];
+      const c = document.createElement('input'); c.type = 'checkbox'; c.setAttribute('data-w37chk', s.id); c.checked = true; document.body.appendChild(c);
+      c.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await f.page.waitForTimeout(2500);
+    r2 = await f.ev(() => ({ onb: window.__ONBW, steps: window.__STEPW.map((x) => x.p.done_by), st: WA37.onbs.filter((o) => o.id === 721)[0].status, raw: wa37PctRaw(721) }));
+    ok('complete: ticking the last real step completes the plan (wave37 writes completed)', r2.onb.length === 1 && r2.onb[0].status === 'completed' && r2.st === 'completed', r2);
+    ok('complete: the headers and the covered setup steps are written done first (8 headers, 3 setup steps)', r2.steps.filter((x) => x === 'Hub: done when its steps were').length === 8 && r2.steps.filter((x) => x === 'Hub: done at setup').length === 3, r2.steps);
+    ok('complete: the table then agrees (every row ticked)', r2.raw.done === r2.raw.total, r2.raw);
+    await done(f);
+  }
+  /* the hire's own view (Joy, made after automatic setup began): no completion, no certificate */
+  {
+    const f = await go('rules', { who: 'plain', hash: '#mypage', width: 1280 });
+    await f.hash('#mypage', 1500);
+    await f.ev(async () => { try { await w122.load(true); } catch (e) { /* */ } });
+    await f.page.waitForTimeout(800);
+    const r0 = await f.ev(() => { const keep = w122.A.loaded; w122.A.loaded = 0; const k = w285.completeKnown(720), s = w122.stats(); w122.A.loaded = keep; return { known: k, complete: s.onb.org.complete, cert: s.onb.cert }; });
+    ok('never early: the hire\'s own view without her training_progress does not complete or certify', r0.known === false && r0.complete === false && r0.cert === false, r0);
+    const r = await f.ev(() => { const s = w122.stats(); return { known: w285.completeKnown(720), raw: wa37PctRaw(720), complete: s.onb.org.complete, has: s.onb.org.has, xp: s.xp }; });
+    ok('complete: a hire who finished her real steps (one in the Academy) is complete in wave122, with headers and setup steps open in the table', r.has && r.known === true && r.complete === true && r.raw.done < r.raw.total, r);
     await done(f);
   }
 
@@ -298,7 +365,9 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
     const t = await txt(f, '#w285home');
     ok('home ' + w + ': one card per hire (Kim, Lee, Alix)', (await f.ev(() => document.querySelectorAll('#w285home .w285hc').length)) === 3 && /Kim Newhire/.test(t) && /Lee Starter/.test(t) && /Alix Denby/.test(t), t.slice(0, 400));
     ok('home ' + w + ': whose turn: You to propose times (Kim), Lee: setup 3 of 12', /You to propose times/.test(t) && /Lee: setup 3 of 12/.test(t), t);
-    ok('home ' + w + ': Alix: Weeks 1 to 4: 24 of 41 (the same rule)', /Weeks 1 to 4: 24 of 41/.test(t), t);
+    ok('home ' + w + ': Alix: Weeks 1 to 4: 25 of 41 (the rule: her week 3 lesson is done in the Academy, not ticked)', /Weeks 1 to 4: 25 of 41/.test(t), t);
+    if (w === 1280) homeFig = (t.match(/Weeks 1 to 4: \d+ of \d+/) || [''])[0];
+    ok('home ' + w + ': Alix asked for help, with Dealt with on her card', /Asked for help with Loom/.test(t) && await has(f, '#w285home [data-w166resolve="7702"]'), t);
     ok('home ' + w + ': this week\'s moments for the manager, not later ones', /Introduce them to the team/.test(t) && /Give them a first task/.test(t) && !/two-week check-in/.test(t), t);
     ok('home ' + w + ': the 57-step list and the long cards are not shown', !(await vis(f, '#w166lead')) && !(await vis(f, '#o275mine')));
     ok('home ' + w + ': no bad words, no scroll', !BAD.test(t) && !(await hasScroll(f)), (t.match(BAD) || [])[0]);
@@ -309,12 +378,30 @@ const rowOf = (name) => '#w285 [data-w285key="' + name + '"]';
       ok('home: Open shows the same panel, with the manager\'s own actions (Propose times)', /Kim Newhire/i.test(p) && /Propose times/.test(p), p.slice(0, 500));
       ok('home: HR\'s buttons stay off for a manager who is not HR', !/Change manager|exceptions/.test(p), p.slice(0, 500));
       await press(f, '#w285pan .x');
-      await press(f, '#w285home [data-w166tick="5101"]', 800);
-      ok('home: ticking a moment goes through wave166 (onboarding_lead_tick)', true);
+      /* Propose still works in the panel after wave275 draws Home again outside its painter (review finding 5) */
+      await press(f, '#w285home [data-w285open^="f861"]', 900);
+      await f.ev(() => { try { window.o275.paintMine(); window.o275.mount(); } catch (e) { /* */ } }); await f.page.waitForTimeout(500);
+      const one = await f.ev(() => { const c = document.querySelectorAll('[data-o271flow="861"]'); return { n: c.length, inPanel: !!(c[0] && c[0].closest('#w285pan')) }; });
+      ok('home: after a Home repaint the panel holds the only copy of the card', one.n === 1 && one.inPanel, one);
+      await press(f, '#w285pan [data-o275a="open"][data-kind="propose"]', 1500);
+      const pr = await f.ev(() => { const p = document.querySelector('#w285pan [data-o271flow="861"]'); return { grid: !!(p && p.querySelector('[data-o271cell]')), first: document.querySelector('[data-o271flow="861"]') === p }; });
+      ok('home: Propose times opens its picker inside the panel, the copy the handlers find', pr.grid && pr.first, pr);
+      await press(f, '#w285pan .x');
+      /* a refused tick: the box comes back */
+      await f.ev(() => { window.__WA_RPC_ERRORS = Object.assign(window.__WA_RPC_ERRORS || {}, { onboarding_lead_tick: 'Only the lead can tick this' }); });
+      await press(f, '#w285home [data-w166tick="5101"]', 5200);
+      ok('home: after a refused tick the box is unticked and can be used again', await f.ev(() => { const c = document.querySelector('#w285home [data-w166tick="5101"]'); return !!c && !c.disabled && !c.checked; }));
     } else await shot(f, 'w285-home-375');
     await done(f);
   }
 
+  {
+    const f = await go('home', { width: 1280 });
+    await toPage(f);
+    const hr = (await txt(f, rowOf('m9811'))).match(/Weeks 1 to 4: \d+ of \d+/);
+    ok('the manager\'s figure equals HR\'s for the same hire (' + homeFig + ')', !!hr && hr[0] === homeFig, [hr && hr[0], homeFig]);
+    await done(f);
+  }
   const errs = allErrs.concat(allCons).filter((e) => !/favicon|ResizeObserver/.test(e));
   ok('no page or console errors', errs.length === 0, errs.slice(0, 8));
   console.log('\nw285drive: ' + pass + ' passed, ' + fail + ' failed');

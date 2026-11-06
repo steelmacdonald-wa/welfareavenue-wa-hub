@@ -944,9 +944,21 @@
     if (o.completed_at) {
       try { pending = (WA37.tmpl || []).filter(function (t) { if (!t.active || !t.updated_at) return false; if (String(t.updated_at) <= String(o.completed_at)) return false; var ack = A.acks[String(t.id)]; return !(ack && String(ack) >= String(t.updated_at)); }); } catch (e) { pending = []; }
     }
-    try { var w285p = window.w285 && window.w285.plan ? window.w285.plan(o.id) : null; if (w285p && w285p.total) { total = w285p.total; done = w285p.done; } } catch (e) { /* the count above */ }   /* wave285: the one progress rule (real steps only) */
-    var complete = o.status === 'completed' || (total > 0 && done === total);
-    return { has: true, o: o, total: total, done: done, pct: total ? Math.round(100 * done / total) : (complete ? 100 : 0), next: next, week: curWeek, complete: complete, completedAt: o.completed_at, pending: pending };
+    /* wave285: the figure and the next step follow the one progress rule (real steps only); whether it is complete (and so the certificate) is the
+       raw count, or window.w285.completeKnown: every real step done with the rule's facts known, never more generous than the facts */
+    var rawT = total, rawD = done;
+    try {
+      var w285p = window.w285 && window.w285.plan ? window.w285.plan(o.id) : null;
+      if (w285p && w285p.total) {
+        total = w285p.total; done = w285p.done;
+        var w285n = window.w285.firstOpen ? window.w285.firstOpen(o.id) : null;
+        if (w285n) { var nt = (WA37.tmpl || []).filter(function (t) { return String(t.id) === String(w285n.tid); })[0]; if (nt) { next = nt; nextWeek = w285n.section; curWeek = w285n.section; } }
+        else { next = null; curWeek = null; }
+      }
+    } catch (e) { total = rawT; done = rawD; }
+    var known = false; try { known = !!(window.w285 && typeof window.w285.completeKnown === 'function' && window.w285.completeKnown(o.id)); } catch (e) { known = false; }
+    var complete = o.status === 'completed' || (rawT > 0 && rawD === rawT) || known;   /* wave285: or every real step done with the rule's facts known */
+    return { has: true, o: o, total: total, done: done, rawPct: rawT ? Math.round(100 * rawD / rawT) : (complete ? 100 : 0), pct: total ? Math.round(100 * done / total) : (complete ? 100 : 0), next: next, week: curWeek, complete: complete, completedAt: o.completed_at, pending: pending };
   }
   function hubState() {
     var api = window.w112Api;
@@ -1007,7 +1019,7 @@
     s.badges = BADGES.filter(function (b) { try { return b.test(s); } catch (e) { return false; } });
     var xp = 0;
     s.doneList.forEach(function (d) { xp += xpFor(d.t) + (kindOf(d.t) === 'lesson' && Number(d.r.score) === 100 ? 20 : 0); });
-    if (s.onb.org.has) xp += s.onb.org.complete ? 100 : Math.round((s.onb.org.pct || 0) * 0.6);
+    if (s.onb.org.has) xp += s.onb.org.complete ? 100 : Math.round((s.onb.org.rawPct != null ? s.onb.org.rawPct : (s.onb.org.pct || 0)) * 0.6);   /* wave285: XP is full when complete (completeKnown above), else the raw count, never more generous */
     if (s.onb.hub.has) xp += s.onb.hub.all ? 50 : s.onb.hub.done * 8;
     xp += s.polSigned * 10 + s.certCount * 100 + s.badges.length * 15;
     s.xp = xp; s.level = levelOf(xp);

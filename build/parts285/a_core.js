@@ -115,24 +115,49 @@
   function ticks(flow) { var t = flow && flow.setup_ticks && typeof flow.setup_ticks === 'object' ? flow.setup_ticks : {}; return RUNDOWN.filter(function (r) { var v = t['rd_' + r[0]]; return v != null && v !== false; }); }
   function flowId(f) { return f ? (f.flow_id != null ? f.flow_id : f.id) : null; }
   function flowsAll() { var s = S271(); if (!s) return []; return (s.ready || []).concat(s.started || [], s.mineList || [], s.backed || []); }
+  /* the person's flow: by the plan it made, else by the member (never a practice flow; a name only when neither side has a member id) */
   function flowForOnb(onb) {
     if (!onb) return null;
-    var all = flowsAll();
-    return all.filter(function (f) { return f && f.onboarding_id != null && String(f.onboarding_id) === String(onb.id); })[0]
-      || all.filter(function (f) { return f && f.status !== 'backed_out' && ((onb.member_id != null && f.member_id != null && String(f.member_id) === String(onb.member_id)) || (lower(plain(f.name)) && lower(plain(f.name)) === lower(onb.person_name))); })[0] || null;
+    var all = flowsAll().filter(function (f) { return f && !f.practice; });
+    return all.filter(function (f) { return f.onboarding_id != null && String(f.onboarding_id) === String(onb.id); })[0]
+      || all.filter(function (f) {
+        if (f.status === 'backed_out') return false;
+        if (onb.member_id != null && f.member_id != null) return String(f.member_id) === String(onb.member_id);
+        return onb.member_id == null && f.member_id == null && !!lower(plain(f.name)) && lower(plain(f.name)) === lower(onb.person_name);
+      })[0] || null;
   }
-  /* the person's setup covered the plan's setup steps: no flow (they joined before automatic setup, so they had their accounts), or all twelve ticks */
+  /* when automatic setup began (app_config onboard_v2_since, read once; every staff member can read it) */
+  var V2 = { at: null, asked: false, failed: false };
+  function loadV2() {
+    if (V2.asked) return; if (typeof db === 'undefined' || !db || typeof db.from !== 'function') return;
+    V2.asked = true;
+    Promise.resolve(db.from('app_config').select('key, value').eq('key', 'onboard_v2_since')).then(function (r) {
+      var row = r && !r.error && (r.data || [])[0], t = row ? Date.parse(String(row.value).replace(/^"|"$/g, '')) : NaN;
+      if (!isNaN(t)) V2.at = t; else V2.failed = true;
+    }).catch(function () { V2.failed = true; V2.asked = false; }).then(function () { CACHE.gen++; try { window.w285.paintAll(); } catch (e) { /* not ready */ } });
+  }
+  /* the person's setup covered the plan's setup steps:
+     - their roster profile was made before automatic setup began (they joined before it, so they had their accounts already), from data every
+       staff member reads (team_members.created_at and onboard_v2_since), never from what happens to be in memory;
+     - or their flow's twelve setup ticks are all in.
+     Anything not known counts as not covered. */
   function setupCovered(onb, flow) {
     var f = flow === undefined ? flowForOnb(onb) : flow;
-    if (!f) return true;
-    return ticks(f).length >= RUNDOWN.length;
+    if (f && ticks(f).length >= RUNDOWN.length) return true;
+    loadV2();
+    var m = onb && onb.member_id != null ? memberById(onb.member_id) : null, made = m && m.created_at ? Date.parse(m.created_at) : NaN;
+    if (V2.at != null && !isNaN(made)) return made < V2.at;
+    return false;
   }
 
   /* ---------- the progress rule ---------- */
-  var TM = { src: null, map: {} };
+  var TM = { src: null, map: {}, byName: {} };
   function tmplMap() {
     var W = W37();
-    if (TM.src !== W.tmpl) { TM.src = W.tmpl; TM.map = {}; (W.tmpl || []).forEach(function (t) { if (t && t.active !== false) TM.map[String(t.id)] = t; }); }
+    if (TM.src !== W.tmpl) {
+      TM.src = W.tmpl; TM.map = {}; TM.byName = {};
+      (W.tmpl || []).forEach(function (t) { if (t && t.active !== false) { TM.map[String(t.id)] = t; TM.byName[lower(t.name) + '|' + t.section] = TM.byName[lower(t.name) + '|' + t.section] || t; } });
+    }
     return TM.map;
   }
   function onbById(id) { return (W37().onbs || []).filter(function (o) { return String(o.id) === String(id); })[0] || null; }
@@ -164,7 +189,12 @@
     out.behindWeek = out.behindDays > 7;
     return Object.assign(out, extra || {});
   }
-  /* a plan from the tables (WA37): HR, and anyone the database lets read the plan */
+  /* one leaf, the same rule wherever its facts come from */
+  function leafOf(t, done0, acad, cover) {
+    var a = t && t.training_id != null && !!acad[String(t.training_id)], c = !!(t && t.setup_covered && cover);
+    return { done: !!done0 || a || c, how: done0 ? 'ticked' : a ? 'academy' : c ? 'setup' : '' };
+  }
+  /* a plan from the tables (WA37): HR, managers and the hire (every staff member reads them) */
   function planOf(onbId, flow) {
     var onb = typeof onbId === 'object' ? onbId : onbById(onbId); if (!onb) return null;
     var tm = tmplMap(), W = W37();
@@ -173,60 +203,120 @@
     var kids = {};
     rows.forEach(function (s) { var t = tm[String(s.template_id)]; if (t.parent_id != null && inPlan[String(t.parent_id)]) (kids[String(t.parent_id)] = kids[String(t.parent_id)] || []).push(s); });
     var who = personOfOnb(onb), acad = doneSet(who), cover = setupCovered(onb, flow);
-    function leafDone(s, t) { return !!s.done || (t.training_id != null && !!acad[String(t.training_id)]) || (!!t.setup_covered && cover); }
     var leaves = [], heads = {};
     rows.forEach(function (s) {
       var t = tm[String(s.template_id)];
       if (kids[String(t.id)]) return;
-      var how = s.done ? 'ticked' : (t.training_id != null && acad[String(t.training_id)]) ? 'academy' : (t.setup_covered && cover) ? 'setup' : '';
-      var p = t.parent_id != null ? tm[String(t.parent_id)] : null;
-      leaves.push({ id: s.id, tid: t.id, name: t.name, section: t.section, done: leafDone(s, t), how: how, due: s.due_date || null, academy: !!(t.training_id || t.academy_path),
+      var L = leafOf(t, s.done, acad, cover), p = t.parent_id != null ? tm[String(t.parent_id)] : null;
+      leaves.push({ id: s.id, tid: t.id, name: t.name, section: t.section, done: L.done, how: L.how, due: s.due_date || null, academy: !!(t.training_id || t.academy_path),
         path: t.academy_path || null, parent: p && inPlan[String(p.id)] ? p.name : null, psort: Number(p && inPlan[String(p.id)] ? p.sort : t.sort) || 0, sort: Number(t.sort) || 0, child: !!(p && inPlan[String(p.id)]) });
     });
-    Object.keys(kids).forEach(function (h) { heads[h] = kids[h].every(function (s) { return leafDone(s, tm[String(s.template_id)]); }); });
+    Object.keys(kids).forEach(function (h) { heads[h] = kids[h].every(function (s) { return leafOf(tm[String(s.template_id)], s.done, acad, cover).done; }); });
     leaves.sort(function (a, b) { return secRank(a.section) - secRank(b.section) || a.psort - b.psort || (a.child - b.child) || a.sort - b.sort; });
     return shape(leaves, dayOf(onb.started_at), { onbId: onb.id, heads: heads, src: 'tables', status: onb.status });
   }
-  /* a plan from the lead's card (onboarding_lead_view: steps in order, a child after its header; done as the database says) */
+  /* a plan from the lead's card (onboarding_lead_view: steps in order, a child after its header; ticks as the database says). The lead's card has
+     no template facts, so they come from the template rows when the page has them (by name and section); without them the figure counts the ticks
+     only and says so (src 'lead', exact false). */
   function planFromLead(p) {
     if (!p) return null;
-    var st = p.steps || [], leaves = [], lastTop = null;
+    tmplMap();
+    var st = p.steps || [], leaves = [], lastTop = null, known = !!(W37().tmpl || []).length;
+    var onb = onbById(p.onboarding_id) || { id: p.onboarding_id, member_id: p.member_id, person_name: p.name };
+    var acad = doneSet({ name: p.name, email: p.email }), cover = known ? setupCovered(onb) : false;
     st.forEach(function (s, i) {
       var nx = st[i + 1], head = !s.child && nx && nx.child && nx.section === s.section;
       if (!s.child) lastTop = s;
       if (head) return;
-      leaves.push({ id: s.id, name: s.name, section: s.section, done: !!s.done, how: s.done ? 'ticked' : '', due: s.due || null, academy: !!s.academy, path: null,
+      var t = TM.byName[lower(s.name) + '|' + s.section] || null, L = leafOf(t, s.done, acad, cover);
+      leaves.push({ id: s.id, tid: t ? t.id : null, name: s.name, section: s.section, done: L.done, how: L.how, due: s.due || null, academy: !!s.academy, path: t ? t.academy_path || null : null,
         parent: s.child && lastTop ? lastTop.name : null, child: !!s.child });
     });
     var start = dayOf(p.started_at) || (p.day != null ? addDays(today(), 1 - Number(p.day)) : '');
-    return shape(leaves, start, { onbId: p.onboarding_id, src: 'lead' });
+    return shape(leaves, start, { onbId: p.onboarding_id, src: 'lead', exact: known });
   }
-  /* the plan for an onboarding: the tables when they hold it, else the lead's card */
+  /* the plan for an onboarding: the tables when they hold it, else the lead's card. One answer per onboarding per pass (the cache clears on the
+     next tick and whenever the arrays it reads are replaced) */
   function leadPerson(onbId) { try { var L = window.w166 && window.w166.state && window.w166.state().lead; return ((L && L.people) || []).filter(function (p) { return String(p.onboarding_id) === String(onbId); })[0] || null; } catch (e) { return null; } }
-  function plan(onbId, flow) {
-    var W = W37(), has = (W.steps || []).some(function (s) { return String(s.onboarding_id) === String(onbId); });
-    if (has && onbById(onbId)) return planOf(onbId, flow);
-    var lp = leadPerson(onbId);
-    if (lp) return planFromLead(lp);
-    return onbById(onbId) ? planOf(onbId, flow) : null;
+  var CACHE = { gen: 0, key: null, map: {}, t: null };
+  function cacheKey() {
+    var W = W37(), A = academy(), s = S271(), L = null; try { L = window.w166 && window.w166.state && window.w166.state().lead; } catch (e) { L = null; }
+    return [CACHE.gen, W.steps, W.tmpl, W.onbs, A && A.prog, s && s.ready, s && s.started, s && s.mineList, L, members()];
   }
-  /* for wave166's checklist and syncHead: the counts of one section, and whether a header is done (parts166/c_plan.js asks, see the note there) */
+  function sameKey(a, b) { if (!a || !b || a.length !== b.length) return false; for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; }
+  function plan(onbId, flow) {
+    var k = cacheKey();
+    if (!sameKey(k, CACHE.key)) { CACHE.key = k; CACHE.map = {}; }
+    if (!CACHE.t) CACHE.t = setTimeout(function () { CACHE.t = null; CACHE.map = {}; }, 0);
+    var ck = String(onbId) + (flow === undefined ? '' : '|' + (flow ? flowId(flow) : 'none'));
+    if (Object.prototype.hasOwnProperty.call(CACHE.map, ck)) return CACHE.map[ck];
+    var W = W37(), has = (W.steps || []).some(function (s) { return String(s.onboarding_id) === String(onbId); }), out;
+    if (has && onbById(onbId)) out = planOf(onbId, flow);
+    else { var lp = leadPerson(onbId); out = lp ? planFromLead(lp) : (onbById(onbId) ? planOf(onbId, flow) : null); }
+    CACHE.map[ck] = out;
+    return out;
+  }
+  /* for wave166's checklist and syncHead and wave122's Academy (parts166/c_plan.js and parts122/c_core.js ask, see the notes there) */
   function secCount(onbId, key) { var p = plan(onbId); if (!p) return null; var s = p.sections.filter(function (x) { return x.key === key; })[0]; return s ? { done: s.done, total: s.total } : { done: 0, total: 0 }; }
-  function stepDone(onbId, tid) {
+  /* why a step reads done: { done, header, how: 'ticked' | 'academy' | 'setup' | '' } (null when the plan is not in the tables) */
+  function stepWhy(onbId, tid) {
     var p = plan(onbId); if (!p || p.src !== 'tables') return null;
-    if (p.heads && Object.prototype.hasOwnProperty.call(p.heads, String(tid))) return p.heads[String(tid)];
+    if (p.heads && Object.prototype.hasOwnProperty.call(p.heads, String(tid))) return { done: p.heads[String(tid)], header: true, how: '' };
     var l = p.sections.reduce(function (a, s) { return a.concat(s.leaves); }, []).filter(function (x) { return String(x.tid) === String(tid); })[0];
-    return l ? l.done : null;
+    return l ? { done: l.done, header: false, how: l.how } : null;
+  }
+  function stepDone(onbId, tid) { var w = stepWhy(onbId, tid); return w ? w.done : null; }
+  /* the first open real step (never a header, never a covered step): { tid, section } */
+  function firstOpen(onbId) {
+    var p = plan(onbId); if (!p || p.src !== 'tables') return null;
+    for (var i = 0; i < p.sections.length; i++) for (var j = 0; j < p.sections[i].leaves.length; j++) { var l = p.sections[i].leaves[j]; if (!l.done) return { tid: l.tid, section: p.sections[i].key }; }
+    return null;
   }
 
-  /* wa37Pct: every older caller (the Training tab, wave39, wave44, the profile bar) counts with the same rule */
+  /* wa37Pct: every older caller that shows a figure (the Training tab, wave39, wave44) counts with the same rule. The decisions that write
+     (wave37's "completed" on the last tick, wave122's certificate) keep the raw count, wa37PctRaw: never more generous than before. */
   if (typeof wa37Pct === 'function') {
     var __pct37 = wa37Pct;
+    window.wa37PctRaw = __pct37;
     wa37Pct = function (onbId) {
       try { var p = plan(onbId); if (p) return { done: p.done, total: p.total, pct: p.pct }; } catch (e) { /* the older count */ }
       return __pct37(onbId);
     };
   }
+  /* ---------- when a plan is complete (the decisions that write: wave37's "completed", wave122's certificate and XP) ----------
+     Complete when the raw count is (every row ticked in the table), or when the rule's facts are all known and every real step is done:
+     the plan's rows are in the tables, a step counted at setup was counted from data (setupCovered never counts from what is unknown), and a
+     step counted in the Academy was counted from training_progress rows this viewer loaded (the Academy's data is loaded). Anything else: raw only. */
+  function completeKnown(onbId) {
+    try {
+      var raw = typeof __pct37 === 'function' ? __pct37(onbId) : null;
+      if (raw && raw.total > 0 && raw.done === raw.total) return true;
+      var onb = onbById(onbId), W = W37();
+      if (!onb || !(W.steps || []).some(function (s) { return String(s.onboarding_id) === String(onbId); })) return false;
+      var p = planOf(onb); if (!p || p.src !== 'tables' || !p.total || p.done < p.total) return false;
+      var leaves = p.sections.reduce(function (a, s) { return a.concat(s.leaves); }, []);
+      if (leaves.some(function (l) { return l.how === 'academy'; }) && !academy()) return false;
+      if (leaves.some(function (l) { return l.how === 'setup'; }) && !setupCovered(onb)) return false;
+      return true;
+    } catch (e) { return false; }
+  }
+  /* the rows a completed plan still has open in the table, and why the rule counted them: headers whose steps are all done, steps setup covered,
+     steps finished in the Academy. wave37's tick handler writes them done (its own write, onboarding_steps) before it marks the plan completed. */
+  function derivedRows(onbId) {
+    var onb = onbById(onbId), W = W37(); if (!onb) return [];
+    var p = planOf(onb); if (!p || p.src !== 'tables') return [];
+    var mine = (W.steps || []).filter(function (s) { return String(s.onboarding_id) === String(onbId); }), out = [];
+    mine.forEach(function (s) {
+      if (s.done) return;
+      var tid = String(s.template_id);
+      if (p.heads && Object.prototype.hasOwnProperty.call(p.heads, tid)) { if (p.heads[tid]) out.push({ id: s.id, by: 'Hub: done when its steps were' }); return; }
+      var l = p.sections.reduce(function (a, x) { return a.concat(x.leaves); }, []).filter(function (x) { return String(x.tid) === tid; })[0];
+      if (l && l.done && l.how === 'setup') out.push({ id: s.id, by: 'Hub: done at setup' });
+      else if (l && l.done && l.how === 'academy') out.push({ id: s.id, by: 'Hub: done in the Avenue Academy' });
+    });
+    return out;
+  }
+
   /* wave166's planStates as other waves read it (wave167's journey: its ring, its week counts and the next step): headers out, the rule's done */
   (function wrap166(tries) {
     var W = window.w166;
@@ -271,22 +361,23 @@
     return { id: id, name: nm || 'Their manager' };
   }
   /* who: the list's people. ctx 'hr' (every flow and plan HR sees) or 'home' (the signed-in manager's own hires) */
-  function collect(ctx) {
+  function collect(ctx, opt) {
     var S = S271() || {}, W = W37(), out = [], by = {}, me = meMember();
     function keyFor(mid, name, fid) { return mid != null ? 'm' + mid : fid != null ? 'f' + fid : 'n' + lower(plain(name)).replace(/[^a-z0-9]+/g, '-'); }
-    function find(mid, name, onbId) {
+    /* the same person: the same member, or the plan their flow made; by name only when neither has a member id, and never a practice flow */
+    function find(mid, name, onbId, practice) {
       for (var i = 0; i < out.length; i++) {
         var P = out[i];
         if (mid != null && P.mid != null && String(P.mid) === String(mid)) return P;
         if (onbId != null && P.flow && P.flow.onboarding_id != null && String(P.flow.onboarding_id) === String(onbId)) return P;
-        if (lower(plain(name)) && lower(plain(P.name)) === lower(plain(name)) && (P.mid == null || mid == null)) return P;
+        if (!practice && !P.practice && mid == null && P.mid == null && lower(plain(name)) && lower(plain(P.name)) === lower(plain(name))) return P;
       }
       return null;
     }
     function add(P) { if (by[P.key]) P.key += '-' + out.length; by[P.key] = P; out.push(P); return P; }
     function addFlow(x, kind) {
       var fid = flowId(x), mid = x.member_id != null ? x.member_id : null;
-      var had = find(mid, x.name, x.onboarding_id);
+      var had = find(mid, x.name, x.onboarding_id, !!x.practice);
       if (had && had.flow) { if (kind === 'started' || had.kind !== 'started') { had.flow = x; had.kind = kind; had.fid = fid; } return had; }
       var P = had || add({ key: keyFor(mid, x.name, fid), name: plain(x.name) || 'Someone', mid: mid });
       P.flow = x; P.kind = kind; P.fid = fid; P.role = P.role || x.role || ''; P.email = P.email || x.email || ''; P.practice = !!x.practice;
@@ -332,12 +423,13 @@
     var finished = ctx === 'home' ? [] : (W.onbs || []).filter(function (o) { return o && o.status === 'completed'; }).map(function (o) {
       return { key: 'done' + o.id, name: plain(o.person_name) || 'Someone', mid: o.member_id, onb: o, kind: 'plan', stage: 'done', finished: true, role: '', mgr: null };
     });
-    finished.forEach(function (P) { var m = P.mid != null ? memberById(P.mid) : null; if (m) { P.email = m.email || ''; P.role = (seatOf(m.id) && seatOf(m.id).title) || m.role || teamLabel(m.department); } derive(P, me); });
+    /* the finished plans are counted always and worked out only when their list is open (or one of them is) */
+    if (opt && opt.finished) finished.forEach(function (P) { var m = P.mid != null ? memberById(P.mid) : null; if (m) { P.email = m.email || ''; P.role = (seatOf(m.id) && seatOf(m.id).title) || m.role || teamLabel(m.department); } derive(P, me); });
     var backed = ctx === 'home' ? [] : (S.backed || []).map(function (f) { var P = { key: 'b' + flowId(f), name: plain(f.name) || 'Someone', role: f.role || '', flow: f, fid: flowId(f), kind: 'backed', stage: 'backed', mgr: mgrOfFlow(f), practice: !!f.practice }; derive(P, me); return P; });
     return { people: out, finished: finished, backed: backed };
   }
   function lookup(ctx, key) {
-    var c = collect(ctx);
+    var c = collect(ctx, { finished: /^done/.test(String(key)) });
     return c.people.concat(c.finished, c.backed).filter(function (P) { return P.key === key; })[0] || null;
   }
 
@@ -393,6 +485,8 @@
     else if (P.stage === 'weeks') { if (P.plan && P.plan.w14.total) { g.pct = P.plan.w14.pct; g.label = 'Weeks 1 to 4: ' + P.plan.w14.done + ' of ' + P.plan.w14.total; } else if (P.plan && P.plan.total) { g.pct = P.plan.pct; g.label = 'Plan: ' + P.plan.done + ' of ' + P.plan.total; } else g.label = 'No plan steps'; }
     else if (P.stage === 'later' || P.stage === 'done') { if (P.plan && P.plan.total) { g.pct = P.plan.pct; g.label = 'Plan: ' + P.plan.done + ' of ' + P.plan.total; } else g.label = 'No plan steps'; }
     else if (P.stage === 'backed') g.label = f && f.updated_at ? 'Backed out ' + fmtDay(f.updated_at) : '';
+    /* the lead's card without the template rows: the figure is the ticks only, and says so */
+    if (P.plan && P.plan.src === 'lead' && P.plan.exact === false && /: \d+ of \d+$/.test(g.label)) g.label += ' ticked';
     P.prog = g;
     return P;
   }
@@ -503,7 +597,7 @@
 
   window.w285 = {
     /* the rule and the facts */
-    planOf: planOf, planFromLead: planFromLead, plan: plan, secCount: secCount, stepDone: stepDone, setupCovered: setupCovered, ticks: ticks, setupCount: setupCount,
+    planOf: planOf, planFromLead: planFromLead, plan: plan, secCount: secCount, stepDone: stepDone, stepWhy: stepWhy, firstOpen: firstOpen, completeKnown: completeKnown, derivedRows: derivedRows, setupCovered: setupCovered, ticks: ticks, setupCount: setupCount,
     collect: collect, lookup: lookup, derive: derive, avenues: avenues, doneSet: doneSet, loadPositions: loadPositions, leadPerson: leadPerson,
     /* the helpers the other parts share */
     h: { E: E, lower: lower, plain: plain, first: first, plural: plural, today: today, dayOf: dayOf, addDays: addDays, diffDays: diffDays, fmtDay: fmtDay, secName: secName, secRank: secRank,
