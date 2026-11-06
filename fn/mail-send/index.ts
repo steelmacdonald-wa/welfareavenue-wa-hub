@@ -4,6 +4,8 @@
 //   {ok:false, reason:'do not contact'} (with status suppressed and basis do not contact, which the CRM page reads) when the rule says do not contact,
 //   and never call Resend. receipt is allowed for anyone who passes wa_can('gifts_edit') (team leads, admins, named finance people), not only admins.
 //   campaign_check adds first_contacts: how many of the audience crm_email_first_contact counts as a first contact (asked as the signed-in person).
+//   The footer's reason follows the permission basis: an email sent under the WA rule says RULE_REASON (placeholder words for Steel to approve)
+//   instead of "you said yes to our news, or gave or volunteered with us in the last two years", which would be untrue for them.
 // v6 (wave273): who an email comes from and who replies reach. app_config mail_senders routes a template to volunteer@,
 //   operations@ or job@ (send also takes route); reply_to, on our domain, is the person handling that volunteer or organization.
 //   Without a reply_to, replies go to the address it came from. Campaigns that name their own sender keep it.
@@ -190,8 +192,20 @@ const REASON: Record<string, string> = {
   volunteer: 'you applied to volunteer, or volunteered, with Welfare Avenue.',
   test: 'it is a test the Hub sent to a team address.'
 };
+/* v7 (wave282): the footer's reason follows the permission basis. Someone emailed under the WA rule of 5 Nov 2026 (basis "not unsubscribed (WA rule
+   of 5 Nov 2026)") may never have said yes or given or volunteered, so the newsletter line above would be untrue for them; they get RULE_REASON instead.
+   PLACEHOLDER WORDS (wave282 review, 06/11/26): for Steel to approve before release. French when the person's language is French (crm_contacts.language),
+   the way receipts and itineraries pick French; the rest of the footer stays as it is. Every other basis keeps the line above. */
+const RULE_REASON: Record<string, string> = {
+  en: "You're getting this because you've been in touch with Welfare Avenue. You can unsubscribe at any time.",
+  fr: 'Vous recevez ce courriel parce que vous avez été en contact avec Welfare Avenue. Vous pouvez vous désabonner en tout temps.'
+};
+function reasonLine(kind: string, basis?: string | null, lang?: string | null): string {
+  if (/^not unsubscribed \(WA rule/.test(String(basis || ''))) return RULE_REASON[String(lang || '').trim().toLowerCase().startsWith('fr') ? 'fr' : 'en'];
+  return 'You are receiving this email because ' + (REASON[kind] || REASON.transactional);
+}
 const OVERLINE: Record<string, string> = { transactional: 'From the Welfare Avenue team', newsletter: 'News from Welfare Avenue', fundraising: 'From Welfare Avenue', volunteer: 'Volunteering at Welfare Avenue', test: 'A Hub test' };
-function layout(o: { inner: string; preheader: string; kind: string; unsub: string; cfg: Record<string, string>; title: string }): string {
+function layout(o: { inner: string; preheader: string; kind: string; unsub: string; cfg: Record<string, string>; title: string; reason?: string }): string {
   const bulk = BULK.includes(o.kind);
   const addr = o.cfg.mail_postal_address || 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9';
   const charity = o.cfg.mail_charity_number || '713048502RR0001';
@@ -209,15 +223,15 @@ function layout(o: { inner: string; preheader: string; kind: string; unsub: stri
     `<tr><td class="wa-pad" style="background-color:${CREAM};padding:32px 36px 20px 36px;border-left:1px solid rgba(16,63,57,.12);border-right:1px solid rgba(16,63,57,.12);">${o.inner}</td></tr>` +
     `<tr><td class="wa-pad" style="background-color:${GREEN};border-radius:0 0 8px 8px;padding:26px 36px 28px 36px;">` +
     `<img src="${LOCKUP_CREAM}" width="140" height="63" alt="Welfare Avenue, building pathways in our community" style="display:block;border:0;width:140px;height:auto;">` +
-    `<div style="padding:16px 0 0;${small}opacity:.85;">Welfare Avenue is a registered charity, no. ${esc(charity)}. ${esc(addr)}.<br>You are receiving this email because ${esc(REASON[o.kind] || REASON.transactional)}</div>` +
+    `<div style="padding:16px 0 0;${small}opacity:.85;">Welfare Avenue is a registered charity, no. ${esc(charity)}. ${esc(addr)}.<br>${esc(o.reason || reasonLine(o.kind))}</div>` +
     `<div style="padding-top:12px;${small}"><a href="${SITE_URL}" style="color:${CREAM};text-decoration:underline;">welfareavenue.com</a>` +
     (o.unsub ? ` &nbsp;·&nbsp; <a href="${o.unsub}" style="color:${CREAM};text-decoration:underline;">${bulk ? 'Unsubscribe' : 'Email preferences'}</a>` : '') +
     `</div></td></tr></table></td></tr></table></body></html>`;
 }
-function textLayout(text: string, kind: string, unsub: string, cfg: Record<string, string>): string {
+function textLayout(text: string, kind: string, unsub: string, cfg: Record<string, string>, reason?: string): string {
   const addr = cfg.mail_postal_address || 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9';
   const charity = cfg.mail_charity_number || '713048502RR0001';
-  return text.trim() + '\n\n--\nWelfare Avenue, building pathways in our community\n' + SITE_URL + '\nRegistered charity no. ' + charity + '. ' + addr + '.\nYou are receiving this email because ' + (REASON[kind] || REASON.transactional) +
+  return text.trim() + '\n\n--\nWelfare Avenue, building pathways in our community\n' + SITE_URL + '\nRegistered charity no. ' + charity + '. ' + addr + '.\n' + (reason || reasonLine(kind)) +
     (unsub ? '\n' + (BULK.includes(kind) ? 'Unsubscribe: ' : 'Email preferences: ') + unsub : '') + '\n';
 }
 function htmlToText(html: string): string {
@@ -247,8 +261,9 @@ function cleanVars(v: unknown): Record<string, string> {
   if (v && typeof v === 'object') for (const [k, val] of Object.entries(v as Record<string, unknown>)) if (/^[a-zA-Z0-9_]{1,40}$/.test(k) && val != null) out[k] = String(val).slice(0, 8000);
   return out;
 }
-async function render(tpl: any, c: any, extra: Record<string, string>, cfg: Record<string, string>, unsub: string) {
+async function render(tpl: any, c: any, extra: Record<string, string>, cfg: Record<string, string>, unsub: string, basis?: string | null) {
   const base = { ...contactVars(c, cfg), ...extra };
+  const reason = reasonLine(tpl.kind, basis, c ? c.language : null);   /* v7 (wave282): the footer's reason follows the basis */
   /* v3: a placeholder typed inside the message itself ({{first_name|there}} in a campaign's or an automation's words) */
   const vars: Record<string, string> = { ...base };
   for (const k of ['headline', 'body_text', 'cta_label', 'cta_url']) if (vars[k]) vars[k] = fill(vars[k], base, false);
@@ -256,8 +271,8 @@ async function render(tpl: any, c: any, extra: Record<string, string>, cfg: Reco
   const subject = fill(tpl.subject, vars, false).replace(/\s+/g, ' ').trim();
   const preheader = fill(tpl.preheader || '', vars, false).trim();
   const inner = styleInner(fill(tpl.html_body, vars, true));
-  const html = layout({ inner, preheader, kind: tpl.kind, unsub, cfg, title: subject });
-  const text = textLayout(tpl.text_body ? fill(tpl.text_body, vars, false) : htmlToText(fill(tpl.html_body, { ...vars, body_html: htmlToText(vars.body_html || '') }, false)), tpl.kind, unsub, cfg);
+  const html = layout({ inner, preheader, kind: tpl.kind, unsub, cfg, title: subject, reason });
+  const text = textLayout(tpl.text_body ? fill(tpl.text_body, vars, false) : htmlToText(fill(tpl.html_body, { ...vars, body_html: htmlToText(vars.body_html || '') }, false)), tpl.kind, unsub, cfg, reason);
   return { subject, preheader, html, text };
 }
 async function template(key: string) {
@@ -265,12 +280,12 @@ async function template(key: string) {
   return data;
 }
 async function contactById(id: number) {
-  const { data } = await svc.from('crm_contacts').select('id,full_name,first_name,last_name,emails,primary_email,email_status,email_consent,merged_into').eq('id', id).maybeSingle();
+  const { data } = await svc.from('crm_contacts').select('id,full_name,first_name,last_name,emails,primary_email,email_status,email_consent,merged_into,language').eq('id', id).maybeSingle();
   return data;
 }
 async function contactByEmail(email: string) {
   const e = email.toLowerCase();
-  const { data } = await svc.from('crm_contacts').select('id,full_name,first_name,last_name,emails,primary_email,email_status,email_consent,merged_into').is('merged_into', null).or('primary_email.ilike.' + e + ',emails.cs.{"' + e + '"}').limit(1);
+  const { data } = await svc.from('crm_contacts').select('id,full_name,first_name,last_name,emails,primary_email,email_status,email_consent,merged_into,language').is('merged_into', null).or('primary_email.ilike.' + e + ',emails.cs.{"' + e + '"}').limit(1);
   return (data || [])[0] || null;
 }
 
@@ -278,7 +293,7 @@ async function contactByEmail(email: string) {
 type Sent = { send_id?: number; resend_id?: string; status?: string; to?: string; subject?: string; error?: string };
 type Sender = { name?: string | null; email?: string | null; reply?: string | null };
 type Attachment = { filename: string; content: string };
-type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null; route?: string | null; reply?: string | null };
+type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null; route?: string | null; reply?: string | null; basis?: string | null };   /* basis (v7): the permission basis, for the footer's reason */
 function senderLine(cfg: Record<string, string>, s?: Sender | null) {
   const name = String((s && s.name) || cfg.mail_from_name || 'Welfare Avenue').replace(/[<>"\r\n]/g, '').trim() || 'Welfare Avenue';
   const email = String((s && s.email) || cfg.mail_from_email || 'info@welfareavenue.com').trim().toLowerCase();
@@ -306,7 +321,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : (routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply) || o.content.sender));
   if (!onDomain(sender.email, o.cfg)) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }; }
   const unsub = await unsubUrl(o.c ? o.c.id : null, o.sendId);
-  const r = await render(tpl, o.c, o.content.vars, o.cfg, unsub);
+  const r = await render(tpl, o.c, o.content.vars, o.cfg, unsub, o.content.basis);
   const bulk = BULK.includes(kind);
   const headers: Record<string, string> = {};
   if (bulk && unsub) { headers['List-Unsubscribe'] = '<' + unsub + '>'; headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'; }
@@ -333,7 +348,7 @@ async function deliver(o: { c: any; to: string; tpl: any; vars: Record<string, s
     meta: { template: o.tpl.name, vars: o.vars, caller: o.who.email, campaign_id: o.campaignId || null, ...(o.content && o.content.attachments && o.content.attachments.length ? { attachments: o.content.attachments.map(a => a.filename) } : {}) }, created_by: o.who.email
   }).select('id').single();
   if (ins.error) return { error: 'send log: ' + ins.error.message };
-  return await sendRow({ sendId: ins.data.id as number, c: o.c, to: o.to, content: { tpl: o.tpl, vars: o.vars, kind: o.kind, ...(o.content || {}), campaignId: o.campaignId || null }, cfg: o.cfg, isTest: o.isTest, who: o.who });
+  return await sendRow({ sendId: ins.data.id as number, c: o.c, to: o.to, content: { tpl: o.tpl, vars: o.vars, kind: o.kind, ...(o.content || {}), campaignId: o.campaignId || null, basis: o.basis }, cfg: o.cfg, isTest: o.isTest, who: o.who });
 }
 
 
@@ -557,13 +572,15 @@ async function pumpAutomations(cfg: Record<string, string>, who: Caller, max: nu
     if (!tpl || !tpl.active) { await svc.from('crm_email_sends').update({ status: 'failed', claimed_at: null, error: 'the saved email "' + key + '" is missing or switched off' }).eq('id', row.id); out.failed++; continue; }
     const c = row.contact_id ? await contactById(row.contact_id) : null;
     const kind = KINDS.includes(String(row.kind)) ? String(row.kind) : 'transactional';
+    let basis: string | null = null;
     if (!row.is_test) {
       const perm = c ? await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: kind }) : { data: [] };
       const p = ((perm as any).data || [])[0];
       if (!c || !p || !p.allowed) { await svc.from('crm_email_sends').update({ status: 'suppressed', claimed_at: null, permission_basis: p ? p.basis : 'the contact is gone' }).eq('id', row.id); out.held++; continue; }
+      basis = p.basis;
     }
     const s = m.sender && m.sender.email ? { name: m.sender.name || null, email: String(m.sender.email), reply: m.sender.reply || null } : null;
-    const r = await sendRow({ sendId: row.id, c, to, content: { tpl, vars: cleanVars(m.vars || {}), kind, subject: m.subject || null, preheader: m.preheader || null, sender: s, automationId: row.automation_id || null },
+    const r = await sendRow({ sendId: row.id, c, to, content: { tpl, vars: cleanVars(m.vars || {}), kind, subject: m.subject || null, preheader: m.preheader || null, sender: s, automationId: row.automation_id || null, basis },
       cfg, isTest: !!row.is_test, who: { ...who, email: 'automation:' + (row.automation_id || '?') } });
     if (r.status === 'sent') out.sent++; else out.failed++;
     await sleep(550);
@@ -595,7 +612,7 @@ async function pump(cfg: Record<string, string>, who: Caller, max: number) {
     const perm = c ? await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: k.kind }) : { data: [] };
     const p = ((perm as any).data || [])[0];
     if (!tpl || !c || !p || !p.allowed) { await svc.from('crm_email_sends').update({ status: 'suppressed', claimed_at: null, permission_basis: p ? p.basis : 'the contact or the template is gone' }).eq('id', row.id); held++; continue; }
-    const out = await sendRow({ sendId: row.id, c, to: String(row.to_email || p.email), content: campaignContent(k, tpl), cfg, isTest: false, who: { ...who, email: k.updated_by || k.created_by || who.email } });
+    const out = await sendRow({ sendId: row.id, c, to: String(row.to_email || p.email), content: { ...campaignContent(k, tpl), basis: p.basis }, cfg, isTest: false, who: { ...who, email: k.updated_by || k.created_by || who.email } });
     if (out.status === 'sent') sent++; else failed++;
     await sleep(550);
   }
@@ -712,7 +729,8 @@ Deno.serve(async (req: Request) => {
       if (body.preheader) vars.preheader = String(body.preheader);
       const tpl = { ...base, kind, subject: body.subject ? String(body.subject) : base.subject, preheader: body.preheader ? String(body.preheader) : base.preheader };
       const c = body.contact_id ? await contactById(Number(body.contact_id)) : null;
-      const r = await render(tpl, c, vars, cfg, c ? await unsubUrl(c.id, null) : SUPABASE_URL + '/functions/v1/mail-unsubscribe?preview=1');
+      const pv = c ? (((await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: kind })) as any).data || [])[0] : null;   /* v7: the footer's reason as they would get it */
+      const r = await render(tpl, c, vars, cfg, c ? await unsubUrl(c.id, null) : SUPABASE_URL + '/functions/v1/mail-unsubscribe?preview=1', pv ? pv.basis : null);
       const snd = senderLine(cfg, body.from_email || body.from_name ? { name: body.from_name, email: body.from_email, reply: body.reply_to } : null);
       return json({ subject: r.subject, preheader: r.preheader, html: r.html, text: r.text, kind, from: snd.from, reply_to: snd.reply || null });
     }
