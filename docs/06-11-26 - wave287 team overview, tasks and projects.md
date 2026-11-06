@@ -76,3 +76,17 @@ Put back the previous index.html (the live page at release time: md5 9977c375 on
 
 ## Not verified live
 Signed in on the real page with live data: the counts against the migrated tasks, the 111 cross-team tasks in other teams' projects, the drawer's motion on a real phone, the Overview with wave123's real inbox and wave132's bank card.
+
+## Released 06/11/26 (Steel: "Yes, release it")
+
+1. Live was 9977c375 (wave285 c4b1dc2), the base this branch merged; checked twice before the swap.
+2. Data: migration `wa287a_projects` applied (the file `build/wa287a_projects.sql`). Before: 879 tasks, 141 with no project, 27 projects. After: 879 tasks, **0 with no project**, 245 moves logged in change_log (`wa287 (projects replace workstreams)`), 33 projects, one General per team (Governance 21, General Finance 47, General Fundraising 20, General HR 17, General Marketing 19, General Ops Montreal 18, General Ops Toronto 16, General Program Development 50), no task in another team's General, trigger `trg_wa287_task_project` in place, backups `wa_tmp287_tasks_backup` (879 rows) and `wa_tmp287_projects_backup` (27 rows).
+3. Page: candidate bae461b9 (8,379,788 bytes, LF) staged in 10 parts in `wa_stage287` (all posted plainly; anon access closed right after posting; the staged copy's md5 checked; table dropped after the swap); gated swap with expected live 9977c375 and markers `wave285: the one progress rule` and `window.__wa287 = true`; host-sync answered 200 (8,379,610 characters).
+4. Served by hub.welfareavenue.com: md5 bae461b9 on the first fetch. Signed out: no console errors; `window.__wa287`, `w116Board.state` and `w285.plan` present.
+
+Not seen yet: signed in with live data (the counts on each team's Overview and Tasks, the cross-team tasks, the drawer on a real phone).
+
+## Undo (after release)
+
+1. Page: build c4b1dc2 with `build/build_lf.py` (gives 9977c375), stage it, gate it with expected live bae461b9, run host-sync.
+2. Data: run `build/wa287a_undo.sql` (after the page, or before: the old page ignores is_general and project ids it does not know only go back with the undo). A task created after the release in one of the six new projects keeps it; the undo's last line counts them.
