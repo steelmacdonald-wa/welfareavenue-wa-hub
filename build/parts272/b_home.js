@@ -20,6 +20,8 @@
     + '#mypage.w272 #mpBody > #w112wrap{order:8;}#mypage.w272 #mpBody > #w180card{order:9;}#mypage.w272 #mpBody > #w219card{order:10;}#mypage.w272 #mpBody > #w166lead{order:11;}#mypage.w272 #mpBody > #w170card{order:12;}'
     + '#mypage.w272 #mpBody > #w116home{order:13;grid-column:1;align-self:stretch;}#mypage.w272 #mpBody > #w171next{order:14;grid-column:2;margin:0;align-self:stretch;}'
     + '#mypage.w272 #mpBody:not(:has(> #w171next)) > #w116home{grid-column:1 / -1;}#mypage.w272 #mpBody:not(:has(> #w116home)) > #w171next{grid-column:1 / -1;}'
+    /* wave290: Your servings this year, right after the Next serving card (both order 14; wave290 appends its card, so it comes second) */
+    + '#mypage.w272 #mpBody > #w290srv{order:14;}'
     + '#mypage.w272 #mpBody > #w74attn{order:15;}#mypage.w272 #mpBody > .mp-grid{order:16;}'
     + '#mypage.w272 #mpBody > .mp-online{order:20;}#mypage.w272 #mpBody > #w192feed{order:21;}#mypage.w272 #mpBody > #w75card{order:22;}#mypage.w272 #mpBody > #w114switch{order:23;}'
     /* Set up your Hub stands in for wave219's card and the Policies card: both say the same things */
