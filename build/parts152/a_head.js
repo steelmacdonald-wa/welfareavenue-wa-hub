@@ -53,7 +53,14 @@
     hub: ['Added in the CRM', 'Contacts someone added on this page.'],
     zeffy: ['Zeffy', 'Donors from Zeffy.'],
     website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],
-    keela: ['Keela', 'Contacts from the Keela export.']
+    keela: ['Keela', 'Contacts from the Keela export.'],
+    /* wave283: the other sources in the CRM today */
+    cabm: ['CABM', 'Volunteers who came to us through the CABM.'],
+    drive: ['Drive 2020-2023', 'Volunteers from the 2020 to 2023 sheets on the Drive.'],
+    fcabq: ['Je Bénévole (FCABQ)', 'Volunteers who came to us through Je Bénévole (FCABQ).'],
+    email: ['By email', 'People who reached us by email.'],
+    website_account: ['Website account', 'People who made an account on welfareavenue.com.'],
+    hub_form: ['Hub form', 'People who answered one of the CRM’s forms (hub.welfareavenue.com/f/).']
   };
   var LANGS = [['', 'Not known'], ['en', 'English'], ['fr', 'French'], ['other', 'Another language']];
   /* the email permission (Canada's anti-spam law, CASL) */
@@ -133,14 +140,19 @@
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function wRole() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
   function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
-  function amAdmin() { return wRole() === 'admin' || ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'].indexOf(myEmail()) >= 0; }
+  function amAdmin() { return wRole() === 'admin'; }   /* wave283: role admin only (no hard-coded addresses) */
   function actor() { return myEmail() || 'staff'; }
+  /* wave283: what the signed-in person may do (wa_my_caps, wave281: gifts_edit, import_admin, hr_private), loaded once by openCrm */
+  function can(cap) { return !!(S.caps || {})[cap]; }
+  /* the one email rule (Steel, 5 Nov 2026), in the words the page uses everywhere */
+  var RULE_TEXT = 'Newsletters, fundraising and volunteer emails go to everyone with a working address who has not unsubscribed. Receipts and confirmations go to any working address.';
+  var GIFT_REFUSED = 'Only team leads, admins and finance can change gifts.';
 
   /* ---------- the data ---------- */
   var COLS = 'id,full_name,first_name,last_name,emails,phones,primary_email,address,city,province,postal_code,country,language,kinds,tags,source,volunteer_id,member_id,' +
     'email_status,email_consent,consent_source,consent_at,implied_consent_until,sms_opt_out,notes,last_activity_at,created_at,updated_at,created_by,updated_by,legacy_refs,' +
     'volunteer_roles,volunteer_tags,volunteer_organization,last_applied,volunteer_needs_review,in_quo,legacy_servings,legacy_hours,hub_servings,last_serving_on,' +
-    'donation_total,donation_count,last_donation_at,org_names';
+    'donation_total,donation_count,last_donation_at,org_names,job_title,do_not_contact,dnc_reason';   /* wave283: the last three (wave281's crm_contacts_v) */
   var S = {
     contacts: null, dupes: null, counts: null, partners: null, gifts: null, loading: {}, at: {}, err: {},
     ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60, gq: '', gplat: '', gyear: '', gshow: 60 },

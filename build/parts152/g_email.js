@@ -74,7 +74,6 @@
       field('Reply-to', inp('mail_reply_to', s.mail_reply_to, 'info@welfareavenue.com')) +
       field('Mode', sel('mail_mode', [['test', 'Test mode: only the test recipients get email'], ['live', 'Live: any contact the rule allows']], s.mail_mode || 'test'), false, 'switching to live is the go-ahead for real sends') +
       field('Test recipients', inp('mail_test_recipients', s.mail_test_recipients, 'name@welfareavenue.com, other@…'), true, 'separated by commas') +
-      field('Fundraising without consent', sel('mail_fundraising_exemption', [['off', 'Off: appeals follow the newsletter rule (consent needed)'], ['on', 'On: a registered charity may send appeals without consent (CASL s.6 exemption)']], s.mail_fundraising_exemption || 'off'), true) +
       field('Postal address in the footer', inp('mail_postal_address', s.mail_postal_address, 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9'), true) +
       '</div><div class="w152foot"><span class="w152err">' + E(MAIL.ferr) + '</span><button class="w152btn ghost sm" data-w154cancel="1">Cancel</button><button class="w152btn sm" data-w154savecfg="1">' + I('check') + ' Save the settings</button></div>';
   }
@@ -148,7 +147,7 @@
   }
   function ruleHtml() {
     return '<section class="w154card wide w154rule"><h3>' + I('shield') + ' How the rule works</h3>' +
-      '<p>Canada’s anti-spam law (CASL) decides who gets what, and the Hub applies it before every send. Confirmations, reminders and receipts are not commercial messages, so they go to anyone whose address works. Newsletters and appeals need <b>express consent</b> (they said yes) or <b>implied consent</b>: Welfare Avenue is a registered charity (no. 713048502RR0001), so a gift or a serving gives two years of implied consent from that day. Someone who unsubscribed or whose address bounces never gets a newsletter or an appeal. Every email carries our postal address and an unsubscribe link, and each send sits on the contact’s timeline with what happened to it. Implied consent is refreshed every morning from the gifts and the rosters.</p></section>';
+      '<p>' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email. The Hub applies the rule before every send. Every email carries our postal address and an unsubscribe link, and each one sits on the contact’s timeline with what happened to it.</p></section>';   /* wave283: one rule (Steel, 5 Nov 2026) */
   }
   function paintEmail(root) {
     var u = S.ui;
@@ -199,7 +198,7 @@
   }
   function saveSettings() {
     var v = formVals(); MAIL.ferr = '';
-    var body = { mail_from_name: v.mail_from_name, mail_from_email: v.mail_from_email, mail_reply_to: v.mail_reply_to, mail_mode: v.mail_mode, mail_test_recipients: v.mail_test_recipients, mail_fundraising_exemption: v.mail_fundraising_exemption, mail_postal_address: v.mail_postal_address };
+    var body = { mail_from_name: v.mail_from_name, mail_from_email: v.mail_from_email, mail_reply_to: v.mail_reply_to, mail_mode: v.mail_mode, mail_test_recipients: v.mail_test_recipients, mail_postal_address: v.mail_postal_address };   /* wave283: no fundraising switch (one rule) */
     MAIL.busy = 'Saving the settings'; paint();
     return mailFn('set_settings', body).then(function (r) {
       MAIL.busy = '';

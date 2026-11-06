@@ -1,6 +1,6 @@
 /* w159drive.js: Leaving Keela, the checklist at the top of the CRM's Sources tab (wave159a). Fixture rows are made up for the
    test. Today (the stub's clock, 25 Sep 2026): the days left to give Keela notice from the next charge and the notice in
-   app_config, and six steps read from the Hub (contacts and gifts from Keela, forms live of all, automations on and the drafts
+   app_config, and six steps read from the Hub (contacts and gifts from Keela, forms published of all (wave283), automations on and the drafts
    that still need Keela's words, the email mode, the receipt mode and what is missing, the donation form) with whose step is
    next. When everything is done the count says so. On a phone the steps stack. usage: node test/w159drive.js */
 const { launch, fresh, loadFixture } = require('./boot');
@@ -23,7 +23,7 @@ function fixture(done) {
     { id: 2, contact_id: 5002, amount: 30, currency: 'CAD', donated_at: '2026-03-01T15:00:00Z', platform: 'keela', kind: 'donation' },
     { id: 3, contact_id: 5003, amount: 20, currency: 'CAD', donated_at: '2026-09-20T15:00:00Z', platform: 'hub', kind: 'donation' }
   ];
-  fx.crm_forms = ['volunteer', 'toronto-volunteer', 'newsletter'].map((slug, i) => ({ id: i + 1, slug, title: slug, status: done ? 'live' : 'draft', questions: [], created_at: '2026-09-28T12:00:00Z' }));
+  fx.crm_forms = ['volunteer', 'toronto-volunteer', 'newsletter'].map((slug, i) => ({ id: i + 1, slug, title: slug, status: done ? 'published' : 'draft', questions: [], created_at: '2026-09-28T12:00:00Z' }));
   fx.crm_automations = [1, 2, 3, 4, 5].map(i => ({ id: i, name: 'Automation ' + i, status: done ? 'on' : 'draft', trigger: {}, steps: i <= 3 && !done ? [{ id: 's1', type: 'send', body: '[Paste the words of Keela’s email here]' }] : [{ id: 's1', type: 'send', body: 'Hello' }], settings: {}, created_at: '2026-09-28T12:00:00Z' }));
   fx.app_config = [
     { key: 'mail_mode', value: done ? 'live' : 'test' }, { key: 'receipt_mode', value: done ? 'on' : 'off' },

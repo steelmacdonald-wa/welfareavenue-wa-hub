@@ -124,6 +124,9 @@
       if (this._count) res.count = rows.length;
       if (this._head) res.data = null;
     } else {
+      /* wave283: a test can have the database answer one table's writes its own way: window.__WA_TABLE_RESULTS = { 'crm_donations:update': { data, error } } */
+      var canned = (window.__WA_TABLE_RESULTS || {})[this._table + ":" + this._op];
+      if (canned) return { data: clone(canned.data === undefined ? null : canned.data), error: canned.error || null };
       /* mutations: acknowledge, never mutate the fixture (deterministic) */
       var p = this._payload;
       var arr = p === null || p === undefined ? [] : (Array.isArray(p) ? p : [p]);
@@ -163,6 +166,15 @@
       rpc: function (fn, args) {
         var data = null;
         if (fn === "get_my_role") data = role;
+        /* wave283: the capabilities (wave281's wa_my_caps), worked out from the fixture's hub_roles row as wa_can does: all three for an admin
+           (the default user), gifts_edit for a team lead or a caps gifts_edit row, nothing ({}) for a member; a test can set its own in __WA_RPCS */
+        if (fn === "wa_my_caps") {
+          var me = rowsFor("hub_roles").filter(function (x) { return x && String(x.email || "").toLowerCase() === email; })[0] || null;
+          var rr = me ? me.role : (role === "admin" ? "admin" : ""), cp = (me && me.caps) || {};
+          data = {};
+          if (rr === "admin" || rr === "leader" || cp.gifts_edit === true) data.gifts_edit = true;
+          if (rr === "admin") { data.import_admin = true; data.hr_private = true; }
+        }
         var rpcs = window.__WA_RPCS || {};
         if (Object.prototype.hasOwnProperty.call(rpcs, fn)) data = rpcs[fn];
         /* wave275: a test can have the database refuse an rpc for this person: window.__WA_RPC_ERRORS = { name: 'message' } */

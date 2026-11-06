@@ -158,7 +158,7 @@ if (require.main === module) (async () => {
     cards: document.querySelectorAll('#crm .w202card').length, ready: [...document.querySelectorAll('#crm .w202card')].filter(c => /Ready as is/.test(c.textContent)).map(c => c.querySelector('.w202cb b').textContent),
     recent: [...document.querySelectorAll('#crm .w202rrow')].map(r => r.innerText.replace(/\s+/g, ' ')), mic: window.w201 ? window.w201.targets : null
   }));
-  ok('the CRM rail lists Studio under Email and marks it', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Studio*|Campaigns|Automations|Reports', b.rail);
+  ok('the CRM rail lists Studio under Email and marks it', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Studio*|Sends|Automations|Reports', b.rail);
   ok('the CRM marks its Studio tab and draws the studio in #w202root', /Studio/.test(b.tab || '') && b.root, b);
   ok('the front page offers three ways to start', b.ways.join('|') === 'Tell the Hub|Start from a template|Build it yourself', b.ways);
   ok('the ten starters sit on Steel’s four shelves', b.cards === 10 && b.shelves.length === 4 && /^Volunteers: welcome and serving 3/.test(b.shelves[0]) && /^Volunteers: call-outs and events 2/.test(b.shelves[1]) && /^Donors: thanks and impact 3/.test(b.shelves[2]) && /^Donors: appeals and events 2/.test(b.shelves[3]), b);
@@ -286,7 +286,7 @@ if (require.main === module) (async () => {
   await until(f, () => location.hash === '#crm/campaigns/991', null, 6000); await wait(1500);
   b = await f.ev(() => ({ camp: window.__camps[0], hash: location.hash, card: (document.querySelector('#crm .w155studio') || {}).innerText, headline: !!document.querySelector('#crm [data-w155k="headline"]'), subject: (document.querySelector('#crm [data-w155k="subject"]') || {}).value }));
   ok('A list makes a campaign draft with the studio’s template, kind and subject', b.camp && b.camp.template_key === 'st_t1' && b.camp.list_id === 71 && b.camp.kind === 'volunteer' && b.camp.status === 'draft' && /Sunday needs you/.test(b.camp.subject), b.camp);
-  ok('the campaign opens in Campaigns with the studio card in place of the headline, message and button', b.hash === '#crm/campaigns/991' && /designed in the email studio/.test(b.card || '') && !b.headline && /Sunday needs you/.test(b.subject || ''), b);
+  ok('the Send opens in Sends (wave283; Campaigns before) with the studio card in place of the headline, message and button', b.hash === '#crm/campaigns/991' && /designed in the email studio/.test(b.card || '') && !b.headline && /Sunday needs you/.test(b.subject || ''), b);
   await shot(f, '04-campaign');
   /* the campaign editor keeps the studio's template when it saves */
   await click(f, '#crm [data-w155cprev]'); await wait(900);

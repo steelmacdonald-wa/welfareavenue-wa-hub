@@ -15,7 +15,7 @@
     var contacts = (S.contacts || []).filter(function (c) { return c.source === 'keela' || (c.legacy_refs && c.legacy_refs.keela_contact_id); }).length;
     var kg = (S.gifts || []).filter(function (g) { return lower(g.platform) === 'keela'; });
     var lastKg = kg.map(function (g) { return dayOf(g.donated_at); }).sort().pop() || '';
-    var forms = S.forms || [], live = forms.filter(function (f) { return f.status === 'live'; });
+    var forms = S.forms || [], live = forms.filter(function (f) { return f.status === 'published'; });   /* wave283: a form that is out is published */
     var autos = S.autos || [], on = autos.filter(function (a) { return a.status === 'on'; });
     var paste = autos.filter(function (a) { return /\[Paste/i.test(JSON.stringify(a.steps || [])); });
     var mail = kcfg('mail_mode') || 'test', rmode = kcfg('receipt_mode') || 'off';
@@ -33,7 +33,7 @@
         n: paste.length ? 'Paste the words of Keela’s welcome emails into the drafts (or have the assistant copy them from Keela), try each on yourself, then turn them on once the forms are live.' : 'Try each on yourself, then turn them on once the forms are live.' },
       { t: 'Email', k: 'Keela sends the newsletters and campaigns.', s: mail === 'live' ? 'done' : 'todo',
         h: 'The Hub’s email is in ' + (mail === 'live' ? 'live mode.' : 'test mode: only the test addresses get email.'),
-        n: mail === 'live' ? 'Send the next newsletter from Campaigns.' : 'Steel switches the mode to live in Email when real sends should start (Resend’s free plan sends up to 100 a day).' },
+        n: mail === 'live' ? 'Send the next newsletter from Sends.' : 'Steel switches the mode to live in Email when real sends should start (Resend’s free plan sends up to 100 a day).' },
       { t: 'Tax receipts', k: 'Keela issued 55 receipts (KEE numbers).', s: rmode === 'on' ? 'done' : rMissing.length ? 'waiting' : 'todo',
         h: 'Receipts from the Hub are ' + (rmode === 'on' ? 'on.' : 'off' + (rMissing.length ? ' (missing: ' + listJoin(rMissing) + ').' : ', and ready to turn on.')),
         n: rmode === 'on' ? 'Issue from Receipts; the year-end run in January.' : 'The treasurer reviews a sample PDF and fills the settings with the signature; the treasurer and Steel decide to turn them on.' },

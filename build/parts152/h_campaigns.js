@@ -11,8 +11,9 @@
   LOADERS.lists = function () { return db.from('crm_lists').select('*').order('updated_at', { ascending: false }); };
   LOADERS.campaigns = function () { return db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(300); };
   LOADERS.cstats = function () { return db.from('crm_campaign_stats_v').select('*'); };
-  var CK = { newsletter: ['Newsletter', PURPLE, 'People who said yes, or gave or served in the last two years.'], fundraising: ['Fundraising appeal', '#B9851B', 'The same people as a newsletter (the exemption setting is off).'],
-    volunteer: ['Volunteer call-out', TEAL, 'Everyone on the list with a working address who has not unsubscribed.'] };
+  /* wave283: one rule for every kind of Send (Steel, 5 Nov 2026) */
+  var CK = { newsletter: ['Newsletter', PURPLE, RULE_TEXT], fundraising: ['Fundraising appeal', '#B9851B', RULE_TEXT],
+    volunteer: ['Volunteer call-out', TEAL, RULE_TEXT] };
   var CSTAT = { draft: ['Draft', MUTED], queued: ['Queued', '#B9851B'], sending: ['Sending', TEAL], sent: ['Sent', GREEN], cancelled: ['Stopped', FLAG] };
   function lchip(map, k) { var d = map[k] || [k || '?', MUTED]; return '<span class="w154chip" style="background:' + d[1] + '17;color:' + d[1] + '"><i style="background:' + d[1] + '"></i>' + E(d[0]) + '</span>'; }
   function sizes() {
@@ -148,7 +149,7 @@
       '<label class="w155lb">What it is for<input class="w152in" data-w155f="description" value="' + E(ed.description) + '" placeholder="Optional"></label>' +
       gs + '<button class="w152btn sm ghost" data-w155or>' + I('plus') + ' Or: another group</button>' +
       '<div data-w155res>' + prevHtml() + '</div>' +
-      (ed.del ? '<div class="w154msg">Delete “' + E(ed.name) + '”? Campaigns that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
+      (ed.del ? '<div class="w154msg">Delete “' + E(ed.name) + '”? Sends that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
       (LC.err ? '<div class="w152err">' + E(LC.err) + '</div>' : '') +
       '<div class="w154acts"><button class="w152btn" data-w155save="dynamic">' + I('check') + ' Save as a live list</button><button class="w152btn ghost" data-w155save="static">Save as a fixed list</button>' +
       (ed.id ? '<button class="w152btn ghost" data-w155del>' + I('trash') + ' Delete</button>' : '') + '<button class="w152btn ghost" data-w155cancel>Cancel</button></div></div>';
@@ -219,17 +220,17 @@
   }
   function campListHtml() {
     var cs = S.campaigns || [];
-    return '<div class="w154card wide"><h3>' + I('send') + ' Campaigns <span class="m">' + plural(cs.length, 'campaign', 'campaigns') + '</span></h3>' +
-      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New campaign</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
+    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + plural(cs.length, 'Send', 'Sends') + '</span></h3>' +
+      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New Send</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
       (LC.cmsg && !LC.c ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
-      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Campaign</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
-        : '<p class="m">No campaign yet. A campaign sends one message to a list, person by person, through the CASL rule.</p>') + '</div>';
+      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
+        : '<p class="m">No Send yet. A Send is one message to a list, sent person by person through the email rule.</p>') + '</div>';
   }
   function modeLine() {
     var st = MAIL.st && MAIL.st.settings ? MAIL.st.settings : null; if (!st) return '';
     var live = st.mail_mode === 'live';
-    return '<div class="w155mode ' + (live ? 'live' : 'test') + '">' + (live ? I('check') + ' Live: a campaign reaches its list.' : I('lock') + ' Test mode: campaigns can be written and tested, and go out once an admin switches the mode to live in the Email tab.') +
-      (st.mail_daily_cap ? ' Up to ' + E(st.mail_campaign_daily_cap || st.mail_daily_cap) + ' campaign emails a day (Resend’s free plan).' : '') + '</div>';
+    return '<div class="w155mode ' + (live ? 'live' : 'test') + '">' + (live ? I('check') + ' Live: a Send reaches its list.' : I('lock') + ' Test mode: Sends can be written and tested, and go out once an admin switches the mode to live in the Email tab.') +
+      (st.mail_daily_cap ? ' Up to ' + E(st.mail_campaign_daily_cap || st.mail_daily_cap) + ' emails from Sends a day.' : '') + '</div>';
   }
   function editorHtml() {
     var c = LC.c, ls = S.lists || [], me = myEmail();
@@ -239,14 +240,14 @@
     var fromSel = '<select class="w152sel" data-w155k="from" aria-label="From"><option value="org"' + (c.from === 'org' ? ' selected' : '') + '>' + E((st.mail_from_name || 'Welfare Avenue') + ' <' + (st.mail_from_email || 'info@welfareavenue.com') + '>') + '</option>' +
       (onDomainMe() ? '<option value="me"' + (c.from === 'me' ? ' selected' : '') + '>' + E(myName() + ' <' + me + '>') + '</option>' : '') + '<option value="custom"' + (c.from === 'custom' ? ' selected' : '') + '>Someone else on the team…</option></select>';
     var f = function (k, label, ph, area) { return '<label class="w155lb">' + E(label) + (area ? '<textarea class="w152in" data-w155k="' + k + '" rows="8" placeholder="' + E(ph || '') + '">' + E(c[k]) + '</textarea>' : '<input class="w152in" data-w155k="' + k + '" value="' + E(c[k]) + '" placeholder="' + E(ph || '') + '">') + '</label>'; };
-    return '<div class="w154card"><h3>' + I('send') + (c.id ? ' Edit the campaign' : ' New campaign') + '</h3>' + modeLine() +
+    return '<div class="w154card"><h3>' + I('send') + (c.id ? ' Edit the Send' : ' New Send') + '</h3>' + modeLine() +
       f('name', 'Name (for the team)', 'October volunteer call-out') +
       '<label class="w155lb">Send to' + listSel + '</label>' +
       '<label class="w155lb">Kind of message' + kindSel + '<span class="m">' + E((CK[c.kind] || CK.newsletter)[2]) + '</span></label>' +
       '<label class="w155lb">From' + fromSel + '</label>' +
       (c.from === 'custom' ? '<div class="w155two">' + f('from_name', 'Their name', 'Sama Saqib') + f('from_email', 'Their address', 'name@welfareavenue.com') + '</div>' : '') +
       f('subject', 'Subject', 'Sunday needs you, {{first_name|friend}}') + f('preheader', 'Preview text (the line after the subject in the inbox)', 'Servers and cooks wanted for 12 October') +
-      (c.studio ? '<div class="w155studio">' + I('spark') + ' <span>The message was designed in the email studio: <b>' + E((tplByKey(c.template_key) || {}).name || 'the studio’s email') + '</b>. Change its words, photos and button there; the subject and preview line here are what this campaign sends.</span>' +
+      (c.studio ? '<div class="w155studio">' + I('spark') + ' <span>The message was designed in the email studio: <b>' + E((tplByKey(c.template_key) || {}).name || 'the studio’s email') + '</b>. Change its words, photos and button there; the subject and preview line here are what this Send sends.</span>' +
         '<a class="w152btn sm ghost" href="#crm/studio/e/' + E(c.template_key) + '">' + I('edit') + ' Edit it in the studio</a></div>'
       : f('headline', 'Headline', 'Join us this Sunday') + f('body', 'Message (a blank line starts a new paragraph)', 'Hi {{first_name|there}},\n\nWe are serving at …', true) +
       '<div class="w155two">' + f('cta_label', 'Button', 'Sign up to serve') + f('cta_url', 'Button link', 'https://welfareavenue.com') + '</div>') +
@@ -264,9 +265,10 @@
     return '<div class="w155chk"><b>' + plural(k.eligible || 0, 'person gets it', 'people get it') + '</b> of ' + plural(k.audience || 0, 'person', 'people') + ' on the list' +
       (k.duplicates ? ' (' + plural(k.duplicates, 'shared address', 'shared addresses') + ' counted once)' : '') + '.' +
       (k.held ? '<div class="m">Held back by the rule: ' + plural(k.held, 'person', 'people') + '</div><ul>' + why + '</ul>' : '') +
+      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(Number(k.first_contacts).toLocaleString('en-CA') + ' of them have never had an email from Welfare Avenue: send them as a separate Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282) */
       (k.per_day ? '<div class="m">At up to ' + k.per_day + ' a day this takes ' + plural(k.days || 1, 'day', 'days') + '.</div>' : '') +
       (LC.confirm ? (live && k.eligible ? '<div class="w155cf"><b>Send it to ' + plural(k.eligible, 'person', 'people') + ' now?</b> The first ones go within the minute; the rest follow at Resend’s pace.<div class="w154acts"><button class="w152btn" data-w155cgo>' + I('send') + ' Send it</button><button class="w152btn ghost" data-w155cno>Not yet</button></div></div>'
-        : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this campaign cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
+        : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this Send cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
   }
   function previewPane() {
     var p = LC.cprev;
@@ -288,7 +290,7 @@
       '<div class="w152stats">' + tile(cs.bounced, 'bounced') + tile(cs.suppressed, 'held back by the rule') + tile(cs.failed, 'failed') + tile(cs.cancelled, 'cancelled') + '</div>' +
       (LC.cmsg ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
       '<div class="w154acts">' + ((k.status === 'sending' || k.status === 'queued') && waiting ? '<button class="w152btn ghost" data-w155cstop>Stop what is still waiting</button>' : '') +
-      '<button class="w152btn ghost" data-w155cdup>Copy into a new draft</button><button class="w152btn ghost" data-w155cclose>Back to the campaigns</button></div>' +
+      '<button class="w152btn ghost" data-w155cdup>Copy into a new draft</button><button class="w152btn ghost" data-w155cclose>Back to the Sends</button></div>' +
       '<h3 style="margin-top:18px">Recipients</h3>' + (rows ? (rows.length ? '<div class="w154sl">' + rows.slice(0, 300).map(function (r) {
         var c = contact(r.contact_id);
         return '<div class="w154sr"><span>' + (c ? '<a href="#crm/c/' + E(c.id) + '" data-w152open="' + E(c.id) + '">' + E(c.full_name || r.to_email) + '</a>' : E(r.to_email)) + '</span><span class="m">' + E(r.to_email) + '</span><span>' + mchip(MSTATUS, r.status) +
@@ -299,7 +301,7 @@
     var need = [];
     if (!S.campaigns) need.push(load('campaigns')); if (!S.cstats) need.push(load('cstats')); if (!S.lists) need.push(load('lists')); if (!S.templates) need.push(load('templates')); if (!LC.sizes) need.push(sizes());
     if (!MAIL.st) need.push(mailFn('settings').then(function (r) { if (r && !r.error) MAIL.st = r; else MAIL.st = MAIL.st || { settings: {} }; }));
-    if (need.length) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the campaigns…'); Promise.all(need).then(function () { if (S.ui.tab === 'campaigns') paint(); }); return; }
+    if (need.length) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the Sends…'); Promise.all(need).then(function () { if (S.ui.tab === 'campaigns') paint(); }); return; }
     var html = statsHtml(S.contacts || []) + tabsHtml();
     if (LC.cid && LC.cid !== 'new' && !LC.c) {
       var k = campById(LC.cid);
@@ -316,7 +318,7 @@
     var c = LC.c, st = MAIL.st && MAIL.st.settings ? MAIL.st.settings : {};
     var fromName = c.from === 'me' ? myName() : c.from === 'custom' ? String(c.from_name || '').trim() : '';
     var fromEmail = c.from === 'me' ? myEmail() : c.from === 'custom' ? String(c.from_email || '').trim().toLowerCase() : '';
-    return { name: String(c.name || '').trim() || String(c.subject || '').trim() || 'Untitled campaign', list_id: c.list_id ? Number(c.list_id) : null, template_key: c.template_key || 'newsletter', kind: c.kind,
+    return { name: String(c.name || '').trim() || String(c.subject || '').trim() || 'Untitled Send', list_id: c.list_id ? Number(c.list_id) : null, template_key: c.template_key || 'newsletter', kind: c.kind,
       subject: String(c.subject || '').trim() || null, preheader: String(c.preheader || '').trim() || null,
       vars: c.studio ? Object.assign({}, c.vars || {}, { studio: true }) : { headline: String(c.headline || '').trim(), body_text: String(c.body || ''), body_html: bodyHtml(c.body), cta_label: String(c.cta_label || '').trim() || 'Visit welfareavenue.com', cta_url: String(c.cta_url || '').trim() || 'https://welfareavenue.com' },
       from_name: fromName || null, from_email: fromEmail || null, reply_to: null, updated_by: actor(), updated_at: new Date().toISOString(), _st: st };
@@ -440,7 +442,7 @@
     if ((el = t.closest('[data-w155cno]'))) { e.preventDefault(); LC.confirm = false; paint(); return; }
     if ((el = t.closest('[data-w155cdel]'))) { e.preventDefault(); delCamp(); return; }
     if ((el = t.closest('[data-w155cstop]'))) { e.preventDefault(); stopCamp(LC.cid); return; }
-    if ((el = t.closest('[data-w155cdup]'))) { e.preventDefault(); var src = campById(LC.cid); if (!src) return; var copy = fromCampaign(src); copy.id = null; copy.name = (src.name || 'Campaign') + ' (copy)'; LC.c = copy; LC.cid = 'new'; LC.check = null; LC.cprev = null; LC.cmsg = ''; try { history.replaceState(null, '', '#crm/campaigns/new'); } catch (x) { /* fine */ } paint(); return; }
+    if ((el = t.closest('[data-w155cdup]'))) { e.preventDefault(); var src = campById(LC.cid); if (!src) return; var copy = fromCampaign(src); copy.id = null; copy.name = (src.name || 'Send') + ' (copy)'; LC.c = copy; LC.cid = 'new'; LC.check = null; LC.cprev = null; LC.cmsg = ''; try { history.replaceState(null, '', '#crm/campaigns/new'); } catch (x) { /* fine */ } paint(); return; }
   });
   function onField(e) {
     var t = e.target; if (!t || !t.closest || !t.closest('.w152root')) return;

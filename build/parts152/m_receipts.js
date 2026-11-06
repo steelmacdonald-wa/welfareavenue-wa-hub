@@ -9,7 +9,7 @@
      the PDF (mail-send, action receipt; a test copy to a test address while the Hub's email is in test mode), and the receipt
      says when it was emailed. The switch for online gifts (admins, only while receipts are on): every paid gift through the
      donation page gets its receipt issued and emailed by itself (stripe-events). Both switches stay off until an admin decides. */
-  var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0 };
+  var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0, row: null };
   LOADERS.rcpts = function () { return db.from('crm_receipts').select('id,serial,contact_id,tax_year,kind,status,gift_ids,amount,advantage_amount,eligible_amount,donor,issued_at,issued_by,replaces_id,replaced_by_id,cancelled_at,cancel_reason,pdf_path,cancelled_pdf_path,emailed_at,email_send_id').order('issued_at', { ascending: false }).order('id', { ascending: false }).limit(3000); };
   function rbMail(body) {
     if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
@@ -35,7 +35,10 @@
     }).catch(function (e) { return { error: String((e && e.message) || e) }; });
   }
   function rbOn() { return !!(GF.cfg && GF.cfg.receipt_mode === 'on'); }
-  function rbAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
+  /* wave283: issuing, replacing, cancelling and drawing follow can_issue (team leads, admins and finance: wa_can gifts_edit); is_admin only while the
+     database is older than wave283. The settings, the mode, the signature, the automatic switch and Email it stay with admins (their functions check admin). */
+  function rbAdmin() { var c = GF.cfg || {}; return !!(c.can_issue === undefined ? c.is_admin : c.can_issue); }
+  function rbIsAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
   function rbSave(bytes, name, type) {
     try {
       var blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: type || 'application/pdf' }), url = URL.createObjectURL(blob);
@@ -68,7 +71,7 @@
     var sig = '<div class="w158bsig">' + (cfg.signature ? (RB.sigUrl ? '<img src="' + E(RB.sigUrl) + '" alt="The signature on receipts">' : '<span class="m">A signature image is uploaded.</span>') : '<span class="m">No signature image yet.</span>') +
       (admin ? '<label class="w152btn sm ghost w158bup">' + I('edit') + (cfg.signature ? ' Replace the signature' : ' Upload the signature') + '<input type="file" accept="image/png,image/jpeg" data-w158bsig hidden></label>' : '') + '</div>';
     return '<div class="w158bmode ' + (on ? 'on' : 'off') + '"><b>Receipts from the Hub are ' + (on ? 'on' : 'off') + '.</b> ' +
-      (on ? 'Admins issue, replace and cancel them below; every receipt takes the next number.'
+      (on ? 'Team leads, admins and finance issue, replace and cancel them below; every receipt takes the next number.'
         : missing.length ? 'Before an admin can turn them on: ' + E(listJoin(missing)) + '.' : 'Everything is ready: an admin can turn them on once the treasurer and Steel agree.') + '</div>' +
       '<div class="w155lb">The signature on receipts <span class="m">the treasurer’s, or another person the board authorizes; a PNG or JPG on a white or clear background</span></div>' + sig +
       (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on admins can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
@@ -103,8 +106,10 @@
   }
   /* wave185: Email it */
   function rbEmail(id) {
-    RB.busy = 'mail:' + id; paint();
+    RB.busy = 'mail:' + id; RB.row = null; paint();
     rbMail({ action: 'receipt', receipt_id: Number(id) }).then(function (r) {
+      /* wave283: a do-not-contact donor: the receipt is kept, not emailed, and the row says so */
+      if (/do not contact/i.test(String(r.basis || r.error || ''))) { RB.row = { id: String(id), msg: 'Receipt not emailed: do not contact' }; RB.busy = ''; if (S.ui.tab === 'gifts') paint(); return; }
       if (r.error) { rbSay('Not emailed: ' + r.error, true); return; }
       if (r.status === 'suppressed') { rbSay('Not emailed: ' + (r.basis || 'the address does not work') + '. Download the PDF and send it another way.', true); return; }
       if (r.status !== 'sent') { rbSay('Not emailed: ' + (r.error || r.status || 'no answer'), true); return; }
@@ -193,7 +198,7 @@
     if (!n) return '';
     if (RB.run) return '<div class="w154msg">Issuing ' + RB.run.done + ' of ' + RB.run.total + '…</div>';
     if (!rbOn()) return '<p class="m">' + I('lock') + ' Issuing waits until receipts from the Hub are on.</p>';
-    if (!rbAdmin()) return '<p class="m">An admin issues the receipts.</p>';
+    if (!rbAdmin()) return '<p class="m">Team leads, admins and finance issue the receipts.</p>';
     return '<div class="w154acts"><button class="w152btn" data-w158brun="' + E(year) + '"' + (RB.busy ? ' disabled' : '') + '>' + I('send') + ' Issue one receipt per donor (' + n + ')</button></div>';
   }
 
@@ -233,7 +238,7 @@
     });
   }
   function rbIssuedHtml() {
-    var list = S.rcpts || [], admin = rbAdmin(), on = rbOn();
+    var list = S.rcpts || [], admin = rbAdmin(), mailer = rbIsAdmin(), on = rbOn();
     var bySerial = {}; list.forEach(function (r) { bySerial[r.id] = r.serial; });
     var rows = list.slice(0, 200).map(function (r) {
       var c = contact(r.contact_id), who = c ? '<a href="#crm/c/' + E(c.id) + '">' + E((r.donor && r.donor.name) || c.full_name) + '</a>' : E((r.donor && r.donor.name) || 'Contact ' + r.contact_id);
@@ -243,16 +248,17 @@
       else if (admin) acts.push('<button class="w152mini" data-w158bmake="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>Make the PDF</button>');
       if (r.cancelled_pdf_path) acts.push('<button class="w152mini" data-w158bpdf="' + E(r.id) + '" data-which="cancelled">Cancelled copy</button>');
       if (admin && r.status === 'issued') {
-        acts.push('<button class="w152mini" data-w185mail="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'mail:' + r.id ? 'Emailing…' : I('send') + (r.emailed_at ? ' Email it again' : ' Email it')) + '</button>');
+        if (mailer) acts.push('<button class="w152mini" data-w185mail="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'mail:' + r.id ? 'Emailing…' : I('send') + (r.emailed_at ? ' Email it again' : ' Email it')) + '</button>');
         if (on) acts.push('<button class="w152mini" data-w158bdo="replace" data-id="' + E(r.id) + '">Replace</button>');
         acts.push('<button class="w152mini" data-w158bdo="cancel" data-id="' + E(r.id) + '">Cancel</button>');
       }
       var mailed = r.status === 'issued' ? (r.emailed_at ? '<span class="w185mailed on" title="' + E('Emailed to the donor on ' + fmtDay(r.emailed_at)) + '">' + I('send') + ' Emailed ' + E(fmtDay(r.emailed_at)) + '</span>' : '<span class="w185mailed">Not emailed</span>') : '';
+      var said = RB.row && RB.row.id === String(r.id) ? '<div class="w158bwhy w283said" role="status">' + E(RB.row.msg) + '</div>' : '';
       var form = RB.act && String(RB.act.id) === String(r.id) ? '<div class="w158bwhy"><input class="w152in" data-w158breason="' + E(r.id) + '" placeholder="' + (RB.act.kind === 'replace' ? 'Why it is replaced (the address changed, a typo…)' : 'Why it is cancelled (issued in error…)') + '">' +
         '<button class="w152btn sm" data-w158bgo="' + E(RB.act.kind) + '" data-id="' + E(r.id) + '">' + (RB.act.kind === 'replace' ? 'Replace it' : 'Cancel it') + '</button><button class="w152btn sm ghost" data-w158bstop="1">Keep it</button></div>' : '';
       return '<div class="w158brow' + (r.status === 'cancelled' ? ' off' : '') + '"><span class="s"><b>' + E(r.serial) + '</b><span class="m">' + E(fmtDay(r.issued_at)) + (r.kind === 'annual' ? ' · ' + plural((r.gift_ids || []).length, 'gift', 'gifts') + ' in ' + E(r.tax_year) : '') + '</span></span>' +
         '<span class="w">' + who + '</span><span class="a">' + E(cents(r.eligible_amount)) + '</span><span class="t">' + gchip({ issued: ['Issued', GREEN], cancelled: [st, MUTED] }, r.status) + (r.cancel_reason ? '<span class="m"> ' + E(String(r.cancel_reason).replace(/^Replaced:\s*/, '')) + '</span>' : '') + mailed + '</span>' +
-        '<span class="x">' + acts.join('') + '</span>' + form + '</div>';
+        '<span class="x">' + acts.join('') + '</span>' + said + form + '</div>';
     }).join('');
     return '<div class="w154card wide"><h3>' + I('note') + ' Receipts issued by the Hub <span class="m">' + plural(list.length, 'receipt', 'receipts') + '</span></h3>' +
       (list.length ? '<div class="w158brows">' + rows + '</div>' : '<p class="m">None yet. Keela’s 55 receipts are the legal copies until receipts from the Hub are on; then each one issued here is listed with its PDF.</p>') + '</div>';

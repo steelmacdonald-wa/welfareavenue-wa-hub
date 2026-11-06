@@ -53,7 +53,14 @@
     hub: ['Added in the CRM', 'Contacts someone added on this page.'],
     zeffy: ['Zeffy', 'Donors from Zeffy.'],
     website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],
-    keela: ['Keela', 'Contacts from the Keela export.']
+    keela: ['Keela', 'Contacts from the Keela export.'],
+    /* wave283: the other sources in the CRM today */
+    cabm: ['CABM', 'Volunteers who came to us through the CABM.'],
+    drive: ['Drive 2020-2023', 'Volunteers from the 2020 to 2023 sheets on the Drive.'],
+    fcabq: ['Je B\u00e9n\u00e9vole (FCABQ)', 'Volunteers who came to us through Je B\u00e9n\u00e9vole (FCABQ).'],
+    email: ['By email', 'People who reached us by email.'],
+    website_account: ['Website account', 'People who made an account on welfareavenue.com.'],
+    hub_form: ['Hub form', 'People who answered one of the CRM\u2019s forms (hub.welfareavenue.com/f/).']
   };
   var LANGS = [['', 'Not known'], ['en', 'English'], ['fr', 'French'], ['other', 'Another language']];
   /* the email permission (Canada's anti-spam law, CASL) */
@@ -133,14 +140,19 @@
   function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
   function wRole() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
   function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
-  function amAdmin() { return wRole() === 'admin' || ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'].indexOf(myEmail()) >= 0; }
+  function amAdmin() { return wRole() === 'admin'; }   /* wave283: role admin only (no hard-coded addresses) */
   function actor() { return myEmail() || 'staff'; }
+  /* wave283: what the signed-in person may do (wa_my_caps, wave281: gifts_edit, import_admin, hr_private), loaded once by openCrm */
+  function can(cap) { return !!(S.caps || {})[cap]; }
+  /* the one email rule (Steel, 5 Nov 2026), in the words the page uses everywhere */
+  var RULE_TEXT = 'Newsletters, fundraising and volunteer emails go to everyone with a working address who has not unsubscribed. Receipts and confirmations go to any working address.';
+  var GIFT_REFUSED = 'Only team leads, admins and finance can change gifts.';
 
   /* ---------- the data ---------- */
   var COLS = 'id,full_name,first_name,last_name,emails,phones,primary_email,address,city,province,postal_code,country,language,kinds,tags,source,volunteer_id,member_id,' +
     'email_status,email_consent,consent_source,consent_at,implied_consent_until,sms_opt_out,notes,last_activity_at,created_at,updated_at,created_by,updated_by,legacy_refs,' +
     'volunteer_roles,volunteer_tags,volunteer_organization,last_applied,volunteer_needs_review,in_quo,legacy_servings,legacy_hours,hub_servings,last_serving_on,' +
-    'donation_total,donation_count,last_donation_at,org_names';
+    'donation_total,donation_count,last_donation_at,org_names,job_title,do_not_contact,dnc_reason';   /* wave283: the last three (wave281's crm_contacts_v) */
   var S = {
     contacts: null, dupes: null, counts: null, partners: null, gifts: null, loading: {}, at: {}, err: {},
     ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60, gq: '', gplat: '', gyear: '', gshow: 60 },
@@ -457,7 +469,7 @@
       '<button role="tab" class="' + (t === 'email' ? 'on' : '') + '" data-w152go="#crm/email">' + I('mail') + ' Email</button>' +
       '<button role="tab" class="' + (t === 'studio' ? 'on' : '') + '" data-w152go="#crm/studio">' + I('spark') + ' Studio</button>' +
       '<button role="tab" class="' + (t === 'lists' ? 'on' : '') + '" data-w152go="#crm/lists">' + I('list') + ' Lists</button>' +
-      '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Campaigns</button>' +
+      '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Sends</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
       '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button>' +
       '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
@@ -548,6 +560,20 @@
     if (window.w202 && window.w202.paint) window.w202.paint(el); else el.innerHTML = busy('The email studio is loading\u2026');
   }
   function openCrm(h) {
+    /* wave283: what this person may do comes first (wa_my_caps), so every loader and paint after it knows; {} on an error (nothing extra) */
+    if (S.caps === undefined && staffOk() && !boardMode() && typeof db !== 'undefined' && db && db.rpc) {
+      if (!S.capsLoading) {
+        S.capsLoading = true;
+        var root0 = mastFor(); if (root0) root0.innerHTML = busy('Loading the CRM\u2026');
+        Promise.resolve(db.rpc('wa_my_caps')).then(function (r) { S.caps = (r && !r.error && r.data && typeof r.data === 'object') ? r.data : {}; }, function () { S.caps = {}; })
+          .then(function () {
+            S.capsLoading = false;
+            var cur = decodeURIComponent(location.hash || '').replace(/^#/, '');   /* where the person is now (they may have moved on while it loaded) */
+            if (/^crm(\/|$)/.test(cur)) openCrm(cur); else if (!cur) openCrm(h);
+          });
+      }
+      return;
+    }
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
     S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : 'contacts';
@@ -586,7 +612,7 @@
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
     var o = document.getElementById('w152sheet'); if (o) { o.style.display = 'none'; o.innerHTML = ''; }
-    S.sheet = null; S.confirm = null;
+    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null;
     if (!quiet && /^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } }
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
@@ -607,13 +633,20 @@
       load('cfields'),
       /* wave157: the automations they are in */
       q(db.from('crm_automation_runs').select('id,automation_id,status,step_id,next_at,is_test,started_at,finished_at').eq('contact_id', c.id).eq('is_test', false).order('started_at', { ascending: false }).limit(50)),
-      load('autos')
+      load('autos'),
+      /* wave283: the age band (never the date), their chapters, and for HR and admins the birth date */
+      Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(c.id) })).then(function (x) { return x && !x.error && typeof x.data === 'string' ? x.data : null; }, function () { return null; }),
+      q(db.from('crm_contact_chapters').select('chapter,source').eq('contact_id', c.id)),
+      load('chapters'),
+      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null)
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now() };
+        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
+          age: r[10] || null, chapters: (r[11] || []).map(function (x) { return x.chapter; }),
+          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null };
         return S.detail[id];
       });
     });
@@ -624,12 +657,16 @@
   function langName(l) { var x = LANGS.filter(function (o) { return o[0] === l; })[0]; return x ? x[1] : (l || ''); }
   function telOf(p) { var d = digits(p); if (d.length === 10) d = '1' + d; return d ? '+' + d : ''; }
 
-  function detailsHtml(c) {
+  /* wave283: the postal code is left out when the street address already holds it (compared without spaces, ignoring case) */
+  function postalIn(addr, pc) { var a = String(addr || '').replace(/\s+/g, '').toLowerCase(), p = String(pc || '').replace(/\s+/g, '').toLowerCase(); return !!p && a.indexOf(p) >= 0; }
+  function detailsHtml(c, d) {
     var rows = [];
     if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
     if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
-    var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), c.postal_code].filter(Boolean).join(' \u00b7 ');
+    var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), postalIn(c.address, c.postal_code) ? '' : c.postal_code].filter(Boolean).join(' \u00b7 ');
     if (place) rows.push(['Address', E(place)]);
+    if (c.job_title) rows.push(['Job title', E(c.job_title)]);   /* wave283 */
+    if (d && d.age) rows.push(['Age', E(d.age)]);   /* wave283: crm_age_band, never the date */
     if (c.language) rows.push(['Language', E(langName(c.language))]);
     if (c.volunteer_organization) rows.push(['School or work', E(c.volunteer_organization)]);
     return rows.length ? '<div class="w152kv">' + rows.map(function (r) { return '<b>' + r[0] + '</b><span>' + r[1] + '</span>'; }).join('') + '</div>' : '<p class="w152pnote">No details yet.</p>';
@@ -767,14 +804,17 @@
     if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
     if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
     if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
-    qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');
+    if (can('gifts_edit')) qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');   /* wave283: gifts_edit */
     if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
     return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
+      (c.do_not_contact ? '<div class="w283dnc" role="status">' + I('lock') + ' <b>' + E(dncWords(c)) + '</b></div>' : '') +   /* wave283 */
+      (S.note && S.note.id === String(c.id) ? '<div class="w152warn" role="status">' + E(S.note.msg) + '</div>' : '') +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +
-      '<div class="w152sec"><h4>Contact details <button class="w152mini" data-w152edit="' + E(c.id) + '">' + I('edit') + 'Edit</button></h4>' + detailsHtml(c) + '</div>' +
+      '<div class="w152sec"><h4>Contact details <button class="w152mini" data-w152edit="' + E(c.id) + '">' + I('edit') + 'Edit</button></h4>' + detailsHtml(c, d) + '</div>' +
       '<div class="w152sec"><h4>With Welfare Avenue</h4>' + withUsHtml(c, d) + '</div>' +
       '<div class="w152sec"><h4>Email permission <button class="w152mini" data-w152perm-edit="' + E(c.id) + '">' + I('shield') + 'Change</button></h4>' + permHtml(c) + '</div>' +
+      '<div class="w152sec w283"><h4>Do not contact</h4>' + dncHtml(c) + '</div>' +
       '<div class="w152sec"><h4>Tags</h4>' + tagsHtml(c) + '</div>' +
       (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
       (d && d.runs && d.runs.length ? '<div class="w152sec"><h4>Automations</h4>' + contactAutosHtml(d) + '</div>' : '') +
@@ -834,14 +874,135 @@
       field('Street address', inp('address', x.address), true) +
       field('City', inp('city', x.city, 'Montreal')) + field('Province', inp('province', x.province, 'QC')) +
       field('Postal code', inp('postal_code', x.postal_code, 'H2X 1Y4')) + field('Language', sel('language', LANGS, x.language || '')) +
+      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer')) +   /* wave283 */
       '<div class="full lbl">What they are to us' + kindsBoxes(c, isNew) + '</div>' +
+      '<div class="full lbl w283">Chapter' + chapterBoxes(c) + '</div>' +   /* wave283: one toggle per active chapter (crm_contact_chapters, source hand) */
+      (can('hr_private') ? birthField(c) : '') +   /* wave283: HR and admins only (crm_contact_private) */
       (isNew ? field('Email permission', sel('perm', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: a recent gift, membership or volunteering'], ['none', 'No consent']], ''), false) +
         field('Where it came from', inp('perm_source', '', 'e.g. signed up at the gala'), false) : '') +
       field('Good to know', area('notes', x.notes, 'Anything the team should know: how they like to be reached, who knows them best'), true) +
       '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id || '') + '">Cancel</button>' +
       '<button class="w152btn" data-w152save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Add them' : ' Save') + '</button></div>';
     openSheet(html, isNew ? 'add' : 'edit:' + id, true);
+    fillEditExtras(c, isNew ? 'add' : 'edit:' + id);
   }
+  /* ---------- wave283: chapters, the birth date and do-not-contact on a contact ---------- */
+  LOADERS.chapters = function () { return db.from('crm_chapters').select('code,name_en,active,sort').eq('active', true).order('sort', { ascending: true }); };
+  function chapterBoxes(c) {
+    var d = c ? S.detail[String(c.id)] : null, ready = !!S.chapters && (!c || !!(d && d.chapters));
+    var had = ready && c ? d.chapters : [];
+    if (!ready) return '<div class="kinds" data-w283chs data-ready="0"><span class="m">Loading the chapters\u2026</span></div>';
+    return '<div class="kinds" data-w283chs data-ready="1" data-had="' + E(had.join(',')) + '">' + (S.chapters || []).map(function (ch) {
+      return '<label><input type="checkbox" data-w283ch="' + E(ch.code) + '"' + (had.indexOf(ch.code) >= 0 ? ' checked' : '') + '> ' + E(ch.name_en || ch.code) + '</label>';
+    }).join('') + '<span class="w152count">No chapter means Montreal in the lists.</span></div>';
+  }
+  function birthField(c) {
+    var d = c ? S.detail[String(c.id)] : null, v = d && typeof d.birth === 'string' ? d.birth : '';
+    var ready = !c || !!(d && d.birth !== null && d.birth !== undefined);
+    return field('Birth date', '<input data-f="birth_date" type="date" value="' + E(v) + '" data-had="' + E(v) + '"' + (ready ? '' : ' disabled data-w283wait="1"') + '>', false, 'HR and admins only; the team sees an age band');
+  }
+  /* the chapters and the birth date may still be loading when the form opens: fill those two in place, so nothing typed is lost */
+  function fillEditExtras(c, tag) {
+    var need = [];
+    if (!S.chapters) need.push(load('chapters'));
+    if (c && !S.detail[String(c.id)]) need.push(loadDetail(c));
+    if (!need.length) return;
+    Promise.all(need).then(function () {
+      if (S.sheet !== tag) return;
+      var o = document.getElementById('w152sheet'); if (!o) return;
+      var box = o.querySelector('[data-w283chs]'); if (box) box.outerHTML = chapterBoxes(c);
+      var bd = o.querySelector('[data-w283wait]');
+      if (bd && c) { var d = S.detail[String(c.id)], v = d && typeof d.birth === 'string' ? d.birth : ''; bd.value = v; bd.setAttribute('data-had', v); bd.disabled = false; bd.removeAttribute('data-w283wait'); }
+    });
+  }
+  /* after the contact row is saved: chapter rows added or removed (source hand), the birth date written; returns what did not save */
+  async function saveExtras(cid) {
+    var o = document.getElementById('w152sheet'), errs = [], d = S.detail[String(cid)];
+    if (!o || !/^\d+$/.test(String(cid))) return errs;
+    var box = o.querySelector('[data-w283chs]');
+    if (box && box.getAttribute('data-ready') === '1') {
+      var had = (box.getAttribute('data-had') || '').split(',').filter(Boolean), now = had.slice();
+      var want = Array.prototype.filter.call(box.querySelectorAll('[data-w283ch]'), function (el) { return el.checked; }).map(function (el) { return el.getAttribute('data-w283ch'); });
+      for (var i = 0; i < want.length; i++) {
+        if (had.indexOf(want[i]) >= 0) continue;
+        var ri = await db.from('crm_contact_chapters').insert({ contact_id: Number(cid), chapter: want[i], source: 'hand', source_ref: 'the CRM', added_by: actor() });
+        if (ri && ri.error) errs.push('the chapter ' + want[i]); else now.push(want[i]);
+      }
+      for (var j = 0; j < had.length; j++) {
+        if (want.indexOf(had[j]) >= 0) continue;
+        var rd = await db.from('crm_contact_chapters').delete().eq('contact_id', Number(cid)).eq('chapter', had[j]);
+        if (rd && rd.error) errs.push('removing the chapter ' + had[j]); else now = now.filter(function (x) { return x !== had[j]; });
+      }
+      if (now.slice().sort().join(',') !== had.slice().sort().join(',')) { if (d) d.chapters = now; audit(cid, 'chapters', had.join(', '), now.join(', ')); }
+    }
+    var bd = o.querySelector('[data-f="birth_date"]');
+    if (bd && can('hr_private') && !bd.disabled) {
+      var before = bd.getAttribute('data-had') || '', val = String(bd.value || '');
+      if (val !== before) {
+        var rb = val ? await db.from('crm_contact_private').upsert({ contact_id: Number(cid), birth_date: val, source: 'set by HR in the CRM', updated_by: actor(), updated_at: new Date().toISOString() })
+          : await db.from('crm_contact_private').delete().eq('contact_id', Number(cid));
+        if (rb && rb.error) errs.push('the birth date');
+        else {
+          if (d) d.birth = val;
+          audit(cid, 'birth_date', null, val ? 'birth date set' : 'birth date removed');   /* never the date itself (Part A.7) */
+          var ab = await Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(cid) })).catch(function () { return null; });
+          if (d) d.age = ab && !ab.error && typeof ab.data === 'string' ? ab.data : null;
+        }
+      }
+    }
+    return errs;
+  }
+  var DNC_REASONS = [['deceased', 'Deceased'], ['asked', 'They asked'], ['other', 'Other']];
+  function dncWords(c) { return 'Do not contact' + (c.dnc_reason ? ' (' + String(c.dnc_reason) + ')' : ''); }
+  function dncHtml(c) {
+    var st = S.dnc && S.dnc.id === String(c.id) ? S.dnc : {};
+    var err = '<span class="w152err" data-w283dncerr role="status">' + E(st.err || '') + '</span>';
+    if (c.do_not_contact) {
+      return '<div class="w152line">' + E(dncWords(c)) + '. <span class="w283m">No email of any kind, no texts and no WhatsApp. Receipts are still issued and kept, not emailed.</span></div>' +
+        (st.confirm ? '<div class="w283cf"><b>Clear do not contact for ' + E(c.full_name) + '?</b> This does not resubscribe them.' +
+            '<div class="w283acts"><button class="w152btn sm" data-w283dncclear="' + E(c.id) + '">Yes, clear it</button><button class="w152btn sm ghost" data-w283dnckeep="' + E(c.id) + '">Keep it</button></div></div>'
+          : '<button class="w152mini" data-w283dncask="' + E(c.id) + '">' + I('x') + 'Clear do not contact</button>') + err;
+    }
+    return '<div class="w283acts"><select class="w152sel" data-w283dncr aria-label="Why they are not to be contacted"><option value="">Why\u2026</option>' +
+      DNC_REASONS.map(function (r) { return '<option value="' + r[0] + '">' + E(r[1]) + '</option>'; }).join('') + '</select>' +
+      '<button class="w152btn sm ghost" data-w283dnc="' + E(c.id) + '">' + I('lock') + ' Do not contact</button></div>' +
+      '<p class="w283m">Stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>' + err;
+  }
+  function saveDnc(id, reason) {
+    var c = contact(id); if (!c) return;
+    if (reason !== null && DNC_REASONS.map(function (r) { return r[0]; }).indexOf(reason) < 0) { S.dnc = { id: String(c.id), err: 'Pick why first.' }; contactSheet(c.id); return; }
+    S.dnc = { id: String(c.id), err: '' };
+    Promise.resolve(db.rpc('crm_set_do_not_contact', { p_contact: Number(c.id), p_reason: reason })).then(function (r) {
+      if (r && r.error) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String(r.error.message || r.error).slice(0, 160) }; contactSheet(c.id); return; }
+      var before = c.do_not_contact ? dncWords(c) : null, st = lower(c.email_status);
+      /* what crm_set_do_not_contact did (wave281): with a reason, the flag and every opt-out; with none, the flag only (never a resubscribe) */
+      applyLocal(c.id, reason ? { do_not_contact: true, dnc_reason: reason, email_status: st === 'bounced' || st === 'complained' ? c.email_status : 'unsubscribed', sms_opt_out: true }
+        : { do_not_contact: false, dnc_reason: null });
+      if (reason) audit(c.id, 'do_not_contact', before, 'do not contact: ' + reason);   /* clearing is logged by the function itself */
+      S.dnc = null;
+      toastS(reason ? 'Do not contact is set' : 'Do not contact is cleared');
+      contactSheet(c.id); repaintBehind();
+    }, function (e) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String((e && e.message) || e).slice(0, 160) }; contactSheet(c.id); });
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target, el; if (!t || !t.closest || !t.closest('#w152sheet')) return;
+    if ((el = t.closest('[data-w283dnc]'))) { e.preventDefault(); var sl = document.querySelector('#w152sheet [data-w283dncr]'); saveDnc(el.getAttribute('data-w283dnc'), sl && sl.value ? sl.value : ''); return; }
+    if ((el = t.closest('[data-w283dncask]'))) { e.preventDefault(); S.dnc = { id: el.getAttribute('data-w283dncask'), confirm: true, err: '' }; contactSheet(el.getAttribute('data-w283dncask')); return; }
+    if ((el = t.closest('[data-w283dnckeep]'))) { e.preventDefault(); S.dnc = null; contactSheet(el.getAttribute('data-w283dnckeep')); return; }
+    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+  });
+  var css283 = document.createElement('style'); css283.id = 'w283css';
+  css283.textContent = ''
+    + '.w283dnc{display:flex;align-items:center;gap:8px;margin:10px 40px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;}'
+    + '.w283dnc .w152i{width:16px;height:16px;flex:none;}'
+    + '.w283acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0;}.w283acts .w152sel{width:auto;}'
+    + '.w283m{color:#6B6965;font-size:12.5px;line-height:1.45;}'
+    + '.w283cf{background:rgba(16,63,57,.05);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
+    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}'
+    + '.w283first{margin:8px 0 4px;font-size:13.5px;font-weight:600;line-height:1.45;}'
+    + '.w283 button:focus-visible,.w283 select:focus-visible,.w283 input:focus-visible,.w283cf button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.35);}'
+    + '@keyframes w283in{from{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.w283cf{animation:none;}}';
+  document.head.appendChild(css283);
   function permForm(id) {
     var c = contact(id); if (!c) return;
     var until = c.implied_consent_until ? dayOf(c.implied_consent_until) : (c._last ? addYears(c._last, 2) : '');
@@ -895,7 +1056,7 @@
     var fixedKinds = c ? c.kinds.filter(function (k) { return KIND_HAND.indexOf(k) < 0; }) : [];
     var kinds = uniq(fixedKinds.concat(v._kinds.filter(function (k) { return k !== 'volunteer' || isNew; })));
     var row = { full_name: v.full_name, first_name: np.first, last_name: np.last, emails: emails, phones: phones, address: v.address || null, city: v.city || null,
-      province: v.province || null, postal_code: v.postal_code ? v.postal_code.toUpperCase() : null, language: v.language || null, kinds: kinds, notes: v.notes || null, updated_by: actor() };
+      province: v.province || null, postal_code: v.postal_code ? v.postal_code.toUpperCase() : null, language: v.language || null, kinds: kinds, notes: v.notes || null, job_title: v.job_title || null, updated_by: actor() };
     try {
       if (isNew) {
         /* the same person twice is the most common CRM mistake: stop at an email or a phone we already have */
@@ -944,7 +1105,9 @@
         var nc = shape(Object.assign({ id: newId, kinds: [], tags: [], emails: [], phones: [], created_at: new Date().toISOString(), hub_servings: 0, legacy_servings: 0, legacy_hours: 0, donation_total: 0, donation_count: 0, org_names: [], volunteer_roles: [], volunteer_tags: [] }, row));
         S.contacts.push(nc); BY_ID[String(nc.id)] = nc; S.confirm = null;
         audit(newId, 'created', null, row.full_name);
-        S.detail[String(newId)] = { ints: [], gifts: [], hist: [], roster: [], events: [], orgs: [], at: Date.now() };
+        S.detail[String(newId)] = { ints: [], gifts: [], hist: [], roster: [], events: [], orgs: [], at: Date.now(), chapters: [], birth: '', age: null };
+        var xnew = await saveExtras(newId);   /* wave283: chapters and the birth date */
+        if (xnew.length) S.note = { id: String(newId), msg: 'Added, but not saved: ' + listJoin(xnew) + '. Open Edit to try again.' };
         toastS(row.full_name + ' is in the CRM');
         try { history.replaceState(null, '', '#crm/c/' + newId); } catch (e) { /* fine */ }
         contactSheet(newId); repaintBehind();
@@ -954,9 +1117,11 @@
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;
       if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }
-      var changed = ['full_name', 'emails', 'phones', 'address', 'city', 'province', 'postal_code', 'language', 'kinds', 'notes'].filter(function (k) { return JSON.stringify(c[k] == null ? null : c[k]) !== JSON.stringify(row[k] == null ? null : row[k]); });
+      var changed = ['full_name', 'emails', 'phones', 'address', 'city', 'province', 'postal_code', 'language', 'kinds', 'notes', 'job_title'].filter(function (k) { return JSON.stringify(c[k] == null ? null : c[k]) !== JSON.stringify(row[k] == null ? null : row[k]); });
       applyLocal(c.id, row);
       if (changed.length) audit(c.id, 'details', null, changed.join(', '));
+      var xerr = await saveExtras(c.id);   /* wave283: chapters and the birth date */
+      if (xerr.length) { showErr('Saved the details, but not ' + listJoin(xerr) + '. Try again.'); repaintBehind(); return; }
       toastS('Saved'); contactSheet(c.id); repaintBehind();
     } catch (e) { showErr('Could not save: ' + String((e && e.message) || e).slice(0, 160)); }
   }
@@ -1149,7 +1314,7 @@
     var next = [
       ['Volunteer history from the old website', 'Every event each volunteer signed up for, was confirmed for and served at, from the Django site.', st(k.hist, 'Next')],
       ['Messages from the website', 'What people write through the contact form on welfareavenue.com, on the sender\u2019s timeline.', st(k.msgs, 'Next')],
-      ['Gifts and tax receipts from Zeffy', 'Every donation with its receipt, on the donor\u2019s timeline and in their total.', st(k.gifts, 'Later')],
+      ['Gifts and tax receipts from Keela', 'Every donation with its receipt, on the donor\u2019s timeline and in their total.', st(k.gifts, 'Later')],
       ['The Keela export', 'Donors and supporters from Keela, merged with the people already here.', keela ? '<span class="st on">' + keela + ' in</span>' : '<span class="st next">When it arrives</span>']
     ].map(function (r) { return '<div class="w152srow nx"><div><div class="tt">' + E(r[0]) + '</div><p>' + E(r[1]) + '</p></div>' + r[2] + '</div>'; }).join('');
     var ok = (perm.express || 0) + (perm.implied || 0);
@@ -1164,7 +1329,7 @@
       '<div class="w152card"><h3>Where they come from <span>' + plural(all.length, 'contact', 'contacts') + '</span></h3>' + srcRows + '</div>' +
       '<div class="w152card"><h3>What joins next</h3>' + next + '</div>' +
       '<div class="w152card"><h3>Email permission <span>' + plural(ok, 'contact', 'contacts') + ' can get a newsletter today</span></h3>' + pr +
-      '<p class="w152pnote">Campaigns go only to express consent, or implied consent that has not run out (CASL). Everyone else is asked first.</p></div>' +
+      '<p class="w152pnote">Sends follow one rule: ' + E(RULE_TEXT) + '</p></div>' +
       '<div class="w152card"><h3>To tidy</h3>' + tidy + '</div></div>';
     if (!S.counts) loadCounts().then(function () { if (S.ui.tab === 'sources') paint(); });
     /* wave159a: what Leaving Keela reads */
@@ -1226,7 +1391,7 @@
       '<div class="w152bar"><label class="w152q">' + I('search') + '<input type="search" data-w152gq="1" value="' + E(u.gq) + '" placeholder="Search a donor, campaign, receipt number or platform" aria-label="Search the gifts"></label>' +
       '<select class="w152sel" data-w152gplat aria-label="Platform"><option value="">Every platform</option>' + Object.keys(plats).sort().map(function (p) { return '<option value="' + E(p) + '"' + (u.gplat === p ? ' selected' : '') + '>' + E(platName(p)) + '</option>'; }).join('') + '</select>' +
       '<select class="w152sel" data-w152gyear aria-label="Fiscal year"><option value="">Every year</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option value="' + E(y) + '"' + (u.gyear === y ? ' selected' : '') + '>FY ' + E(y) + ' (Oct ' + (Number(y) - 1) + ' to Sep ' + E(y) + ')</option>'; }).join('') + '</select>' +
-      '<button class="w152btn" data-w158new="1">' + I('plus') + ' Record a gift</button><button class="w152btn ghost" data-w152go="#crm/gifts/receipts">' + I('note') + ' Receipts</button><button class="w152btn ghost" data-w152go="#crm/gifts/online">' + I('card') + ' Online giving</button></div>' + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
+      (can('gifts_edit') ? '<button class="w152btn" data-w158new="1">' + I('plus') + ' Record a gift</button>' : '') + '<button class="w152btn ghost" data-w152go="#crm/gifts/receipts">' + I('note') + ' Receipts</button><button class="w152btn ghost" data-w152go="#crm/gifts/online">' + I('card') + ' Online giving</button></div>' + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
       '<div class="w152count">' + (filtered ? plural(list.length, 'gift matches', 'gifts match') + ' (' + E(money(sel)) + ') \u00b7 <button class="w152mini" data-w152gclear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'gift', 'gifts') + ', newest first') +
       (shown.length < list.length ? ' \u00b7 showing the first ' + shown.length : '') + '</div>' +
       (shown.length ? '<div class="w152list w153gifts" role="list"><div class="w152lh" aria-hidden="true"><span>When</span><span>Donor</span><span>Amount</span><span>Campaign and platform</span><span>Receipt</span></div>' + shown.map(giftRow).join('') + '</div>' +
@@ -1328,7 +1493,6 @@
       field('Reply-to', inp('mail_reply_to', s.mail_reply_to, 'info@welfareavenue.com')) +
       field('Mode', sel('mail_mode', [['test', 'Test mode: only the test recipients get email'], ['live', 'Live: any contact the rule allows']], s.mail_mode || 'test'), false, 'switching to live is the go-ahead for real sends') +
       field('Test recipients', inp('mail_test_recipients', s.mail_test_recipients, 'name@welfareavenue.com, other@\u2026'), true, 'separated by commas') +
-      field('Fundraising without consent', sel('mail_fundraising_exemption', [['off', 'Off: appeals follow the newsletter rule (consent needed)'], ['on', 'On: a registered charity may send appeals without consent (CASL s.6 exemption)']], s.mail_fundraising_exemption || 'off'), true) +
       field('Postal address in the footer', inp('mail_postal_address', s.mail_postal_address, 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9'), true) +
       '</div><div class="w152foot"><span class="w152err">' + E(MAIL.ferr) + '</span><button class="w152btn ghost sm" data-w154cancel="1">Cancel</button><button class="w152btn sm" data-w154savecfg="1">' + I('check') + ' Save the settings</button></div>';
   }
@@ -1402,7 +1566,7 @@
   }
   function ruleHtml() {
     return '<section class="w154card wide w154rule"><h3>' + I('shield') + ' How the rule works</h3>' +
-      '<p>Canada\u2019s anti-spam law (CASL) decides who gets what, and the Hub applies it before every send. Confirmations, reminders and receipts are not commercial messages, so they go to anyone whose address works. Newsletters and appeals need <b>express consent</b> (they said yes) or <b>implied consent</b>: Welfare Avenue is a registered charity (no. 713048502RR0001), so a gift or a serving gives two years of implied consent from that day. Someone who unsubscribed or whose address bounces never gets a newsletter or an appeal. Every email carries our postal address and an unsubscribe link, and each send sits on the contact\u2019s timeline with what happened to it. Implied consent is refreshed every morning from the gifts and the rosters.</p></section>';
+      '<p>' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email. The Hub applies the rule before every send. Every email carries our postal address and an unsubscribe link, and each one sits on the contact\u2019s timeline with what happened to it.</p></section>';   /* wave283: one rule (Steel, 5 Nov 2026) */
   }
   function paintEmail(root) {
     var u = S.ui;
@@ -1453,7 +1617,7 @@
   }
   function saveSettings() {
     var v = formVals(); MAIL.ferr = '';
-    var body = { mail_from_name: v.mail_from_name, mail_from_email: v.mail_from_email, mail_reply_to: v.mail_reply_to, mail_mode: v.mail_mode, mail_test_recipients: v.mail_test_recipients, mail_fundraising_exemption: v.mail_fundraising_exemption, mail_postal_address: v.mail_postal_address };
+    var body = { mail_from_name: v.mail_from_name, mail_from_email: v.mail_from_email, mail_reply_to: v.mail_reply_to, mail_mode: v.mail_mode, mail_test_recipients: v.mail_test_recipients, mail_postal_address: v.mail_postal_address };   /* wave283: no fundraising switch (one rule) */
     MAIL.busy = 'Saving the settings'; paint();
     return mailFn('set_settings', body).then(function (r) {
       MAIL.busy = '';
@@ -1592,8 +1756,9 @@
   LOADERS.lists = function () { return db.from('crm_lists').select('*').order('updated_at', { ascending: false }); };
   LOADERS.campaigns = function () { return db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(300); };
   LOADERS.cstats = function () { return db.from('crm_campaign_stats_v').select('*'); };
-  var CK = { newsletter: ['Newsletter', PURPLE, 'People who said yes, or gave or served in the last two years.'], fundraising: ['Fundraising appeal', '#B9851B', 'The same people as a newsletter (the exemption setting is off).'],
-    volunteer: ['Volunteer call-out', TEAL, 'Everyone on the list with a working address who has not unsubscribed.'] };
+  /* wave283: one rule for every kind of Send (Steel, 5 Nov 2026) */
+  var CK = { newsletter: ['Newsletter', PURPLE, RULE_TEXT], fundraising: ['Fundraising appeal', '#B9851B', RULE_TEXT],
+    volunteer: ['Volunteer call-out', TEAL, RULE_TEXT] };
   var CSTAT = { draft: ['Draft', MUTED], queued: ['Queued', '#B9851B'], sending: ['Sending', TEAL], sent: ['Sent', GREEN], cancelled: ['Stopped', FLAG] };
   function lchip(map, k) { var d = map[k] || [k || '?', MUTED]; return '<span class="w154chip" style="background:' + d[1] + '17;color:' + d[1] + '"><i style="background:' + d[1] + '"></i>' + E(d[0]) + '</span>'; }
   function sizes() {
@@ -1729,7 +1894,7 @@
       '<label class="w155lb">What it is for<input class="w152in" data-w155f="description" value="' + E(ed.description) + '" placeholder="Optional"></label>' +
       gs + '<button class="w152btn sm ghost" data-w155or>' + I('plus') + ' Or: another group</button>' +
       '<div data-w155res>' + prevHtml() + '</div>' +
-      (ed.del ? '<div class="w154msg">Delete \u201c' + E(ed.name) + '\u201d? Campaigns that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
+      (ed.del ? '<div class="w154msg">Delete \u201c' + E(ed.name) + '\u201d? Sends that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
       (LC.err ? '<div class="w152err">' + E(LC.err) + '</div>' : '') +
       '<div class="w154acts"><button class="w152btn" data-w155save="dynamic">' + I('check') + ' Save as a live list</button><button class="w152btn ghost" data-w155save="static">Save as a fixed list</button>' +
       (ed.id ? '<button class="w152btn ghost" data-w155del>' + I('trash') + ' Delete</button>' : '') + '<button class="w152btn ghost" data-w155cancel>Cancel</button></div></div>';
@@ -1800,17 +1965,17 @@
   }
   function campListHtml() {
     var cs = S.campaigns || [];
-    return '<div class="w154card wide"><h3>' + I('send') + ' Campaigns <span class="m">' + plural(cs.length, 'campaign', 'campaigns') + '</span></h3>' +
-      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New campaign</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
+    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + plural(cs.length, 'Send', 'Sends') + '</span></h3>' +
+      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New Send</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
       (LC.cmsg && !LC.c ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
-      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Campaign</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
-        : '<p class="m">No campaign yet. A campaign sends one message to a list, person by person, through the CASL rule.</p>') + '</div>';
+      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
+        : '<p class="m">No Send yet. A Send is one message to a list, sent person by person through the email rule.</p>') + '</div>';
   }
   function modeLine() {
     var st = MAIL.st && MAIL.st.settings ? MAIL.st.settings : null; if (!st) return '';
     var live = st.mail_mode === 'live';
-    return '<div class="w155mode ' + (live ? 'live' : 'test') + '">' + (live ? I('check') + ' Live: a campaign reaches its list.' : I('lock') + ' Test mode: campaigns can be written and tested, and go out once an admin switches the mode to live in the Email tab.') +
-      (st.mail_daily_cap ? ' Up to ' + E(st.mail_campaign_daily_cap || st.mail_daily_cap) + ' campaign emails a day (Resend\u2019s free plan).' : '') + '</div>';
+    return '<div class="w155mode ' + (live ? 'live' : 'test') + '">' + (live ? I('check') + ' Live: a Send reaches its list.' : I('lock') + ' Test mode: Sends can be written and tested, and go out once an admin switches the mode to live in the Email tab.') +
+      (st.mail_daily_cap ? ' Up to ' + E(st.mail_campaign_daily_cap || st.mail_daily_cap) + ' emails from Sends a day.' : '') + '</div>';
   }
   function editorHtml() {
     var c = LC.c, ls = S.lists || [], me = myEmail();
@@ -1820,14 +1985,14 @@
     var fromSel = '<select class="w152sel" data-w155k="from" aria-label="From"><option value="org"' + (c.from === 'org' ? ' selected' : '') + '>' + E((st.mail_from_name || 'Welfare Avenue') + ' <' + (st.mail_from_email || 'info@welfareavenue.com') + '>') + '</option>' +
       (onDomainMe() ? '<option value="me"' + (c.from === 'me' ? ' selected' : '') + '>' + E(myName() + ' <' + me + '>') + '</option>' : '') + '<option value="custom"' + (c.from === 'custom' ? ' selected' : '') + '>Someone else on the team\u2026</option></select>';
     var f = function (k, label, ph, area) { return '<label class="w155lb">' + E(label) + (area ? '<textarea class="w152in" data-w155k="' + k + '" rows="8" placeholder="' + E(ph || '') + '">' + E(c[k]) + '</textarea>' : '<input class="w152in" data-w155k="' + k + '" value="' + E(c[k]) + '" placeholder="' + E(ph || '') + '">') + '</label>'; };
-    return '<div class="w154card"><h3>' + I('send') + (c.id ? ' Edit the campaign' : ' New campaign') + '</h3>' + modeLine() +
+    return '<div class="w154card"><h3>' + I('send') + (c.id ? ' Edit the Send' : ' New Send') + '</h3>' + modeLine() +
       f('name', 'Name (for the team)', 'October volunteer call-out') +
       '<label class="w155lb">Send to' + listSel + '</label>' +
       '<label class="w155lb">Kind of message' + kindSel + '<span class="m">' + E((CK[c.kind] || CK.newsletter)[2]) + '</span></label>' +
       '<label class="w155lb">From' + fromSel + '</label>' +
       (c.from === 'custom' ? '<div class="w155two">' + f('from_name', 'Their name', 'Sama Saqib') + f('from_email', 'Their address', 'name@welfareavenue.com') + '</div>' : '') +
       f('subject', 'Subject', 'Sunday needs you, {{first_name|friend}}') + f('preheader', 'Preview text (the line after the subject in the inbox)', 'Servers and cooks wanted for 12 October') +
-      (c.studio ? '<div class="w155studio">' + I('spark') + ' <span>The message was designed in the email studio: <b>' + E((tplByKey(c.template_key) || {}).name || 'the studio\u2019s email') + '</b>. Change its words, photos and button there; the subject and preview line here are what this campaign sends.</span>' +
+      (c.studio ? '<div class="w155studio">' + I('spark') + ' <span>The message was designed in the email studio: <b>' + E((tplByKey(c.template_key) || {}).name || 'the studio\u2019s email') + '</b>. Change its words, photos and button there; the subject and preview line here are what this Send sends.</span>' +
         '<a class="w152btn sm ghost" href="#crm/studio/e/' + E(c.template_key) + '">' + I('edit') + ' Edit it in the studio</a></div>'
       : f('headline', 'Headline', 'Join us this Sunday') + f('body', 'Message (a blank line starts a new paragraph)', 'Hi {{first_name|there}},\n\nWe are serving at \u2026', true) +
       '<div class="w155two">' + f('cta_label', 'Button', 'Sign up to serve') + f('cta_url', 'Button link', 'https://welfareavenue.com') + '</div>') +
@@ -1845,9 +2010,10 @@
     return '<div class="w155chk"><b>' + plural(k.eligible || 0, 'person gets it', 'people get it') + '</b> of ' + plural(k.audience || 0, 'person', 'people') + ' on the list' +
       (k.duplicates ? ' (' + plural(k.duplicates, 'shared address', 'shared addresses') + ' counted once)' : '') + '.' +
       (k.held ? '<div class="m">Held back by the rule: ' + plural(k.held, 'person', 'people') + '</div><ul>' + why + '</ul>' : '') +
+      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(Number(k.first_contacts).toLocaleString('en-CA') + ' of them have never had an email from Welfare Avenue: send them as a separate Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282) */
       (k.per_day ? '<div class="m">At up to ' + k.per_day + ' a day this takes ' + plural(k.days || 1, 'day', 'days') + '.</div>' : '') +
       (LC.confirm ? (live && k.eligible ? '<div class="w155cf"><b>Send it to ' + plural(k.eligible, 'person', 'people') + ' now?</b> The first ones go within the minute; the rest follow at Resend\u2019s pace.<div class="w154acts"><button class="w152btn" data-w155cgo>' + I('send') + ' Send it</button><button class="w152btn ghost" data-w155cno>Not yet</button></div></div>'
-        : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this campaign cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
+        : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this Send cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
   }
   function previewPane() {
     var p = LC.cprev;
@@ -1869,7 +2035,7 @@
       '<div class="w152stats">' + tile(cs.bounced, 'bounced') + tile(cs.suppressed, 'held back by the rule') + tile(cs.failed, 'failed') + tile(cs.cancelled, 'cancelled') + '</div>' +
       (LC.cmsg ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
       '<div class="w154acts">' + ((k.status === 'sending' || k.status === 'queued') && waiting ? '<button class="w152btn ghost" data-w155cstop>Stop what is still waiting</button>' : '') +
-      '<button class="w152btn ghost" data-w155cdup>Copy into a new draft</button><button class="w152btn ghost" data-w155cclose>Back to the campaigns</button></div>' +
+      '<button class="w152btn ghost" data-w155cdup>Copy into a new draft</button><button class="w152btn ghost" data-w155cclose>Back to the Sends</button></div>' +
       '<h3 style="margin-top:18px">Recipients</h3>' + (rows ? (rows.length ? '<div class="w154sl">' + rows.slice(0, 300).map(function (r) {
         var c = contact(r.contact_id);
         return '<div class="w154sr"><span>' + (c ? '<a href="#crm/c/' + E(c.id) + '" data-w152open="' + E(c.id) + '">' + E(c.full_name || r.to_email) + '</a>' : E(r.to_email)) + '</span><span class="m">' + E(r.to_email) + '</span><span>' + mchip(MSTATUS, r.status) +
@@ -1880,7 +2046,7 @@
     var need = [];
     if (!S.campaigns) need.push(load('campaigns')); if (!S.cstats) need.push(load('cstats')); if (!S.lists) need.push(load('lists')); if (!S.templates) need.push(load('templates')); if (!LC.sizes) need.push(sizes());
     if (!MAIL.st) need.push(mailFn('settings').then(function (r) { if (r && !r.error) MAIL.st = r; else MAIL.st = MAIL.st || { settings: {} }; }));
-    if (need.length) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the campaigns\u2026'); Promise.all(need).then(function () { if (S.ui.tab === 'campaigns') paint(); }); return; }
+    if (need.length) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the Sends\u2026'); Promise.all(need).then(function () { if (S.ui.tab === 'campaigns') paint(); }); return; }
     var html = statsHtml(S.contacts || []) + tabsHtml();
     if (LC.cid && LC.cid !== 'new' && !LC.c) {
       var k = campById(LC.cid);
@@ -1897,7 +2063,7 @@
     var c = LC.c, st = MAIL.st && MAIL.st.settings ? MAIL.st.settings : {};
     var fromName = c.from === 'me' ? myName() : c.from === 'custom' ? String(c.from_name || '').trim() : '';
     var fromEmail = c.from === 'me' ? myEmail() : c.from === 'custom' ? String(c.from_email || '').trim().toLowerCase() : '';
-    return { name: String(c.name || '').trim() || String(c.subject || '').trim() || 'Untitled campaign', list_id: c.list_id ? Number(c.list_id) : null, template_key: c.template_key || 'newsletter', kind: c.kind,
+    return { name: String(c.name || '').trim() || String(c.subject || '').trim() || 'Untitled Send', list_id: c.list_id ? Number(c.list_id) : null, template_key: c.template_key || 'newsletter', kind: c.kind,
       subject: String(c.subject || '').trim() || null, preheader: String(c.preheader || '').trim() || null,
       vars: c.studio ? Object.assign({}, c.vars || {}, { studio: true }) : { headline: String(c.headline || '').trim(), body_text: String(c.body || ''), body_html: bodyHtml(c.body), cta_label: String(c.cta_label || '').trim() || 'Visit welfareavenue.com', cta_url: String(c.cta_url || '').trim() || 'https://welfareavenue.com' },
       from_name: fromName || null, from_email: fromEmail || null, reply_to: null, updated_by: actor(), updated_at: new Date().toISOString(), _st: st };
@@ -2021,7 +2187,7 @@
     if ((el = t.closest('[data-w155cno]'))) { e.preventDefault(); LC.confirm = false; paint(); return; }
     if ((el = t.closest('[data-w155cdel]'))) { e.preventDefault(); delCamp(); return; }
     if ((el = t.closest('[data-w155cstop]'))) { e.preventDefault(); stopCamp(LC.cid); return; }
-    if ((el = t.closest('[data-w155cdup]'))) { e.preventDefault(); var src = campById(LC.cid); if (!src) return; var copy = fromCampaign(src); copy.id = null; copy.name = (src.name || 'Campaign') + ' (copy)'; LC.c = copy; LC.cid = 'new'; LC.check = null; LC.cprev = null; LC.cmsg = ''; try { history.replaceState(null, '', '#crm/campaigns/new'); } catch (x) { /* fine */ } paint(); return; }
+    if ((el = t.closest('[data-w155cdup]'))) { e.preventDefault(); var src = campById(LC.cid); if (!src) return; var copy = fromCampaign(src); copy.id = null; copy.name = (src.name || 'Send') + ' (copy)'; LC.c = copy; LC.cid = 'new'; LC.check = null; LC.cprev = null; LC.cmsg = ''; try { history.replaceState(null, '', '#crm/campaigns/new'); } catch (x) { /* fine */ } paint(); return; }
   });
   function onField(e) {
     var t = e.target; if (!t || !t.closest || !t.closest('.w152root')) return;
@@ -3454,6 +3620,8 @@
   }
   function giftForm(id, contactId) {
     var g = id ? giftById(id) : null, isNew = !g, hub = !g || lower(g.platform) === 'hub';
+    var mayEdit = can('gifts_edit');   /* wave283: team leads, admins and finance (wa_my_caps); everyone with the CRM reads gifts */
+    if (isNew && !mayEdit) { openSheet('<h2>Record a gift</h2><div class="w152err" role="status">' + E(GIFT_REFUSED) + '</div><div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button></div>', 'gift:new', true); return; }
     var x = g || { contact_id: contactId || null, amount: '', donated_at: today(), kind: 'donation', method: 'cheque', campaign: '', designation: '', advantage_amount: 0, advantage_desc: '', in_kind_desc: '', appraiser: '', tribute_kind: '', tribute_name: '', notes: '', platform: 'hub' };
     var c = x.contact_id ? contact(x.contact_id) : null;
     var donor = c ? '<div class="w158donor">' + avatar(c) + '<b>' + E(c.full_name) + '</b><span class="m">' + E(c.emails[0] || '') + '</span></div>'
@@ -3475,10 +3643,13 @@
       field('In honour or memory of', sel('tribute_kind', [['', 'No'], ['honour', 'In honour of'], ['memory', 'In memory of']], x.tribute_kind || '')) + field('Their name', inp('tribute_name', x.tribute_name, 'Their name')) +
       field('Notes', area('notes', x.notes, 'Cheque number, who dropped it off, anything the treasurer should know'), true) +
       '<div class="note full w158rule" data-w158rule>' + E(receiptRule(x)[1]) + '</div>' +
-      '</div><div class="w152foot"><span class="w152err" data-w152err></span>' +
-      (!isNew && hub && amAdmin() ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +
+      (mayEdit ? '' : '<div class="note full" data-w283ro>' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>') +
+      '</div><div class="w152foot"><span class="w152err" data-w152err role="status"></span>' +
+      (!isNew && hub && mayEdit ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
       (!isNew ? '<button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button>' : '') +
-      '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button></div>';
+      (mayEdit ? '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button>'
+        : '<button class="w152btn" data-w152close="1">Close</button>') + '</div>';
+    if (!mayEdit) html = html.replace(/<(input|select|textarea)\b/g, '<$1 disabled');   /* read-only: every field, no save or delete */
     openSheet(html, 'gift:' + (id || 'new'), true);
   }
   function giftFormValues(box) {
@@ -3503,6 +3674,7 @@
     var id = box.getAttribute('data-w158gift'), g = id !== 'new' ? giftById(id) : null, hub = !g || lower(g.platform) === 'hub';
     var v = giftFormValues(box), err = sh.querySelector('[data-w152err]');
     var say = function (m) { if (err) err.textContent = m; };
+    if (!can('gifts_edit')) { say(GIFT_REFUSED); return; }
     var cid = donorFrom(v, box), amt = Number(v.amount), adv = Number(v.advantage_amount) || 0;
     if (!cid) { say('Pick the donor from the list (type a name or an email).'); return; }
     if (hub && !(amt > 0)) { say('The amount must be more than $0.'); return; }
@@ -3520,14 +3692,19 @@
       : db.from('crm_donations').insert(Object.assign({ contact_id: cid, platform: 'hub', created_by: actor(), receipt_eligible: row.kind !== 'sponsorship' && row.kind !== 'other' }, row)).select().single();
     Promise.resolve(q).then(function (r) {
       if (btn) btn.disabled = false;
-      if (r && r.error) { say('Not saved: ' + (r.error.message || r.error)); return; }
+      /* wave283: 0 rows (PGRST116 from .single()) or a refused write (42501) is row security saying no */
+      if (r && r.error) { say(r.error.code === 'PGRST116' || r.error.code === '42501' ? GIFT_REFUSED : 'Not saved: ' + (r.error.message || r.error)); return; }
       GF.msg = g ? 'Saved.' : 'Recorded: ' + cents(row.amount) + ' from ' + ((contact(cid) || {}).full_name || 'the donor') + '.';
       Promise.all([load('gifts', true), load('grcpt', true)]).then(function () { closeSheet(true); if (S.detail[String(cid)]) delete S.detail[String(cid)]; if (S.ui.tab === 'gifts') paint(); });
     });
   }
   function delGift(id) {
-    Promise.resolve(db.from('crm_donations').delete().eq('id', Number(id))).then(function (r) {
-      GF.msg = r && r.error ? 'Not deleted: ' + (r.error.message || r.error) : 'Deleted.';
+    var say = function (m) { var el = document.querySelector('#w152sheet [data-w152err]'); if (el) el.textContent = m; };
+    if (!can('gifts_edit')) { say(GIFT_REFUSED); return; }
+    Promise.resolve(db.from('crm_donations').delete().eq('id', Number(id)).select('id')).then(function (r) {
+      if (r && r.error) { say(r.error.code === '42501' ? GIFT_REFUSED : 'Not deleted: ' + (r.error.message || r.error)); return; }
+      if (r && Array.isArray(r.data) && !r.data.length) { say(GIFT_REFUSED); return; }   /* wave283: 0 rows deleted: row security said no */
+      GF.msg = 'Deleted.';
       Promise.all([load('gifts', true), load('grcpt', true)]).then(function () { closeSheet(true); paint(); });
     });
   }
@@ -3653,7 +3830,7 @@
      the PDF (mail-send, action receipt; a test copy to a test address while the Hub's email is in test mode), and the receipt
      says when it was emailed. The switch for online gifts (admins, only while receipts are on): every paid gift through the
      donation page gets its receipt issued and emailed by itself (stripe-events). Both switches stay off until an admin decides. */
-  var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0 };
+  var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0, row: null };
   LOADERS.rcpts = function () { return db.from('crm_receipts').select('id,serial,contact_id,tax_year,kind,status,gift_ids,amount,advantage_amount,eligible_amount,donor,issued_at,issued_by,replaces_id,replaced_by_id,cancelled_at,cancel_reason,pdf_path,cancelled_pdf_path,emailed_at,email_send_id').order('issued_at', { ascending: false }).order('id', { ascending: false }).limit(3000); };
   function rbMail(body) {
     if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
@@ -3679,7 +3856,10 @@
     }).catch(function (e) { return { error: String((e && e.message) || e) }; });
   }
   function rbOn() { return !!(GF.cfg && GF.cfg.receipt_mode === 'on'); }
-  function rbAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
+  /* wave283: issuing, replacing, cancelling and drawing follow can_issue (team leads, admins and finance: wa_can gifts_edit); is_admin only while the
+     database is older than wave283. The settings, the mode, the signature, the automatic switch and Email it stay with admins (their functions check admin). */
+  function rbAdmin() { var c = GF.cfg || {}; return !!(c.can_issue === undefined ? c.is_admin : c.can_issue); }
+  function rbIsAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
   function rbSave(bytes, name, type) {
     try {
       var blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: type || 'application/pdf' }), url = URL.createObjectURL(blob);
@@ -3712,7 +3892,7 @@
     var sig = '<div class="w158bsig">' + (cfg.signature ? (RB.sigUrl ? '<img src="' + E(RB.sigUrl) + '" alt="The signature on receipts">' : '<span class="m">A signature image is uploaded.</span>') : '<span class="m">No signature image yet.</span>') +
       (admin ? '<label class="w152btn sm ghost w158bup">' + I('edit') + (cfg.signature ? ' Replace the signature' : ' Upload the signature') + '<input type="file" accept="image/png,image/jpeg" data-w158bsig hidden></label>' : '') + '</div>';
     return '<div class="w158bmode ' + (on ? 'on' : 'off') + '"><b>Receipts from the Hub are ' + (on ? 'on' : 'off') + '.</b> ' +
-      (on ? 'Admins issue, replace and cancel them below; every receipt takes the next number.'
+      (on ? 'Team leads, admins and finance issue, replace and cancel them below; every receipt takes the next number.'
         : missing.length ? 'Before an admin can turn them on: ' + E(listJoin(missing)) + '.' : 'Everything is ready: an admin can turn them on once the treasurer and Steel agree.') + '</div>' +
       '<div class="w155lb">The signature on receipts <span class="m">the treasurer\u2019s, or another person the board authorizes; a PNG or JPG on a white or clear background</span></div>' + sig +
       (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on admins can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
@@ -3747,8 +3927,10 @@
   }
   /* wave185: Email it */
   function rbEmail(id) {
-    RB.busy = 'mail:' + id; paint();
+    RB.busy = 'mail:' + id; RB.row = null; paint();
     rbMail({ action: 'receipt', receipt_id: Number(id) }).then(function (r) {
+      /* wave283: a do-not-contact donor: the receipt is kept, not emailed, and the row says so */
+      if (/do not contact/i.test(String(r.basis || r.error || ''))) { RB.row = { id: String(id), msg: 'Receipt not emailed: do not contact' }; RB.busy = ''; if (S.ui.tab === 'gifts') paint(); return; }
       if (r.error) { rbSay('Not emailed: ' + r.error, true); return; }
       if (r.status === 'suppressed') { rbSay('Not emailed: ' + (r.basis || 'the address does not work') + '. Download the PDF and send it another way.', true); return; }
       if (r.status !== 'sent') { rbSay('Not emailed: ' + (r.error || r.status || 'no answer'), true); return; }
@@ -3837,7 +4019,7 @@
     if (!n) return '';
     if (RB.run) return '<div class="w154msg">Issuing ' + RB.run.done + ' of ' + RB.run.total + '\u2026</div>';
     if (!rbOn()) return '<p class="m">' + I('lock') + ' Issuing waits until receipts from the Hub are on.</p>';
-    if (!rbAdmin()) return '<p class="m">An admin issues the receipts.</p>';
+    if (!rbAdmin()) return '<p class="m">Team leads, admins and finance issue the receipts.</p>';
     return '<div class="w154acts"><button class="w152btn" data-w158brun="' + E(year) + '"' + (RB.busy ? ' disabled' : '') + '>' + I('send') + ' Issue one receipt per donor (' + n + ')</button></div>';
   }
 
@@ -3877,7 +4059,7 @@
     });
   }
   function rbIssuedHtml() {
-    var list = S.rcpts || [], admin = rbAdmin(), on = rbOn();
+    var list = S.rcpts || [], admin = rbAdmin(), mailer = rbIsAdmin(), on = rbOn();
     var bySerial = {}; list.forEach(function (r) { bySerial[r.id] = r.serial; });
     var rows = list.slice(0, 200).map(function (r) {
       var c = contact(r.contact_id), who = c ? '<a href="#crm/c/' + E(c.id) + '">' + E((r.donor && r.donor.name) || c.full_name) + '</a>' : E((r.donor && r.donor.name) || 'Contact ' + r.contact_id);
@@ -3887,16 +4069,17 @@
       else if (admin) acts.push('<button class="w152mini" data-w158bmake="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>Make the PDF</button>');
       if (r.cancelled_pdf_path) acts.push('<button class="w152mini" data-w158bpdf="' + E(r.id) + '" data-which="cancelled">Cancelled copy</button>');
       if (admin && r.status === 'issued') {
-        acts.push('<button class="w152mini" data-w185mail="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'mail:' + r.id ? 'Emailing\u2026' : I('send') + (r.emailed_at ? ' Email it again' : ' Email it')) + '</button>');
+        if (mailer) acts.push('<button class="w152mini" data-w185mail="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'mail:' + r.id ? 'Emailing\u2026' : I('send') + (r.emailed_at ? ' Email it again' : ' Email it')) + '</button>');
         if (on) acts.push('<button class="w152mini" data-w158bdo="replace" data-id="' + E(r.id) + '">Replace</button>');
         acts.push('<button class="w152mini" data-w158bdo="cancel" data-id="' + E(r.id) + '">Cancel</button>');
       }
       var mailed = r.status === 'issued' ? (r.emailed_at ? '<span class="w185mailed on" title="' + E('Emailed to the donor on ' + fmtDay(r.emailed_at)) + '">' + I('send') + ' Emailed ' + E(fmtDay(r.emailed_at)) + '</span>' : '<span class="w185mailed">Not emailed</span>') : '';
+      var said = RB.row && RB.row.id === String(r.id) ? '<div class="w158bwhy w283said" role="status">' + E(RB.row.msg) + '</div>' : '';
       var form = RB.act && String(RB.act.id) === String(r.id) ? '<div class="w158bwhy"><input class="w152in" data-w158breason="' + E(r.id) + '" placeholder="' + (RB.act.kind === 'replace' ? 'Why it is replaced (the address changed, a typo\u2026)' : 'Why it is cancelled (issued in error\u2026)') + '">' +
         '<button class="w152btn sm" data-w158bgo="' + E(RB.act.kind) + '" data-id="' + E(r.id) + '">' + (RB.act.kind === 'replace' ? 'Replace it' : 'Cancel it') + '</button><button class="w152btn sm ghost" data-w158bstop="1">Keep it</button></div>' : '';
       return '<div class="w158brow' + (r.status === 'cancelled' ? ' off' : '') + '"><span class="s"><b>' + E(r.serial) + '</b><span class="m">' + E(fmtDay(r.issued_at)) + (r.kind === 'annual' ? ' \u00b7 ' + plural((r.gift_ids || []).length, 'gift', 'gifts') + ' in ' + E(r.tax_year) : '') + '</span></span>' +
         '<span class="w">' + who + '</span><span class="a">' + E(cents(r.eligible_amount)) + '</span><span class="t">' + gchip({ issued: ['Issued', GREEN], cancelled: [st, MUTED] }, r.status) + (r.cancel_reason ? '<span class="m"> ' + E(String(r.cancel_reason).replace(/^Replaced:\s*/, '')) + '</span>' : '') + mailed + '</span>' +
-        '<span class="x">' + acts.join('') + '</span>' + form + '</div>';
+        '<span class="x">' + acts.join('') + '</span>' + said + form + '</div>';
     }).join('');
     return '<div class="w154card wide"><h3>' + I('note') + ' Receipts issued by the Hub <span class="m">' + plural(list.length, 'receipt', 'receipts') + '</span></h3>' +
       (list.length ? '<div class="w158brows">' + rows + '</div>' : '<p class="m">None yet. Keela\u2019s 55 receipts are the legal copies until receipts from the Hub are on; then each one issued here is listed with its PDF.</p>') + '</div>';
@@ -4239,7 +4422,7 @@
     var contacts = (S.contacts || []).filter(function (c) { return c.source === 'keela' || (c.legacy_refs && c.legacy_refs.keela_contact_id); }).length;
     var kg = (S.gifts || []).filter(function (g) { return lower(g.platform) === 'keela'; });
     var lastKg = kg.map(function (g) { return dayOf(g.donated_at); }).sort().pop() || '';
-    var forms = S.forms || [], live = forms.filter(function (f) { return f.status === 'live'; });
+    var forms = S.forms || [], live = forms.filter(function (f) { return f.status === 'published'; });   /* wave283: a form that is out is published */
     var autos = S.autos || [], on = autos.filter(function (a) { return a.status === 'on'; });
     var paste = autos.filter(function (a) { return /\[Paste/i.test(JSON.stringify(a.steps || [])); });
     var mail = kcfg('mail_mode') || 'test', rmode = kcfg('receipt_mode') || 'off';
@@ -4257,7 +4440,7 @@
         n: paste.length ? 'Paste the words of Keela\u2019s welcome emails into the drafts (or have the assistant copy them from Keela), try each on yourself, then turn them on once the forms are live.' : 'Try each on yourself, then turn them on once the forms are live.' },
       { t: 'Email', k: 'Keela sends the newsletters and campaigns.', s: mail === 'live' ? 'done' : 'todo',
         h: 'The Hub\u2019s email is in ' + (mail === 'live' ? 'live mode.' : 'test mode: only the test addresses get email.'),
-        n: mail === 'live' ? 'Send the next newsletter from Campaigns.' : 'Steel switches the mode to live in Email when real sends should start (Resend\u2019s free plan sends up to 100 a day).' },
+        n: mail === 'live' ? 'Send the next newsletter from Sends.' : 'Steel switches the mode to live in Email when real sends should start (Resend\u2019s free plan sends up to 100 a day).' },
       { t: 'Tax receipts', k: 'Keela issued 55 receipts (KEE numbers).', s: rmode === 'on' ? 'done' : rMissing.length ? 'waiting' : 'todo',
         h: 'Receipts from the Hub are ' + (rmode === 'on' ? 'on.' : 'off' + (rMissing.length ? ' (missing: ' + listJoin(rMissing) + ').' : ', and ready to turn on.')),
         n: rmode === 'on' ? 'Issue from Receipts; the year-end run in January.' : 'The treasurer reviews a sample PDF and fills the settings with the signature; the treasurer and Steel decide to turn them on.' },
@@ -4604,19 +4787,19 @@
       W.tours.crm = { tab: 'crm', icon: 'people', hash: '#crm', steps: [
         T('#crm > .w118mast', 'CRM', 'Everyone Welfare Avenue knows in one place: volunteers, donors, partners\u2019 contacts and the team, with what each one has done with us.'),
         T('#crm .w152stats', 'At a glance', 'Everyone, the volunteers, who has served at an event, and the donors (or the duplicates to check). A number narrows the list to them.', OPT),
-        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Campaigns, Forms, Automations and Reports.', OPT),
+        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Sends, Forms, Automations and Reports.', OPT),
         T('#crm .w152chips', 'Who they are to us', 'Volunteers, donors, partners\u2019 contacts, supporters, staff and alumni. One person can be several.', OPT),
         T('#crm .w152q', 'Find anyone', 'Type a name, an email, a phone number, a school or a tag. Next to it: a volunteer role, their activity, their email permission, and the order.', OPT),
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner\u2019s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
         T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
         { c: 1, t: 'A contact\u2019s page', p: 'Their details (a volunteer\u2019s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website\u2019s history.' },
-        { c: 1, t: 'Email permission', p: 'Canada\u2019s anti-spam law (CASL): newsletters and appeals go only to people who said yes, or whose implied consent has not run out (two years after a gift or a serving). Record it on their page when they tell you.' },
+        { c: 1, t: 'Email permission', p: RULE_TEXT },
         T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact\u2019s page has Send an email from the Hub.', OPT),
         T('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'Studio', 'The email studio (wave202): emails in the Welfare Avenue brand, put together with the Hub from your words and photos or from a template, checked before they go out, and sent to one person, a list or saved for the automations. It has its own tour.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
-        T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Campaigns', 'Campaigns (wave155): one message to a list, person by person, through the consent rule, at up to 80 a day on Resend\u2019s free plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Sends', 'Sends (wave155): one message to a list, person by person, through the email rule, within the daily cap on Resend\u2019s plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM\u2019s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it. Each form opens on a photo from the Photo library behind our logo (wave168: pick it under Cover photo, or keep the default for its kind); the preview shows it.', OPT),
-        T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Receipts shows the settings, who is owed a receipt for the year and the receipts the Hub issued; once an admin turns receipts on (the treasurer and Steel decide), admins issue them with their PDF, one per donor at year-end, email each one to the donor with the PDF attached (Email it), and replace or cancel them with the reason; with the online-gift switch on, every gift through the donation page is receipted and emailed by itself.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Team leads, admins and finance record gifts and issue receipts. Receipts shows the settings, who is owed a receipt for the year and the receipts the Hub issued; once an admin turns receipts on (the treasurer and Steel decide), they are issued with their PDF, one per donor at year-end, emailed to the donor with the PDF attached (Email it), and replaced or cancelled with the reason; with the online-gift switch on, every gift through the donation page is receipted and emailed by itself.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/automations"]', 'Automations', 'Automations (wave157): when someone fills in a form, gets a tag, gives, or has a serving coming, the Hub runs the steps for them: emails through the permission rule (8 am to 8 pm), waits, a yes and a no path on an opened email, tags, a task on a team\u2019s board, a notice. They start as drafts; Try it on me runs one on your own contact.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/reports"]', 'Reports', 'Reports (wave160): a fiscal year at a glance, against the year before. Gifts by month, kind, campaign and size; donors who gave for the first time, again, or not yet this year (made into a list in one click); volunteers new and returning, by month and role; email permission today. The year in a few lines is ready to copy for the board, and the page prints.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other\u2019s history moves to it, or mark them as different people (family members share phones).' }
@@ -4638,5 +4821,6 @@
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
-    /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow };
+    /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow,
+    /* wave283 */ can: can, caps: function () { return S.caps; } };
 })();

@@ -41,6 +41,8 @@
   }
   function giftForm(id, contactId) {
     var g = id ? giftById(id) : null, isNew = !g, hub = !g || lower(g.platform) === 'hub';
+    var mayEdit = can('gifts_edit');   /* wave283: team leads, admins and finance (wa_my_caps); everyone with the CRM reads gifts */
+    if (isNew && !mayEdit) { openSheet('<h2>Record a gift</h2><div class="w152err" role="status">' + E(GIFT_REFUSED) + '</div><div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button></div>', 'gift:new', true); return; }
     var x = g || { contact_id: contactId || null, amount: '', donated_at: today(), kind: 'donation', method: 'cheque', campaign: '', designation: '', advantage_amount: 0, advantage_desc: '', in_kind_desc: '', appraiser: '', tribute_kind: '', tribute_name: '', notes: '', platform: 'hub' };
     var c = x.contact_id ? contact(x.contact_id) : null;
     var donor = c ? '<div class="w158donor">' + avatar(c) + '<b>' + E(c.full_name) + '</b><span class="m">' + E(c.emails[0] || '') + '</span></div>'
@@ -62,10 +64,13 @@
       field('In honour or memory of', sel('tribute_kind', [['', 'No'], ['honour', 'In honour of'], ['memory', 'In memory of']], x.tribute_kind || '')) + field('Their name', inp('tribute_name', x.tribute_name, 'Their name')) +
       field('Notes', area('notes', x.notes, 'Cheque number, who dropped it off, anything the treasurer should know'), true) +
       '<div class="note full w158rule" data-w158rule>' + E(receiptRule(x)[1]) + '</div>' +
-      '</div><div class="w152foot"><span class="w152err" data-w152err></span>' +
-      (!isNew && hub && amAdmin() ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +
+      (mayEdit ? '' : '<div class="note full" data-w283ro>' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>') +
+      '</div><div class="w152foot"><span class="w152err" data-w152err role="status"></span>' +
+      (!isNew && hub && mayEdit ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
       (!isNew ? '<button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button>' : '') +
-      '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button></div>';
+      (mayEdit ? '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button>'
+        : '<button class="w152btn" data-w152close="1">Close</button>') + '</div>';
+    if (!mayEdit) html = html.replace(/<(input|select|textarea)\b/g, '<$1 disabled');   /* read-only: every field, no save or delete */
     openSheet(html, 'gift:' + (id || 'new'), true);
   }
   function giftFormValues(box) {
@@ -90,6 +95,7 @@
     var id = box.getAttribute('data-w158gift'), g = id !== 'new' ? giftById(id) : null, hub = !g || lower(g.platform) === 'hub';
     var v = giftFormValues(box), err = sh.querySelector('[data-w152err]');
     var say = function (m) { if (err) err.textContent = m; };
+    if (!can('gifts_edit')) { say(GIFT_REFUSED); return; }
     var cid = donorFrom(v, box), amt = Number(v.amount), adv = Number(v.advantage_amount) || 0;
     if (!cid) { say('Pick the donor from the list (type a name or an email).'); return; }
     if (hub && !(amt > 0)) { say('The amount must be more than $0.'); return; }
@@ -107,14 +113,19 @@
       : db.from('crm_donations').insert(Object.assign({ contact_id: cid, platform: 'hub', created_by: actor(), receipt_eligible: row.kind !== 'sponsorship' && row.kind !== 'other' }, row)).select().single();
     Promise.resolve(q).then(function (r) {
       if (btn) btn.disabled = false;
-      if (r && r.error) { say('Not saved: ' + (r.error.message || r.error)); return; }
+      /* wave283: 0 rows (PGRST116 from .single()) or a refused write (42501) is row security saying no */
+      if (r && r.error) { say(r.error.code === 'PGRST116' || r.error.code === '42501' ? GIFT_REFUSED : 'Not saved: ' + (r.error.message || r.error)); return; }
       GF.msg = g ? 'Saved.' : 'Recorded: ' + cents(row.amount) + ' from ' + ((contact(cid) || {}).full_name || 'the donor') + '.';
       Promise.all([load('gifts', true), load('grcpt', true)]).then(function () { closeSheet(true); if (S.detail[String(cid)]) delete S.detail[String(cid)]; if (S.ui.tab === 'gifts') paint(); });
     });
   }
   function delGift(id) {
-    Promise.resolve(db.from('crm_donations').delete().eq('id', Number(id))).then(function (r) {
-      GF.msg = r && r.error ? 'Not deleted: ' + (r.error.message || r.error) : 'Deleted.';
+    var say = function (m) { var el = document.querySelector('#w152sheet [data-w152err]'); if (el) el.textContent = m; };
+    if (!can('gifts_edit')) { say(GIFT_REFUSED); return; }
+    Promise.resolve(db.from('crm_donations').delete().eq('id', Number(id)).select('id')).then(function (r) {
+      if (r && r.error) { say(r.error.code === '42501' ? GIFT_REFUSED : 'Not deleted: ' + (r.error.message || r.error)); return; }
+      if (r && Array.isArray(r.data) && !r.data.length) { say(GIFT_REFUSED); return; }   /* wave283: 0 rows deleted: row security said no */
+      GF.msg = 'Deleted.';
       Promise.all([load('gifts', true), load('grcpt', true)]).then(function () { closeSheet(true); paint(); });
     });
   }

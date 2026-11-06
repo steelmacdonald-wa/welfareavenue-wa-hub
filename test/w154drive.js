@@ -52,7 +52,7 @@ function fixture(extra) {
 /* the stubbed function: every call is recorded in window.__calls */
 const STUB = `(function(){
   window.__calls = [];
-  var SETTINGS = { mail_mode: 'test', mail_from_name: 'Welfare Avenue', mail_from_email: 'info@welfareavenue.com', mail_reply_to: 'info@welfareavenue.com', mail_test_recipients: 'steelmacdonald@gmail.com, steel.macdonald@welfareavenue.com', mail_postal_address: 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9', mail_charity_number: '713048502RR0001', mail_fundraising_exemption: 'off', mail_domain: 'welfareavenue.com' };
+  var SETTINGS = { mail_mode: 'test', mail_from_name: 'Welfare Avenue', mail_from_email: 'info@welfareavenue.com', mail_reply_to: 'info@welfareavenue.com', mail_test_recipients: 'steelmacdonald@gmail.com, steel.macdonald@welfareavenue.com', mail_postal_address: 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9', mail_charity_number: '713048502RR0001', mail_domain: 'welfareavenue.com' };   /* wave283: no fundraising switch */
   var DOMAIN = { id: 'd1', name: 'welfareavenue.com', status: 'pending', region: 'us-east-1', records: [
     { record: 'DKIM', name: 'resend._domainkey', type: 'TXT', ttl: 'Auto', status: 'not_started', value: 'p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC-test' },
     { record: 'SPF', name: 'send', type: 'MX', ttl: 'Auto', status: 'not_started', value: 'feedback-smtp.us-east-1.amazonses.com', priority: 10 },
@@ -99,7 +99,7 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   /* the settings form */
   await click(f, '[data-w154cfg]'); await f.page.waitForTimeout(200);
   const form = await f.ev(() => ({ form: !!document.querySelector('#crm .w154form'), mode: (document.querySelector('#crm .w154form [data-f="mail_mode"]') || {}).value, fields: [...document.querySelectorAll('#crm .w154form [data-f]')].map(e => e.getAttribute('data-f')) }));
-  ok('Change the settings opens the form: from name and address, reply-to, the mode (test), test recipients, the fundraising exemption, the postal address', form.form && form.mode === 'test' && form.fields.join('|') === 'mail_from_name|mail_from_email|mail_reply_to|mail_mode|mail_test_recipients|mail_fundraising_exemption|mail_postal_address', form);
+  ok('Change the settings opens the form: from name and address, reply-to, the mode (test), test recipients, the postal address (the fundraising switch is gone since wave283)', form.form && form.mode === 'test' && form.fields.join('|') === 'mail_from_name|mail_from_email|mail_reply_to|mail_mode|mail_test_recipients|mail_postal_address', form);
   await f.ev(() => { document.querySelector('#crm .w154form [data-f="mail_mode"]').value = 'live'; });
   await click(f, '[data-w154savecfg]'); await f.page.waitForTimeout(700);
   const saved = await f.ev(() => ({ call: window.__calls.filter(c => c.action === 'set_settings').pop(), card: document.querySelector('#crm .w154card').innerText.replace(/\s+/g, ' ') }));
@@ -120,7 +120,7 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   const log = await f.ev(() => [...document.querySelectorAll('#crm .w154sr')].map(r => ({ to: r.children[1].innerText.replace(/\s+/g, ' ').trim(), tpl: r.children[2].innerText.replace(/\s+/g, ' ').trim(), what: r.children[3].innerText.replace(/\s+/g, ' ').trim(), link: !!r.querySelector('a') })));
   ok('the send log, newest first: a test to the admin, a newsletter held back for no consent, a delivered thank-you to Amara (opened)', log.length === 3 && /test/.test(log[0].what) && !log[0].link && /Not sent/.test(log[1].what) && /no consent recorded/.test(log[1].what) && log[1].link && /Amara Okafor/.test(log[2].to) && log[2].link && /Delivered/.test(log[2].what) && /opened/.test(log[2].what), log);
   const rule = await text(f, '#crm .w154rule');
-  ok('the rule is spelled out with the charity number and the two-year implied consent', /713048502RR0001/.test(rule) && /two years/.test(rule) && /unsubscribed/.test(rule), (rule || '').slice(0, 200));
+  ok('the rule is spelled out: one rule since wave283 (everyone with a working address who has not unsubscribed; receipts to any working address)', /Newsletters, fundraising and volunteer emails go to everyone with a working address who has not unsubscribed\. Receipts and confirmations go to any working address\./.test(rule) && !/two years/.test(rule), (rule || '').slice(0, 200));
   const tile = await click(f, '[data-w154perm="express"]'); await f.page.waitForTimeout(900);
   const filt = await f.ev(() => ({ hash: location.hash, perm: window.w152.state().ui.perm, rows: document.querySelectorAll('#crm .w152row').length }));
   ok('a permission number opens the contacts filtered to it (express: Amara alone)', tile && filt.hash === '#crm' && filt.perm === 'express' && filt.rows === 1, filt);

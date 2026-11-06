@@ -51,7 +51,7 @@
       '<button role="tab" class="' + (t === 'email' ? 'on' : '') + '" data-w152go="#crm/email">' + I('mail') + ' Email</button>' +
       '<button role="tab" class="' + (t === 'studio' ? 'on' : '') + '" data-w152go="#crm/studio">' + I('spark') + ' Studio</button>' +
       '<button role="tab" class="' + (t === 'lists' ? 'on' : '') + '" data-w152go="#crm/lists">' + I('list') + ' Lists</button>' +
-      '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Campaigns</button>' +
+      '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Sends</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
       '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button>' +
       '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
@@ -142,6 +142,20 @@
     if (window.w202 && window.w202.paint) window.w202.paint(el); else el.innerHTML = busy('The email studio is loading…');
   }
   function openCrm(h) {
+    /* wave283: what this person may do comes first (wa_my_caps), so every loader and paint after it knows; {} on an error (nothing extra) */
+    if (S.caps === undefined && staffOk() && !boardMode() && typeof db !== 'undefined' && db && db.rpc) {
+      if (!S.capsLoading) {
+        S.capsLoading = true;
+        var root0 = mastFor(); if (root0) root0.innerHTML = busy('Loading the CRM…');
+        Promise.resolve(db.rpc('wa_my_caps')).then(function (r) { S.caps = (r && !r.error && r.data && typeof r.data === 'object') ? r.data : {}; }, function () { S.caps = {}; })
+          .then(function () {
+            S.capsLoading = false;
+            var cur = decodeURIComponent(location.hash || '').replace(/^#/, '');   /* where the person is now (they may have moved on while it loaded) */
+            if (/^crm(\/|$)/.test(cur)) openCrm(cur); else if (!cur) openCrm(h);
+          });
+      }
+      return;
+    }
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
     S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : 'contacts';

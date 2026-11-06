@@ -90,7 +90,7 @@
     var next = [
       ['Volunteer history from the old website', 'Every event each volunteer signed up for, was confirmed for and served at, from the Django site.', st(k.hist, 'Next')],
       ['Messages from the website', 'What people write through the contact form on welfareavenue.com, on the sender’s timeline.', st(k.msgs, 'Next')],
-      ['Gifts and tax receipts from Zeffy', 'Every donation with its receipt, on the donor’s timeline and in their total.', st(k.gifts, 'Later')],
+      ['Gifts and tax receipts from Keela', 'Every donation with its receipt, on the donor’s timeline and in their total.', st(k.gifts, 'Later')],
       ['The Keela export', 'Donors and supporters from Keela, merged with the people already here.', keela ? '<span class="st on">' + keela + ' in</span>' : '<span class="st next">When it arrives</span>']
     ].map(function (r) { return '<div class="w152srow nx"><div><div class="tt">' + E(r[0]) + '</div><p>' + E(r[1]) + '</p></div>' + r[2] + '</div>'; }).join('');
     var ok = (perm.express || 0) + (perm.implied || 0);
@@ -105,7 +105,7 @@
       '<div class="w152card"><h3>Where they come from <span>' + plural(all.length, 'contact', 'contacts') + '</span></h3>' + srcRows + '</div>' +
       '<div class="w152card"><h3>What joins next</h3>' + next + '</div>' +
       '<div class="w152card"><h3>Email permission <span>' + plural(ok, 'contact', 'contacts') + ' can get a newsletter today</span></h3>' + pr +
-      '<p class="w152pnote">Campaigns go only to express consent, or implied consent that has not run out (CASL). Everyone else is asked first.</p></div>' +
+      '<p class="w152pnote">Sends follow one rule: ' + E(RULE_TEXT) + '</p></div>' +
       '<div class="w152card"><h3>To tidy</h3>' + tidy + '</div></div>';
     if (!S.counts) loadCounts().then(function () { if (S.ui.tab === 'sources') paint(); });
     /* wave159a: what Leaving Keela reads */

@@ -190,7 +190,7 @@ const view = f => f.ev(() => ({ t: ((document.querySelector('#crm .w152root') ||
   await f.hash('#crm/gifts/receipts', 2600);
   b = await f.ev(() => ({ t: ((document.querySelector('#crm .w152root') || {}).innerText || '').replace(/\s+/g, ' '), up: !!document.querySelector('#crm [data-w158bsig]'), sw: !!document.querySelector('#crm [data-w158bask], #crm [data-w158bmode]'),
     issue: document.querySelectorAll('#crm [data-w158bissue]').length, acts: document.querySelectorAll('#crm [data-w158bdo]').length, pdf: document.querySelectorAll('#crm [data-w158bpdf]').length }));
-  ok('a staff member sees the state and the PDFs, without the admin controls', /Receipts from the Hub are on/.test(b.t) && !b.up && !b.sw && b.issue === 0 && b.acts === 0 && b.pdf === 3 && /An admin issues the receipts/.test(b.t), b);
+  ok('a staff member sees the state and the PDFs, without the admin controls', /Receipts from the Hub are on/.test(b.t) && !b.up && !b.sw && b.issue === 0 && b.acts === 0 && b.pdf === 3 && /Team leads, admins and finance issue the receipts/.test(b.t), b);   /* wave283: who issues (can_issue; is_admin while the database is older) */
   ok('no page errors (member)', f.errs.length === 0, f.errs);
   await f.close();
 

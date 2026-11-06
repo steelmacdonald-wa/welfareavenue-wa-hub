@@ -19,7 +19,7 @@
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
     var o = document.getElementById('w152sheet'); if (o) { o.style.display = 'none'; o.innerHTML = ''; }
-    S.sheet = null; S.confirm = null;
+    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null;
     if (!quiet && /^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } }
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
@@ -40,13 +40,20 @@
       load('cfields'),
       /* wave157: the automations they are in */
       q(db.from('crm_automation_runs').select('id,automation_id,status,step_id,next_at,is_test,started_at,finished_at').eq('contact_id', c.id).eq('is_test', false).order('started_at', { ascending: false }).limit(50)),
-      load('autos')
+      load('autos'),
+      /* wave283: the age band (never the date), their chapters, and for HR and admins the birth date */
+      Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(c.id) })).then(function (x) { return x && !x.error && typeof x.data === 'string' ? x.data : null; }, function () { return null; }),
+      q(db.from('crm_contact_chapters').select('chapter,source').eq('contact_id', c.id)),
+      load('chapters'),
+      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null)
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now() };
+        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
+          age: r[10] || null, chapters: (r[11] || []).map(function (x) { return x.chapter; }),
+          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null };
         return S.detail[id];
       });
     });
@@ -57,12 +64,16 @@
   function langName(l) { var x = LANGS.filter(function (o) { return o[0] === l; })[0]; return x ? x[1] : (l || ''); }
   function telOf(p) { var d = digits(p); if (d.length === 10) d = '1' + d; return d ? '+' + d : ''; }
 
-  function detailsHtml(c) {
+  /* wave283: the postal code is left out when the street address already holds it (compared without spaces, ignoring case) */
+  function postalIn(addr, pc) { var a = String(addr || '').replace(/\s+/g, '').toLowerCase(), p = String(pc || '').replace(/\s+/g, '').toLowerCase(); return !!p && a.indexOf(p) >= 0; }
+  function detailsHtml(c, d) {
     var rows = [];
     if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
     if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
-    var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), c.postal_code].filter(Boolean).join(' · ');
+    var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), postalIn(c.address, c.postal_code) ? '' : c.postal_code].filter(Boolean).join(' · ');
     if (place) rows.push(['Address', E(place)]);
+    if (c.job_title) rows.push(['Job title', E(c.job_title)]);   /* wave283 */
+    if (d && d.age) rows.push(['Age', E(d.age)]);   /* wave283: crm_age_band, never the date */
     if (c.language) rows.push(['Language', E(langName(c.language))]);
     if (c.volunteer_organization) rows.push(['School or work', E(c.volunteer_organization)]);
     return rows.length ? '<div class="w152kv">' + rows.map(function (r) { return '<b>' + r[0] + '</b><span>' + r[1] + '</span>'; }).join('') + '</div>' : '<p class="w152pnote">No details yet.</p>';
@@ -200,14 +211,17 @@
     if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
     if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
     if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
-    qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');
+    if (can('gifts_edit')) qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');   /* wave283: gifts_edit */
     if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
     return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
+      (c.do_not_contact ? '<div class="w283dnc" role="status">' + I('lock') + ' <b>' + E(dncWords(c)) + '</b></div>' : '') +   /* wave283 */
+      (S.note && S.note.id === String(c.id) ? '<div class="w152warn" role="status">' + E(S.note.msg) + '</div>' : '') +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +
-      '<div class="w152sec"><h4>Contact details <button class="w152mini" data-w152edit="' + E(c.id) + '">' + I('edit') + 'Edit</button></h4>' + detailsHtml(c) + '</div>' +
+      '<div class="w152sec"><h4>Contact details <button class="w152mini" data-w152edit="' + E(c.id) + '">' + I('edit') + 'Edit</button></h4>' + detailsHtml(c, d) + '</div>' +
       '<div class="w152sec"><h4>With Welfare Avenue</h4>' + withUsHtml(c, d) + '</div>' +
       '<div class="w152sec"><h4>Email permission <button class="w152mini" data-w152perm-edit="' + E(c.id) + '">' + I('shield') + 'Change</button></h4>' + permHtml(c) + '</div>' +
+      '<div class="w152sec w283"><h4>Do not contact</h4>' + dncHtml(c) + '</div>' +
       '<div class="w152sec"><h4>Tags</h4>' + tagsHtml(c) + '</div>' +
       (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
       (d && d.runs && d.runs.length ? '<div class="w152sec"><h4>Automations</h4>' + contactAutosHtml(d) + '</div>' : '') +
@@ -267,14 +281,135 @@
       field('Street address', inp('address', x.address), true) +
       field('City', inp('city', x.city, 'Montreal')) + field('Province', inp('province', x.province, 'QC')) +
       field('Postal code', inp('postal_code', x.postal_code, 'H2X 1Y4')) + field('Language', sel('language', LANGS, x.language || '')) +
+      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer')) +   /* wave283 */
       '<div class="full lbl">What they are to us' + kindsBoxes(c, isNew) + '</div>' +
+      '<div class="full lbl w283">Chapter' + chapterBoxes(c) + '</div>' +   /* wave283: one toggle per active chapter (crm_contact_chapters, source hand) */
+      (can('hr_private') ? birthField(c) : '') +   /* wave283: HR and admins only (crm_contact_private) */
       (isNew ? field('Email permission', sel('perm', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: a recent gift, membership or volunteering'], ['none', 'No consent']], ''), false) +
         field('Where it came from', inp('perm_source', '', 'e.g. signed up at the gala'), false) : '') +
       field('Good to know', area('notes', x.notes, 'Anything the team should know: how they like to be reached, who knows them best'), true) +
       '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id || '') + '">Cancel</button>' +
       '<button class="w152btn" data-w152save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Add them' : ' Save') + '</button></div>';
     openSheet(html, isNew ? 'add' : 'edit:' + id, true);
+    fillEditExtras(c, isNew ? 'add' : 'edit:' + id);
   }
+  /* ---------- wave283: chapters, the birth date and do-not-contact on a contact ---------- */
+  LOADERS.chapters = function () { return db.from('crm_chapters').select('code,name_en,active,sort').eq('active', true).order('sort', { ascending: true }); };
+  function chapterBoxes(c) {
+    var d = c ? S.detail[String(c.id)] : null, ready = !!S.chapters && (!c || !!(d && d.chapters));
+    var had = ready && c ? d.chapters : [];
+    if (!ready) return '<div class="kinds" data-w283chs data-ready="0"><span class="m">Loading the chapters…</span></div>';
+    return '<div class="kinds" data-w283chs data-ready="1" data-had="' + E(had.join(',')) + '">' + (S.chapters || []).map(function (ch) {
+      return '<label><input type="checkbox" data-w283ch="' + E(ch.code) + '"' + (had.indexOf(ch.code) >= 0 ? ' checked' : '') + '> ' + E(ch.name_en || ch.code) + '</label>';
+    }).join('') + '<span class="w152count">No chapter means Montreal in the lists.</span></div>';
+  }
+  function birthField(c) {
+    var d = c ? S.detail[String(c.id)] : null, v = d && typeof d.birth === 'string' ? d.birth : '';
+    var ready = !c || !!(d && d.birth !== null && d.birth !== undefined);
+    return field('Birth date', '<input data-f="birth_date" type="date" value="' + E(v) + '" data-had="' + E(v) + '"' + (ready ? '' : ' disabled data-w283wait="1"') + '>', false, 'HR and admins only; the team sees an age band');
+  }
+  /* the chapters and the birth date may still be loading when the form opens: fill those two in place, so nothing typed is lost */
+  function fillEditExtras(c, tag) {
+    var need = [];
+    if (!S.chapters) need.push(load('chapters'));
+    if (c && !S.detail[String(c.id)]) need.push(loadDetail(c));
+    if (!need.length) return;
+    Promise.all(need).then(function () {
+      if (S.sheet !== tag) return;
+      var o = document.getElementById('w152sheet'); if (!o) return;
+      var box = o.querySelector('[data-w283chs]'); if (box) box.outerHTML = chapterBoxes(c);
+      var bd = o.querySelector('[data-w283wait]');
+      if (bd && c) { var d = S.detail[String(c.id)], v = d && typeof d.birth === 'string' ? d.birth : ''; bd.value = v; bd.setAttribute('data-had', v); bd.disabled = false; bd.removeAttribute('data-w283wait'); }
+    });
+  }
+  /* after the contact row is saved: chapter rows added or removed (source hand), the birth date written; returns what did not save */
+  async function saveExtras(cid) {
+    var o = document.getElementById('w152sheet'), errs = [], d = S.detail[String(cid)];
+    if (!o || !/^\d+$/.test(String(cid))) return errs;
+    var box = o.querySelector('[data-w283chs]');
+    if (box && box.getAttribute('data-ready') === '1') {
+      var had = (box.getAttribute('data-had') || '').split(',').filter(Boolean), now = had.slice();
+      var want = Array.prototype.filter.call(box.querySelectorAll('[data-w283ch]'), function (el) { return el.checked; }).map(function (el) { return el.getAttribute('data-w283ch'); });
+      for (var i = 0; i < want.length; i++) {
+        if (had.indexOf(want[i]) >= 0) continue;
+        var ri = await db.from('crm_contact_chapters').insert({ contact_id: Number(cid), chapter: want[i], source: 'hand', source_ref: 'the CRM', added_by: actor() });
+        if (ri && ri.error) errs.push('the chapter ' + want[i]); else now.push(want[i]);
+      }
+      for (var j = 0; j < had.length; j++) {
+        if (want.indexOf(had[j]) >= 0) continue;
+        var rd = await db.from('crm_contact_chapters').delete().eq('contact_id', Number(cid)).eq('chapter', had[j]);
+        if (rd && rd.error) errs.push('removing the chapter ' + had[j]); else now = now.filter(function (x) { return x !== had[j]; });
+      }
+      if (now.slice().sort().join(',') !== had.slice().sort().join(',')) { if (d) d.chapters = now; audit(cid, 'chapters', had.join(', '), now.join(', ')); }
+    }
+    var bd = o.querySelector('[data-f="birth_date"]');
+    if (bd && can('hr_private') && !bd.disabled) {
+      var before = bd.getAttribute('data-had') || '', val = String(bd.value || '');
+      if (val !== before) {
+        var rb = val ? await db.from('crm_contact_private').upsert({ contact_id: Number(cid), birth_date: val, source: 'set by HR in the CRM', updated_by: actor(), updated_at: new Date().toISOString() })
+          : await db.from('crm_contact_private').delete().eq('contact_id', Number(cid));
+        if (rb && rb.error) errs.push('the birth date');
+        else {
+          if (d) d.birth = val;
+          audit(cid, 'birth_date', null, val ? 'birth date set' : 'birth date removed');   /* never the date itself (Part A.7) */
+          var ab = await Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(cid) })).catch(function () { return null; });
+          if (d) d.age = ab && !ab.error && typeof ab.data === 'string' ? ab.data : null;
+        }
+      }
+    }
+    return errs;
+  }
+  var DNC_REASONS = [['deceased', 'Deceased'], ['asked', 'They asked'], ['other', 'Other']];
+  function dncWords(c) { return 'Do not contact' + (c.dnc_reason ? ' (' + String(c.dnc_reason) + ')' : ''); }
+  function dncHtml(c) {
+    var st = S.dnc && S.dnc.id === String(c.id) ? S.dnc : {};
+    var err = '<span class="w152err" data-w283dncerr role="status">' + E(st.err || '') + '</span>';
+    if (c.do_not_contact) {
+      return '<div class="w152line">' + E(dncWords(c)) + '. <span class="w283m">No email of any kind, no texts and no WhatsApp. Receipts are still issued and kept, not emailed.</span></div>' +
+        (st.confirm ? '<div class="w283cf"><b>Clear do not contact for ' + E(c.full_name) + '?</b> This does not resubscribe them.' +
+            '<div class="w283acts"><button class="w152btn sm" data-w283dncclear="' + E(c.id) + '">Yes, clear it</button><button class="w152btn sm ghost" data-w283dnckeep="' + E(c.id) + '">Keep it</button></div></div>'
+          : '<button class="w152mini" data-w283dncask="' + E(c.id) + '">' + I('x') + 'Clear do not contact</button>') + err;
+    }
+    return '<div class="w283acts"><select class="w152sel" data-w283dncr aria-label="Why they are not to be contacted"><option value="">Why…</option>' +
+      DNC_REASONS.map(function (r) { return '<option value="' + r[0] + '">' + E(r[1]) + '</option>'; }).join('') + '</select>' +
+      '<button class="w152btn sm ghost" data-w283dnc="' + E(c.id) + '">' + I('lock') + ' Do not contact</button></div>' +
+      '<p class="w283m">Stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>' + err;
+  }
+  function saveDnc(id, reason) {
+    var c = contact(id); if (!c) return;
+    if (reason !== null && DNC_REASONS.map(function (r) { return r[0]; }).indexOf(reason) < 0) { S.dnc = { id: String(c.id), err: 'Pick why first.' }; contactSheet(c.id); return; }
+    S.dnc = { id: String(c.id), err: '' };
+    Promise.resolve(db.rpc('crm_set_do_not_contact', { p_contact: Number(c.id), p_reason: reason })).then(function (r) {
+      if (r && r.error) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String(r.error.message || r.error).slice(0, 160) }; contactSheet(c.id); return; }
+      var before = c.do_not_contact ? dncWords(c) : null, st = lower(c.email_status);
+      /* what crm_set_do_not_contact did (wave281): with a reason, the flag and every opt-out; with none, the flag only (never a resubscribe) */
+      applyLocal(c.id, reason ? { do_not_contact: true, dnc_reason: reason, email_status: st === 'bounced' || st === 'complained' ? c.email_status : 'unsubscribed', sms_opt_out: true }
+        : { do_not_contact: false, dnc_reason: null });
+      if (reason) audit(c.id, 'do_not_contact', before, 'do not contact: ' + reason);   /* clearing is logged by the function itself */
+      S.dnc = null;
+      toastS(reason ? 'Do not contact is set' : 'Do not contact is cleared');
+      contactSheet(c.id); repaintBehind();
+    }, function (e) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String((e && e.message) || e).slice(0, 160) }; contactSheet(c.id); });
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target, el; if (!t || !t.closest || !t.closest('#w152sheet')) return;
+    if ((el = t.closest('[data-w283dnc]'))) { e.preventDefault(); var sl = document.querySelector('#w152sheet [data-w283dncr]'); saveDnc(el.getAttribute('data-w283dnc'), sl && sl.value ? sl.value : ''); return; }
+    if ((el = t.closest('[data-w283dncask]'))) { e.preventDefault(); S.dnc = { id: el.getAttribute('data-w283dncask'), confirm: true, err: '' }; contactSheet(el.getAttribute('data-w283dncask')); return; }
+    if ((el = t.closest('[data-w283dnckeep]'))) { e.preventDefault(); S.dnc = null; contactSheet(el.getAttribute('data-w283dnckeep')); return; }
+    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+  });
+  var css283 = document.createElement('style'); css283.id = 'w283css';
+  css283.textContent = ''
+    + '.w283dnc{display:flex;align-items:center;gap:8px;margin:10px 40px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;}'
+    + '.w283dnc .w152i{width:16px;height:16px;flex:none;}'
+    + '.w283acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0;}.w283acts .w152sel{width:auto;}'
+    + '.w283m{color:#6B6965;font-size:12.5px;line-height:1.45;}'
+    + '.w283cf{background:rgba(16,63,57,.05);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
+    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}'
+    + '.w283first{margin:8px 0 4px;font-size:13.5px;font-weight:600;line-height:1.45;}'
+    + '.w283 button:focus-visible,.w283 select:focus-visible,.w283 input:focus-visible,.w283cf button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.35);}'
+    + '@keyframes w283in{from{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.w283cf{animation:none;}}';
+  document.head.appendChild(css283);
   function permForm(id) {
     var c = contact(id); if (!c) return;
     var until = c.implied_consent_until ? dayOf(c.implied_consent_until) : (c._last ? addYears(c._last, 2) : '');
@@ -328,7 +463,7 @@
     var fixedKinds = c ? c.kinds.filter(function (k) { return KIND_HAND.indexOf(k) < 0; }) : [];
     var kinds = uniq(fixedKinds.concat(v._kinds.filter(function (k) { return k !== 'volunteer' || isNew; })));
     var row = { full_name: v.full_name, first_name: np.first, last_name: np.last, emails: emails, phones: phones, address: v.address || null, city: v.city || null,
-      province: v.province || null, postal_code: v.postal_code ? v.postal_code.toUpperCase() : null, language: v.language || null, kinds: kinds, notes: v.notes || null, updated_by: actor() };
+      province: v.province || null, postal_code: v.postal_code ? v.postal_code.toUpperCase() : null, language: v.language || null, kinds: kinds, notes: v.notes || null, job_title: v.job_title || null, updated_by: actor() };
     try {
       if (isNew) {
         /* the same person twice is the most common CRM mistake: stop at an email or a phone we already have */
@@ -377,7 +512,9 @@
         var nc = shape(Object.assign({ id: newId, kinds: [], tags: [], emails: [], phones: [], created_at: new Date().toISOString(), hub_servings: 0, legacy_servings: 0, legacy_hours: 0, donation_total: 0, donation_count: 0, org_names: [], volunteer_roles: [], volunteer_tags: [] }, row));
         S.contacts.push(nc); BY_ID[String(nc.id)] = nc; S.confirm = null;
         audit(newId, 'created', null, row.full_name);
-        S.detail[String(newId)] = { ints: [], gifts: [], hist: [], roster: [], events: [], orgs: [], at: Date.now() };
+        S.detail[String(newId)] = { ints: [], gifts: [], hist: [], roster: [], events: [], orgs: [], at: Date.now(), chapters: [], birth: '', age: null };
+        var xnew = await saveExtras(newId);   /* wave283: chapters and the birth date */
+        if (xnew.length) S.note = { id: String(newId), msg: 'Added, but not saved: ' + listJoin(xnew) + '. Open Edit to try again.' };
         toastS(row.full_name + ' is in the CRM');
         try { history.replaceState(null, '', '#crm/c/' + newId); } catch (e) { /* fine */ }
         contactSheet(newId); repaintBehind();
@@ -387,9 +524,11 @@
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;
       if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }
-      var changed = ['full_name', 'emails', 'phones', 'address', 'city', 'province', 'postal_code', 'language', 'kinds', 'notes'].filter(function (k) { return JSON.stringify(c[k] == null ? null : c[k]) !== JSON.stringify(row[k] == null ? null : row[k]); });
+      var changed = ['full_name', 'emails', 'phones', 'address', 'city', 'province', 'postal_code', 'language', 'kinds', 'notes', 'job_title'].filter(function (k) { return JSON.stringify(c[k] == null ? null : c[k]) !== JSON.stringify(row[k] == null ? null : row[k]); });
       applyLocal(c.id, row);
       if (changed.length) audit(c.id, 'details', null, changed.join(', '));
+      var xerr = await saveExtras(c.id);   /* wave283: chapters and the birth date */
+      if (xerr.length) { showErr('Saved the details, but not ' + listJoin(xerr) + '. Try again.'); repaintBehind(); return; }
       toastS('Saved'); contactSheet(c.id); repaintBehind();
     } catch (e) { showErr('Could not save: ' + String((e && e.message) || e).slice(0, 160)); }
   }

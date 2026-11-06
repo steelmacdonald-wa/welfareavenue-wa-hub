@@ -73,7 +73,7 @@
     return myEmail().split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function (x) { return x.toUpperCase(); });
   }
   function wRole() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
-  function amAdmin() { return wRole() === 'admin' || ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'].indexOf(myEmail()) >= 0; }
+  function amAdmin() { return wRole() === 'admin'; }   /* wave283: role admin only (no hard-coded addresses) */
   function canEdit(t) { if (!t || !t.design) return false; if (amAdmin()) return true; return t.created_by && t.created_by !== 'starter' && lower(t.created_by) === myEmail(); }
   function crm() { return window.w152 || null; }
   function cstate() { var c = crm(); try { return c ? c.state() : {}; } catch (e) { return {}; } }

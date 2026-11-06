@@ -136,7 +136,7 @@
         ] }, { label: 'Email', items: [
           { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' },
           { h: '#crm/studio', l: 'Studio', ic: 'star', page: 'crm' },   /* wave202: the email studio */
-          { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' },
+          { h: '#crm/campaigns', l: 'Sends', ic: 'send', page: 'crm' },   /* wave283: a Send is one email to many people (crm_campaigns); Campaigns are fundraising events */
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }, { label: 'Reports', items: [
           { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
@@ -177,7 +177,7 @@
     },
     /* wave176: Steel (30/09/26): "I'd like the MTL Volunteering to be it's own app now, it's big enough that it should be it's own app."
        The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
-    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
+    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'Servings, rosters, texts and volunteers in Montreal and Toronto', pages: ['volunteering'], home: '#volunteering',
       groups: function () {
         /* wave259 (Steel, 15/10/26: "the UI is just getting really messy ... some sort of refresh"): five places. Servings and
            Calendar; People (Volunteers, New applicants and Sign-offs as tabs of one page); Messages (the ops line: every
@@ -264,8 +264,9 @@
      person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
      Admins and the Executive profile have every app as theirs.
      wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
-     the CRM is now theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['crm'], board: [] };
+     the CRM is now theirs.
+     wave283 (CRM slice 1, Phase 3): Marketing also has the CRM, and Toronto also has the Volunteer Manager. */
+  var TEAM_APPS = { marketing: ['studio', 'crm'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
