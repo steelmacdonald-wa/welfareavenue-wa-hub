@@ -34,6 +34,11 @@ on conflict (code) do nothing;
 comment on table public.crm_chapters is 'wave281: the chapters (Montreal, Toronto; Ottawa may be added later). Staff read; admins write.';
 comment on column public.crm_chapters.mail_route is 'wave281: the app_config mail_senders route this chapter''s volunteer email goes from: volunteer (volunteer@) for Montreal, toronto (toronto@) for Toronto.';
 comment on column public.crm_chapters.ops_team is 'wave281: the chapter''s operations team code (dept_meta): opsmtl or opsto.';
+comment on column public.crm_chapters.code is 'wave281: the chapter''s code, in lower case: montreal or toronto. crm_contact_chapters.chapter points here.';
+comment on column public.crm_chapters.name_en is 'wave281: the chapter''s name in English (Montreal, Toronto).';
+comment on column public.crm_chapters.name_fr is 'wave281: the chapter''s name in French (Montréal, Toronto).';
+comment on column public.crm_chapters.active is 'wave281: false for a chapter that is no longer used; its rows stay.';
+comment on column public.crm_chapters.sort is 'wave281: the order chapters are listed in (Montreal 1, Toronto 2).';
 
 create table if not exists public.crm_contact_chapters (
   contact_id bigint references public.crm_contacts(id) on delete cascade,
@@ -58,6 +63,10 @@ create policy crm_contact_chapters_staff_delete on public.crm_contact_chapters f
 comment on table public.crm_contact_chapters is 'wave281: which chapter a person belongs to, one row per person per chapter (a person can have both). Rows come only from evidence: a form answer, a confirmed serving, an application, the Keela import, set by hand, or the wave281 backfill (source evidence). crm_in_chapter() holds the filter rule. CRM staff read, add and remove rows; security-definer writers use crm_add_chapter; crm_merge_contacts moves them.';
 comment on column public.crm_contact_chapters.source is 'wave281: where the row came from: form, serving, application, import, hand, or evidence (the wave281 backfill from tags and history).';
 comment on column public.crm_contact_chapters.source_ref is 'wave281: what the source was, in a few words (for the backfill: tag, keela tag, serving, old website serving, form, application).';
+comment on column public.crm_contact_chapters.contact_id is 'wave281: the person (crm_contacts). Deleting the contact deletes the row; a merge moves it.';
+comment on column public.crm_contact_chapters.chapter is 'wave281: the chapter code (crm_chapters): montreal or toronto.';
+comment on column public.crm_contact_chapters.added_at is 'wave281: when the row was added.';
+comment on column public.crm_contact_chapters.added_by is 'wave281: the signed-in email that added it, system for a writer with nobody signed in, or wave281 for the backfill.';
 
 create or replace function public.crm_add_chapter(p_contact bigint, p_chapter text, p_source text, p_ref text)
 returns boolean language plpgsql security definer set search_path to '' as $function$
@@ -140,18 +149,24 @@ create table if not exists public.crm_consent_events (
 );
 create index if not exists crm_consent_events_contact_idx on public.crm_consent_events (contact_id, occurred_at);
 alter table public.crm_consent_events enable row level security;
-revoke all on table public.crm_consent_events from public, anon, authenticated;
+revoke all on table public.crm_consent_events from public, anon, authenticated, service_role;
 grant select on table public.crm_consent_events to authenticated;
-grant all on table public.crm_consent_events to service_role;
+grant select, insert, update, delete, references, trigger on table public.crm_consent_events to service_role;   -- no truncate: the log is append-only
 revoke all on sequence public.crm_consent_events_id_seq from public, anon, authenticated;
 drop policy if exists crm_consent_events_staff_read on public.crm_consent_events;
 create policy crm_consent_events_staff_read on public.crm_consent_events for select to authenticated using (public.is_wa_staff() and coalesce(public.wa_page_ok('crm'), true));
-comment on table public.crm_consent_events is 'wave281: the consent log, one row per changed consent column of a person (email_status, email_consent: email; sms_opt_out, sms_consent: sms; whatsapp_opt_out: whatsapp), written by the trigger trg_wa281_consent_log, plus the wave281 backfill (form consent answers, change_log rows). Append-only: CRM staff read it and nobody writes it directly; an update or delete is refused unless wa.consent_merge is on (crm_merge_contacts) or, for a delete, the contact itself is being deleted.';
+comment on table public.crm_consent_events is 'wave281: the consent log, one row per changed consent column of a person (email_status, email_consent: email; sms_opt_out, sms_consent: sms; whatsapp_opt_out: whatsapp), written by the trigger trg_wa281_consent_log, plus the wave281 backfill (form consent answers, change_log rows). Append-only: CRM staff read it and nobody writes it directly; a truncate is always refused (no role holds the right, and a trigger refuses it), and an update or delete is refused unless wa.consent_merge is on (crm_merge_contacts) or, for a delete, the contact itself is being deleted.';
 comment on column public.crm_consent_events.column_name is 'wave281: the crm_contacts column that changed (email_status, email_consent, sms_opt_out, sms_consent, whatsapp_opt_out), or form consent for a form answer loaded by the backfill.';
 comment on column public.crm_consent_events.source is 'wave281: who or what made the change: the setting wa.consent_source if the writer set it (form: <slug>, STOP text, START text, daily implied-consent refresh, do not contact: <reason>, Keela import), else the new consent_source text if it changed in the same update, else staff for a signed-in staff member, else website account for any other signed-in person, else system. change_log for rows copied from change_log.';
 comment on column public.crm_consent_events.words is 'wave281: the words the person saw or wrote (the setting wa.consent_words; for a form answer, the consent sentence).';
 comment on column public.crm_consent_events.actor is 'wave281: the signed-in email that made the change, or system (wave281 backfill for the form answers loaded once).';
 comment on column public.crm_consent_events.import_batch_id is 'wave281: the import batch (crm_import_batches, a later wave) when the import made the change (the setting wa.import_batch).';
+comment on column public.crm_consent_events.id is 'wave281: the row''s number, in the order rows were written.';
+comment on column public.crm_consent_events.contact_id is 'wave281: the person (crm_contacts). Deleting the contact deletes its rows; a merge moves them to the kept contact.';
+comment on column public.crm_consent_events.channel is 'wave281: email (email_status, email_consent, form consent), sms (sms_opt_out, sms_consent) or whatsapp (whatsapp_opt_out).';
+comment on column public.crm_consent_events.old_value is 'wave281: the value before the change, as text (true or false for the opt-outs); null when the contact was just created, and for a form answer.';
+comment on column public.crm_consent_events.new_value is 'wave281: the value after the change, as text; for a form answer, given or not given.';
+comment on column public.crm_consent_events.occurred_at is 'wave281: when the change happened (for a form answer, the time it was given; for a change_log row, its time).';
 
 alter table public.crm_contacts add column if not exists sms_consent text check (sms_consent in ('express'));
 alter table public.crm_contacts add column if not exists sms_consent_source text;
@@ -199,6 +214,7 @@ comment on trigger trg_wa281_consent_log on public.crm_contacts is 'wave281: wri
 create or replace function public.crm_consent_guard()
 returns trigger language plpgsql security definer set search_path to '' as $function$
 begin
+  if tg_op = 'TRUNCATE' then raise exception 'The consent log is append-only: truncate is refused.'; end if;
   if coalesce(current_setting('wa.consent_merge', true), '') = 'on' then
     if tg_op = 'DELETE' then return old; end if;
     return new;
@@ -208,11 +224,15 @@ begin
   raise exception 'The consent log is append-only: % is refused (only crm_merge_contacts moves rows).', lower(tg_op);
 end $function$;
 revoke all on function public.crm_consent_guard() from public, anon, authenticated;
-comment on function public.crm_consent_guard() is 'wave281: trigger function on crm_consent_events (trg_wa281_consent_guard). Refuses any update or delete unless the setting wa.consent_merge is on (only crm_merge_contacts sets it, while it moves rows to the kept contact) or, for a delete, the contact no longer exists (its removal cascades).';
+comment on function public.crm_consent_guard() is 'wave281: trigger function on crm_consent_events (trg_wa281_consent_guard, trg_wa281_consent_no_truncate). Refuses a truncate always, and any update or delete unless the setting wa.consent_merge is on (only crm_merge_contacts sets it, while it moves rows to the kept contact) or, for a delete, the contact no longer exists (its removal cascades).';
 drop trigger if exists trg_wa281_consent_guard on public.crm_consent_events;
 create trigger trg_wa281_consent_guard before update or delete on public.crm_consent_events
   for each row execute function public.crm_consent_guard();
 comment on trigger trg_wa281_consent_guard on public.crm_consent_events is 'wave281: keeps the consent log append-only.';
+drop trigger if exists trg_wa281_consent_no_truncate on public.crm_consent_events;
+create trigger trg_wa281_consent_no_truncate before truncate on public.crm_consent_events
+  for each statement execute function public.crm_consent_guard();
+comment on trigger trg_wa281_consent_no_truncate on public.crm_consent_events is 'wave281: a truncate (which fires no row trigger) is refused, even through a cascade from crm_contacts.';
 
 -- backfill (a): every processed Hub form answer with consent. form-submit stores {asked, given, at, form} (fn/form-submit/index.ts line 372).
 insert into public.crm_consent_events (contact_id, channel, column_name, old_value, new_value, source, words, actor, occurred_at)
@@ -289,6 +309,8 @@ create or replace view public.wa_stopped_phones_v with (security_invoker = on) a
 revoke all on table public.wa_stopped_phones_v from public, anon, authenticated;
 grant select on table public.wa_stopped_phones_v to service_role;
 comment on view public.wa_stopped_phones_v is 'wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (whatsapp).';
+comment on column public.wa_stopped_phones_v.phone_digits is 'wave281: the phone number''s last 10 digits (wa171_digits).';
+comment on column public.wa_stopped_phones_v.channel is 'wave281: sms for a STOP texted to the ops line (quo_messages), whatsapp for a STOP sent on WhatsApp (whatsapp_messages).';
 
 -- ============================================================================================ 1.5 private data and fields
 alter table public.crm_contacts add column if not exists job_title text;
@@ -309,6 +331,10 @@ drop policy if exists crm_contact_private_hr on public.crm_contact_private;
 create policy crm_contact_private_hr on public.crm_contact_private for all to authenticated using (public.wa_is_hr() or public.is_wa_admin()) with check (public.wa_is_hr() or public.is_wa_admin());
 comment on table public.crm_contact_private is 'wave281: private data about a person, one row per contact: the birth date (from Keela only; Hub forms ask "Are you 16 or older?" instead). Only HR and admins read or write it; staff see crm_age_band(). crm_merge_contacts moves it.';
 comment on column public.crm_contact_private.birth_date is 'wave281: the date of birth. Never copied into the timeline, change_log or the import''s change records.';
+comment on column public.crm_contact_private.contact_id is 'wave281: the person (crm_contacts), one row each. Deleting the contact deletes the row; a merge moves it.';
+comment on column public.crm_contact_private.source is 'wave281: where the birth date came from (the Keela import, or set by HR).';
+comment on column public.crm_contact_private.updated_at is 'wave281: when the row last changed.';
+comment on column public.crm_contact_private.updated_by is 'wave281: who last changed it (an email, or the import).';
 
 create or replace function public.crm_age_band(p_contact bigint)
 returns text language sql stable security definer set search_path to '' as $function$
@@ -411,6 +437,11 @@ comment on column public.wa_campaigns.goal_amount is 'wave281: the money goal in
 comment on column public.wa_campaigns.status is 'wave281: planned, active, done or archived.';
 comment on column public.wa_campaigns.donate_key is 'wave281: the key the donation page and forms use for this campaign (crm_forms.settings.campaign, for example gift-basket-drive).';
 comment on column public.wa_campaigns.keela_name is 'wave281: the campaign''s name in Keela, for the import.';
+comment on column public.wa_campaigns.id is 'wave281: the campaign''s number. crm_donations.campaign_id, wa_campaign_people.campaign_id and crm_forms.settings.campaign_id point here.';
+comment on column public.wa_campaigns.name is 'wave281: the campaign''s name as staff see it (for example Gift Basket Drive 2026).';
+comment on column public.wa_campaigns.year is 'wave281: the year the campaign runs in.';
+comment on column public.wa_campaigns.created_at is 'wave281: when the row was added.';
+comment on column public.wa_campaigns.created_by is 'wave281: who added it (an email, or wave281 for the seed rows).';
 
 create table if not exists public.wa_campaign_people (
   campaign_id bigint references public.wa_campaigns(id) on delete cascade,
@@ -431,6 +462,11 @@ create policy wa_campaign_people_staff on public.wa_campaign_people for all to a
   using (public.is_wa_staff() and coalesce(public.wa_page_ok('crm'), true)) with check (public.is_wa_staff() and coalesce(public.wa_page_ok('crm'), true));
 comment on table public.wa_campaign_people is 'wave281: who took part in a Campaign and how (participant, registrant, volunteer, donor, sponsor), shown as "<campaign>, <part>". CRM staff read and write; crm_merge_contacts moves the rows.';
 comment on column public.wa_campaign_people.source is 'wave281: where the row came from (for example form, import, hand).';
+comment on column public.wa_campaign_people.campaign_id is 'wave281: the campaign (wa_campaigns). Deleting the campaign deletes its rows.';
+comment on column public.wa_campaign_people.contact_id is 'wave281: the person (crm_contacts). Deleting the contact deletes the row; a merge moves it.';
+comment on column public.wa_campaign_people.part is 'wave281: how the person took part: participant, registrant, volunteer, donor or sponsor. One person can have several parts in one campaign.';
+comment on column public.wa_campaign_people.source_ref is 'wave281: what the source was, in a few words (for example the form slug or the import batch).';
+comment on column public.wa_campaign_people.added_at is 'wave281: when the row was added.';
 
 insert into public.wa_campaigns (name, type, year, goal_amount, keela_name, donate_key, status, created_by)
 select x.name, x.type, x.year, x.goal, x.keela, x.donate, x.status, 'wave281'

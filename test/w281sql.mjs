@@ -123,6 +123,11 @@ try {
   for (const t of ADDED_TABLES) ok((await one(db, `select obj_description('public.${t}'::regclass, 'pg_class') is not null as x`)).x === true, t + ' has a comment');
   ok((await one(db, `select obj_description('public.wa_stopped_phones_v'::regclass, 'pg_class') is not null as x`)).x === true, 'wa_stopped_phones_v has a comment');
   for (const [t, c] of ADDED_COLUMNS) ok((await one(db, `select col_description('public.${t}'::regclass, (select attnum from pg_attribute where attrelid = 'public.${t}'::regclass and attname = '${c}')) is not null as x`)).x === true, t + '.' + c + ' has a comment');
+  for (const t of [...ADDED_TABLES, 'wa_stopped_phones_v']) {
+    const r = await one(db, `select count(*)::int as n, string_agg(a.attname, ', ' order by a.attnum) filter (where col_description(a.attrelid, a.attnum) is null) as missing
+      from pg_attribute a where a.attrelid = 'public.${t}'::regclass and a.attnum > 0 and not a.attisdropped`);
+    ok(r.n > 0 && r.missing === null, 'every column of ' + t + ' has a comment (' + r.n + ' columns; missing: ' + r.missing + ')');
+  }
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname in ('trg_wa281_consent_log', 'trg_wa281_consent_guard', 'trg_wa281_gift_campaign') and not tgisinternal`)).n === 3, 'three triggers after two runs');
 
   await runAssertions(db, 'assertions');

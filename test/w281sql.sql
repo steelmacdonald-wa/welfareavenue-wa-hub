@@ -115,7 +115,14 @@ begin
   assert v_ok, 'a delete from the log is refused';
   perform set_config('wa.consent_merge', 'on', true);
   update public.crm_consent_events set words = words where contact_id = 1601;
+  v_ok := false;
+  begin truncate public.crm_consent_events; exception when others then v_ok := sqlerrm like '%append-only: truncate is refused%'; end;
+  assert v_ok, 'a truncate of the log is refused, even with the merge setting on and as the table owner';
   perform set_config('wa.consent_merge', '', true);
+  v_ok := false;
+  begin truncate public.crm_contacts cascade; exception when others then v_ok := sqlerrm like '%append-only: truncate is refused%'; end;
+  assert v_ok, 'and so is a truncate that cascades to it from crm_contacts';
+  assert (select count(*) from public.crm_consent_events where contact_id = 1601) = 4, 'the four log rows are all still there';
   delete from public.crm_contacts where id = 1602;
   assert (select count(*) from public.crm_consent_events where contact_id = 1602) = 0, 'deleting a contact takes its log with it (the cascade passes the guard)';
 end $$;
@@ -479,6 +486,9 @@ begin
   assert not has_table_privilege('authenticated', 'public.crm_consent_events', 'insert') and not has_table_privilege('authenticated', 'public.crm_consent_events', 'update')
      and not has_table_privilege('authenticated', 'public.crm_consent_events', 'delete') and not has_table_privilege('authenticated', 'public.crm_consent_events', 'truncate'),
     'signed-in users only read the consent log';
+  assert not has_table_privilege('service_role', 'public.crm_consent_events', 'truncate') and not has_table_privilege('anon', 'public.crm_consent_events', 'truncate')
+     and has_table_privilege('service_role', 'public.crm_consent_events', 'insert'), 'no API role holds truncate on the consent log; the service role can still write it';
+  assert exists (select 1 from pg_trigger where tgname = 'trg_wa281_consent_no_truncate' and tgrelid = 'public.crm_consent_events'::regclass), 'the truncate trigger is there';
 end $$;
 
 select 'w281sql: all assertions passed' as result;

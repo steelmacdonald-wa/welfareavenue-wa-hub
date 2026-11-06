@@ -13,7 +13,7 @@ Nothing visible. There is no page change (the live page stays md5 0b8e0fa6). Lat
    - The backfill, from evidence only: Toronto for the 44 contacts tagged Toronto (in tags or in Keela's tags). Montreal for 462 contacts with a confirmed completed serving, an attended old-website serving, a processed Montreal form answer or a volunteer application.
    - `crm_add_chapter` is for the service role only. The page writes the table under its own policies.
 2. **The consent log** (`crm_consent_events`). One row each time an email status, email consent, text opt-out, text consent or WhatsApp opt-out changes. It records where the change came from: staff, a website account, the system, or a named writer (STOP text, START text, WhatsApp STOP, daily implied-consent refresh, do not contact). A plain new contact writes nothing.
-   - Nobody can edit or delete log rows. Only a merge moves them, and deleting a contact takes its rows with it.
+   - Nobody can edit, delete or truncate log rows. Only a merge moves them, and deleting a contact takes its rows with it. No API role holds the right to truncate, and a trigger refuses a truncate from anyone else.
    - Loaded once: the 59 Hub form answers with consent (39 given, 20 not given) and the 1 consent change in change_log.
    - New text-consent columns on contacts: `sms_consent`, `sms_consent_source`, `sms_consent_at`.
 3. **Do-not-contact.** `crm_set_do_not_contact(contact, reason)` (deceased, asked or other). It sets the flag, unsubscribes the email (a bounced or complained address keeps that status), stops texts and WhatsApp, and logs each change. `crm_email_permission` then refuses every kind of email, transactional included. Clearing it (no reason) clears the flag only, never resubscribes anyone, and writes a change_log line.
@@ -68,8 +68,9 @@ Seven live functions are changed by exact replacement of a line in their live te
    - Anything set since the release goes with it: chapter rows, the consent log, do-not-contact flags, text consent, birth dates, job titles, Campaigns, gift and form links, caps, the four custom fields and their values, the organisation columns. Take a copy first.
    - Contacts, gifts and forms themselves are never deleted. An undo line goes in change_log.
 
-## Notes
+## Worth knowing
 
+- The 300 ms check is not met because of the existing `wa171_opted_out` (1,248 ms before this wave, 1,237 ms after). wave281 doesn't change that. Steel decides whether to waive the check or schedule a fix.
+- `crm_in_chapter` is security invoker, so a caller without the CRM page gets Montreal for everyone. Page code must use the staff-checked `wa286_volunteer_chapters` instead.
 - A few writers set the consent source for the rest of their transaction (`crm_set_do_not_contact`, `wa171_inbound`, `wa254_inbound`, the refresh). Each Hub call is its own transaction, so this only matters to someone running several in one SQL session.
-- `crm_in_chapter` reads as the caller (security invoker, as the design asks). A member without the CRM page sees no chapter rows, so for them everyone looks like Montreal. Later waves that use it on Volunteer Manager pages need to know this.
 - The rollback checks used a few numbers from live id sequences (contacts, gifts, change_log), which never roll back. That leaves small gaps in those ids and nothing else.

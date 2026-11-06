@@ -2268,6 +2268,11 @@ wave281: the chapters (Montreal, Toronto; Ottawa may be added later). Staff read
 
 - `mail_route`: wave281: the app_config mail_senders route this chapter's volunteer email goes from: volunteer (volunteer@) for Montreal, toronto (toronto@) for Toronto.
 - `ops_team`: wave281: the chapter's operations team code (dept_meta): opsmtl or opsto.
+- `code`: wave281: the chapter's code, in lower case: montreal or toronto. crm_contact_chapters.chapter points here.
+- `name_en`: wave281: the chapter's name in English (Montreal, Toronto).
+- `name_fr`: wave281: the chapter's name in French (Montréal, Toronto).
+- `active`: wave281: false for a chapter that is no longer used; its rows stay.
+- `sort`: wave281: the order chapters are listed in (Montreal 1, Toronto 2).
 
 ### `crm_contact_chapters`
 
@@ -2275,26 +2280,43 @@ wave281: which chapter a person belongs to, one row per person per chapter (a pe
 
 - `source`: wave281: where the row came from: form, serving, application, import, hand, or evidence (the wave281 backfill from tags and history).
 - `source_ref`: wave281: what the source was, in a few words (for the backfill: tag, keela tag, serving, old website serving, form, application).
+- `contact_id`: wave281: the person (crm_contacts). Deleting the contact deletes the row; a merge moves it.
+- `chapter`: wave281: the chapter code (crm_chapters): montreal or toronto.
+- `added_at`: wave281: when the row was added.
+- `added_by`: wave281: the signed-in email that added it, system for a writer with nobody signed in, or wave281 for the backfill.
 
 ### `crm_consent_events`
 
-wave281: the consent log, one row per changed consent column of a person (email_status, email_consent: email; sms_opt_out, sms_consent: sms; whatsapp_opt_out: whatsapp), written by the trigger trg_wa281_consent_log, plus the wave281 backfill (form consent answers, change_log rows). Append-only: CRM staff read it and nobody writes it directly; an update or delete is refused unless wa.consent_merge is on (crm_merge_contacts) or, for a delete, the contact itself is being deleted.
+wave281: the consent log, one row per changed consent column of a person (email_status, email_consent: email; sms_opt_out, sms_consent: sms; whatsapp_opt_out: whatsapp), written by the trigger trg_wa281_consent_log, plus the wave281 backfill (form consent answers, change_log rows). Append-only: CRM staff read it and nobody writes it directly; a truncate is always refused (no role holds the right, and a trigger refuses it), and an update or delete is refused unless wa.consent_merge is on (crm_merge_contacts) or, for a delete, the contact itself is being deleted.
 
 - `column_name`: wave281: the crm_contacts column that changed (email_status, email_consent, sms_opt_out, sms_consent, whatsapp_opt_out), or form consent for a form answer loaded by the backfill.
 - `source`: wave281: who or what made the change: the setting wa.consent_source if the writer set it (form: <slug>, STOP text, START text, daily implied-consent refresh, do not contact: <reason>, Keela import), else the new consent_source text if it changed in the same update, else staff for a signed-in staff member, else website account for any other signed-in person, else system. change_log for rows copied from change_log.
 - `words`: wave281: the words the person saw or wrote (the setting wa.consent_words; for a form answer, the consent sentence).
 - `actor`: wave281: the signed-in email that made the change, or system (wave281 backfill for the form answers loaded once).
 - `import_batch_id`: wave281: the import batch (crm_import_batches, a later wave) when the import made the change (the setting wa.import_batch).
+- `id`: wave281: the row's number, in the order rows were written.
+- `contact_id`: wave281: the person (crm_contacts). Deleting the contact deletes its rows; a merge moves them to the kept contact.
+- `channel`: wave281: email (email_status, email_consent, form consent), sms (sms_opt_out, sms_consent) or whatsapp (whatsapp_opt_out).
+- `old_value`: wave281: the value before the change, as text (true or false for the opt-outs); null when the contact was just created, and for a form answer.
+- `new_value`: wave281: the value after the change, as text; for a form answer, given or not given.
+- `occurred_at`: wave281: when the change happened (for a form answer, the time it was given; for a change_log row, its time).
 
 ### `wa_stopped_phones_v` (view)
 
 wave281: the stopped phones: for each phone (10 digits, wa171_digits) and channel (sms: quo_messages; whatsapp: whatsapp_messages), the latest inbound keyword text (handled opted_out or opted_in) was a STOP. A STOP sticks to the number even when no contact holds it; a later START (opted_in) clears it. Service role only (wa171_digits is not granted to signed-in users): read by wa171_opted_out (security definer), quo-send (sms) and whatsapp-send (whatsapp).
+
+- `phone_digits`: wave281: the phone number's last 10 digits (wa171_digits).
+- `channel`: wave281: sms for a STOP texted to the ops line (quo_messages), whatsapp for a STOP sent on WhatsApp (whatsapp_messages).
 
 ### `crm_contact_private`
 
 wave281: private data about a person, one row per contact: the birth date (from Keela only; Hub forms ask "Are you 16 or older?" instead). Only HR and admins read or write it; staff see crm_age_band(). crm_merge_contacts moves it.
 
 - `birth_date`: wave281: the date of birth. Never copied into the timeline, change_log or the import's change records.
+- `contact_id`: wave281: the person (crm_contacts), one row each. Deleting the contact deletes the row; a merge moves it.
+- `source`: wave281: where the birth date came from (the Keela import, or set by HR).
+- `updated_at`: wave281: when the row last changed.
+- `updated_by`: wave281: who last changed it (an email, or the import).
 
 ### `wa_campaigns`
 
@@ -2305,12 +2327,22 @@ wave281: a Campaign: a fundraising event, drive, appeal or program (not a Send, 
 - `status`: wave281: planned, active, done or archived.
 - `donate_key`: wave281: the key the donation page and forms use for this campaign (crm_forms.settings.campaign, for example gift-basket-drive).
 - `keela_name`: wave281: the campaign's name in Keela, for the import.
+- `id`: wave281: the campaign's number. crm_donations.campaign_id, wa_campaign_people.campaign_id and crm_forms.settings.campaign_id point here.
+- `name`: wave281: the campaign's name as staff see it (for example Gift Basket Drive 2026).
+- `year`: wave281: the year the campaign runs in.
+- `created_at`: wave281: when the row was added.
+- `created_by`: wave281: who added it (an email, or wave281 for the seed rows).
 
 ### `wa_campaign_people`
 
 wave281: who took part in a Campaign and how (participant, registrant, volunteer, donor, sponsor), shown as "<campaign>, <part>". CRM staff read and write; crm_merge_contacts moves the rows.
 
 - `source`: wave281: where the row came from (for example form, import, hand).
+- `campaign_id`: wave281: the campaign (wa_campaigns). Deleting the campaign deletes its rows.
+- `contact_id`: wave281: the person (crm_contacts). Deleting the contact deletes the row; a merge moves it.
+- `part`: wave281: how the person took part: participant, registrant, volunteer, donor or sponsor. One person can have several parts in one campaign.
+- `source_ref`: wave281: what the source was, in a few words (for example the form slug or the import batch).
+- `added_at`: wave281: when the row was added.
 
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
@@ -2719,7 +2751,7 @@ Functions:
 - `crm_add_chapter(bigint, text, text, text)`: wave281: adds a person to a chapter (contact, chapter code, source, source note); does nothing when the row is already there, and says true when it added one. Service role only: its callers are security-definer functions and triggers (forms, servings, applications, the import). The page writes crm_contact_chapters directly under its policies.
 - `crm_in_chapter(bigint, text)`: wave281: the chapter filter rule. toronto: the person has a toronto row. montreal: a montreal row, or no chapter row at all (so Montreal lists stay as they were). all: everyone. Any other code: a row for that code. Security invoker: it reads crm_contact_chapters as the caller, under its row security.
 - `crm_consent_log()`: wave281: trigger function on crm_contacts (trg_wa281_consent_log). Writes one crm_consent_events row for each of email_status, email_consent, sms_opt_out, sms_consent and whatsapp_opt_out whose value changed (on insert: each that differs from the column default, so a plain new contact writes nothing). Source: wa.consent_source, else a changed consent_source, else staff, else website account (a signed-in person who is not staff), else system. Actor: the signed-in email, or system.
-- `crm_consent_guard()`: wave281: trigger function on crm_consent_events (trg_wa281_consent_guard). Refuses any update or delete unless the setting wa.consent_merge is on (only crm_merge_contacts sets it, while it moves rows to the kept contact) or, for a delete, the contact no longer exists (its removal cascades).
+- `crm_consent_guard()`: wave281: trigger function on crm_consent_events (trg_wa281_consent_guard, trg_wa281_consent_no_truncate). Refuses a truncate always, and any update or delete unless the setting wa.consent_merge is on (only crm_merge_contacts sets it, while it moves rows to the kept contact) or, for a delete, the contact no longer exists (its removal cascades).
 - `crm_set_do_not_contact(bigint, text)`: wave281: sets or clears do-not-contact for one person. CRM staff only. With a reason (deceased, asked, other): the flag, reason, time and who, email_status unsubscribed (bounced or complained are kept), sms_opt_out and whatsapp_opt_out true, consent_source do not contact: <reason>; the consent log records each change. With a null reason: clears the four do-not-contact fields only (never resubscribes anyone) and writes a change_log line, do not contact cleared.
 - `crm_age_band(bigint)`: wave281: a person's age band on today's date in Toronto: under 16, 16 to 17, 18 or older, or null when no birth date is stored. Never returns the date. Null for anyone who is not CRM staff.
 - `wa_can(text)`: wave281: true when the signed-in person has a capability. gifts_edit: leaders and admins, or hub_roles.caps gifts_edit true (named finance people). import_admin: admins. hr_private: HR or admins. False for an unknown capability and for anyone without a hub_roles row or with role blocked.

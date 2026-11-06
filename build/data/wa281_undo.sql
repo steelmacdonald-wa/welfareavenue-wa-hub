@@ -596,6 +596,9 @@ alter table public.crm_contacts drop column if exists do_not_contact;
 -- ============================================================================================ 10. the consent log
 drop trigger if exists trg_wa281_consent_log on public.crm_contacts;
 drop function if exists public.crm_consent_log();
+do $t$ begin
+  if to_regclass('public.crm_consent_events') is not null then drop trigger if exists trg_wa281_consent_no_truncate on public.crm_consent_events; end if;
+end $t$;
 drop table if exists public.crm_consent_events;
 drop function if exists public.crm_consent_guard();
 alter table public.crm_contacts drop column if exists sms_consent_at;

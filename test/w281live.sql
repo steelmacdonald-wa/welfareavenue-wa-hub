@@ -80,6 +80,15 @@ begin
      or has_table_privilege('authenticated', 'public.wa_stopped_phones_v', 'select') then raise exception 'w281live: a service-role-only object is open to signed-in users'; end if;
   if exists (select 1 from pg_class where relname in ('crm_chapters', 'crm_contact_chapters', 'crm_consent_events', 'crm_contact_private', 'wa_campaigns', 'wa_campaign_people')
                and relnamespace = 'public'::regnamespace and (not relrowsecurity or has_table_privilege('anon', oid, 'select'))) then raise exception 'w281live: a new table lacks row security or is open to anon'; end if;
+  -- the consent log cannot be truncated: no API role holds the right, and a statement trigger refuses it for everyone else (not run here: the check reads the catalogue)
+  if exists (select 1 from unnest(array['anon', 'authenticated', 'service_role']) ro where has_table_privilege(ro, 'public.crm_consent_events', 'truncate'))
+     or not exists (select 1 from pg_trigger where tgname = 'trg_wa281_consent_no_truncate' and tgrelid = 'public.crm_consent_events'::regclass and tgenabled = 'O')
+     then raise exception 'w281live: the consent log can be truncated'; end if;
+  -- every column of every new table and of the stopped-phones view has a comment
+  select count(*) into n from pg_attribute a join pg_class c on c.oid = a.attrelid
+   where c.relnamespace = 'public'::regnamespace and c.relname in ('crm_chapters', 'crm_contact_chapters', 'crm_consent_events', 'crm_contact_private', 'wa_campaigns', 'wa_campaign_people', 'wa_stopped_phones_v')
+     and a.attnum > 0 and not a.attisdropped and col_description(a.attrelid, a.attnum) is null;
+  if n <> 0 then raise exception 'w281live: % columns of new tables have no comment', n; end if;
 
   -- the keela_ settings: a signed-in member who is not an admin is refused
   perform set_config('request.jwt.claims', jsonb_build_object('role', 'authenticated', 'email', v_member)::text, true);
