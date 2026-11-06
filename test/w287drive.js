@@ -177,6 +177,12 @@ const ADMIN = { name: 'Steel', id: 37 };
     await f.hash('#team/marketing/tasks/Content', 2600);
     ok('#team/marketing/tasks/Content opens the new Content project', ((await state(f)) || {}).list === 'p27');
     ok('no horizontal scroll at 1280', !(await hasScroll(f)));
+    /* a renamed project shows its new name in the sidebar, the list title and the Overview's card (w116idrive read the retired markup) */
+    await f.ev(() => { const p = window.w116Projects().find((x) => x.id === 6); p.name = 'Website Redesign (renamed)'; window.w116Board.list('p6'); });
+    ok('a renamed project shows in the sidebar and the list title', await f.ev(() => /\(renamed\)/.test(document.querySelector('#w116tasks .w287pr[data-pid="6"]').textContent) && /RENAMED/i.test(document.querySelector('#w116tasks .w287lhead h3').textContent)));
+    await f.hash('#team/marketing', 2600);
+    ok('a renamed project shows on the Overview’s card', await f.ev(() => [].some.call(document.querySelectorAll('#w287proj .w287pc .nm'), (n) => /Website Redesign \(renamed\)/.test(n.textContent))));
+    await f.hash('#team/marketing/tasks', 2600);
     ok('the "Asked of" banner stays on Tasks', await f.ev(() => !!document.getElementById('w258req')) || await f.ev(() => !(window.w123 && window.w123.items && window.w123.items('marketing', 'open').some((x) => x.k === 'r'))));
     await done(f);
   }
@@ -191,6 +197,7 @@ const ADMIN = { name: 'Steel', id: 37 };
     ok('Fundraising: the Gift Basket Drive counts Marketing’s task too (' + gb + ')', sc.proj[13] === gb && f.fx.dept_tasks.some((t) => !t.done && t.project_id === 13 && t.department === 'marketing'), { page: sc.proj[13], gb });
     ok('Fundraising: sub-projects sit indented under Fundraising Events', [11, 12, 13].every((id) => sc.depth[id] === 1) && sc.order.indexOf(2) < sc.order.indexOf(11), sc);
     ok('Fundraising: Grants Program points to its own page', await f.ev(() => { const r = document.querySelector('#w116tasks .w287pr[data-pid="23"]'); return !!r && r.getAttribute('data-w116go') === '#grants'; }));
+    ok('Fundraising: the All list ends with wave258’s Grants pointer', await f.ev(() => !!document.querySelector('#w116tasks .w258ptr a[data-w116go="#grants"]')));
     ok('Fundraising: the grants task stays off the team page (wave258)', await f.ev(() => !document.querySelector('#w116tasks .w116r[data-tid="5206"]')));
     ok('Fundraising: the Sub-team grouping is still offered', await f.ev(() => !!document.querySelector('#w116tasks select[data-act="group"] option[value="board"]')));
     await click(f, '#w116tasks .w287pr[data-pid="13"]', 600);

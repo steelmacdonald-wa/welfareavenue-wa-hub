@@ -751,7 +751,11 @@
     var body;
     if (B.st.view === 'board') body = kanbanHtml(rows);
     else if (B.st.view === 'cal') body = calHtml(rows);
-    else { var gs = groupsFor(rows); body = (rows.length ? '' : emptyHtml(L)) + '<div class="w287groups">' + gs.map(groupHtml).join('') + '</div>'; }
+    else {
+      var gs = groupsFor(rows); body = (rows.length ? '' : emptyHtml(L)) + '<div class="w287groups">' + gs.map(groupHtml).join('') + '</div>';
+      /* a project with its own page (Grants, wave258) closes the All list with wave258's pointer, where its group used to be */
+      if (L === 'all' && !B.scope.board) m.own.forEach(function (p) { var away = elsewhere(p); if (!away) return; var lab = away === '#grants' ? 'Grants' : p.name; body += '<div class="w258ptr" data-w258ptr="1"><span class="dot"></span><span>' + E(lab) + ' has its own page now: <a data-w116go="' + E(away) + '">open ' + E(lab) + '</a></span></div>'; });
+    }
     var side = B.slot.querySelector('.w287side'), sx = side ? side.scrollLeft : 0, sy = side ? side.scrollTop : 0;
     var nSel = Object.keys(B.sel).length;
     B.slot.innerHTML = '<div class="w287 w287v-' + E(B.st.view) + '">' + sideHtml(m) + '<div class="w287main">' + headHtml(m, rows) +
