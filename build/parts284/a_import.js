@@ -44,7 +44,7 @@
   var TYPES = [['fundraising_event', 'Fundraising event'], ['drive', 'Drive'], ['appeal', 'Appeal'], ['program', 'Program']];
   var READ_AS = { optin: 'opt-in', unsubscribe: 'opt-out (unsubscribed)', bounce: 'bounce', complaint: 'complaint (complained)', other: 'other (not acted on)' };
   var CFG = ['keela_keys', 'keela_assignee_map', 'keela_org_pairs_ok', 'keela_campaign_types'];
-  var LISTS = { keela_ids_skipped: 'Skipped (Keela ids)', phone_only: 'Phone-only matches, listed and not merged', org_pairs: 'Close organisation pairs',
+  var LISTS = { keela_ids_skipped: 'Keela ids skipped', phone_only: 'Phone-only matches, listed and not merged', org_pairs: 'Close organisation pairs',
     assignees_unmapped: 'Keela assignees with no Hub person yet', campaigns_to_create: 'Campaigns to create (pick a type)', campaigns_created: 'Campaigns created',
     positions_unmapped: 'Keela positions with no Hub role', company_types_unmapped: 'Keela company types with no Partners category',
     changed_since_kept: 'Changed since the import, so kept', created_review: 'Created by the import: review by hand',
@@ -54,7 +54,7 @@
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
     crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
-    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upBusy: false, purgeAsk: false, purgeMsg: '', seen: {}, pop: null };
+    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, purgeAsk: false, purgeMsg: '', seen: {}, pop: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function num(n) { n = Number(n || 0); return n.toLocaleString('en-CA'); }
@@ -127,7 +127,7 @@
     out.push('Read ' + plural(c.rows_read, 'row', 'rows'));
     out.push(num(c.matched) + ' matched');
     if (c.created) out.push(num(c.created) + ' new');
-    var up = c.updated || {}, keys = Object.keys(up).sort(function (a, z) { return up[z] - up[a]; });
+    var up = c.updated || {}, keys = Object.keys(up).filter(function (k) { return Number(up[k]) > 0; }).sort(function (a, z) { return up[z] - up[a]; });   /* a field with 0 changes is not listed */
     if (keys.length) out.push(plural(sum(up), 'change', 'changes') + ' (' + keys.slice(0, 4).map(function (k) { return (FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ' ' + num(up[k]); }).join(', ') + (keys.length > 4 ? ', and more' : '') + ')');
     else out.push('no changes');
     if (sum(c.kept_hub_value)) out.push('the Hub kept its own value ' + plural(sum(c.kept_hub_value), 'time', 'times'));
@@ -137,18 +137,26 @@
     var cne = c.created_not_emailed || {}; if (sum(cne)) out.push(plural(sum(cne), 'new person arrives', 'new people arrive') + ' not emailed (their Keela opt-out)');
     return (b.status === 'applied' ? 'Applied: ' : b.status === 'compared' ? 'If applied: ' : '') + out.join('; ') + '.';
   }
+  function isPair(x) { return !!(x && typeof x === 'object' && x.keela_company_id && x.partner_id); }
   function itemText(x) {
     if (x == null) return '';
     if (typeof x !== 'object') return String(x);
-    if (x.keela_company_id && x.partner_id) return (x.keela_name || x.keela_company_id) + ' and ' + (x.partner_name || ('partner ' + x.partner_id));
+    if (isPair(x)) return 'Keela: ' + (x.keela_name || x.keela_company_id) + ', Partners: ' + (x.partner_name || ('partner ' + x.partner_id));
     return Object.keys(x).map(function (k) { return x[k]; }).join(' · ');
   }
+  /* a close organisation pair on two lines, so you can tell where the Keela name ends */
+  function pairHtml(x) {
+    return '<span class="w284pair"><span>Keela: <b>' + E(x.keela_name || x.keela_company_id) + '</b></span><span>Partners: ' + E(x.partner_name || ('partner ' + x.partner_id)) + '</span></span>';
+  }
+  function itemHtml(x) { return isPair(x) ? pairHtml(x) : E(itemText(x)); }
+  function nonZero(o) { return Object.keys(o || {}).filter(function (k) { return Number(o[k]) > 0; }); }
+  function cnt(n) { return ' <em class="w284cnt">' + num(n) + '</em>'; }
   function listsHtml(b) {
     var r = b && b.report; if (!r) return '';
     var l = r.lists || {}, sk = (r.counts && r.counts.skipped) || {}, parts = [];
-    if (Object.keys(sk).length) parts.push('<div class="w284ls"><b>Skipped</b><ul>' + Object.keys(sk).map(function (k) { return '<li>' + E(k) + ': ' + num(sk[k]) + '</li>'; }).join('') + '</ul></div>');
+    if (nonZero(sk).length) parts.push('<div class="w284ls"><b>Skipped</b><ul>' + nonZero(sk).map(function (k) { return '<li>' + E(k) + ': ' + num(sk[k]) + '</li>'; }).join('') + '</ul></div>');
     var kept = (r.counts && r.counts.kept_hub_value) || {};
-    if (Object.keys(kept).length) parts.push('<div class="w284ls"><b>The Hub kept its value</b><ul>' + Object.keys(kept).map(function (k) { return '<li>' + E(FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ': ' + num(kept[k]) + '</li>'; }).join('') + '</ul></div>');
+    if (nonZero(kept).length) parts.push('<div class="w284ls"><b>The Hub kept its value</b><ul>' + nonZero(kept).map(function (k) { return '<li>' + E(FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ': ' + num(kept[k]) + '</li>'; }).join('') + '</ul></div>');
     /* round 3: every Keela event wording with how the import read it, so staff can check the reading before Apply (event types, not personal data) */
     var ew = l.event_words || [];
     if (ew.length) parts.push('<div class="w284ls"><table class="w284keys w284words"><caption>Event words and how the import read them</caption><thead><tr><th scope="col">Words</th><th scope="col">Read as</th><th scope="col">Events</th></tr></thead><tbody>'
@@ -156,7 +164,7 @@
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
       var arr = l[k] || []; if (!arr.length) return;
-      parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + ' (' + num(arr.length) + ')</b><ul>' + arr.slice(0, 200).map(function (x) { return '<li>' + E(itemText(x)) + '</li>'; }).join('')
+      parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + cnt(arr.length) + '</b><ul>' + arr.slice(0, 200).map(function (x) { return '<li>' + itemHtml(x) + '</li>'; }).join('')
         + (arr.length > 200 ? '<li class="m">and ' + num(arr.length - 200) + ' more</li>' : '') + '</ul></div>');
     });
     if (!parts.length) return '';
@@ -171,7 +179,7 @@
       ok.forEach(function (p) { if (!pairs.some(function (q) { return q.keela_company_id === p.keela_company_id && q.partner_id === p.partner_id; })) pairs.push(p); });
       if (pairs.length) h = '<fieldset class="w284ctl"><legend>Tick the pairs that are the same organisation</legend>' + pairs.map(function (p) {
         var on = ok.some(function (q) { return q.keela_company_id === p.keela_company_id && q.partner_id === p.partner_id; });
-        return '<label class="w284chk"><input type="checkbox" data-w284pair="' + E(p.keela_company_id) + '|' + E(p.partner_id) + '"' + (on ? ' checked' : '') + '> <span>' + E(itemText(p)) + '</span></label>';
+        return '<label class="w284chk"><input type="checkbox" data-w284pair="' + E(p.keela_company_id) + '|' + E(p.partner_id) + '"' + (on ? ' checked' : '') + '> ' + pairHtml(p) + '</label>';
       }).join('') + '</fieldset>';
     }
     if (kind === 'legacy_fields') {
@@ -234,7 +242,7 @@
           return '<option value="' + f.k + '"' + (S.upKind === f.k ? ' selected' : '') + '>' + E(f.t) + '</option>'; }).join('') + '</select></label>'
         + '<label class="w284row"><span>File</span><input type="file" data-w284upfile="1" accept=".json,.csv,application/json,text/csv"></label>'
         + '<button class="w284btn" data-w284upload="1"' + (S.upBusy ? ' disabled' : '') + '>Upload and stage</button></div>'
-        + (S.upMsg ? '<p class="' + (/could not|not |error|refused/i.test(S.upMsg) ? 'w284err' : 'w284note') + '" role="status">' + E(S.upMsg) + '</p>' : '');
+        + (S.upMsg ? '<p class="' + (S.upErr ? 'w284err' : 'w284note') + '" role="' + (S.upErr ? 'alert' : 'status') + '">' + E(S.upMsg) + '</p>' : '');   /* red only when something failed (S.upErr), never from the words */
     var keysCfg = obj(S.cfg.keela_keys, {});
     var list = S.files.length ? '<ul class="w284files">' + S.files.map(function (f) {
       var done = f.rows != null && f.staged_through === f.rows, base = String(f.name || '').split('/').pop().replace(/^\d+-/, '');
@@ -343,10 +351,10 @@
   function stageFile(fid, offset) {
     S.stage[fid] = 'Staging…'; paint();
     return fn('stage', { file_id: fid, offset: offset || 0 }).then(function (r) {
-      if (r.error) { S.stage[fid] = ''; S.upMsg = 'Staging stopped: ' + r.error; return loadRun(); }
+      if (r.error) { S.stage[fid] = ''; S.upMsg = 'Staging stopped: ' + r.error; S.upErr = true; return loadRun(); }
       var d = r.data;
       if (d.next_offset != null) { S.stage[fid] = 'Staged ' + num(d.staged_through) + ' of ' + num(d.rows) + ' rows…'; paint(); return stageFile(fid, d.next_offset); }
-      S.stage[fid] = ''; S.upMsg = 'Staged ' + plural(d.rows, 'row', 'rows') + '. Check its keys, then compare.';
+      S.stage[fid] = ''; S.upMsg = 'Staged ' + plural(d.rows, 'row', 'rows') + '. Check its keys, then compare.'; S.upErr = false;
       S.openKeys[fid] = true;
       return loadRun().then(function () { return loadKeys(fid); });
     });
@@ -356,18 +364,18 @@
   }
   function upload() {
     var inp = host() && host().querySelector('[data-w284upfile]'), file = inp && inp.files && inp.files[0];
-    if (!file) { S.upMsg = 'Choose a file first, not uploaded.'; paint(); return; }
+    if (!file) { S.upMsg = 'Choose a file first.'; S.upErr = true; paint(); return; }
     var spec = FILES.filter(function (f) { return f.k === S.upKind; })[0];
     var path = S.run + '/' + Date.now() + '-' + String(file.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80);
-    S.upBusy = true; S.upMsg = 'Uploading ' + file.name + '…'; paint();
+    S.upBusy = true; S.upMsg = 'Uploading ' + file.name + '…'; S.upErr = false; paint();
     Promise.resolve(db.storage.from('imports').upload(path, file, { contentType: spec.type, upsert: false })).then(function (u) {
       if (u && u.error) throw new Error('The file could not be uploaded (' + (u.error.message || u.error) + ').');
       return fn('register', { run_id: S.run, path: path, kind: S.upKind });
     }).then(function (r) {
       if (r.error) throw new Error('The file was not recorded: ' + r.error);
-      S.upBusy = false; S.upMsg = 'Uploaded. Staging…';
+      S.upBusy = false; S.upMsg = 'Uploaded. Staging…'; S.upErr = false;
       return loadRun().then(function () { return stageFile(r.data.file_id, 0); });
-    }).catch(function (e) { S.upBusy = false; S.upMsg = String((e && e.message) || e); paint(); });
+    }).catch(function (e) { S.upBusy = false; S.upMsg = String((e && e.message) || e); S.upErr = true; paint(); });
   }
 
   /* ---------- events (once) ---------- */
@@ -390,7 +398,7 @@
     else if (t.closest('[data-w284new]')) {
       fn('new_run', { label: S.label }).then(function (r) {
         if (r.error) { S.err = r.error; paint(); return; }
-        S.label = ''; S.run = r.data.run_id; S.runs = null; S.batches = {}; S.files = []; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = '';
+        S.label = ''; S.run = r.data.run_id; S.runs = null; S.batches = {}; S.files = []; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false;
         load();
       });
     }
@@ -406,7 +414,7 @@
   });
   document.addEventListener('change', function (ev) {
     var t = ev.target; if (!t || !t.closest || !t.closest('#w284root')) return;
-    if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; reloadRun(); }
+    if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false; reloadRun(); }
     else if (t.hasAttribute('data-w284upkind')) S.upKind = t.value;
     else if (t.hasAttribute('data-w284pair')) {
       var parts = t.getAttribute('data-w284pair').split('|'), pair = { keela_company_id: parts[0], partner_id: Number(parts[1]) };
