@@ -1,0 +1,210 @@
+/* =====================================================================
+   WA v290 Your servings this year, on Home (06/11/26)
+   =====================================================================
+   Steel (06/11/26): "I need to build something in the hub where it's essentially on the home page. It's the volunteering
+   dates of the year that one has to do before year end. I'm thinking of adding that starting December 1st. Actually, no,
+   November 15th is good." His choices the same day: count by the fiscal year (to 30 September), the Montreal team only, a
+   thank-you once someone reaches four and then the card leaves, and it sits under the Next serving card ("it should go
+   somewhere here").
+
+   Every member volunteers at four servings a year, counted by the fiscal year (wave191p). From 15 November each fiscal year
+   (app_config servings_card_from) Home shows a Montreal team member how many they have of the four and the next servings,
+   to tick and confirm in one tap. Confirm uses the onboarding's own sign-up, marked as from Home (wa290_home_signup): they
+   are Confirmed right away and Operations Montreal gets a Request with the dates; nothing is texted to them. At four of four
+   the card says thank you for seven days, then leaves until the next fiscal year. The database decides who sees it and when
+   (wa290_home_servings: not Toronto, not the board, not before the start day); the page only draws what it is given.
+
+   #w290srv is the last child of #mpBody, with order 14 in build/parts272/b_home.js: after the Next serving card (wave171,
+   also order 14, earlier in the page), before Needs your attention and My tasks. Full width on a computer, one column on a
+   phone. Like wave171's card it is drawn after its own fetch and kept in place by renderMyPage and a light check.
+   window.w290: paint, state, html. */
+(function () {
+  'use strict';
+  if (window.__wa290) return; window.__wa290 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', PURPLE = '#6F64AB', FLAG = '#A8382A';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var OUT = 'cubic-bezier(.23,1,.32,1)', MUTED = 'rgba(31,32,30,.62)', SURF = 'rgba(16,63,57,.05)', SURF2 = 'rgba(16,63,57,.1)', LINE = 'rgba(16,63,57,.11)';
+  var TICK = 'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23FFFAF2%27 stroke-width=%272.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27><path d=%27M5 12.5 10 17.5 19 7%27/></svg>")';
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function onHome() { var h = String(location.hash || ''); return !h || h === '#' || /^#mypage(\/|$)/.test(h); }
+  function hm12(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var h = Number(m[1]); return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
+  function day(iso, opts) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', Object.assign({ timeZone: 'UTC' }, opts)); } catch (e) { return String(iso || ''); } }
+  function fmtDay(iso) { return day(iso, { weekday: 'long', month: 'long', day: 'numeric' }); }
+  function fmtMonthDay(iso) { return iso ? day(iso, { month: 'long', day: 'numeric' }) : 'September 30'; }
+  var WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+  function word(n) { return WORDS[n] || String(n); }
+  function Word(n) { var w = word(n); return w.charAt(0).toUpperCase() + w.slice(1); }
+
+  /* data: what wa290_home_servings returned; pick: the servings ticked; done: the last confirmation, shown until the next load */
+  var S = { data: null, at: 0, loading: null, busy: false, err: '', pick: {}, role: 'server', done: null };
+  var ROLES = [['server', 'Serve'], ['photographer', 'Take photos']];
+
+  var css = ''
+    + '#w290srv{background:' + SURF + ';border-radius:18px;padding:16px 18px 14px;box-sizing:border-box;font-family:' + BODY + ';color:' + INK + ';font-size:15.5px;line-height:1.45;}'
+    + '#w290srv .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + PURPLE + ';}'
+    + '#w290srv h3{margin:2px 0 4px;font:500 26px/1.02 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w290srv .bar{height:8px;border-radius:8px;background:' + SURF2 + ';overflow:hidden;margin:8px 0 10px;max-width:420px;}'
+    + '#w290srv .bar i{display:block;height:100%;border-radius:8px;background:' + GOLD + ';transition:width 300ms ' + OUT + ';}'
+    + '#w290srv p{margin:0 0 8px;font-size:14.5px;}'
+    + '#w290srv p.sub{color:' + MUTED + ';}'
+    + '#w290srv .ok{background:rgba(220,165,39,.2);border-radius:12px;padding:10px 12px;margin:2px 0 10px;font-size:14.5px;color:' + INK + ';outline:0;}'
+    + '#w290srv .sl{margin:2px 0 4px;}'
+    + '#w290srv .sv{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0;box-sizing:border-box;border-top:1px solid ' + LINE + ';cursor:pointer;}'
+    + '#w290srv .sv:first-child{border-top:0;}'
+    + '#w290srv .sv input{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;flex:none;border-radius:50%;box-shadow:inset 0 0 0 1.75px rgba(31,32,30,.42);background:transparent center/14px 14px no-repeat;cursor:pointer;transition:background-color 160ms ' + OUT + ',box-shadow 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
+    + '#w290srv .sv input:checked{background-color:' + GREEN + ';background-image:' + TICK + ';box-shadow:none;}'
+    + '#w290srv .sv input:active{transform:scale(.9);}'
+    + '#w290srv .sv input:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w290srv .sv.mine{cursor:default;}#w290srv .sv.mine input{cursor:default;opacity:.55;}'
+    + '#w290srv .d{display:flex;flex-direction:column;flex:1;min-width:0;}'
+    + '#w290srv .d b{font-weight:600;font-size:15.5px;color:' + INK + ';}'
+    + '#w290srv .d small{font-size:13px;line-height:1.35;color:' + MUTED + ';overflow-wrap:anywhere;}'
+    + '#w290srv .st{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 8px;background:rgba(220,165,39,.26);color:' + GREEN + ';}'
+    + '#w290srv .roles{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px;padding:0;border:0;min-width:0;}'
+    + '#w290srv .roles legend{float:left;width:100%;padding:0;margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + MUTED + ';}'
+    + '#w290srv .roles label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;background:' + SURF2 + ';color:' + GREEN + ';font:500 14px ' + BODY + ';cursor:pointer;transition:background-color 160ms ' + OUT + ',color 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
+    + '#w290srv .roles label:active{transform:scale(.97);}'
+    + '#w290srv .roles input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none;}'
+    + '#w290srv .roles label.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w290srv .roles label:has(input:focus-visible){outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w290srv .er{margin:0 0 10px;font-size:14px;color:' + FLAG + ';outline:0;}'
+    + '#w290srv .ac{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;}'
+    + '#w290srv .go{min-height:44px;padding:0 20px;border:0;border-radius:999px;background:' + GOLD + ';color:' + GREEN + ';font:700 15px ' + BODY + ';cursor:pointer;transition:transform 120ms ' + OUT + ',filter 160ms ease;}'
+    + '#w290srv .go:active{transform:scale(.97);}#w290srv .go[disabled]{opacity:.65;cursor:default;transform:none;}'
+    + '#w290srv .go:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    + '#w290srv .note{flex:1 1 220px;font-size:13px;color:' + MUTED + ';}'
+    + '@media (min-width:901px){#w290srv .sl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:28px;}#w290srv .sl > .sv:nth-child(2){border-top:0;}}'
+    + '@media (hover:hover) and (pointer:fine){#w290srv .go:not([disabled]):hover{filter:brightness(1.06);}#w290srv .roles label:not(.on):hover{background:rgba(16,63,57,.15);}#w290srv .sv:not(.mine):hover input:not(:checked){box-shadow:inset 0 0 0 1.75px ' + GREEN + ';}}'
+    + '@media (max-width:900px){#w290srv{padding:14px 16px 12px;}#w290srv h3{font-size:24px;}}'
+    + '@media (prefers-reduced-motion:reduce){#w290srv .bar i,#w290srv .sv input,#w290srv .roles label,#w290srv .go{transition:none;}#w290srv .sv input:active,#w290srv .roles label:active,#w290srv .go:active{transform:none;}}';
+  function addCss() { if (document.getElementById('w290css')) return; var st = document.createElement('style'); st.id = 'w290css'; st.textContent = css; document.head.appendChild(st); }
+
+  /* ---------- the data: one call, kept a minute ---------- */
+  async function load(force) {
+    if (!force && S.data && Date.now() - S.at < 60000) return S.data;
+    if (S.loading) return S.loading;
+    S.loading = (async function () {
+      try {
+        var r = await db.rpc('wa290_home_servings');
+        if (r && !r.error) S.data = r.data || { show: false };
+        else if (!S.data) S.data = { show: false, why: 'error' };
+      } catch (e) { if (!S.data) S.data = { show: false, why: 'error' }; }
+      S.at = Date.now(); S.loading = null;
+      return S.data;
+    })();
+    return S.loading;
+  }
+
+  /* ---------- the card ---------- */
+  function rowHtml(s) {
+    var mine = !!(s.mine && s.mine.confirmed), on = !mine && !!S.pick[s.id];
+    var meta = (s.start ? hm12(s.start) + ' \u00b7 ' : '') + (s.location || 'Montreal') + (s.partner ? ' \u00b7 with ' + s.partner : '');
+    return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" data-w290ev="' + Number(s.id) + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
+      + '<span class="d"><b>' + E(fmtDay(s.date)) + '</b><small>' + E(meta) + '</small></span>'
+      + (mine ? '<span class="st">You\u2019re on it</span>' : '') + '</label>';
+  }
+  function html() {
+    var x = S.data; if (!x || !x.show) return '';
+    var yr = x.year || {}, target = Number(yr.target || 4) || 4, done = Math.max(0, Number(yr.done || 0));
+    var until = fmtMonthDay(yr.to), ops = (x.ops && x.ops.name) || 'the operations team';
+    var ok = S.done ? '<div class="ok" role="status"><b>You\u2019re confirmed for ' + E(S.done.dates || 'your servings') + '.</b> ' + E(ops) + ' has the dates in the Operations Montreal inbox.</div>' : '';
+    var h = '<div class="k">Your servings \u00b7 until ' + E(until) + '</div>';
+    if (x.state === 'thanks') {
+      return h + '<h3 id="w290h">' + Math.min(done, target) + ' of ' + target + '. Thank you!</h3>'
+        + '<div class="bar" aria-hidden="true"><i style="width:100%"></i></div>' + ok
+        + '<p>That\u2019s your ' + word(target) + ' servings for the year. Thank you for showing up for our community.</p>';
+    }
+    var left = Math.max(0, target - done), pct = Math.min(100, Math.round(100 * done / target));
+    h += '<h3 id="w290h">' + done + ' of ' + target + ' this year</h3>'
+      + '<div class="bar" role="progressbar" aria-label="Your servings this year" aria-valuemin="0" aria-valuemax="' + target + '" aria-valuenow="' + Math.min(done, target) + '"><i style="width:' + pct + '%"></i></div>'
+      + ok
+      + '<p class="sub">' + (done === 0 ? 'Every member volunteers at ' + word(target) + ' servings a year, October to September.' : (left === 1 ? 'One more' : Word(left) + ' more') + ' before ' + E(until) + '.') + ' Pick the dates that work for you.</p>';
+    var sv = x.servings || [];
+    if (!sv.length) return h + '<p class="sub">No servings are open right now. ' + E(ops) + ' adds the next ones soon.</p>';
+    h += '<div class="sl" role="group" aria-labelledby="w290h">' + sv.map(rowHtml).join('') + '</div>';
+    if (!sv.some(function (s) { return !(s.mine && s.mine.confirmed); })) return h + '<p class="sub">You\u2019re on every open serving. ' + E(ops) + ' adds the next ones soon.</p>';
+    h += '<fieldset class="roles"><legend>What would you like to do?</legend>' + ROLES.map(function (r) {
+      var on = S.role === r[0];
+      return '<label class="' + (on ? 'on' : '') + '"><input type="radio" name="w290role" value="' + r[0] + '"' + (on ? ' checked' : '') + '>' + E(r[1]) + '</label>';
+    }).join('') + '</fieldset>';
+    if (S.err) h += '<p class="er" role="alert">' + E(S.err) + '</p>';
+    h += '<div class="ac"><button type="button" class="go" data-w290go="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Confirming\u2026' : 'Confirm my servings') + '</button>'
+      + '<span class="note">You\u2019re confirmed right away, and ' + E(ops) + ' gets the dates.</span></div>';
+    return h;
+  }
+
+  /* appended to #mpBody: order 14 (b_home.js) and coming after wave171's card in the page put it right after the Next serving card
+     (wave171 inserts its card near the top of #mpBody, never at the end) */
+  function place(focusSel) {
+    var body = document.getElementById('mpBody'), el = document.getElementById('w290srv'), h = html();
+    if (!h || !body) { if (el) el.remove(); return; }
+    addCss();
+    if (!el) { el = document.createElement('section'); el.id = 'w290srv'; el.setAttribute('aria-labelledby', 'w290h'); }
+    if (el.parentNode !== body) body.appendChild(el);
+    if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+    if (focusSel) { var f = el.querySelector(focusSel); if (f) { if (!f.matches('button,input')) f.setAttribute('tabindex', '-1'); try { f.focus(); } catch (e) { /* fine */ } } }
+  }
+  async function paint(force) {
+    if (!staff() || board()) { var x = document.getElementById('w290srv'); if (x) x.remove(); return; }
+    var home = document.getElementById('mypage');
+    if (!home || !home.classList.contains('active')) return;
+    await load(force);
+    place();
+  }
+
+  /* ---------- Confirm my servings ---------- */
+  async function go() {
+    if (S.busy) return;
+    var ids = Object.keys(S.pick).filter(function (k) { return S.pick[k]; }).map(Number);
+    if (!ids.length) { S.err = 'Choose at least one serving.'; place('.er'); return; }
+    S.busy = true; S.err = ''; S.done = null; place('.go');
+    try {
+      var r = await db.rpc('wa290_home_signup', { p_events: ids, p_role: S.role });
+      if (r && r.error) throw r.error;
+      S.done = { dates: (r && r.data && r.data.dates) || '' }; S.pick = {};
+      T('You\u2019re confirmed. Thank you!');
+      await load(true);
+    } catch (e) {
+      S.err = String((e && e.message) || e || '').replace(/^.*?ERROR:\s*/, '').slice(0, 200) || 'Could not confirm. Try again.';
+    }
+    S.busy = false;
+    place(S.err ? '.er' : '.ok');
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w290srv')) return;
+    var el = document.getElementById('w290srv');
+    var id = t.getAttribute('data-w290ev');
+    if (id) {
+      S.pick[id] = t.checked;
+      var l = t.closest('label'); if (l) l.classList.toggle('on', t.checked);
+      if (S.err) { S.err = ''; var er = el && el.querySelector('.er'); if (er) er.remove(); }
+    } else if (t.name === 'w290role') {
+      S.role = t.value;
+      t.closest('.roles').querySelectorAll('label').forEach(function (lb) { lb.classList.toggle('on', !!lb.querySelector('input:checked')); });
+    } else return;
+    if (el) el.__h = html();   /* the page already shows the change; no redraw under the finger */
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#w290srv [data-w290go]');
+    if (!b) return;
+    e.preventDefault(); go();
+  });
+  if (typeof renderMyPage === 'function') {
+    var __rm290 = renderMyPage;
+    renderMyPage = async function () { var r = await __rm290.apply(this, arguments); try { paint(false); } catch (e) { /* fine */ } return r; };
+  }
+  /* Home redraws its body now and then (wave272, wave262): put the card back. No call unless the card was showing. */
+  setInterval(function () {
+    try { if (S.data && S.data.show && !document.hidden && onHome() && staff() && !board() && !document.getElementById('w290srv')) paint(false); } catch (e) { /* fine */ }
+  }, 2000);
+  window.addEventListener('hashchange', function () { if (onHome()) setTimeout(function () { try { paint(false); } catch (e) { /* fine */ } }, 400); });
+
+  /* ---------- test hook ---------- */
+  window.w290 = { paint: paint, html: html, state: function () { return { data: S.data, pick: S.pick, role: S.role, busy: S.busy, err: S.err, done: S.done }; } };
+})();
