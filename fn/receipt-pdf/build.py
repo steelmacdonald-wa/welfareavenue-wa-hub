@@ -3,7 +3,7 @@
 TTF subsets in fonts/) and the server (serve.ts) into index.ts:  python3 fn/receipt-pdf/build.py"""
 import base64, os
 D = os.path.dirname(os.path.abspath(__file__))
-head = """// Welfare Avenue: receipt-pdf (v2, 30/09/26 Toronto, wave185; v1 28/09/26, wave158b)
+head = """// Welfare Avenue: receipt-pdf (v3, 06/11/26 Toronto, wave283; v2 30/09/26, wave185; v1 28/09/26, wave158b)
 // Draws CRA donation receipts as PDFs (pdf-lib) in the Welfare Avenue brand (the green band with the cream lockup, Barlow
 // Condensed headings, Space Grotesk text, the gold star doodle), in English or French. Built from render.js (the drawing,
 // also run by the local check), fonts.js (the three brand fonts as base64, subset to Latin) and serve.ts by build.py: edit
@@ -12,7 +12,7 @@ head = """// Welfare Avenue: receipt-pdf (v2, 30/09/26 Toronto, wave185; v1 28/0
 // automation after an online gift, which reads through the service role):
 //   sample {gift_id, lang?}  -> a sample for one gift from crm_receipt_sample: marked SAMPLE, never numbered, kept or sent (pdf_b64)
 //   check {store?, return?, lang?} -> the build's check that the drawing works (x-wa-secret; a made-up receipt, nothing read or kept)
-//   render {receipt_id}      -> the official copy of an issued receipt (admins, or the automation; crm_receipt_doc), drawn once
+//   render {receipt_id}      -> the official copy of an issued receipt (team leads, admins and finance since v3, or the automation; crm_receipt_doc), drawn once
 //                               into the private bucket receipts (<tax year>/<serial>.pdf) with its checksum (crm_receipt_pdf_set);
 //                               a cancelled receipt gets its copy marked CANCELLED beside it (<serial>-cancelled.pdf). Returns the path.
 // The signature is the image an admin uploaded to receipts/settings/signature.png; the lockup and the doodle come from the brand

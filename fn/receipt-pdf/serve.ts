@@ -114,7 +114,10 @@ Deno.serve(async (req: Request) => {
       const id = Number(body.receipt_id);
       const { data: d, error } = await asUser.rpc('crm_receipt_doc', { p_id: id });
       if (error || !d) return json({ error: error ? error.message : 'No such receipt.' }, 403);
-      if (!auto && !d.is_admin) return json({ error: 'Only an admin draws the official copy.' }, 403);
+      /* v3 (wave283): team leads, admins and finance draw it (crm_receipt_doc's can_issue, wa_can gifts_edit); is_admin is read only while the
+         database is older than wave283, so this version is safe on either side of the release or its undo */
+      const mayIssue = d.can_issue === undefined ? d.is_admin : d.can_issue;
+      if (!auto && !mayIssue) return json({ error: 'Only team leads, admins and finance draw the official copy.' }, 403);
       const cancelled = !!d.cancelled;
       if (!cancelled && d.pdf_path) return json({ ok: true, path: d.pdf_path, existing: true });
       if (cancelled && d.cancelled_pdf_path) return json({ ok: true, path: d.cancelled_pdf_path, existing: true });

@@ -1,4 +1,4 @@
-// Welfare Avenue: receipt-pdf (v2, 30/09/26 Toronto, wave185; v1 28/09/26, wave158b)
+// Welfare Avenue: receipt-pdf (v3, 06/11/26 Toronto, wave283; v2 30/09/26, wave185; v1 28/09/26, wave158b)
 // Draws CRA donation receipts as PDFs (pdf-lib) in the Welfare Avenue brand (the green band with the cream lockup, Barlow
 // Condensed headings, Space Grotesk text, the gold star doodle), in English or French. Built from render.js (the drawing,
 // also run by the local check), fonts.js (the three brand fonts as base64, subset to Latin) and serve.ts by build.py: edit
@@ -7,7 +7,7 @@
 // automation after an online gift, which reads through the service role):
 //   sample {gift_id, lang?}  -> a sample for one gift from crm_receipt_sample: marked SAMPLE, never numbered, kept or sent (pdf_b64)
 //   check {store?, return?, lang?} -> the build's check that the drawing works (x-wa-secret; a made-up receipt, nothing read or kept)
-//   render {receipt_id}      -> the official copy of an issued receipt (admins, or the automation; crm_receipt_doc), drawn once
+//   render {receipt_id}      -> the official copy of an issued receipt (team leads, admins and finance since v3, or the automation; crm_receipt_doc), drawn once
 //                               into the private bucket receipts (<tax year>/<serial>.pdf) with its checksum (crm_receipt_pdf_set);
 //                               a cancelled receipt gets its copy marked CANCELLED beside it (<serial>-cancelled.pdf). Returns the path.
 // The signature is the image an admin uploaded to receipts/settings/signature.png; the lockup and the doodle come from the brand
@@ -432,7 +432,10 @@ Deno.serve(async (req: Request) => {
       const id = Number(body.receipt_id);
       const { data: d, error } = await asUser.rpc('crm_receipt_doc', { p_id: id });
       if (error || !d) return json({ error: error ? error.message : 'No such receipt.' }, 403);
-      if (!auto && !d.is_admin) return json({ error: 'Only an admin draws the official copy.' }, 403);
+      /* v3 (wave283): team leads, admins and finance draw it (crm_receipt_doc's can_issue, wa_can gifts_edit); is_admin is read only while the
+         database is older than wave283, so this version is safe on either side of the release or its undo */
+      const mayIssue = d.can_issue === undefined ? d.is_admin : d.can_issue;
+      if (!auto && !mayIssue) return json({ error: 'Only team leads, admins and finance draw the official copy.' }, 403);
       const cancelled = !!d.cancelled;
       if (!cancelled && d.pdf_path) return json({ ok: true, path: d.pdf_path, existing: true });
       if (cancelled && d.cancelled_pdf_path) return json({ ok: true, path: d.cancelled_pdf_path, existing: true });
