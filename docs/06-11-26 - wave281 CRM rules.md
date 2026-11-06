@@ -43,7 +43,8 @@ Seven live functions are changed by exact replacement of a line in their live te
 
 ## Checks so far
 
-- **Offline:** `node test/w281sql.mjs` passes (158 runner checks, the assertion script three times). The fixture holds the live text of the seven functions, `crm_contact_match` and `crm_contacts_v`, checked against the live md5 of each.
+- **Offline:** `node test/w281sql.mjs` passes (165 runner checks, the assertion script three times). The fixture holds the live text of the seven functions, `crm_contact_match` and `crm_contacts_v`, checked against the live md5 of each.
+- **After the review fixes** (every column of the new tables commented; the consent log cannot be truncated), at b489858: run 1 (the migration twice, the live checks) and run 2 (the full undo cycle) both answered **ROLLBACK_OK**. A read-only check afterwards found live as before.
 - **Live rollback checks** (`build/sql_rollback_test.py`, run through the Supabase connector on 06/11/26; everything rolled back each time):
   1. At 8669fdd: the before snapshot, the migration twice, the live checks. **ROLLBACK_OK.** The backfills gave exactly what the live rows predict. Nobody's email permission changed for any kind. The only texting change was the stopped phones. The contacts view rows were unchanged.
   2. At 8669fdd: the before snapshot, the migration, the undo twice, the undo checks, the migration again, the live checks. **ROLLBACK_OK.** The undo put back all seven functions, `crm_contact_match`, `crm_contacts_v` and the policy exactly (definition, comment, grants, options), and removed every wave281 object. The first try of this run, at cf8e621, found that live stores the view's option as `security_invoker=true` and the undo wrote `on`; fixed in 8669fdd.
