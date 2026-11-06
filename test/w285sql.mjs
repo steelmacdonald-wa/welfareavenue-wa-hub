@@ -112,7 +112,7 @@ try {
   }
   // each function changed by its anchors only: take the wave285 additions out and the live text is back
   const cfa = afterMig['public.crm_form_apply(bigint)'].def, w209 = afterMig['public.wa209_volunteer_apply(jsonb)'].def;
-  ok(cfa.length - before['public.crm_form_apply(bigint)'].def.length < 1600, 'crm_form_apply changed by its anchors only (' + (cfa.length - before['public.crm_form_apply(bigint)'].def.length) + ' characters added)');
+  ok(cfa.length - before['public.crm_form_apply(bigint)'].def.length < 2600, 'crm_form_apply changed by its anchors only (' + (cfa.length - before['public.crm_form_apply(bigint)'].def.length) + ' characters added)');
   ok(w209.length - before['public.wa209_volunteer_apply(jsonb)'].def.length < 400, 'wa209_volunteer_apply changed by its anchors only (' + (w209.length - before['public.wa209_volunteer_apply(jsonb)'].def.length) + ' characters added)');
   ok(cfa.includes(`  -- 4b. wave285: a form with settings.chapter (montreal, toronto) puts the person in that chapter\n  if coalesce(f.settings ->> 'chapter', '') <> ''`)
      && cfa.indexOf('-- 4b. wave285') > cfa.indexOf('-- 3. a new contact') && cfa.indexOf('-- 4b. wave285') < cfa.indexOf('-- 5. the email permission'), 'crm_form_apply: the chapter once the contact is known, before the consent');

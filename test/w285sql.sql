@@ -211,22 +211,68 @@ begin
   assert not exists (select 1 from public.volunteer_applications where lower(email) = 'w285.test@example.com') and (select count(*) from public.dept_requests) = 2, 'a test files no application and no Request';
 end $$;
 
--- 5. someone already in the CRM who unsubscribed and said STOP ticks both boxes: email stays unsubscribed, STOP stays, the text consent is recorded
-do $$
-declare s bigint; r jsonb; d record;
+-- a toronto-volunteer answer with both boxes ticked, applied: the submission id (fix round 1's cases below use it)
+create function pg_temp.w285_answer(p_email text, p_phone text, p_at timestamptz) returns bigint language plpgsql as $f$
+declare s bigint;
 begin
-  insert into public.crm_form_submissions (form_id, status, answers, display, mapped, consent, lang, created_at) values (851, 'received', '{}', '[]',
-    '{"contact": {"first_name": "Fixture", "last_name": "Stopped", "email": "fixture.stopped@stopped-fixture.ca"}, "fields": {}, "consent": true}',
+  insert into public.crm_form_submissions (form_id, status, answers, display, mapped, consent, lang, created_at) values (851, 'received', '{}',
+    '[{"label": "Text permission", "value": "Yes"}]',
+    jsonb_build_object('contact', jsonb_strip_nulls(jsonb_build_object('first_name', 'Fixture', 'email', p_email, 'phone', p_phone)), 'fields', '{}'::jsonb, 'consent', true),
     jsonb_build_object('asked', 'Send me Welfare Avenue news by email. I can unsubscribe at any time.', 'given', true, 'form', 'toronto-volunteer',
-                       'sms', jsonb_build_object('asked', 'Text me about volunteering. I can reply STOP at any time.', 'given', true)), 'en', '2026-11-06 19:00:00+00') returning id into s;
-  r := public.crm_form_apply(s);
-  assert (r ->> 'contact_id')::bigint = 1851, 'the person already in the CRM is used';
+                       'sms', jsonb_build_object('asked', 'Text me about volunteering. I can reply STOP at any time.', 'given', true)), 'en', p_at) returning id into s;
+  perform public.crm_form_apply(s);
+  return s;
+end $f$;
+
+-- 5. someone already in the CRM who unsubscribed and said STOP ticks both boxes (with the phone on file): email stays unsubscribed, STOP stays,
+--    and no text consent is written; the tick stays in the answer and the timeline for the team to confirm
+do $$
+declare s bigint; d record;
+begin
+  s := pg_temp.w285_answer('fixture.stopped@stopped-fixture.ca', '+1 416 555 0109', '2026-11-06 19:00:00+00');
+  assert (select contact_id from public.crm_form_submissions where id = s) = 1851, 'the person already in the CRM is used';
   select * into d from public.crm_contacts where id = 1851;
   assert d.email_status = 'unsubscribed' and d.email_consent is null, 'an unsubscribe is never undone by a form';
-  assert d.sms_opt_out and d.sms_consent = 'express', 'STOP stays on; the text consent is recorded (sms_opt_out stays the stop switch)';
-  assert (select string_agg(column_name || '/' || source || '/' || words, ',') from public.crm_consent_events where contact_id = 1851 and source like 'form:%')
-       = 'sms_consent/form: toronto-volunteer/Text me about volunteering. I can reply STOP at any time.', 'the form wrote the text consent to the consent log, and nothing about email';
+  assert d.sms_opt_out and d.sms_consent is null and d.sms_consent_source is null, 'STOP stays on, and the text box does not write text consent over it';
+  assert not exists (select 1 from public.crm_consent_events where contact_id = 1851 and source like 'form:%'), 'the form wrote nothing to the consent log for a stopped person';
+  assert (select consent -> 'sms' ->> 'given' from public.crm_form_submissions where id = s) = 'true'
+     and exists (select 1 from public.crm_interactions where contact_id = 1851 and source_ref = 'form:' || s and body like '%Text permission: Yes%'), 'the tick stays in the answer and the timeline';
   assert exists (select 1 from public.crm_contact_chapters where contact_id = 1851 and chapter = 'toronto' and source = 'form'), 'and the person joins Toronto';
+end $$;
+
+-- 6 to 10 (fix round 1): who the text box counts for
+do $$
+declare s bigint; c bigint; d record;
+begin
+  -- 6. do-not-contact (not stopped, the same phone): no text consent
+  insert into public.crm_contacts (full_name, emails, phones, do_not_contact) values ('Fixture Dnc', array['fixture.dnc@toronto-fixture.ca'], array['+14165550111'], true) returning id into c;
+  s := pg_temp.w285_answer('fixture.dnc@toronto-fixture.ca', '+1 416 555 0111', '2026-11-06 19:10:00+00');
+  select * into d from public.crm_contacts where id = c;
+  assert (select contact_id from public.crm_form_submissions where id = s) = c and d.sms_consent is null and not d.sms_opt_out
+     and not exists (select 1 from public.crm_consent_events where contact_id = c and channel = 'sms'), 'do-not-contact: no text consent, sms_opt_out untouched, nothing in the log';
+  assert (select consent -> 'sms' ->> 'given' from public.crm_form_submissions where id = s) = 'true', 'do-not-contact: the tick stays in the answer';
+  -- 7. a different phone typed than the one on file: no text consent, the phone on file kept
+  insert into public.crm_contacts (full_name, emails, phones) values ('Fixture Otherphone', array['fixture.otherphone@toronto-fixture.ca'], array['+14165550120']) returning id into c;
+  s := pg_temp.w285_answer('fixture.otherphone@toronto-fixture.ca', '+1 416 555 0199', '2026-11-06 19:20:00+00');
+  select * into d from public.crm_contacts where id = c;
+  assert d.sms_consent is null and d.phones = array['+14165550120'] and not exists (select 1 from public.crm_consent_events where contact_id = c and channel = 'sms'),
+    'another phone typed: no text consent, and the phone on file is kept';
+  assert exists (select 1 from public.crm_interactions where contact_id = c and source_ref = 'form:' || s), 'another phone typed: the answer is on the timeline';
+  -- 8. the phone on file, written differently: text consent
+  insert into public.crm_contacts (full_name, emails, phones) values ('Fixture Samephone', array['fixture.samephone@toronto-fixture.ca'], array['416-555-0130']) returning id into c;
+  s := pg_temp.w285_answer('fixture.samephone@toronto-fixture.ca', '+1 (416) 555-0130', '2026-11-06 19:30:00+00');
+  assert (select sms_consent from public.crm_contacts where id = c) = 'express'
+     and (select string_agg(column_name || '/' || source, ',') from public.crm_consent_events where contact_id = c and channel = 'sms') = 'sms_consent/form: toronto-volunteer', 'the phone on file (any format): text consent, logged';
+  -- 9. no phone on file, one typed: text consent, and the phone is saved
+  insert into public.crm_contacts (full_name, emails) values ('Fixture Nophone', array['fixture.nophone@toronto-fixture.ca']) returning id into c;
+  s := pg_temp.w285_answer('fixture.nophone@toronto-fixture.ca', '+1 416 555 0140', '2026-11-06 19:40:00+00');
+  select * into d from public.crm_contacts where id = c;
+  assert d.sms_consent = 'express' and d.phones = array['+1 416 555 0140'], 'no phone on file: the typed phone is saved and the text consent recorded';
+  -- 10. a new person at 21:30 in Toronto (02:30 UTC the next day): the source carries the Toronto day
+  s := pg_temp.w285_answer('fixture.late@toronto-fixture.ca', '+1 416 555 0150', '2026-11-07 02:30:00+00');
+  select * into d from public.crm_contacts where id = (select contact_id from public.crm_form_submissions where id = s);
+  assert d.sms_consent = 'express' and d.sms_consent_source = 'Hub form: toronto-volunteer (06 Nov 2026)' and d.sms_consent_at = '2026-11-07 02:30:00+00'::timestamptz,
+    'a new person in the evening: the day in Toronto (' || coalesce(d.sms_consent_source, 'none') || ')';
 end $$;
 select set_config('request.jwt.claims', '', true);
 

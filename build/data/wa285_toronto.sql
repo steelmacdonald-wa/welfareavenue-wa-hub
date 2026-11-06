@@ -54,7 +54,9 @@ comment on column public.volunteer_applications.chapter is 'wave285: the chapter
 -- crm_form_apply: v_city comes only from the answers (the form's settings.city is no longer written on new contacts); a form with
 -- settings.chapter puts the person in that chapter (crm_add_chapter, source form, once the contact is known) and passes it to
 -- wa209_volunteer_apply; before the email permission is written, the consent log is told the form (form: <slug>) and the words they saw; a ticked
--- text box (crm_form_submissions.consent.sms.given) sets sms_consent express, its source and time, with the text box's words in the log.
+-- text box (crm_form_submissions.consent.sms.given) sets sms_consent express, its source (with the day in Toronto) and time, with the text box's
+-- words in the log, but only for a contact the answer created, a signed-in person's own record, or a contact who has not said STOP, is not
+-- do-not-contact and whose phone is the one typed (or who had none); otherwise the tick stays in the answer for the team to confirm.
 -- sms_opt_out is never touched here: STOP stays the stop switch.
 do $wa285$
 declare v text; a text; b text;
@@ -116,13 +118,23 @@ begin
     where id = v_cid;
   end if;
 
-  -- 5b. wave285: the text box (crm_forms.consent.sms): a ticked box is express text consent, recorded with the form and the day; the consent log
-  --     keeps the words they saw. sms_opt_out is never touched: a STOP stays a STOP.
-  if coalesce((s.consent -> 'sms' ->> 'given')::boolean, false) then
+  -- 5b. wave285: the text box (crm_forms.consent.sms): a ticked box is express text consent, recorded with the form and the day (in Toronto); the
+  --     consent log keeps the words they saw. As with the email permission, the box could have been ticked by anyone who typed this email, so it
+  --     counts only for a contact this answer created, a signed-in person's own record, or a contact who has not said STOP, is not do-not-contact
+  --     and whose phone is the one typed (or who had no phone). Otherwise the tick stays in the answer and the timeline for the team to confirm.
+  --     sms_opt_out is never touched: a STOP stays a STOP.
+  if coalesce((s.consent -> 'sms' ->> 'given')::boolean, false)
+     and (v_created or v_own or exists (
+           select 1 from public.crm_contacts c
+            where c.id = v_cid and not coalesce(c.sms_opt_out, false) and not coalesce(c.do_not_contact, false)
+              and (cardinality(coalesce(c.phones, '{}'::text[])) = 0
+                   or (regexp_replace(coalesce(v_ph, ''), '\D', '', 'g') <> ''
+                       and exists (select 1 from unnest(c.phones) x
+                                    where right(regexp_replace(x, '\D', '', 'g'), 10) = right(regexp_replace(v_ph, '\D', '', 'g'), 10)))))) then
     perform set_config('wa.consent_source', 'form: ' || f.slug, true);
     perform set_config('wa.consent_words', coalesce(s.consent -> 'sms' ->> 'asked', ''), true);
     update public.crm_contacts set sms_consent = 'express',
-      sms_consent_source = 'Hub form: ' || f.slug || ' (' || to_char(s.created_at, 'DD Mon YYYY') || ')', sms_consent_at = s.created_at
+      sms_consent_source = 'Hub form: ' || f.slug || ' (' || to_char(s.created_at at time zone 'America/Toronto', 'DD Mon YYYY') || ')', sms_consent_at = s.created_at
     where id = v_cid;
   end if;$x$);
     v := replace(v, $x$        'language', coalesce(f.lang, 'en'), 'by', v_src));$x$,
@@ -137,7 +149,7 @@ grant execute on function public.wa209_volunteer_apply(jsonb) to authenticated, 
 revoke all on function public.crm_form_apply(bigint) from public, anon, authenticated;
 grant execute on function public.crm_form_apply(bigint) to service_role;
 comment on function public.wa209_volunteer_apply(jsonb) is 'wave209: files a volunteer application ({name, email, phone, roles | role_text, source, source_ref, applied_at, message, cv_url, cv_path, language, mail_id, candidate_id, by, chapter}): the person found by email or phone in volunteer_people or added there (so they are in the CRM and the directory), roles and tags (volunteer applicant, the source, applied YYYY-MM) merged, last_applied and Review set, a timeline entry in crm_interactions, and the row in volunteer_applications (Applicants received). A source_ref files an application once. wave239: the videographer role. wave285: the chapter (montreal when none is given) is saved on the application (volunteer_applications.chapter) and puts the person in that chapter (crm_add_chapter, source application). Staff and the service role.';
-comment on function public.crm_form_apply(bigint) is 'Applies one form submission (wave156): the contact, the volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account''s own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else''s submission only fills gaps and never re-subscribes. wave216: an application form adds a card to the Applications board; wave239: a volunteer form with a volunteering record files the application in Applicants received. wave261 (16/10/26): settings.request files a Request (request_types, assigned to its default assignee) without the email or phone; settings.gift_pledge adds a pledged campaign_gifts row waiting for a Confirm; settings.role_text names what a volunteer applied for; an address at a reserved test domain (example.com/.org/.net, .test, .example, .invalid) is a test (no Request, pledge or applicant; the submission is marked is_test). wave285 (06/11/26): settings.chapter puts the person in that chapter (crm_add_chapter, source form) and goes with the application to wa209_volunteer_apply; a new contact''s city comes only from the answers, never the form''s settings.city; the consent log records the form (form: <slug>) and the words shown; a ticked text box (consent.sms) is express text consent (sms_consent, its source and time; sms_opt_out untouched). Called by form-submit with the service role.';
+comment on function public.crm_form_apply(bigint) is 'Applies one form submission (wave156): the contact, the volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account''s own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else''s submission only fills gaps and never re-subscribes. wave216: an application form adds a card to the Applications board; wave239: a volunteer form with a volunteering record files the application in Applicants received. wave261 (16/10/26): settings.request files a Request (request_types, assigned to its default assignee) without the email or phone; settings.gift_pledge adds a pledged campaign_gifts row waiting for a Confirm; settings.role_text names what a volunteer applied for; an address at a reserved test domain (example.com/.org/.net, .test, .example, .invalid) is a test (no Request, pledge or applicant; the submission is marked is_test). wave285 (06/11/26): settings.chapter puts the person in that chapter (crm_add_chapter, source form) and goes with the application to wa209_volunteer_apply; a new contact''s city comes only from the answers, never the form''s settings.city; the consent log records the form (form: <slug>) and the words shown; a ticked text box (consent.sms) is express text consent (sms_consent, its source with the day in Toronto, and time) for a contact the answer created, the person''s own record, or a contact who has not said STOP, is not do-not-contact and whose phone is the one typed (or who had none); otherwise the tick stays in the answer for the team to confirm; sms_opt_out is never touched. Called by form-submit with the service role.';
 
 -- ============================================================================================ 4. the forms
 -- toronto-volunteer: the Toronto settings (chapter, serving location, the Request for Tate; no settings.city) and both boxes. It stays closed (its
