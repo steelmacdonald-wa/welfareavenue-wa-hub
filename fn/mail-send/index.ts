@@ -1,4 +1,8 @@
 // Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v8 (wave286, 06/11/26, not deployed; on top of v7): a volunteer's itinerary goes from their serving's chapter address. sendItineraryRow reads the
+//   serving's chapter (volunteer_events.chapter) and its crm_chapters.mail_route and hands it to routed(): toronto@ for a Toronto serving, volunteer@
+//   (the template's route) for a Montreal one; when the chapter cannot be read the template's route stands, as in v7. The other volunteer emails
+//   already take a route in send (wa266f_email_drain passes the serving's chapter route since wave286).
 // v7 (wave282, 06/11/26, not deployed): Steel's email rule of 5 Nov 2026 lives in crm_email_permission (newsletters and fundraising go to anyone
 //   not unsubscribed). set_settings no longer takes mail_fundraising_exemption (the setting is deleted). send and receipt answer
 //   {ok:false, reason:'do not contact'} (with status suppressed and basis do not contact, which the CRM page reads) when the rule says do not contact,
@@ -466,6 +470,16 @@ function itineraryEmail(d: any, o: { note?: string | null; isUpdate?: boolean; l
     T.open + ': ' + link, wa ? T.wa + ': ' + wa : '', '', T.q].filter(x => x !== null).join('\n');
   return { subject, html, text: textLayout(text.replace(/\n{3,}/g, '\n\n'), 'transactional', o.unsub, o.cfg), preheader: T.pre };
 }
+/* v8 (wave286): the mail route of a serving's chapter (volunteer_events.chapter -> crm_chapters.mail_route): toronto for a Toronto serving, volunteer
+   for a Montreal one. null when it cannot be read (before wave286's database, or no such serving): the template's own route, as before. */
+async function chapterRoute(eventId: unknown): Promise<string | null> {
+  try {
+    const ev = await svc.from('volunteer_events').select('chapter').eq('id', Number(eventId)).maybeSingle();
+    if (ev.error || !ev.data || !ev.data.chapter) return null;
+    const ch = await svc.from('crm_chapters').select('mail_route').eq('code', String(ev.data.chapter)).maybeSingle();
+    return ch.error || !ch.data ? null : (String(ch.data.mail_route || '') || null);
+  } catch (_) { return null; }
+}
 async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Caller): Promise<Sent> {
   const key = await resendKey();
   const fail = async (msg: string) => { await svc.from('crm_email_sends').update({ status: 'failed', claimed_at: null, error: msg.slice(0, 400) }).eq('id', row.id); return { send_id: row.id, status: 'failed', error: msg }; };
@@ -477,9 +491,9 @@ async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Call
   const unsub = await unsubUrl(c ? c.id : null, row.id);
   const e = itineraryEmail(d, { note: m.note, isUpdate: !!m.is_update, lang: m.lang, cfg, unsub });
   /* wave273: replies reach whoever handles this role */
-  const ro = await svc.from('event_roster').select('role').eq('id', Number(m.roster_id)).maybeSingle();
+  const ro = await svc.from('event_roster').select('role,event_id').eq('id', Number(m.roster_id)).maybeSingle();
   const ow = ro.data ? await svc.rpc('wa258_role_owner', { p_role: ro.data.role }) : null;
-  const sender = senderLine(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data));
+  const sender = senderLine(cfg, routed(cfg, 'volunteer_itinerary', ro.data ? await chapterRoute(ro.data.event_id) : null, ow && ow.data));
   const res = await rs(key, 'POST', '/emails', { from: sender.from, to: [row.to_email], subject: e.subject, html: e.html, text: e.text, reply_to: sender.reply,
     tags: [{ name: 'template', value: 'volunteer_itinerary' }, { name: 'kind', value: 'transactional' }, { name: 'send_id', value: String(row.id) }] }, { 'Idempotency-Key': 'wa-send-' + row.id });
   await svc.from('crm_email_sends').update({ subject: e.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
