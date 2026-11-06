@@ -11,7 +11,7 @@
    (keela_campaign_types), and the contacts file's subscription history key (keela_keys). A changed setting asks for a new compare.
    window.w284.open(host) is called by the CRM page (parts152 c_list.js) with #w284root. */
 (function () {
-  if (window.__w284) return; window.__w284 = 1;
+  if (window.__wa284) return; window.__wa284 = true;   /* the ground rule's guard (window.__wa28N) */
 
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#6B6965', RED = '#B3402F';
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
@@ -52,7 +52,7 @@
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
     crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
-    label: '', upKind: 'keela_contacts_json', upMsg: '', upBusy: false, purgeAsk: false, purgeMsg: '', seen: {}, pop: null };
+    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upBusy: false, purgeAsk: false, purgeMsg: '', seen: {}, pop: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function num(n) { n = Number(n || 0); return n.toLocaleString('en-CA'); }
@@ -130,6 +130,8 @@
     else out.push('no changes');
     if (sum(c.kept_hub_value)) out.push('the Hub kept its own value ' + plural(sum(c.kept_hub_value), 'time', 'times'));
     if (sum(c.skipped)) out.push(num(sum(c.skipped)) + ' skipped');
+    if (c.undated_events) out.push(plural(c.undated_events, 'event', 'events') + ' with no readable date' + (c.undated_optouts_honoured ? ' (' + plural(c.undated_optouts_honoured, 'opt-out', 'opt-outs') + ' among them honoured)' : ''));
+    var cne = c.created_not_emailed || {}; if (sum(cne)) out.push(plural(sum(cne), 'new person arrives', 'new people arrive') + ' not emailed (their Keela opt-out)');
     return (b.status === 'applied' ? 'Applied: ' : b.status === 'compared' ? 'If applied: ' : '') + out.join('; ') + '.';
   }
   function itemText(x) {
@@ -212,6 +214,7 @@
       + extraHtml(K.k, b) + listsHtml(b)
       + (err ? '<p class="w284err" role="alert">Stopped: ' + E(err) + '</p>' : '')
       + (S.msg[K.k] ? '<p class="w284err" role="alert">' + E(S.msg[K.k]) + '</p>' : '')
+      + (S.note[K.k] ? '<p class="w284warn">' + E(S.note[K.k]) + '</p>' : '')
       + '<div class="w284acts">' + (busy ? '<span class="w284busy">' + E(busy) + '</span>' : btn) + '</div>'
       + '</section>';
   }
@@ -300,6 +303,7 @@
       return fn(action, { batch_id: b.id });
     }).then(function (r) {
       if (r && r.error) S.msg[kind] = r.error;
+      S.note[kind] = (r && r.data && r.data.note) || '';   /* crm-import says when it had to use the API (8-second limit) */
       if (action === 'compare' && !(r && r.error)) S.stale[kind] = false;
       return loadRun();
     }).then(function () {

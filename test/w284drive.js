@@ -10,7 +10,7 @@
      and Purge asks inside its own row. No page errors; at phone width nothing scrolls sideways.
    usage: node test/w284drive.js */
 const { launch, fresh, loadFixture } = require('./boot');
-let pass = 0, fail = 0; const out = [];
+let pass = 0, fail = 0, b2; const out = [];
 function ok(name, cond, extra) { if (cond) { pass++; out.push('PASS ' + name); } else { fail++; out.push('FAIL ' + name + (extra !== undefined ? ' :: ' + JSON.stringify(extra).slice(0, 900) : '')); } }
 const ORDER = ['optouts', 'legacy_fields', 'people', 'fields', 'orgs', 'consent', 'participation', 'form_answers'];
 function C(id, full_name, o) {
@@ -29,7 +29,7 @@ function fixture() {
   fx.crm_import_runs = [{ id: 7, label: 'Test Keela run', created_by: 'test@example.com', created_at: '2026-08-10T12:00:00Z', last_applied_at: '2026-08-20T12:00:00Z', purged_at: null },
                         { id: 6, label: 'Test older run', created_by: 'test@example.com', created_at: '2026-08-01T12:00:00Z', last_applied_at: null, purged_at: '2026-08-05T12:00:00Z' }];
   fx.crm_import_batches = [
-    { id: 71, run_id: 7, kind: 'optouts', status: 'applied', report: REP('optouts', { rows_read: 1510, matched: 8, updated: { email_status: 8, consent_source: 8 }, skipped: { 'latest event is not an opt-out': 1502 } }), error: null, applied_at: '2026-08-20T12:00:00Z', applied_by: 'test@example.com' },
+    { id: 71, run_id: 7, kind: 'optouts', status: 'applied', report: REP('optouts', { rows_read: 1510, matched: 8, updated: { email_status: 8, consent_source: 8 }, skipped: { 'latest event is not an opt-out': 1502 }, undated_events: 2, undated_optouts_honoured: 1 }), error: null, applied_at: '2026-08-20T12:00:00Z', applied_by: 'test@example.com' },
     { id: 72, run_id: 7, kind: 'legacy_fields', status: 'compared', report: REP('legacy_fields', { rows_read: 1468, matched: 1468, updated: { crm_contact_fields: 600, owner_member_id: 0 }, skipped: { 'assignee not mapped': 125 } }, { assignees_unmapped: ['Test Keela User'], positions_unmapped: ['Juggler'] }), error: null },
     { id: 73, run_id: 7, kind: 'people', status: 'applied', report: REP('people', { rows_read: 1510, matched: 1457, created: 31, updated: { city: 40, phones: 12 }, kept_hub_value: { city: 3 } }, { keela_ids_skipped: [{ keela_id: 'KT007', reason: 'no email or phone' }] }), error: null, applied_at: '2026-08-20T12:00:00Z' },
     { id: 74, run_id: 7, kind: 'fields', status: 'failed', report: null, error: 'missing key Birth Date' },
@@ -103,6 +103,9 @@ const rail = (f) => f.ev(() => [...document.querySelectorAll('#w153rail [data-w1
   ok('an applied people card has Undo; a compared card has Apply', JSON.stringify(b.people) === '["Undo"]' && JSON.stringify(b.legacy) === '["Apply"]', b);
   ok('a failed card says why inside it, with Compare', /Stopped: missing key Birth Date/.test(b.fieldsErr) && JSON.stringify(b.fields) === '["Compare"]', b);
   ok('a card waits for its file (no responses file staged)', /Stage the Keela form responses/.test(b.formsNote) && JSON.stringify(b.forms) === '["Compare"]', b.formsNote);
+  b2 = await f.ev(() => ({ guard: window.__wa284, old: window.__w284, opt: (document.querySelector('#w284root [data-w284card="optouts"] .w284sum') || {}).innerText || '' }));
+  ok('the segment\'s guard is window.__wa284', b2.guard === true && b2.old === undefined, b2);
+  ok('the opt-outs sentence counts the events with no readable date', /2 events with no readable date \(1 opt-out among them honoured\)/.test(b2.opt), b2.opt);
   ok('the report\'s counts in a sentence', /^Applied: Read 1,510 rows; 1,457 matched; 31 new; 52 changes \(city 40, phones 12\); the Hub kept its own value 3 times\.$/.test(b.peopleSum), b.peopleSum);
   b = await f.ev(() => { const d = document.querySelector('#w284root [data-w284card="people"] details'); if (d) d.open = true; return d ? d.innerText : ''; });
   ok('See the lists shows Keela ids, never a value', /See the lists/.test(b) && /KT007/.test(b) && !/@/.test(b), b);
