@@ -1,10 +1,16 @@
 -- Welfare Avenue Hub: wave281 undo, 06/11/26. Reverses build/data/wa281_rules.sql, in reverse order.
 -- The seven patched functions, crm_contacts_v (with crm_contact_match, which takes its row type and must be dropped and recreated with it) and the
 -- hub_roles_self_member policy come back exactly as live had them on 06/11/26 (pg_get_functiondef, pg_get_viewdef and pg_get_expr, read with the
--- Supabase connector; md5 of each definition in test/w281sql.mjs), with their live grants and comments. Then everything wave281 added is dropped.
--- What goes with it: chapter rows, the consent log, do-not-contact flags, text consent, birth dates, job titles, Campaigns and their people, gift and
--- form campaign links, hub_roles.caps, the four custom fields and their values, the organisation columns. Take a copy of anything set since the
--- release before running it. Gifts, forms and contacts themselves are never deleted. The release line in change_log stays; an undo line is added.
+-- Supabase connector; md5 of each definition in test/w281sql.mjs), with their live grants and comments. Then wave281's functions, triggers,
+-- policies, views and grants are dropped.
+-- What stays, as data only (Steel's rule: an undo never undoes opt-outs or consent, and evidence is not thrown away): the consent log
+-- (crm_consent_events) and its rows, the do-not-contact flag with its reason, time and author, text consent with its source and date, and the chapters
+-- (crm_chapters, crm_contact_chapters) with their rows. Nothing of wave281 acts on them any more, and no API role can read or write them (the append-only
+-- guard goes, so the log's write rights go with it). Running build/data/wa281_rules.sql again brings back the functions, triggers, policies and grants
+-- around them without duplicating a row.
+-- What goes: birth dates, job titles, Campaigns and their people, gift and form campaign links, hub_roles.caps, the four custom fields and their
+-- values, the organisation columns. Take a copy of anything set since the release before running it. Gifts, forms and contacts themselves are never
+-- deleted. The release line in change_log stays; an undo line is added.
 -- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data, and must keep reading the migration's text.
 -- No transaction control (see the migration). Safe to run twice.
 
@@ -586,36 +592,47 @@ drop view if exists public.wa_stopped_phones_v;
 drop index if exists public.quo_messages_wa281_keyword_idx;
 drop index if exists public.whatsapp_messages_wa281_keyword_idx;
 
--- ============================================================================================ 9. do-not-contact
+-- ============================================================================================ 9. do-not-contact (the flag, dnc_reason, dnc_at and dnc_by stay)
 drop trigger if exists trg_wa281_dnc_hold on public.crm_contacts;
 drop function if exists public.crm_dnc_hold();
-drop trigger if exists trg_wa281_consent_log on public.crm_contacts;   -- it fires on do_not_contact too
 drop function if exists public.crm_set_do_not_contact(bigint, text);
-alter table public.crm_contacts drop column if exists dnc_by;
-alter table public.crm_contacts drop column if exists dnc_at;
-alter table public.crm_contacts drop column if exists dnc_reason;
-alter table public.crm_contacts drop column if exists do_not_contact;
 
--- ============================================================================================ 10. the consent log
+-- ============================================================================================ 10. the consent log (the table, its rows and the text-consent columns stay)
 drop trigger if exists trg_wa281_consent_log on public.crm_contacts;
 drop function if exists public.crm_consent_log();
 do $t$ begin
-  if to_regclass('public.crm_consent_events') is not null then drop trigger if exists trg_wa281_consent_no_truncate on public.crm_consent_events; end if;
+  if to_regclass('public.crm_consent_events') is not null then
+    drop trigger if exists trg_wa281_consent_guard on public.crm_consent_events;
+    drop trigger if exists trg_wa281_consent_no_truncate on public.crm_consent_events;
+    drop policy if exists crm_consent_events_staff_read on public.crm_consent_events;
+    -- with the append-only guard gone, no API role keeps any right on the log, so it stays untouched (wave281's run gives them back)
+    revoke all on table public.crm_consent_events from public, anon, authenticated, service_role;
+    comment on table public.crm_consent_events is 'wave281, kept by its undo: the consent log and its rows, as data only. Nothing writes it and no API role can read or write it; running wa281_rules.sql again brings back its trigger, append-only guard, policy and grants.';
+  end if;
 end $t$;
-drop table if exists public.crm_consent_events;
 drop function if exists public.crm_consent_guard();
-alter table public.crm_contacts drop column if exists sms_consent_at;
-alter table public.crm_contacts drop column if exists sms_consent_source;
-alter table public.crm_contacts drop column if exists sms_consent;
 
--- ============================================================================================ 11. chapters
+-- ============================================================================================ 11. chapters (both tables and their rows stay)
 drop function if exists public.crm_in_chapter(bigint, text);
 drop function if exists public.crm_add_chapter(bigint, text, text, text);
-drop table if exists public.crm_contact_chapters;
-drop table if exists public.crm_chapters;
+do $t$ begin
+  if to_regclass('public.crm_contact_chapters') is not null then
+    drop policy if exists crm_contact_chapters_staff_read on public.crm_contact_chapters;
+    drop policy if exists crm_contact_chapters_staff_insert on public.crm_contact_chapters;
+    drop policy if exists crm_contact_chapters_staff_delete on public.crm_contact_chapters;
+    revoke all on table public.crm_contact_chapters from public, anon, authenticated, service_role;
+    comment on table public.crm_contact_chapters is 'wave281, kept by its undo: which chapter each person belongs to, with its evidence, as data only. No API role can read or write it; running wa281_rules.sql again brings back its functions, policies and grants.';
+  end if;
+  if to_regclass('public.crm_chapters') is not null then
+    drop policy if exists crm_chapters_staff_read on public.crm_chapters;
+    drop policy if exists crm_chapters_admin_write on public.crm_chapters;
+    revoke all on table public.crm_chapters from public, anon, authenticated, service_role;
+    comment on table public.crm_chapters is 'wave281, kept by its undo: the chapters (Montreal, Toronto) that crm_contact_chapters points to, as data only. No API role can read or write it; running wa281_rules.sql again brings back its policies and grants.';
+  end if;
+end $t$;
 
 -- the undo record (once per release)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
-select 'release', 'wave281', 'wave281 undo', null, 'wave281 undone: the CRM rules removed and the seven functions, crm_contacts_v and hub_roles_self_member back as live had them on 06/11/26.', 'wave281 undo'
+select 'release', 'wave281', 'wave281 undo', null, 'wave281 undone: the CRM rules removed and the seven functions, crm_contacts_v and hub_roles_self_member back as live had them on 06/11/26. The consent log, do-not-contact, text consent and the chapter rows are kept as data.', 'wave281 undo'
  where not exists (select 1 from public.change_log u where u.entity_type = 'release' and u.entity_id = 'wave281' and u.field = 'wave281 undo'
                     and u.changed_at >= coalesce((select max(r.changed_at) from public.change_log r where r.entity_type = 'release' and r.entity_id = 'wave281' and r.field = 'wave281'), '-infinity'::timestamptz));

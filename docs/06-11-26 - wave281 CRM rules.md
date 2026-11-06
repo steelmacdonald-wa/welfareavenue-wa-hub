@@ -67,8 +67,10 @@ Seven live functions are changed by exact replacement of a line in their live te
 ## Undo
 
 1. Redeploy quo-send v8 and whatsapp-send v1 (the source at 94f6942).
-2. Claude applies `build/data/wa281_undo.sql`. It puts back the seven functions, `crm_contacts_v`, `crm_contact_match` and the policy exactly as live had them on 06/11/26, then drops everything wave281 added.
-   - Anything set since the release goes with it: chapter rows, the consent log, do-not-contact flags, text consent, birth dates, job titles, Campaigns, gift and form links, caps, the four custom fields and their values, the organisation columns. Take a copy first.
+2. Claude applies `build/data/wa281_undo.sql`. It puts back the seven functions, `crm_contacts_v`, `crm_contact_match` and the policy exactly as live had them on 06/11/26, then drops the functions, triggers, policies, views and grants wave281 added.
+   - **What stays, and why.** Steel's rule: an undo never undoes opt-outs or consent, and evidence is not thrown away. So the undo keeps, as data: the consent log (`crm_consent_events`) and its rows; the do-not-contact flag with `dnc_reason`, `dnc_at` and `dnc_by`; text consent (`sms_consent`, its source and date); and the chapters (`crm_chapters`, `crm_contact_chapters`) with their rows. Nothing of wave281 acts on them after the undo. The log's append-only guard goes with the rest, so every API role (anon, authenticated, service_role) loses its rights on the three kept tables too, and the kept log stays untouched. The text and WhatsApp opt-outs and the email status were live columns before wave281 and keep their values.
+   - **What goes.** Birth dates, job titles, Campaigns, gift and form links, caps, the four custom fields and their values, the organisation columns. Take a copy first.
+   - **Running wave281 again** after the undo works: every table and column is created only if missing, the backfills skip rows already there, and the comments, policies, grants and triggers come back. A do-not-contact person whose texts were turned back on while the rule was off is stopped again, with a log row.
    - Contacts, gifts and forms themselves are never deleted. An undo line goes in change_log.
 
 ## Worth knowing

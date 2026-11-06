@@ -43,6 +43,16 @@ const MATCH = 'public.crm_contact_match(public.crm_contacts_v,jsonb)';
 const MATCH_MD5 = 'd21db1e35fb6e0a8f65d766db3a1d618';
 const VIEW_MD5 = '326f39ce0495c38c50c81273ee58fd9f';
 const PATCHED = Object.keys(LIVE);
+// the final review (I3): the undo keeps these as data (Steel's rule: an undo never undoes opt-outs or consent; evidence is kept)
+const KEPT_TABLES = ['crm_chapters', 'crm_contact_chapters', 'crm_consent_events'];
+const KEPT_COLUMNS = ['sms_consent', 'sms_consent_source', 'sms_consent_at', 'do_not_contact', 'dnc_reason', 'dnc_at', 'dnc_by'];
+const PRIVS = `select string_agg(t || ':' || r || ':' || p, ',' order by t, r, p) as x from unnest(array['crm_chapters', 'crm_contact_chapters', 'crm_consent_events']) t,
+  unnest(array['anon', 'authenticated', 'service_role']) r, unnest(array['select', 'insert', 'update', 'delete', 'truncate', 'references', 'trigger']) p where has_table_privilege(r, 'public.' || t, p)`;
+const KEEP = `select (select count(*)::int from public.crm_consent_events) as consent, (select md5(string_agg(to_jsonb(e)::text, '|' order by e.id)) from public.crm_consent_events e) as consent_rows,
+  (select md5(string_agg(to_jsonb(x)::text, '|' order by x.contact_id, x.chapter)) from public.crm_contact_chapters x) as chapter_rows,
+  (select md5(string_agg(to_jsonb(x)::text, '|' order by x.code)) from public.crm_chapters x) as chapters,
+  (select string_agg(concat_ws(':', id, do_not_contact, dnc_reason, dnc_at, dnc_by, sms_consent, sms_consent_source, sms_consent_at, sms_opt_out, whatsapp_opt_out, email_status), ',' order by id)
+     from public.crm_contacts where id in (1291, 1292)) as people, (select count(*)::int from public.crm_contacts) as contacts`;
 const ADDED_FNS = ['public.crm_add_chapter(bigint,text,text,text)', 'public.crm_in_chapter(bigint,text)', 'public.crm_consent_log()', 'public.crm_consent_guard()',
   'public.crm_set_do_not_contact(bigint,text)', 'public.crm_age_band(bigint)', 'public.wa_can(text)', 'public.wa_my_caps()', 'public.crm_gift_campaign_id(text)', 'public.wa281_gift_campaign()',
   'public.crm_dnc_hold()'];
@@ -99,6 +109,7 @@ try {
   ok(first.chapters === 44 + 6 && first.consent === 5 && first.campaigns === 7 && first.gifts === 5 && first.fields === 6 && first.forms === 2 && first.release_rows === 1,
     'the backfills: 44 toronto + 6 montreal chapter rows, 3 form answers + 2 change_log rows, 7 campaigns, 5 gifts, 4 new fields, 2 forms, 1 release line (' + JSON.stringify(first) + ')');
   const afterMig = await snapshot(db);
+  const privsFirst = (await one(db, PRIVS)).x;
   for (const f of PATCHED) {
     ok(afterMig[f].def !== before[f].def, f + ' was patched');
     ok(afterMig[f].def === afterOnce[f].def, f + ' is patched once only (the second run skipped it)');
@@ -134,6 +145,15 @@ try {
   await runAssertions(db, 'assertions');
   await runAssertions(db, 'assertions (second run)');
 
+  // ---- data the undo must keep: a do-not-contact person and a text consent (invented), with the log rows they write, and the chapter rows
+  await db.exec(`insert into public.crm_contacts (id, full_name, emails, phones, email_status, do_not_contact, dnc_reason, dnc_at, dnc_by) overriding system value
+      values (1291, 'Test Undo Dnc', array['w281.undo.dnc@example.invalid'], array['+15145550291'], 'subscribed', true, 'asked', now(), 'w281.member@example.invalid');
+    insert into public.crm_contacts (id, full_name, sms_consent, sms_consent_source, sms_consent_at) overriding system value
+      values (1292, 'Test Undo Text Consent', 'express', 'form: test-plain-form', now());`);
+  const kept = await one(db, KEEP);
+  ok(kept.consent === first.consent + 4 && /^1291:t:asked:/.test(kept.people) && /,1292:f:express:form: test-plain-form:/.test(kept.people),
+    'before the undo: the do-not-contact person and the text consent, with their four log rows (' + kept.people + ')');
+
   // ---- the undo, twice
   await db.exec(undo);
   await db.exec(undo);
@@ -151,8 +171,17 @@ try {
   ok((await privs('authenticated')) === 'references,select,trigger,truncate' && (await privs('anon')) === null, 'crm_contacts_v grants are back (authenticated rDxtm, anon none)');
   ok(afterUndo.policy.chk === before.policy.chk && afterUndo.policy.cmd === before.policy.cmd && afterUndo.policy.roles === before.policy.roles, 'hub_roles_self_member is back exactly');
   for (const f of ADDED_FNS) ok((await one(db, `select to_regprocedure('${f}') is null as x`)).x === true, f + ' is gone');
-  for (const t of [...ADDED_TABLES, 'wa_stopped_phones_v']) ok((await one(db, `select to_regclass('public.${t}') is null as x`)).x === true, t + ' is gone');
-  for (const [t, c] of ADDED_COLUMNS) ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = '${t}' and column_name = '${c}'`)).n === 0, t + '.' + c + ' is dropped');
+  for (const t of [...ADDED_TABLES, 'wa_stopped_phones_v'].filter((x) => !KEPT_TABLES.includes(x))) ok((await one(db, `select to_regclass('public.${t}') is null as x`)).x === true, t + ' is gone');
+  for (const [t, c] of ADDED_COLUMNS.filter(([t, c]) => !(t === 'crm_contacts' && KEPT_COLUMNS.includes(c)))) {
+    ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = '${t}' and column_name = '${c}'`)).n === 0, t + '.' + c + ' is dropped');
+  }
+  // the final review (I3): the consent log, the chapters, do-not-contact and text consent stay, as data only
+  const keptAfter = await one(db, KEEP);
+  ok(JSON.stringify(keptAfter) === JSON.stringify(kept), 'the undo keeps the consent log, the chapters and their rows, do-not-contact and text consent exactly (' + JSON.stringify(keptAfter) + ')');
+  for (const c of KEPT_COLUMNS) ok((await one(db, `select count(*)::int as n from information_schema.columns where table_name = 'crm_contacts' and column_name = '${c}'`)).n === 1, 'crm_contacts.' + c + ' is kept');
+  ok((await one(db, PRIVS)).x === null, 'no API role can read or write the kept tables (the guard on the log is gone, so its rights go too)');
+  ok((await one(db, `select count(*)::int as n from pg_policy where polrelid in ('public.crm_chapters'::regclass, 'public.crm_contact_chapters'::regclass, 'public.crm_consent_events'::regclass)`)).n === 0, 'no policy is left on them');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgrelid = 'public.crm_consent_events'::regclass and not tgisinternal`)).n === 0, 'no trigger is left on the log');
   ok((await one(db, `select count(*)::int as n from pg_trigger where tgname like 'trg_wa281%'`)).n === 0, 'no wave281 trigger left');
   ok((await one(db, `select count(*)::int as n from pg_class where relname in ('quo_messages_wa281_keyword_idx', 'whatsapp_messages_wa281_keyword_idx')`)).n === 0, 'the two keyword indexes are gone');
   ok((await one(db, `select count(*)::int as n from pg_proc where proname like 'wa281%'`)).n === 0, 'no wa281 function left');
@@ -163,11 +192,19 @@ try {
   ok((await one(db, `select count(*)::int as n from public.crm_contacts`)).n === (await one(db, `select count(*)::int as n from public.crm_contacts where id between 1001 and 1301`)).n, 'no contact was deleted by the undo');
   console.log('wa281 undo: every check passed');
 
-  // ---- and the migration goes back on after an undo
+  // ---- while the rules are off nothing holds the opt-outs: a START text turns the do-not-contact person's texts back on (as live wa171_inbound would)
+  await db.exec(`update public.crm_contacts set sms_opt_out = false where id = 1291`);
+  // ---- and the migration goes back on after an undo: no row twice, its comments and grants back, the do-not-contact person put right
   await db.exec(migration);
   await runAssertions(db, 're-applied assertions');
   const again = await one(db, COUNTS);
-  ok(again.chapters === first.chapters && again.consent === first.consent && again.gifts === first.gifts && again.forms === first.forms, 'the backfills give the same rows again after an undo');
+  ok(again.chapters === first.chapters && again.gifts === first.gifts && again.forms === first.forms && again.campaigns === first.campaigns && again.consent === kept.consent + 1,
+    'after the undo the backfills add no row twice; the one new log row puts the do-not-contact person right (' + JSON.stringify(again) + ')');
+  ok((await one(db, `select sms_opt_out and whatsapp_opt_out and email_status = 'unsubscribed' as x from public.crm_contacts where id = 1291`)).x === true, 're-applying stops the do-not-contact person from being texted again');
+  ok((await one(db, `select column_name || '=' || new_value || '/' || source as x from public.crm_consent_events where contact_id = 1291 order by id desc limit 1`)).x === 'sms_opt_out=true/do not contact: asked', 'and the log says so');
+  ok((await one(db, PRIVS)).x === privsFirst, 'the grants on the kept tables are back as after the first run');
+  for (const t of KEPT_TABLES) ok(!/kept by its undo/.test((await one(db, `select obj_description('public.${t}'::regclass, 'pg_class') as c`)).c || 'x'), t + ': the comment from the migration is back');
+  ok((await one(db, `select count(*)::int as n from pg_trigger where tgname in ('trg_wa281_consent_log', 'trg_wa281_consent_guard', 'trg_wa281_consent_no_truncate', 'trg_wa281_gift_campaign', 'trg_wa281_dnc_hold') and not tgisinternal`)).n === 5, 'the five triggers are back');
 
   await db.close();
 
