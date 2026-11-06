@@ -163,7 +163,10 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 
 ## 7. Decisions for Steel
 
-1. **Decided 05/11/26: Toronto is its own app** on the same tables, rather than a city switch inside the Montreal
+1. **Updated 06/11/26: one Volunteer Manager, two cities.** Steel: "there should only be one CRM ... we could definitely
+   combine both Montreal and Toronto in one app but keep procedures made differently." One launcher tile with a
+   Montreal | Toronto switch; each city keeps its own screens, stages, words and automations (`docs/toronto/wave274 one app brief.md`).
+   Before that, **decided 05/11/26: Toronto is its own app** on the same tables, rather than a city switch inside the Montreal
    Volunteer Manager. Steel: "I don't want Montreal methodologies to mess up Toronto methodologies and operations." You said "this new app in the hub"; the 07/10 recap had "a toggle to distinguish Montreal vs
    Toronto". The separate app keeps Toronto's flow simple and leaves Montreal untouched.
 2. **Who sees whom.** Today every staff member can read every volunteer in both cities. Keep it (simplest), or limit the
@@ -216,3 +219,7 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 | 05/11/26 | Builder's calls: the month tag is compact (`$1.3K`) and shows only where a pill has 70 px (at 1366, not on a phone); a bad amount is said beside the field; a cancelled event's agenda line says Cancelled; the Calendar re-reads after a Toronto save (`wa:volevents`) | Steel or Edison |
 | 05/11/26 | The Calendar's Open the event sent a Toronto event to Montreal's `#volunteering/e/<id>` (stuck on Loading); now `#toronto/e/<id>` | `parts124/f_sheet.js`, marked wave274b |
 | 05/11/26 | Still open: the kitchen box's Edit has no spend field (Edit the event has it); DATA_MODEL.md waits for a regeneration (274, 277, 274b); setting a spend for Montreal servings | Small follow-ups; Montreal is Steel's call |
+| 06/11/26 | The live Hub moved to 0b8e0fa6 (wave279b, another session: the CRM in Toronto's Your apps); merged under Toronto, `TEAM_APPS.opsto` ['toronto', 'crm'] | Deploy only on top of the live md5 |
+| 06/11/26 | Steel: one CRM; one Volunteer Manager with a city switch, procedures kept separate | `docs/toronto/wave274 one app brief.md`, built before the first publish |
+| 06/11/26 | Another session plans a CRM rebuild (waves 280 to 284) with a Keela import: overlaps wave274d | Decide which one imports Keela before either is built |
+| 06/11/26 | Ian's Slack DMs go to his personal account U057BRKP1R9 (wave279b's change), confirmed by Steel | Steel's saved preferences still name U0A7DF871FS |
