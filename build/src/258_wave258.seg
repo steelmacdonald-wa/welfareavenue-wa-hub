@@ -280,6 +280,8 @@
   function placeReq(host, d) {
     var cur = document.getElementById('w258req');
     if (!staff()) { if (cur) cur.remove(); return; }
+    /* wave287: not on the Overview, where the Team inbox card holds the same requests with more actions; Agenda and Tasks keep it */
+    var c0 = W116cur(); if (c0 && c0.d === d && c0.page === 'overview') { if (cur) cur.remove(); return; }
     if (window.w123 && !window.w123.loaded()) {
       if (!REQV.loading) { REQV.loading = true; Promise.resolve(window.w123.load()).then(function () { REQV.loading = false; schedule(); }, function () { REQV.loading = false; }); }
       return;

@@ -28717,6 +28717,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       read the synced cache instead of each person's own Google Calendar,
       and Home gains "Your upcoming meetings" (who accepted, join link).
    The task boards themselves live in wave116b (w116Board).
+   wave287 (06/11/26, edited here; the CSS and motion are in
+   287_wave287): projects replace workstreams. The project helpers are
+   published (w116IsGeneral, w116GeneralOf, w116ProjOf, w116ProjColor,
+   w116Ink, w116Elsewhere, w116ProjForWs); the Overview is rebuilt in
+   reading order (header with the clamped read and the tabs' thumb;
+   Now: a sentence and three tiles; Needs attention; project cards;
+   the Team inbox, Updates, Mentions, decisions; meetings, KPIs, team,
+   the pulse, tools); #team/<d>/tasks/<workstream> opens the project
+   that replaced the workstream.
    ===================================================================== */
 (function () {
   if (window.__wa116) return; window.__wa116 = true;
@@ -29132,6 +29141,59 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w116TasksFor = tasksFor;
   window.w116ProjectsFor = projectsFor;
 
+  /* ---------- wave287: projects replace workstreams ---------- */
+  /* the team's catch-all: projects.is_general (wa287a_projects.sql); before that column exists, the top-level "General <team>" project */
+  function isGeneral(p) {
+    if (!p) return false;
+    if (p.is_general === true) return true;
+    if (p.is_general === false) return false;
+    var m = /^general\s+(.+)$/i.exec(String(p.name || '').trim()); if (!m || p.parent_id) return false;
+    var rest = lower(m[1]);
+    return lower(label(p.department)).indexOf(rest) >= 0 || lower(T.short[p.department] || '').indexOf(rest) >= 0 || rest === lower(p.department);
+  }
+  function generalOf(d) { return window.w116Projects().filter(function (p) { return p.department === d && (p.status || 'active') === 'active' && isGeneral(p); })[0] || null; }
+  function projById(id) { return window.w116Projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
+  /* the project a task counts in: its own, else its team's General (null when the team has none) */
+  function projOf(t) { if (!t) return null; var p = t.project_id ? projById(t.project_id) : null; return p || generalOf(t.department); }
+  /* colours from the brand set and the Hub's team palette; General wears the team's colour */
+  var PCOL = ['#6F64AB', '#DCA527', '#2A8C7A', '#103F39', '#c87a2f', '#3a6ea5', '#b9851b', '#4a4f57'];
+  function projColor(p) {
+    if (!p) return '#797773';
+    if (p.color && /^#[0-9a-f]{6}$/i.test(p.color)) return p.color;
+    if (isGeneral(p)) return color(p.department);
+    var i = (Number(p.id) || 0) * 5 % PCOL.length, c = PCOL[i];
+    if (lower(c) === lower(color(p.department))) c = PCOL[(i + 1) % PCOL.length];
+    return c;
+  }
+  /* a colour dark enough to set text in on cream (gold and the lighter team colours are darkened) */
+  function ink(c) {
+    var m = /^#([0-9a-f]{6})$/i.exec(String(c || '')); if (!m) return GREEN;
+    var rgb = [0, 2, 4].map(function (i) { return parseInt(m[1].slice(i, i + 2), 16); });
+    function lum(a) { var v = a.map(function (x) { x = x / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
+    /* contrast against cream (luminance about 0.955); 4:1 is enough for large titles and small bold labels */
+    for (var k = 0; k < 14 && (0.955 + 0.05) / (lum(rgb) + 0.05) < 4; k++) rgb = rgb.map(function (x, j) { return Math.round(x * 0.86 + [31, 32, 30][j] * 0.14); });
+    return '#' + rgb.map(function (x) { return ('0' + x.toString(16)).slice(-2); }).join('');
+  }
+  /* a project that lives on its own page: Grants (wave258) is left out of the Fundraising team page and has #grants */
+  /* only while wave258's filter is on (it marks the published w116TasksFor), which is what keeps grants off the team page */
+  function elsewhere(p, board) { if (!p || board) return null; if (p.department === 'fundraising' && boardKeyOf(p) === 'grants' && window.w116TasksFor && window.w116TasksFor.__w258) return '#grants'; return null; }
+  /* an old #team/<d>/tasks/<workstream> link: the project that replaced the workstream (projects.workstream), else null */
+  function projForWs(d, ws) {
+    var l = lower(ws); if (!l) return null;
+    var hit = window.w116Projects().filter(function (p) { return p.department === d && (p.status || 'active') === 'active' && lower(p.workstream) === l; })
+      .sort(function (a, b) { return (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0) || Number(a.id) - Number(b.id); });
+    if (hit[0]) return hit[0];
+    if (l === 'general') return generalOf(d);
+    return null;
+  }
+  window.w116IsGeneral = isGeneral;
+  window.w116GeneralOf = generalOf;
+  window.w116ProjOf = projOf;
+  window.w116ProjColor = projColor;
+  window.w116Ink = ink;
+  window.w116Elsewhere = elsewhere;
+  window.w116ProjForWs = projForWs;
+
   /* ---------- the panel ---------- */
   function host() {
     var sec = document.getElementById('team');
@@ -29164,11 +29226,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var ms = members(d);
     var next = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(); })[0];
     return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Teams &middot; <a data-w116go="#team/' + E(d) + '">' + E(label(d)) + '</a>' + (title ? ' &middot; ' + E(title) : '') + '</div>' +
-      '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + '</div>' +
+      /* wave287: the Overview's read is clamped to two lines with More (287 shows More only when the text is cut); the tabs get a sliding thumb */
+      '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub' + (cur === 'overview' ? ' w287read' : '') + '" id="w287read-' + E(d) + '">' + sub + '</p>' + (cur === 'overview' ? '<button type="button" class="w287more" data-w287more="1" aria-controls="w287read-' + E(d) + '" aria-expanded="false" hidden>More</button>' : '') : '') + '</div>' +
       '<div class="w116right">' + (ms.length ? '<span title="' + E(ms.map(function (m) { return m.name; }).join(', ')) + '" data-w116go="#orgchart" style="cursor:pointer">' + stack(ms, 28, 6) + '</span>' : '') +
       (next ? '<span class="w116next"><span class="ic">&#9200;</span><span><b>' + E(relDay(next.start_at)) + '</b> ' + E(next.all_day ? '' : fmtTime(next.start_at)) + ' &middot; ' + E(next.summary) + (next.meet_link ? ' &middot; <a href="' + E(next.meet_link) + '" target="_blank" rel="noopener">Join</a>' : '') + '</span></span>' : '') +
       '</div></div>' +
-      '<div class="w116seg" style="margin:0 0 18px">' + pages.map(function (p) { return '<a data-w116go="' + E(p.hash) + '" class="' + (p.key === cur ? 'on' : '') + '">' + E(p.label) + '</a>'; }).join('') + '</div>';
+      '<div class="w116seg w287tabs" data-d="' + E(d) + '" style="margin:0 0 18px"><span class="w287thumb" aria-hidden="true"></span>' + pages.map(function (p) { return '<a data-w116go="' + E(p.hash) + '" class="' + (p.key === cur ? 'on' : '') + '"' + (p.key === cur ? ' aria-current="page"' : '') + '>' + E(p.label) + '</a>'; }).join('') + '</div>';
   }
   function markNav(d, page) {
     try {
@@ -29412,30 +29475,123 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         '<div class="k"><span><b>' + open.length + '</b> open</span>' + (od.length ? '<span style="color:' + FLAG + '"><b style="color:' + FLAG + '">' + od.length + '</b> overdue</span>' : '') + '<span><b>' + pr.length + '</b> projects</span>' + (b.tool ? '<span>+ ' + E(b.toolLabel || 'tool') + '</span>' : '') + '</div></div>';
     }).join('') + '</div>';
   }
+  /* ---------- wave287: the Overview, in the order a lead reads it ---------- */
+  function todayKey() { return dayKey(new Date().toISOString()); }
+  function plus(iso, n) { var x = new Date(iso + 'T12:00:00'); x.setDate(x.getDate() + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); }
+  function teamRows(d) { return window.w116TasksFor ? window.w116TasksFor(d, null, null) : tasksFor(d, null, null); }   /* the published one: wave258 leaves grants out of Fundraising */
+  function requestsOpen(d) {
+    try { if (!staff() || !window.w123 || !window.w123.loaded || !window.w123.loaded()) return null; return (window.w123.items(d, 'open') || []).filter(function (it) { return it.k === 'r'; }).length; } catch (e) { return null; }
+  }
+  function nowNumbers(d) {
+    var rows = teamRows(d), tdy = todayKey(), wk = plus(tdy, 7), since = new Date(Date.now() - 30 * 86400000).toISOString();
+    var open = rows.filter(function (t) { return !t.done; });
+    return {
+      open: open.length,
+      overdue: open.filter(function (t) { return t.due_date && t.due_date < tdy; }).length,
+      week: open.filter(function (t) { return t.due_date && t.due_date >= tdy && t.due_date <= wk; }).length,
+      done30: rows.filter(function (t) { return t.done && ((t.closed_at && t.closed_at >= since) || (!t.closed_at && t.updated_at && t.updated_at >= since)); }).length,
+      req: requestsOpen(d)
+    };
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function nowSentence(d) {
+    var n = nowNumbers(d), parts = [];
+    if (n.req) parts.push(plural(n.req, 'open request', 'open requests'));
+    if (!n.open && !n.done30) return (parts.length ? parts[0] + '. ' : '') + 'No open tasks yet.';
+    parts.push(n.overdue ? plural(n.overdue, 'task overdue', 'tasks overdue') : 'nothing overdue');
+    if (n.week) parts.push(n.week + ' due this week');
+    if (n.done30) parts.push(n.done30 + ' done in the last 30 days');
+    var s = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts[parts.length - 1] : parts[0];
+    return s.charAt(0).toUpperCase() + s.slice(1) + '.';
+  }
+  function nowHtml(d) {
+    var n = nowNumbers(d), base = '#team/' + E(d) + '/tasks';
+    function tile(q, num, lab, zero, warn) {
+      return '<div class="w116kpi w287tile' + (num ? '' : ' zero') + (warn && num ? ' warn' : '') + '" data-w116go="' + base + '" data-w116q="' + q + '" role="link" tabindex="0">' +
+        (num ? '<b>' + num + '</b><span>' + lab + '</span>' : '<span class="z">' + zero + '</span>') + '</div>';
+    }
+    return '<div class="w287now" id="w287now"><p class="w287sent" data-d="' + E(d) + '">' + E(nowSentence(d)) + '</p>' +
+      '<div class="w116kpis w287tiles">' + tile('all', n.open, 'Open', 'No open tasks') + tile('overdue', n.overdue, 'Overdue', 'Nothing overdue', true) + tile('week', n.week, 'Due this week', 'Nothing due this week') + '</div></div>';
+  }
+  /* Needs attention: up to six overdue or due within seven days, in the task-row style with a working tick */
+  function needHtml(d) {
+    var tdy = todayKey(), wk = plus(tdy, 7);
+    var rows = teamRows(d).filter(function (t) { return !t.done && t.due_date && t.due_date <= wk; })
+      .sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)) || (b.flag ? 1 : 0) - (a.flag ? 1 : 0) || Number(a.id) - Number(b.id); });
+    var shown = rows.slice(0, 6);
+    var body = !shown.length ? '<p class="w287calm"><span class="ic">&#10003;</span>Nothing overdue or due in the next seven days.</p>'
+      : '<div class="w287rows">' + shown.map(function (t) { return window.w116RowHtml ? window.w116RowHtml(t, { dept: d }) : '<div class="w116r" data-tid="' + E(t.id) + '">' + E(t.title) + '</div>'; }).join('') + '</div>' +
+        (rows.length > shown.length ? '<p class="w287more2">And ' + (rows.length - shown.length) + ' more.</p>' : '');
+    return '<div class="w116card w287need" id="w287need"><h3>Needs attention <span class="lnk" data-w116go="#team/' + E(d) + '/tasks" data-w116q="today">see all</span></h3>' + body + '</div>';
+  }
+  /* Projects: a card per project (General first and quieter; sub-projects after their parent) */
+  function ring(done, total, c) {
+    var r = 15, C = 2 * Math.PI * r, f = total ? done / total : 0;
+    return '<svg class="w287ring" viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="' + r + '" fill="none" stroke="rgba(16,63,57,.10)" stroke-width="3.2"/>' +
+      (f ? '<circle cx="18" cy="18" r="' + r + '" fill="none" stroke="' + c + '" stroke-width="3.2" stroke-linecap="round" stroke-dasharray="' + (C * f).toFixed(2) + ' ' + C.toFixed(2) + '" transform="rotate(-90 18 18)"/>' : '') + '</svg>';
+  }
+  function projCardsHtml(d) {
+    var all = projectsFor(d, null).filter(function (p) { return (p.status || 'active') === 'active'; });
+    var ids = {}; all.forEach(function (p) { ids[Number(p.id)] = 1; });
+    var gen = all.filter(isGeneral)[0] || null, kids = {}, tops = [];
+    all.forEach(function (p) { if (p === gen) return; var par = p.parent_id && ids[Number(p.parent_id)] ? Number(p.parent_id) : 0; if (par) (kids[par] = kids[par] || []).push(p); else tops.push(p); });
+    var srt = function (a, b) { return (Number(a.sort == null ? 999 : a.sort) - Number(b.sort == null ? 999 : b.sort)) || String(a.name).localeCompare(String(b.name)); };
+    var order = gen ? [gen] : [];
+    (function walk(list, depth) { list.sort(srt).forEach(function (p) { order.push(p); if (kids[Number(p.id)] && depth < 4) walk(kids[Number(p.id)], depth + 1); }); })(tops, 0);
+    var tdy = todayKey(), tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
+    var cards = order.map(function (p) {
+      var pid = Number(p.id), gp = isGeneral(p);
+      var ts = tasks.filter(function (t) { var e = projOf(t); return e && Number(e.id) === pid; });
+      var open = ts.filter(function (t) { return !t.done; }), done = ts.length - open.length;
+      var od = open.filter(function (t) { return t.due_date && t.due_date < tdy; }).length;
+      var next = open.filter(function (t) { return t.due_date; }).sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)); })[0];
+      var c = projColor(p), away = elsewhere(p, null);
+      var par = p.parent_id && ids[Number(p.parent_id)] ? projById(p.parent_id) : null;
+      var leads = (Array.isArray(p.leads) ? p.leads : []).map(function (n) { return memberByName(n) || { name: n }; });
+      var du = next && window.w116DueChip ? window.w116DueChip(next) : null;
+      return '<div class="w287pc' + (gp ? ' gen' : '') + (par ? ' sub' : '') + '" role="link" tabindex="0" style="--c:' + c + '" ' + (away ? 'data-w116go="' + E(away) + '"' : 'data-w116go="#team/' + E(d) + '/tasks" data-w116q="project:' + pid + '"') + ' title="' + E(p.name) + '">' +
+        '<div class="hd"><div class="tl">' + (par ? '<span class="ov">' + E(par.name) + '</span>' : (gp ? '<span class="ov">Catch-all</span>' : '')) + '<b class="nm"><i class="dot"></i>' + E(p.name) + '</b></div>' + ring(done, ts.length, c) + '</div>' +
+        '<div class="ct"><span>' + (ts.length ? (open.length ? '<b>' + open.length + '</b> open' : 'All done') + (od ? ', <span class="od">' + od + ' overdue</span>' : '') : 'No tasks yet') + '</span>' + (done ? '<span class="dn">' + done + ' of ' + ts.length + ' done</span>' : '') + '</div>' +
+        (next ? '<div class="nx"><span class="w287due ' + (du ? du.cls : '') + '">' + E(du ? du.txt : next.due_date) + '</span><span class="t">' + E(next.title) + '</span></div>' : '') +
+        (leads.length ? '<div class="ld">' + stack(leads, 22, 4) + '<span>' + E(leads.map(function (x) { return String(x.name).split(' ')[0]; }).join(', ')) + '</span></div>' : '') + '</div>';
+    });
+    if (staff()) cards.push('<div class="w287pc new" role="button" tabindex="0" data-w116act="addproj" data-d="' + E(d) + '"><span class="pl">+</span>New project</div>');
+    return '<div class="w116card w287proj" id="w287proj"><h3>Projects <span class="lnk" data-w116go="#projects">all projects</span></h3>' +
+      (order.length || staff() ? '<div class="w287pgrid">' + cards.join('') + '</div>' : '<p class="w116empty">No active projects.</p>') + '</div>';
+  }
   async function renderOverview(d) {
     var h = host(); if (!h) return;
     var meta = (typeof DB_META !== 'undefined' && DB_META[d]) || {};
     h.innerHTML = header(d, 'overview', null, meta.read ? E(meta.read) : '') + '<p class="w116empty">Loading...</p>';
     await Promise.all([loadEvents(), loadMentions(), loadProjects(), loadMetrics()]);
     if (!W116.cur || W116.cur.d !== d || W116.cur.page !== 'overview') return;
+    /* wave287: header, Now (a sentence and three tiles), then the left column (Needs attention, Projects, the Team inbox that wave123
+       puts first in the DOM and 287 orders third, Updates, Mentions, Executive decisions) and the right (meetings, KPIs, Team, Where the
+       team is, Tools). The ids and classes later waves inject into stay: .w116kpis, .w116grid, .w116col, #w116meet, #w116updcard, .w116dec */
     var html = header(d, 'overview', null, meta.read ? E(meta.read) : '') +
       (d === 'fundraising' ? '' : boardsHtml(d)) +   /* wave232 (Steel, 12/10/26): Fundraising's sub-team cards repeated the Fundraising app; gone */
-      kpiTiles(d, null) +
-      '<div class="w116grid"><div class="w116col">' +
-      '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
-      decisionsHtml(d) +
-      '<div class="w116card" id="w116updcard"><h3>Updates <span class="lnk" data-w116act="allupd" data-d="' + E(d) + '">show all</span></h3>' + updatesHtml(d, 6) + (staff() ? '<div class="w116addrow"><a data-w116act="addupd" data-d="' + E(d) + '">+ Add an update</a><a data-w116act="addtask" data-d="' + E(d) + '">+ Add a task</a></div>' : '') + '</div>' +
+      nowHtml(d) +
+      '<div class="w116grid w287grid"><div class="w116col">' +
+      needHtml(d) +
+      projCardsHtml(d) +
+      '<div class="w116card" id="w116updcard"><h3>Updates <span class="lnk" data-w116act="allupd" data-d="' + E(d) + '">show all</span></h3>' + updatesHtml(d, 4) + (staff() ? '<div class="w116addrow"><a data-w116act="addupd" data-d="' + E(d) + '">+ Add an update</a><a data-w116act="addtask" data-d="' + E(d) + '">+ Add a task</a></div>' : '') + '</div>' +
       '<div class="w116card"><h3>Mentions from other teams</h3>' + mentionsHtml(d) + '</div>' +
+      decisionsHtml(d) +
       '</div><div class="w116col">' +
       '<div class="w116card" id="w116meet"><h3>Upcoming meetings <span class="lnk" data-w116go="#team/' + E(d) + '/agenda">agenda</span></h3>' + eventsHtml(d) + '</div>' +
       '<div class="w116card"><h3>KPIs we track</h3>' + metricsHtml(d) + '</div>' +
-      '<div class="w116card"><h3>Projects <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">tasks</span></h3>' + projectsHtml(d, null) + (staff() ? '<div class="w116addrow"><a data-w116act="addproj" data-d="' + E(d) + '">+ Add a project</a><a data-w116go="#projects">All projects</a></div>' : '') + '</div>' +
       '<div class="w116card"><h3>Team <span class="lnk" data-w116go="#orgchart">org chart</span></h3>' + teamHtml(d) + (canInvite(d) ? '<div class="w116addrow"><a data-w113deptinv="' + E(d) + '">+ Invite a team member</a></div>' : '') + '</div>' +
-      '<div class="w116card"><h3>Tools</h3>' + toolsHtml(d) + '</div>' +
+      '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
+      '<div class="w116card w287tools"><h3>Tools</h3>' + toolsHtml(d) + '</div>' +
       '</div></div>';
     h.innerHTML = html;
     if (d === 'opsmtl') volunteeringTiles(d);
+    /* the requests count arrives with wave123's inbox; the sentence picks it up when it does */
+    if (requestsOpen(d) == null && staff() && window.w123 && window.w123.load && window.w123.loaded && !window.w123.loaded()) {
+      Promise.resolve(window.w123.load()).then(function () { var s = document.querySelector('#w116host .w287sent[data-d="' + d + '"]'); if (s) s.textContent = nowSentence(d); }, function () { /* fine */ });
+    }
   }
+  window.w116NowSentence = nowSentence;
   async function volunteeringTiles(d) {
     try {
       var today = dayKey(new Date().toISOString());
@@ -29487,7 +29643,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function renderTasks(d, board, ws) {
     var h = host(); if (!h) return;
     var title = board ? board.label : 'Tasks';
-    var sub = board ? E(board.blurb || '') : 'Every open task for ' + E(label(d)) + ', grouped the way you want it.';
+    var sub = board ? E(board.blurb || '') : 'Every task for ' + E(label(d)) + ', by list and by project.';
+    /* wave287: an old #team/<d>/tasks/<workstream> link opens the project that replaced the workstream (else All); the address loses the workstream */
+    if (ws && !board) {
+      var wp = projForWs(d, ws), away = wp ? elsewhere(wp, null) : null;
+      if (away) { try { location.replace(away); } catch (e) { go(away); } return; }
+      if (window.w116Board && window.w116Board.preset) window.w116Board.preset(wp ? 'project:' + wp.id : 'all');
+      try { history.replaceState(null, '', '#team/' + d + '/tasks'); } catch (e) { /* fine */ }
+      if (W116.cur) W116.cur.sub = '';
+      ws = null;
+    }
     var extra = '';
     if (board && board.tool) {
       extra = '<div class="w116seg" style="margin:-8px 0 16px"><a class="on">Tasks by project</a><a data-w116go="#' + E(board.tool) + '">' + E(board.toolLabel || 'Tool') + ' (QuickBooks, statements, forecast) &#8594;</a></div>';
@@ -29516,6 +29681,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var key = board ? page : page;
     if (page !== 'agenda') unmountAgenda();
     W116.cur = { d: d, page: board ? 'board' : page, key: key, sub: sub, board: board };
+    try { var hh = host(); if (hh) { hh.classList.toggle('w287ov', !board && page !== 'agenda' && page !== 'tasks'); hh.classList.toggle('w287tasks', !!board || page === 'tasks'); } } catch (e) { /* fine */ }   /* wave287 */
     markNav(d, key);
     try { document.title = label(d) + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
     if (board) renderTasks(d, board, null);
@@ -29802,6 +29968,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    Every write goes through the same dept_tasks rows, change_log
    entries and in-memory caches the rest of the Hub uses, then the
    classic department page repaints so both stay in step.
+   wave287 (06/11/26, edited here; the look and the motion are in
+   287_wave287): the page takes the Apple Reminders shape. A sidebar of
+   smart lists (Today, Scheduled, All, Flagged, Mine, Completed) and the
+   team's projects (General first, sub-projects indented, other teams'
+   projects that hold this team's tasks, New project) picks the list;
+   B.st.list keeps it ('today'... or 'p<id>'). Projects replace
+   workstreams: a task with no project counts in its team's General
+   project (projects.is_general), the workstream grouping, the drawer's
+   Workstream field and the quick add's workstream are gone (subsection
+   stays in the data; the Fundraising boards still read it). Rows have
+   a round tick, the title and one line of facts; a tick completes the
+   task with an Undo before the row folds away. New in the API: set,
+   list, state, complete and the presets today, scheduled, all,
+   flagged, mine, completed and week.
    ===================================================================== */
 (function () {
   if (window.__wa116b) return; window.__wa116b = true;
@@ -29811,7 +29991,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var STATUSES = ['Open', 'In progress', 'Waiting', 'Blocked', 'Done'];
   var STCOL = { 'Open': ['rgba(121,119,115,.16)', '#5c5a56'], 'In progress': ['rgba(3,195,236,.16)', '#0a8fac'], 'Waiting': ['rgba(220,165,39,.22)', '#7a5a0f'], 'Blocked': ['rgba(179,64,47,.14)', FLAG], 'Done': ['rgba(16,63,57,.14)', GREEN] };
-  var B = { slot: null, scope: null, st: null, sel: {}, drawer: null, drag: null, calMonth: null };
+  var B = { slot: null, scope: null, st: null, sel: {}, drawer: null, drag: null, calMonth: null, fold: {}, foldT: {}, model: null, qaOpen: null };
 
   var css = document.createElement('style');
   css.id = 'wa116bcss';
@@ -29985,8 +30165,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function key(scope) { return 'wa116.' + scope.dept + '.' + (scope.board ? scope.board.key : (scope.ws || 'all')); }
   function loadState(scope) {
-    var def = { view: 'list', group: scope.board ? 'project' : (scope.dept === 'fundraising' && !scope.ws ? 'board' : 'workstream'), sort: 'manual', mine: false, owner: '', status: '', project: '', due: '', flag: false, done: false, q: '', closed: {} };
+    var def = { view: 'list', list: 'all', group: 'project', sort: 'manual', mine: false, owner: '', status: '', project: '', due: '', flag: false, done: false, q: '', closed: {}, showf: false };
     try { var s = JSON.parse(localStorage.getItem(key(scope)) || 'null'); if (s) Object.keys(def).forEach(function (k) { if (s[k] !== undefined) def[k] = s[k]; }); } catch (e) { /* fine */ }
+    if (def.group === 'workstream') def.group = 'project';   /* wave287: workstreams became projects */
+    if (!def.list || (def.list.charAt(0) === 'p' && !projById(def.list.slice(1)))) def.list = 'all';
     return def;
   }
   function saveState() { try { var s = Object.assign({}, B.st); s.q = ''; localStorage.setItem(key(B.scope), JSON.stringify(s)); } catch (e) { /* fine */ } }
@@ -29999,6 +30181,116 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     return null;
   }
+
+  /* ---------- wave287: lists (the smart lists and the projects) ---------- */
+  var SMART = [
+    { k: 'today', n: 'Today', c: GOLD, ic: 'sun', sub: 'Overdue, and due today.', none: 'Nothing overdue or due today.' },
+    { k: 'scheduled', n: 'Scheduled', c: PURPLE, ic: 'cal', sub: 'Every open task with a due date.', none: 'No open task has a due date.' },
+    { k: 'all', n: 'All', c: GREEN, ic: 'tray', sub: 'Every open task, by project.', none: 'No open tasks. Add the first one below.' },
+    { k: 'flagged', n: 'Flagged', c: FLAG, ic: 'flag', sub: 'Waiting on an executive decision.', none: 'Nothing is waiting on the executives.' },
+    { k: 'mine', n: 'Mine', c: '#1F201E', ic: 'me', sub: 'Yours, as the owner or an assignee.', none: 'Nothing open with your name on it.' },
+    { k: 'completed', n: 'Completed', c: '#797773', ic: 'check', sub: 'Done, the newest first.', none: 'Nothing completed yet.' }
+  ];
+  var ICON = {
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4 7 7M17 17l1.6 1.6M5.4 18.6 7 17M17 7l1.6-1.6"/>',
+    cal: '<rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+    tray: '<path d="M4 13.5 6.6 6h10.8l2.6 7.5V18a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18z"/><path d="M4 13.5h4.6l1.4 2.2h4l1.4-2.2H20"/>',
+    flag: '<path d="M6.5 21V4.5"/><path d="M6.5 4.5H17l-2.2 4 2.2 4H6.5"/>',
+    me: '<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.3-3.6 3.9-5.2 7-5.2s5.7 1.6 7 5.2"/>',
+    check: '<path d="M5.5 12.5l4.2 4.2 8.8-9.4"/>',
+    cmt: '<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-9l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z"/>',
+    plus: '<path d="M12 5.5v13M5.5 12h13"/>',
+    out: '<path d="M14 5h5v5M19 5l-8 8M17 14v5H5V7h5"/>',
+    chev: '<path d="m7 10 5 5 5-5"/>',
+    filter: '<path d="M4 6h16M7 12h10M10 18h4"/>'
+  };
+  function svg(k, cls) { return '<svg class="' + (cls || 'w287i') + '" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + (ICON[k] || '') + '</svg>'; }
+  function smartOf(k) { return SMART.filter(function (x) { return x.k === k; })[0] || null; }
+  function isGen(p) { return !!(p && window.w116IsGeneral && window.w116IsGeneral(p)); }
+  function generalOf(d) { return window.w116GeneralOf ? window.w116GeneralOf(d) : null; }
+  /* the project a task counts in: its own, else its team's General, else 0 (No project) */
+  function effPid(t) { var p = t.project_id ? projById(t.project_id) : null; if (p) return Number(p.id); var g = generalOf(t.department); return g ? Number(g.id) : 0; }
+  function pColor(p) { return p && window.w116ProjColor ? window.w116ProjColor(p) : '#797773'; }
+  function ink(c) { return window.w116Ink ? window.w116Ink(c) : c; }
+  function elsewhere(p) { return p && window.w116Elsewhere ? window.w116Elsewhere(p, B.scope && B.scope.board) : null; }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function teamLabel(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || (T.labels && T.labels[d]) || d; }
+  function mineT(t) {
+    var meN = lower(myName()), meM = me();
+    return (!!meN && (lower(t.owner) === meN || lower(t.owner).indexOf(meN.split(' ')[0]) === 0)) || (!!meM && assigneeIds(t).indexOf(Number(meM.id)) >= 0);
+  }
+  function srtP(a, b) { return (Number(a.sort == null ? 999 : a.sort) - Number(b.sort == null ? 999 : b.sort)) || String(a.name).localeCompare(String(b.name)); }
+  /* everything the sidebar and the lists read, computed once per render */
+  function model() {
+    var s = B.scope, d = s.dept;
+    var team = window.w116TasksFor ? window.w116TasksFor(d, s.board, s.ws) : (DB_TASKS || []).filter(function (t) { return t.department === d; });
+    var open = team.filter(function (t) { return !t.done; });
+    var counts = {}; open.forEach(function (t) { var k = effPid(t); counts[k] = (counts[k] || 0) + 1; });
+    var ownAll = window.w116ProjectsFor ? window.w116ProjectsFor(d, s.board) : projects().filter(function (p) { return p.department === d; });
+    var own = ownAll.filter(function (p) { return (p.status || 'active') === 'active' || counts[Number(p.id)]; });
+    var ownIds = {}; own.forEach(function (p) { ownIds[Number(p.id)] = 1; });
+    /* other teams' tasks filed in this team's projects are part of those projects */
+    var cross = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return t.department !== d && t.project_id && ownIds[Number(t.project_id)]; });
+    var pcount = {}; Object.keys(counts).forEach(function (k) { pcount[k] = counts[k]; });
+    cross.forEach(function (t) { if (!t.done) pcount[Number(t.project_id)] = (pcount[Number(t.project_id)] || 0) + 1; });
+    var gen = own.filter(isGen)[0] || null;
+    var kids = {}, tops = [];
+    own.forEach(function (p) { if (p === gen) return; var par = p.parent_id && ownIds[Number(p.parent_id)] ? Number(p.parent_id) : 0; if (par) (kids[par] = kids[par] || []).push(p); else tops.push(p); });
+    var ordered = []; if (gen) ordered.push({ p: gen, depth: 0 });
+    (function walk(list, depth) { list.sort(srtP).forEach(function (p) { ordered.push({ p: p, depth: depth }); if (kids[Number(p.id)] && depth < 4) walk(kids[Number(p.id)], depth + 1); }); })(tops, 0);
+    var L = (B.st && B.st.list) || 'all';
+    var other = Object.keys(counts).filter(function (k) { return Number(k) && !ownIds[Number(k)]; }).map(function (k) { return projById(k); }).filter(Boolean);
+    if (L.charAt(0) === 'p' && !ownIds[Number(L.slice(1))] && !other.some(function (p) { return 'p' + p.id === L; })) { var cur = projById(L.slice(1)); if (cur) other.push(cur); }
+    other.sort(function (a, b) { return (T.order.indexOf(a.department) - T.order.indexOf(b.department)) || String(a.name).localeCompare(String(b.name)); });
+    var tdy = today();
+    var smart = {
+      today: open.filter(function (t) { return t.due_date && t.due_date <= tdy; }).length,
+      scheduled: open.filter(function (t) { return !!t.due_date; }).length,
+      all: open.length,
+      flagged: open.filter(function (t) { return !!t.flag; }).length,
+      mine: open.filter(mineT).length,
+      completed: team.filter(function (t) { return t.done; }).length
+    };
+    return { team: team, open: open, cross: cross, own: own, ownIds: ownIds, ordered: ordered, other: other, gen: gen, counts: counts, pcount: pcount, smart: smart, none: counts[0] || 0 };
+  }
+  function listRows(m, L) {
+    if (L.charAt(0) === 'p') {
+      var pid = Number(L.slice(1));
+      var r = m.team.filter(function (t) { return effPid(t) === pid; });
+      return m.ownIds[pid] ? r.concat(m.cross.filter(function (t) { return Number(t.project_id) === pid; })) : r;
+    }
+    if (L === 'none') return m.team.filter(function (t) { return effPid(t) === 0; });
+    return m.team;
+  }
+  function isProjList(L) { return L === 'none' || L.charAt(0) === 'p'; }
+  /* what a task added in this list starts with */
+  function listPre() {
+    var L = B.st.list || 'all', p = {};
+    if (L.charAt(0) === 'p') p.project = Number(L.slice(1));
+    if (L === 'today' || L === 'scheduled') p.due = today();
+    if (L === 'flagged') p.flag = true;
+    if (B.scope.board) p.ws = B.scope.board.ws;
+    return p;
+  }
+  function setList(l) {
+    var st = B.st; st.list = l;
+    st.due = ''; st.status = ''; st.project = ''; st.flag = false; st.mine = false; st.done = false;
+    st.group = isProjList(l) ? 'due' : 'project';
+    B.sel = {}; B.qaOpen = null; B.listMoved = true;
+    saveState(); render();
+  }
+  function dueChip(t) {
+    if (!t.due_date) return null;
+    var d = t.due_date, tdy = today();
+    var lbl = new Date(d + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (t.done) return { cls: 'past', txt: lbl };
+    if (d < tdy) { var n = Math.round((new Date(tdy + 'T12:00:00').getTime() - new Date(d + 'T12:00:00').getTime()) / 86400000); return { cls: 'over', txt: n === 1 ? '1 day overdue' : n + ' days overdue' }; }
+    if (d === tdy) return { cls: 'today', txt: 'Today' };
+    if (d === addDays(tdy, 1)) return { cls: 'soon', txt: 'Tomorrow' };
+    if (d <= addDays(tdy, 6)) return { cls: 'soon', txt: new Date(d + 'T12:00:00').toLocaleDateString([], { weekday: 'long' }) };
+    return { cls: '', txt: lbl };
+  }
+  window.w116DueChip = dueChip;
 
   /* ---------- writes ---------- */
   function who0() { try { return who(); } catch (e) { return 'staff'; } }
@@ -30065,7 +30357,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     title = String(title || '').trim();
     if (!title) return null;
     var d = B.scope.dept;
-    var row = { department: d, subsection: pre.ws && pre.ws !== 'General' ? pre.ws : null, title: title, owner: pre.owner != null ? pre.owner : (myName() || ''), status: pre.status || 'Open', flag: false, priority: false, done: false, sort: 999, due_date: pre.due || null, project_id: pre.project ? Number(pre.project) : null, confidential: false, updated_by: who0(), updated_at: new Date().toISOString(), opened_at: new Date().toISOString() };
+    /* wave287: the workstream is set only on the Fundraising boards (pre.ws), which still read it; the project comes from the list or the group */
+    var row = { department: d, subsection: pre.ws && pre.ws !== 'General' ? pre.ws : null, title: title, owner: pre.owner != null ? pre.owner : (myName() || ''), status: pre.status || 'Open', flag: !!pre.flag, priority: false, done: false, sort: 999, due_date: pre.due || null, project_id: pre.project ? Number(pre.project) : null, confidential: false, updated_by: who0(), updated_at: new Date().toISOString(), opened_at: new Date().toISOString() };
     if (pre.status === 'Done') { row.done = true; row.closed_at = new Date().toISOString(); }
     var r = await db.from('dept_tasks').insert(row).select('*').single();
     if (r && r.error) { toast('Could not add the task'); return null; }
@@ -30099,27 +30392,74 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     render();
     try { await Promise.all(writes); } catch (e) { toast('Order not saved'); }
   }
+  /* wave287: the tick. The circle fills, the task is saved as done, an Undo shows, and the row folds away a moment later */
+  function rowsOf(id) { return Array.prototype.slice.call(document.querySelectorAll('[data-tid="' + String(id).replace(/"/g, '') + '"]')); }
+  /* after a tick or an Undo: the board repaints itself; a team Overview (no board on screen) repaints through wave116's router */
+  function afterTick() {
+    after();
+    if (!B.slot || !document.body.contains(B.slot)) { try { if (String(location.hash || '').indexOf('#team/') === 0 && window.w116Refresh) window.w116Refresh(); } catch (e) { /* fine */ } }
+  }
+  function reduced() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  async function complete(t) {
+    if (!t) return false;
+    if (t.done) { await setStatus(t, 'Open'); return true; }
+    if (B.fold[t.id]) return false;
+    var prev = { status: t.status && bucket({ status: t.status }) !== 'Done' ? t.status : 'Open' };
+    B.fold[t.id] = 1;
+    rowsOf(t.id).forEach(function (r) { r.classList.add('w287tk'); var ck = r.querySelector('.w116done'); if (ck) ck.setAttribute('aria-checked', 'true'); });
+    var ok = await patch(t, { status: 'Done', done: true, closed_at: new Date().toISOString() }, [['done', bucket({ status: prev.status }), 'Done']]);
+    if (!ok) { delete B.fold[t.id]; rowsOf(t.id).forEach(function (r) { r.classList.remove('w287tk'); }); return false; }
+    snack('Done: ' + (t.title.length > 60 ? t.title.slice(0, 58) + '…' : t.title), function () { undoDone(t, prev); });
+    clearTimeout(B.foldT[t.id]);
+    B.foldT[t.id] = setTimeout(function () {
+      rowsOf(t.id).forEach(function (r) { r.classList.add('w287gone'); });
+      setTimeout(function () { delete B.fold[t.id]; delete B.foldT[t.id]; afterTick(); }, reduced() ? 120 : 220);
+    }, 1400);
+    return true;
+  }
+  async function undoDone(t, prev) {
+    clearTimeout(B.foldT[t.id]); delete B.foldT[t.id]; delete B.fold[t.id];
+    if (await patch(t, { status: prev.status, done: false, closed_at: null }, [['status', 'Done', prev.status]])) { toast('Back on the list'); afterTick(); }
+  }
+  function snack(text, undo) {
+    var el = document.getElementById('w287snack');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w287snack'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el);
+      el.addEventListener('click', function (e) { var b = e.target.closest && e.target.closest('[data-w287sn]'); if (!b) return; var fn = el.__undo; hideSnack(); if (b.getAttribute('data-w287sn') === 'undo' && fn) fn(); });
+    }
+    el.__undo = undo || null;
+    el.innerHTML = '<span class="t">' + E(text) + '</span>' + (undo ? '<button type="button" data-w287sn="undo">Undo</button>' : '') + '<button type="button" class="x" data-w287sn="x" aria-label="Dismiss">&#10005;</button>';
+    void el.offsetWidth; el.classList.add('on');
+    clearTimeout(B.snT); B.snT = setTimeout(hideSnack, 6000);
+  }
+  function hideSnack() { var el = document.getElementById('w287snack'); if (el) { el.classList.remove('on'); el.__undo = null; } clearTimeout(B.snT); }
 
   /* ---------- selection of tasks ---------- */
   function scopeRows() {
-    var s = B.scope; var st = B.st;
-    var rows = window.w116TasksFor ? window.w116TasksFor(s.dept, s.board, s.ws) : DB_TASKS.filter(function (t) { return t.department === s.dept; });
+    var st = B.st;
+    var m = B.model = model(); var L = st.list || 'all';
+    var rows = listRows(m, L);
     var tdy = today(), wk = addDays(tdy, 7);
-    var meN = lower(myName()); var meM = me();
     return rows.filter(function (t) {
-      if (!st.done && t.done && !(st.status === 'Done')) return false;
+      if (L === 'completed') { if (!t.done) return false; }
+      else if (!st.done && t.done && !(st.status === 'Done') && !B.fold[t.id]) return false;
+      if (L === 'today' && !(t.due_date && t.due_date <= tdy)) return false;
+      if (L === 'scheduled' && !t.due_date) return false;
+      if (L === 'flagged' && !t.flag) return false;
+      if (L === 'mine' && !mineT(t)) return false;
       if (st.status && bucket(t) !== st.status) return false;
-      if (st.mine) { var mine = lower(t.owner) === meN || (meN && lower(t.owner).indexOf(meN.split(' ')[0]) === 0) || (meM && assigneeIds(t).indexOf(Number(meM.id)) >= 0); if (!mine) return false; }
+      if (st.mine && !mineT(t)) return false;
       if (st.owner) { var o = lower(t.owner); if (st.owner === '__none' ? !!o : (o !== lower(st.owner) && (!assignees(t).some(function (m) { return lower(m.name) === lower(st.owner); })))) return false; }
-      if (st.project) { if (st.project === '__none' ? !!t.project_id : Number(t.project_id) !== Number(st.project)) return false; }
+      if (st.project) { if (st.project === '__none' ? effPid(t) !== 0 : effPid(t) !== Number(st.project)) return false; }
       if (st.due === 'overdue' && !(t.due_date && t.due_date < tdy && !t.done)) return false;
       if (st.due === 'today' && t.due_date !== tdy) return false;
       if (st.due === 'week' && !(t.due_date && t.due_date >= tdy && t.due_date <= wk)) return false;
       if (st.due === 'none' && t.due_date) return false;
       if (st.flag && !t.flag) return false;
-      if (st.q) { var q = lower(st.q); if (lower(t.title).indexOf(q) < 0 && lower(t.owner).indexOf(q) < 0 && lower(t.subsection).indexOf(q) < 0 && lower(projLabel(projById(t.project_id))).indexOf(q) < 0) return false; }
+      if (st.q) { var q = lower(st.q); if (lower(t.title).indexOf(q) < 0 && lower(t.owner).indexOf(q) < 0 && lower(projLabel(projById(effPid(t)))).indexOf(q) < 0) return false; }
       return true;
     }).sort(function (a, b) {
+      if (L === 'completed' && st.sort === 'manual') return String(b.closed_at || b.updated_at || '').localeCompare(String(a.closed_at || a.updated_at || ''));
       if (st.sort === 'due') return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')) || (a.sort || 0) - (b.sort || 0);
       if (st.sort === 'updated') return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
       if (st.sort === 'title') return String(a.title).localeCompare(String(b.title));
@@ -30129,16 +30469,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function groupsFor(rows) {
     var st = B.st, s = B.scope, out = [];
     function add(k, name, list, pre, color) { out.push({ key: k, name: name, rows: list, pre: pre || {}, color: color }); }
-    if (st.group === 'project') {
-      var projs = (window.w116ProjectsFor ? window.w116ProjectsFor(s.dept, s.board) : projects().filter(function (p) { return p.department === s.dept; })).slice();
-      var seen = {}; projs.forEach(function (p) { seen[Number(p.id)] = 1; });
-      rows.forEach(function (t) { if (t.project_id && !seen[Number(t.project_id)]) { var p = projById(t.project_id); if (p) { projs.push(p); seen[Number(p.id)] = 1; } } });
-      projs.sort(function (a, b) { return (a.parent_id ? projLabel(a) : a.name).localeCompare(b.parent_id ? projLabel(b) : b.name); });
-      projs.forEach(function (p) { var list = rows.filter(function (t) { return Number(t.project_id) === Number(p.id); }); if (list.length || (p.status || 'active') === 'active') add('p' + p.id, projLabel(p), list, { project: p.id, ws: s.board ? s.board.ws : null }); });
-      var none = rows.filter(function (t) { return !t.project_id; });
-      add('p0', 'No project', none, { ws: s.board ? s.board.ws : (s.ws || null) });
-    } else if (st.group === 'workstream') {
-      wsList(s.dept).forEach(function (w) { var list = rows.filter(function (t) { return (t.subsection || 'General') === w; }); if (list.length || w === 'General' || !s.ws) add('w' + w, w, list, { ws: w }); });
+    var wsB = s.board ? s.board.ws : null;
+    if (st.group === 'project' || st.group === 'workstream') {
+      /* wave287: one group per project that has tasks in this list, in the sidebar's order (General first, sub-projects after their parent) */
+      var m = B.model || model();
+      var byP = {}; rows.forEach(function (t) { var k = effPid(t); (byP[k] = byP[k] || []).push(t); });
+      m.ordered.map(function (o) { return o.p; }).concat(m.other).forEach(function (p) {
+        var k = Number(p.id); if (!byP[k]) return;
+        add('p' + k, projLabel(p), byP[k], { project: k, ws: wsB }, pColor(p)); delete byP[k];
+      });
+      Object.keys(byP).forEach(function (k) { if (Number(k) === 0) return; var p = projById(k); add('p' + k, p ? projLabel(p) : 'Project ' + k, byP[k], { project: Number(k), ws: wsB }, p ? pColor(p) : null); });
+      if (byP[0]) add('p0', 'No project', byP[0], { ws: wsB });
+      if (!out.length && st.list !== 'completed') {
+        /* nothing to show: one empty group to add into (the open project, else General) */
+        var L0 = st.list || 'all';
+        var tgt = L0.charAt(0) === 'p' ? projById(L0.slice(1)) : (m.gen || (m.ordered[0] && m.ordered[0].p) || null);
+        if (tgt) add('p' + tgt.id, projLabel(tgt), [], { project: Number(tgt.id), ws: wsB }, pColor(tgt)); else add('p0', 'No project', [], { ws: wsB });
+      }
     } else if (st.group === 'status') {
       STATUSES.forEach(function (b) { add('s' + b, b, rows.filter(function (t) { return bucket(t) === b; }), { status: b }, STCOL[b][1]); });
     } else if (st.group === 'assignee') {
@@ -30151,7 +30498,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       add('d2', 'Today', rows.filter(function (t) { return t.due_date === tdy; }), { due: tdy });
       add('d3', 'This week', rows.filter(function (t) { return t.due_date && t.due_date > tdy && t.due_date <= wk; }), { due: addDays(tdy, 3) });
       add('d4', 'Later', rows.filter(function (t) { return t.due_date && t.due_date > wk; }), { due: addDays(tdy, 14) });
-      add('d5', 'No due date', rows.filter(function (t) { return !t.due_date || (t.done && t.due_date < tdy); }), {});
+      add('d5', 'No date', rows.filter(function (t) { return !t.due_date || (t.done && t.due_date < tdy); }), {});
+      /* wave287: Reminders shows the windows that hold something; No date stays as the place to add */
+      out = out.filter(function (g) { return g.rows.length || g.key === 'd5'; });
+      if (wsB) out.forEach(function (g) { g.pre.ws = wsB; });
     } else if (st.group === 'board') {
       (T.boards[s.dept] || []).forEach(function (b) { add('b' + b.key, b.label, rows.filter(function (t) { return boardOf(t) === b; }), { ws: b.ws }, b.color); });
       add('b0', 'Everything else', rows.filter(function (t) { return !boardOf(t); }), {});
@@ -30160,45 +30510,61 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---------- rendering ---------- */
-  function rowHtml(t) {
-    var as = assignees(t); var du = dueInfo(t); var p = t.project_id ? projById(t.project_id) : null; var b = bucket(t);
-    var showP = B.st.group !== 'project' && p; var showW = B.st.group !== 'workstream' && t.subsection && !(B.scope.board);
-    return '<div class="w116r st-' + stKey(b) + (t.done ? ' done' : '') + (B.sel[t.id] ? ' sel' : '') + '" data-tid="' + E(t.id) + '" draggable="true">' +
-      '<span class="w116chk"><input type="checkbox" data-act="sel"' + (B.sel[t.id] ? ' checked' : '') + ' /></span>' +
-      '<span class="w116done" data-act="toggle" title="' + (t.done ? 'Reopen' : 'Mark done') + '">' + (t.done ? '&#10003;' : '') + '</span>' +
-      '<span class="w116t"><span class="ttl">' + E(t.title) + '</span>' +
-      (t.flag ? '<span class="w116tag flag" title="' + E(t.reason_note || 'Needs an executive decision') + '">exec</span>' : '') +
-      (t.confidential ? '<span class="w116tag conf">confidential</span>' : '') +
-      (showP ? '<span class="w116tag" title="Project">' + E(p.name) + '</span>' : '') +
-      (showW ? '<span class="w116tag ws">' + E(t.subsection) + '</span>' : '') +
-      (window.w132Back && window.w132Back(t) ? '<span class="w116tag bank" title="Waited in the bank; back on the board for two weeks now">back from the bank</span>' : '') +
-      (comments(t) ? '<span class="w116tag cm">&#128172; ' + comments(t) + '</span>' : '') + '</span>' +
-      '<span class="w116as" data-act="owner" title="' + E(t.owner ? 'Owner: ' + t.owner : 'Set an owner') + '">' + (t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 22) : '<span class="none">+</span>') + as.filter(function (m) { return lower(m.name) !== lower(t.owner); }).slice(0, 3).map(function (m) { return av(m, 22); }).join('') + '</span>' +
-      '<span class="w116due ' + du.cls + '" data-act="due" title="' + E(t.due_date || 'Set a due date') + '">' + (du.txt || '&#8212;') + '</span>' +
-      stPill(t) + '</div>';
+  /* wave287: a row is a round tick (edged in the project's colour), the title, and one quiet line of facts. ctx.lone: no group around
+     it (the Overview's Needs attention), so the project always shows */
+  function factsHtml(t, ctx) {
+    ctx = ctx || {};
+    var as = assignees(t), du = dueChip(t), pid = effPid(t), p = pid ? projById(pid) : null, b = bucket(t);
+    var L = (B.st && B.st.list) || 'all', grp = B.st && B.st.group;
+    var showP = p && (ctx.lone || ((L.charAt(0) !== 'p' || Number(L.slice(1)) !== pid) && grp !== 'project' && grp !== 'workstream'));
+    var dept = ctx.dept || (B.scope && B.scope.dept);
+    var oa = t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 20) : '';
+    var more = as.filter(function (m) { return lower(m.name) !== lower(t.owner); });
+    var f = [], tail = [];   /* tail: the set-it-here controls with nothing to show yet; they trail the line and appear on hover */
+    var asH = '<span class="w116as' + (oa || more.length ? '' : ' w287none') + '" data-act="owner" title="' + E(t.owner ? 'Owner: ' + t.owner + (more.length ? ', with ' + more.map(function (m) { return m.name; }).join(', ') : '') : 'Set an owner') + '">' + (oa || (more.length ? '' : '<span class="none">+</span>')) + more.slice(0, 3).map(function (m) { return av(m, 20); }).join('') + (oa && !more.length ? '<span class="w287on">' + E(String(t.owner).split(' ')[0]) + '</span>' : '') + '</span>';
+    var duH = '<span class="w116due w287due ' + (du ? du.cls : 'nodate') + '" data-act="due" title="' + E(t.due_date ? 'Due ' + t.due_date : 'Set a due date') + '">' + (du ? E(du.txt) : 'Add a date') + '</span>';
+    (oa || more.length ? f : tail).push(asH);
+    (du ? f : tail).push(duH);
+    if (showP) f.push('<span class="w287ptag" title="' + E(projLabel(p)) + '"><i style="background:' + pColor(p) + '"></i><span>' + E(p.name) + '</span></span>');
+    if (dept && t.department !== dept) f.push('<span class="w287team">' + E((T.short && T.short[t.department]) || t.department) + '</span>');
+    if (t.flag) f.push('<span class="w287flag" title="' + E(t.reason_note || 'Needs an executive decision') + '">' + svg('flag') + 'Exec</span>');
+    if (t.confidential) f.push('<span class="w116tag conf">confidential</span>');
+    if (window.w132Back && window.w132Back(t)) f.push('<span class="w116tag bank" title="Waited in the bank; back on the board for two weeks now">back from the bank</span>');
+    if (comments(t)) f.push('<span class="w287cm" title="Comments">' + svg('cmt') + comments(t) + '</span>');
+    if (!t.done) (b === 'Open' ? tail : f).push(stPill(t, b === 'Open' ? 'w287open' : ''));
+    return f.concat(tail).join('');
   }
+  function rowHtml(t, ctx) {
+    var pid = effPid(t), p = pid ? projById(pid) : null, b = bucket(t), tk = !!B.fold[t.id];
+    return '<div class="w116r w287r st-' + stKey(b) + (t.done ? ' done' : '') + (tk ? ' w287tk' : '') + (B.sel[t.id] ? ' sel' : '') + (ctx && ctx.lone ? ' w287or' : '') + '" data-tid="' + E(t.id) + '"' + (ctx && ctx.lone ? '' : ' draggable="true"') + ' style="--pc:' + (p ? pColor(p) : 'rgba(16,63,57,.4)') + '">' +
+      (ctx && ctx.lone ? '' : '<span class="w116chk"><input type="checkbox" data-act="sel" aria-label="Select this task"' + (B.sel[t.id] ? ' checked' : '') + ' /></span>') +
+      '<span class="w116done" data-act="toggle" role="checkbox" tabindex="0" aria-checked="' + (t.done || tk ? 'true' : 'false') + '" aria-label="' + E((t.done ? 'Reopen ' : 'Complete ') + t.title) + '" title="' + (t.done ? 'Reopen' : 'Complete') + '"><i></i>' + svg('check', 'w287ck') + '</span>' +
+      '<span class="w116t"><span class="ttl">' + E(t.title) + '</span><span class="w287f">' + factsHtml(t, ctx) + '</span></span></div>';
+  }
+  window.w116RowHtml = function (t, ctx) { return rowHtml(t, Object.assign({ lone: true }, ctx || {})); };
   function qaHtml(gkey, hint) {
-    return '<div class="w116qa" data-qa="' + E(gkey) + '" style="display:none"><input type="text" placeholder="Task title, Enter to save, Esc to cancel" /><small>' + E(hint || '') + '</small></div>';
+    return '<div class="w116qa" data-qa="' + E(gkey) + '" style="display:none"><span class="w287qc" aria-hidden="true"></span><input type="text" placeholder="New task" aria-label="New task title" /><small>' + E(hint ? 'Enter to save, Esc to stop. ' + hint : 'Enter to save, Esc to stop.') + '</small></div>';
   }
   function groupHtml(g) {
-    var open = g.rows.filter(function (t) { return !t.done; }).length, done = g.rows.length - open;
-    var pct = g.rows.length ? Math.round(done / g.rows.length * 100) : 0;
+    var open = g.rows.filter(function (t) { return !t.done; }).length;
     var closed = B.st.closed && B.st.closed[g.key];
-    var pre = []; if (g.pre.project) pre.push('project: ' + E(g.name)); if (g.pre.ws) pre.push('workstream: ' + E(g.pre.ws)); if (g.pre.status) pre.push('status: ' + g.pre.status); if (g.pre.owner) pre.push('owner: ' + E(g.pre.owner)); if (g.pre.due) pre.push('due ' + g.pre.due);
-    return '<div class="w116g' + (closed ? ' closed' : '') + '" data-g="' + E(g.key) + '"><div class="w116gh" data-act="fold"><span class="chev">&#9660;</span>' +
-      (g.color ? '<span class="w116av" style="width:10px;height:10px;border-radius:3px;background:' + g.color + ';border:none"></span>' : '') +
-      '<b>' + E(g.name) + '</b><span class="n">' + open + '</span>' + (g.rows.length ? '<span class="bar" title="' + done + ' of ' + g.rows.length + ' done"><i style="width:' + pct + '%"></i></span>' : '') +
-      '<span class="sp"></span><span class="add" data-act="qa" data-g="' + E(g.key) + '">+ Add task</span></div>' +
-      '<div class="w116rows">' + (g.rows.length ? g.rows.map(rowHtml).join('') : '<div class="w116empty2">Nothing here' + (B.st.q || B.st.owner || B.st.status || B.st.due || B.st.mine ? ' with these filters' : '') + '.</div>') + qaHtml(g.key, pre.join(' \u00b7 ')) + '</div></div>';
+    var noAdd = B.st.list === 'completed' || g.key === 'd1';
+    var pre = []; if (g.pre.project && B.st.group !== 'project') { var gp = projById(g.pre.project); if (gp) pre.push('in ' + E(gp.name)); } if (g.pre.status) pre.push('status ' + g.pre.status); if (g.pre.owner) pre.push('owner ' + E(g.pre.owner)); if (g.pre.due) pre.push('due ' + g.pre.due);
+    var lp = listPre(); if (lp.flag) pre.push('flagged');
+    return '<section class="w116g w287g' + (closed ? ' closed' : '') + '" data-g="' + E(g.key) + '"' + (g.color ? ' style="--gc:' + g.color + '"' : '') + '>' +
+      '<div class="w116gh" data-act="fold" role="button" tabindex="0" aria-expanded="' + (closed ? 'false' : 'true') + '"><span class="chev">' + svg('chev') + '</span>' +
+      (g.color ? '<i class="w287gdot"></i>' : '') + '<b>' + E(g.name) + '</b>' + (open ? '<span class="n">' + open + '</span>' : '') + '</div>' +
+      '<div class="w116rows">' + (g.rows.length ? g.rows.map(function (t) { return rowHtml(t); }).join('') : (B.model && !B.model.emptyList ? '<div class="w116empty2">Nothing here' + (B.st.q || B.st.owner || B.st.status || B.st.due || B.st.mine ? ' with these filters' : '') + '.</div>' : '')) +
+      (noAdd ? '' : '<div class="w287add" data-act="qa" data-g="' + E(g.key) + '" role="button" tabindex="0"><span class="w287plus">' + svg('plus') + '</span>New task</div>' + qaHtml(g.key, pre.join(', '))) + '</div></section>';
   }
   function kanbanHtml(rows) {
     return '<div class="w116kb">' + STATUSES.map(function (b) {
       var list = rows.filter(function (t) { return bucket(t) === b; });
       return '<div class="w116kc" data-kst="' + E(b) + '"><div class="w116kch" style="color:' + STCOL[b][1] + '">' + E(b) + '<span class="n">' + list.length + '</span></div>' +
         list.map(function (t) {
-          var p = t.project_id ? projById(t.project_id) : null; var du = dueInfo(t); var as = assignees(t);
-          return '<div class="w116kd" data-tid="' + E(t.id) + '" draggable="true"><div class="ttl">' + E(t.title) + '</div><div class="ft">' +
-            (p ? '<span class="w116tag">' + E(p.name) + '</span>' : (t.subsection ? '<span class="w116tag ws">' + E(t.subsection) + '</span>' : '<span></span>')) +
+          var pid = effPid(t), p = pid ? projById(pid) : null; var du = dueInfo(t); var as = assignees(t);
+          return '<div class="w116kd" data-tid="' + E(t.id) + '" draggable="true" style="--pc:' + (p ? pColor(p) : 'transparent') + '"><div class="ttl">' + E(t.title) + '</div><div class="ft">' +
+            (p ? '<span class="w287ptag"><i style="background:' + pColor(p) + '"></i><span>' + E(p.name) + '</span></span>' : '<span></span>') +
             '<span style="display:inline-flex;align-items:center;gap:6px">' + (t.flag ? '<span class="w116tag flag">exec</span>' : '') + (du.txt ? '<span class="w116due ' + du.cls + '" style="min-width:0">' + du.txt + '</span>' : '') +
             (t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 20) : '') + as.filter(function (m) { return lower(m.name) !== lower(t.owner); }).slice(0, 2).map(function (m) { return av(m, 20); }).join('') + '</span></div></div>';
         }).join('') +
@@ -30226,16 +30592,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function toolbarHtml(rows) {
     var st = B.st, s = B.scope;
-    var groups = [['project', 'Project'], ['workstream', 'Workstream'], ['status', 'Status'], ['assignee', 'Owner'], ['due', 'Due date'], ['none', 'No grouping']];
-    if (s.dept === 'fundraising' && !s.board) groups.unshift(['board', 'Sub-team']);
-    if (s.board) groups = groups.filter(function (g) { return g[0] !== 'workstream'; });
+    /* wave287: grouping by workstream is gone (projects replace it); the filters fold behind one Filters button */
+    var groups = [['project', 'Project'], ['status', 'Status'], ['assignee', 'Owner'], ['due', 'Due date'], ['none', 'No grouping']];
+    if (s.dept === 'fundraising' && !s.board) groups.push(['board', 'Sub-team']);
     var ms = members(s.dept);
-    var projs = window.w116ProjectsFor ? window.w116ProjectsFor(s.dept, s.board) : projects().filter(function (p) { return p.department === s.dept; });
+    var m0 = B.model || model();
+    var projs = m0.ordered.map(function (o) { return o.p; }).concat(m0.other);
     var nSel = Object.keys(B.sel).length;
-    var html = '<div class="w116tb' + (B.showf ? ' showf' : '') + '">' +
+    var nF = activeFilters().length;
+    var html = '<div class="w116tb' + (st.showf ? ' showf' : '') + '">' +
       '<span class="w116seg">' + [['list', 'List'], ['board', 'Board'], ['cal', 'Calendar']].map(function (v) { return '<a data-act="view" data-v="' + v[0] + '" class="' + (st.view === v[0] ? 'on' : '') + '">' + v[1] + '</a>'; }).join('') + '</span>' +
-      (st.view === 'list' ? '<select data-act="group" title="Group by">' + groups.map(function (g) { return '<option value="' + g[0] + '"' + (st.group === g[0] ? ' selected' : '') + '>By ' + g[1].toLowerCase() + '</option>'; }).join('') + '</select>' : '') +
-      '<span class="tog fbtn' + (B.showf ? ' on' : '') + '" data-act="fbtn">&#9776; Filters</span>' +
+      (st.view === 'list' ? '<select data-act="group" title="Group by" aria-label="Group by">' + groups.map(function (g) { return '<option value="' + g[0] + '"' + (st.group === g[0] ? ' selected' : '') + '>By ' + g[1].toLowerCase() + '</option>'; }).join('') + '</select>' : '') +
+      '<span class="tog fbtn' + (st.showf ? ' on' : '') + '" data-act="fbtn" role="button" tabindex="0" aria-expanded="' + (st.showf ? 'true' : 'false') + '">' + svg('filter') + 'Filters' + (nF ? '<b class="w287fn">' + nF + '</b>' : '') + '</span>' +
       '<span class="flt">' +
       '<span class="tog' + (st.mine ? ' on' : '') + '" data-act="mine">&#9679; Mine</span>' +
       '<select data-act="owner" title="Owner"><option value="">Anyone</option><option value="__none"' + (st.owner === '__none' ? ' selected' : '') + '>Unassigned</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '"' + (st.owner === m.name ? ' selected' : '') + '>' + E(m.name) + '</option>'; }).join('') + '</select>' +
@@ -30246,8 +30614,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<span class="tog' + (st.done ? ' on' : '') + '" data-act="done">&#10003; Show done</span>' +
       '<select data-act="sort" title="Sort">' + [['manual', 'Manual order'], ['due', 'By due date'], ['updated', 'Recently updated'], ['title', 'A to Z']].map(function (o) { return '<option value="' + o[0] + '"' + (st.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
       '<span class="tog" data-act="selall" title="Select every task shown">&#9745; Select all</span>' +
-      '</span><span class="sp"></span><input type="search" data-act="q" placeholder="Search tasks" value="' + E(st.q) + '" />' +
-      '<button class="new" data-act="new">+ New task</button></div>';
+      '</span><span class="sp"></span><input type="search" data-act="q" placeholder="Search tasks" aria-label="Search tasks" value="' + E(st.q) + '" />' +
+      '</div>';
     if (nSel) {
       html += '<div class="w116bulk"><b>' + nSel + ' selected</b>' +
         '<select data-bulk="status"><option value="">Set status...</option>' + STATUSES.map(function (b) { return '<option value="' + b + '">' + b + '</option>'; }).join('') + '</select>' +
@@ -30258,17 +30626,109 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     return html;
   }
+  /* ---------- wave287: the sidebar, the list's title and the active filters ---------- */
+  function activeFilters() {
+    var st = B.st, c = [];
+    if (!st) return c;
+    if (st.mine) c.push(['mine', 'Mine']);
+    if (st.owner) c.push(['owner', st.owner === '__none' ? 'Unassigned' : 'Owner: ' + st.owner]);
+    if (st.status) c.push(['status', 'Status: ' + st.status]);
+    if (st.project) { var fp = st.project === '__none' ? null : projById(st.project); c.push(['project', st.project === '__none' ? 'No project' : 'Project: ' + (fp ? fp.name : st.project)]); }
+    if (st.due) c.push(['due', { overdue: 'Overdue', today: 'Due today', week: 'Due this week', none: 'No due date' }[st.due] || st.due]);
+    if (st.flag) c.push(['flag', 'Exec']);
+    if (st.done && st.list !== 'completed') c.push(['done', 'Showing done']);
+    return c;
+  }
+  function chipsHtml() {
+    var c = activeFilters(); if (!c.length) return '';
+    return '<div class="w287chips">' + c.map(function (x) { return '<button type="button" class="w287chip" data-act="clr" data-k="' + x[0] + '" title="Remove this filter">' + E(x[1]) + '<span aria-hidden="true">&#10005;</span></button>'; }).join('') +
+      (c.length > 1 ? '<button type="button" class="w287clr" data-act="clr" data-k="*">Clear all</button>' : '') + '</div>';
+  }
+  function sideHtml(m) {
+    var L = B.st.list || 'all';
+    var tiles = SMART.map(function (x) {
+      var n = m.smart[x.k] || 0;
+      return '<button type="button" class="w287sl' + (L === x.k ? ' on' : '') + '" data-act="list" data-l="' + x.k + '" style="--c:' + x.c + '" aria-pressed="' + (L === x.k ? 'true' : 'false') + '">' +
+        '<span class="ic">' + svg(x.ic) + '</span><b class="n' + (n ? '' : ' z') + '">' + n + '</b><span class="nm">' + x.n + '</span></button>';
+    }).join('');
+    function prow(p, depth, other) {
+      var k = Number(p.id), n = other ? (m.counts[k] || 0) : (m.pcount[k] || 0), away = !other && elsewhere(p);
+      var nm = other ? p.name : p.name;
+      return '<button type="button" class="w287pr' + ('p' + k === L ? ' on' : '') + (isGen(p) ? ' gen' : '') + (depth ? ' d' + Math.min(depth, 3) : '') + '"' +
+        (away ? ' data-w116go="' + E(away) + '" title="' + E(p.name) + ' has its own page"' : ' data-act="list" data-l="p' + k + '" title="' + E(p.name) + '"') + ' data-pid="' + k + '" style="--c:' + pColor(p) + '" aria-pressed="' + ('p' + k === L ? 'true' : 'false') + '">' +
+        '<i class="dot"></i><span class="nm">' + E(nm) + (other ? '<small>' + E((T.short && T.short[p.department]) || p.department) + '</small>' : '') + '</span>' +
+        (away ? '<span class="n">' + svg('out') + '</span>' : '<span class="n' + (n ? '' : ' z') + '">' + n + '</span>') + '</button>';
+    }
+    var html = '<aside class="w287side" aria-label="Lists"><div class="w287smart">' + tiles + '</div>' +
+      '<div class="w287pl"><div class="w287ph">Projects</div>' + m.ordered.map(function (o) { return prow(o.p, o.depth, false); }).join('');
+    if (m.none || L === 'none') html += '<button type="button" class="w287pr' + (L === 'none' ? ' on' : '') + '" data-act="list" data-l="none" style="--c:#797773"><i class="dot"></i><span class="nm">No project</span><span class="n">' + m.none + '</span></button>';
+    if (m.other.length) html += '<div class="w287ph q">' + (B.scope.board ? 'Other projects' : 'Other teams\u2019 projects') + '</div>' + m.other.map(function (p) { return prow(p, 0, true); }).join('');
+    if (staffOk() && !B.scope.board && T.order.indexOf(B.scope.dept) >= 0) html += '<button type="button" class="w287newp" data-w116act="addproj" data-d="' + E(B.scope.dept) + '">' + svg('plus') + 'New project</button>';
+    return html + '</div></aside>';
+  }
+  function headHtml(m, rows) {
+    var L = B.st.list || 'all', name, c, sub = '', icon, open = rows.filter(function (t) { return !t.done; }).length, n = L === 'completed' ? rows.length : open;
+    if (isProjList(L)) {
+      var p = L === 'none' ? null : projById(L.slice(1));
+      name = p ? p.name : 'No project'; c = p ? pColor(p) : '#797773';
+      icon = '<i class="w287hdot" style="background:' + c + '"></i>';
+      var bits = [];
+      if (p && p.parent_id) { var par = projById(p.parent_id); if (par) bits.push('In ' + E(par.name)); }
+      if (p && isGen(p)) bits.push('The catch-all for ' + E(teamLabel(p.department)) + ' work that is not part of another project.');
+      else if (p && p.department !== B.scope.dept) bits.push('A ' + E(teamLabel(p.department)) + ' project. Only ' + E(teamLabel(B.scope.dept)) + '\u2019s tasks show here.');
+      if (p && Array.isArray(p.leads) && p.leads.length) bits.push('Led by ' + E(p.leads.join(', ').replace(/, ([^,]*)$/, ' and $1')));
+      if (!p) bits.push('Tasks that are not filed in a project yet.');
+      if (p) bits.push('<a data-w116go="#project/' + E(p.id) + '">Project page</a>');
+      sub = bits.join(' \u00b7 ');
+    } else {
+      var sd = smartOf(L) || SMART[2]; name = sd.n; c = sd.c; sub = E(sd.sub);
+      icon = '<span class="w287hic" style="background:' + c + '">' + svg(sd.ic) + '</span>';
+    }
+    return '<div class="w287lhead" style="--c:' + ink(c) + '"><div class="w287lrow"><h3' + (String(name).length > 44 ? ' class="long"' : '') + '>' + icon + '<span class="nm">' + E(name) + '<span class="w287lc" title="' + (L === 'completed' ? 'completed' : 'open') + '">' + n + '</span></span></h3>' +
+      (L === 'completed' ? '' : '<button type="button" class="new w287new" data-act="new">' + svg('plus') + 'New task</button>') + '</div><p class="w287lsub">' + sub + '</p></div>';
+  }
+  function emptyHtml(L) {
+    var sd = smartOf(L), filtered = activeFilters().length || B.st.q;
+    var msg = filtered ? 'Nothing here with these filters.' : (sd ? sd.none : 'Nothing open in this project.');
+    return '<div class="w287empty"><span class="ic">' + svg('check') + '</span><b>' + E(msg) + '</b>' + (filtered ? '<button type="button" class="w287clr" data-act="clr" data-k="*">Clear the filters</button>' : '') + '</div>';
+  }
   function render() {
     if (!B.slot || !B.scope || !document.body.contains(B.slot)) return;
     var rows = scopeRows();
+    var m = B.model, L = B.st.list || 'all';
+    m.emptyList = !rows.length;
     var body;
     if (B.st.view === 'board') body = kanbanHtml(rows);
     else if (B.st.view === 'cal') body = calHtml(rows);
-    else { var gs = groupsFor(rows); body = gs.map(groupHtml).join(''); }
-    var total = (window.w116TasksFor ? window.w116TasksFor(B.scope.dept, B.scope.board, B.scope.ws) : []).filter(function (t) { return !t.done; }).length;
-    B.slot.innerHTML = '<div class="w116b">' + toolbarHtml(rows) + body +
-      '<p class="w116note">' + rows.length + ' shown \u00b7 ' + total + ' open in total. Click a task for details; drag to reorder or move between groups.</p></div>';
+    else {
+      var gs = groupsFor(rows); body = (rows.length ? '' : emptyHtml(L)) + '<div class="w287groups">' + gs.map(groupHtml).join('') + '</div>';
+      /* a project with its own page (Grants, wave258) closes the All list with wave258's pointer, where its group used to be */
+      if (L === 'all' && !B.scope.board) m.own.forEach(function (p) { var away = elsewhere(p); if (!away) return; var lab = away === '#grants' ? 'Grants' : p.name; body += '<div class="w258ptr" data-w258ptr="1"><span class="dot"></span><span>' + E(lab) + ' has its own page now: <a data-w116go="' + E(away) + '">open ' + E(lab) + '</a></span></div>'; });
+    }
+    var side = B.slot.querySelector('.w287side'), sx = side ? side.scrollLeft : 0, sy = side ? side.scrollTop : 0;
+    var nSel = Object.keys(B.sel).length;
+    B.slot.innerHTML = '<div class="w287 w287v-' + E(B.st.view) + '">' + sideHtml(m) + '<div class="w287main">' + headHtml(m, rows) +
+      '<div class="w116b' + (nSel ? ' w287sel' : '') + '">' + toolbarHtml(rows) + chipsHtml() + body +
+      '<p class="w116note">' + rows.length + ' shown \u00b7 ' + m.smart.all + ' open in total. Click a task for its details; drag a task to reorder it, onto another group, or onto a project on the left.</p></div></div></div>';
+    side = B.slot.querySelector('.w287side');
+    if (side) {
+      side.scrollLeft = sx; side.scrollTop = sy;
+      if (B.listMoved) { var on = side.querySelector('.on'); if (on && side.scrollWidth > side.clientWidth + 2) { var r0 = side.getBoundingClientRect(), r1 = on.getBoundingClientRect(); if (r1.left < r0.left || r1.right > r0.right) side.scrollLeft += (r1.left - r0.left) - 16; } }
+    }
+    B.listMoved = false;
     var q = B.slot.querySelector('input[data-act="q"]'); if (q && B.qFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); B.qFocus = false; }
+    if (B.qaOpen) { var box = B.slot.querySelector('.w116qa[data-qa="' + B.qaOpen + '"]'); if (box) openQa(box); else B.qaOpen = null; }
+  }
+  function openQa(box) {
+    var g = box.closest('.w116g'); if (g) g.classList.remove('closed');
+    var add = box.previousElementSibling; if (add && add.classList.contains('w287add')) add.style.display = 'none';
+    box.style.display = ''; var inp = box.querySelector('input'); if (inp) inp.focus();
+    B.qaOpen = box.getAttribute('data-qa');
+  }
+  function closeQa(box) {
+    box.style.display = 'none'; var inp = box.querySelector('input'); if (inp) inp.value = '';
+    var add = box.previousElementSibling; if (add && add.classList.contains('w287add')) add.style.display = '';
+    B.qaOpen = null;
   }
   var qTimer = null;
 
@@ -30301,8 +30761,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label>Assignees</label><div class="chips">' + as.map(function (i) { var m = memberById(i); return m ? '<span class="w116chip">' + av(m, 18) + E(m.name) + '<span class="rm" data-dact="rmas" data-id="' + i + '">&#10005;</span></span>' : ''; }).join('') +
       '<select data-dfield="addas" style="width:auto"><option value="">+ Add</option>' + ms.filter(function (m) { return as.indexOf(Number(m.id)) < 0; }).map(function (m) { return '<option value="' + m.id + '">' + E(m.name) + (m.department !== d ? ' (' + E(T.short[m.department] || m.department) + ')' : '') + '</option>'; }).join('') + '</select></div>' +
       '<label>Due date</label><input type="date" data-dfield="due" value="' + E(t.due_date || '') + '" />' +
-      '<label>Project</label><select data-dfield="project"><option value="">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (Number(t.project_id) === Number(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + (p.department !== d ? ' (' + E(T.short[p.department] || p.department) + ')' : '') + '</option>'; }).join('') + '</select>' +
-      '<label>Workstream</label><select data-dfield="ws">' + wsList(d).map(function (w) { return '<option value="' + E(w) + '"' + ((t.subsection || 'General') === w ? ' selected' : '') + '>' + E(w) + '</option>'; }).join('') + '</select>' +
+      /* wave287: the project is the task's one label (a task with none counts in its team's General); the Workstream field is gone */
+      '<label>Project</label><select data-dfield="project"><option value="">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (effPid(t) === Number(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + (p.department !== d ? ' (' + E(T.short[p.department] || p.department) + ')' : '') + '</option>'; }).join('') + '</select>' +
       '<label>Team</label><select data-dfield="dept" title="Move this task to another team">' + T.order.map(function (k) { return '<option value="' + k + '"' + (k === d ? ' selected' : '') + '>' + E((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k) + '</option>'; }).join('') + '</select>' +
       '<label>Flags</label><div><label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="flag"' + (t.flag ? ' checked' : '') + ' /> Needs an executive decision</label>' +
       '<label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="conf"' + (t.confidential ? ' checked' : '') + ' /> Confidential (hidden from the board view)</label></div>' +
@@ -30314,6 +30774,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<p class="w116note">Added ' + E(t.opened_at ? String(t.opened_at).slice(0, 10) : 'earlier') + (t.updated_by ? ' \u00b7 last change by ' + E(window.waWho ? waWho(t.updated_by) : t.updated_by) : '') + (t.closed_at ? ' \u00b7 closed ' + E(String(t.closed_at).slice(0, 10)) : '') + '</p>' +
       '</div>' +
       '<div class="w116drf"><button class="pri" data-dact="toggle">' + (t.done ? 'Reopen' : 'Mark done') + '</button><button data-dact="open">Department page</button><button class="warn" data-dact="del">Delete</button></div>';
+    void els.dr.offsetWidth;   /* wave287: the first open slides in too (the closed position is laid out before the open class) */
     els.dr.classList.add('open'); els.bk.classList.add('open');
     var ta = els.dr.querySelector('textarea.ttl');
     if (ta) { var grow = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }; ta.addEventListener('input', grow); setTimeout(grow, 0); }
@@ -30367,11 +30828,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (k === 'addas') { if (f.value) { await setAssignees(t, assigneeIds(t).concat([Number(f.value)])); openDrawer(t.id); } }
     if (k === 'due') await setDue(t, f.value || null);
     if (k === 'project') await setProject(t, f.value || null);
-    if (k === 'ws') await setWs(t, f.value);
     if (k === 'dept') {
       var nd = f.value; if (nd && nd !== t.department) {
         var oldD = t.department; var keepWs = wsList(nd).indexOf(t.subsection || 'General') >= 0 ? (t.subsection || 'General') : 'General';
-        if (await patch(t, { department: nd, subsection: keepWs === 'General' ? null : keepWs }, [['department', oldD, nd]])) {
+        var mv = { department: nd, subsection: keepWs === 'General' ? null : keepWs };
+        /* wave287: a task in its old team's General goes to the new team's General (another team's General is never right) */
+        var og = generalOf(oldD); if (og && effPid(t) === Number(og.id)) { var ng = generalOf(nd); mv.project_id = ng ? Number(ng.id) : null; }
+        if (await patch(t, mv, [['department', oldD, nd]])) {
           toast('Moved to ' + ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[nd]) || nd)); closeDrawer(); after();
           try { if (typeof renderSection === 'function') renderSection(nd); } catch (x) { /* fine */ }
         }
@@ -30389,20 +30852,29 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var rowEl = e.target.closest('.w116r,.w116kd,.w116cp');
     var act = a ? a.getAttribute('data-act') : '';
     if (act === 'view') { B.st.view = a.getAttribute('data-v'); saveState(); render(); return; }
-    if (act === 'fbtn') { B.showf = !B.showf; render(); return; }
+    if (act === 'list') { e.preventDefault(); setList(a.getAttribute('data-l')); return; }
+    if (act === 'clr') { var ck = a.getAttribute('data-k'); if (ck === '*') { ['owner', 'status', 'project', 'due', 'q'].forEach(function (k) { B.st[k] = ''; }); B.st.mine = false; B.st.flag = false; B.st.done = false; } else if (['owner', 'status', 'project', 'due'].indexOf(ck) >= 0) B.st[ck] = ''; else B.st[ck] = false; saveState(); render(); return; }
+    if (act === 'fbtn') { B.st.showf = !B.st.showf; saveState(); render(); return; }
     if (act === 'selall') { var shown = scopeRows(); var all = shown.length && shown.every(function (t) { return B.sel[t.id]; }); B.sel = {}; if (!all) shown.forEach(function (t) { B.sel[t.id] = 1; }); render(); return; }
     if (act === 'mine') { B.st.mine = !B.st.mine; saveState(); render(); return; }
     if (act === 'flag') { B.st.flag = !B.st.flag; saveState(); render(); return; }
     if (act === 'done') { B.st.done = !B.st.done; saveState(); render(); return; }
-    if (act === 'fold') { var g = a.closest('.w116g'); var k = g.getAttribute('data-g'); B.st.closed = B.st.closed || {}; if (B.st.closed[k]) delete B.st.closed[k]; else B.st.closed[k] = 1; saveState(); g.classList.toggle('closed'); return; }
-    if (act === 'qa') { e.stopPropagation(); var box = B.slot.querySelector('.w116qa[data-qa="' + a.getAttribute('data-g') + '"]'); if (box) { var g2 = box.closest('.w116g'); if (g2) g2.classList.remove('closed'); box.style.display = ''; var inp = box.querySelector('input'); inp.focus(); } return; }
-    if (act === 'new') { var first = B.slot.querySelector('.w116qa'); if (first) { var g3 = first.closest('.w116g'); if (g3) g3.classList.remove('closed'); first.style.display = ''; first.querySelector('input').focus(); first.scrollIntoView({ block: 'center', behavior: 'smooth' }); } return; }
+    if (act === 'fold') { var g = a.closest('.w116g'); var k = g.getAttribute('data-g'); B.st.closed = B.st.closed || {}; if (B.st.closed[k]) delete B.st.closed[k]; else B.st.closed[k] = 1; saveState(); g.classList.toggle('closed'); a.setAttribute('aria-expanded', g.classList.contains('closed') ? 'false' : 'true'); return; }
+    if (act === 'qa') { e.stopPropagation(); var box = B.slot.querySelector('.w116qa[data-qa="' + a.getAttribute('data-g') + '"]'); if (box) openQa(box); return; }
+    if (act === 'new') {
+      /* the list's own place to add: No date when grouped by due window, else the first group */
+      var tv = B.slot.querySelector('[data-w116tview].on'); if (tv) tv.click();   /* the Tree (wave116t) steps aside first */
+      var first = B.slot.querySelector('.w116qa[data-qa="d5"]') || B.slot.querySelector('.w287groups .w116qa') || B.slot.querySelector('.w116qa');
+      if (!first && B.st.view !== 'list') { B.st.view = 'list'; saveState(); render(); first = B.slot.querySelector('.w116qa[data-qa="d5"]') || B.slot.querySelector('.w116qa'); }
+      if (first) { openQa(first); try { first.scrollIntoView({ block: 'center', behavior: reduced() ? 'auto' : 'smooth' }); } catch (x) { /* fine */ } }
+      return;
+    }
     if (act === 'cal') { var n = Number(a.getAttribute('data-n')); if (n === 0) B.calMonth = new Date(); else { var m = B.calMonth || new Date(); var mm = new Date(m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '-01T12:00:00'); mm.setMonth(mm.getMonth() + n); B.calMonth = mm; } render(); return; }
     if (act === 'more') { B.st.view = 'list'; B.st.group = 'due'; saveState(); render(); return; }
     if (!rowEl) return;
     var tid = rowEl.getAttribute('data-tid'); var t = taskById(tid); if (!t) return;
     if (act === 'sel') { if (a.checked) B.sel[t.id] = 1; else delete B.sel[t.id]; render(); return; }
-    if (act === 'toggle') { e.stopPropagation(); setStatus(t, t.done ? 'Open' : 'Done'); return; }
+    if (act === 'toggle') { e.stopPropagation(); complete(t); return; }
     if (act === 'status') { e.stopPropagation(); inlineSelect(a, STATUSES.map(function (s) { return [s, s]; }), bucket(t), function (v) { setStatus(t, v); }); return; }
     if (act === 'owner') { e.stopPropagation(); var opts = [['', 'Unassigned']].concat(members(t.department).map(function (m) { return [m.name, m.name]; })); inlineSelect(a, opts, t.owner || '', function (v) { setOwner(t, v); }); return; }
     if (act === 'due') { e.stopPropagation(); inlineDate(a, t.due_date || '', function (v) { setDue(t, v || null); }); return; }
@@ -30457,17 +30929,22 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!B.slot || !B.slot.contains(e.target)) return;
     var qa = e.target.closest && e.target.closest('.w116qa');
     if (qa && e.target.tagName === 'INPUT') {
-      if (e.key === 'Escape') { qa.style.display = 'none'; e.target.value = ''; return; }
+      if (e.type !== 'keydown') return;
+      if (e.key === 'Escape') { e.stopPropagation(); closeQa(qa); return; }
       if (e.key === 'Enter') {
         var gk = qa.getAttribute('data-qa'); var pre = {};
         var gs = groupsFor(scopeRows()); var g = gs.filter(function (x) { return x.key === gk; })[0];
         if (g) pre = g.pre; else if (gk.charAt(0) === 's') pre = { status: gk.slice(1) };
-        if (pre.owner === '') pre.owner = '';
+        pre = Object.assign({}, listPre(), pre);   /* wave287: the open list files it (its project, today for Today, the flag for Flagged) */
         var title = e.target.value; e.target.value = '';
-        addTask(title, pre);
+        if (String(title || '').trim()) { B.qaOpen = gk; addTask(title, pre); }
       }
       return;
     }
+    var tk = e.target.closest && e.target.closest('[data-act="toggle"]');
+    if (tk && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); var rw = tk.closest('[data-tid]'); var tt = rw && taskById(rw.getAttribute('data-tid')); if (tt) complete(tt); return; }
+    var kb = e.target.closest && e.target.closest('.w287add,.w116gh,.fbtn');
+    if (kb && e.type === 'keydown' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); kb.click(); return; }
     if (e.target.getAttribute && e.target.getAttribute('data-act') === 'q') {
       clearTimeout(qTimer);
       qTimer = setTimeout(function () { B.st.q = e.target.value; B.qFocus = true; render(); }, 220);
@@ -30482,7 +30959,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function onDragEnd() { B.drag = null; if (B.slot) B.slot.querySelectorAll('.dragging,.drop,.over').forEach(function (x) { x.classList.remove('dragging', 'drop', 'over'); }); }
   function onDragOver(e) {
     if (!B.drag || !B.slot || !B.slot.contains(e.target)) return;
-    var tgt = e.target.closest('.w116g,.w116kc,.w116cd'); if (!tgt) return;
+    var tgt = e.target.closest('.w116g,.w116kc,.w116cd,.w287pr[data-act="list"][data-pid]'); if (!tgt) return;
     e.preventDefault();
     B.slot.querySelectorAll('.drop').forEach(function (x) { if (x !== tgt) x.classList.remove('drop'); });
     tgt.classList.add('drop');
@@ -30495,6 +30972,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     e.preventDefault();
     var t = taskById(B.drag); var id = B.drag; onDragEnd();
     if (!t) return;
+    var pr = e.target.closest('.w287pr[data-act="list"][data-pid]'); if (pr) { await setProject(t, Number(pr.getAttribute('data-pid'))); return; }   /* wave287: drop on a project in the sidebar */
     var col = e.target.closest('.w116kc'); if (col) { await setStatus(t, col.getAttribute('data-kst')); return; }
     var day = e.target.closest('.w116cd'); if (day) { await setDue(t, day.getAttribute('data-day')); return; }
     var g = e.target.closest('.w116g'); if (!g) return;
@@ -30503,8 +30981,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var same = grp.rows.some(function (x) { return String(x.id) === String(id); });
     if (!same) {
       var p = grp.pre;
-      if (B.st.group === 'project') await setProject(t, p.project || null);
-      else if (B.st.group === 'workstream') await setWs(t, p.ws || 'General');
+      if (B.st.group === 'project' || B.st.group === 'workstream') await setProject(t, p.project || null);
       else if (B.st.group === 'status') await setStatus(t, p.status);
       else if (B.st.group === 'assignee') await setOwner(t, p.owner || '');
       else if (B.st.group === 'due') { if (p.due) await setDue(t, p.due); else await setDue(t, null); }
@@ -30524,6 +31001,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     document.body.addEventListener('dragover', onDragOver);
     document.body.addEventListener('drop', onDrop);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && B.drawer) closeDrawer(); });
+    /* wave287: an empty quick add closes when you leave it */
+    document.body.addEventListener('focusout', function (e) {
+      var qa = e.target && e.target.closest && e.target.closest('.w116qa'); if (!qa || !B.slot || !B.slot.contains(qa)) return;
+      setTimeout(function () { var inp = qa.querySelector('input'); if (document.body.contains(qa) && !qa.contains(document.activeElement) && inp && !inp.value.trim() && qa.style.display !== 'none') closeQa(qa); }, 150);
+    });
   }
 
   async function loadCommentCounts() {
@@ -30536,18 +31018,27 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   window.w116Board = {
     render: function (slot, scope) {
-      B.slot = slot; B.scope = scope; B.st = loadState(scope); B.sel = {};
-      if (B.preset) { Object.assign(B.st, B.preset); B.preset = null; }
+      B.slot = slot; B.scope = scope; B.st = loadState(scope); B.sel = {}; B.qaOpen = null;
+      if (B.preset) { Object.assign(B.st, B.preset); B.preset = null; B.listMoved = true; saveState(); }
       render();
       if (!window.__w116cm) loadCommentCounts().then(function () { if (B.slot === slot) render(); });
     },
+    /* wave287: presets open a list (the Overview's tiles, Needs attention, the project cards); the older ones map onto lists */
     preset: function (q) {
-      if (q === 'overdue') B.preset = { due: 'overdue', done: false, status: '' };
-      else if (q === 'done') B.preset = { done: true, status: 'Done', due: '' };
-      else if (q === 'projects') B.preset = { group: 'project', view: 'list' };
-      else if (String(q).indexOf('project:') === 0) B.preset = { project: String(q).slice(8), group: 'workstream', view: 'list', done: false, status: '', due: '', mine: false };
+      var clean = { view: 'list', due: '', status: '', project: '', flag: false, mine: false, done: false };
+      var LISTS = { today: 'today', scheduled: 'scheduled', all: 'all', flagged: 'flagged', mine: 'mine', completed: 'completed', done: 'completed', projects: 'all', open: 'all' };
+      q = String(q || '');
+      if (LISTS[q]) B.preset = Object.assign(clean, { list: LISTS[q], group: 'project' });
+      else if (q === 'overdue') B.preset = Object.assign(clean, { list: 'today', group: 'project', due: 'overdue' });
+      else if (q === 'week') B.preset = Object.assign(clean, { list: 'scheduled', group: 'project', due: 'week' });
+      else if (q.indexOf('project:') === 0) B.preset = Object.assign(clean, { list: 'p' + Number(q.slice(8)), group: 'due' });
       else B.preset = null;
     },
+    set: function (patch) { if (!B.st || !patch) return; Object.assign(B.st, patch); saveState(); render(); },
+    list: function (l) { if (B.st) setList(String(l)); },
+    state: function () { return B.st ? JSON.parse(JSON.stringify(B.st)) : null; },
+    model: function () { return B.scope ? model() : null; },
+    complete: function (id) { return complete(taskById(id)); },
     refresh: render,
     closeDrawer: closeDrawer,
     open: openDrawer
@@ -35712,23 +36203,28 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       /* top-level tasks in this bucket: no parent, or a parent outside the bucket */
       var ids = {}; list.forEach(function (t) { ids[t.id] = 1; });
       var roots = list.filter(function (t) { return !t.parent_task_id || !ids[t.parent_task_id]; });
-      var byWs = {}; roots.forEach(function (t) { var w = t.subsection || ''; (byWs[w] = byWs[w] || []).push(t); });
-      var wss = Object.keys(byWs).sort(function (a, b) { return (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)); });
-      return wss.map(function (w) { return (w ? '<div class="n ws"><span class="tg leaf"></span><span class="lb">' + E(w) + '</span><span class="ct">' + byWs[w].length + '</span></div>' : '') + byWs[w].map(function (t) { return taskNode(t, 0); }).join(''); }).join('');
+      /* wave287: projects replace workstreams, so the tree no longer sorts a project's tasks into workstreams */
+      return roots.map(function (t) { return taskNode(t, 0); }).join('');
     }
     function projNode(p) {
       var subs = projs.filter(function (x) { return Number(x.parent_id) === Number(p.id); });
-      var mine = visible.filter(function (t) { return Number(t.project_id) === Number(p.id); });
-      var total = mine.length + subs.reduce(function (a, s) { return a + visible.filter(function (t) { return Number(t.project_id) === Number(s.id); }).length; }, 0);
+      var mine = visible.filter(function (t) { return Number(t.project_id || gmap[t.id]) === Number(p.id); });
+      var total = mine.length + subs.reduce(function (a, s) { return a + visible.filter(function (t) { return Number(t.project_id || gmap[t.id]) === Number(s.id); }).length; }, 0);
       var key = 'p' + p.id; var isClosed = !!closed[key];
       return '<div class="n project" data-w116tn="' + key + '"><span class="tg" data-w116ttg="' + key + '">' + (isClosed ? '+' : '\u2212') + '</span><span class="lb" data-w116tgo="#project/' + p.id + '">' + E(p.name) + '</span><span class="ct"><b>' + total + '</b> task' + (total === 1 ? '' : 's') + (subs.length ? ' \u00b7 ' + subs.length + ' sub-project' + (subs.length === 1 ? '' : 's') : '') + '</span></div>' +
         '<div class="ch' + (isClosed ? ' closed' : '') + '">' + subs.map(projNode).join('') + taskList(mine) + '</div>';
     }
     var tops = projs.filter(function (p) { return !p.parent_id || !projs.some(function (x) { return Number(x.id) === Number(p.parent_id); }); });
-    var general = visible.filter(function (t) { return !t.project_id || !projs.some(function (p) { return Number(p.id) === Number(t.project_id); }); });
+    /* wave287: a task with no project sits in its team's General project (window.w116GeneralOf) */
+    var gen0 = window.w116GeneralOf ? window.w116GeneralOf(d) : null, gmap = {};
+    if (gen0 && projs.some(function (p) { return Number(p.id) === Number(gen0.id); })) {
+      visible.forEach(function (t) { if (!t.project_id) gmap[t.id] = gen0.id; });
+      projs.sort(function (a, b) { return (Number(b.id) === Number(gen0.id) ? 1 : 0) - (Number(a.id) === Number(gen0.id) ? 1 : 0); });
+    }
+    var general = visible.filter(function (t) { var pid = t.project_id || gmap[t.id]; return !pid || !projs.some(function (p) { return Number(p.id) === Number(pid); }); });
     return '<div class="w116tree"><div class="n team"><span class="tg leaf"></span><span class="lb" data-w116tgo="#team/' + E(d) + '">' + E(label(d)) + '</span><span class="ct"><b>' + visible.length + '</b> open task' + (visible.length === 1 ? '' : 's') + ' \u00b7 ' + tops.length + ' project' + (tops.length === 1 ? '' : 's') + '</span><span class="add" data-w116tdone="1">' + (showDone ? 'hide done' : 'show done') + '</span></div><div class="ch">' +
       tops.map(projNode).join('') +
-      (general.length ? '<div class="n project" data-w116tn="pg"><span class="tg" data-w116ttg="pg">' + (closed.pg ? '+' : '\u2212') + '</span><span class="lb">General (no project)</span><span class="ct"><b>' + general.length + '</b></span></div><div class="ch' + (closed.pg ? ' closed' : '') + '">' + taskList(general) + '</div>' : '') +
+      (general.length ? '<div class="n project" data-w116tn="pg"><span class="tg" data-w116ttg="pg">' + (closed.pg ? '+' : '\u2212') + '</span><span class="lb">No project</span><span class="ct"><b>' + general.length + '</b></span></div><div class="ch' + (closed.pg ? ' closed' : '') + '">' + taskList(general) + '</div>' : '') +
       '</div></div>';
   }
   function showTree() {
@@ -40689,9 +41185,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w262homebar', 'Show everything on Home', 'Home shows what matters first. In the loop, Updates for you, time commitments, Slack notifications and time off wait behind this button; one click shows them, another hides them again.', OPT)   /* wave262 */
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
-      S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together the team\u2019s pulse, decisions, updates and meetings. The line under the name is the Hub\u2019s read of how the team is doing, from recent meetings.'),
+      S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together what needs the team now, its projects, requests, updates and meetings. The line under the name is the Hub\u2019s read of how the team is doing, from recent meetings; More shows all of it.'),   /* wave287: the steps follow the rebuilt Overview */
       S('#w116host .w116seg', 'The team\u2019s pages', 'Switch between Overview, Agenda, Tasks and any boards the team runs, like Volunteering or the Content calendar.', OPT),
-      S('#w116host .w116kpis', 'Key numbers', 'Open and overdue tasks, work finished in the last 30 days, active projects and meetings coming up. Click a number to open the list behind it.', OPT),
+      S('#w116host .w116kpis', 'Now', 'One line on where the team stands, then open tasks, overdue and due this week. Click a tile to open that list on the Tasks page.', OPT),
+      S('#w287need', 'Needs attention', 'Overdue tasks and the ones due in the next seven days. Tick one to complete it (Undo is right there), or click it for its details.', OPT),
+      S('#w287proj', 'Projects', 'Every project of the team, General first: what is open, what is overdue and the next task due. Click a card to open that project\u2019s list.', OPT),
       H(/^Where the team is/i, '.w116card', 'Where the team is', 'The pulse score and the high priority list, rebuilt from the latest transcripts. Re-run it after a big meeting.', OPT),
       H(/^Executive decisions for this team/i, '.w116card', 'Decisions for this team', 'Calls waiting on an executive, with who decides and the Hub\u2019s recommendation. Decide them on the Executive dashboard.', OPT),
       S('#w123tcard', 'Team inbox', 'Requests to this team, emails the Hub inbox filed for it (Jev pings the team\u2019s Slack channel only when one needs you soon) and asks spotted in its meetings. Open one to set its status, hand it on or mark it done.', OPT),
@@ -40699,14 +41197,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       H(/^Mentions from other teams/i, '.w116card', 'Mentions from other teams', 'Where other teams talked about your people or your work, so nothing falls between teams.', OPT),
       S('#w116meet', 'Upcoming meetings', 'The team\u2019s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
-      H(/^Projects/i, '.w116card', 'Projects', 'The team\u2019s projects with their open tasks. Add a project here, or open All projects.', OPT),
       S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Avenue Academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
     tasks: { tab: 'dept', icon: 'list', hash: function () { return '#team/' + deptTab() + '/tasks'; }, steps: [
-      S('#w116tasks .w116tb', 'Pick your view', 'See the team\u2019s work as a List, a Board, a Calendar or a Tree, grouped by project, workstream, status or owner.'),
-      S('#w116tasks .w116g', 'Groups', 'Each group folds open. Use + Add task inside a group to add a task straight into it.', OPT),
+      S('#w116tasks .w287side', 'Lists and projects', 'Smart lists (Today, Scheduled, All, Flagged, Mine, Completed) and the team\u2019s projects, General first. Pick one to see its tasks; drop a task on a project to move it there.', OPT),
+      S('#w116tasks .w116tb', 'Pick your view', 'See the list as a List, a Board, a Calendar or a Tree, grouped by project, due date, status or owner. Filters folds the rest away.'),
+      S('#w116tasks .w116g', 'Groups', 'Each group folds open. New task at the end of a group adds a task straight into it; the round tick completes one.', OPT),
       S('#w116tasks .w116note', 'Working with tasks', 'Click a task for its details, comments and history. Type @ and a name in a comment to bring someone in: they get a Slack message with a link. Drag to reorder a task or move it to another group.', OPT),
       S('#w116agHost || #w116host .w116agnote', 'The team agenda', 'Agendas for this team\u2019s meetings, drafted from transcripts and open work. Tick items off during the meeting.', { opt: 1, hash: function () { return '#team/' + deptTab() + '/agenda'; } })
     ] },
@@ -90659,6 +91157,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function placeReq(host, d) {
     var cur = document.getElementById('w258req');
     if (!staff()) { if (cur) cur.remove(); return; }
+    /* wave287: not on the Overview, where the Team inbox card holds the same requests with more actions; Agenda and Tasks keep it */
+    var c0 = W116cur(); if (c0 && c0.d === d && c0.page === 'overview') { if (cur) cur.remove(); return; }
     if (window.w123 && !window.w123.loaded()) {
       if (!REQV.loading) { REQV.loading = true; Promise.resolve(window.w123.load()).then(function () { REQV.loading = false; schedule(); }, function () { REQV.loading = false; }); }
       return;
@@ -100017,6 +100517,402 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     } catch (e) { return false; }
   }
   [0, 1600, 5200, 9000].forEach(function (ms) { setTimeout(function () { try { walks(); tour(); } catch (e) { /* fine */ } }, ms); });
+})();
+/* =====================================================================
+   WA v287 team overview, tasks and projects (06/11/26)
+   =====================================================================
+   Steel: "rebuilding the UI of the overview using Emil's skills... the
+   Apple design for the task management... the work stream should just
+   turn into the different projects, and each task should be
+   categorized in that way."
+   Design: claude/06-11-26 - Team overview, tasks and projects, design
+   (wave287).md, sections 2 and 3. The data half is
+   build/wa287a_projects.sql (projects.is_general, projects.workstream,
+   every task in a project).
+   Where the work lives:
+   - 116_wave116 (edited in place): the project helpers every page
+     reads (w116IsGeneral, w116GeneralOf, w116ProjOf, w116ProjColor,
+     w116Ink, w116Elsewhere, w116ProjForWs), the Overview rebuilt (Now,
+     Needs attention, project cards; the cards later waves inject into
+     keep their ids), the tabs' thumb and the clamped read in header(),
+     old #team/<d>/tasks/<workstream> links opening that project.
+   - 116b_wave116b (edited in place): the Reminders-style task page
+     (smart lists, projects in a sidebar, rows with a tick and one line
+     of facts, Undo, the drawer without Workstream, the new API).
+   - 116t_wave116t (edited in place): the Tree no longer sorts by
+     workstream; tasks with no project sit in General.
+   - 258_wave258 (edited in place): the "Asked of" banner stays off the
+     Overview (the Team inbox card holds the same requests); Agenda and
+     Tasks keep it.
+   - This segment: the CSS, and the motion that needs script: the tabs'
+     sliding thumb, More on the read, the Overview's task rows (tick,
+     open), keyboard on the tiles and cards.
+   Motion follows Emil's rules: feedback on pointer-down, the tick fills
+   in 160ms ease-out, the drawer uses the iOS curve (280ms in, 200ms
+   out, the same way back), list switches are instant, only transform
+   and opacity animate, and prefers-reduced-motion turns slides into
+   short fades. Hover effects only where a fine pointer can hover.
+   Runs after every wave that wraps the board or the team pages (after
+   285, before 164 and 110), so its CSS lands after theirs.
+   ===================================================================== */
+(function () {
+  if (window.__wa287) return; window.__wa287 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', GROUND = '#1F201E', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var OUT = 'cubic-bezier(0.23, 1, 0.32, 1)', DRAWER = 'cubic-bezier(0.32, 0.72, 0, 1)';
+  var FINE = '@media (hover: hover) and (pointer: fine)';
+  var ROW = ':is(.w287, .w287need) .w116r.w287r';
+
+  var css = document.createElement('style');
+  css.id = 'wa287css';
+  css.textContent = '' +
+    /* ---------- the task page: sidebar and main ---------- */
+    '.w287{display:grid;grid-template-columns:236px minmax(0,1fr);gap:22px;align-items:start;font-family:' + BODY + ';}' +
+    '.w287 button{font-family:inherit;}' +
+    '.w287side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;padding:2px 2px 16px;scrollbar-width:thin;overscroll-behavior:contain;}' +
+    '.w287smart{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 20px;}' +
+    '.w287sl{appearance:none;border:0;margin:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px 6px;padding:10px 11px 9px;border-radius:14px;background:var(--wa-card);box-shadow:0 0 0 1px rgba(16,63,57,.07),0 1px 2px rgba(16,63,57,.05);cursor:pointer;color:var(--wa-text);text-align:left;transition:transform 140ms ' + OUT + ';-webkit-tap-highlight-color:transparent;}' +
+    '.w287sl .ic{width:28px;height:28px;border-radius:50%;background:var(--c);color:' + CREAM + ';display:inline-flex;align-items:center;justify-content:center;}' +
+    '.w287sl .ic svg{width:16px;height:16px;}' +
+    '.w287sl .n{justify-self:end;font-family:' + HEAD + ';font-weight:600;font-size:25px;line-height:1;color:var(--wa-text);font-variant-numeric:tabular-nums;}' +
+    '.w287sl .n.z{color:var(--wa-muted);opacity:.55;}' +
+    '.w287sl .nm{grid-column:1 / -1;font-size:13px;font-weight:600;color:var(--wa-muted);letter-spacing:.1px;}' +
+    '.w287sl.on{background:var(--c);box-shadow:0 6px 16px -8px var(--c);}' +
+    '.w287sl.on .ic{background:rgba(255,250,242,.2);}' +
+    '.w287sl.on .n,.w287sl.on .nm{color:' + CREAM + ';opacity:1;}' +
+    '.w287sl.on[data-l="today"] .n,.w287sl.on[data-l="today"] .nm,.w287sl.on[data-l="today"] .ic{color:' + GREEN + ';}' +
+    '.w287sl.on[data-l="today"] .ic{background:rgba(16,63,57,.12);}' +
+    '.w287sl:active{transform:scale(.97);}' +
+    '.w287pl{display:flex;flex-direction:column;gap:1px;}' +
+    '.w287ph{font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--wa-muted);margin:0 10px 6px;}' +
+    '.w287ph.q{margin-top:18px;font-weight:600;letter-spacing:1px;}' +
+    '.w287pr{appearance:none;border:0;margin:0;background:none;display:flex;align-items:center;gap:10px;width:100%;min-height:34px;padding:6px 10px;border-radius:10px;cursor:pointer;color:var(--wa-text);text-align:left;font-size:13.5px;line-height:1.3;transition:transform 140ms ' + OUT + ';-webkit-tap-highlight-color:transparent;}' +
+    '.w287pr .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:0 0 auto;}' +
+    '.w287pr .nm{flex:1 1 auto;min-width:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere;}' +
+    '.w287pr .nm small{margin-left:6px;font-size:11px;font-weight:600;color:var(--wa-muted);}' +
+    '.w287pr .n{flex:0 0 auto;font-size:12.5px;font-weight:600;color:var(--wa-muted);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;}' +
+    '.w287pr .n.z{opacity:.45;}' +
+    '.w287pr .n svg{width:14px;height:14px;}' +
+    '.w287pr.d1{padding-left:28px;}.w287pr.d2{padding-left:44px;}.w287pr.d3{padding-left:58px;}' +
+    '.w287pr.d1 .dot,.w287pr.d2 .dot,.w287pr.d3 .dot{width:8px;height:8px;}' +
+    '.w287pr.gen .nm{font-weight:600;}' +
+    '.w287pr.on{background:rgba(16,63,57,.10);}' +
+    '.w287pr.on .nm{font-weight:700;color:' + GREEN + ';}' +
+    '.w287pr.on .n{color:' + GREEN + ';}' +
+    '.w287pr.drop{background:rgba(220,165,39,.22);box-shadow:inset 0 0 0 1.5px ' + GOLD + ';}' +
+    '.w287pr:active{transform:scale(.98);}' +
+    '.w287newp{appearance:none;border:0;background:none;margin:10px 0 0;display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:10px;cursor:pointer;color:var(--wa-muted);font-size:13px;font-weight:600;text-align:left;transition:transform 140ms ' + OUT + ';}' +
+    '.w287newp svg{width:16px;height:16px;padding:2px;border-radius:50%;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '.w287newp:active{transform:scale(.98);}' +
+    FINE + '{.w287sl:hover{box-shadow:0 0 0 1px rgba(16,63,57,.16),0 4px 12px rgba(16,63,57,.08);}.w287sl.on:hover{box-shadow:0 6px 16px -8px var(--c);}.w287pr:hover{background:rgba(16,63,57,.05);}.w287pr.on:hover{background:rgba(16,63,57,.12);}.w287newp:hover{color:' + GREEN + ';}}' +
+    '.w287main{min-width:0;background:var(--wa-card);border:1px solid rgba(16,63,57,.07);border-radius:20px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 12px 32px rgba(16,63,57,.06);padding:22px 24px 16px;}' +
+    '.w287lhead{margin:0 0 14px;}' +
+    '.w287lhead h3{display:flex;align-items:center;gap:12px;margin:0;font-family:' + HEAD + ';font-weight:600;font-size:31px;line-height:1.02;letter-spacing:.2px;text-transform:uppercase;color:var(--c);}' +
+    '.w287lhead .nm{min-width:0;overflow-wrap:anywhere;}' +
+    '.w287lhead h3.long{font-size:22px;line-height:1.12;align-items:flex-start;}' +
+    '.w287lrow{display:flex;align-items:center;gap:12px;}' +
+    '.w287lrow h3{flex:1 1 auto;min-width:0;}' +
+    '.w287lc{margin-left:.32em;font-weight:500;color:var(--c);opacity:.5;font-variant-numeric:tabular-nums;white-space:nowrap;}' +
+    '.w287new{appearance:none;border:0;margin:0;flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;border-radius:10px;background:' + GOLD + ';color:' + GREEN + ';font-family:' + HEAD + ';font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:transform 120ms ' + OUT + ';}' +
+    '.w287new svg{width:16px;height:16px;stroke-width:2.4;}' +
+    '.w287new:active{transform:scale(.97);}' +
+    FINE + '{.w287new:hover{filter:brightness(1.04);}}' +
+    '.w287hic{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:' + CREAM + ';flex:0 0 auto;}' +
+    '.w287hic svg{width:19px;height:19px;}' +
+    '.w287hdot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;}' +
+    '.w287lsub{margin:6px 0 0;font-size:13px;line-height:1.45;color:var(--wa-muted);max-width:72ch;}' +
+    '.w287lsub a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;}' +
+    /* the toolbar, made lighter: the filters fold behind one button */
+    '.w287 .w116tb{gap:8px;margin:0 0 6px;padding:0 0 12px;border-bottom:1px solid rgba(16,63,57,.08);}' +
+    '.w287 .w116tb .w116seg{padding:2px;border-radius:10px;}' +
+    '.w287 .w116tb .w116seg a{padding:5px 11px;font-size:12.5px;border-radius:8px;}' +
+    '.w287 .w116tb select,.w287 .w116tb input[type=search],.w287 .w116tb .tog{border:1px solid transparent;background:rgba(16,63,57,.05);border-radius:9px;font-size:12.5px;color:var(--wa-text);}' +
+    '.w287 .w116tb .tog{padding:6px 10px;}' +
+    '.w287 .w116tb .tog.on{background:rgba(16,63,57,.12);color:' + GREEN + ';}' +
+    '.w287 .w116tb .tog svg{width:14px;height:14px;}' +
+    '.w287 .w116tb .tog.fbtn{display:inline-flex;}' +
+    '.w287 .w116tb .flt{display:none;flex:1 0 100%;flex-wrap:wrap;gap:6px;order:10;padding:4px 0 0;}' +
+    '.w287 .w116tb.showf .flt{display:flex;}' +
+    '.w287 .w116tb .sp{display:block;}' +
+    '.w287 .w116tb input[type=search]{flex:0 1 160px;min-width:110px;padding:7px 10px;}' +
+    '.w287grp{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--wa-muted);}' +
+    '.w287fn{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ';font-size:11px;font-weight:700;margin-left:2px;}' +
+    '.w287chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;}' +
+    '.w287chip{appearance:none;border:0;margin:0;display:inline-flex;align-items:center;gap:7px;padding:4px 9px 4px 11px;border-radius:999px;background:rgba(220,165,39,.20);color:' + GREEN + ';font-size:12px;font-weight:600;cursor:pointer;transition:transform 120ms ' + OUT + ';}' +
+    '.w287chip span{font-size:10px;opacity:.7;}' +
+    '.w287chip:active{transform:scale(.96);}' +
+    '.w287clr{appearance:none;border:0;background:none;margin:0;padding:4px 6px;font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    /* groups: one surface, sections divided by their headings */
+    '.w287 .w116g{background:none;border:0;box-shadow:none;border-radius:0;margin:0 0 14px;overflow:visible;}' +
+    '.w287 .w116g.drop{outline:2px dashed rgba(16,63,57,.28);outline-offset:3px;border-radius:12px;}' +
+    '.w287 .w116gh{gap:8px;padding:10px 4px 7px;border-bottom:1px solid rgba(16,63,57,.08);}' +
+    '.w287 .w116gh .chev{width:18px;height:18px;background:none;color:var(--wa-muted);transition:transform 160ms ' + OUT + ';}' +
+    '.w287 .w116gh .chev svg{width:15px;height:15px;}' +
+    '.w287 .w116g.closed .w116gh .chev{transform:rotate(-90deg);}' +
+    '.w287gdot{width:9px;height:9px;border-radius:50%;background:var(--gc);flex:0 0 auto;}' +
+    '.w287 .w116gh b{font-size:14px;font-weight:700;color:var(--wa-text);min-width:0;overflow-wrap:anywhere;}' +
+    '.w287 .w116gh .n{background:none;padding:0;font-size:12.5px;font-weight:600;color:var(--wa-muted);}' +
+    '.w287 .w116rows{padding:2px 0 0;}' +
+    '.w287 .w116empty2{padding:10px 4px 6px 52px;}' +
+    /* rows: a round tick, the title, one quiet line of facts */
+    ROW + '{display:grid;grid-template-columns:18px 24px minmax(0,1fr);gap:10px;align-items:start;padding:10px 8px 10px 4px;border-radius:12px;border-left:0;position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent;}' +
+    '.w287need .w116r.w287r{grid-template-columns:24px minmax(0,1fr);padding:10px 6px 10px 2px;}' +
+    ROW + '::after{content:"";position:absolute;left:52px;right:8px;bottom:0;height:1px;background:rgba(16,63,57,.07);}' +
+    '.w287need .w116r.w287r::after{left:36px;right:4px;}' +
+    ROW + ':last-child::after{display:none;}' +
+    ROW + ':active{background:rgba(16,63,57,.06);}' +
+    ROW + '.sel{background:rgba(220,165,39,.16);}' +
+    ROW + '.w116tchild{margin-left:24px;}' +
+    '.w287 .w116r .w116chk{display:flex;align-items:center;justify-content:center;height:24px;}' +
+    ROW + ' .w116done{position:relative;width:22px;height:22px;margin:1px 0 0;box-sizing:border-box;border-radius:50%;border:1.6px solid var(--pc);background:none;display:inline-flex;align-items:center;justify-content:center;color:' + CREAM + ';cursor:pointer;transition:transform 120ms ' + OUT + ';}' +
+    ROW + ' .w116done i{position:absolute;inset:0;border-radius:50%;background:var(--pc);opacity:0;transform:scale(.6);transition:opacity 160ms ' + OUT + ',transform 160ms ' + OUT + ';}' +
+    ROW + ' .w116done .w287ck{position:relative;width:13px;height:13px;stroke-width:2.6;opacity:0;transform:scale(.7);transition:opacity 140ms ' + OUT + ' 40ms,transform 160ms ' + OUT + ' 40ms;}' +
+    ROW + ' .w116done:active{transform:scale(.9);}' +
+    ROW + '.done .w116done,' + ROW + '.w287tk .w116done{background:none;border-color:var(--pc);}' +
+    ROW + '.done .w116done i,' + ROW + '.w287tk .w116done i{opacity:1;transform:none;}' +
+    ROW + '.done .w116done .w287ck,' + ROW + '.w287tk .w116done .w287ck{opacity:1;transform:none;}' +
+    ROW + '.done .w116t,' + ROW + '.w287tk .w116t{text-decoration:none;}' +
+    ROW + '.done .ttl,' + ROW + '.w287tk .ttl{color:var(--wa-muted);}' +
+    ROW + '.w287gone{opacity:0;transform:translateY(-3px) scale(.985);transition:opacity 200ms ' + OUT + ',transform 200ms ' + OUT + ';}' +
+    ROW + ' .w116t{display:flex;flex-wrap:wrap;align-items:center;column-gap:10px;row-gap:3px;min-width:0;padding-top:2px;font-size:14px;line-height:1.35;}' +
+    ROW + ' .w116t .ttl{flex:1 0 100%;max-width:100%;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere;color:var(--wa-text);}' +
+    '.w287f{display:contents;}' +
+    ROW + ' .w116as{display:inline-flex;align-items:center;cursor:pointer;}' +
+    ROW + ' .w116as .w116av{border-width:1.5px;}' +
+    ROW + ' .w116as .none{width:20px;height:20px;font-size:11px;}' +
+    '.w287on{margin-left:6px;font-size:12px;color:var(--wa-muted);}' +
+    ROW + ' .w116due{display:inline;min-width:0;text-align:left;font-size:12px;font-weight:600;color:var(--wa-muted);cursor:pointer;}' +
+    ROW + ' .w116due.over{color:' + FLAG + ';}' +
+    ROW + ' .w116due.today{color:#7a5a0f;}' +
+    ROW + ' .w116due.soon{color:var(--wa-text);}' +
+    '.w287ptag{display:inline-flex;align-items:center;gap:5px;max-width:230px;min-width:0;font-size:12px;color:var(--wa-muted);}' +
+    '.w287ptag i{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}' +
+    '.w287ptag span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.w287team{font-size:11px;font-weight:700;color:' + PURPLE + ';background:rgba(111,100,171,.12);border-radius:999px;padding:1px 7px;}' +
+    '.w287flag{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:700;color:' + FLAG + ';}' +
+    '.w287flag svg,.w287cm svg{width:13px;height:13px;}' +
+    '.w287cm{display:inline-flex;align-items:center;gap:3px;font-size:12px;color:var(--wa-muted);}' +
+    ROW + ' .w116st{display:inline-block;font-size:10px;padding:2px 8px;}' +
+    ROW + ' .w116tag{font-size:11px;}' +
+    ROW + ' .w116tag.sub,' + ROW + ' .w116tag.subs{background:none;padding:0;font-size:12px;font-weight:600;color:var(--wa-muted);}' +
+    '@media (hover: none), (pointer: coarse){' + ROW + ' .w116as.w287none,' + ROW + ' .w116due.nodate,' + ROW + ' .w116st.w287open{display:none;}}' +
+    FINE + '{' + ROW + ':hover{background:rgba(16,63,57,.035);}' + ROW + ':active{background:rgba(16,63,57,.06);}' +
+      ROW + ' .w116as.w287none,' + ROW + ' .w116due.nodate,' + ROW + ' .w116st.w287open{display:none;}' +
+      ROW + ':hover .w116as.w287none,' + ROW + ':hover .w116due.nodate{display:inline-flex;opacity:.75;}' + ROW + ':hover .w116st.w287open{display:inline-block;opacity:.75;}' +
+      ROW + ':not(.done):not(.w287tk) .w116done:hover i{opacity:.16;transform:none;}' +
+      '.w287 .w116r .w116chk{opacity:0;transition:opacity 120ms ease;}.w287 .w116r:hover .w116chk,.w287 .w116b.w287sel .w116chk,.w287 .w116chk:focus-within{opacity:1;}}' +
+    /* adding a task: a New task line closes every group */
+    '.w287add{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 32px;border-radius:10px;color:var(--wa-muted);font-size:13.5px;cursor:pointer;transition:transform 120ms ' + OUT + ';-webkit-tap-highlight-color:transparent;}' +
+    '.w287need .w287add{padding-left:2px;}' +
+    '.w287plus{width:22px;height:22px;border-radius:50%;background:rgba(16,63,57,.08);color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}' +
+    '.w287plus svg{width:14px;height:14px;}' +
+    '.w287add:active{transform:scale(.99);}' +
+    FINE + '{.w287add:hover{color:' + GREEN + ';background:rgba(16,63,57,.035);}}' +
+    '.w287 .w116qa{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 10px;align-items:center;padding:6px 8px 8px 32px;}' +
+    '.w287qc{width:22px;height:22px;box-sizing:border-box;border-radius:50%;border:1.6px dashed rgba(16,63,57,.35);}' +
+    '.w287 .w116qa input{width:100%;box-sizing:border-box;border:0;border-bottom:1px solid rgba(16,63,57,.18);border-radius:0;background:none;padding:6px 2px;font-size:14px;outline:none;color:var(--wa-text);}' +
+    '.w287 .w116qa input:focus{border-bottom-color:' + GREEN + ';}' +
+    '.w287 .w116qa small{grid-column:2;margin:0;}' +
+    '.w287empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:30px 12px 14px;text-align:center;color:var(--wa-muted);}' +
+    '.w287empty .ic{width:42px;height:42px;border-radius:50%;background:rgba(16,63,57,.06);color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;}' +
+    '.w287empty .ic svg{width:22px;height:22px;}' +
+    '.w287empty b{font-size:14.5px;font-weight:600;color:var(--wa-text);}' +
+    '.w287 .w116note{font-size:11.5px;margin:12px 0 0;}' +
+    '.w287 .w116kd{border-left:3px solid var(--pc);}' +
+    '.w287 .w116kd .ft .w287ptag{max-width:150px;}' +
+    '.w287 .w116bulk{border-radius:12px;}' +
+    /* the phone: the sidebar becomes a sticky row of chips */
+    '@media (max-width: 899px){' +
+      '.w287{grid-template-columns:minmax(0,1fr);gap:10px;}' +
+      '.w287side{position:sticky;top:0;z-index:6;max-height:none;display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding:8px 2px 10px;margin:0 -2px;background:var(--wa-paper, #F4F2EA);scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);}' +
+      '.w287side::-webkit-scrollbar{display:none;}' +
+      '.w287smart,.w287pl{display:contents;}' +
+      '.w287ph{display:none;}' +
+      '.w287sl{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:5px 12px 5px 5px;border-radius:999px;}' +
+      '.w287sl .ic{width:24px;height:24px;}.w287sl .ic svg{width:14px;height:14px;}' +
+      '.w287sl .nm{order:1;font-size:13px;color:var(--wa-text);}' +
+      '.w287sl .n{order:2;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:var(--wa-muted);}' +
+      '.w287pr{flex:0 0 auto;width:auto;max-width:220px;min-height:34px;padding:5px 12px;border-radius:999px;background:var(--wa-card);box-shadow:0 0 0 1px rgba(16,63,57,.08);}' +
+      '.w287pr.d1,.w287pr.d2,.w287pr.d3{padding-left:12px;}' +
+      '.w287pr .nm{-webkit-line-clamp:1;white-space:nowrap;display:block;text-overflow:ellipsis;}' +
+      '.w287pr.on{background:' + GREEN + ';box-shadow:none;}.w287pr.on .nm,.w287pr.on .n{color:' + CREAM + ';}' +
+      '.w287newp{flex:0 0 auto;margin:0;border-radius:999px;box-shadow:0 0 0 1px rgba(16,63,57,.08);white-space:nowrap;}' +
+      '.w287main{padding:16px 14px 12px;border-radius:18px;}' +
+      '.w287lhead h3{font-size:28px;gap:10px;}' +
+      '.w287hic{width:30px;height:30px;}.w287hdot{width:13px;height:13px;}' +
+      '.w287 .w116tb input[type=search]{flex:1 1 120px;min-width:0;}' +
+      '.w287 .w116tb .sp{display:none;}' +
+      '.w287 .w116r.w287r{grid-template-columns:18px 24px minmax(0,1fr);padding:10px 4px 10px 0;}' +
+      '.w287 .w116r .w116chk{opacity:.55;}' +
+      '.w287add{padding-left:28px;}.w287 .w116qa{padding-left:28px;}' +
+      '.w287ptag{max-width:160px;}' +
+    '}' +
+
+    /* ---------- the Overview ---------- */
+    '#w116host.w287ov .w116top{margin-bottom:12px;}' +
+    '.w287read{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:68ch;}' +
+    '.w287read.open{display:block;-webkit-line-clamp:unset;}' +
+    '.w287more{appearance:none;border:0;background:none;margin:2px 0 0;padding:2px 0;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    '.w287tabs{position:relative;isolation:isolate;}' +
+    '@media (max-width: 740px){#w116host > .w287tabs{display:flex;flex-wrap:nowrap;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;}#w116host > .w287tabs::-webkit-scrollbar{display:none;}#w116host > .w287tabs a{flex:0 0 auto;}}' +
+    '.w287thumb{position:absolute;left:0;top:0;width:0;height:0;border-radius:9px;background:var(--wa-card);box-shadow:0 1px 2px rgba(16,63,57,.14),0 0 0 .5px rgba(16,63,57,.06);z-index:-1;opacity:0;pointer-events:none;transform-origin:0 0;}' +
+    '.w287tabs.w287th .w287thumb{opacity:1;}' +
+    '.w287tabs.w287th a.on{background:none;box-shadow:none;}' +
+    '.w287tabs.w287anim .w287thumb{transition:transform 260ms ' + OUT + ';}' +
+    '.w287tabs a{position:relative;}' +
+    FINE + '{.w287tabs.w287th a:not(.on):hover{background:rgba(255,250,242,.55);}}' +
+    '.w287now{margin:0 0 18px;}' +
+    '.w287sent{margin:0 0 12px;max-width:70ch;font-family:' + BODY + ';font-size:17px;font-weight:500;line-height:1.45;color:var(--wa-text);}' +
+    '#w116host .w287tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:0;}' +
+    '#w116host .w287tiles .w116kpi{min-height:86px;justify-content:space-between;gap:6px;padding:14px 16px;border-radius:16px;transition:transform 140ms ' + OUT + ';-webkit-tap-highlight-color:transparent;}' +
+    '#w116host .w287tiles .w116kpi b{font-size:38px;margin:0;}' +
+    '#w116host .w287tiles .w116kpi > span{font-size:13px;font-weight:600;color:var(--wa-muted);}' +
+    '#w116host .w287tiles .w116kpi.warn{background:rgba(179,64,47,.05);border-color:rgba(179,64,47,.20);}' +
+    '#w116host .w287tiles .w116kpi.zero{justify-content:center;background:transparent;box-shadow:none;border:1px dashed rgba(16,63,57,.16);}' +
+    '#w116host .w287tiles .w116kpi .z{font-size:13.5px;font-weight:500;color:var(--wa-muted);}' +
+    '#w116host .w287tiles .w116kpi:active{transform:scale(.98);}' +
+    FINE + '{#w116host .w287tiles .w116kpi:hover{border-color:rgba(16,63,57,.22);}#w116host .w287tiles .w116kpi.zero:hover{border-color:rgba(16,63,57,.3);}}' +
+    '#w116host.w287ov .w116card{border-radius:18px;}' +
+    '#w116host.w287ov .w116grid > .w116col:first-child > #w287need{order:-3;}' +
+    '#w116host.w287ov .w116grid > .w116col:first-child > #w287proj{order:-2;}' +
+    '#w116host.w287ov .w116grid > .w116col:first-child > #w123tcard{order:-1;}' +
+    '#w116host.w287ov .w116grid > .w116col > .w287tools{order:1;}' +   /* Tools closes the right column, after the cards later waves add (SOPs, the bank) */
+    '.w287need .w287rows{display:flex;flex-direction:column;margin:0 -6px;}' +
+    '.w287calm{display:flex;align-items:center;gap:10px;margin:2px 0;font-size:13.5px;color:var(--wa-muted);}' +
+    '.w287calm .ic{width:26px;height:26px;border-radius:50%;background:rgba(16,63,57,.07);color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:0 0 auto;}' +
+    '.w287more2{margin:8px 0 0;font-size:12.5px;color:var(--wa-muted);}' +
+    '.w287pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;}' +
+    '.w287pc{display:flex;flex-direction:column;gap:8px;min-width:0;padding:13px 14px 12px;border-radius:14px;background:var(--wa-card);border:1px solid rgba(16,63,57,.10);cursor:pointer;transition:transform 140ms ' + OUT + ';-webkit-tap-highlight-color:transparent;}' +
+    '.w287pc .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}' +
+    '.w287pc .tl{min-width:0;}' +
+    '.w287pc .ov{display:block;margin:0 0 3px;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w287pc .nm{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;font-size:14.5px;font-weight:700;line-height:1.3;color:var(--wa-text);}' +
+    '.w287pc .nm .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin:0 7px 1px 0;vertical-align:middle;}' +
+    '.w287ring{width:34px;height:34px;flex:0 0 auto;margin-top:-2px;}' +
+    '.w287pc .ct{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 8px;font-size:12.5px;color:var(--wa-muted);}' +
+    '.w287pc .ct b{color:var(--wa-text);font-weight:700;}' +
+    '.w287pc .ct .od{color:' + FLAG + ';font-weight:600;}' +
+    '.w287pc .nx{display:flex;align-items:baseline;gap:7px;min-width:0;font-size:12px;padding-top:7px;border-top:1px solid rgba(16,63,57,.07);}' +
+    '.w287pc .nx .w287due{flex:0 0 auto;font-weight:700;color:var(--wa-muted);}' +
+    '.w287pc .nx .w287due.over{color:' + FLAG + ';}.w287pc .nx .w287due.today{color:#7a5a0f;}.w287pc .nx .w287due.soon{color:var(--wa-text);}' +
+    '.w287pc .nx .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--wa-text);}' +
+    '.w287pc .ld{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;color:var(--wa-muted);}' +
+    '.w287pc .ld > span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.w287pc.gen{background:rgba(16,63,57,.035);border-color:transparent;}' +
+    '.w287pc.gen .nm{font-weight:600;}' +
+    '.w287pc.new{flex-direction:row;align-items:center;justify-content:center;gap:8px;min-height:92px;background:none;border:1.5px dashed rgba(16,63,57,.20);color:' + GREEN + ';font-size:13.5px;font-weight:700;}' +
+    '.w287pc.new .pl{width:24px;height:24px;border-radius:50%;background:rgba(16,63,57,.08);display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;}' +
+    '.w287pc:active{transform:scale(.98);}' +
+    FINE + '{.w287pc:hover{border-color:rgba(16,63,57,.24);}.w287pc.gen:hover{border-color:rgba(16,63,57,.14);}.w287pc.new:hover{border-color:rgba(16,63,57,.36);}}' +
+    '#w116host.w287ov .w116prog .pulse{display:flex;align-items:flex-start;gap:10px;border-radius:12px;padding:8px 12px;}' +
+    '#w116host.w287ov .w116prog .pulse b{flex:0 0 auto;white-space:nowrap;}' +
+    '.w287tools .w116tools{gap:6px;}' +
+    '.w287tools .w116tools a{padding:6px 11px;border-radius:999px;font-size:12px;}' +
+    '@media (max-width: 740px){.w287sent{font-size:15.5px;}#w116host .w287tiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}#w116host .w287tiles .w116kpi{min-height:74px;padding:11px 12px;}#w116host .w287tiles .w116kpi b{font-size:30px;}#w116host .w287tiles .w116kpi > span,#w116host .w287tiles .w116kpi .z{font-size:12px;}.w287pgrid{grid-template-columns:minmax(0,1fr);}}' +
+    '@media (max-width: 420px){#w116host .w287tiles{grid-template-columns:repeat(2,minmax(0,1fr));}#w116host .w287tiles .w116kpi:first-child{grid-column:1 / -1;}}' +
+
+    /* ---------- the drawer: the iOS drawer curve, 280ms in and 200ms out, the same way back ---------- */
+    '#w116dr{visibility:hidden;transition:transform 200ms ' + DRAWER + ',visibility 0s linear 200ms;}' +
+    '#w116dr.open{visibility:visible;transition:transform 280ms ' + DRAWER + ',visibility 0s;}' +
+    '#w116drb{display:block;opacity:0;pointer-events:none;transition:opacity 200ms ease;}' +
+    '#w116drb.open{opacity:1;pointer-events:auto;transition-duration:280ms;}' +
+
+    /* ---------- the undo bar ---------- */
+    '#w287snack{position:fixed;left:50%;bottom:24px;z-index:160;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 32px);box-sizing:border-box;padding:8px 8px 8px 16px;border-radius:14px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-size:13.5px;box-shadow:0 16px 40px rgba(16,63,57,.32);opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,12px);transition:opacity 160ms ease,transform 160ms ' + OUT + ',visibility 0s linear 160ms;}' +
+    '#w287snack.on{opacity:1;visibility:visible;pointer-events:auto;transform:translate(-50%,0);transition:opacity 200ms ' + OUT + ',transform 240ms ' + OUT + ',visibility 0s;}' +
+    '#w287snack .t{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#w287snack button{appearance:none;border:0;margin:0;background:rgba(255,250,242,.12);color:' + GOLD + ';font-family:inherit;font-size:13px;font-weight:700;border-radius:9px;padding:7px 12px;cursor:pointer;white-space:nowrap;transition:transform 120ms ' + OUT + ';}' +
+    '#w287snack button:active{transform:scale(.96);}' +
+    '#w287snack .x{color:' + CREAM + ';background:none;padding:7px 8px;}' +
+
+    /* ---------- reduced motion: slides become short fades ---------- */
+    '@media (prefers-reduced-motion: reduce){' +
+      '#w116dr{transform:none;opacity:0;transition:opacity 160ms ease,visibility 0s linear 160ms;}' +
+      '#w116dr.open{transform:none;opacity:1;transition:opacity 160ms ease,visibility 0s;}' +
+      '#w287snack,#w287snack.on{transform:translate(-50%,0);transition:opacity 160ms ease,visibility 0s linear 160ms;}' +
+      '#w287snack.on{transition:opacity 160ms ease,visibility 0s;}' +
+      '.w287tabs.w287anim .w287thumb{transition:none;}' +
+      ROW + '.w287gone{transform:none;transition:opacity 120ms ease;}' +
+      '.w287 .w116gh .chev{transition:none;}' +
+    '}';
+  document.head.appendChild(css);
+
+  /* ---------- the tabs' sliding thumb (FLIP: only transform animates) ---------- */
+  var TH = { last: null };
+  function reduced() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  function placeThumb(force) {
+    var seg = document.querySelector('#w116host > .w287tabs'); if (!seg) return;
+    var th = seg.querySelector('.w287thumb'), on = seg.querySelector('a.on');
+    if (!th) return;
+    if (!on || !on.offsetWidth) { seg.classList.remove('w287th'); return; }
+    if (seg.scrollWidth > seg.clientWidth + 2 && (on.offsetLeft < seg.scrollLeft || on.offsetLeft + on.offsetWidth > seg.scrollLeft + seg.clientWidth)) seg.scrollLeft = Math.max(0, on.offsetLeft - 8);   /* the phone's scrolling tabs keep the current one in view */
+    var pos = { d: seg.getAttribute('data-d'), x: on.offsetLeft, y: on.offsetTop, w: on.offsetWidth, h: on.offsetHeight };
+    var key = [pos.d, pos.x, pos.y, pos.w, pos.h].join('|');
+    if (!force && th.getAttribute('data-k') === key) return;
+    var from = TH.last && TH.last.d === pos.d && th.getAttribute('data-k') == null ? TH.last : null;
+    th.setAttribute('data-k', key);
+    seg.classList.remove('w287anim');
+    th.style.width = pos.w + 'px'; th.style.height = pos.h + 'px';
+    if (from && !reduced() && (from.x !== pos.x || from.y !== pos.y || from.w !== pos.w)) {
+      th.style.transform = 'translate(' + from.x + 'px,' + from.y + 'px) scaleX(' + (from.w / pos.w).toFixed(4) + ')';
+      seg.classList.add('w287th');
+      void th.offsetWidth;
+      seg.classList.add('w287anim');
+      th.style.transform = 'translate(' + pos.x + 'px,' + pos.y + 'px)';
+    } else {
+      th.style.transform = 'translate(' + pos.x + 'px,' + pos.y + 'px)';
+      seg.classList.add('w287th');
+    }
+    TH.last = pos;
+  }
+  /* the read: More shows only when two lines cut it */
+  function syncRead() {
+    document.querySelectorAll('#w116host .w287read').forEach(function (p) {
+      var b = p.parentNode && p.parentNode.querySelector('[data-w287more]'); if (!b) return;
+      if (p.classList.contains('open')) { b.hidden = false; return; }
+      b.hidden = !(p.scrollHeight > p.clientHeight + 2);
+    });
+  }
+  var pend = null;
+  function sync() { if (pend) return; pend = (window.requestAnimationFrame || setTimeout)(function () { pend = null; try { placeThumb(false); syncRead(); } catch (e) { /* fine */ } }); }
+  function watch() {
+    var sec = document.getElementById('team'); if (!sec || sec.__w287) return;
+    sec.__w287 = true;
+    try { new MutationObserver(sync).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+    sync();
+  }
+  window.addEventListener('resize', function () { try { var th = document.querySelector('#w116host > .w287tabs .w287thumb'); if (th) th.removeAttribute('data-k'); TH.last = null; placeThumb(true); syncRead(); } catch (e) { /* fine */ } });
+  try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { TH.last = null; placeThumb(true); syncRead(); }); } catch (e) { /* fine */ }
+
+  /* ---------- clicks and keys on the Overview ---------- */
+  function taskOf(el) { var r = el && el.closest && el.closest('#w116host .w287or[data-tid]'); return r ? r.getAttribute('data-tid') : null; }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var more = t.closest('[data-w287more]');
+    if (more) { e.preventDefault(); var p = document.getElementById(more.getAttribute('aria-controls')); if (p) { var open = !p.classList.contains('open'); p.classList.toggle('open', open); more.textContent = open ? 'Less' : 'More'; more.setAttribute('aria-expanded', open ? 'true' : 'false'); } return; }
+    var id = taskOf(t); if (!id || !window.w116Board) return;
+    e.preventDefault(); e.stopPropagation();
+    if (t.closest('[data-act="toggle"]')) { try { window.w116Board.complete(id); } catch (x) { /* fine */ } return; }
+    try { window.w116Board.open(id); } catch (x) { /* fine */ }
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target; if (!t || !t.closest) return;
+    if (taskOf(t) && t.closest('[data-act="toggle"]')) { e.preventDefault(); try { window.w116Board.complete(taskOf(t)); } catch (x) { /* fine */ } return; }
+    var go = t.closest('#w116host .w287tile[role="link"], #w116host .w287pc[tabindex]');
+    if (go) { e.preventDefault(); go.click(); }
+  });
+
+  if (typeof startApp === 'function') {
+    var __sa287 = startApp;
+    startApp = async function () {
+      var r = await __sa287.apply(this, arguments);
+      try { watch(); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  window.w287Debug = function () { return { thumb: TH.last, board: window.w116Board && window.w116Board.state ? window.w116Board.state() : null }; };
 })();
 /* =====================================================================
    WA v284 The Import page (#crm/settings/imports): Keela's exports staged, compared and applied in batches (06/11/26, CRM slice 1 Phase 4)
