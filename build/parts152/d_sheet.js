@@ -129,7 +129,7 @@
     return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' · ')) + '</div>' : '') +
       permLine(c) +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and appeals need their express consent, or an implied consent that has not run out (two years after a gift or a serving; Welfare Avenue is a registered charity). Confirmations, reminders and receipts are not commercial messages and still go out; a bouncing address stops everything.</p>';
+      '<p class="w152pnote">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">×</button></span>'; }).join('') +

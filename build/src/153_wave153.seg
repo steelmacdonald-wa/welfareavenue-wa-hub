@@ -287,7 +287,7 @@
      wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
      the CRM is now theirs.
      wave283 (CRM slice 1, Phase 3): Marketing also has the CRM, and Toronto also has the Volunteer Manager. */
-  var TEAM_APPS = { marketing: ['studio', 'crm'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };   /* wave274 (one app): the Toronto team's apps are the Volunteer Manager (it opens Toronto for them) and wave279b's CRM, as the CRM rebuild plans for wave282 */
+  var TEAM_APPS = { marketing: ['studio', 'crm'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };   /* wave274 (one app): the Toronto team's apps are the Volunteer Manager (it opens Toronto for them) and wave279b's CRM, as the CRM rebuild (wave283) also gives them */
   /* wave284: the CRM rail's Imports item, for import_admin (admins) only, as the CRM page knows it (wa_my_caps through window.w152.can) */
   function importsOk() { try { return !!(window.w152 && window.w152.can && window.w152.can('import_admin')); } catch (e) { return false; } }
   function myProfile() {

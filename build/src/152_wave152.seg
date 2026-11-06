@@ -731,7 +731,7 @@
     return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' \u00b7 ')) + '</div>' : '') +
       permLine(c) +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and appeals need their express consent, or an implied consent that has not run out (two years after a gift or a serving; Welfare Avenue is a registered charity). Confirmations, reminders and receipts are not commercial messages and still go out; a bouncing address stops everything.</p>';
+      '<p class="w152pnote">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">\u00d7</button></span>'; }).join('') +
@@ -1330,7 +1330,7 @@
       ['Gifts and tax receipts from Keela', 'Every donation with its receipt, on the donor\u2019s timeline and in their total.', st(k.gifts, 'Later')],
       ['The Keela export', 'Donors and supporters from Keela, merged with the people already here.', keela ? '<span class="st on">' + keela + ' in</span>' : '<span class="st next">When it arrives</span>']
     ].map(function (r) { return '<div class="w152srow nx"><div><div class="tt">' + E(r[0]) + '</div><p>' + E(r[1]) + '</p></div>' + r[2] + '</div>'; }).join('');
-    var ok = (perm.express || 0) + (perm.implied || 0);
+    var ok = all.filter(function (c) { return c.emails.length && c._perm !== 'unsub' && c._perm !== 'bounced' && !c.do_not_contact; }).length;   /* final review M6: Steel's rule (RULE_TEXT) */
     var pr = [['express', 'said yes to our emails'], ['implied', 'with an implied consent that has not run out'], ['unknown', 'with no permission on file yet'], ['none', 'with no consent'], ['unsub', 'who unsubscribed'], ['bounced', 'whose address bounces']]
       .filter(function (x) { return perm[x[0]]; }).map(function (x) { return '<div class="w152srow"><b>' + perm[x[0]] + '</b><div><div class="tt">' + permChip(x[0]) + '</div><p>' + E('Contacts ' + x[1] + '.') + '</p></div><span></span></div>'; }).join('');
     var rev = all.filter(function (c) { return c.volunteer_needs_review; }).length, noEm = all.filter(function (c) { return !c.emails.length; }).length, noPh = all.filter(function (c) { return !c.phones.length; }).length, pairs = S.dupes ? dupePairs().length : 0;
@@ -3951,7 +3951,7 @@
       (on ? 'Team leads, admins and finance issue, replace and cancel them below; every receipt takes the next number.'
         : missing.length ? 'Before an admin can turn them on: ' + E(listJoin(missing)) + '.' : 'Everything is ready: an admin can turn them on once the treasurer and Steel agree.') + '</div>' +
       '<div class="w155lb">The signature on receipts <span class="m">the treasurer\u2019s, or another person the board authorizes; a PNG or JPG on a white or clear background</span></div>' + sig +
-      (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on admins can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
+      (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on team leads, admins and finance can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
           '<div class="w154acts"><button class="w152btn" data-w158bmode="on">' + I('check') + ' Turn them on</button><button class="w152btn ghost" data-w158bmodeno="1">Not yet</button></div></div>'
         : '<div class="w154acts">' + (on ? '<button class="w152btn ghost" data-w158bmode="off">' + I('lock') + ' Turn receipts off</button>' : '<button class="w152btn ghost" data-w158bask="1"' + (missing.length ? ' disabled title="' + E('Missing: ' + missing.join(', ')) + '"' : '') + '>' + I('check') + ' Turn receipts on\u2026</button>') + '</div>') : '') +
       rbAutoHtml(cfg);

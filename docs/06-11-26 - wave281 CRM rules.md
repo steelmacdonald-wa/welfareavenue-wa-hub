@@ -76,6 +76,6 @@ Seven live functions are changed by exact replacement of a line in their live te
 ## Worth knowing
 
 - The 300 ms check is not met because of the existing `wa171_opted_out` (1,248 ms before this wave, 1,237 ms after). wave281 doesn't change that. Steel decides whether to waive the check or schedule a fix.
-- `crm_in_chapter` is security invoker, so a caller without the CRM page gets Montreal for everyone. Page code must use the staff-checked `wa286_volunteer_chapters` instead.
+- `crm_in_chapter` is security invoker, so a caller without the CRM page gets Montreal for everyone. Code for people without the CRM page needs its own staff-checked reader; wave286 planned one (`wa286_volunteer_chapters`) for the Volunteer Manager's People filter, but it went with that page work and does not exist.
 - A few writers set the consent source for the rest of their transaction (`crm_set_do_not_contact`, `wa171_inbound`, `wa254_inbound`, the refresh). Each Hub call is its own transaction, so this only matters to someone running several in one SQL session.
 - The rollback checks used a few numbers from live id sequences (contacts, gifts, change_log), which never roll back. That leaves small gaps in those ids and nothing else.
