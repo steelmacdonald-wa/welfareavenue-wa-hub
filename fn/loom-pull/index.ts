@@ -1,4 +1,14 @@
-// Welfare Avenue: loom-pull (v4, 15/10/26, wave258; v3 14/10/26, wave237; v2.1 29/09/26, wave165; v1 28/09/26, wave162)
+// Welfare Avenue: loom-pull (v5, 05/11/26, wave280; v4 15/10/26, wave258; v3 14/10/26, wave237; v2.1 29/09/26, wave165; v1 28/09/26, wave162)
+// v5: Atlassian replaced the Loom tools on its MCP server on 26/10/26 (about 23:00 UTC): listLoomVideos, listLoomVideosSharedWithMe and
+// getLoomVideo are gone; the server now has listLoomObjects {cloudId, scope MINE | SHARED_WITH_ME | ALL, createdAtRange {from, to},
+// limit (at most 25), offset; answers {items, hasNextPage, nextOffset}} and getLoomObjectsContent {cloudId, identifiers [ARI or share
+// URL, never a bare id], expand ['transcript'], resume [nextCursor]; each item carries content [{component, status READY |
+// UNAVAILABLE | ..., payload {content: '[m:ss] Name: text' lines, totalCharacters, nextCursor?}}]}. Every scheduled run since then
+// failed with "The Loom tools are not on this MCP server" (344 runs to 05/11/26) and nobody was told: the pull also took
+// listLoomObjectFolders for its list tool. Now: the new tools are picked by name first (a folder tool never), the list runs once for
+// MINE and once for SHARED_WITH_ME (the two old lists) and pages by hasNextPage and nextOffset, and a transcript is read from its
+// transcript component, page by page; UNAVAILABLE is asked once more and otherwise waits, as an unfinished transcript always has.
+// The old tool names still work if Atlassian brings them back. health-check v3 (wave280) now tells the admins when the pull fails.
 // v4: a transcript Loom has not finished is waiting, never filed. On 15/10/26 at 19:00 the Fundraising meeting was filed with the
 // body 'unknown' (Loom answered before its transcript was ready), marked filed and never tried again. transcriptReady() now treats
 // an empty transcript, a placeholder ('unknown', 'pending', 'not available' and the like), fewer than five words, or a text far
@@ -247,20 +257,31 @@ const num = (v: unknown): number | null => { const n = typeof v === 'number' ? v
 
 /* ---------- the schema-led arguments (the probe shows the real names; these cover the usual spellings) ---------- */
 function propsOf(t: Json | null): Json { return (t && t.inputSchema && t.inputSchema.properties) || {}; }
-export function argsFor(t: Json | null, want: { cloudId?: string; videoId?: string; ari?: string; cursor?: string; limit?: number; offset?: number; from?: string; format?: string; transcript?: boolean }): Json {
+export function argsFor(t: Json | null, want: { cloudId?: string; videoId?: string; ari?: string; cursor?: string; limit?: number; offset?: number; from?: string; format?: string; transcript?: boolean; scope?: string; resume?: string[] }): Json {
   const p = propsOf(t); const keys = Object.keys(p); const a: Json = {};
   const find = (re: RegExp) => keys.find((k) => re.test(k));
   const cid = find(/^cloud_?id$/i);
   if (cid && want.cloudId) a[cid] = want.cloudId;
+  /* v5: listLoomObjects needs a scope (MINE unless asked otherwise) */
+  const ks = find(/^scope$/i);
+  if (ks) { const en = ((p[ks] && p[ks].enum) || []) as string[]; a[ks] = want.scope && (!en.length || en.indexOf(want.scope) >= 0) ? want.scope : (en.indexOf('MINE') >= 0 ? 'MINE' : (en[0] ?? want.scope)); }
   if (want.videoId) {
+    const ki = find(/^identifiers?$/i);   // v5: getLoomObjectsContent takes ARIs or share links, never a bare id
     const ka = find(/^(video_?ari|ari)$/i);
     const k = find(/^(video_?id|loom_?video_?id|loom_?id|id)$/i) || find(/video_?id$/i);
     const ku = find(/^(video_?url|url|share_?url|link|loom_?url)$/i);
-    if (ka && want.ari) a[ka] = want.ari;
-    else if (k) a[k] = want.videoId; else if (ku) a[ku] = 'https://www.loom.com/share/' + want.videoId; else a.videoId = want.videoId;
+    const share = 'https://www.loom.com/share/' + want.videoId;
+    if (ki) { const one = want.ari || share; a[ki] = p[ki] && p[ki].type === 'string' ? one : [one]; }
+    else if (ka && want.ari) a[ka] = want.ari;
+    else if (k) a[k] = want.videoId; else if (ku) a[ku] = share; else a.videoId = want.videoId;
   }
+  if (want.resume && want.resume.length) { const k = find(/^resume$/i); if (k) a[k] = want.resume; }
   if (want.offset !== undefined) { const k = find(/^offset$/i); if (k) a[k] = want.offset; }
-  if (want.from) { const k = find(/^(created_?at_?from|created_?after|created_?since|from_?date|start_?date|since)$/i); if (k) a[k] = want.from; }
+  if (want.from) {
+    const kr = find(/^created_?at_?range$/i);   // v5: {from, to}
+    if (kr) a[kr] = { from: want.from };
+    else { const k = find(/^(created_?at_?from|created_?after|created_?since|from_?date|start_?date|since)$/i); if (k) a[k] = want.from; }
+  }
   if (want.format) {
     const k = find(/^transcript_?format$/i);
     if (k) { const en = ((p[k] && p[k].enum) || []) as string[]; a[k] = !en.length || en.indexOf(want.format) >= 0 ? want.format : (en.indexOf('phrases') >= 0 ? 'phrases' : en[0]); }
@@ -319,6 +340,36 @@ export function videoObjectIn(d: unknown, id: string): Json | null {
   let best: Json | null = null;
   walk(d, (v) => { if (v && typeof v === 'object' && !Array.isArray(v) && loomIdOf(v as Json) === id && (!best || Object.keys(v as Json).length > Object.keys(best).length)) best = v as Json; });
   return best;
+}
+/* v5: the scopes a list tool takes (listLoomObjects: MINE, SHARED_WITH_ME, ALL); none for the old tools */
+export function scopeEnum(t: Json | null): string[] {
+  const p = propsOf(t); const k = Object.keys(p).find((x) => /^scope$/i.test(x));
+  return k && Array.isArray(p[k].enum) ? (p[k].enum as unknown[]).map(String) : [];
+}
+/* v5: {items, hasNextPage, nextOffset}: whether there is more, and where it starts (null when the answer does not say) */
+export function pageInfo(d: unknown): { more: boolean | null; next: number | null } {
+  let more: boolean | null = null; let next: number | null = null;
+  walk(d, (v, k) => {
+    if (more === null && /^has_?next_?page$/i.test(k) && typeof v === 'boolean') more = v;
+    if (next === null && /^next_?offset$/i.test(k)) next = num(v);
+  });
+  return { more, next };
+}
+/* v5: one content component of a getLoomObjectsContent answer ({component, status, payload}), or null when the answer has none */
+export function componentIn(d: unknown, name: string): Json | null {
+  let found: Json | null = null;
+  walk(d, (v) => { if (!found && v && typeof v === 'object' && !Array.isArray(v) && String((v as Json).component || '').toLowerCase() === name && typeof (v as Json).status === 'string') found = v as Json; });
+  return found;
+}
+/* v5: the next page of a component's text (its payload's nextCursor), '' at the end */
+export function componentCursor(c: Json | null): string {
+  const pl = (c && c.payload) || {};
+  return str(pl.nextCursor) || str(pl.next_cursor) || str(c && c.nextCursor) || '';
+}
+/* v5: two pages of a transcript joined: a new timed line starts on its own line, anything else (a line cut in two) runs on */
+export function joinPages(a: string, b: string): string {
+  if (!a) return b; if (!b) return a;
+  return a + (!/\n$/.test(a) && /^\s*\[?(?:\d+:)?\d{1,2}:\d{2}\]?\s/.test(b) ? '\n' : '') + b;
 }
 export function nextCursorIn(d: unknown): string {
   let c = '';
@@ -678,9 +729,10 @@ async function connect(ctx: Json): Promise<Session> {
   await m.listTools();
   const s: Session = {
     m,
-    list: m.tool(/^listLoomVideos$/i) || m.tool(/^list.*loom.*videos?$/i) || m.tool(/^(list|search).*loom/i),
+    /* v5: Atlassian's tools since 26/10/26 first (listLoomObjects, getLoomObjectsContent), then the old names; never a folder tool */
+    list: m.tool(/^listLoomObjects$/i) || m.tool(/^listLoomVideos$/i) || m.tool(/^list.*loom.*videos?$/i) || m.tool(/^(list|search)(?!.*folder).*loom/i),
     shared: m.tool(/^listLoomVideosSharedWithMe$/i) || m.tool(/^list.*loom.*shared/i),
-    get: m.tool(/^getLoomVideo$/i) || m.tool(/^get.*loom.*video$/i),
+    get: m.tool(/^getLoomObjectsContent$/i) || m.tool(/^getLoomVideo$/i) || m.tool(/^get.*loom.*video$/i),
     tx: m.tool(/^get.*loom.*transcript/i),
     cloudId: String(ctx.cloud_id || ''),
     sites: [],
@@ -704,12 +756,16 @@ async function listAll(s: Session, since: string, deadline: number): Promise<Vid
   const seen = new Map<string, Video>();
   const from = sinceIso(since); const fromT = Date.parse(from);
   const LIMIT = 100;
-  for (const [tool, shared] of [[s.list, false], [s.shared, true]] as Array<[Json | null, boolean]>) {
-    if (!tool) continue;
+  /* v5: a tool with a scope (listLoomObjects) is the two old lists in one: MINE, then SHARED_WITH_ME */
+  const passes: Array<[Json, boolean, string | undefined]> = [];
+  const scopes = s.list ? scopeEnum(s.list) : [];
+  if (s.list && scopes.length) { for (const sc of ['MINE', 'SHARED_WITH_ME']) if (scopes.indexOf(sc) >= 0) passes.push([s.list, sc !== 'MINE', sc]); }
+  if (!passes.length) for (const [tool, shared] of [[s.list, false], [s.shared, true]] as Array<[Json | null, boolean]>) if (tool) passes.push([tool, shared, undefined]);
+  for (const [tool, shared, scope] of passes) {
     const byOffset = Object.keys(propsOf(tool)).some((k) => /^offset$/i.test(k));
-    let cursor = '';
-    for (let page = 0; page < 10 && Date.now() < deadline; page++) {
-      const d = await s.m.call(String(tool.name), argsFor(tool, { cloudId: s.cloudId, limit: LIMIT, offset: byOffset ? page * LIMIT : undefined, cursor: cursor || undefined, from }));
+    let cursor = ''; let offset = 0;
+    for (let page = 0; page < 20 && Date.now() < deadline; page++) {
+      const d = await s.m.call(String(tool.name), argsFor(tool, { cloudId: s.cloudId, limit: LIMIT, offset: byOffset ? offset : undefined, cursor: cursor || undefined, from, scope }));
       const raw = videosIn(d);
       const vids = raw.map((x) => normVideo(x, shared));
       let older = 0;
@@ -718,8 +774,16 @@ async function listAll(s: Session, since: string, deadline: number): Promise<Vid
         if (!Number.isNaN(t) && t < fromT) { older++; continue; }
         if (v.id && !seen.has(v.id)) seen.set(v.id, v);
       }
+      /* v5: the answer says whether there is more (a page may be short, or even empty, while more remain) */
+      const pg = pageInfo(d);
+      if (byOffset && pg.more !== null) {
+        if (!pg.more || (older && older === vids.length)) break;
+        const nextOff = pg.next !== null ? pg.next : offset + raw.length;
+        if (nextOff <= offset) break;
+        offset = nextOff; continue;
+      }
       if (!vids.length || (older && older === vids.length)) break;
-      if (byOffset) { if (raw.length < LIMIT) break; continue; }
+      if (byOffset) { if (raw.length < LIMIT) break; offset += raw.length; continue; }
       const next = nextCursorIn(d);
       if (!next || next === cursor) break;
       cursor = next;
@@ -729,9 +793,34 @@ async function listAll(s: Session, since: string, deadline: number): Promise<Vid
 }
 async function fetchVideo(s: Session, id: string, ari = '', format = 'phrases'): Promise<{ meta: Video | null; tx: { lines: string[]; speakers: string[]; segs: number }; raw: unknown }> {
   if (!s.get) throw new Error('Loom has no getLoomVideo tool on this server');
-  const d = await s.m.call(String(s.get.name), argsFor(s.get, { cloudId: s.cloudId, videoId: id, ari, transcript: true, format }));
+  const name = String(s.get.name);
+  let d = await s.m.call(name, argsFor(s.get, { cloudId: s.cloudId, videoId: id, ari, transcript: true, format }));
+  /* v5: getLoomObjectsContent gives the transcript as a component: READY with its text (in pages), or UNAVAILABLE ("trying again may
+     succeed": asked once more), PROCESSING and the like (waiting, as an unfinished transcript always is) */
+  let part = componentIn(d, 'transcript');
+  if (part && part.status !== 'READY') {
+    await new Promise((r) => setTimeout(r, Number(Deno.env.get('WA_FN_TEST') ? 0 : 1500)));
+    const again = await s.m.call(name, argsFor(s.get, { cloudId: s.cloudId, videoId: id, ari, transcript: true, format }));
+    const p2 = componentIn(again, 'transcript');
+    if (p2) { d = again; part = p2; }
+  }
   const obj = videoObjectIn(d, id);
   const meta = obj ? normVideo(obj) : null;
+  if (part) {
+    const page = (c: Json | null): string => (c && c.status === 'READY' && c.payload && typeof c.payload.content === 'string' ? c.payload.content : '');   // untrimmed: a page may end mid-line
+    let text = page(part);
+    let cursor = text ? componentCursor(part) : '';
+    for (let i = 0; cursor && i < 30; i++) {
+      const more = await s.m.call(name, argsFor(s.get, { cloudId: s.cloudId, videoId: id, ari, transcript: true, resume: [cursor] }));
+      const pm = componentIn(more, 'transcript');
+      const chunk = page(pm);
+      if (!chunk) { text = ''; break; }   // a transcript missing a page is not ready: it waits for the next pull
+      text = joinPages(text, chunk);
+      const nc = componentCursor(pm);
+      cursor = nc && nc !== cursor ? nc : '';
+    }
+    return { meta, tx: text ? transcriptOf(text) : { lines: [], speakers: [], segs: 0 }, raw: d };
+  }
   let tx = transcriptOf(d);
   if (!tx.lines.length && s.tx) {
     try { const d2 = await s.m.call(String(s.tx.name), argsFor(s.tx, { cloudId: s.cloudId, videoId: id })); tx = transcriptOf(d2); } catch (_) { /* no transcript tool answer */ }
