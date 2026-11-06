@@ -340,7 +340,7 @@ begin
     if length(v) - length(replace(v, a, '')) <> length(a) then raise exception 'wave281: crm_contacts_v moved (anchor o.org_names)'; end if;
     v := replace(v, a, 'o.org_names, c.job_title, c.do_not_contact, c.dnc_reason');
     perform set_config('search_path', 'public', true);
-    execute 'create or replace view public.crm_contacts_v with (security_invoker = on) as ' || v;
+    execute 'create or replace view public.crm_contacts_v with (security_invoker = true) as ' || v;   -- live stores true
     perform set_config('search_path', v_sp, true);
   end if;
 end $view$;

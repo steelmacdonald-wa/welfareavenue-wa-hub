@@ -424,7 +424,7 @@ alter policy hub_roles_self_member on public.hub_roles with check ((email = lowe
 -- by name at run time.
 drop function if exists public.crm_contact_match(public.crm_contacts_v, jsonb);
 drop view if exists public.crm_contacts_v;
-create view public.crm_contacts_v with (security_invoker = on) as
+create view public.crm_contacts_v with (security_invoker = true) as   -- live stores true
  SELECT c.id,
     c.full_name,
     c.first_name,

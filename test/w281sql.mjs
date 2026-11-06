@@ -76,6 +76,7 @@ try {
   for (const f of PATCHED) ok((await one(db, `select md5(pg_get_functiondef('${f}'::regprocedure)) as m`)).m === LIVE[f], f + ': the fixture text is the live text (md5)');
   ok((await one(db, `select md5(pg_get_functiondef('${MATCH}'::regprocedure)) as m`)).m === MATCH_MD5, 'crm_contact_match: the fixture text is the live text (md5)');
   ok((await one(db, `select md5(pg_get_viewdef('public.crm_contacts_v'::regclass, true)) as m`)).m === VIEW_MD5, 'crm_contacts_v: the fixture text is the live text (md5)');
+  ok((await one(db, `select reloptions::text as o from pg_class where oid = 'public.crm_contacts_v'::regclass`)).o === '{security_invoker=true}', 'crm_contacts_v: options as live stores them');
   console.log('fixture: the seven functions, crm_contact_match and crm_contacts_v match the live md5s');
 
   // ---- before: the live state, and the failing state (no wave281 objects yet)

@@ -424,7 +424,7 @@ begin
     'the four fields, after the last existing row';
   assert (select array_agg(attname::text order by attnum desc) from (select attname, attnum from pg_attribute where attrelid = 'public.crm_contacts_v'::regclass and attnum > 0 order by attnum desc limit 4) x)
     = array['dnc_reason', 'do_not_contact', 'job_title', 'org_names'], 'crm_contacts_v ends with job_title, do_not_contact, dnc_reason';
-  assert (select reloptions::text from pg_class where oid = 'public.crm_contacts_v'::regclass) = '{security_invoker=on}', 'crm_contacts_v stays security_invoker';
+  assert (select reloptions::text from pg_class where oid = 'public.crm_contacts_v'::regclass) = '{security_invoker=true}', 'crm_contacts_v stays security_invoker (stored as true, as live has it)';
   assert has_table_privilege('authenticated', 'public.crm_contacts_v', 'select') and not has_table_privilege('anon', 'public.crm_contacts_v', 'select'), 'and stays readable by signed-in users only';
   assert (select do_not_contact from public.crm_contacts_v where id = 1702) = true, 'the view shows do_not_contact';
   assert (select column_default from information_schema.columns where table_name = 'wa_partners' and column_name = 'goals') = '''{}''::text[]', 'wa_partners.goals defaults to empty';
