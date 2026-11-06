@@ -45,7 +45,8 @@ create temp table w281_expect as
        and (exists (select 1 from unnest(c.tags) t where t ilike '%toronto%')
             or (jsonb_typeof(c.legacy_refs -> 'keela' -> 'tags') = 'array' and exists (select 1 from jsonb_array_elements_text(c.legacy_refs -> 'keela' -> 'tags') t where t ilike '%toronto%')))) as toronto,
     (select count(*) from public.crm_contacts c where c.merged_into is null and (
-          (c.volunteer_id is not null and exists (select 1 from public.event_roster r join public.volunteer_events e on e.id = r.event_id where r.person_id = c.volunteer_id and r.status = 'Confirmed' and e.status = 'completed'))
+          (c.volunteer_id is not null and exists (select 1 from public.event_roster r join public.volunteer_events e on e.id = r.event_id where r.person_id = c.volunteer_id and r.status = 'Confirmed' and e.status = 'completed'
+                 and not (coalesce(e.kind, '') = 'meal' and coalesce(e.location, '') = 'Toronto')))
        or exists (select 1 from public.crm_volunteer_history h where h.contact_id = c.id and h.attended)
        or exists (select 1 from public.crm_form_submissions s join public.crm_forms f on f.id = s.form_id where s.contact_id = c.id and s.status = 'processed' and f.settings ->> 'city' = 'Montreal')
        or exists (select 1 from public.volunteer_applications a where a.contact_id = c.id or (c.volunteer_id is not null and a.person_id = c.volunteer_id)))) as montreal,

@@ -19,6 +19,7 @@ begin
   assert (select string_agg(contact_id || ':' || source_ref, ',' order by contact_id) from public.crm_contact_chapters where chapter = 'montreal')
     = '1001:old website serving,1101:serving,1102:old website serving,1103:form,1104:application,1105:application',
     'montreal from a confirmed completed serving, an attended old-website serving, a processed Montreal form, an application (by contact or by person); not a planned serving, a spam answer or an unattended row';
+  assert not exists (select 1 from public.crm_contact_chapters where contact_id = 1190), 'a confirmed serving at a completed Toronto meal (wave274) is not Montreal evidence (final review M1)';
   assert (select bool_and(source = 'evidence' and added_by = 'wave281') from public.crm_contact_chapters), 'the backfill rows say evidence, wave281';
   -- crm_in_chapter
   assert public.crm_in_chapter(1047, 'montreal') = true, 'no chapter row: in Montreal';

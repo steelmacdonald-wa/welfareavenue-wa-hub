@@ -107,12 +107,14 @@ select c.id, 'toronto', 'evidence', 'keela tag', 'wave281'
  where c.merged_into is null and jsonb_typeof(c.legacy_refs -> 'keela' -> 'tags') = 'array'
    and exists (select 1 from jsonb_array_elements_text(c.legacy_refs -> 'keela' -> 'tags') t where t ilike '%toronto%')
 on conflict (contact_id, chapter) do nothing;
+-- a Toronto meal (wave274: kind meal, location Toronto) is not Montreal evidence; wave286 puts its crew in Toronto
 insert into public.crm_contact_chapters (contact_id, chapter, source, source_ref, added_by)
 select c.id, 'montreal', 'evidence', 'serving', 'wave281'
   from public.crm_contacts c
  where c.merged_into is null and c.volunteer_id is not null
    and exists (select 1 from public.event_roster r join public.volunteer_events e on e.id = r.event_id
-                where r.person_id = c.volunteer_id and r.status = 'Confirmed' and e.status = 'completed')
+                where r.person_id = c.volunteer_id and r.status = 'Confirmed' and e.status = 'completed'
+                  and not (coalesce(e.kind, '') = 'meal' and coalesce(e.location, '') = 'Toronto'))
 on conflict (contact_id, chapter) do nothing;
 insert into public.crm_contact_chapters (contact_id, chapter, source, source_ref, added_by)
 select c.id, 'montreal', 'evidence', 'old website serving', 'wave281'

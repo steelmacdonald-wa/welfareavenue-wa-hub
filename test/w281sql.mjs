@@ -82,6 +82,12 @@ const COUNTS = `select (select count(*)::int from public.crm_contact_chapters) a
 try {
   const db = new PGlite();
   await db.exec(schema);
+  // the final review (M1): a confirmed serving at a completed Toronto meal (wave274: kind meal, location Toronto) is not Montreal evidence. Added here,
+  // not in test/w281schema.sql, which the later waves' runners share (wave286 would rightly put this person in Toronto).
+  await db.exec(`insert into public.volunteer_people (id, full_name, phones) values (507, 'Test Toronto Meal Volunteer', null);
+    insert into public.volunteer_events (id, event_date, status, kind, location) values (703, date '2026-10-25', 'completed', 'meal', 'Toronto');
+    insert into public.crm_contacts (id, full_name, volunteer_id) overriding system value values (1190, 'Test Toronto Meal Served', 507);
+    insert into public.event_roster (event_id, person_id, role, status) values (703, 507, 'cook', 'Confirmed');`);
 
   // ---- the fixture holds the live text: md5 of every changed object equals live's
   for (const f of PATCHED) ok((await one(db, `select md5(pg_get_functiondef('${f}'::regprocedure)) as m`)).m === LIVE[f], f + ': the fixture text is the live text (md5)');
