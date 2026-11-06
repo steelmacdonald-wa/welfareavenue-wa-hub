@@ -70,7 +70,7 @@ begin
   perform public.wa290_servings_shoutouts();
   select * into x from public.hub_shoutouts s where s.ref = 'servings:' || v_fy || ':' || v_tm;
   if not found then raise exception 'w290blive 4: no shout-out at four servings'; end if;
-  if x.kind <> 'auto' or x.source <> 'servings' or x.member_id <> v_tm or x.team <> 'marketing' or not x.active or x.by <> 'the hub'
+  if x.kind <> 'auto' or x.source <> 'servings' or x.member_id <> v_tm or x.team <> 'marketing' or not x.active or x."by" <> 'the hub'
      or x.text <> 'Test has volunteered at four servings this year. Thank you for showing up for our community!'
      or x.expires_at < now() + interval '9 days 23 hours' or x.expires_at > now() + interval '10 days 1 minute' then raise exception 'w290blive 4: the shout-out is not as expected'; end if;
   n := public.wa290_servings_shoutouts();
