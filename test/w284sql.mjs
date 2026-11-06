@@ -146,13 +146,17 @@ try {
     console.log('without wave281 the migration stops and nothing is kept');
   }
 
-  // ---- the live check file (run on live only inside build/sql_rollback_test.py's block), proved here first on the fixture, in one transaction
+  // ---- the live check files (run on live only inside build/sql_rollback_test.py's block), proved here first on the fixture, each in one transaction
   {
-    const db4 = await fresh();
-    await db4.exec('begin;\n' + migration + '\n' + live + '\nrollback;');
-    ok(true, 'live check file');
-    console.log('live check file, offline: migration then test/w284live.sql: passed');
-    await db4.close();
+    const liveUndo = read('w284live_undo.sql');
+    for (const [label, files] of [['migration twice, live checks', [migration, migration, live]],
+                                  ['migration, live checks, undo twice, undo checks, migration, live checks', [migration, live, undo, undo, liveUndo, migration, live]]]) {
+      const db4 = await fresh();
+      await db4.exec('begin;\n' + files.join('\n') + '\nrollback;');
+      ok(true, label);
+      console.log('live check files, offline: ' + label + ': passed');
+      await db4.close();
+    }
   }
 
   console.log(`w284sql.mjs: OK (${checks} runner checks, plus the assertion runs)`);
