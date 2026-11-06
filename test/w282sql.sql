@@ -125,7 +125,7 @@ end $$;
 
 -- ---------------------------------------------------------------- the first newsletter's two lists (E1)
 do $$
-declare r jsonb; v_allowed int; v_first int; m bigint[]; f bigint[]; v_err text; who text;
+declare r jsonb; v_allowed int; v_addr int; v_first int; v_first_addr int; m bigint[]; f bigint[]; v_err text; who text;
 begin
   -- refused: nobody signed in, a member with no profile, another team's profile, a blocked marketing person
   foreach who in array array['', 'w281.member@example.invalid', 'w282.ops@example.invalid', 'w282.blockedmkt@example.invalid'] loop
@@ -139,11 +139,17 @@ begin
   end loop;
   assert not exists (select 1 from public.crm_lists where name like 'Test refused%'), 'a refused call creates no list';
 
-  -- the direct counts, as staff
+  -- the direct counts, as staff: allowed records, their addresses (lower-cased, trimmed), first contacts, and first-contact addresses not held by
+  -- anyone allowed who is not a first contact
   perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.member@example.invalid"}', true);
-  select count(*) into v_allowed from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed;
+  select count(*), count(distinct lower(btrim(p.email))) into v_allowed, v_addr
+    from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed;
   select count(*) into v_first from public.crm_contacts c where c.merged_into is null and public.crm_email_first_contact(c.id);
-  assert v_first = 6, 'six first contacts in the fixture (' || v_first || ')';
+  assert v_first = 9, 'nine first contacts in the fixture, 2022 and 2024 included (' || v_first || ')';
+  with a as (select c.id, lower(btrim(p.email)) as addr, public.crm_email_first_contact(c.id) as first
+               from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed)
+  select count(distinct a.addr) into v_first_addr from a where a.first and not exists (select 1 from a b where b.addr = a.addr and not b.first);
+  assert v_allowed - v_addr = 3, 'three allowed records share an address with another (' || v_allowed || ' records, ' || v_addr || ' addresses)';
 
   -- marketing builds them
   perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w282.marketing@example.invalid"}', true);
@@ -154,24 +160,35 @@ begin
   end;
   assert v_err = 'a name is needed', 'a blank name is refused (' || v_err || ')';
   r := public.wa282_newsletter_lists('Test November newsletter');
-  assert (r ->> 'main')::int + (r ->> 'first_contacts')::int = v_allowed, 'main + first contacts = every contact allowed a newsletter (' || r::text || ', ' || v_allowed || ')';
-  assert (r ->> 'first_contacts')::int = v_first, 'first contacts = the direct count';
+  assert (r ->> 'main')::int + (r ->> 'first_contacts')::int = v_addr, 'main + first contacts = every address allowed a newsletter, once (' || r::text || ', ' || v_addr || ')';
+  assert (r ->> 'first_contacts')::int = v_first_addr, 'first contacts = the direct count of first-contact addresses not on the main list (' || v_first_addr || ')';
+  assert (r ->> 'left_out_same_address')::int = v_allowed - v_addr, 'it says how many records were left out for sharing an address';
   select member_ids into m from public.crm_lists where id = (r ->> 'main_list_id')::bigint and name = 'Test November newsletter: main' and kind = 'static' and created_by = 'w282.marketing@example.invalid';
   select member_ids into f from public.crm_lists where id = (r ->> 'first_contacts_list_id')::bigint and name = 'Test November newsletter: first contacts' and kind = 'static';
   assert cardinality(m) = (r ->> 'main')::int and cardinality(f) = (r ->> 'first_contacts')::int, 'the two static lists hold the counts it returned';
-  assert f = array[2001, 2009, 2010, 2013, 2014, 2017]::bigint[], 'the first contacts list: ' || f::text;
+  assert f = array[2001, 2009, 2010, 2013, 2014, 2017, 2023]::bigint[], 'the first contacts list: ' || f::text;
   assert not (m && f), 'nobody is on both lists';
-  assert m @> array[2006, 2007, 2008, 2011, 2012, 2015, 2020]::bigint[], 'express, implied, Hub-emailed and recent Keela openers are on the main list';
-  assert not (m && array[2002, 2003, 2004, 2005, 2016, 2018, 2019]::bigint[]), 'unsubscribed, bounced, complained, do-not-contact, no address and merged are on neither';
-  assert (select count(*) from (select unnest(m) union select unnest(f)) u) = v_allowed, 'together they are exactly the allowed contacts';
+  assert m @> array[2006, 2007, 2008, 2011, 2012, 2015, 2020, 2021, 2025]::bigint[], 'express, implied, Hub-emailed and recent Keela openers are on the main list';
+  assert not (m && array[2002, 2003, 2004, 2005, 2016, 2018, 2019]::bigint[]) and not (f && array[2002, 2003, 2004, 2005, 2016, 2018, 2019]::bigint[]),
+    'unsubscribed, bounced, complained, do-not-contact, no address and merged are on neither';
+  -- one address, one place
+  assert not (f && array[2022]::bigint[]) and not (m && array[2022]::bigint[]), 'a first contact whose address (case and spaces aside) is already on the main list is left out';
+  assert (array[2023]::bigint[] <@ f) and not (f && array[2024]::bigint[]) and not (m && array[2024]::bigint[]), 'two first contacts with one address: only the lower id is on the first-contacts list';
+  assert (array[2025]::bigint[] <@ m) and not (m && array[2026]::bigint[]) and not (f && array[2026]::bigint[]), 'two main-list records with one address: only the lower id is on the main list';
+  assert (select count(*) = count(distinct lower(btrim(p.email))) from unnest(m) x cross join lateral public.crm_email_permission(x, 'newsletter') p), 'each address appears at most once in the main list';
+  assert (select count(*) = count(distinct lower(btrim(p.email))) from unnest(f) x cross join lateral public.crm_email_permission(x, 'newsletter') p), 'each address appears at most once in the first-contacts list';
+  assert not exists (select 1 from unnest(m) x cross join lateral public.crm_email_permission(x, 'newsletter') pm
+                       join (select lower(btrim(p.email)) as addr from unnest(f) y cross join lateral public.crm_email_permission(y, 'newsletter') p) q on q.addr = lower(btrim(pm.email))),
+    'no address is on both lists';
+  assert (select count(distinct lower(btrim(p.email))) from unnest(m || f) x cross join lateral public.crm_email_permission(x, 'newsletter') p) = v_addr, 'together they reach every allowed address';
 
   -- an admin and the fundraising team may too
   perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.admin@example.invalid"}', true);
   r := public.wa282_newsletter_lists('Test admin');
-  assert (r ->> 'main')::int + (r ->> 'first_contacts')::int = v_allowed, 'an admin gets the same counts';
+  assert (r ->> 'main')::int + (r ->> 'first_contacts')::int = v_addr, 'an admin gets the same counts';
   perform set_config('request.jwt.claims', '{"role":"authenticated","email":"w282.fundraising@example.invalid"}', true);
   r := public.wa282_newsletter_lists('Test fundraising');
-  assert (r ->> 'first_contacts')::int = v_first, 'the fundraising team gets the same counts';
+  assert (r ->> 'first_contacts')::int = v_first_addr, 'the fundraising team gets the same counts';
   perform set_config('request.jwt.claims', '', true);
 end $$;
 

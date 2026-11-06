@@ -117,7 +117,7 @@ try {
   ok(afterUndo.setting === 'off', 'mail_fundraising_exemption is back, off');
   for (const f of ADDED_FNS) ok((await one(db, `select to_regprocedure('${f}') is null as x`)).x === true, f + ' is gone');
   ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'release' and entity_id = 'wave282' and field = 'wave282 undo'`)).n === 1, 'one undo line after two runs');
-  ok((await one(db, `select count(*)::int as n from public.crm_contacts`)).n === (await one(db, `select count(*)::int as n from public.crm_contacts where id between 1001 and 2020`)).n, 'no contact was touched');
+  ok((await one(db, `select count(*)::int as n from public.crm_contacts`)).n === (await one(db, `select count(*)::int as n from public.crm_contacts where id between 1001 and 2026`)).n, 'no contact was touched');
   // the consent rule is back: unknown consent is refused a newsletter again
   const p = await one(db, `select allowed, basis from public.crm_email_permission(2001, 'newsletter')`);
   ok(p.allowed === false && p.basis === 'no consent recorded', 'after the undo, unknown consent is refused a newsletter again (' + p.basis + ')');

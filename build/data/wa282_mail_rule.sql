@@ -87,7 +87,7 @@ declare
   v_name text := btrim(coalesce(p_name, ''));
   v_who text := public.wa_email();
   v_day text := to_char(now() at time zone 'America/Toronto', 'DD/MM/YY');
-  v_main bigint[]; v_first bigint[]; v_main_id bigint; v_first_id bigint;
+  v_main bigint[]; v_first bigint[]; v_main_id bigint; v_first_id bigint; v_allowed int;
 begin
   if not (coalesce(public.is_wa_admin(), false)
           or (coalesce(public.is_wa_staff(), false)
@@ -95,33 +95,42 @@ begin
     raise exception 'not allowed: admins and the marketing and fundraising teams build the newsletter lists';
   end if;
   if v_name = '' then raise exception 'a name is needed'; end if;
+  -- one address at most once in each list, and never on both: mail-send removes repeated addresses within a Send but not across the two Sends.
+  -- The address is the one mail-send would use (crm_email_permission's email), compared lower-cased and trimmed. When records share an address the
+  -- lowest contact id stands for it; an address already on the main list leaves the first-contacts list.
   with p as (
-    select c.id, x.allowed, x.basis
+    select c.id, x.allowed, x.basis, lower(btrim(x.email)) as addr
       from public.crm_contacts c
       cross join lateral public.crm_email_permission(c.id, 'newsletter') x
      where c.merged_into is null),
   f as (
-    select p.id, coalesce(p.allowed, false) as allowed,
-           case when p.allowed and p.basis = 'not unsubscribed (WA rule of 5 Nov 2026)' then coalesce(public.crm_email_first_contact(p.id), false) else false end as first
-      from p)
-  select coalesce(array_agg(f.id order by f.id) filter (where f.allowed and not f.first), '{}'::bigint[]),
-         coalesce(array_agg(f.id order by f.id) filter (where f.first), '{}'::bigint[])
-    into v_main, v_first
-    from f;
+    select p.id, p.addr,
+           case when p.basis = 'not unsubscribed (WA rule of 5 Nov 2026)' then coalesce(public.crm_email_first_contact(p.id), false) else false end as first
+      from p
+     where p.allowed and coalesce(p.addr, '') <> ''),
+  m as (
+    select distinct on (f.addr) f.id, f.addr from f where not f.first order by f.addr, f.id),
+  fc as (
+    select distinct on (f.addr) f.id from f where f.first and not exists (select 1 from m where m.addr = f.addr) order by f.addr, f.id)
+  select (select coalesce(array_agg(m.id order by m.id), '{}'::bigint[]) from m),
+         (select coalesce(array_agg(fc.id order by fc.id), '{}'::bigint[]) from fc),
+         (select count(*)::int from f)
+    into v_main, v_first, v_allowed;
   insert into public.crm_lists (name, description, kind, filter, member_ids, created_by, updated_by)
-  values (v_name || ': main', 'wave282: everyone who may get a newsletter except first contacts, on ' || v_day || '. Send 1 of the two-Send newsletter.',
+  values (v_name || ': main', 'wave282: everyone who may get a newsletter except first contacts, one record per address, on ' || v_day || '. Send 1 of the two-Send newsletter.',
           'static', '{}'::jsonb, v_main, v_who, v_who)
   returning id into v_main_id;
   insert into public.crm_lists (name, description, kind, filter, member_ids, created_by, updated_by)
-  values (v_name || ': first contacts', 'wave282: first contacts (crm_email_first_contact) on ' || v_day || '. Send 2, the day after Send 1.',
+  values (v_name || ': first contacts', 'wave282: first contacts (crm_email_first_contact), one record per address and none already on the main list, on ' || v_day || '. Send 2, the day after Send 1.',
           'static', '{}'::jsonb, v_first, v_who, v_who)
   returning id into v_first_id;
   return jsonb_build_object('main', cardinality(v_main), 'first_contacts', cardinality(v_first),
-                            'main_list_id', v_main_id, 'first_contacts_list_id', v_first_id);
+                            'main_list_id', v_main_id, 'first_contacts_list_id', v_first_id,
+                            'left_out_same_address', v_allowed - cardinality(v_main) - cardinality(v_first));
 end $function$;
 revoke all on function public.wa282_newsletter_lists(text) from public, anon;
 grant execute on function public.wa282_newsletter_lists(text) to authenticated, service_role;
-comment on function public.wa282_newsletter_lists(text) is 'wave282: builds the first Hub newsletter''s two static lists (E1, two Sends) and returns {main, first_contacts, main_list_id, first_contacts_list_id}: "<name>: main" holds every live contact crm_email_permission allows a newsletter who is not a first contact (Send 1); "<name>: first contacts" holds the first contacts (crm_email_first_contact; Send 2, the next day). Admins, or a signed-in member of the marketing or fundraising profile; anyone else (the service role included) is refused.';
+comment on function public.wa282_newsletter_lists(text) is 'wave282: builds the first Hub newsletter''s two static lists (E1, two Sends) and returns {main, first_contacts, main_list_id, first_contacts_list_id, left_out_same_address}: "<name>: main" holds the live contacts crm_email_permission allows a newsletter who are not first contacts (Send 1); "<name>: first contacts" holds the first contacts (crm_email_first_contact; Send 2, the next day). One address (lower-cased, trimmed) appears at most once in each list (the lowest contact id stands for it) and never on both: an address already on the main list leaves the first-contacts list. Admins, or a signed-in member of the marketing or fundraising profile; anyone else (the service role included) is refused.';
 
 -- the release record (once)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)

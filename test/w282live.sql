@@ -6,7 +6,7 @@
 do $live$
 declare
   rule text := 'not unsubscribed (WA rule of 5 Nov 2026)';
-  n bigint; v_allowed bigint; v_first bigint; v_admin text; v_other text; v_err text; r jsonb; m bigint[]; f bigint[]; s record; d text;
+  n bigint; v_allowed bigint; v_addr bigint; v_first bigint; v_first_addr bigint; v_admin text; v_other text; v_err text; r jsonb; m bigint[]; f bigint[]; s record; d text;
 begin
   select * into s from pg_temp.w282_state_before;
   select email into v_admin from public.hub_roles where role = 'admin' and email <> '' order by email limit 1;
@@ -62,15 +62,32 @@ begin
                       and c.legacy_refs -> 'keela' -> 'email_marketing' ->> 'last_opened' >= to_char(current_date - interval '12 months', 'YYYY-MM-DD'), false);
   if n <> v_first then raise exception 'w282live: crm_email_first_contact gives % first contacts, the direct rule %', v_first, n; end if;
 
-  -- the two lists, as an admin: they add up to every contact allowed a newsletter, and nobody is on both
-  select count(*) into v_allowed from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed;
+  -- the two lists, as an admin: one record per address (lower-cased, trimmed) in each, no address on both, and together every allowed address
+  select count(*), count(distinct lower(btrim(p.email))) into v_allowed, v_addr
+    from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed;
+  with a as (select c.id, lower(btrim(p.email)) as addr, public.crm_email_first_contact(c.id) as first
+               from public.crm_contacts c cross join lateral public.crm_email_permission(c.id, 'newsletter') p where c.merged_into is null and p.allowed)
+  select count(distinct a.addr) into v_first_addr from a where a.first and not exists (select 1 from a b where b.addr = a.addr and not b.first);
   r := public.wa282_newsletter_lists('W282 rollback check');
-  if (r ->> 'main')::bigint + (r ->> 'first_contacts')::bigint <> v_allowed then raise exception 'w282live: the lists hold % + %, the allowed count is %', r ->> 'main', r ->> 'first_contacts', v_allowed; end if;
-  if (r ->> 'first_contacts')::bigint <> v_first then raise exception 'w282live: the first-contacts list holds %, crm_email_first_contact gives %', r ->> 'first_contacts', v_first; end if;
+  if (r ->> 'main')::bigint + (r ->> 'first_contacts')::bigint <> v_addr then raise exception 'w282live: the lists hold % + %, the allowed addresses are %', r ->> 'main', r ->> 'first_contacts', v_addr; end if;
+  if (r ->> 'first_contacts')::bigint <> v_first_addr then raise exception 'w282live: the first-contacts list holds %, the direct count is %', r ->> 'first_contacts', v_first_addr; end if;
+  if (r ->> 'left_out_same_address')::bigint <> v_allowed - v_addr then raise exception 'w282live: left_out_same_address is %, expected %', r ->> 'left_out_same_address', v_allowed - v_addr; end if;
   select member_ids into m from public.crm_lists where id = (r ->> 'main_list_id')::bigint and kind = 'static' and name = 'W282 rollback check: main';
   select member_ids into f from public.crm_lists where id = (r ->> 'first_contacts_list_id')::bigint and kind = 'static' and name = 'W282 rollback check: first contacts';
   if cardinality(m) <> (r ->> 'main')::bigint or cardinality(f) <> (r ->> 'first_contacts')::bigint then raise exception 'w282live: the lists do not hold the counts returned'; end if;
   if m && f then raise exception 'w282live: someone is on both lists'; end if;
+  if exists (select 1 from unnest(f) x where not public.crm_email_first_contact(x)) then raise exception 'w282live: the first-contacts list holds someone who is not a first contact'; end if;
+  if (select count(*) <> count(distinct lower(btrim(p.email))) from unnest(m) x cross join lateral public.crm_email_permission(x, 'newsletter') p)
+     or (select count(*) <> count(distinct lower(btrim(p.email))) from unnest(f) x cross join lateral public.crm_email_permission(x, 'newsletter') p) then
+    raise exception 'w282live: an address appears twice in one list';
+  end if;
+  if exists (select 1 from unnest(m) x cross join lateral public.crm_email_permission(x, 'newsletter') pm
+               join (select lower(btrim(p.email)) as addr from unnest(f) y cross join lateral public.crm_email_permission(y, 'newsletter') p) q on q.addr = lower(btrim(pm.email))) then
+    raise exception 'w282live: an address is on both lists';
+  end if;
+  if (select count(distinct lower(btrim(p.email))) from unnest(m || f) x cross join lateral public.crm_email_permission(x, 'newsletter') p) <> v_addr then
+    raise exception 'w282live: the lists do not reach every allowed address';
+  end if;
   if exists (select 1 from unnest(m || f) x join public.crm_contacts c on c.id = x where c.merged_into is not null or coalesce(c.email_status, '') in ('unsubscribed', 'bounced', 'complained') or c.do_not_contact) then
     raise exception 'w282live: a list holds someone who may not be emailed';
   end if;

@@ -66,6 +66,14 @@ insert into public.crm_contacts (id, full_name, emails, email_status, email_cons
   (2019, 'Test Express Unsubscribed', array['w282.2019@example.invalid'], 'unsubscribed', 'express', 'form: test-plain-form', '{}'),
   (2020, 'Test Clicked Delayed Email', array['w282.2020@example.invalid'], 'unknown', null, null, '{"keela": {"email_marketing": {}}}');
 insert into public.crm_contacts (id, full_name, emails, email_status, merged_into) overriding system value values (2018, 'Test Merged', array['w282.2018@example.invalid'], 'unknown', 2001);
+-- records that share an address (case and spaces differ): one emailed and one new; two new; two with express consent
+insert into public.crm_contacts (id, full_name, emails, email_status, email_consent, consent_source) overriding system value values
+  (2021, 'Test Shared Address Emailed', array['w282.shared@example.invalid'], 'unknown', null, null),
+  (2022, 'Test Shared Address New', array[' W282.Shared@Example.invalid '], 'unknown', null, null),
+  (2023, 'Test Twin New A', array['w282.twin@example.invalid'], 'unknown', null, null),
+  (2024, 'Test Twin New B', array['W282.TWIN@example.invalid '], 'unknown', null, null),
+  (2025, 'Test Pair Express A', array['w282.pair@example.invalid'], 'subscribed', 'express', 'form: test-plain-form'),
+  (2026, 'Test Pair Express B', array[' w282.PAIR@example.invalid'], 'subscribed', 'express', 'form: test-plain-form');
 update public.crm_contacts set do_not_contact = true, dnc_reason = 'asked' where id = 2005;
 -- Keela opens relative to today: 30 days ago (recent), 13 months ago (old), exactly 12 months ago (not before the cut-off, so recent)
 update public.crm_contacts set legacy_refs = jsonb_build_object('keela', jsonb_build_object('email_marketing', jsonb_build_object('last_opened', to_char(current_date - 30, 'YYYY-MM-DD')))) where id = 2012;
@@ -79,4 +87,5 @@ insert into public.crm_email_sends (contact_id, to_email, template_key, kind, st
   (2009, 'w282.2009@example.invalid', 'test', 'test', 'sent', true, now(), null),
   (2010, 'w282.2010@example.invalid', 'newsletter', 'newsletter', 'suppressed', false, null, null),
   (2011, 'w282.2011@example.invalid', 'newsletter', 'newsletter', 'failed', false, now() - interval '2 days', null),
-  (2020, 'w282.2020@example.invalid', 'newsletter', 'newsletter', 'delayed', false, null, now() - interval '1 day');
+  (2020, 'w282.2020@example.invalid', 'newsletter', 'newsletter', 'delayed', false, null, now() - interval '1 day'),
+  (2021, 'w282.shared@example.invalid', 'newsletter', 'newsletter', 'delivered', false, null, null);

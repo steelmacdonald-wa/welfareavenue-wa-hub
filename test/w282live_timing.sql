@@ -24,6 +24,6 @@ begin
   r := public.wa282_newsletter_lists('W282 timing check');
   c := round(extract(epoch from clock_timestamp() - t0) * 1000);
   perform set_config('request.jwt.claims', '', true);
-  raise exception 'W282_TIMING over % contacts: crm_email_permission (newsletter) % ms, % allowed; crm_email_first_contact % ms, % first contacts; wa282_newsletter_lists % ms (main %, first contacts %)',
-    total, a, n_allowed, b, n_first, c, r ->> 'main', r ->> 'first_contacts';
+  raise exception 'W282_TIMING over % contacts: crm_email_permission (newsletter) % ms, % allowed; crm_email_first_contact % ms, % first contacts; wa282_newsletter_lists % ms (main %, first contacts %, left out for a shared address %)',
+    total, a, n_allowed, b, n_first, c, r ->> 'main', r ->> 'first_contacts', r ->> 'left_out_same_address';
 end $t$;
