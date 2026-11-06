@@ -53,6 +53,10 @@ insert into public.quo_messages (batch_id, phone, body, status, direction, kind,
 -- a Keela person whose history has an undated unsubscribe that a dated opt-in clearly follows (the list runs oldest first)
 insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
   (3006, 'Test Theta Order', array['theta@example.com'], 'subscribed', '{"keela": {"contact_id": "KT010"}}');
+-- two Keela people with an opt-in and an unsubscribe on the same day: one list runs newest first, the other oldest first
+insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
+  (3007, 'Test Iota Tie New', array['iota@example.com'], 'subscribed', '{"keela": {"contact_id": "KT014"}}'),
+  (3008, 'Test Kappa Tie Old', array['kappa@example.com'], 'subscribed', '{"keela": {"contact_id": "KT015"}}');
 insert into public.crm_contacts (id, full_name, phones, legacy_refs) overriding system value values
   (3003, 'gamma@example.com', array['+1 514 555 0303'], '{}');
 insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values

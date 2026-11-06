@@ -88,6 +88,27 @@ reset role;
 select set_config('request.jwt.claims', '', true);
 delete from public.crm_import_runs where label = 'Test probe run';
 
+-- ---------------------------------------------------------------- the event words and the verdict (round 2)
+do $$
+declare o record;
+begin
+  assert public.wa284_ev_kind('Subscription cancelled') = 'unsubscribe' and public.wa284_ev_kind('Subscription ended') = 'unsubscribe', 'cancelled and ended are opt-outs, never opt-ins';
+  assert public.wa284_ev_kind('Do not email') = 'unsubscribe' and public.wa284_ev_kind('Suppressed') = 'unsubscribe' and public.wa284_ev_kind('Removed from list') = 'unsubscribe'
+     and public.wa284_ev_kind('Text STOP') = 'unsubscribe' and public.wa284_ev_kind('Opted out') = 'unsubscribe', 'do not email, suppressed, removed, stop and opted out are opt-outs';
+  assert public.wa284_ev_kind('Cleaned') = 'bounce' and public.wa284_ev_kind('Hard bounce') = 'bounce' and public.wa284_ev_kind('Soft bounce') = 'other', 'cleaned and hard bounces are bounces; a soft bounce is not';
+  assert public.wa284_ev_kind('Email Marked as Spam') = 'complaint', 'a spam mark is a complaint';
+  assert public.wa284_ev_kind('Subscribed') = 'optin' and public.wa284_ev_kind('Email Opted In') = 'optin' and public.wa284_ev_kind('Profile updated') = 'other' and public.wa284_ev_kind('Attended') = 'other',
+    'opt-ins read as opt-ins; other words stay other';
+  select * into o from public.wa284_opt_state('[{"d": "2025-05-10", "t": "Unsubscribed"}, {"d": "2025-05-10", "t": "Opted In"}, {"d": "2025-01-01", "t": "Opted In"}]', 'd', 't', null, 'email');
+  assert o.optout = 'unsubscribe' and o.optout_date = date '2025-05-10', 'same-day tie in a newest-first list: the unsubscribe wins';
+  select * into o from public.wa284_opt_state('[{"d": "2025-01-01", "t": "Opted In"}, {"d": "2025-05-10", "t": "Unsubscribed"}, {"d": "2025-05-10", "t": "Opted In"}]', 'd', 't', null, 'email');
+  assert o.optout = 'unsubscribe' and o.optout_date = date '2025-05-10', 'same-day tie in an oldest-first list: the unsubscribe wins';
+  select * into o from public.wa284_opt_state('[{"d": "2025-01-01", "t": "Opted In"}, {"d": "2025-05-10", "t": "Subscription cancelled"}]', 'd', 't', null, 'email');
+  assert o.optout = 'unsubscribe', 'a Subscription cancelled event is honoured as an opt-out';
+  select * into o from public.wa284_opt_state('[{"d": "2025-05-11", "t": "Opted In"}, {"d": "2025-05-10", "t": "Unsubscribed"}]', 'd', 't', null, 'email');
+  assert o.optout is null and o.latest_kind = 'optin', 'an opt-in on a later day still wins';
+end $$;
+
 -- ---------------------------------------------------------------- a run, a file, staging (the settings an admin fills in start as wave284 seeds them)
 update public.app_config set value = '{}' where key in ('keela_keys', 'keela_assignee_map', 'keela_campaign_types');
 update public.app_config set value = '[]' where key = 'keela_org_pairs_ok';
@@ -139,7 +160,7 @@ declare v_file bigint := pg_temp.id('contacts'); r jsonb; kk record;
    "Subscription History": [{"date": "2025-02-02", "type": "Text Opted In", "form_name": "Test SMS Form"}, {"date": "2025-02-03", "type": "Email Opted In", "form_name": "Test Form"},
                             {"date": "sometime", "type": "Email Unsubscribed", "form_name": null}]},
   {"Contact Id": "KT006", "Contact Type": "Individual", "Full Name": "Test Zeta New", "Primary Email": "zeta@example.com", "Primary Phone": "514 555 0106", "Tags": ["Test Gala 2026"],
-   "Subscription History": []},
+   "Subscription History": [{"date": "2025-03-03", "type": "Profile updated", "form_name": null}]},
   {"Contact Id": "KT007", "Contact Type": "Individual", "Full Name": "Test Eta Nothing"},
   {"Contact Id": "KT008", "Contact Type": "Individual", "Full Name": "Test Beta Duplicate", "Primary Email": " BETA@example.com "},
   {"Contact Id": "KT010", "Contact Type": "Individual", "Full Name": "Test Theta Order", "Primary Email": "theta@example.com",
@@ -151,6 +172,12 @@ declare v_file bigint := pg_temp.id('contacts'); r jsonb; kk record;
    "Subscription History": [{"date": "2025-04-02", "type": "Hard Bounce", "form_name": null}]},
   {"Contact Id": "KT013", "Contact Type": "Individual", "Full Name": "Test New Spam", "Primary Email": "new.spam@example.com",
    "Subscription History": [{"date": "2025-04-03", "type": "Email Marked as Spam", "form_name": null}]},
+  {"Contact Id": "KT014", "Contact Type": "Individual", "Full Name": "Test Iota Tie New", "Primary Email": "iota@example.com",
+   "Subscription History": [{"date": "2025-05-10", "type": "Email Unsubscribed", "form_name": null}, {"date": "2025-05-10", "type": "Email Opted In", "form_name": "Test Form"},
+                            {"date": "2025-01-01", "type": "Email Opted In", "form_name": "Test Form"}]},
+  {"Contact Id": "KT015", "Contact Type": "Individual", "Full Name": "Test Kappa Tie Old", "Primary Email": "kappa@example.com",
+   "Subscription History": [{"date": "2025-01-01", "type": "Email Opted In", "form_name": "Test Form"}, {"date": "2025-05-10", "type": "Email Unsubscribed", "form_name": null},
+                            {"date": "2025-05-10", "type": "Email Opted In", "form_name": "Test Form"}]},
   {"Contact Id": "KC01", "Contact Type": "Company", "Full Name": "Test Bakery Inc.", "Company Type": "Business", "Goal": ["Sponsorship", "Item donations"]},
   {"Contact Id": "KC02", "Contact Type": "Company", "Full Name": "Test Alpha Keela"},
   {"Contact Id": "KC03", "Contact Type": "Company", "Full Name": "514-555-0199"},
@@ -159,17 +186,17 @@ declare v_file bigint := pg_temp.id('contacts'); r jsonb; kk record;
   {"Contact Id": "KC06", "Contact Type": "Company", "Full Name": "Test New Org", "Company Type": "Corporate", "Status": "Developing", "Goal": "Sponsorship"}
   ]$j$;
 begin
-  r := public.wa284_stage_rows(v_file, 0, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o <= 8), 18);
-  assert (r ->> 'staged_through')::int = 8 and (r ->> 'rows')::int = 18, 'the first chunk: 8 of 18';
+  r := public.wa284_stage_rows(v_file, 0, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o <= 8), 20);
+  assert (r ->> 'staged_through')::int = 8 and (r ->> 'rows')::int = 20, 'the first chunk: 8 of 20';
   r := public.wa284_stage_rows(v_file, 8, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o > 8));
-  assert (r ->> 'staged_through')::int = 18 and (r ->> 'rows')::int = 18, 'the second chunk: 18 of 18';
+  assert (r ->> 'staged_through')::int = 20 and (r ->> 'rows')::int = 20, 'the second chunk: 20 of 20';
   assert (select data ->> 'City' from import_stage.rows where file_id = v_file and row_no = 1) = 'Montréal'
      and (select data ->> 'Notes' from import_stage.rows where file_id = v_file and row_no = 5) = E'Line one\nLigne deux é', 'accents and multi-line notes survive staging';
-  assert (select jsonb_agg(f ->> 'staged_through') from jsonb_array_elements(public.wa284_files(pg_temp.id('run'))) f) = '["18"]', 'wa284_files says 18 staged';
+  assert (select jsonb_agg(f ->> 'staged_through') from jsonb_array_elements(public.wa284_files(pg_temp.id('run'))) f) = '["20"]', 'wa284_files says 20 staged';
   -- the keys, with counts, never values
-  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Contact Id' and k.filled = 18), 'keys: Contact Id 18';
+  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Contact Id' and k.filled = 20), 'keys: Contact Id 20';
   assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Primary Phone' and k.filled = 3), 'keys: a blank value is not counted';
-  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Subscription History[].date' and k.filled = 17), 'keys: the keys inside the subscription history';
+  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Subscription History[].date' and k.filled = 24), 'keys: the keys inside the subscription history';
   for kk in select * from public.wa284_keys(v_file) loop
     assert kk.key not like '%@%' and kk.key not like '%555%' and kk.key not like '%Test %', 'keys hold no values (' || kk.key || ')';
   end loop;
@@ -190,9 +217,11 @@ begin
   r := public.wa284_compare(b);
   assert pg_temp.md5_live() = v_md5, 'compare leaves the live tables unchanged';
   assert (select status from public.crm_import_batches where id = b) = 'compared', 'compared';
-  assert r #>> '{counts,rows_read}' = '12' and r #>> '{counts,matched}' = '3' and r #>> '{counts,updated,email_status}' = '2' and r #>> '{counts,updated,consent_source}' = '2'
+  assert r #>> '{counts,rows_read}' = '14' and r #>> '{counts,matched}' = '5' and r #>> '{counts,updated,email_status}' = '4' and r #>> '{counts,updated,consent_source}' = '4'
      and r #>> '{counts,skipped,already not emailed}' = '1' and r #>> '{counts,skipped,no Hub contact}' = '3',
-    'the optouts report: 12 read, 3 matched, two opt-outs to write (one undated), one already not emailed, three not in the Hub yet (' || r::text || ')';
+    'the optouts report: 14 read, 5 matched, four opt-outs to write (one undated, two same-day ties), one already not emailed, three not in the Hub yet (' || r::text || ')';
+  assert r #>> '{counts,unrecognised_events}' = '1' and r -> 'lists' -> 'unrecognised_event_types' = '["Profile updated"]',
+    'an event whose words the import does not know is counted and its words listed for staff (' || r::text || ')';
   -- C1: an opt-out whose date cannot be read is honoured, and the report counts the undated events; one a dated opt-in clearly follows is not
   assert r #>> '{counts,undated_events}' = '2' and r #>> '{counts,undated_optouts_honoured}' = '1' and r #>> '{counts,skipped,undated opt-out followed by an opt-in}' = '1',
     'undated events counted (2), the undated unsubscribe honoured (KT005), the one an opt-in clearly follows not (KT010)';
@@ -209,6 +238,9 @@ begin
     'apply: the Keela unsubscribe is honoured with its source';
   assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe (undated)' from public.crm_contacts where id = 3005), 'the undated unsubscribe is honoured, said undated';
   assert (select email_status from public.crm_contacts where id = 3006) = 'subscribed', 'an undated unsubscribe that a dated opt-in clearly follows is not';
+  -- round 2: an opt-in and an unsubscribe on the same day: the unsubscribe wins, whether the list runs newest first (KT014) or oldest first (KT015)
+  assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe 2025-05-10' from public.crm_contacts where id = 3007), 'same-day tie, newest-first list: unsubscribed';
+  assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe 2025-05-10' from public.crm_contacts where id = 3008), 'same-day tie, oldest-first list: unsubscribed';
   assert r #> '{basis,file_id}' is not null and r #>> '{basis,settings}' is not null, 'the report keeps what it was based on (the file and the settings)';
   assert (select count(*) from public.crm_consent_events where contact_id = 3001 and column_name = 'email_status' and source = 'Keela import' and import_batch_id = b) = 1,
     'the consent log records it as the Keela import, with the batch';
@@ -262,7 +294,7 @@ begin
   b := public.wa284_new_batch(pg_temp.id('run'), 'people'); insert into w284ids values ('people', b);
   select string_agg(t::text, ',' order by t.id) into v_before from (select id, first_name, last_name, address, city, phones, emails, primary_email, notes, legacy_refs from public.crm_contacts where id in (3001, 3002, 3003, 3004, 3005)) t;
   r := public.wa284_compare(b);
-  assert r #>> '{counts,rows_read}' = '12' and r #>> '{counts,matched}' = '6' and r #>> '{counts,created}' = '4', 'people: 12 read, 6 matched, 4 new (' || r::text || ')';
+  assert r #>> '{counts,rows_read}' = '14' and r #>> '{counts,matched}' = '8' and r #>> '{counts,created}' = '4', 'people: 14 read, 8 matched, 4 new (' || r::text || ')';
   assert r #> '{counts,created_not_emailed}' = '{"unsubscribed": 1, "bounced": 1, "complained": 1}', 'three of the new people arrive not emailed (' || r::text || ')';
   assert r -> 'lists' -> 'phone_only' = '[{"keela_id": "KT003", "contact_id": 3003}]', 'a phone-only match is listed, never merged';
   assert r -> 'lists' -> 'keela_ids_skipped' = '[{"reason": "no email or phone", "keela_id": "KT007"}]', 'a person with neither email nor phone is skipped and listed';
@@ -372,18 +404,21 @@ do $$
 declare b bigint; r jsonb; v_err text;
 begin
   b := public.wa284_new_batch(pg_temp.id('run'), 'consent'); insert into w284ids values ('consent', b);
+  -- round 2: as if staff had set the two same-day-tie people back to subscribed: batch 6 must still read the unsubscribe as the latest event
+  update public.crm_contacts set email_status = 'subscribed' where id in (3007, 3008);
   r := public.wa284_compare(b);
-  assert r #>> '{counts,updated,crm_consent_events}' = '15' and r #>> '{counts,skipped,undated event}' = '2', 'consent: 15 dated events into the log, the two undated ones left out (' || r::text || ')';
+  assert r #>> '{counts,updated,crm_consent_events}' = '22' and r #>> '{counts,skipped,undated event}' = '2', 'consent: 22 dated events into the log, the two undated ones left out (' || r::text || ')';
   assert r #>> '{counts,skipped,undated opt-out (no express consent)}' = '2' and r #>> '{counts,skipped,text opt-out followed by a Hub START}' = '1' and r #>> '{counts,updated,sms_opt_out}' = '1',
     'consent: no express consent past an undated opt-out (2), one text opt-out kept off by a Hub START, one applied (' || r::text || ')';
   r := public.wa284_apply(b, 'w281.admin@example.invalid');
-  assert (select count(*) from public.crm_consent_events where source = 'keela' and import_batch_id = b) = 15, 'the Keela events are in the consent log (source keela)';
+  assert (select count(*) from public.crm_consent_events where source = 'keela' and import_batch_id = b) = 22, 'the Keela events are in the consent log (source keela)';
   assert (select email_consent = 'express' and consent_source = 'Keela: opted in on Test Signup Form 2025-03-01' from public.crm_contacts where id = 3002), 'express consent with dated proof';
   assert (select email_consent is null and email_status = 'unsubscribed' from public.crm_contacts where id = 3001), 'never upgrades an unsubscribed address';
   assert (select email_consent is null from public.crm_contacts where id = 3004), 'nor a bounced or unsubscribed one';
   -- C1: KT005's latest dated email event is an opt-in with a form, but an unsubscribe with no readable date may be newer: no express consent
   assert (select email_consent is null and email_status = 'unsubscribed' from public.crm_contacts where id = 3005), 'no express consent past an undated unsubscribe (KT005)';
   assert (select email_consent is null from public.crm_contacts where id = 3006), 'nor past one a dated opt-in seems to follow (KT010)';
+  assert (select count(*) from public.crm_contacts where id in (3007, 3008) and email_consent is null) = 2, 'no express consent on a same-day tie, either list order';
   assert (select sms_consent = 'express' and sms_consent_source = 'Keela import' from public.crm_contacts where id = 3005), 'a text opt-in becomes sms_consent';
   -- C3: a Keela text opt-out stops texts, with its source in the consent log; a Hub START after it keeps texts on
   assert (select sms_opt_out from public.crm_contacts where id = 3001), 'a Keela text opt-out sets sms_opt_out';

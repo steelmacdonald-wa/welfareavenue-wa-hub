@@ -364,14 +364,15 @@ comment on function public.wa284_file(bigint, text) is 'wave284: the run''s late
 
 create or replace function public.wa284_ev_kind(p_type text)
 returns text language sql immutable set search_path to '' as $function$
+  -- opt-out words first, so "Subscription cancelled" or "Subscription ended" can never read as an opt-in
   select case when x.t ~* 'spam|complain|abuse' then 'complaint'
-              when x.t ~* 'unsubscri|opt(ed)?[ -]?out' then 'unsubscribe'
-              when x.t ~* 'bounce' and x.t !~* 'soft' then 'bounce'
+              when (x.t ~* 'bounce' and x.t !~* 'soft') or x.t ~* '\mcleaned\M' then 'bounce'
+              when x.t ~* 'unsubscri|opt(ed)?[ -]?out|cancel|\mended\M|do[ -]?not[ -]?e-?mail|don''?t[ -]?e-?mail|suppress|\mremoved\M|\mstop(ped)?\M' then 'unsubscribe'
               when x.t ~* 'opt(ed)?[ -]?in|subscri' then 'optin'
               else 'other' end
     from (select coalesce(p_type, '') as t) x
 $function$;
-comment on function public.wa284_ev_kind(text) is 'wave284: the kind of a Keela subscription event from its type''s words: complaint (spam, complaint, abuse), unsubscribe (unsubscribed, opted out), bounce (a bounce that is not soft), optin (opted in, subscribed) or other. The service role only.';
+comment on function public.wa284_ev_kind(text) is 'wave284: the kind of a Keela subscription event from its type''s words, opt-out words first: complaint (spam, complaint, abuse), bounce (a bounce that is not soft, or cleaned), unsubscribe (unsubscribed, opted out, cancelled, ended, do not email, suppressed, removed, stop), then optin (opted in, subscribed), else other (counted, and listed by batch 1 so staff can check the words). The service role only.';
 
 create or replace function public.wa284_events(p_list jsonb, p_kd text, p_kt text, p_kf text, p_kc text)
 returns table (occurred date, at_text text, kind text, channel text, type_text text, form text)
@@ -404,14 +405,16 @@ declare v_lpos bigint; v_order text; u record; v_rank jsonb := '{"unsubscribe": 
 begin
   undated := 0; undated_optouts := 0; overridden := 0;
   select count(*) into undated from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t where t.d is null;
-  -- the latest dated event
-  select t.kind, t.d, t.pos into latest_kind, latest_date, v_lpos from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t
-   where t.d is not null and t.kind <> 'other' order by t.d desc, t.at_text desc, t.pos desc limit 1;
-  if latest_kind in ('unsubscribe', 'bounce', 'complaint') then optout := latest_kind; optout_date := latest_date; end if;
   -- the list's order, when its dated events tell it: oldest first (asc) or newest first (desc); otherwise unknown
   select case when bool_and(z.d >= z.pd) and bool_or(z.d > z.pd) then 'asc' when bool_and(z.d <= z.pd) and bool_or(z.d < z.pd) then 'desc' end into v_order
     from (select t.d, lag(t.d) over (order by t.pos) as pd from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t where t.d is not null) z
    where z.pd is not null;
+  -- the latest dated event; on the same date an opt-out wins over an opt-in (Steel: every unsubscribe and bounce is honoured), then the later
+  -- time, then the list's own order (newest first when it runs newest first)
+  select t.kind, t.d, t.pos into latest_kind, latest_date, v_lpos from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t
+   where t.d is not null and t.kind <> 'other'
+   order by t.d desc, (t.kind in ('unsubscribe', 'bounce', 'complaint')) desc, t.at_text desc, case when v_order = 'desc' then -t.pos else t.pos end desc limit 1;
+  if latest_kind in ('unsubscribe', 'bounce', 'complaint') then optout := latest_kind; optout_date := latest_date; end if;
   -- an opt-out with no readable date is honoured, unless the latest dated event is an opt-in that the list's known order puts after it
   for u in select t.kind, t.pos from public.wa284_ev_rows(p_list, p_kd, p_kt, p_kc, p_channel) t
             where t.d is null and t.kind in ('unsubscribe', 'bounce', 'complaint') order by t.pos loop
@@ -420,7 +423,7 @@ begin
     if optout is null or (v_rank ->> u.kind)::int > (v_rank ->> optout)::int then optout := u.kind; optout_date := null; end if;
   end loop;
 end $function$;
-comment on function public.wa284_opt_state(jsonb, text, text, text, text) is 'wave284: what one channel''s Keela history says (email or sms). optout: the opt-out to honour (unsubscribe, bounce or complaint), from the latest dated event, or from any event whose date cannot be read unless the latest dated event is an opt-in that the list''s known order (its dated events oldest first or newest first) puts after it; the strongest wins (complaint, bounce, unsubscribe). optout_date: its date, null when it came from an undated event. Also the counts of undated events, undated opt-outs and undated opt-outs overridden, and the latest dated event''s kind and date. The service role only.';
+comment on function public.wa284_opt_state(jsonb, text, text, text, text) is 'wave284: what one channel''s Keela history says (email or sms). optout: the opt-out to honour (unsubscribe, bounce or complaint), from the latest dated event (on the same date an opt-out wins over an opt-in), or from any event whose date cannot be read unless the latest dated event is an opt-in that the list''s known order (its dated events oldest first or newest first) puts after it; the strongest wins (complaint, bounce, unsubscribe). optout_date: its date, null when it came from an undated event. Also the counts of undated events, undated opt-outs and undated opt-outs overridden, and the latest dated event''s kind and date. The service role only.';
 
 create or replace function public.wa284_optout_status(p_kind text)
 returns text language sql immutable set search_path to '' as $function$
@@ -461,15 +464,20 @@ declare
   k_d text := public.wa284_need_in(f, k_hist, 'sub_date'); k_t text := public.wa284_need_in(f, k_hist, 'sub_type'); k_f text := public.wa284_need_in(f, k_hist, 'sub_form');
   k_c text := public.wa284_key('sub_channel');
   v_other int := public.wa284_types(f, k_type);
-  r record; o record; v_kid text; v_id bigint; v_st text; v_new text;
+  r record; o record; e record; v_kid text; v_id bigint; v_st text; v_new text;
 begin
   if v_other > 0 then w := public.wa284_bump(w, '{counts,skipped,unrecognised Contact Type}', v_other); end if;
-  w := jsonb_set(w, '{counts,undated_events}', '0'::jsonb);
+  w := jsonb_set(jsonb_set(w, '{counts,undated_events}', '0'::jsonb), '{counts,unrecognised_events}', '0'::jsonb);
   for r in select x.row_no, x.data from import_stage.rows x
             where x.file_id = f and lower(coalesce(public.wa284_txt(x.data -> k_type), '')) = 'individual' order by x.row_no loop
     w := public.wa284_bump(w, '{counts,rows_read}');
     select * into o from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'email');
     if o.undated > 0 then w := public.wa284_bump(w, '{counts,undated_events}', o.undated); end if;
+    -- events whose words the import does not know stay other: counted, and their words listed (event types, not personal data) for staff to check
+    for e in select coalesce(nullif(ev.type_text, ''), '(no type)') as t from public.wa284_events(r.data -> k_hist, k_d, k_t, k_f, k_c) ev where ev.kind = 'other' loop
+      w := public.wa284_bump(w, '{counts,unrecognised_events}');
+      w := public.wa284_push(w, 'unrecognised_event_types', to_jsonb(e.t));
+    end loop;
     if o.optout is null then
       w := public.wa284_bump(w, case when o.overridden > 0 then '{counts,skipped,undated opt-out followed by an opt-in}' else '{counts,skipped,latest event is not an opt-out}' end::text[]);
       continue;
@@ -492,7 +500,7 @@ begin
   end loop;
   return w;
 end $function$;
-comment on function public.wa284_w_optouts(bigint, bigint, boolean) is 'wave284: batch 1 (optouts). For each Keela person, the email opt-out wa284_opt_state says to honour: the latest dated event if it is an unsubscribe, a hard bounce or a spam complaint, or any opt-out whose date cannot be read unless a dated opt-in clearly follows it. On a Hub contact that can still be emailed it sets email_status unsubscribed, bounced or complained and consent_source "Keela: <event> <date>" (or "(undated)"). The report counts the events with no readable date (undated_events). The opt-out always applies; it is never undone. The service role only.';
+comment on function public.wa284_w_optouts(bigint, bigint, boolean) is 'wave284: batch 1 (optouts). For each Keela person, the email opt-out wa284_opt_state says to honour: the latest dated event if it is an unsubscribe, a hard bounce or a spam complaint, or any opt-out whose date cannot be read unless a dated opt-in clearly follows it. On a Hub contact that can still be emailed it sets email_status unsubscribed, bounced or complained and consent_source "Keela: <event> <date>" (or "(undated)"). The report counts the events with no readable date (undated_events) and the events whose words it does not know (unrecognised_events, their words listed in unrecognised_event_types). On the same date an opt-out wins over an opt-in. The opt-out always applies; it is never undone. The service role only.';
 
 -- 2. legacy_fields: from legacy_refs.keela (no upload); fills empty fields only
 create or replace function public.wa284_w_legacy_fields(p_batch bigint, p_run bigint, p_rehearse boolean)
@@ -917,7 +925,8 @@ begin
     select * into oe from public.wa284_opt_state(r.data -> k_hist, k_d, k_t, k_c, 'email');
     v_kind := null; v_occ := null; v_form := null;
     select ev.kind, ev.occurred, ev.form into v_kind, v_occ, v_form from public.wa284_events(r.data -> k_hist, k_d, k_t, k_f, k_c) ev
-     where ev.channel = 'email' and ev.occurred is not null order by ev.occurred desc, ev.at_text desc limit 1;
+     where ev.channel = 'email' and ev.occurred is not null
+     order by ev.occurred desc, (ev.kind = 'optin') asc, ev.at_text desc limit 1;   -- on the same date anything else (an opt-out first of all) wins over an opt-in
     if v_kind = 'optin' and v_form is not null then
       if oe.undated_optouts > 0 then w := public.wa284_bump(w, '{counts,skipped,undated opt-out (no express consent)}');
       elsif c.email_status in ('unsubscribed', 'bounced', 'complained') or c.do_not_contact then w := public.wa284_bump(w, '{counts,skipped,opt-in on an address that is not emailed}');
@@ -1127,6 +1136,7 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
       'kept_hub_value', coalesce(p_w #> '{counts,kept_hub_value}', '{}'::jsonb),
       'skipped', coalesce(p_w #> '{counts,skipped}', '{}'::jsonb))
       || jsonb_strip_nulls(jsonb_build_object('undated_events', p_w #> '{counts,undated_events}', 'undated_optouts_honoured', p_w #> '{counts,undated_optouts_honoured}',
+                                   'unrecognised_events', p_w #> '{counts,unrecognised_events}',
                                    'created_not_emailed', p_w #> '{counts,created_not_emailed}')),
     'lists', '{"keela_ids_skipped": [], "org_pairs": [], "assignees_unmapped": [], "campaigns_to_create": [], "changed_since_kept": [], "created_review": []}'::jsonb
              || coalesce(p_w -> 'lists', '{}'::jsonb),
