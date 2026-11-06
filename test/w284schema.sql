@@ -57,6 +57,9 @@ insert into public.crm_contacts (id, full_name, emails, email_status, legacy_ref
 insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
   (3007, 'Test Iota Tie New', array['iota@example.com'], 'subscribed', '{"keela": {"contact_id": "KT014"}}'),
   (3008, 'Test Kappa Tie Old', array['kappa@example.com'], 'subscribed', '{"keela": {"contact_id": "KT015"}}');
+-- a Keela person whose latest event says the subscription expired (round 3: once misread as an opt-in, which hid the unsubscribe before it)
+insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values
+  (3009, 'Test Lambda Expired', array['lambda@example.com'], 'subscribed', '{"keela": {"contact_id": "KT016"}}');
 insert into public.crm_contacts (id, full_name, phones, legacy_refs) overriding system value values
   (3003, 'gamma@example.com', array['+1 514 555 0303'], '{}');
 insert into public.crm_contacts (id, full_name, emails, email_status, legacy_refs) overriding system value values

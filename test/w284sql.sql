@@ -88,9 +88,9 @@ reset role;
 select set_config('request.jwt.claims', '', true);
 delete from public.crm_import_runs where label = 'Test probe run';
 
--- ---------------------------------------------------------------- the event words and the verdict (round 2)
+-- ---------------------------------------------------------------- the event words and the verdict (rounds 2 and 3)
 do $$
-declare o record;
+declare o record; v text;
 begin
   assert public.wa284_ev_kind('Subscription cancelled') = 'unsubscribe' and public.wa284_ev_kind('Subscription ended') = 'unsubscribe', 'cancelled and ended are opt-outs, never opt-ins';
   assert public.wa284_ev_kind('Do not email') = 'unsubscribe' and public.wa284_ev_kind('Suppressed') = 'unsubscribe' and public.wa284_ev_kind('Removed from list') = 'unsubscribe'
@@ -99,6 +99,19 @@ begin
   assert public.wa284_ev_kind('Email Marked as Spam') = 'complaint', 'a spam mark is a complaint';
   assert public.wa284_ev_kind('Subscribed') = 'optin' and public.wa284_ev_kind('Email Opted In') = 'optin' and public.wa284_ev_kind('Profile updated') = 'other' and public.wa284_ev_kind('Attended') = 'other',
     'opt-ins read as opt-ins; other words stay other';
+  -- round 3: every negating or ending wording is an opt-out; only explicit positive wordings are opt-ins; neutral updates are other
+  foreach v in array array['Opting out', 'Subscription expired', 'Subscription lapsed', 'Subscription paused', 'Subscriber inactive', 'Inactive', 'Contact deleted',
+                           'Consent revoked', 'Withdrawn', 'Subscription withdrawn', 'No longer subscribed', 'Not subscribed', 'Opt-in withdrawn', 'Subscriber archived',
+                           'Subscription cancelled', 'Subscription ended', 'Do not email', 'Removed from list', 'Unsubscribed', 'Opted out', 'Text STOP'] loop
+    assert public.wa284_ev_kind(v) = 'unsubscribe', v || ' reads as an opt-out (it read as ' || public.wa284_ev_kind(v) || ')';
+  end loop;
+  foreach v in array array['Subscription preferences updated', 'Profile updated', 'Preferences updated'] loop
+    assert public.wa284_ev_kind(v) = 'other', v || ' is a neutral update (it read as ' || public.wa284_ev_kind(v) || ')';
+  end loop;
+  foreach v in array array['Subscribed', 'Resubscribed', 'Re-subscribed', 'Opted in', 'Opt-in', 'Opt in', 'Consent given', 'Double opt-in confirmed', 'Signed up',
+                           'Email Opted In', 'Text Opted In', 'Email Subscribed'] loop
+    assert public.wa284_ev_kind(v) = 'optin', v || ' reads as an opt-in (it read as ' || public.wa284_ev_kind(v) || ')';
+  end loop;
   select * into o from public.wa284_opt_state('[{"d": "2025-05-10", "t": "Unsubscribed"}, {"d": "2025-05-10", "t": "Opted In"}, {"d": "2025-01-01", "t": "Opted In"}]', 'd', 't', null, 'email');
   assert o.optout = 'unsubscribe' and o.optout_date = date '2025-05-10', 'same-day tie in a newest-first list: the unsubscribe wins';
   select * into o from public.wa284_opt_state('[{"d": "2025-01-01", "t": "Opted In"}, {"d": "2025-05-10", "t": "Unsubscribed"}, {"d": "2025-05-10", "t": "Opted In"}]', 'd', 't', null, 'email');
@@ -178,6 +191,9 @@ declare v_file bigint := pg_temp.id('contacts'); r jsonb; kk record;
   {"Contact Id": "KT015", "Contact Type": "Individual", "Full Name": "Test Kappa Tie Old", "Primary Email": "kappa@example.com",
    "Subscription History": [{"date": "2025-01-01", "type": "Email Opted In", "form_name": "Test Form"}, {"date": "2025-05-10", "type": "Email Unsubscribed", "form_name": null},
                             {"date": "2025-05-10", "type": "Email Opted In", "form_name": "Test Form"}]},
+  {"Contact Id": "KT016", "Contact Type": "Individual", "Full Name": "Test Lambda Expired", "Primary Email": "lambda@example.com",
+   "Subscription History": [{"date": "2025-06-01", "type": "Email Unsubscribed", "form_name": null}, {"date": "2025-07-01", "type": "Subscription preferences updated", "form_name": null},
+                            {"date": "2025-08-01", "type": "Subscription expired", "form_name": null}]},
   {"Contact Id": "KC01", "Contact Type": "Company", "Full Name": "Test Bakery Inc.", "Company Type": "Business", "Goal": ["Sponsorship", "Item donations"]},
   {"Contact Id": "KC02", "Contact Type": "Company", "Full Name": "Test Alpha Keela"},
   {"Contact Id": "KC03", "Contact Type": "Company", "Full Name": "514-555-0199"},
@@ -186,17 +202,17 @@ declare v_file bigint := pg_temp.id('contacts'); r jsonb; kk record;
   {"Contact Id": "KC06", "Contact Type": "Company", "Full Name": "Test New Org", "Company Type": "Corporate", "Status": "Developing", "Goal": "Sponsorship"}
   ]$j$;
 begin
-  r := public.wa284_stage_rows(v_file, 0, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o <= 8), 20);
-  assert (r ->> 'staged_through')::int = 8 and (r ->> 'rows')::int = 20, 'the first chunk: 8 of 20';
+  r := public.wa284_stage_rows(v_file, 0, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o <= 8), 21);
+  assert (r ->> 'staged_through')::int = 8 and (r ->> 'rows')::int = 21, 'the first chunk: 8 of 21';
   r := public.wa284_stage_rows(v_file, 8, (select jsonb_agg(e order by o) from jsonb_array_elements(v_rows) with ordinality x(e, o) where o > 8));
-  assert (r ->> 'staged_through')::int = 20 and (r ->> 'rows')::int = 20, 'the second chunk: 20 of 20';
+  assert (r ->> 'staged_through')::int = 21 and (r ->> 'rows')::int = 21, 'the second chunk: 21 of 21';
   assert (select data ->> 'City' from import_stage.rows where file_id = v_file and row_no = 1) = 'Montréal'
      and (select data ->> 'Notes' from import_stage.rows where file_id = v_file and row_no = 5) = E'Line one\nLigne deux é', 'accents and multi-line notes survive staging';
-  assert (select jsonb_agg(f ->> 'staged_through') from jsonb_array_elements(public.wa284_files(pg_temp.id('run'))) f) = '["20"]', 'wa284_files says 20 staged';
+  assert (select jsonb_agg(f ->> 'staged_through') from jsonb_array_elements(public.wa284_files(pg_temp.id('run'))) f) = '["21"]', 'wa284_files says 21 staged';
   -- the keys, with counts, never values
-  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Contact Id' and k.filled = 20), 'keys: Contact Id 20';
+  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Contact Id' and k.filled = 21), 'keys: Contact Id 21';
   assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Primary Phone' and k.filled = 3), 'keys: a blank value is not counted';
-  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Subscription History[].date' and k.filled = 24), 'keys: the keys inside the subscription history';
+  assert exists (select 1 from public.wa284_keys(v_file) k where k.key = 'Subscription History[].date' and k.filled = 27), 'keys: the keys inside the subscription history';
   for kk in select * from public.wa284_keys(v_file) loop
     assert kk.key not like '%@%' and kk.key not like '%555%' and kk.key not like '%Test %', 'keys hold no values (' || kk.key || ')';
   end loop;
@@ -217,11 +233,17 @@ begin
   r := public.wa284_compare(b);
   assert pg_temp.md5_live() = v_md5, 'compare leaves the live tables unchanged';
   assert (select status from public.crm_import_batches where id = b) = 'compared', 'compared';
-  assert r #>> '{counts,rows_read}' = '14' and r #>> '{counts,matched}' = '5' and r #>> '{counts,updated,email_status}' = '4' and r #>> '{counts,updated,consent_source}' = '4'
+  assert r #>> '{counts,rows_read}' = '15' and r #>> '{counts,matched}' = '6' and r #>> '{counts,updated,email_status}' = '5' and r #>> '{counts,updated,consent_source}' = '5'
      and r #>> '{counts,skipped,already not emailed}' = '1' and r #>> '{counts,skipped,no Hub contact}' = '3',
-    'the optouts report: 14 read, 5 matched, four opt-outs to write (one undated, two same-day ties), one already not emailed, three not in the Hub yet (' || r::text || ')';
-  assert r #>> '{counts,unrecognised_events}' = '1' and r -> 'lists' -> 'unrecognised_event_types' = '["Profile updated"]',
-    'an event whose words the import does not know is counted and its words listed for staff (' || r::text || ')';
+    'the optouts report: 15 read, 6 matched, five opt-outs to write (one undated, two same-day ties, one expired), one already not emailed, three not in the Hub yet (' || r::text || ')';
+  assert r #>> '{counts,unrecognised_events}' = '2' and r -> 'lists' -> 'unrecognised_event_types' = '["Profile updated", "Subscription preferences updated"]',
+    'events whose words the import does not know are counted and their words listed for staff (' || r::text || ')';
+  -- round 3: every distinct wording with the kind it was read as, and how many events used it
+  assert r -> 'lists' -> 'event_words' @> '[{"words": "Email Opted In", "read_as": "optin", "count": 11}, {"words": "Email Unsubscribed", "read_as": "unsubscribe", "count": 7},
+                                            {"words": "Hard Bounce", "read_as": "bounce", "count": 2}, {"words": "Email Marked as Spam", "read_as": "complaint", "count": 1},
+                                            {"words": "Text Opted Out", "read_as": "unsubscribe", "count": 2}, {"words": "Subscription expired", "read_as": "unsubscribe", "count": 1},
+                                            {"words": "Profile updated", "read_as": "other", "count": 1}, {"words": "Subscription preferences updated", "read_as": "other", "count": 1}]'
+     and jsonb_array_length(r -> 'lists' -> 'event_words') = 9, 'every event wording is listed with its reading and count (' || (r -> 'lists' -> 'event_words')::text || ')';
   -- C1: an opt-out whose date cannot be read is honoured, and the report counts the undated events; one a dated opt-in clearly follows is not
   assert r #>> '{counts,undated_events}' = '2' and r #>> '{counts,undated_optouts_honoured}' = '1' and r #>> '{counts,skipped,undated opt-out followed by an opt-in}' = '1',
     'undated events counted (2), the undated unsubscribe honoured (KT005), the one an opt-in clearly follows not (KT010)';
@@ -241,6 +263,8 @@ begin
   -- round 2: an opt-in and an unsubscribe on the same day: the unsubscribe wins, whether the list runs newest first (KT014) or oldest first (KT015)
   assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe 2025-05-10' from public.crm_contacts where id = 3007), 'same-day tie, newest-first list: unsubscribed';
   assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe 2025-05-10' from public.crm_contacts where id = 3008), 'same-day tie, oldest-first list: unsubscribed';
+  -- round 3: a later "Subscription expired" is an opt-out, not an opt-in that would hide the unsubscribe before it
+  assert (select email_status = 'unsubscribed' and consent_source = 'Keela: unsubscribe 2025-08-01' from public.crm_contacts where id = 3009), 'an expired subscription is an opt-out';
   assert r #> '{basis,file_id}' is not null and r #>> '{basis,settings}' is not null, 'the report keeps what it was based on (the file and the settings)';
   assert (select count(*) from public.crm_consent_events where contact_id = 3001 and column_name = 'email_status' and source = 'Keela import' and import_batch_id = b) = 1,
     'the consent log records it as the Keela import, with the batch';
@@ -294,7 +318,7 @@ begin
   b := public.wa284_new_batch(pg_temp.id('run'), 'people'); insert into w284ids values ('people', b);
   select string_agg(t::text, ',' order by t.id) into v_before from (select id, first_name, last_name, address, city, phones, emails, primary_email, notes, legacy_refs from public.crm_contacts where id in (3001, 3002, 3003, 3004, 3005)) t;
   r := public.wa284_compare(b);
-  assert r #>> '{counts,rows_read}' = '14' and r #>> '{counts,matched}' = '8' and r #>> '{counts,created}' = '4', 'people: 14 read, 8 matched, 4 new (' || r::text || ')';
+  assert r #>> '{counts,rows_read}' = '15' and r #>> '{counts,matched}' = '9' and r #>> '{counts,created}' = '4', 'people: 15 read, 9 matched, 4 new (' || r::text || ')';
   assert r #> '{counts,created_not_emailed}' = '{"unsubscribed": 1, "bounced": 1, "complained": 1}', 'three of the new people arrive not emailed (' || r::text || ')';
   assert r -> 'lists' -> 'phone_only' = '[{"keela_id": "KT003", "contact_id": 3003}]', 'a phone-only match is listed, never merged';
   assert r -> 'lists' -> 'keela_ids_skipped' = '[{"reason": "no email or phone", "keela_id": "KT007"}]', 'a person with neither email nor phone is skipped and listed';
@@ -407,11 +431,11 @@ begin
   -- round 2: as if staff had set the two same-day-tie people back to subscribed: batch 6 must still read the unsubscribe as the latest event
   update public.crm_contacts set email_status = 'subscribed' where id in (3007, 3008);
   r := public.wa284_compare(b);
-  assert r #>> '{counts,updated,crm_consent_events}' = '22' and r #>> '{counts,skipped,undated event}' = '2', 'consent: 22 dated events into the log, the two undated ones left out (' || r::text || ')';
+  assert r #>> '{counts,updated,crm_consent_events}' = '25' and r #>> '{counts,skipped,undated event}' = '2', 'consent: 25 dated events into the log, the two undated ones left out (' || r::text || ')';
   assert r #>> '{counts,skipped,undated opt-out (no express consent)}' = '2' and r #>> '{counts,skipped,text opt-out followed by a Hub START}' = '1' and r #>> '{counts,updated,sms_opt_out}' = '1',
     'consent: no express consent past an undated opt-out (2), one text opt-out kept off by a Hub START, one applied (' || r::text || ')';
   r := public.wa284_apply(b, 'w281.admin@example.invalid');
-  assert (select count(*) from public.crm_consent_events where source = 'keela' and import_batch_id = b) = 22, 'the Keela events are in the consent log (source keela)';
+  assert (select count(*) from public.crm_consent_events where source = 'keela' and import_batch_id = b) = 25, 'the Keela events are in the consent log (source keela)';
   assert (select email_consent = 'express' and consent_source = 'Keela: opted in on Test Signup Form 2025-03-01' from public.crm_contacts where id = 3002), 'express consent with dated proof';
   assert (select email_consent is null and email_status = 'unsubscribed' from public.crm_contacts where id = 3001), 'never upgrades an unsubscribed address';
   assert (select email_consent is null from public.crm_contacts where id = 3004), 'nor a bounced or unsubscribed one';
