@@ -1,4 +1,8 @@
-// Welfare Avenue: form-submit (v9, 26/10/26, wave264: a choice question with source "organizations" lists the organizations
+// Welfare Avenue: form-submit (v10, 06/11/26, wave288: the second consent box. A form whose consent.sms.ask is true sends the page
+//   consent.sms {ask, label}; the page sends the text box as a top-level consent_sms (true or false) next to consent, and the stored
+//   consent gains sms {asked: the text box's words, given}, which crm_form_apply records as express text consent. The answers show
+//   Text permission. A one-choice question saved to volunteer.roles with the value both (Either) means cook and server.
+// v9, 26/10/26, wave264: a choice question with source "organizations" lists the organizations
 //   volunteers come from (volunteer_orgs: listed and on_form, in the form's language) and "Other (not listed)" with a box for
 //   the name (answers[<qid>__other], 2 to 120 characters); the answer goes to mapped.org ({id} or {other}) and the database's
 //   trigger wa264_submission_org files it on the person, the application and the roster rows.
@@ -20,7 +24,7 @@
 //        not found; a closed form says so. v5: a question that fills a contact field says which (fill: first_name,
 //        last_name, email, phone, city, province, postal_code, address, language), so the website can fill it in for a
 //        signed-in person.
-//   POST {slug, token, answers, consent, hp, lang}  Built-in spam checks (Steel, 28/09/26): the hidden field hp must
+//   POST {slug, token, answers, consent, consent_sms, hp, lang}  Built-in spam checks (Steel, 28/09/26): the hidden field hp must
 //        be empty and the token between 3 seconds and 24 hours old (a failure is stored as spam and answered like a
 //        success, so a bot learns nothing); at most 20 submissions per IP hash in 10 minutes (a room of volunteers on
 //        one Wi-Fi still fits) and 3 per email and form in an hour. The answers are checked against the questions,
@@ -59,8 +63,8 @@ const MON_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet'
 const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_FR = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 const T = {
-  en: { max: 'Please pick at most {n}.', required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application', other: 'Please write the name of your organization.', otherOpt: 'Other (not listed)', otherBox: 'Name of your organization' },
-  fr: { max: 'Veuillez en choisir {n} au plus.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale', other: 'Veuillez écrire le nom de votre organisme.', otherOpt: 'Autre (pas dans la liste)', otherBox: 'Nom de votre organisme' }
+  en: { max: 'Please pick at most {n}.', required: 'Please answer this question.', email: 'Please enter a valid email address.', phone: 'Please enter a phone number we can reach.', choice: 'Please pick one of the choices.', long: 'That answer is too long.', date: 'Please enter a date.', number: 'Please enter a number.', consent: 'Please tick the box to sign up.', yes: 'Yes', no: 'No', permission: 'Email permission', textPermission: 'Text permission', file: 'Please attach your CV: a PDF, Word document or photo, up to 10 MB.', general: 'Not sure yet: a general application', other: 'Please write the name of your organization.', otherOpt: 'Other (not listed)', otherBox: 'Name of your organization' },
+  fr: { max: 'Veuillez en choisir {n} au plus.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.', phone: 'Veuillez entrer un numéro où vous joindre.', choice: 'Veuillez choisir une des options.', long: 'Cette réponse est trop longue.', date: 'Veuillez entrer une date.', number: 'Veuillez entrer un nombre.', consent: 'Veuillez cocher la case pour vous inscrire.', yes: 'Oui', no: 'Non', permission: 'Permission courriel', textPermission: 'Permission texto', file: 'Veuillez joindre votre CV : un PDF, un document Word ou une photo, 10 Mo au plus.', general: 'Je ne sais pas encore : une candidature générale', other: 'Veuillez écrire le nom de votre organisme.', otherOpt: 'Autre (pas dans la liste)', otherBox: 'Nom de votre organisme' }
 };
 
 // deno-lint-ignore no-explicit-any
@@ -154,7 +158,10 @@ async function publicForm(form: Json): Promise<Json> {
         ...(q.type === 'file' ? { accept: Object.keys(FILE_EXT).map(x => '.' + x).join(','), max_mb: MAX_FILE / 1048576 } : {})
       };
     }),
-    consent: form.consent && form.consent.ask ? { ask: true, required: !!form.consent.required, label: String(form.consent.label || '') } : { ask: false }
+    consent: {
+      ...(form.consent && form.consent.ask ? { ask: true, required: !!form.consent.required, label: String(form.consent.label || '') } : { ask: false }),
+      ...(form.consent && form.consent.sms && form.consent.sms.ask ? { sms: { ask: true, label: String(form.consent.sms.label || '') } } : {})   // v10 (wave288): the text box
+    }
   };
 }
 async function loadForm(slug: string): Promise<Json> {
@@ -177,7 +184,7 @@ async function accountOf(req: Request): Promise<string | null> {
 }
 
 // ---------- the answers against the questions ----------
-function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
+function check(form: Json, pub: Json, answers: Json, consentGiven: boolean, smsGiven = false) {
   const t = T[form.lang === 'fr' ? 'fr' : 'en'];
   const errors: Record<string, string> = {};
   const clean: Record<string, Json> = {};
@@ -222,7 +229,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
     display.push({ label: pq.label, value: shown });
     const to = String(q.to || '');
     if (to.startsWith('contact.')) mapped.contact[to.slice(8)] = typeof val === 'string' ? val : String(val);
-    else if (to === 'volunteer.roles') mapped.roles = Array.isArray(val) ? val : [val];
+    else if (to === 'volunteer.roles') mapped.roles = Array.isArray(val) ? val : String(val) === 'both' ? ['cook', 'server'] : [val];   // v10 (wave288): both (Either) is cook and server
     else if (to === 'volunteer.dates') mapped.dates = Array.isArray(val) ? val : [val];
     else if (to.startsWith('field:')) mapped.fields[to.slice(6)] = val;
     else if (to === 'volunteer.organization') {   // v9 (wave264)
@@ -242,6 +249,7 @@ function check(form: Json, pub: Json, answers: Json, consentGiven: boolean) {
     mapped.consent = consentGiven;
     display.push({ label: t.permission, value: consentGiven ? t.yes + ': "' + pub.consent.label + '"' : t.no });
   }
+  if (pub.consent.sms) display.push({ label: t.textPermission, value: smsGiven ? t.yes + ': "' + pub.consent.sms.label + '"' : t.no });   // v10 (wave288)
   if (!mapped.contact.email && !Object.keys(errors).length) errors._form = 'This form has no email question.';
   return { errors, clean, mapped, display };
 }
@@ -359,7 +367,7 @@ Deno.serve(async (req: Request) => {
 
     const answers = body.answers || {};
     const uploads = await resolveFiles(form, pub, answers);
-    const res = check(form, pub, answers, body.consent === true);
+    const res = check(form, pub, answers, body.consent === true, body.consent_sms === true);
     if (Object.keys(res.errors).length) return reply(req, { error: 'invalid', fields: res.errors }, 400);
     const email = String(res.mapped.contact.email || '');
     if (checks) {
@@ -369,7 +377,10 @@ Deno.serve(async (req: Request) => {
       if ((count || 0) >= PER_EMAIL) return reply(req, { error: 'rate' }, 429);
     }
     const account = await accountOf(req);
-    const consent = pub.consent.ask ? { asked: pub.consent.label, given: body.consent === true, at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}) } : null;
+    // v10 (wave288): the text box goes in the same object as sms {asked, given}; today's keys (asked, given, at, form) are unchanged
+    const sms = pub.consent.sms ? { sms: { asked: pub.consent.sms.label, given: body.consent_sms === true } } : {};
+    const consent = pub.consent.ask ? { asked: pub.consent.label, given: body.consent === true, at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}), ...sms }
+      : pub.consent.sms ? { at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}), ...sms } : null;
     const ins = await svc.from('crm_form_submissions').insert({
       form_id: form.id, status: 'received', answers: res.clean, display: res.display, mapped: res.mapped, consent,
       lang: form.lang, ip_hash: ipHash, user_agent: ua, is_test: isTest, auth_user_id: account

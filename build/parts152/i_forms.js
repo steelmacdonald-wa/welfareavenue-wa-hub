@@ -16,6 +16,29 @@
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
   LOADERS.cfields = function () { return db.from('crm_fields').select('*').order('sort', { ascending: true }).order('id', { ascending: true }); };
   LOADERS.fevents = function () { return db.from('volunteer_events').select('id,event_date,status,kind,location,title').eq('status', 'planned').gte('event_date', today()).order('event_date', { ascending: true }).limit(24); };
+  /* wave288 (06/11/26, CRM slice 1 Phase 5a, the Toronto forms): a form names its chapter (crm_chapters, LOADERS.chapters: everyone who
+     answers joins it, and a volunteer form's serving dates are that chapter's servings) and its Campaign (wa_campaigns), in place of the old
+     "City written on new contacts"; and it can ask a second question, may we text you (consent.sms, the words kept with a ticked box) */
+  LOADERS.wacampaigns = function () { return db.from('wa_campaigns').select('id,name,year,status').order('year', { ascending: false }).order('name', { ascending: true }); };
+  var SMS_DEFAULT = { en: 'Text me about volunteering. I can reply STOP at any time.', fr: 'Écrivez-moi par texto au sujet du bénévolat. Je peux répondre STOP en tout temps.' };
+  function chapterOf288(code) { return (S.chapters || []).filter(function (c) { return c.code === code; })[0] || null; }
+  function chapCampHtml288(f) {
+    var st = f.settings || {}, chs = S.chapters || [], cps = S.wacampaigns || [], cur = String(st.chapter || ''), cid = st.campaign_id != null ? String(st.campaign_id) : '';
+    var chOpts = '<option value="">None</option>' + chs.map(function (c) { return '<option value="' + E(c.code) + '"' + (c.code === cur ? ' selected' : '') + '>' + E(c.name_en || c.code) + '</option>'; }).join('') +
+      (cur && !chapterOf288(cur) ? '<option value="' + E(cur) + '" selected>' + E(cur) + '</option>' : '');
+    var cpOpts = '<option value="">None</option>' + cps.map(function (c) { return '<option value="' + E(c.id) + '"' + (String(c.id) === cid ? ' selected' : '') + '>' + E(c.name) + '</option>'; }).join('') +
+      (cid && !cps.some(function (c) { return String(c.id) === cid; }) ? '<option value="' + E(cid) + '" selected>Campaign ' + E(cid) + '</option>' : '');
+    var ch = chapterOf288(cur);
+    return '<div class="w155two"><label class="w155lb">Chapter<select class="w152sel" data-w288set="chapter">' + chOpts + '</select></label>' +
+      '<label class="w155lb">Campaign<select class="w152sel" data-w288set="campaign_id">' + cpOpts + '</select></label></div>' +
+      '<p class="m">' + (cur ? 'Everyone who answers joins ' + E((ch && ch.name_en) || cur) + '.' + (f.kind === 'volunteer' ? ' The serving dates are its servings.' : '') : 'No chapter: answers join no chapter.') + '</p>';
+  }
+  function smsHtml288(f) {
+    var sm = (f.consent && f.consent.sms) || {};
+    return '<div class="w288sms"><label class="w156ck"><input type="checkbox" data-w288sms="ask"' + (sm.ask ? ' checked' : '') + '> Also ask for text consent</label>' +
+      (sm.ask ? '<label class="w155lb">The words next to the text box<textarea class="w152in" data-w288sms="label" rows="2">' + E(sm.label || '') + '</textarea></label>' +
+        '<p class="m">A second box under the email one. A ticked box records express consent to texts with these words, the form and the date. Replying STOP still stops every text.</p>' : '') + '</div>';
+  }
   var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED], application: ['Join the team (HR centre)', GREEN] };
   /* wave168: every form's page opens with a photo from the Photo library behind the logo and the title (crm_forms.cover_photo_id;
      none uses the kind's default, as form-submit does) */
@@ -204,14 +227,13 @@
       (f.settings && f.settings.campaign ? '<div class="w155lb">Campaign<span class="m w261camp">' + E(CAMPAIGN_NAME[f.settings.campaign] || f.settings.campaign) + (f.settings.request ? ': each answer is a Request for ' + E(f.settings.request.type === 'gift-drive' ? 'Fundraising' : 'the team') : '') + (f.settings.gift_pledge ? ', and a pledge in Gifts collected' : '') + '</span></div>' : '<div></div>') + '</div>' +
       inp('intro', 'What it is for (under the title)', 'A sentence or two', true) + coverPickHtml(f) +
       (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to the Volunteer Manager (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
-        '<div class="w155two"><label class="w155lb">City written on new contacts<input class="w152in" data-w156set="city" value="' + E(f.settings.city || '') + '" placeholder="Montreal"></label>' +
-        '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="toronto"></label></div></div>' :
-        '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +
+        chapCampHtml288(f) + '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="toronto"></label></div>' :
+        chapCampHtml288(f) + '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +
       '<h4 class="w156h4">Questions</h4>' + f.questions.map(function (q, i) { return qHtml(q, i, f.questions.length, f.kind); }).join('') +
       '<div class="w154acts"><button class="w152btn ghost" data-w156qadd="text">' + I('plus') + ' Add a question</button></div>' +
       '<h4 class="w156h4">Email permission</h4><div class="w156box"><label class="w156ck"><input type="checkbox" data-w156c="ask"' + (f.consent.ask ? ' checked' : '') + '> Ask for permission to email them (a box they tick themselves)</label>' +
       (f.consent.ask ? '<label class="w156ck"><input type="checkbox" data-w156c="required"' + (f.consent.required ? ' checked' : '') + '> They must tick it to send the form (a newsletter sign-up)</label>' +
-        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label><p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue’s address and email beside it.</p>' : '') + '</div>' +
+        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label><p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue’s address and email beside it.</p>' : '') + smsHtml288(f) + '</div>' +
       inp('thank_you', 'Thank-you message (after they send it)', 'Thank you. We have your answers.', true) +
       '<div class="w154acts"><button class="w152btn" data-w156save="1">' + I('check') + ' Save</button>' +
       (f.id && !live ? '<button class="w152btn ghost" data-w156pub="1">' + I('send') + ' Put it live…</button>' : '') +
@@ -254,6 +276,7 @@
       bandHtml168(f) + '<div class="w156page"><i class="w156rule"></i>' + (f.intro ? '<p>' + E(f.intro) + '</p>' : '') +
       f.questions.map(function (q) { return '<div class="w156pq">' + one(q) + '</div>'; }).join('') +
       (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || CONSENT_DEFAULT) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
+      (f.consent && f.consent.sms && f.consent.sms.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.sms.label || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']) + '</span></div>' : '') +
       '<span class="w156send">' + (f.lang === 'fr' ? 'Envoyer' : 'Send') + '</span></div></div></div>';
   }
 
@@ -302,6 +325,7 @@
   function paintForms(root) {
     var need = [];
     if (!S.forms) need.push(load('forms')); if (!S.fstats) need.push(load('fstats')); if (!S.cfields) need.push(load('cfields')); if (!S.fevents) need.push(load('fevents'));
+    if (!S.chapters) need.push(load('chapters')); if (!S.wacampaigns) need.push(load('wacampaigns'));   /* wave288 */
     if (need.length) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the forms…'); Promise.all(need).then(function () { if (S.ui.tab === 'forms') paint(); }); return; }
     if (!FM.counts) { FM.counts = {}; loadFieldCounts(); }
     var html = statsHtml(S.contacts || []) + tabsHtml();
@@ -371,9 +395,12 @@
     return newFields(f).then(function () {
       var tags = String(f._tags || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
       var row = { slug: f.slug, title: String(f.title).trim(), intro: String(f.intro || '').trim() || null, lang: f.lang === 'fr' ? 'fr' : 'en', kind: FKIND[f.kind] ? f.kind : 'general',
-        questions: cleanQuestions(f.questions), consent: f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
+        questions: cleanQuestions(f.questions), consent: Object.assign(f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
+          f.consent.sms && f.consent.sms.ask ? { sms: { ask: true, label: String(f.consent.sms.label || '').trim() || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en'] } } : {}),
         thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, purpose: purposeOf(f), updated_by: actor() };
       if (row.kind !== 'volunteer') delete row.settings.volunteer_record;
+      var ch288 = row.settings.chapter ? chapterOf288(row.settings.chapter) : null;   /* wave288: a volunteer form's serving dates follow its chapter */
+      if (ch288 && ch288.name_en && row.kind === 'volunteer') row.settings.serving_location = ch288.name_en;
       var q = f.id ? db.from('crm_forms').update(row).eq('id', f.id).select().single() : db.from('crm_forms').insert(Object.assign({ status: 'draft', created_by: actor() }, row)).select().single();
       return Promise.resolve(q).then(function (r) {
         FM.busy = '';
@@ -456,6 +483,7 @@
     + '.w156more .w152kv{grid-template-columns:minmax(110px,42%) minmax(0,1fr);margin-bottom:4px;}.w156more .w152kv>span:first-child{color:var(--wa-muted,' + MUTED + ');}'
     + '.w261chips{margin:4px 0 6px;}.w261sec{margin-top:6px;}.w261h{display:flex;align-items:center;gap:8px;}.w261h>i{width:10px;height:10px;border-radius:50%;display:inline-block;}.w261h .w155sub{font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-size:12.5px;}'
     + '.w261camp{display:block;font-size:13.5px;font-weight:500;letter-spacing:0;text-transform:none;margin-top:6px;}'
+    + '.w288sms{border-top:1px dashed rgba(16,63,57,.2);margin-top:10px;padding-top:10px;}.w154card .w155lb textarea[data-w288sms]{min-height:72px;}'
     + '@media (max-width:700px){.w156sh{grid-template-columns:minmax(0,1fr) auto;}.w156sh>span:first-child{grid-column:1/-1;font-size:12px;color:' + MUTED + ';}}';
   document.head.appendChild(css156);
 
@@ -498,6 +526,21 @@
       return;
     }
     if (t.hasAttribute('data-w156set')) { key = t.getAttribute('data-w156set'); f.settings[key] = t.type === 'checkbox' ? t.checked : t.value; return; }
+    /* wave288: the chapter (a volunteer form's serving location follows it), the Campaign, and the text box */
+    if (t.hasAttribute('data-w288set')) {
+      key = t.getAttribute('data-w288set');
+      if (key === 'chapter') {
+        if (t.value) { f.settings.chapter = t.value; var ch = chapterOf288(t.value); if (ch && ch.name_en && f.kind === 'volunteer') f.settings.serving_location = ch.name_en; }
+        else delete f.settings.chapter;
+      } else if (key === 'campaign_id') { if (t.value) f.settings.campaign_id = Number(t.value); else delete f.settings.campaign_id; }
+      paint(); return;
+    }
+    if (t.hasAttribute('data-w288sms')) {
+      key = t.getAttribute('data-w288sms'); f.consent.sms = f.consent.sms || {};
+      if (key === 'ask') { f.consent.sms.ask = t.checked; if (t.checked && !f.consent.sms.label) f.consent.sms.label = SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']; paint(); }
+      else { f.consent.sms[key] = t.value; previewSoon156(); }
+      return;
+    }
     if (t.hasAttribute('data-w156c')) { key = t.getAttribute('data-w156c'); f.consent[key] = t.type === 'checkbox' ? t.checked : t.value; if (key === 'ask' && t.checked && !f.consent.label) f.consent.label = CONSENT_DEFAULT; if (t.type === 'checkbox') paint(); return; }
     if (t.hasAttribute('data-w156qk')) {
       i = qAt(t); if (i < 0) return; key = t.getAttribute('data-w156qk'); var q = f.questions[i];
