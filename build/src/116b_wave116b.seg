@@ -906,7 +906,7 @@
     if (act === 'mine') { B.st.mine = !B.st.mine; saveState(); render(); return; }
     if (act === 'flag') { B.st.flag = !B.st.flag; saveState(); render(); return; }
     if (act === 'done') { B.st.done = !B.st.done; saveState(); render(); return; }
-    if (act === 'fold') { var g = a.closest('.w116g'); var k = g.getAttribute('data-g'); B.st.closed = B.st.closed || {}; if (B.st.closed[k]) delete B.st.closed[k]; else B.st.closed[k] = 1; saveState(); g.classList.toggle('closed'); return; }
+    if (act === 'fold') { var g = a.closest('.w116g'); var k = g.getAttribute('data-g'); B.st.closed = B.st.closed || {}; if (B.st.closed[k]) delete B.st.closed[k]; else B.st.closed[k] = 1; saveState(); g.classList.toggle('closed'); a.setAttribute('aria-expanded', g.classList.contains('closed') ? 'false' : 'true'); return; }
     if (act === 'qa') { e.stopPropagation(); var box = B.slot.querySelector('.w116qa[data-qa="' + a.getAttribute('data-g') + '"]'); if (box) openQa(box); return; }
     if (act === 'new') {
       /* the list's own place to add: No date when grouped by due window, else the first group */
