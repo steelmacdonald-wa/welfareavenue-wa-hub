@@ -20,8 +20,9 @@
   function chipCounts(list) { var c = {}; list.forEach(function (x) { c[x.k] = (c[x.k] || 0) + 1; }); return c; }
   function evPill(it, compact) {
     var L = LAYER[it.k];
-    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '')) + '" tabindex="0" role="button">'
-      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span></div>';
+    var amt = it.budget != null ? spend(it.budget) : '';   /* wave274b: the anticipated spend: in full in the tooltip, as a short tag ($750, $1.3K) after the title where it fits (b_css.js) */
+    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '') + (amt ? ', anticipated spend ' + amt : '')) + '" tabindex="0" role="button">'
+      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span>' + (amt ? '<em class="w124amt">' + E(kMoney(it.budget)) + '</em>' : '') + '</div>';
   }
   function monthHtml(list) {
     var s = monthStart(C.anchor), dow = (s.getDay() + 6) % 7, start = addDays(s, -dow), t = today();
@@ -40,7 +41,9 @@
   }
   function rowHtml(it) {
     var L = LAYER[it.k];
-    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (it.sub ? '<div class="mm">' + E(clip(it.sub, 120)) + '</div>' : '') + '</div></div>';
+    /* wave274b: the anticipated spend on its line; a cancelled event says so, since the month's total leaves it out */
+    var mm = [it.sub ? clip(it.sub, 120) : '', it.budget != null && it.cancelled ? 'Cancelled' : '', it.budget != null ? 'Anticipated spend ' + spend(it.budget) : ''].filter(Boolean).join(' · ');
+    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (mm ? '<div class="mm">' + E(mm) + '</div>' : '') + '</div></div>';
   }
   function agendaHtml(list) {
     var t = today(), tk = ymd(t), byDay = {}, days = [];
@@ -77,6 +80,23 @@
     var next = C.fund.filter(function (f) { var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; return s && e >= t && f.status !== 'cancelled' && f.status !== 'idea' && f.precision !== 'none'; }).sort(function (a, b) { return String(a.start_date).localeCompare(String(b.start_date)); }).slice(0, 4);
     return '<div class="w124card"><h3>Fundraising next<span class="lnk" data-w124go="#fundevents">events calendar</span></h3>' + (next.length ? next.map(function (f) { return '<div class="w124row" data-w124fund="' + f.id + '" style="--c:' + LAYER.fund.c + ';grid-template-columns:1fr"><div><div class="tt"><i></i>' + E(f.title) + '</div><div class="mm">' + E(fundWhen(f)) + (f.target_min ? ' · target ' + E(kMoney(f.target_min)) + (f.target_max ? ' to ' + E(kMoney(f.target_max)) : '') : '') + '</div></div></div>'; }).join('') : '<p class="w124empty">No fundraising events ahead.</p>') + '</div>';
   }
+  /* wave274b: the month's anticipated spend, one quiet line under the layers while Volunteering is on: "Anticipated spend this
+     month: $1,250 on 3 events (Toronto $750, Montreal $500)". Cancelled events are left out; a city is Toronto when its location
+     says so, otherwise Montreal; the cities are named only when both have one. Nothing until the shown month is loaded. */
+  function spendLine() {
+    if (!C.layers.vol || !staffOk()) return '';
+    var y = C.anchor.getFullYear(), m = C.anchor.getMonth(), k = String(C.rangeKey || '').split('/');
+    if (!(k[0] && k[1] && k[0] <= ymd(monthStart(C.anchor)) && k[1] >= ymd(addMonths(C.anchor, 1)))) return '';
+    var tor = { n: 0, s: 0 }, mtl = { n: 0, s: 0 };
+    C.vol.forEach(function (v) {
+      var d = parseDay(v.event_date), b = budgetOf(v);
+      if (!d || b == null || d.getFullYear() !== y || d.getMonth() !== m || lower(v.status) === 'cancelled') return;
+      var c = /toronto/i.test(String(v.location || '')) ? tor : mtl; c.n++; c.s = Math.round((c.s + b) * 100) / 100;
+    });
+    var n = tor.n + mtl.n; if (!n) return '';
+    return '<p class="w124spend"><i aria-hidden="true"></i><span>Anticipated spend this month: <b>' + E(spend(Math.round((tor.s + mtl.s) * 100) / 100)) + '</b> on ' + n + (n === 1 ? ' event' : ' events')
+      + (tor.n && mtl.n ? ' (Toronto ' + E(spend(tor.s)) + ', Montreal ' + E(spend(mtl.s)) + ')' : '') + '</span></p>';
+  }
   function calPaint() {
     var h = calHost(); if (!h) return;
     var r = rangeFor(), grid = C.view === 'month';
@@ -89,7 +109,7 @@
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
-      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>'
+      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>' + spendLine()   /* wave274b */
       + '<div class="w124wrap"><div style="min-width:0">' + bandHtml(monthStart(C.anchor), addMonths(C.anchor, 1)) + (grid ? monthHtml(list) : agendaHtml(monthOnly)) + '</div>'
       + '<div class="w124side"><div class="w124card"><h3>Up next</h3>' + upNext() + '</div>' + fundSideHtml() + (staffOk() ? bdaysHtml() : '') + '</div></div>';
     h.innerHTML = html;
