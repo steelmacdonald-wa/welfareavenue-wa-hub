@@ -213,7 +213,7 @@ if (typeof wa36Render === 'function') {
         var row = null;
         WA37.steps.forEach(function (s) { if (String(s.id) === String(sid)) { s.done = patch.done; s.done_at = patch.done_at; s.done_by = patch.done_by; row = s; } });
         if (row) {
-          var p = wa37Pct(row.onboarding_id);
+          var p = (typeof window.wa37PctRaw === 'function' ? window.wa37PctRaw : wa37Pct)(row.onboarding_id);   /* wave285: completing a plan keeps the raw count (every row ticked), never more generous than before */
           var o = WA37.onbs.filter(function (x) { return String(x.id) === String(row.onboarding_id); })[0];
           if (o && p.total > 0 && p.done === p.total && o.status === 'active') {
             await db.from('onboardings').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', o.id);
