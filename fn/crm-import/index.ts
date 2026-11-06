@@ -18,8 +18,9 @@
 //   undo {batch_id}               -> {report}: value-checked; never for optouts or consent
 //   These three can take minutes on the full export, longer than the API's 8-second statement_timeout (the authenticator role). They run
 //   over a direct Postgres connection (the built-in SUPABASE_DB_URL; deno-postgres v0.17.0, pinned), in one transaction that first sets
-//   statement_timeout to 300s for itself (set local; no role is altered). Without SUPABASE_DB_URL they fall back to the API and the reply
-//   says so (note).
+//   statement_timeout to 140s for itself (set local; no role is altered): under the edge function's 150-second request limit, so a batch
+//   too slow for it stops in the database with nothing written, never after the page has given up. Without SUPABASE_DB_URL they fall back
+//   to the API and the reply says so (note), on success and on error.
 //   purge {run_id}                -> {removed}: deletes the run's staged rows, change records and uploaded files
 // Tables: crm_import_runs, crm_import_batches, crm_import_changes, import_stage.files, import_stage.rows (all through the wa284_* functions);
 // storage bucket imports. Side effects: none outside these (the database's guard refuses requests, emails, texts, automations, notifications,
@@ -68,14 +69,15 @@ function clean(err) {
   if (/^(missing key|wa284:|import side effect blocked)/.test(m)) return m.slice(0, 300);
   return 'stopped by the database (' + String(f.code || (err && err.code) || 'error') + ')';
 }
-// compare, apply and undo over a direct connection: one transaction that allows itself 300 seconds (the API stops statements at 8)
+// compare, apply and undo over a direct connection: one transaction that allows itself 140 seconds (the API stops statements at 8; the
+// edge function's request ends at 150, so the database stops first and a slow apply rolls back whole)
 async function direct(name, batch, by) {
   pool = pool || new Pool(DB_URL, 1, true);
   const client = await pool.connect();
   const tx = client.createTransaction('wa284_' + name + '_' + batch);
   try {
     await tx.begin();
-    await tx.queryArray("set local statement_timeout = '300s'");
+    await tx.queryArray("set local statement_timeout = '140s'");
     const r = await tx.queryObject({ text: 'select public.wa284_' + name + '($1::bigint, $2::text) as report', args: [batch, by] });
     await tx.commit();
     return r.rows[0] ? r.rows[0].report : null;
@@ -144,16 +146,16 @@ Deno.serve(async (req) => {
     if (a === 'compare' || a === 'apply' || a === 'undo') {
       const bid = id(body.batch_id);
       if (!bid) return reply(req, { error: 'wa284: which batch?' }, 400);
+      const viaApi = !DB_URL;
+      const note = viaApi ? 'SUPABASE_DB_URL is missing, so this ran through the API, which stops a statement after 8 seconds.' : undefined;
       try {
-        const viaApi = !DB_URL;
         const report = viaApi ? await rpc('wa284_' + a, { p_batch: bid, p_by: by }) : await direct(a, bid, by);
-        const note = viaApi ? 'SUPABASE_DB_URL is missing, so this ran through the API, which stops a statement after 8 seconds.' : undefined;
         if (report && report.error) return reply(req, { error: String(report.error), report: null, note });   // a compare that stopped (recorded on the batch)
         return reply(req, { report, note });
       } catch (e) {
         const msg = clean(e);
         if (a === 'apply') await svc.rpc('wa284_fail', { p_batch: bid, p_error: msg });   // the apply rolled back; the batch says why
-        return reply(req, { error: msg });
+        return reply(req, { error: msg, note });   // the fallback note on the error branch too
       }
     }
     if (a === 'purge') {
