@@ -63,6 +63,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--green);box-shadow:0 0
 .bad input[type=text],.bad input[type=email],.bad input[type=tel],.bad textarea,.bad select,.bad .choice{border-color:var(--flag)}
 .consent{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}
 .consent .choice{border-style:dashed}
+.consent .choice+.choice{margin-top:10px}
 .small{font-size:13px;color:var(--muted);margin:8px 0 0}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 button{font:inherit;font-weight:600;font-size:17px;border:0;border-radius:999px;padding:13px 28px;background:var(--gold);color:var(--ink);cursor:pointer;margin-top:8px;min-width:170px}
@@ -211,7 +212,10 @@ a{color:var(--green)}
     app.innerHTML = '<form id="waf" novalidate>' + '<div class="rule"></div>' + (f.intro ? '<p class="intro">' + E(f.intro) + '</p>' : '') +
       (S.banner ? '<div class="banner ' + (Object.keys(S.errors).length ? 'warn' : 'info') + '" role="alert">' + E(S.banner) + '</div>' : '') +
       f.questions.map(function (q) { return field(q, keep); }).join('') +
-      (c.ask ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent"><label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' +
+      (c.ask || (c.sms && c.sms.ask) ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent">' +
+        (c.ask ? '<label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' : '') +
+        /* wave285: the second box, may we text you (consent.sms), under the email box; sent as the top-level consent_sms */
+        (c.sms && c.sms.ask ? '<label class="choice"><input type="checkbox" id="q__consent_sms" name="_consent_sms"' + (keep && keep._consent_sms ? ' checked' : '') + '><span>' + E(c.sms.label) + '</span></label>' : '') +
         (cerr ? '<p class="err" id="q__consent_e">' + E(cerr) + '</p>' : '') + '<p class="small">' + E((S.org && S.org.address) || 'Welfare Avenue') + ' · ' + E((S.org && S.org.email) || '') + '</p></div>' : '') +
       '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>' +
       '<button type="submit" id="send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button></form>';
@@ -250,6 +254,7 @@ a{color:var(--green)}
       else { var el = form.querySelector('[name="' + q.id + '"]'); out[q.id] = el ? el.value : ''; }
     });
     var cb = form.querySelector('input[name="_consent"]'); out._consent = !!(cb && cb.checked);
+    var cs = form.querySelector('input[name="_consent_sms"]'); out._consent_sms = !!(cs && cs.checked);   /* wave285 */
     out._hp = (form.querySelector('input[name="website"]') || {}).value || '';
     return out;
   }
@@ -309,7 +314,7 @@ a{color:var(--green)}
     });
   }
   function sendAnswers(a, answers) {
-    call('POST', { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }).then(function (r) {
+    call('POST', { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, consent_sms: a._consent_sms, hp: a._hp, lang: S.lang }).then(function (r) {
       S.sending = false;
       if (r.status === 200 && r.body.ok) { S.done = true; thanks(r.body.thank_you || S.form.thank_you); return; }
       if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = t('fix'); render(a); focusFirst(); return; }
