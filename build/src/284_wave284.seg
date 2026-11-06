@@ -19,7 +19,7 @@
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var KINDS = [
     { k: 'optouts', t: 'Opt-outs', need: 'keela_contacts_json', never: true,
-      rule: 'People whose latest Keela email event is an unsubscribe or a hard bounce stop getting email here too. Never undone.' },
+      rule: 'People whose latest Keela email event is an unsubscribe, a hard bounce or a spam complaint, or who have an opt-out with no readable date, stop getting email here too (a complaint is marked complained). On the same day an opt-out wins over an opt-in. Never undone.' },
     { k: 'legacy_fields', t: 'Keela fields already in the Hub', need: null,
       rule: 'From the Keela details the first import kept: positions, availability, dates volunteered, Rally Paper team, donor readiness and the assignee. Fills empty fields only.' },
     { k: 'people', t: 'People', need: 'keela_contacts_json',
@@ -46,7 +46,8 @@
   var LISTS = { keela_ids_skipped: 'Skipped (Keela ids)', phone_only: 'Phone-only matches, listed and not merged', org_pairs: 'Close organisation pairs',
     assignees_unmapped: 'Keela assignees with no Hub person yet', campaigns_to_create: 'Campaigns to create (pick a type)', campaigns_created: 'Campaigns created',
     positions_unmapped: 'Keela positions with no Hub role', company_types_unmapped: 'Keela company types with no Partners category',
-    changed_since_kept: 'Changed since the import, so kept', created_review: 'Created by the import: review by hand' };
+    changed_since_kept: 'Changed since the import, so kept', created_review: 'Created by the import: review by hand',
+    unrecognised_event_types: 'Event words the import does not know (check them before applying)' };
   var FIELD_WORDS = { email_status: 'email status', consent_source: 'consent source', email_consent: 'email consent', sms_consent: 'text consent', full_name: 'full name',
     first_name: 'first name', last_name: 'last name', postal_code: 'postal code', primary_email: 'primary email', legacy_refs: 'Keela ids', owner_member_id: 'owner',
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
@@ -131,6 +132,7 @@
     if (sum(c.kept_hub_value)) out.push('the Hub kept its own value ' + plural(sum(c.kept_hub_value), 'time', 'times'));
     if (sum(c.skipped)) out.push(num(sum(c.skipped)) + ' skipped');
     if (c.undated_events) out.push(plural(c.undated_events, 'event', 'events') + ' with no readable date' + (c.undated_optouts_honoured ? ' (' + plural(c.undated_optouts_honoured, 'opt-out', 'opt-outs') + ' among them honoured)' : ''));
+    if (c.unrecognised_events) out.push(plural(c.unrecognised_events, 'event', 'events') + ' with words the import does not know (see the lists)');
     var cne = c.created_not_emailed || {}; if (sum(cne)) out.push(plural(sum(cne), 'new person arrives', 'new people arrive') + ' not emailed (their Keela opt-out)');
     return (b.status === 'applied' ? 'Applied: ' : b.status === 'compared' ? 'If applied: ' : '') + out.join('; ') + '.';
   }
