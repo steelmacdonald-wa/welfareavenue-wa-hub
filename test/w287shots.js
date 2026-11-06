@@ -28,6 +28,19 @@ fs.mkdirSync(OUT, { recursive: true });
         console.log('saved', name);
       }
     }
+    if (process.env.EXTRA) {
+      /* worst cases for review: Program Development's goal-sentence project, a project list, the drawer, an empty list */
+      const extra = [['progdev-overview', '#team/progdev', null], ['progdev-longproject', '#team/progdev/tasks', 'p31'], ['marketing-content', '#team/marketing/tasks', 'p27'], ['opsto-today', '#team/opsto/tasks', 'today']];
+      for (const [n, hs, l] of extra) {
+        await f.hash(hs, 2600);
+        if (l) { await f.ev((x) => window.w116Board.list(x), l); await f.page.waitForTimeout(500); }
+        await f.ev(() => window.scrollTo(0, 0)); await f.page.mouse.move(w - 4, h - 4); await f.page.waitForTimeout(400);
+        await f.page.screenshot({ path: path.join(OUT, TAG + '-' + n + '-' + w + '.png'), timeout: 120000, animations: 'disabled' });
+        console.log('saved', TAG + '-' + n + '-' + w);
+      }
+      await f.ev(() => { const r = document.querySelector('#w116tasks .w116r[data-tid]'); if (r) r.querySelector('.ttl').click(); }); await f.page.waitForTimeout(700);
+      await f.page.screenshot({ path: path.join(OUT, TAG + '-drawer-' + w + '.png'), timeout: 120000, animations: 'disabled' });
+    }
     if (f.errs.length) console.log('page errors', f.errs);
     await f.close();
   }
