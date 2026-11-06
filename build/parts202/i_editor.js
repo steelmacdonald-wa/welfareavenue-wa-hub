@@ -157,7 +157,7 @@
       '<div class="w202foot">' + (SS.ro ? '' : '<button class="w152btn sm ghost" data-w202dupe>' + I('copy') + ' Make a copy</button>') +
       (!SS.ro && e.key ? (SS.confirmDel ? '<span class="w202cf">' + (e.one_off ? 'Delete this email?' : 'Remove this template? Automations that use it stop sending it.') + ' <button class="w152btn sm" data-w202delyes>Yes, remove it</button><button class="w152btn sm ghost" data-w202delno>Keep it</button></span>'
         : '<button class="w152btn sm ghost" data-w202rm>' + I('trash') + ' ' + (e.one_off ? 'Delete' : 'Remove the template') + '</button>') : '') + '</div>' +
-      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + movingHtml() + costsHtml() + '</div>';
+      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + movingHtml() + '</div>';
   }
   /* ---------- edits ---------- */
   var timers = {};
