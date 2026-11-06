@@ -62144,8 +62144,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function allowed(id) { var t = tab(id); return !!t && t.style.display !== 'none' && !!document.getElementById(id); }
   /* wave262 (Steel, 20/10/26: "allow them to look through the apps that are available to them"): the apps that belong to a
      person's team come first as Your apps; the other apps they can open follow under More apps. Nothing is taken away.
-     Admins and the Executive profile have every app as theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['toronto', 'crm'], board: [] };   /* wave274: the Toronto team's apps */
+     Admins and the Executive profile have every app as theirs.
+     wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
+     the CRM is now theirs. */
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['toronto', 'crm'], board: [] };   /* wave274: the Toronto team's apps (Toronto Volunteers first, then wave279b's CRM) */
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
