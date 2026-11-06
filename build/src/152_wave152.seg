@@ -3913,7 +3913,7 @@
   }
   function rbOn() { return !!(GF.cfg && GF.cfg.receipt_mode === 'on'); }
   /* wave283: issuing, replacing, cancelling and drawing follow can_issue (team leads, admins and finance: wa_can gifts_edit); is_admin only while the
-     database is older than wave283. The settings, the mode, the signature, the automatic switch and Email it stay with admins (their functions check admin). */
+     database is older than wave283. Email it too (final review M5: mail-send v7 sends a receipt for anyone with gifts_edit). The settings, the mode, the signature and the automatic switch stay with admins (their functions check admin). */
   function rbAdmin() { var c = GF.cfg || {}; return !!(c.can_issue === undefined ? c.is_admin : c.can_issue); }
   function rbIsAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
   function rbSave(bytes, name, type) {
@@ -4115,7 +4115,7 @@
     });
   }
   function rbIssuedHtml() {
-    var list = S.rcpts || [], admin = rbAdmin(), mailer = rbIsAdmin(), on = rbOn();
+    var list = S.rcpts || [], admin = rbAdmin(), mailer = rbAdmin(), on = rbOn();   /* final review M5: Email it follows can_issue */
     var bySerial = {}; list.forEach(function (r) { bySerial[r.id] = r.serial; });
     var rows = list.slice(0, 200).map(function (r) {
       var c = contact(r.contact_id), who = c ? '<a href="#crm/c/' + E(c.id) + '">' + E((r.donor && r.donor.name) || c.full_name) + '</a>' : E((r.donor && r.donor.name) || 'Contact ' + r.contact_id);

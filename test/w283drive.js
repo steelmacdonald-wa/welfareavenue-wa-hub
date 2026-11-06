@@ -3,7 +3,7 @@
    - The CRM rail says Sends; the Sends page says Sends; the composer shows the first-contact count.
    - Gift controls follow gifts_edit (wa_my_caps): hidden for a member (a gift opens read-only, no save or delete), shown for a team lead,
      with Delete; a 0-row update or delete shows "Only team leads, admins and finance can change gifts." in the row.
-   - Receipts follow can_issue; Email it stays with admins; a do-not-contact donor's receipt row says "Receipt not emailed: do not contact".
+   - Receipts follow can_issue, Email it too (final review M5, mail-send v7); a do-not-contact donor's receipt row says "Receipt not emailed: do not contact".
    - A contact: the do-not-contact banner and control (set with a reason; clearing asks and says it does not resubscribe), the job title,
      the age band, the postal code once; the edit form's job title and chapter toggles; the birth date only with hr_private.
    - Email settings: the fundraising switch is gone and the one rule is written out. Leaving Keela counts published forms. Sources name
@@ -108,13 +108,14 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   ok('a 0-row delete shows the same message and keeps the gift open', b.err === REFUSED && b.open, b);
   await f.ev(() => { window.__WA_TABLE_RESULTS = {}; });
   await click(f, '#w152sheet [data-w152close]'); await f.page.waitForTimeout(300);
-  /* receipts: Issue, Replace and Cancel follow can_issue; Email it stays with admins */
+  /* receipts: Issue, Replace, Cancel and Email it follow can_issue (final review M5: mail-send v7 allows gifts_edit) */
   await f.hash('#crm/gifts/receipts', 2400);
   b = await f.ev(() => ({ issue: !!document.querySelector('#crm [data-w158bissue]'), run: !!document.querySelector('#crm [data-w158brun]'), replace: !!document.querySelector('#crm [data-w158bdo="replace"]'),
     cancel: !!document.querySelector('#crm [data-w158bdo="cancel"]'), mail: !!document.querySelector('#crm [data-w185mail]'), mode: !!document.querySelector('#crm [data-w158bmode],#crm [data-w158bask]'),
     save: !!document.querySelector('#crm [data-w158cfgsave]'), words: (document.querySelector('#crm .w158bmode') || {}).innerText || '' }));
   ok('team lead (can_issue): Issue, the year-end run, Replace and Cancel', b.issue && b.run && b.replace && b.cancel, b);
-  ok('team lead (not admin): no Email it, no receipts switch, no settings save', !b.mail && !b.mode && !b.save, b);
+  ok('team lead (can_issue): Email it is there (final review M5)', b.mail, b);
+  ok('team lead (not admin): no receipts switch, no settings save', !b.mode && !b.save, b);
   ok('the receipts line names who issues them', /Team leads, admins and finance issue, replace and cancel them/.test(b.words), b.words);
   ok('team lead: no page errors', f.errs.length === 0, f.errs);
   await f.close();
