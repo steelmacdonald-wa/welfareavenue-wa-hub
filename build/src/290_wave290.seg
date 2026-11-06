@@ -45,42 +45,42 @@
 
   var css = ''
     + '#w290srv{background:' + SURF + ';border-radius:18px;padding:16px 18px 14px;box-sizing:border-box;font-family:' + BODY + ';color:' + INK + ';font-size:15.5px;line-height:1.45;}'
-    + '#w290srv .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + PURPLE + ';}'
-    + '#w290srv h3{margin:2px 0 4px;font:500 26px/1.02 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
-    + '#w290srv .bar{height:8px;border-radius:8px;background:' + SURF2 + ';overflow:hidden;margin:8px 0 10px;max-width:420px;}'
-    + '#w290srv .bar i{display:block;height:100%;border-radius:8px;background:' + GOLD + ';transition:width 300ms ' + OUT + ';}'
-    + '#w290srv p{margin:0 0 8px;font-size:14.5px;}'
-    + '#w290srv p.sub{color:' + MUTED + ';}'
-    + '#w290srv .ok{background:rgba(220,165,39,.2);border-radius:12px;padding:10px 12px;margin:2px 0 10px;font-size:14.5px;color:' + INK + ';outline:0;}'
-    + '#w290srv .sl{margin:2px 0 4px;}'
-    + '#w290srv .sv{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0;box-sizing:border-box;border-top:1px solid ' + LINE + ';cursor:pointer;}'
-    + '#w290srv .sv:first-child{border-top:0;}'
-    + '#w290srv .sv input{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;flex:none;border-radius:50%;box-shadow:inset 0 0 0 1.75px rgba(31,32,30,.42);background:transparent center/14px 14px no-repeat;cursor:pointer;transition:background-color 160ms ' + OUT + ',box-shadow 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
-    + '#w290srv .sv input:checked{background-color:' + GREEN + ';background-image:' + TICK + ';box-shadow:none;}'
-    + '#w290srv .sv input:active{transform:scale(.9);}'
-    + '#w290srv .sv input:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
-    + '#w290srv .sv.mine{cursor:default;}#w290srv .sv.mine input{cursor:default;opacity:.55;}'
-    + '#w290srv .d{display:flex;flex-direction:column;flex:1;min-width:0;}'
-    + '#w290srv .d b{font-weight:600;font-size:15.5px;color:' + INK + ';}'
-    + '#w290srv .d small{font-size:13px;line-height:1.35;color:' + MUTED + ';overflow-wrap:anywhere;}'
-    + '#w290srv .st{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 8px;background:rgba(220,165,39,.26);color:' + GREEN + ';}'
-    + '#w290srv .roles{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px;padding:0;border:0;min-width:0;}'
-    + '#w290srv .roles legend{float:left;width:100%;padding:0;margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + MUTED + ';}'
-    + '#w290srv .roles label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;background:' + SURF2 + ';color:' + GREEN + ';font:500 14px ' + BODY + ';cursor:pointer;transition:background-color 160ms ' + OUT + ',color 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
-    + '#w290srv .roles label:active{transform:scale(.97);}'
-    + '#w290srv .roles input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none;}'
-    + '#w290srv .roles label.on{background:' + GREEN + ';color:' + CREAM + ';}'
-    + '#w290srv .roles label:has(input:focus-visible){outline:2px solid ' + GOLD + ';outline-offset:2px;}'
-    + '#w290srv .er{margin:0 0 10px;font-size:14px;color:' + FLAG + ';outline:0;}'
-    + '#w290srv .ac{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;}'
-    + '#w290srv .go{min-height:44px;padding:0 20px;border:0;border-radius:999px;background:' + GOLD + ';color:' + GREEN + ';font:700 15px ' + BODY + ';cursor:pointer;transition:transform 120ms ' + OUT + ',filter 160ms ease;}'
-    + '#w290srv .go:active{transform:scale(.97);}#w290srv .go[disabled]{opacity:.65;cursor:default;transform:none;}'
-    + '#w290srv .go:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
-    + '#w290srv .note{flex:1 1 220px;font-size:13px;color:' + MUTED + ';}'
-    + '@media (min-width:901px){#w290srv .sl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:28px;}#w290srv .sl > .sv:nth-child(2){border-top:0;}}'
-    + '@media (hover:hover) and (pointer:fine){#w290srv .go:not([disabled]):hover{filter:brightness(1.06);}#w290srv .roles label:not(.on):hover{background:rgba(16,63,57,.15);}#w290srv .sv:not(.mine):hover input:not(:checked){box-shadow:inset 0 0 0 1.75px ' + GREEN + ';}}'
-    + '@media (max-width:900px){#w290srv{padding:14px 16px 12px;}#w290srv h3{font-size:24px;}}'
-    + '@media (prefers-reduced-motion:reduce){#w290srv .bar i,#w290srv .sv input,#w290srv .roles label,#w290srv .go{transition:none;}#w290srv .sv input:active,#w290srv .roles label:active,#w290srv .go:active{transform:none;}}';
+    + '#w290srv .k,#w290sheet .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + PURPLE + ';}'
+    + '#w290srv h3,#w290sheet h3{margin:2px 0 4px;font:500 26px/1.02 ' + HEAD + ';letter-spacing:.01em;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w290srv .bar,#w290sheet .bar{height:8px;border-radius:8px;background:' + SURF2 + ';overflow:hidden;margin:8px 0 10px;max-width:420px;}'
+    + '#w290srv .bar i,#w290sheet .bar i{display:block;height:100%;border-radius:8px;background:' + GOLD + ';transition:width 300ms ' + OUT + ';}'
+    + '#w290srv p,#w290sheet p{margin:0 0 8px;font-size:14.5px;}'
+    + '#w290srv p.sub,#w290sheet p.sub{color:' + MUTED + ';}'
+    + '#w290srv .ok,#w290sheet .ok{background:rgba(220,165,39,.2);border-radius:12px;padding:10px 12px;margin:2px 0 10px;font-size:14.5px;color:' + INK + ';outline:0;}'
+    + '#w290srv .sl,#w290sheet .sl{margin:2px 0 4px;}'
+    + '#w290srv .sv,#w290sheet .sv{display:flex;align-items:center;gap:12px;min-height:48px;padding:6px 0;box-sizing:border-box;border-top:1px solid ' + LINE + ';cursor:pointer;}'
+    + '#w290srv .sv:first-child,#w290sheet .sv:first-child{border-top:0;}'
+    + '#w290srv .sv input,#w290sheet .sv input{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;flex:none;border-radius:50%;box-shadow:inset 0 0 0 1.75px rgba(31,32,30,.42);background:transparent center/14px 14px no-repeat;cursor:pointer;transition:background-color 160ms ' + OUT + ',box-shadow 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
+    + '#w290srv .sv input:checked,#w290sheet .sv input:checked{background-color:' + GREEN + ';background-image:' + TICK + ';box-shadow:none;}'
+    + '#w290srv .sv input:active,#w290sheet .sv input:active{transform:scale(.9);}'
+    + '#w290srv .sv input:focus-visible,#w290sheet .sv input:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w290srv .sv.mine,#w290sheet .sv.mine{cursor:default;}#w290srv .sv.mine input,#w290sheet .sv.mine input{cursor:default;opacity:.55;}'
+    + '#w290srv .d,#w290sheet .d{display:flex;flex-direction:column;flex:1;min-width:0;}'
+    + '#w290srv .d b,#w290sheet .d b{font-weight:600;font-size:15.5px;color:' + INK + ';}'
+    + '#w290srv .d small,#w290sheet .d small{font-size:13px;line-height:1.35;color:' + MUTED + ';overflow-wrap:anywhere;}'
+    + '#w290srv .st,#w290sheet .st{flex:none;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 8px;background:rgba(220,165,39,.26);color:' + GREEN + ';}'
+    + '#w290srv .roles,#w290sheet .roles{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px;padding:0;border:0;min-width:0;}'
+    + '#w290srv .roles legend,#w290sheet .roles legend{float:left;width:100%;padding:0;margin:0 0 6px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + MUTED + ';}'
+    + '#w290srv .roles label,#w290sheet .roles label{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;background:' + SURF2 + ';color:' + GREEN + ';font:500 14px ' + BODY + ';cursor:pointer;transition:background-color 160ms ' + OUT + ',color 160ms ' + OUT + ',transform 120ms ' + OUT + ';}'
+    + '#w290srv .roles label:active,#w290sheet .roles label:active{transform:scale(.97);}'
+    + '#w290srv .roles input,#w290sheet .roles input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none;}'
+    + '#w290srv .roles label.on,#w290sheet .roles label.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w290srv .roles label:has(input:focus-visible),#w290sheet .roles label:has(input:focus-visible){outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w290srv .er,#w290sheet .er{margin:0 0 10px;font-size:14px;color:' + FLAG + ';outline:0;}'
+    + '#w290srv .ac,#w290sheet .ac{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;}'
+    + '#w290srv .go,#w290sheet .go{min-height:44px;padding:0 20px;border:0;border-radius:999px;background:' + GOLD + ';color:' + GREEN + ';font:700 15px ' + BODY + ';cursor:pointer;transition:transform 120ms ' + OUT + ',filter 160ms ease;}'
+    + '#w290srv .go:active,#w290sheet .go:active{transform:scale(.97);}#w290srv .go[disabled],#w290sheet .go[disabled]{opacity:.65;cursor:default;transform:none;}'
+    + '#w290srv .go:focus-visible,#w290sheet .go:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    + '#w290srv .note,#w290sheet .note{flex:1 1 220px;font-size:13px;color:' + MUTED + ';}'
+    + '@media (min-width:901px){#w290srv .sl,#w290sheet .sl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:28px;}#w290srv .sl > .sv:nth-child(2),#w290sheet .sl > .sv:nth-child(2){border-top:0;}}'
+    + '@media (hover:hover) and (pointer:fine){#w290srv .go:not([disabled]):hover,#w290sheet .go:not([disabled]):hover{filter:brightness(1.06);}#w290srv .roles label:not(.on):hover,#w290sheet .roles label:not(.on):hover{background:rgba(16,63,57,.15);}#w290srv .sv:not(.mine):hover input:not(:checked),#w290sheet .sv:not(.mine):hover input:not(:checked){box-shadow:inset 0 0 0 1.75px ' + GREEN + ';}}'
+    + '@media (max-width:900px){#w290srv{padding:14px 16px 12px;}#w290srv h3,#w290sheet h3{font-size:24px;}}'
+    + '@media (prefers-reduced-motion:reduce){#w290srv .bar i,#w290sheet .bar i,#w290srv .sv input,#w290sheet .sv input,#w290srv .roles label,#w290sheet .roles label,#w290srv .go,#w290sheet .go{transition:none;}#w290srv .sv input:active,#w290sheet .sv input:active,#w290srv .roles label:active,#w290sheet .roles label:active,#w290srv .go:active,#w290sheet .go:active{transform:none;}}';
   function addCss() { if (document.getElementById('w290css')) return; var st = document.createElement('style'); st.id = 'w290css'; st.textContent = css; document.head.appendChild(st); }
 
   /* ---------- the data: one call, kept a minute ---------- */
@@ -100,10 +100,12 @@
   }
 
   /* ---------- the card ---------- */
-  function rowHtml(s) {
-    var mine = !!(s.mine && s.mine.confirmed), on = !mine && !!S.pick[s.id];
+  /* one serving row, shared with the Sign up pop-up (c_next.js): pick = the ticked ids, attr = the data attribute its box carries */
+  function rowHtml(s, pick, attr) {
+    pick = pick || S.pick; attr = attr || 'data-w290ev';
+    var mine = !!(s.mine && s.mine.confirmed), on = !mine && !!pick[s.id];
     var meta = (s.start ? hm12(s.start) + ' \u00b7 ' : '') + (s.location || 'Montreal') + (s.partner ? ' \u00b7 with ' + s.partner : '');
-    return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" data-w290ev="' + Number(s.id) + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
+    return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" ' + attr + '="' + Number(s.id) + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
       + '<span class="d"><b>' + E(fmtDay(s.date)) + '</b><small>' + E(meta) + '</small></span>'
       + (mine ? '<span class="st">You\u2019re on it</span>' : '') + '</label>';
   }
@@ -125,7 +127,7 @@
       + '<p class="sub">' + (done === 0 ? 'Every member volunteers at ' + word(target) + ' servings a year, October to September.' : (left === 1 ? 'One more' : Word(left) + ' more') + ' before ' + E(until) + '.') + ' Pick the dates that work for you.</p>';
     var sv = x.servings || [];
     if (!sv.length) return h + '<p class="sub">No servings are open right now. ' + E(ops) + ' adds the next ones soon.</p>';
-    h += '<div class="sl" role="group" aria-labelledby="w290h">' + sv.map(rowHtml).join('') + '</div>';
+    h += '<div class="sl" role="group" aria-labelledby="w290h">' + sv.map(function (s) { return rowHtml(s); }).join('') + '</div>';
     if (!sv.some(function (s) { return !(s.mine && s.mine.confirmed); })) return h + '<p class="sub">You\u2019re on every open serving. ' + E(ops) + ' adds the next ones soon.</p>';
     h += '<fieldset class="roles"><legend>What would you like to do?</legend>' + ROLES.map(function (r) {
       var on = S.role === r[0];
@@ -152,6 +154,7 @@
     if (!staff() || board()) { var x = document.getElementById('w290srv'); if (x) x.remove(); return; }
     var home = document.getElementById('mypage');
     if (!home || !home.classList.contains('active')) return;
+    loadNext(false);   /* c_next.js: the friendly Next serving card's facts, ahead of wave171's paint */
     await load(force);
     place();
   }
@@ -175,6 +178,173 @@
     place(S.err ? '.er' : '.ok');
   }
 
+  /* ---------- wave290b: the Next serving card for everyone, and Sign up ----------
+     Steel (06/11/26): "a sign up button that opens a volunteer form. Or whatever makes it seem less for operations", then: two views.
+     Operations Montreal keep wave171's card (confirmations, still waiting, Open the serving) with Sign up beside Open the serving.
+     Everyone else on Home sees the friendly card: the date, the time and the place, spots still open (by role), whether they are on it,
+     and Sign up. Sign up opens the pop-up: the next servings (the one they came from ticked), Serve or Take photos, Confirm my servings
+     (wa290_home_signup, as on the servings card). wave171's nextHtml asks nextView(ev, kicker): null keeps its own view, '' hides the
+     card while the facts load (its 2 second check draws it again), anything else is the card. */
+  var NX = { data: null, at: 0, loading: null };
+  var SH = { open: false, ev: null, data: null, at: 0, pick: {}, role: 'server', busy: false, err: '', done: null, opener: null, loading: false };
+
+  async function loadNext(force) {
+    if (!force && NX.data && Date.now() - NX.at < 60000) return NX.data;
+    if (NX.loading) return NX.loading;
+    NX.loading = (async function () {
+      try { var r = await db.rpc('wa290_next_serving'); NX.data = (r && !r.error && r.data) ? r.data : { error: true }; }
+      catch (e) { NX.data = { error: true }; }
+      NX.at = Date.now(); NX.loading = null;
+      return NX.data;
+    })();
+    return NX.loading;
+  }
+  function onHomePage() { var h = document.getElementById('mypage'); return !!(h && h.classList.contains('active')); }
+
+  function nextView(ev, kick) {
+    if (!ev || !onHomePage() || board() || !staff()) return null;
+    addNextCss();
+    var n = NX.data;
+    if (!n) { loadNext(false); return ''; }
+    if (n.error || n.ops) return null;
+    var same = n.event && Number(n.event.id) === Number(ev.id), x = same ? n.event : {};
+    var meta = (x.start ? hm12(x.start) + ' \u00b7 ' : '') + (x.location || ev.location || 'Montreal') + (x.partner ? ' \u00b7 with ' + x.partner : '');
+    var h = '<div class="k">' + E(kick || 'Next serving') + '</div>'
+      + '<h3>' + E(fmtDay(ev.event_date)) + '</h3>'
+      + '<p class="w290meta">' + E(meta) + '</p>';
+    if (same && n.spots && Number(n.spots.total) > 0) {
+      var open = Number(n.spots.open) || 0, conf = Number(n.confirmed) || 0;
+      h += '<p class="w290spots">' + (open > 0 ? '<b>' + open + ' spot' + (open === 1 ? '' : 's') + '</b> still open' : '<b>Every spot is filled</b>') + (conf ? ' \u00b7 ' + conf + ' confirmed so far' : '') + '</p>';
+      var roles = (n.spots.roles || []).slice(0, 4);
+      if (roles.length) h += '<p class="w290roles">' + roles.map(function (r) { return E(r.label) + ' ' + Number(r.open); }).join(' \u00b7 ') + '</p>';
+    }
+    if (same && n.mine) h += '<p class="w290on">You\u2019re on this one. Thank you!</p>';
+    return h + signupBtn(ev.id, false, same && n.mine);
+  }
+  function signupBtn(evId, alt, mine) {
+    if (!onHomePage() || board() || !staff()) return '';
+    return '<button type="button" class="go w290su' + (alt ? ' alt' : '') + '" data-w290signup="' + Number(evId) + '">' + (mine ? 'Sign up for another' : 'Sign up') + '</button>';
+  }
+
+  /* ---------- the Sign up pop-up ---------- */
+  async function sheetLoad(force) {
+    if (!force && SH.data && Date.now() - SH.at < 30000) return SH.data;
+    SH.loading = true;
+    try { var r = await db.rpc('wa191_onb_servings'); if (r && !r.error) SH.data = r.data; else SH.err = /Team members only/.test((r && r.error && r.error.message) || '') ? 'Signing up here is for team members.' : 'The servings could not load. Try again in a moment.'; }
+    catch (e) { SH.err = 'The servings could not load. Try again in a moment.'; }
+    SH.at = Date.now(); SH.loading = false;
+    return SH.data;
+  }
+  function sheetBody() {
+    var x = SH.data, ops = (x && x.ops && x.ops.name) || 'the operations team';
+    if (!x) return '<p class="sub">' + E(SH.err || 'Loading the next servings\u2026') + '</p>';
+    var yr = x.year || {}, target = Number(yr.target || 4) || 4, done = Math.max(0, Number(yr.done || 0));
+    var h = '<p class="sub">Your servings this year: <b>' + done + ' of ' + target + '</b>, October to September.</p>';
+    if (SH.done) {
+      return h + '<div class="ok" role="status"><b>You\u2019re confirmed for ' + E(SH.done.dates || 'your servings') + '.</b> ' + E(ops) + ' has the dates in the Operations Montreal inbox.</div>'
+        + '<div class="ac"><button type="button" class="go" data-w290x="done">Done</button></div>';
+    }
+    var sv = x.servings || [];
+    if (!sv.length) return h + '<p class="sub">No servings are open right now. ' + E(ops) + ' adds the next ones soon.</p>';
+    h += '<div class="sl" role="group" aria-label="The next servings">' + sv.map(function (s) { return rowHtml(s, SH.pick, 'data-w290sev'); }).join('') + '</div>';
+    if (!sv.some(function (s) { return !(s.mine && s.mine.confirmed); })) return h + '<p class="sub">You\u2019re on every open serving. Thank you!</p>';
+    h += '<fieldset class="roles"><legend>What would you like to do?</legend>' + ROLES.map(function (r) {
+      var on = SH.role === r[0];
+      return '<label class="' + (on ? 'on' : '') + '"><input type="radio" name="w290srole" value="' + r[0] + '"' + (on ? ' checked' : '') + '>' + E(r[1]) + '</label>';
+    }).join('') + '</fieldset>';
+    if (SH.err) h += '<p class="er" role="alert">' + E(SH.err) + '</p>';
+    return h + '<div class="ac"><button type="button" class="go" data-w290sgo="1"' + (SH.busy ? ' disabled' : '') + '>' + (SH.busy ? 'Confirming\u2026' : 'Confirm my servings') + '</button>'
+      + '<span class="note">You\u2019re confirmed right away, and ' + E(ops) + ' gets the dates.</span></div>';
+  }
+  function sheetPaint(focusSel) {
+    var el = document.getElementById('w290sheet'); if (!el) return;
+    var body = el.querySelector('.bd'); if (!body) return;
+    var h = sheetBody(); if (body.__h !== h) { body.innerHTML = h; body.__h = h; }
+    if (focusSel) { var f = el.querySelector(focusSel); if (f) { if (!f.matches('button,input')) f.setAttribute('tabindex', '-1'); try { f.focus(); } catch (e) { /* fine */ } } }
+  }
+  async function sheetOpen(evId, opener) {
+    addCss(); addNextCss();
+    SH.open = true; SH.ev = Number(evId) || null; SH.pick = {}; SH.role = 'server'; SH.err = ''; SH.busy = false; SH.done = null; SH.opener = opener || null;
+    var el = document.getElementById('w290sheet');
+    if (!el) { el = document.createElement('div'); el.id = 'w290sheet'; document.body.appendChild(el); }
+    el.innerHTML = '<div class="scrim" data-w290x="scrim"></div><div class="box" role="dialog" aria-modal="true" aria-labelledby="w290st">'
+      + '<button type="button" class="x" data-w290x="x" aria-label="Close">\u00d7</button>'
+      + '<div class="k">Volunteer at a serving</div><h2 id="w290st" tabindex="-1">Sign up</h2><div class="bd"></div></div>';
+    el.className = 'on';
+    try { document.documentElement.classList.add('w290lock'); } catch (e) { /* fine */ }
+    sheetPaint();
+    try { el.querySelector('h2').focus(); } catch (e) { /* fine */ }
+    await sheetLoad(false);
+    var x = SH.data;
+    if (x && SH.ev && (x.servings || []).some(function (s) { return Number(s.id) === SH.ev && !(s.mine && s.mine.confirmed); })) SH.pick[SH.ev] = true;
+    if (SH.open) sheetPaint();
+  }
+  function sheetClose() {
+    var el = document.getElementById('w290sheet');
+    if (el) { el.className = ''; el.innerHTML = ''; }
+    SH.open = false;
+    try { document.documentElement.classList.remove('w290lock'); } catch (e) { /* fine */ }
+    var back = SH.opener && document.contains(SH.opener) ? SH.opener : document.querySelector('[data-w290signup="' + SH.ev + '"]');
+    if (back) { try { back.focus(); } catch (e) { /* fine */ } }
+  }
+  async function sheetGo() {
+    if (SH.busy) return;
+    var ids = Object.keys(SH.pick).filter(function (k) { return SH.pick[k]; }).map(Number);
+    if (!ids.length) { SH.err = 'Choose at least one serving.'; sheetPaint('.er'); return; }
+    SH.busy = true; SH.err = ''; sheetPaint();
+    try {
+      var r = await db.rpc('wa290_home_signup', { p_events: ids, p_role: SH.role });
+      if (r && r.error) throw r.error;
+      SH.done = { dates: (r && r.data && r.data.dates) || '' }; SH.pick = {};
+      T('You\u2019re confirmed. Thank you!');
+      await Promise.all([sheetLoad(true), loadNext(true), load(true)]);
+      place();   /* the servings card counts again */
+      var nx = document.getElementById('w171next'); if (nx) nx.remove();   /* wave171's 2 second check draws the Next serving card again */
+    } catch (e) {
+      SH.err = String((e && e.message) || e || '').replace(/^.*?ERROR:\s*/, '').slice(0, 200) || 'Could not confirm. Try again.';
+    }
+    SH.busy = false;
+    sheetPaint(SH.err ? '.er' : '.ok');
+  }
+  function trap(e) {
+    if (!SH.open) return;
+    if (e.key === 'Escape') { e.preventDefault(); sheetClose(); return; }
+    if (e.key !== 'Tab') return;
+    var box = document.querySelector('#w290sheet .box'); if (!box) return;
+    var f = [].slice.call(box.querySelectorAll('button:not([disabled]),input:not([disabled]),[tabindex="-1"]')).filter(function (x) { return x.offsetParent !== null || x === document.activeElement; });
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+
+  var nextCss = ''
+    /* the friendly card inside wave171's #w171next (its own k, h3, p and .go stay) */
+    + '#mypage.w272 #w171next .w290meta{color:' + MUTED + ';}'
+    + '#mypage.w272 #w171next .w290spots{font-size:14.5px;color:' + INK + ';}#mypage.w272 #w171next .w290spots b{color:' + GREEN + ';font-weight:700;}'
+    + '#mypage.w272 #w171next .w290roles{font-size:13px;color:' + MUTED + ';}'
+    + '#mypage.w272 #w171next .w290on{font-weight:600;color:' + GREEN + ';}'
+    + '#mypage.w272 #w171next .w290su{min-height:44px;padding:0 20px;font-size:15px;color:' + GREEN + ';transition:transform 120ms ' + OUT + ',filter 160ms ease;}'
+    + '#mypage.w272 #w171next .w290su:active{transform:scale(.97);}'
+    + '#mypage.w272 #w171next .w290su.alt{margin-left:8px;background:' + SURF2 + ';color:' + GREEN + ';min-height:auto;padding:7px 14px;font-size:12.5px;}'
+    + '#mypage.w272 #w171next .w290su:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    /* the pop-up */
+    + 'html.w290lock{overflow:hidden;}'
+    + '#w290sheet{display:none;}#w290sheet.on{display:block;position:fixed;inset:0;z-index:9400;font-family:' + BODY + ';color:' + INK + ';}'
+    + '#w290sheet .scrim{position:absolute;inset:0;background:rgba(16,63,57,.42);animation:w290fade 180ms ' + OUT + ';}'
+    + '#w290sheet .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;box-sizing:border-box;background:' + CREAM + ';border-radius:22px;padding:22px 22px 18px;box-shadow:0 24px 64px rgba(16,63,57,.28);animation:w290in 200ms ' + OUT + ';font-size:15.5px;line-height:1.45;}'
+    + '#w290sheet h2{margin:2px 0 8px;font:500 30px/1 ' + HEAD + ';text-transform:uppercase;letter-spacing:.01em;color:' + GREEN + ';outline:0;}'
+    + '#w290sheet .k{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:' + PURPLE + ';}'
+    + '#w290sheet .sub{margin:0 0 8px;color:' + MUTED + ';font-size:14.5px;}#w290sheet .sub b{color:' + GREEN + ';}'
+    + '#w290sheet .x{position:absolute;right:12px;top:12px;width:44px;height:44px;border:0;border-radius:50%;background:' + SURF2 + ';color:' + GREEN + ';font:400 24px/1 ' + BODY + ';cursor:pointer;}'
+    + '#w290sheet .x:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    + '@keyframes w290fade{from{opacity:0}to{opacity:1}}@keyframes w290in{from{opacity:0;transform:translate(-50%,-48%) scale(.98)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}'
+    + '@media (max-width:700px){#w290sheet .box{left:0;right:0;top:auto;bottom:0;width:100%;transform:none;border-radius:22px 22px 0 0;max-height:88vh;padding:20px 16px calc(16px + env(safe-area-inset-bottom));animation:w290up 220ms ' + OUT + ';}'
+    + '@keyframes w290up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}}'
+    + '@media (hover:hover) and (pointer:fine){#mypage.w272 #w171next .w290su:hover{filter:brightness(1.06);}#w290sheet .x:hover{background:rgba(16,63,57,.15);}}'
+    + '@media (prefers-reduced-motion:reduce){#w290sheet .scrim,#w290sheet .box{animation:none;}#mypage.w272 #w171next .w290su{transition:none;}#mypage.w272 #w171next .w290su:active{transform:none;}}';
+  function addNextCss() { if (document.getElementById('w290ncss')) return; var st = document.createElement('style'); st.id = 'w290ncss'; st.textContent = nextCss; document.head.appendChild(st); }
+
   /* ---------- wiring ---------- */
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !t.closest || !t.closest('#w290srv')) return;
@@ -195,6 +365,29 @@
     if (!b) return;
     e.preventDefault(); go();
   });
+  /* wave290b: Sign up (the friendly card and beside Open the serving), and the pop-up */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w290signup]');
+    if (b) { e.preventDefault(); e.stopPropagation(); sheetOpen(b.getAttribute('data-w290signup'), b); return; }
+    if (!SH.open) return;
+    if (t.closest('#w290sheet [data-w290x]')) { e.preventDefault(); sheetClose(); return; }
+    if (t.closest('#w290sheet [data-w290sgo]')) { e.preventDefault(); sheetGo(); }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w290sheet')) return;
+    var id = t.getAttribute('data-w290sev');
+    if (id) {
+      SH.pick[id] = t.checked;
+      var l = t.closest('label'); if (l) l.classList.toggle('on', t.checked);
+      if (SH.err) { SH.err = ''; var er = document.querySelector('#w290sheet .er'); if (er) er.remove(); }
+    } else if (t.name === 'w290srole') {
+      SH.role = t.value;
+      t.closest('.roles').querySelectorAll('label').forEach(function (lb) { lb.classList.toggle('on', !!lb.querySelector('input:checked')); });
+    } else return;
+    var bd = document.querySelector('#w290sheet .bd'); if (bd) bd.__h = sheetBody();
+  });
+  document.addEventListener('keydown', trap, true);
   if (typeof renderMyPage === 'function') {
     var __rm290 = renderMyPage;
     renderMyPage = async function () { var r = await __rm290.apply(this, arguments); try { paint(false); } catch (e) { /* fine */ } return r; };
@@ -206,5 +399,6 @@
   window.addEventListener('hashchange', function () { if (onHome()) setTimeout(function () { try { paint(false); } catch (e) { /* fine */ } }, 400); });
 
   /* ---------- test hook ---------- */
-  window.w290 = { paint: paint, html: html, state: function () { return { data: S.data, pick: S.pick, role: S.role, busy: S.busy, err: S.err, done: S.done }; } };
+  window.w290 = { paint: paint, html: html, nextView: nextView, signupBtn: signupBtn, signup: sheetOpen, closeSignup: sheetClose,
+    state: function () { return { data: S.data, pick: S.pick, role: S.role, busy: S.busy, err: S.err, done: S.done, next: NX.data, sheet: { open: SH.open, ev: SH.ev, pick: SH.pick, role: SH.role, err: SH.err, done: SH.done } }; } };
 })();

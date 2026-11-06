@@ -676,13 +676,17 @@
     var when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : 'in ' + d + ' days';
     var names = wait.slice(0, 6).map(function (r) { return first(r.person_name) + ' (' + one(r.role).toLowerCase() + ')'; }).join(', ') + (wait.length > 6 ? ' and ' + (wait.length - 6) + ' more' : '');
     var mode = S.mode || 'off';
+    /* wave290b (Steel, 06/11/26: "whatever makes it seem less for operations"): on Home, everyone outside Operations Montreal gets
+       the friendly card (window.w290.nextView: the date, the place, spots still open, Sign up); '' while its facts load; null keeps this one */
+    try { if (window.w290 && typeof window.w290.nextView === 'function') { var alt290 = window.w290.nextView(ev, 'Next serving \u00b7 ' + when + (ev.format ? ' \u00b7 ' + (FORMATS[ev.format] || ev.format) : '')); if (alt290 !== null) return alt290; } } catch (x290) { /* fine: this view */ }
     return '<div class="k">Next serving \u00b7 ' + E(when) + (ev.format ? ' \u00b7 ' + E(FORMATS[ev.format] || ev.format) : '') + '</div>'
       + '<h3>' + E(fmtDay(ev.event_date, true)) + '</h3>'
       + '<p><b style="color:' + GOLD + '">' + conf.length + ' of ' + rows.length + '</b> confirmed' + (bytext ? ' \u00b7 ' + bytext + ' by text' : '') + (decl.length ? ' \u00b7 ' + decl.length + ' can\u2019t make it' : '') + '</p>'
       + '<div class="bar"><i style="width:' + pct + '%"></i></div>'
       + (wait.length ? '<p>Still waiting: ' + E(names) + '.</p>' : (rows.length ? '<p>Everyone on the list has answered.</p>' : '<p>No one is on the roster yet.</p>'))
       + '<p style="font-size:12px;opacity:.8">' + (mode === 'live' ? 'Confirmation texts go 7 days before.' : mode === 'test' ? 'Texts are in test mode.' : 'Texts are off.') + '</p>'
-      + '<button class="go" data-w171open="' + ev.id + '">Open the serving</button>';
+      + '<button class="go" data-w171open="' + ev.id + '">Open the serving</button>'
+      + (window.w290 && typeof window.w290.signupBtn === 'function' ? window.w290.signupBtn(ev.id, true) : '');   /* wave290b: Sign up beside it, on Home */
   }
   function placeNext(host, anchor, before) {
     var n = S.next; var html = nextHtml(n);

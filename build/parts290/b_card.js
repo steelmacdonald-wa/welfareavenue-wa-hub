@@ -16,10 +16,12 @@
   }
 
   /* ---------- the card ---------- */
-  function rowHtml(s) {
-    var mine = !!(s.mine && s.mine.confirmed), on = !mine && !!S.pick[s.id];
+  /* one serving row, shared with the Sign up pop-up (c_next.js): pick = the ticked ids, attr = the data attribute its box carries */
+  function rowHtml(s, pick, attr) {
+    pick = pick || S.pick; attr = attr || 'data-w290ev';
+    var mine = !!(s.mine && s.mine.confirmed), on = !mine && !!pick[s.id];
     var meta = (s.start ? hm12(s.start) + ' · ' : '') + (s.location || 'Montreal') + (s.partner ? ' · with ' + s.partner : '');
-    return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" data-w290ev="' + Number(s.id) + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
+    return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" ' + attr + '="' + Number(s.id) + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
       + '<span class="d"><b>' + E(fmtDay(s.date)) + '</b><small>' + E(meta) + '</small></span>'
       + (mine ? '<span class="st">You’re on it</span>' : '') + '</label>';
   }
@@ -41,7 +43,7 @@
       + '<p class="sub">' + (done === 0 ? 'Every member volunteers at ' + word(target) + ' servings a year, October to September.' : (left === 1 ? 'One more' : Word(left) + ' more') + ' before ' + E(until) + '.') + ' Pick the dates that work for you.</p>';
     var sv = x.servings || [];
     if (!sv.length) return h + '<p class="sub">No servings are open right now. ' + E(ops) + ' adds the next ones soon.</p>';
-    h += '<div class="sl" role="group" aria-labelledby="w290h">' + sv.map(rowHtml).join('') + '</div>';
+    h += '<div class="sl" role="group" aria-labelledby="w290h">' + sv.map(function (s) { return rowHtml(s); }).join('') + '</div>';
     if (!sv.some(function (s) { return !(s.mine && s.mine.confirmed); })) return h + '<p class="sub">You’re on every open serving. ' + E(ops) + ' adds the next ones soon.</p>';
     h += '<fieldset class="roles"><legend>What would you like to do?</legend>' + ROLES.map(function (r) {
       var on = S.role === r[0];
@@ -68,6 +70,7 @@
     if (!staff() || board()) { var x = document.getElementById('w290srv'); if (x) x.remove(); return; }
     var home = document.getElementById('mypage');
     if (!home || !home.classList.contains('active')) return;
+    loadNext(false);   /* c_next.js: the friendly Next serving card's facts, ahead of wave171's paint */
     await load(force);
     place();
   }

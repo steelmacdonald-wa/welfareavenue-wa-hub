@@ -153,6 +153,92 @@ const home = (o) => Object.assign({ who: 'admin', hash: '#mypage', width: 1366, 
     if (SHOTS) { await f.ev(() => document.getElementById('w290srv').scrollIntoView({ block: 'center' })); await f.page.waitForTimeout(200); await f.page.screenshot({ path: SHOTS + '/w290_phone.png' }); }
     ok('no page errors (phone)', f.errs.length === 0, f.errs);
     await f.close();
+
+    /* ---------- wave290b: the Next serving card for everyone, and the Sign up pop-up ---------- */
+    const NEXT = (o) => Object.assign({ ops: false, event: { id: 23, date: '2026-10-04', start: '12:00', location: 'Place Émilie-Gamelin', partner: null },
+      spots: { total: 20, open: 15, roles: [{ role: 'server', label: 'Server', open: 6 }, { role: 'cook', label: 'Cook', open: 4 }, { role: 'driver', label: 'Driver', open: 2 }, { role: 'team_leader', label: 'Team leader', open: 2 }, { role: 'photographer', label: 'Photographer', open: 1 }] },
+      confirmed: 5, mine: false }, o || {});
+    const ONB = { me: { name: 'Steel', department: 'exec' }, ops: { name: 'Ahmed', title: 'Operations Lead, Montreal' }, year: { from: '2025-10-01', to: '2026-09-30', done: 1, target: 4 },
+      servings: [Object.assign({}, SV[0], { id: 23 }), SV[1], SV[2]] };
+    const rpcsB = (next) => Object.assign(rpcs(TODO), { wa290_next_serving: next, wa191_onb_servings: ONB });
+    const nextCard = f => f.ev(() => { const el = document.getElementById('w171next'); if (!el) return null; const b = el.querySelector('[data-w290signup]'); const r = el.getBoundingClientRect();
+      return { txt: el.innerText.replace(/\s+/g, ' ').trim(), k: (el.querySelector('.k') || {}).textContent, h: (el.querySelector('h3') || {}).textContent, open: !!el.querySelector('[data-w171open]'),
+        btn: b ? { t: b.textContent, alt: b.classList.contains('alt'), h: b.getBoundingClientRect().height } : null, right: r.right, vw: innerWidth }; });
+    const sheet = f => f.ev(() => { const el = document.getElementById('w290sheet'); if (!el || !el.classList.contains('on')) return null; const box = el.querySelector('.box'); const r = box.getBoundingClientRect();
+      return { txt: box.innerText.replace(/\s+/g, ' ').trim(), dialog: box.getAttribute('role') === 'dialog' && box.getAttribute('aria-modal') === 'true', focus: box.contains(document.activeElement) ? (document.activeElement.id || document.activeElement.className || document.activeElement.tagName) : null,
+        rows: [...box.querySelectorAll('.sv')].map(l => ({ id: l.querySelector('input').getAttribute('data-w290sev'), ck: l.querySelector('input').checked, dis: l.querySelector('input').disabled })),
+        left: r.left, right: r.right, bottom: r.bottom, vw: innerWidth, vh: innerHeight, over: document.documentElement.scrollWidth - innerWidth }; });
+
+    /* 7. someone outside Operations: the friendly card, Sign up, the pop-up */
+    f = await fresh(browser, home({ rpcs: rpcsB(NEXT()) }));
+    await f.page.waitForTimeout(2800);
+    let nc = await nextCard(f);
+    ok('friendly: the Next serving card is there', !!nc, nc);
+    ok('friendly: the kicker, the day, the time and the place', nc && /Next serving · in 9 days/.test(nc.k) && /Sunday, October 4/.test(nc.h) && /12:00 pm · Place Émilie-Gamelin/.test(nc.txt), nc && nc.txt);
+    ok('friendly: 15 spots still open, 5 confirmed so far', nc && /15 spots still open · 5 confirmed so far/.test(nc.txt), nc && nc.txt);
+    ok('friendly: the open roles, four at most', nc && /Server 6 · Cook 4 · Driver 2 · Team leader 2/.test(nc.txt) && !/Photographer 1/.test(nc.txt), nc && nc.txt);
+    ok('friendly: no operations detail (still waiting, texts, Open the serving)', nc && !/Still waiting|Texts are|confirmed · |Open the serving/.test(nc.txt) && !nc.open, nc && nc.txt);
+    ok('friendly: Sign up, at least 44px', nc && nc.btn && nc.btn.t === 'Sign up' && !nc.btn.alt && nc.btn.h >= 44, nc && nc.btn);
+    if (SHOTS) await (await f.page.$('#w171next')).screenshot({ path: SHOTS + '/w290b_next_friendly.png' });
+    await record(f);
+    await f.page.click('#w171next [data-w290signup]'); await f.page.waitForTimeout(700);
+    let sh = await sheet(f);
+    ok('Sign up opens the pop-up, a modal dialog with the focus inside', sh && sh.dialog && !!sh.focus, sh);
+    ok('the pop-up: this year 1 of 4, the serving they came from ticked', sh && /Your servings this year: 1 of 4, October to September\./.test(sh.txt) && sh.rows.length === 3 && sh.rows[0].id === '23' && sh.rows[0].ck && !sh.rows[2].ck, sh && { txt: sh.txt.slice(0, 160), rows: sh.rows });
+    ok('the pop-up: one they are on cannot be ticked again', sh && sh.rows[1].dis && sh.rows[1].ck, sh && sh.rows[1]);
+    if (SHOTS) await f.page.screenshot({ path: SHOTS + '/w290b_sheet_computer.png' });
+    await f.page.click('#w290sheet .roles label:nth-of-type(2)'); await f.page.waitForTimeout(100);
+    await f.page.click('#w290sheet [data-w290sgo]'); await f.page.waitForTimeout(800);
+    const sg = await calls(f, 'wa290_home_signup');
+    ok('Confirm sends the serving and the role', sg.length === 1 && JSON.stringify(sg[0].a.p_events) === '[23]' && sg[0].a.p_role === 'photographer', sg);
+    sh = await sheet(f);
+    ok('confirmed: the dates, who has them, the focus on it, Done', sh && /You’re confirmed for Sunday, October 4; Sunday, October 18\. Ahmed has the dates in the Operations Montreal inbox\./.test(sh.txt) && /ok/.test(sh.focus || '') && /Done/.test(sh.txt), sh && { txt: sh.txt, focus: sh.focus });
+    await f.page.click('#w290sheet [data-w290x="done"]'); await f.page.waitForTimeout(300);
+    ok('Done closes it and the focus goes back to Sign up', !(await sheet(f)) && await f.ev(() => !!document.activeElement && (document.activeElement.hasAttribute('data-w290signup') || document.activeElement === document.body)), await f.ev(() => document.activeElement && document.activeElement.outerHTML.slice(0, 120)));
+    /* Escape, the scrim, nothing ticked */
+    await f.page.waitForTimeout(2600);
+    await f.page.click('#w171next [data-w290signup]'); await f.page.waitForTimeout(600);
+    await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+    ok('Escape closes the pop-up', !(await sheet(f)));
+    await f.page.click('#w171next [data-w290signup]'); await f.page.waitForTimeout(600);
+    await f.page.uncheck('#w290sheet input[data-w290sev="23"]');
+    await f.page.click('#w290sheet [data-w290sgo]'); await f.page.waitForTimeout(300);
+    sh = await sheet(f);
+    ok('nothing ticked: says so in the pop-up, nothing sent', sh && /Choose at least one serving\./.test(sh.txt) && (await calls(f, 'wa290_home_signup')).length === 1, sh && sh.txt.slice(-160));
+    await f.page.mouse.click(10, 10); await f.page.waitForTimeout(200);
+    ok('a tap outside closes it', !(await sheet(f)));
+    ok('no page errors (friendly)', f.errs.length === 0, f.errs);
+    await f.close();
+
+    /* 8. on it already */
+    f = await fresh(browser, home({ rpcs: rpcsB(NEXT({ mine: true, confirmed: 6, spots: { total: 20, open: 14, roles: [{ role: 'server', label: 'Server', open: 5 }] } })) }));
+    await f.page.waitForTimeout(2800);
+    nc = await nextCard(f);
+    ok('on it already: thank you, and Sign up for another', nc && /You’re on this one\. Thank you!/.test(nc.txt) && nc.btn && nc.btn.t === 'Sign up for another' && /14 spots still open · 6 confirmed so far/.test(nc.txt), nc && nc.txt);
+    await f.close();
+
+    /* 9. Operations Montreal keep their card, with Sign up beside Open the serving */
+    f = await fresh(browser, home({ rpcs: rpcsB(NEXT({ ops: true })) }));
+    await f.page.waitForTimeout(2800);
+    nc = await nextCard(f);
+    ok('Operations: their card (confirmed, Open the serving) and Sign up beside it', nc && nc.open && /confirmed/.test(nc.txt) && !/spots still open/.test(nc.txt) && nc.btn && nc.btn.t === 'Sign up' && nc.btn.alt, nc && { txt: nc.txt, btn: nc.btn });
+    if (SHOTS) await (await f.page.$('#w171next')).screenshot({ path: SHOTS + '/w290b_next_ops.png' });
+    ok('no page errors (Operations)', f.errs.length === 0, f.errs);
+    await f.close();
+
+    /* 10. a phone: the friendly card and the pop-up as a sheet from the bottom */
+    f = await fresh(browser, home({ rpcs: rpcsB(NEXT()), width: 390 }));
+    await f.page.waitForTimeout(2800);
+    nc = await nextCard(f);
+    ok('phone: the friendly card fits', nc && nc.right <= nc.vw + 1, nc && { right: nc.right, vw: nc.vw });
+    await f.ev(() => document.querySelector('#w171next [data-w290signup]').scrollIntoView({ block: 'center' }));
+    await f.page.click('#w171next [data-w290signup]'); await f.page.waitForTimeout(700);
+    sh = await sheet(f);
+    ok('phone: the pop-up rises from the bottom, full width, nothing sideways', sh && sh.left <= 1 && sh.right >= sh.vw - 1 && Math.abs(sh.bottom - sh.vh) <= 2 && sh.over <= 1, sh && { left: sh.left, right: sh.right, bottom: sh.bottom, vh: sh.vh, over: sh.over });
+    ok('phone: the close button is at least 44px', await f.ev(() => { const r = document.querySelector('#w290sheet .x').getBoundingClientRect(); return r.width >= 44 && r.height >= 44; }));
+    if (SHOTS) await f.page.screenshot({ path: SHOTS + '/w290b_sheet_phone.png' });
+    ok('no page errors (phone, pop-up)', f.errs.length === 0, f.errs);
+    await f.close();
   } catch (e) { fail++; console.log('FAIL crashed :: ' + (e && e.stack || e)); }
   await browser.close();
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -1,4 +1,4 @@
-# 06/11/26 - wave290: Your servings this year, on Home (built 06/11/26, not released)
+# 06/11/26 - wave290: Your servings this year, on Home, and wave290b: the Next serving card for everyone (built 06/11/26, not released)
 
 Steel (06/11/26): "I need to build something in the hub where it's essentially on the home page. It's the volunteering dates of the year that one has to do before year end. I'm thinking of adding that starting December 1st. Actually, no, November 15th is good." Then, with a screenshot of Home on his phone and the Next serving card circled: "I think it should go somewhere here."
 
@@ -40,6 +40,59 @@ Nobody else sees anything new: not Toronto, not the board or directors, not anyo
 - **The page:** `build/parts290` draws `#w290srv` and appends it to `#mpBody`. `build/parts272/b_home.js` gives it `order: 14`, the same as the Next serving card, which wave171 inserts higher in the page, so the new card always comes second. On a computer the card is full width under the row that holds the Next serving card, with the dates in two columns; on a phone it is one column. It is drawn after its own call, like wave171's card, and put back when Home redraws (renderMyPage, and a light check every 2 seconds that only runs while the card is showing).
 - **Craft (Home's rules from wave272):** one quiet surface, 48 px rows with round ticks, press feedback, hover only with a mouse, the bar the only motion, all of it off for reduced motion. Real checkboxes and radio buttons with labels; the roles move with the arrow keys; an error and a confirmation take the focus and are announced.
 
+## wave290b: the Next serving card for everyone, and a shout-out at four (06/11/26)
+
+Steel, the same day: "those that have volunteered 4 times should be given a shout-out on the hub updates. Next to the upcoming up with a sign up button that opens a volunteer form. Or whatever makes it seem less for operations." His choices:
+- **Two views of the Next serving card.** Operations Montreal keep theirs; everyone else sees a friendly one with Sign up.
+- **The shout-out** goes in the Hub's shout-outs.
+
+**The Next serving card (wave171) on Home, for everyone outside Operations Montreal:**
+- **What it shows:** the kicker as before ("Next serving · in 9 days · Home-cooked"), the day, the time and the place (and a partner), then "15 spots still open · 5 confirmed so far", the open roles (four at most, for example "Server 6 · Cook 4 · Driver 2 · Team leader 2"), "You're on this one. Thank you!" when they are, and a gold **Sign up**.
+- **What it leaves out:** no confirmation counts by text, no names still waiting, no texting mode, no Open the serving.
+- **Operations Montreal** (team or access profile `opsmtl`) keep wave171's card exactly, with a quiet Sign up beside Open the serving. So does the Executive dashboard.
+- **Spots:** this serving's own `spot_counts`, else each role guide's `target` (20 a serving today). Filled means Confirmed on the roster, plus an active partner's headcount per role (`covers`).
+
+**Sign up** opens a pop-up, a centred dialog on a computer and a sheet from the bottom on a phone:
+- their count this year;
+- the next servings, the one they came from already ticked (ones they are on cannot be ticked again);
+- Serve or Take photos;
+- **Confirm my servings**: the same `wa290_home_signup` as the servings card, so Operations get a Request "From: Home". Then "You're confirmed for ...", and Done.
+
+Escape, a tap outside or Close shut it, and the focus goes back to Sign up.
+
+**The shout-out at four:**
+- **When:** every morning at 07:25 in Toronto, `wa290_servings_shoutouts()` (cron `wa-servings-shoutouts`, after the shoutouts job at 07:10) looks for active team members (not the board) who have volunteered at four Montreal servings this fiscal year. A serving counts here once it is completed or its day has passed and they were Confirmed on it. So the shout-out is for servings done, while the Home card counts servings signed up for.
+- **What:** each gets one shout-out a fiscal year, "Shima has volunteered at four servings this year. Thank you for showing up for our community!" (`hub_shoutouts`, kind auto, source servings, ten days).
+- **Where it shows:** like every shout-out, on the loading screen, in the HR centre and on the Executive dashboard. Nothing goes to Slack, email or a phone.
+
+**Files:**
+- `build/data/wa290b_next_and_shoutouts.sql` (`wa290_next_serving`, `wa290_servings_shoutouts`, the cron job) and `build/data/wa290b_undo.sql`.
+- `build/parts290/c_next.js` (the friendly view, Sign up and the pop-up), plus small changes in `a_head.js` (the rows' styles shared with the pop-up), `b_card.js` and `z_wire.js`.
+- `build/parts171/e_cards.js`: two lines in wave171's `nextHtml` (ask `w290.nextView`; Sign up beside Open the serving). `build/src/171_wave171.seg` is assembled again.
+- Tests: `test/w290blive.sql` and `test/w290blive_undo.sql` (live, rolled back), and more of `test/w290drive.js`.
+
+**Checks:**
+- **The page:** `test/w290drive.js` passes 58 of 58 (23 new):
+  - the friendly card's words and its Sign up of 44 px;
+  - no operations detail;
+  - the pop-up: a modal dialog, the focus inside, this year's count, the serving ticked;
+  - Confirm sends the serving and the role;
+  - the confirmation and Done (the focus goes back);
+  - Escape, a tap outside, nothing ticked;
+  - on it already ("Sign up for another");
+  - Operations keep their card with Sign up beside Open the serving;
+  - on a phone the pop-up is a full-width sheet from the bottom, with nothing sideways.
+- **Regressions** on this candidate: `test/w272drive.js` 152 of 152 (Home), `test/w174drive.js` 21 of 21, `test/w175drive.js` 7 of 7, `test/w182drive.js` 31 of 31.
+- **Live, rolled back** (at d11d05a): **ROLLBACK_OK**. The run did all of this, then rolled everything back:
+  - wave290, wave290b twice, the checks;
+  - the friendly facts for an invented member: the same serving as wave171's card, open spots that add up, signing up makes them "on it" with one more confirmed;
+  - Operations Montreal counted as Operations;
+  - three served: no shout-out; four: one, as written, and only once; a former member gets none;
+  - the undo twice and its checks (the cron job, the functions and the shout-outs gone, wave290 kept);
+  - wave290b again and wave290's own checks.
+
+**Release order:** wave290, then wave290b, then the page. **Undo order:** the page, then `wa290b_undo.sql`, then `wa290_undo.sql`.
+
 ## Files
 
 - `build/data/wa290_home_servings.sql`: the migration. Safe to run twice.
@@ -47,7 +100,7 @@ Nobody else sees anything new: not Toronto, not the board or directors, not anyo
 - `build/parts290/` (`a_head.js`, `b_card.js`, `z_wire.js`, `assemble.py`) makes `build/src/290_wave290.seg`.
 - `build/parts272/b_home.js`: one line (the card's order), so `build/src/272_wave272.seg` again.
 - `build/src/MANIFEST.txt`: 290 after 274, before 110.
-- `build/candidate.html`: 351a9257 (8,195,610 bytes). The base builds live's b8082fba byte for byte.
+- `build/candidate.html`: cb8c6d7c (8,212,357 bytes) with wave290b (351a9257 with wave290 alone). The base builds live's b8082fba byte for byte.
 - Tests: `test/w290drive.js` (the page, offline), and `test/w290live_before.sql`, `test/w290live.sql`, `test/w290live_undo.sql` (live checks that always roll back).
 - `docs/DATA_MODEL.md` regenerated. It also picked up comments from wave274 and wave277 that had not been regenerated.
 
