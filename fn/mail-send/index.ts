@@ -1,4 +1,9 @@
 // Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v7 (wave282, 06/11/26, not deployed): Steel's email rule of 5 Nov 2026 lives in crm_email_permission (newsletters and fundraising go to anyone
+//   not unsubscribed). set_settings no longer takes mail_fundraising_exemption (the setting is deleted). send and receipt answer
+//   {ok:false, reason:'do not contact'} (with status suppressed and basis do not contact, which the CRM page reads) when the rule says do not contact,
+//   and never call Resend. receipt is allowed for anyone who passes wa_can('gifts_edit') (team leads, admins, named finance people), not only admins.
+//   campaign_check adds first_contacts: how many of the audience crm_email_first_contact counts as a first contact (asked as the signed-in person).
 // v6 (wave273): who an email comes from and who replies reach. app_config mail_senders routes a template to volunteer@,
 //   operations@ or job@ (send also takes route); reply_to, on our domain, is the person handling that volunteer or organization.
 //   Without a reply_to, replies go to the address it came from. Campaigns that name their own sender keep it.
@@ -42,18 +47,18 @@
 //   domain_setup        -> create welfareavenue.com in Resend (or read it) and return the DNS records     (admin)
 //   domain_verify       -> ask Resend to verify, return the state                                        (admin)
 //   webhook_setup       -> create the Resend webhook to mail-events, secret into the vault               (admin)
-//   set_settings {..}   -> change from name/email, reply-to, mode, test recipients, fundraising exemption (admin)
+//   set_settings {..}   -> change from name/email, reply-to, mode, test recipients, postal address              (admin)
 //   save_template {..}  -> edit a template's subject, preheader, bodies, active                          (admin)
 //   refresh_consent     -> crm_refresh_implied_consent(), returns the counts                             (admin)
 //   preview {template_key, contact_id?, vars?} -> subject, html, text as they would go out
 //   test {template_key, to, vars?}   -> a real send to one of the test recipients only
 //   send {contact_id, template_key, vars?} -> the real thing: rule, mode, render, Resend, log
-//   campaign_check {campaign_id}   -> who the list holds, who the rule allows, who is held back and why, the cap
+//   campaign_check {campaign_id}   -> who the list holds, who the rule allows, who is held back and why, the cap, first contacts (v7)
 //   campaign_queue {campaign_id}   -> live mode only: one queued send per allowed address, the held ones logged; starts the pump
 //   campaign_pump                  -> takes queued sends (crm_claim_queued) within the daily cap, re-checks the rule, sends
 //   campaign_cancel {campaign_id}  -> the sends still waiting are cancelled
 //   campaign_test {campaign_id, to?} -> the campaign as it will look, to a test recipient or the caller's own staff address
-//   receipt {receipt_id, to?}      -> the thank-you with the official receipt PDF attached (admins or the automation)
+//   receipt {receipt_id, to?}      -> the thank-you with the official receipt PDF attached (wa_can gifts_edit, or the automation)
 //   receipt_sample {to?, lang?}    -> the same email with a SAMPLE receipt attached, to a test recipient (admins)
 //   itinerary_preview {roster_id, note?, is_update?, lang?} -> a volunteer's itinerary email as it will look (leaders, HR, admins)
 //   itinerary_test {roster_id, to?, note?, is_update?, lang?} -> the same, sent to a test recipient or the caller's own team address
@@ -93,7 +98,8 @@ async function getSecret(name: string): Promise<string | null> {
 async function resendKey(): Promise<string | null> {
   return Deno.env.get('RESEND_API_KEY') || await getSecret('RESEND_API_KEY');
 }
-type Caller = { who: string; email: string; admin: boolean };
+/* db (v7): the caller's own client (their JWT), for the functions that answer per signed-in person (wa_can, crm_email_first_contact) */
+type Caller = { who: string; email: string; admin: boolean; db?: any };
 async function caller(req: Request): Promise<Caller | null> {
   try { const g = req.headers.get('x-wa-secret'); if (g && g === (await getSecret('WA_TRIGGER_SECRET'))) return { who: 'automation', email: 'automation', admin: true }; } catch (_) { /* no */ }
   const authHeader = req.headers.get('Authorization') || '';
@@ -106,7 +112,26 @@ async function caller(req: Request): Promise<Caller | null> {
   if (ok.data === false) return null;
   const role = await asUser.rpc('get_my_role');
   const admin = String(role.data || '') === 'admin' || ADMINS.includes(email);
-  return { who: 'staff', email, admin };
+  return { who: 'staff', email, admin, db: asUser };
+}
+/* v7 (wave282): receipts follow wa_can('gifts_edit'), asked as the signed-in person */
+async function canEditGifts(who: Caller): Promise<boolean> {
+  if (!who.db) return false;
+  const r = await who.db.rpc('wa_can', { p_cap: 'gifts_edit' });
+  return !r.error && r.data === true;
+}
+/* v7 (wave282): how many of a Send's audience would get their first email from Welfare Avenue. crm_email_first_contact answers only staff, so it is
+   asked as the signed-in person; people with express or implied consent never count, so only the other allowed people are asked, 25 at a time.
+   null when it cannot be counted (the automation, or the function missing); the page then shows nothing. */
+async function firstContacts(who: Caller, rows: { contact_id: number; allowed: boolean; basis: string }[]): Promise<number | null> {
+  if (!who.db) return null;
+  const ids = [...new Set(rows.filter(r => r.allowed && !/^(express consent|implied consent until)/.test(String(r.basis || ''))).map(r => Number(r.contact_id)))];
+  let n = 0;
+  for (let i = 0; i < ids.length; i += 25) {
+    const res = await Promise.all(ids.slice(i, i + 25).map(id => who.db.rpc('crm_email_first_contact', { p_contact: id })));
+    for (const r of res) { if (r.error) return null; if (r.data === true) n++; }
+  }
+  return n;
 }
 async function rs(key: string, method: string, path: string, body?: unknown, extra?: Record<string, string>): Promise<{ ok: boolean; status: number; body: any }> {
   const res = await fetch(RESEND + path, {
@@ -643,13 +668,13 @@ Deno.serve(async (req: Request) => {
     }
     if (action === 'set_settings') {
       if (!admin) return json({ error: 'admins only' }, 403);
-      const allowed = ['mail_from_name', 'mail_from_email', 'mail_reply_to', 'mail_mode', 'mail_test_recipients', 'mail_fundraising_exemption', 'mail_postal_address'];
+      /* v7 (wave282): mail_fundraising_exemption is gone (Steel's rule of 5 Nov 2026 is in crm_email_permission); it is ignored if sent */
+      const allowed = ['mail_from_name', 'mail_from_email', 'mail_reply_to', 'mail_mode', 'mail_test_recipients', 'mail_postal_address'];
       const changes: string[] = [];
       for (const k of allowed) {
         if (body[k] === undefined) continue;
         let v = String(body[k] || '').trim();
         if (k === 'mail_mode' && !['test', 'live'].includes(v)) return json({ error: 'mode must be test or live' }, 400);
-        if (k === 'mail_fundraising_exemption' && !['on', 'off'].includes(v)) return json({ error: 'exemption must be on or off' }, 400);
         if (k === 'mail_from_email' && !(isEmail(v) && v.toLowerCase().endsWith('@' + (cfg.mail_domain || 'welfareavenue.com')))) return json({ error: 'the from address must be on ' + (cfg.mail_domain || 'welfareavenue.com') }, 400);
         if (k === 'mail_reply_to' && v && !isEmail(v)) return json({ error: 'reply-to is not an email address' }, 400);
         if (k === 'mail_test_recipients') { const l = listOf(v).filter(isEmail); if (!l.length) return json({ error: 'at least one test recipient' }, 400); v = l.join(', '); }
@@ -709,6 +734,8 @@ Deno.serve(async (req: Request) => {
       const p = (perm.data || [])[0] || { allowed: false, basis: 'the permission rule did not answer' };
       if (!p.allowed) {
         await svc.from('crm_email_sends').insert({ contact_id: c.id, to_email: p.email || c.primary_email || (c.emails || [])[0] || '(no email)', template_key: tpl.key, kind, status: 'suppressed', permission_basis: p.basis, meta: { template: tpl.name, caller: who.email }, created_by: who.email });
+        /* v7 (wave282): a do-not-contact person; Resend is never called */
+        if (p.basis === 'do not contact') return json({ ok: false, reason: 'do not contact', status: 'suppressed', basis: p.basis }, 200);
         return json({ status: 'suppressed', basis: p.basis, to: p.email }, 200);
       }
       const to = String(p.email).toLowerCase();
@@ -745,7 +772,7 @@ Deno.serve(async (req: Request) => {
       const perDay = Math.max(1, Number(cfg.mail_campaign_daily_cap || cfg.mail_daily_cap || 0) || a.ok.length || 1);
       const summary = { audience: a.rows.length, eligible: a.ok.length, held: a.held.length, duplicates: a.dupes, why: a.why, mode: live ? 'live' : 'test', usage: u,
         per_day: Number(cfg.mail_campaign_daily_cap || cfg.mail_daily_cap || 0) || null, days: Math.max(1, Math.ceil(a.ok.length / perDay)) };
-      if (action === 'campaign_check') return json(summary);
+      if (action === 'campaign_check') return json({ ...summary, first_contacts: await firstContacts(who, a.rows) });   /* v7 (wave282) */
       /* campaign_queue */
       if (k.status !== 'draft') return json({ error: 'this campaign is ' + k.status }, 400);
       if (!live) return json({ ...summary, error: 'The Hub is in test mode: a campaign goes out once an admin switches the mode to live in the Email tab. Send yourself a test meanwhile.', status: 'blocked' }, 403);
@@ -761,8 +788,8 @@ Deno.serve(async (req: Request) => {
       return json({ ...summary, queued: queued.length, first });
     }
     if (action === 'receipt') {
-      /* v5 (wave185): the thank-you with the official receipt attached. Admins (Email it) or the automation. */
-      if (!admin) return json({ error: 'admins only' }, 403);
+      /* v5 (wave185): the thank-you with the official receipt attached. v7 (wave282): anyone who passes wa_can('gifts_edit') (Email it), or the automation. */
+      if (!admin && !(await canEditGifts(who))) return json({ error: 'Only team leads, admins and finance can email receipts.' }, 403);
       const rid = Number(body.receipt_id);
       const d = await svc.rpc('crm_receipt_email_doc', { p_id: rid });
       if (d.error || !d.data) return json({ error: d.error ? d.error.message : 'no such receipt' }, 404);
@@ -770,6 +797,14 @@ Deno.serve(async (req: Request) => {
       if (rc.status !== 'issued') return json({ error: 'Receipt ' + rc.serial + ' is cancelled: nothing is emailed.' }, 400);
       if (!rc.contact_id) return json({ error: 'The receipt has no donor on file.' }, 400);
       const c = await contactById(Number(rc.contact_id)); if (!c) return json({ error: 'no such contact' }, 404);
+      /* the rule: a receipt is transactional (anyone whose address works). v7 (wave282): asked first, so a do-not-contact donor costs no PDF and no Resend call;
+         the receipt stays issued and stored. */
+      const perm = await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: 'transactional' });
+      const p = (perm.data || [])[0] || { allowed: false, basis: 'the permission rule did not answer', email: null };
+      if (p.basis === 'do not contact') {
+        await svc.from('crm_email_sends').insert({ contact_id: c.id, to_email: p.email || c.primary_email || (c.emails || [])[0] || '(no email)', template_key: rc.lang === 'fr' ? 'receipt_fr' : 'receipt', kind: 'transactional', status: 'suppressed', permission_basis: p.basis, meta: { caller: who.email, receipt_id: rid }, created_by: who.email });
+        return json({ ok: false, reason: 'do not contact', status: 'suppressed', basis: p.basis, serial: rc.serial }, 200);
+      }
       /* the PDF: drawn by receipt-pdf once; drawn now when it is missing */
       let path = String(rc.pdf_path || '');
       if (!path) {
@@ -808,9 +843,7 @@ Deno.serve(async (req: Request) => {
                         : (rc.tribute_kind === 'memory' ? 'Your gift was made in memory of ' : 'Your gift was made in honour of ') + rc.tribute_name + '.';
         vars.extra_html = '<p>' + esc(line) + '</p>'; vars.extra_text = line + '\n\n';
       }
-      /* the rule: a receipt is transactional (anyone whose address works) */
-      const perm = await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: 'transactional' });
-      const p = (perm.data || [])[0] || { allowed: false, basis: 'the permission rule did not answer', email: null };
+      /* the rule's answer (asked above): a bounced or complained address gets nothing */
       if (!p.allowed) {
         await svc.from('crm_email_sends').insert({ contact_id: c.id, to_email: p.email || c.primary_email || (c.emails || [])[0] || '(no email)', template_key: tpl.key, kind: 'transactional', status: 'suppressed', permission_basis: p.basis, meta: { template: tpl.name, caller: who.email, receipt_id: rid }, created_by: who.email });
         return json({ status: 'suppressed', basis: p.basis, to: p.email, serial: rc.serial }, 200);
