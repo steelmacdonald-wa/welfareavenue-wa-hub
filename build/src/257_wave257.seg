@@ -47,18 +47,24 @@
       return e && (e.kind || 'service') === 'service' && String(e.event_date) >= t && e.status !== 'cancelled' && e.status !== 'completed';
     }).sort(function (a, b) { return String(a.event_date) < String(b.event_date) ? -1 : 1; });
   }
+  /* wave286: the Volunteer Manager's chapter switch (window.WA_CHAPTER: montreal, toronto or all); the servings and the 30-second cache follow it */
+  function chapterNow() { var c = window.WA_CHAPTER; return c && c !== 'all' ? String(c) : 'all'; }
+  function inChapter(e, ch) { return ch === 'all' || ((e && e.chapter) || 'montreal') === ch; }
   async function loadPlaces(force) {
-    if (!force && U.by && Date.now() - U.at < 30000) return U.by;
+    var ch = chapterNow();
+    if (!force && U.by && U.ch === ch && Date.now() - U.at < 30000) return U.by;
     if (U.loading) return U.loading;
     U.loading = (async function () {
       try {
         /* the servings themselves (not only the calendar's list), so every upcoming serving counts */
         var evs = [];
         try {
-          var q = await db.from('volunteer_events').select('id,code,title,event_date,status,kind').gte('event_date', todayIso()).order('event_date', { ascending: true });
-          evs = ((q && q.data) || []).filter(function (e) { return (e.kind || 'service') === 'service' && e.status !== 'cancelled' && e.status !== 'completed' && String(e.event_date) >= todayIso(); });
+          var qb = db.from('volunteer_events').select('id,code,title,event_date,status,kind,chapter').gte('event_date', todayIso());
+          if (ch !== 'all') qb = qb.eq('chapter', ch);
+          var q = await qb.order('event_date', { ascending: true });
+          evs = ((q && q.data) || []).filter(function (e) { return (e.kind || 'service') === 'service' && e.status !== 'cancelled' && e.status !== 'completed' && String(e.event_date) >= todayIso() && inChapter(e, ch); });
         } catch (e) { evs = []; }
-        if (!evs.length) evs = upcomingEvents();
+        if (!evs.length) evs = upcomingEvents().filter(function (e) { return inChapter(e, ch); });
         U.evs = evs;
         var by = {};
         if (evs.length) {
@@ -70,7 +76,7 @@
           });
           Object.keys(by).forEach(function (k) { by[k].sort(function (a, b) { return String(a.e.event_date) < String(b.e.event_date) ? -1 : 1; }); });
         }
-        U.by = by; U.at = Date.now();
+        U.by = by; U.at = Date.now(); U.ch = ch;
       } catch (e) { U.by = U.by || {}; }
       U.loading = null;
       return U.by;
@@ -365,5 +371,6 @@
   }
   if (!addTour()) { var tt = 0, tv = setInterval(function () { if (addTour() || ++tt > 40) clearInterval(tv); }, 500); }
 
-  window.w257 = { places: loadPlaces, state: function () { return { U: U, A: A }; }, open: openAssign, stateOf: stateOf };
+  window.w257 = { places: loadPlaces, state: function () { return { U: U, A: A }; }, open: openAssign, stateOf: stateOf,
+    reset: function () { U.at = 0; U.by = null; U.ch = null; } };   /* wave286: the chapter switch moved; the next paint reads the places again */
 })();

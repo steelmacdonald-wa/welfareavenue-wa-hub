@@ -154,7 +154,8 @@
   function w106NextCode(dateStr) {
     var yy = String(dateStr || '').slice(2, 4) || String(new Date().getFullYear()).slice(2);
     var max = 0;
-    (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []).forEach(function (e) {
+    /* wave286: every chapter's servings (the switch may hide some), so a code is never taken twice */
+    (window.WA_VOL_EVENTS_ALL || (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : [])).forEach(function (e) {
       var m = /^WA-(\d{2})-(\d+)$/.exec(e.code || '');
       if (m && m[1] === yy) max = Math.max(max, Number(m[2]));
     });

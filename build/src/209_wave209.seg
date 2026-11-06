@@ -203,15 +203,35 @@
 
   /* ---------- the Volunteer Manager: Applicants received ---------- */
   function onView() { try { return typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'applicants'; } catch (e) { return false; } }
+  /* wave286: the Volunteer Manager's chapter switch (window.WA_CHAPTER: montreal, toronto or all). The list and its 60-second cache follow it. Until the
+     Toronto forms wave adds volunteer_applications.chapter the filtered read fails: then every application is read and counted as Montreal. */
+  function chapterNow() { var c = window.WA_CHAPTER; return c && c !== 'all' ? String(c) : 'all'; }
   async function load(force) {
     if (V.loading) return V.loading;
-    if (!force && V.list && Date.now() - V.at < 60000) return V.list;
+    var ch = chapterNow();
+    if (!force && V.list && V.ch === ch && Date.now() - V.at < 60000) return V.list;
     V.loading = (async function () {
-      try { var r = await db.from('volunteer_applications').select('*').order('applied_at', { ascending: false }).limit(2000); V.list = (r && !r.error && r.data) || []; } catch (e) { V.list = V.list || []; }
-      V.at = Date.now(); V.loading = null; V.n = V.list.filter(isOpen).length;
+      try {
+        var q = db.from('volunteer_applications').select('*');
+        if (ch !== 'all' && !V.noCh) q = q.eq('chapter', ch);
+        var r = await q.order('applied_at', { ascending: false }).limit(2000);
+        if (r && r.error && ch !== 'all' && !V.noCh) { V.noCh = true; r = await db.from('volunteer_applications').select('*').order('applied_at', { ascending: false }).limit(2000); }
+        var rows = (r && !r.error && r.data) || [];
+        V.list = ch === 'all' ? rows : rows.filter(function (a) { return (a.chapter || 'montreal') === ch; });
+      } catch (e) { V.list = V.list || []; }
+      V.at = Date.now(); V.ch = ch; V.loading = null; V.n = V.list.filter(isOpen).length;
       return V.list;
     })();
     return V.loading;
+  }
+  /* wave286: the switch moved: forget the cache, and count again for the rail */
+  function reset() { V.at = 0; V.ch = null; try { if (staff()) counts(); } catch (e) { /* fine */ } }
+  function chapterChip(a) {
+    if (chapterNow() !== 'all') return '';
+    var code = a.chapter || 'montreal', name = code;
+    try { (window.WA_CHAPTERS || []).forEach(function (c) { if (c.code === code) name = c.name_en || code; }); } catch (e) { /* fine */ }
+    if (name === code) name = code.charAt(0).toUpperCase() + code.slice(1);
+    return '<span class="w209chip w286ch">' + E(name) + '</span>';
   }
   function isOpen(a) { return a.status === 'received' || a.status === 'contacted'; }
   async function counts(noLoad) { if (!staff()) return; if (!noLoad) await load(true); try { if (window.WA_APP && typeof WA_APP.renderRail === 'function') WA_APP.renderRail(); } catch (e) { /* fine */ } try { document.dispatchEvent(new CustomEvent('w209count', { detail: V.n })); } catch (e) { /* fine */ } }
@@ -256,7 +276,7 @@
     var msg = a.message ? '<div class="w209msg">' + E(open || !long ? a.message : String(a.message).slice(0, 240) + '\u2026') + (long ? ' ' + btn(open ? 'Less' : 'More', 'data-w209more="' + a.id + '"', 'sm link') : '') + '</div>' : '';
     var cv = a.cv_url ? '<a class="w197b sm" href="' + E(a.cv_url) + '" target="_blank" rel="noopener">CV</a>' : (a.cv_path ? btn('CV', 'data-w209cv="' + E(a.cv_path) + '"', 'sm') : '');
     var stt = '<span class="w209st ' + E(a.status) + '">' + E(lbl(STATUS, a.status)) + '</span>';
-    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b>' + stt + '</div>' +
+    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b>' + stt + chapterChip(a) + '</div>' +
       '<div class="w209roles2">' + (a.roles || []).map(function (k) { return '<span class="w209chip">' + E(roleLabel(k)) + '</span>'; }).join('') + (a.role_text && (a.roles || []).length <= 1 ? '<small>' + E(a.role_text) + '</small>' : '') + '</div>' +
       '<p class="w209meta">Applied ' + E(ago(a.applied_at)) + ' (' + E(day(a.applied_at)) + ') \u00b7 ' + E(lbl(SOURCES, a.source) || a.source) + (a.language ? ' \u00b7 ' + (a.language === 'fr' ? 'French' : a.language === 'en' ? 'English' : E(a.language)) : '') + '</p>' +
       '<p class="w209ct">' + (a.email ? '<a href="mailto:' + E(a.email) + '">' + E(a.email) + '</a>' : '') + (a.email && a.phone ? ' \u00b7 ' : '') + (a.phone ? '<a href="tel:' + E(String(a.phone).replace(/[^\d+]/g, '')) + '">' + E(a.phone) + '</a>' : '') + (!a.email && !a.phone ? 'No contact details' : '') + '</p>' +
@@ -439,5 +459,5 @@
     '.w197b.link{border:none;text-decoration:underline;padding:2px 4px;}';
   (document.head || document.documentElement).appendChild(css);
 
-  window.w209 = { state: function () { return V; }, load: load, counts: counts, paint: paint, barBits: barBits, sheetBits: sheetBits, openForm: openForm, volRoles: volRoles, moveCard: moveCard, arm: arm };
+  window.w209 = { state: function () { return V; }, load: load, reset: reset, counts: counts, paint: paint, barBits: barBits, sheetBits: sheetBits, openForm: openForm, volRoles: volRoles, moveCard: moveCard, arm: arm };
 })();
