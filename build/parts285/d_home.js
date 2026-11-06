@@ -18,11 +18,21 @@
       + '<button type="button" class="w285b" data-w285open="' + E(P.key) + '" data-ctx="home" aria-label="Open ' + E(P.name) + '">Open</button></div>'
       + '<div class="w285turn' + (P.turn.cls ? ' ' + P.turn.cls : '') + '">' + E(P.turn.t) + '</div>'
       + '<div class="w285prog" style="max-width:320px">' + (g.pct != null ? '<div class="w285bar"><i style="width:' + Math.max(0, Math.min(100, g.pct)) + '%"></i></div>' : '') + '<div class="w285pct">' + E(g.label || '') + '</div></div>'
+      + helpHtml(P)
       + (wk.length || act ? '<div class="wk"><div class="w285lbl">This week, for you</div>' + wk.map(function (s) {
           var late = s.due && String(s.due) < t0;
           return '<label><input type="checkbox" data-w166tick="' + E(s.id) + '"><span>' + E(s.name) + (s.due ? '<em class="' + (late ? 'late' : '') + '">' + (late ? 'was due ' : 'by ') + E(fmtDay(s.due)) + '</em>' : '') + '</span></label>';
         }).join('') + (act ? '<div style="margin-top:6px">' + act + '</div>' : '') + '</div>' : '')
       + '</div>';
+  }
+  /* a hire asking for help: on their card, with wave166's own Dealt with (onboarding_help_resolve) */
+  function helpHtml(P) {
+    var L = (P.lead && P.lead.help) || [];
+    if (!L.length && P.onb && W.helpOf) L = W.helpOf(P.onb.id);
+    return L.map(function (q) {
+      return '<div class="w285it" style="padding:8px 0;border:0"><i class="w285dot r"></i><p><b>Asked for help</b>' + (q.step ? ' with ' + E(q.step) : '') + (q.note ? ': “' + E(q.note) + '”' : '.') + (q.at ? '<span class="w285sub">' + E(fmtDay(q.at)) + '</span>' : '') + '</p>'
+        + '<span class="w285acts"><button type="button" class="w285b" data-w166resolve="' + E(q.id) + '">Dealt with</button></span></div>';
+    }).join('');
   }
   var HP = { t: null, busy: false };
   function paintHome() {
@@ -34,20 +44,32 @@
     var html = '<h3>' + (ppl.length === 1 ? 'Your new hire' : 'Your new hires (' + ppl.length + ')') + '</h3><p>Whose turn it is, what this week needs from you, and Open for the whole picture.</p>' + ppl.map(cardHtml).join('');
     if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
     if (!body.classList.contains('w285on')) body.classList.add('w285on');
+    /* wave275 can draw a card into its hidden list outside its painter: the open panel's card stays the only copy */
+    try { W.stripOpen(); } catch (e) { /* fine */ }
   }
   function paintHomeSoon() { clearTimeout(HP.t); HP.t = setTimeout(function () { try { paintHome(); } catch (e) { /* the next one */ } }, 60); }
   W.paintHome = paintHome; W.paintHomeSoon = paintHomeSoon;
+  /* a tick on the card: wave166 saves it and disables the box; whatever it answers, the card is drawn again from the lead's card afterwards, so a
+     box is never left disabled after a refused save */
+  document.addEventListener('change', function (e) {
+    var c = e.target; if (!c || !c.closest || !c.closest('#w285home') || !c.getAttribute('data-w166tick')) return;
+    [1500, 4000].forEach(function (ms) { setTimeout(function () { var el = document.getElementById('w285home'); if (el) el.__h = ''; paintHome(); }, ms); });
+  });
   function watchHome() {
     var body = document.getElementById('mpBody'); if (!body || body.__w285mo) return; body.__w285mo = true;
     new MutationObserver(function (list) {
-      for (var i = 0; i < list.length; i++) { var t = list[i].target; if (t && t.closest && t.closest('#w285home')) continue; paintHomeSoon(); return; }
+      for (var i = 0; i < list.length; i++) { var t = list[i].target; if (t && t.closest && t.closest('#w285home')) continue; try { W.stripOpen(); } catch (e) { /* fine */ } paintHomeSoon(); return; }
     }).observe(body, { childList: true, subtree: true });
   }
   if (typeof renderMyPage === 'function') {
     var __rm285 = renderMyPage;
     renderMyPage = async function () {
       var r = await __rm285.apply(this, arguments);
-      try { watchHome(); paintHome(); var L = window.w166; if (L && L.load) Promise.resolve(L.load(false)).then(paintHomeSoon, paintHomeSoon); } catch (e) { /* non-fatal */ }
+      try {
+        watchHome(); paintHome(); var L = window.w166; if (L && L.load) Promise.resolve(L.load(false)).then(paintHomeSoon, paintHomeSoon);
+        /* the plans themselves (every staff member reads them), so the manager's figure is the rule's, the same as HR's */
+        if (typeof wa37Load === 'function' && !(typeof WA37 !== 'undefined' && WA37.loaded)) Promise.resolve(wa37Load(false)).then(paintHomeSoon, paintHomeSoon);
+      } catch (e) { /* non-fatal */ }
       return r;
     };
   }
@@ -74,6 +96,8 @@
       html = '<span style="font-weight:700;color:#103F39;white-space:nowrap">Onboarding' + (done ? ': complete' : '') + '</span>'
         + (p && p.total ? '<span class="w285bar"><i style="width:' + p.pct + '%"></i></span><span style="color:rgba(16,63,57,.64);white-space:nowrap">' + p.done + ' of ' + p.total + ' steps</span>' : '<span style="color:rgba(16,63,57,.64)">No plan steps yet</span>')
         + (h.isHr() ? '<button type="button" class="w285b" data-w285open="' + E(done ? 'done' + o.id : 'm' + mid) + '" data-ctx="hr" data-tab="pl">Open</button>' : '');
+    } else if (h.isHr() && W.openPlanOf && W.openPlanOf(mid)) {
+      html = '<span style="color:rgba(16,63,57,.64)">They already have an onboarding plan (' + E(W.openPlanOf(mid).status) + '), so a second one cannot be started here.</span>';
     } else if (h.isHr()) {
       var ask = W.askStart && W.askStart[mid], busy = W.panel && W.panel().asked && W.panel().asked[mid];
       html = ask ? '<span>Start ' + E(first(name) ? first(name) + '\'s' : 'their') + ' plan today? Every step of the Plan template is copied in with its due date.</span><button type="button" class="w285b pri" data-w285start="' + E(mid) + '" data-go="1" data-name="' + E(name) + '"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Starting...' : 'Start it today') + '</button><button type="button" class="w285b" data-w285start="' + E(mid) + '" data-go="0">Cancel</button>'

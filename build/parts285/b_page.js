@@ -86,6 +86,12 @@
         acts: L.length === 1 ? openBtn(L[0], 'su', 'Open') : '<button type="button" class="w285b" data-w285fold="t' + E(k) + '" aria-expanded="' + !!open + '">' + (open ? 'Hide the list' : 'Open the list') + '</button>',
         more: L.length > 1 && open ? L.map(function (P) { return { red: false, html: '<p><b>' + E(P.name) + '</b>: ' + E(words[0]) + '.</p>', acts: openBtn(P, 'su', 'Open') }; }) : null });
     });
+    /* a hire asking for help (wave39's onboarding_help, open ones): Dealt with is wave166's own button (onboarding_help_resolve) */
+    W.helpAll().forEach(function (q) {
+      var P = c.people.filter(function (x) { return x.onb && String(x.onb.id) === String(q.onboarding_id); })[0];
+      out.unshift({ red: true, html: '<p><b>' + E(P ? P.name : q.person || 'Someone') + '</b> asked for help' + (q.step ? ' with ' + E(q.step) : '') + (q.note ? ': “' + E(q.note) + '”' : '.') + (q.at ? '<span class="w285sub">' + E(fmtDay(q.at)) + '</span>' : '') + '</p>',
+        acts: '<button type="button" class="w285b" data-w166resolve="' + E(q.id) + '">Dealt with</button>' + (P ? openBtn(P, 'ov', 'Open') : '') });
+    });
     c.backed.forEach(function (P) {
       var n = removals(P.flow);
       if (n) out.push({ red: false, html: '<p><b>' + E(P.name) + '</b> backed out: take ' + plural(n, 'thing') + ' out by hand.</p>', acts: openBtn(P, 'ov', 'Open') });
@@ -140,7 +146,7 @@
 
   /* ---------- the page ---------- */
   function pageHtml() {
-    var S = h.S() || {}, c = W.collect('hr');
+    var S = h.S() || {}, c = W.collect('hr', { finished: ST.seeDone });
     var html = '';
     if (S.err) html += '<div class="o271err" style="margin:0 0 14px">' + E(S.err) + '</div>';
     var n = needs(c);
@@ -182,6 +188,24 @@
   }
   function paintSoon() { clearTimeout(pend); pend = setTimeout(function () { try { paint(); } catch (e) { /* the next one */ } }, 30); }
   W.paintPage = paint; W.paintPageSoon = paintSoon;
+  /* the open help requests: wave39's list (HR) and the lead's card (the manager), one shape: {id, onboarding_id, step, note, at} */
+  W.helpAll = function () {
+    var out = [], seen = {};
+    try { (typeof WA39_HELP !== 'undefined' ? WA39_HELP : []).forEach(function (x) { if (x && (x.status == null || x.status === 'open') && !seen[x.id]) { seen[x.id] = 1; out.push({ id: x.id, onboarding_id: x.onboarding_id, step: x.step_name || '', note: x.note || '', at: x.created_at || null }); } }); } catch (e) { /* none */ }
+    try { var L = window.w166 && window.w166.state && window.w166.state().lead; ((L && L.people) || []).forEach(function (p) { (p.help || []).forEach(function (q) { if (q && !seen[q.id]) { seen[q.id] = 1; out.push({ id: q.id, onboarding_id: p.onboarding_id, step: q.step || '', note: q.note || '', at: q.at || null, person: p.name }); } }); }); } catch (e) { /* none */ }
+    return out;
+  };
+  W.helpOf = function (onbId) { return W.helpAll().filter(function (q) { return onbId != null && String(q.onboarding_id) === String(onbId); }); };
+  /* after wave166 marks a request dealt with, wave39's list is read again (wave166 refreshes the lead's card itself) */
+  window.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w166resolve]'); if (!b) return;
+    var id = b.getAttribute('data-w166resolve');
+    setTimeout(async function () {
+      try { if (typeof WA39_HELP !== 'undefined') WA39_HELP = WA39_HELP.filter(function (x) { return String(x.id) !== String(id); }); } catch (x) { /* fine */ }
+      try { if (typeof wa39OnbLoad === 'function') await wa39OnbLoad(); } catch (x) { /* fine */ }
+      W.paintAll();
+    }, 900);
+  }, true);
 
   /* ---------- wiring ---------- */
   /* wave271's painter: after it, the page (and the panel and Home, see c_panel.js) draw from the same state */
