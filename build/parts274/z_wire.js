@@ -295,6 +295,9 @@
       wa40Allowed.__w274 = true;
     } catch (e) { /* fine */ }
   }
+  /* wave274 (one app, 06/11/26): Toronto is now a city of the Volunteer Manager (wave153's APPS.toronto, of: 'volunteer'; the
+     Montreal | Toronto switch is wave153's). The page keeps its own id and its access label, Toronto Volunteers (People and
+     access decides it per profile); only the launcher shows it as the Volunteer Manager. */
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
     wrapAllowed();

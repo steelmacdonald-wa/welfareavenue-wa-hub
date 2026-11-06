@@ -34,7 +34,7 @@
   }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
-    var cur = S.app || 'hub';
+    var cur = tileOf(S.app || 'hub');   /* wave274 (one app): in Toronto the Volunteer Manager's tile is the current one */
     /* wave262: Your apps first, then More apps (the other apps this person can open) */
     var Y = yours(), tiles = function (ids) { return ids.map(function (id) { return tileHtml(APPS[id], id === cur); }).join(''); };
     p.innerHTML = '<div class="w153ph">' + (Y.all ? 'Apps' : 'Your apps') + '</div><div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) +
@@ -72,11 +72,30 @@
     /* the page's own item while the address names a section the rail does not list */
     return !items(app).some(function (g) { return g.items.some(function (x) { return pageOf(x.h) === ip && subOf(x.h) === sub; }); });
   }
+  /* wave274 (one app): the city switch, Montreal | Toronto: two real buttons, the current city pressed in its own colour. Shown
+     only when this person may open both; a press goes to that city's home (#volunteering, #toronto), a page change, not an animation */
+  function switchHtml(app) {
+    app = app || S.app; if (!app || !APPS[app]) return '';
+    var cs = cities(app); if (cs.length < 2) return '';
+    return '<div class="w153city" role="group" aria-label="City">' + cs.map(function (c) {
+      var on = c === app;
+      return '<button type="button" data-w153city="' + E(c) + '" aria-pressed="' + (on ? 'true' : 'false') + '" style="--w153cc:' + APPS[c].color + '">' + E(APPS[c].city || APPS[c].label) + '</button>';
+    }).join('') + '</div>';
+  }
+  function toCity(c) {
+    var a = APPS[c]; if (!a || !ownOk(c)) return;
+    if (c === S.app) return;   /* the city you are in: a pressed button stays pressed */
+    var sw = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.w153city') : null;
+    S.cityFocus = sw && sw.closest('#w153rail') ? { c: c, until: Date.now() + 3000 } : null;   /* the keyboard keeps its place: the new city's button */
+    go(a.home || firstHash(c));
+  }
   function paintRail() {
     var r = document.getElementById('w153rail'); if (!r) return;
     var app = S.app; if (!app) { r.innerHTML = ''; return; }
     var a = APPS[app], gs = items(app);
-    r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
+    var fc = document.activeElement && r.contains(document.activeElement) ? document.activeElement.getAttribute('data-w153city') : null;   /* wave274 (one app) */
+    var sw = switchHtml(app);   /* wave274 (one app): the city's own line, then the switch, under the app's name */
+    r.innerHTML = '<div class="w153ah' + (sw ? ' w153ahc' : '') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.line || a.blurb) + '</small></div>' + sw + '</div>' +
       gs.map(function (g) {
         return '<div class="w153sec">' + (g.solo ? '' : '<div class="w153sh">' + E(g.label) + '</div>') + g.items.map(function (it) {
           var on = isOn(app, it);
@@ -84,6 +103,11 @@
         }).join('') + '</div>';
       }).join('') +
       (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');
+    /* wave274 (one app): a redraw keeps the focus on the switch; after a switch by keyboard it lands on the new city's button */
+    var cf = S.cityFocus && S.cityFocus.until > Date.now() && S.cityFocus.c === app ? app : null;
+    if (cf) S.cityFocus = null;
+    var want = cf || fc, fb = want ? r.querySelector('[data-w153city="' + want + '"]') : null;
+    if (fb) { try { fb.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
   }
   /* the app bar: the app, where you are, its quick actions */
   function whereNow(app) {
@@ -110,11 +134,12 @@
     if (SEC[pn] && sn && S.settled !== hn && SEC[pn].now() !== sn) { S.settled = hn; settle(pn, sn); }
     var was = S.app; S.app = current(); S.sig = sig();
     document.body.classList.toggle('w153app', !!S.app);
-    ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
+    FRAMES.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });   /* wave274 (one app): each city keeps its class (w153volunteer, w153toronto) */
     var dock = document.getElementById('w153dock');
     var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
     if (dock) dock.style.display = any ? '' : 'none';
     if (!S.app) { var h = hashNow(); if (h && pageOf(h) && !ownerOf(pageOf(h))) store(KEY_LAST, h); }
+    else if (citiesOf(S.app).length > 1 && read(KEY_CITY) !== S.app) store(KEY_CITY, S.app);   /* wave274 (one app): the city in use, for the tile next time */
     paintRail(); paintBar(); if (S.open) paintPop();
     if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
     S.drawn++;
@@ -126,6 +151,8 @@
     if (id === 'hub' || !APPS[id]) return close();
     if (!appOk(id)) return;
     var pg = pageOf(hashNow());
+    /* wave274 (one app): the Volunteer Manager stays in the city you are in, else opens the last one used, else the profile's */
+    if (APPS[id].cities) { var inCity = ownerOf(pg); id = inCity && tileOf(inCity) === id && ownOk(inCity) ? inCity : cityFor(id); }   /* (a city named itself, open('toronto'), opens that city) */
     if (APPS[id].pages.indexOf(pg) < 0) { if (APPS[id].home) go(APPS[id].home); else { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = '#mypage'; } } else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }

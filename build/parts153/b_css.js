@@ -29,8 +29,9 @@
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
     + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
-    /* wave274: with Toronto Volunteers the launcher has ten apps; on a screen up to 960 px tall each blurb keeps to one line, so every app and the Website link fit without scrolling */
-    + '@media (max-height:960px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
+    /* wave274: with Toronto Volunteers the launcher had ten apps; on a screen up to 960 px tall each blurb kept to one line, so every app and the Website link fit without scrolling.
+       wave274 (one app): nine apps again (771 px with every blurb whole, in a box of 100vh - 120): whole blurbs from 900 px tall, one line below */
+    + '@media (max-height:899px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
     + '#w153pop .w153ph.w262ph{padding-top:12px;}'
     + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
@@ -50,6 +51,22 @@
     + '#w153rail .w153ah{display:flex;align-items:center;gap:10px;padding:2px 8px 14px;margin-bottom:6px;border-bottom:1px solid rgba(16,63,57,.10);}'
     + '#w153rail .w153ah b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:22px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';line-height:1;}'
     + '#w153rail .w153ah small{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    /* wave274 (one app): the city switch, Montreal | Toronto, under the app's name in the rail (and in the phone's menu, wave163's sheet).
+       The pressed city takes its own colour (Montreal green, Toronto purple, --w153cc). Press feedback only: scale(0.97) in 160 ms;
+       the colour changes with the page, without a transition (switching cities is a page change, not an animation) */
+    + '#w153rail .w153ah.w153ahc{flex-wrap:wrap;row-gap:12px;}'
+    + '#w153rail .w153ah.w153ahc > div:not(.w153city){flex:1 1 0;min-width:0;}'
+    + '#w153rail .w153ah .w153city{flex:1 0 100%;}'
+    + '.w153city{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;border-radius:12px;background:rgba(16,63,57,.07);box-sizing:border-box;font-family:' + BODY + ';}'
+    + '.w153city button{min-height:34px;margin:0;padding:0 8px;border:0;border-radius:9px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:13px;font-weight:600;line-height:1.1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    + '-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;transition:transform 160ms cubic-bezier(0.23, 1, 0.32, 1);}'
+    + '.w153city button[aria-pressed="true"]{background:var(--w153cc,' + GREEN + ');color:' + CREAM + ';font-weight:700;box-shadow:0 1px 2px rgba(16,63,57,.20);cursor:default;}'
+    + '.w153city button:active{transform:scale(0.97);}'
+    + '.w153city button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    + '@media (hover:hover) and (pointer:fine){.w153city button[aria-pressed="false"]:hover{background:var(--wa-card);}}'
+    + '@media (prefers-reduced-motion:reduce){.w153city button{transition:none;}.w153city button:active{transform:none;opacity:.85;}}'
+    + '#w163sheet .w153city{margin:2px 16px 8px;}'
+    + '@media (max-width:900px){.w153city button{min-height:44px;font-size:15px;}}'
     + '#w153rail .w153sh{font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.6px;text-transform:uppercase;color:' + MUTED + ';padding:12px 12px 4px;}'
     + '#w153rail .w153it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:7px 12px;border-radius:10px;border:none;background:none;font-family:' + BODY + ';font-weight:500;font-size:13.5px;color:var(--wa-text);line-height:1.3;cursor:pointer;text-decoration:none;box-sizing:border-box;}'
     + '#w153rail .w153it .w153i{width:17px;height:17px;color:' + MUTED + ';}'

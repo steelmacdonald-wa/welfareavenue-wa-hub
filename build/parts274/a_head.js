@@ -23,6 +23,9 @@
    access profile; not applied yet: everything here works without it, saying plainly what waits for it).
    wave274b: the anticipated spend of an event (volunteer_events.budget, build/data/wa274b_budget.sql), set in New event and
    Edit the event, shown in Plan and on the Hub calendar (parts124); until the column exists the field is hidden.
+   wave274 (one app, 06/11/26, Steel: "there should only be one CRM ... combine both Montreal and Toronto in one app but keep
+   procedures made differently"): the launcher's tile is the Volunteer Manager with a Montreal | Toronto switch (parts153);
+   this app is its Toronto city, its screens, words, stages and data unchanged.
    Not in this wave: sign-up forms, automatic emails or texts, recipes and groceries, Setup, page tours.
    window.w274: state, show, paint, load, loadPool, newEvent, stageOf, crewOf, pool, filterPeople, flush. */
 (function () {

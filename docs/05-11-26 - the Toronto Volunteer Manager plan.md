@@ -98,9 +98,10 @@ Checked in the code and, read only, in the database on 05/11/26.
   (`hub_servings`: Confirmed rows at completed events) and history, and opens the Volunteer Manager.
 - **The website** still embeds the two Keela forms on `/toronto/` and `/fr/toronto/` (frontend repo).
 
-## 4. The design: one database, two apps
+## 4. The design: one database, one Volunteer Manager, two cities
 
-**Toronto Volunteers is its own app** (page `toronto`, in the launcher, Your apps for the opsto profile), built for the way
+**Since 06/11/26 Toronto is a city of the one Volunteer Manager** (a Montreal | Toronto switch; Toronto keeps its own page
+`toronto`, its own screens and procedures). It was first built as its own app (page `toronto`, in the launcher, Your apps for the opsto profile), built for the way
 Toronto works, on the same tables as Montreal so the CRM, hours, sign-offs and history work the same.
 
 - **A Toronto event** is a `volunteer_events` row with `kind = 'meal'`, `location = 'Toronto'`, the kitchen in
@@ -163,7 +164,7 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 
 ## 7. Decisions for Steel
 
-1. **Updated 06/11/26: one Volunteer Manager, two cities.** Steel: "there should only be one CRM ... we could definitely
+1. **Decided 06/11/26, built on the branch: one Volunteer Manager, two cities.** Steel: "there should only be one CRM ... we could definitely
    combine both Montreal and Toronto in one app but keep procedures made differently." One launcher tile with a
    Montreal | Toronto switch; each city keeps its own screens, stages, words and automations (`docs/toronto/wave274 one app brief.md`).
    Before that, **decided 05/11/26: Toronto is its own app** on the same tables, rather than a city switch inside the Montreal
@@ -171,7 +172,9 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
    Toronto". The separate app keeps Toronto's flow simple and leaves Montreal untouched.
 2. **Who sees whom.** Today every staff member can read every volunteer in both cities. Keep it (simplest), or limit the
    Toronto team to Toronto people and Montreal's to Montreal's (a row-security change for wave274d or later).
-3. **The name** in the launcher: "Toronto Volunteers" (proposed), and whether Montreal's becomes "Montreal Volunteers".
+3. **The name, decided 06/11/26:** the app is the Volunteer Manager and its cities are Montreal and Toronto. Still open:
+   whether People and access renames the pages' labels ("Volunteer Manager", "Toronto Volunteers") to "Volunteer Manager,
+   Montreal" and "Volunteer Manager, Toronto".
 4. **Approved 05/11/26: applying wave274's SQL** (additive: one new table, two functions, the page in the access
    profiles) and publishing.
 5. **The website's Toronto forms** (wave274c): replace the Keela embeds with the Hub forms once they are live.
@@ -223,3 +226,8 @@ published by about 15/11/26 lets the 22/11 and 29/11 events run in the Hub.
 | 06/11/26 | Steel: one CRM; one Volunteer Manager with a city switch, procedures kept separate | `docs/toronto/wave274 one app brief.md`, built before the first publish |
 | 06/11/26 | Another session plans a CRM rebuild (waves 280 to 284) with a Keela import: overlaps wave274d | Decide which one imports Keela before either is built |
 | 06/11/26 | Ian's Slack DMs go to his personal account U057BRKP1R9 (wave279b's change), confirmed by Steel | Steel's saved preferences still name U0A7DF871FS |
+| 06/11/26 | wave274 (one app) built: one Volunteer Manager tile (green, the heart), a Montreal \| Toronto switch in the rail and the phone's Menu, each city's own rail, pages, words, stages and actions; `ORDER` without `'toronto'`, `TEAM_APPS.opsto` ['volunteer', 'crm']; the tile opens the city you are in, else the last used (`wa274.city`), else the profile's (opsto Toronto) | The release note's One app, two cities |
+| 06/11/26 | `test/w274onedrive.js` 163 passed (admin, opsto, Montreal only, Toronto only, at 1366 and 390); the launcher checks in w153drive and w274drive expect the one tile | |
+| 06/11/26 | Toronto stays its own frame inside the app (`WA_APP.current()` 'toronto', body class `w153toronto`), so no hook of 191, 195, 209, 259 or 274 changed; the phone's switch is in wave163's Menu sheet (`parts163/c_phone.js`) | |
+| 06/11/26 | Everyone with Montreal also has Toronto until an admin sets a profile apart (the SQL copies `volunteering`), so in practice everyone sees the switch | People and access |
+| 06/11/26 | Builder's calls: the tile's blurb names both cities even for someone with one; pressing the city you are in does nothing; launcher blurbs go to one line below 900 px tall; w163drive 37 of 40 before and after for older reasons | Steel or Edison |

@@ -10,7 +10,7 @@ Toronto Volunteers is a new app in the Hub (page `toronto`), built for that way 
 
 | Screen | Where | What it does |
 |---|---|---|
-| The app | launcher, `#w153pop` and Home's Your apps | Toronto Volunteers (purple, the people icon), after the Volunteer Manager. Your apps for the Toronto team (profile `opsto`, with the CRM). The rail: Events, then Volunteers. The app's action is New event: on a computer wave197 shows it at the masthead's right (Toronto's purple on Events, quiet on the other pages), on a phone the app bar shows it. |
+| The app | launcher, `#w153pop` and Home's Your apps | Since 06/11/26 the Toronto city of the Volunteer Manager: one tile with a Montreal \| Toronto switch (see One app, two cities below). Before that it was Toronto Volunteers (purple, the people icon), a tile of its own after the Volunteer Manager. Your apps for the Toronto team (profile `opsto`, with the CRM). The rail: Events, then Volunteers. The app's action is New event: on a computer wave197 shows it at the masthead's right (Toronto's purple on Events, quiet on the other pages), on a phone the app bar shows it. |
 | Events | `#toronto` | "Toronto events", "Cook together, then bring the meals to the people who need them." The next event as a dark hero card: the date large, "In 9 days, at 10:00", the title, the kitchen and its time, "Meals for: Eva's Initiatives (40)" (a private organization reads "1 organization, not named publicly"), "3 of 9 confirmed", one bar per crew (confirmed over waiting), the stage. Then the upcoming events as compact cards with the same facts (a cancelled one dashed, with its chip). Then "Past events (n)", folded, each with its meals delivered. Empty: "No Toronto events yet." with New event. |
 | New event and Edit | sheet | Date (required), Start time (10:00), Kitchen (suggestions from past Toronto events and Ralph Thornton Community Centre), Kitchen time ("10:00 to 14:00"), Meals planned, Title ("Free meal event"), Note. Create opens the new event's page. |
 | The event page | `#toronto/e/<id>` | The title, the date, the time and the kitchen in the masthead with All events; the status, the code, how far away; Edit; More (Cancel this event, with a confirm sheet; Plan this event again, or Reopen this event). The stage strip Plan, Crew, Confirm, Wrap up: the current stage from the date (more than 10 days Plan, 10 to 3 Crew, 2 to 0 Confirm, past or completed Wrap up), each a button to its section. The current stage's main action is the page's primary button. |
@@ -39,7 +39,7 @@ Motion and the look follow the brief's design bar (section 6): the Hub's tokens 
 
 ## Also in this wave
 
-- `parts153`: `APPS.toronto`, `'toronto'` in `ORDER` after the Volunteer Manager, `TEAM_APPS.opsto = ['toronto', 'crm']`, the tab hidden from the Hub's menu, the New event action. With ten apps the launcher no longer fitted a 900 px tall screen (840 px in a 780 px box), so up to 960 px tall each blurb keeps to one line.
+- `parts153`: `APPS.toronto`, `'toronto'` in `ORDER` after the Volunteer Manager, `TEAM_APPS.opsto = ['toronto', 'crm']`, the tab hidden from the Hub's menu, the New event action. With ten apps the launcher no longer fitted a 900 px tall screen (840 px in a 780 px box), so up to 960 px tall each blurb keeps to one line. (One app, two cities, below, changed the first three and the blurb rule.)
 - `parts127`, `parts131`: `toronto` in the Teams group, labelled Toronto Volunteers. `parts134`: `toronto` in the apps group. `110`: the label. `118`: the masthead.
 - Home's Your apps is drawn again once the page is registered, so the app is there from the start.
 - Wave272's corner note (add the Hub as an app) closes when a Toronto sheet opens, keeping its own rule of never sitting over a window.
@@ -117,6 +117,43 @@ Left for Steel:
 - whether notes queue
 - folding the picker's filters on a phone
 - length limits on the event title and kitchen
+
+## One app, two cities
+
+Steel (06/11/26): "there should only be one CRM ... we could definitely combine both Montreal and Toronto in one app but keep procedures made differently." And the day before: "I don't want Montreal methodologies to mess up Toronto methodologies and operations."
+
+So, before the first publish, Toronto Volunteers stopped being an app of its own. It is now the Toronto city of the Volunteer Manager: one app with a city switch, where each city keeps its own screens, words, stages and automations exactly as they were. There is still one CRM, and nothing here touches it. The brief is `docs/toronto/wave274 one app brief.md`.
+
+| What | Where | How it works |
+|---|---|---|
+| One tile | the launcher, Home's Your apps, the phone's Menu | "Volunteer Manager", "Servings and events in Montreal and Toronto", with the Volunteer Manager's green and heart. There is no Toronto Volunteers tile anywhere. `TEAM_APPS.opsto` is `['volunteer', 'crm']`, as the CRM rebuild plans for wave282, and `opsmtl` stays `['volunteer']`. `ORDER` has no `'toronto'`. |
+| The city switch | the rail, under the app's name; the phone's Menu, under Back to the Hub | Montreal \| Toronto: two real buttons with `aria-pressed`, in a group labelled City. The pressed one takes its city's colour (Montreal green, Toronto purple). Each is 34 px tall on a computer and 44 px on a phone. Montreal goes to `#volunteering` and Toronto to `#toronto`; pressing the city you are in does nothing. With the keyboard, Tab reaches the switch, the focus ring shows, and after Enter the focus stays on the switch (on the new city's button). |
+| Motion | | Press feedback only: `scale(0.97)` on `:active`, `transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1)`. The colour changes without a transition, because switching cities is a page change, not an animation. Hover is only for a mouse. With reduced motion a press dims to 85% instead of shrinking. |
+| Each city's own | the rail, the app bar, the pages | Montreal has exactly the groups and actions it had: Servings, Calendar, People, Messages, Setup, and Text volunteers. Toronto has exactly wave274's: Events, Volunteers, and New event. The rail's head and the app bar name the app, Volunteer Manager, with the city's colour on the icon and the city's own line under the name ("MTL servings, rosters, texts and volunteers", "Toronto events, crews and volunteers"). Page titles stay each city's own ("Servings", "Toronto events", an event's title). wave274's `setMast` still sets Toronto's titles, and wave197 now leaves them alone because they never repeat the app's name. |
+| Who sees what | | A city is offered when the person may open its page (`volunteering` for Montreal, `toronto` for Toronto). This is the menu's rule, from `wa40Allowed` and wave127's profiles, with wave274's `torontoRule` until the SQL is applied. With both cities the switch shows. With one there is no switch, and the tile opens that city. With neither there is no tile, and directors get none, as before. |
+| Where the tile opens | | It opens the city you are in. Failing that, it opens the last city used in this browser (`localStorage` key `wa274.city`, read and written in try/catch, a convenience only). The first time, it goes by profile: `opsto` opens Toronto and everyone else Montreal. A city left in the browser that the person can no longer open is ignored. |
+| Addresses | | Unchanged. `#volunteering...` and `#toronto...` open their city, so links, emails, the tests and the Calendar's Open the event (`#toronto/e/<id>`) all still land. On a phone, Find a page lists each city's pages as "Volunteer Manager, Montreal" or "Volunteer Manager, Toronto". |
+
+How it is built:
+
+- **The cities (`parts153`, marked `wave274 (one app)`).** `APPS.volunteer` gains `cities: ['volunteer', 'toronto']`, the new blurb and its rail `line`. `APPS.toronto` becomes a city (`of: 'volunteer'`, label Volunteer Manager, the heart in purple).
+- **Each city is still its own frame.** `WA_APP.current()`, the rail, the actions and the body class are `volunteer` or `toronto` (`w153volunteer`, `w153toronto`). So every hook on them is untouched: waves 191, 195, 209 and 259 on Montreal's rail, and wave274's New event.
+- **Who owns a page.** `FRAMES` is the launcher's order with each app's cities in place, and it decides who owns a page. `appOk('volunteer')` is true when either city is open to the person. `ownOk(id)` is a city's own rule, so a city's frame opens only on a page the person may open.
+- **New in `WA_APP`:** `tileOf`, `cities`, `cityFor`, `switchHtml`, `toCity`, `frames` and `cityKey`.
+- **The phone (`parts163`).** The switch sits in the Menu sheet. The Volunteer Manager's tile is lit in either city. Find a page covers both cities.
+- **The launcher has nine apps again.** wave274's one-line blurbs now start below 900 px tall (`max-height: 899px`). At 900 px every blurb is whole and the launcher fits: 771 px in a 780 px box.
+- **The `toronto` page keeps its id, its access row and its label**, Toronto Volunteers (110, 118, 127, 131). People and access still decides it per profile; only the launcher grouping changed.
+
+Tests: `test/w274onedrive.js` (163 passed, 0 failed) covers four people at 1366 and 390 px:
+
+- an admin: both cities, Montreal the first time, the last city remembered by the tile and after a reload
+- a member on `opsto`: both cities, Toronto the first time, Your apps the Volunteer Manager and the CRM
+- a member whose profile gives only `volunteering`: no switch, Montreal
+- a member whose profile gives only `toronto`: no switch, Toronto
+
+For each, it checks the switch by click and by keyboard, each city's rail, action, title and colour, the old addresses, no sideways scroll against `screen.width`, and no page errors. The launcher checks in `test/w153drive.js` and `test/w274drive.js` now expect the one tile (a comment in each says why).
+
+On the same build, before and after: `w274drive` 222 and 222, `w274break` 238 and 238, `w274bdrive` 134 and 134, `w259drive` 22 and 22, `w191drive` 39 and 39, `w272drive` 152 and 152, `w195drive` 52 and 52, and `w153drive` 45 of 46 both times (the known dock check). `w163drive` is 37 of 40 both times, for older reasons: it still expects the menu heading Departments (now Teams) and a member's apps in menu order, not Your apps first (wave262). The Toronto Volunteers tile that wave274 had put in its app lists is gone again. Run the new test with `export WA_CHROME=/opt/pw-browsers/chromium-1243/chrome-linux64/chrome; bash build/build.sh && CAND=build/candidate.html node test/w274onedrive.js` (`WA_SHOTS=<folder>` saves the screenshots).
 
 ## Left for later waves (the plan, section 5)
 

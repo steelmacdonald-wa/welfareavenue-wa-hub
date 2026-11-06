@@ -177,7 +177,11 @@
     },
     /* wave176: Steel (30/09/26): "I'd like the MTL Volunteering to be it's own app now, it's big enough that it should be it's own app."
        The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
-    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
+    /* wave274 (one app): Steel (06/11/26): "there should only be one CRM ... we could definitely combine both Montreal and Toronto
+       in one app but keep procedures made differently." The Volunteer Manager is one tile with a city switch (cities): Montreal is
+       this entry (page volunteering), Toronto is APPS.toronto (page toronto, of: 'volunteer'). Each city keeps its own rail, pages,
+       words, stages, actions and body class (w153volunteer, w153toronto); blurb is the tile's, line the rail's (the city's own). */
+    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'Servings and events in Montreal and Toronto', line: 'MTL servings, rosters, texts and volunteers', city: 'Montreal', team: 'opsmtl', cities: ['volunteer', 'toronto'], pages: ['volunteering'], home: '#volunteering',
       groups: function () {
         /* wave259 (Steel, 15/10/26: "the UI is just getting really messy ... some sort of refresh"): five places. Servings and
            Calendar; People (Volunteers, New applicants and Sign-offs as tabs of one page); Messages (the ops line: every
@@ -197,7 +201,8 @@
     },
     /* wave274: Steel (05/11/26): "a volunteer manager for Toronto ... this new app in the hub". Toronto Volunteers: the Toronto team's
        events (a community kitchen, one or two organizations the meals go to, a crew), on the Volunteer Manager's tables (page #toronto) */
-    toronto: { id: 'toronto', label: 'Toronto Volunteers', color: PURPLE, ic: 'people', blurb: 'Toronto events, crews and volunteers', pages: ['toronto'], home: '#toronto',
+    /* wave274 (one app): Toronto is now a city of the Volunteer Manager (of), named by it, in Toronto's purple: the colour says the city */
+    toronto: { id: 'toronto', label: 'Volunteer Manager', color: PURPLE, ic: 'heart', blurb: 'Toronto events, crews and volunteers', line: 'Toronto events, crews and volunteers', city: 'Toronto', team: 'opsto', of: 'volunteer', pages: ['toronto'], home: '#toronto',
       groups: function () {
         return [{ label: 'Events', items: [
           { h: '#toronto', l: 'Events', ic: 'list', page: 'toronto' }
@@ -263,7 +268,10 @@
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'toronto', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave274: Toronto Volunteers after the Volunteer Manager */   /* wave193: the Fundraising app, before HR and Finance */
+  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'studio', 'hr', 'finance', 'admin'];   /* wave225: the Content Studio after Fundraising */   /* wave193: the Fundraising app, before HR and Finance */   /* wave274 (one app): Toronto is a city of the Volunteer Manager, no longer a tile of its own */
+  /* wave274 (one app): every app that frames pages, in the launcher's order with each app's cities in its place
+     (hub, strategy, volunteer, toronto, crm, ...): who owns a page, and the body class each one sets */
+  var FRAMES = []; ORDER.forEach(function (id) { (APPS[id].cities || [id]).forEach(function (c) { if (APPS[c] && FRAMES.indexOf(c) < 0) FRAMES.push(c); }); });
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
@@ -277,7 +285,7 @@
      Admins and the Executive profile have every app as theirs.
      wave279b (Steel, 05/11/26: "Yes, next release"): Toronto staff could already open the CRM, but their Your apps was empty;
      the CRM is now theirs. */
-  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['toronto', 'crm'], board: [] };   /* wave274: the Toronto team's apps (Toronto Volunteers first, then wave279b's CRM) */
+  var TEAM_APPS = { marketing: ['studio'], fundraising: ['fund', 'crm'], opsmtl: ['volunteer'], hr: ['hr'], progdev: ['strategy'], opsto: ['volunteer', 'crm'], board: [] };   /* wave274 (one app): the Toronto team's apps are the Volunteer Manager (it opens Toronto for them) and wave279b's CRM, as the CRM rebuild plans for wave282 */
   function myProfile() {
     try { var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; if (r && r.role === 'admin') return 'admin'; if (r && r.profile) return String(r.profile); } catch (e) { /* fine */ }
     try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { return ''; }
@@ -293,8 +301,30 @@
     if (boardMode() || !staffOk()) return false;
     var a = APPS[id]; if (!a) return false;
     if (id === 'hub') return true;
+    if (a.cities) return a.cities.some(ownOk);   /* wave274 (one app): the Volunteer Manager is there when either city is */
+    return ownOk(id);
+  }
+  /* an app's (or a city's) own pages, the launcher's rule before wave274 (one app) */
+  function ownOk(id) {
+    if (boardMode() || !staffOk()) return false;
+    var a = APPS[id]; if (!a) return false;
+    if (id === 'hub') return true;
     if (a.need) return allowed(a.need);   /* wave193: the Fundraising app needs its own page; the Events calendar alone (finance staff, wave124) opens no app */
     return a.pages.some(allowed);
+  }
+  /* ---------- wave274 (one app): the cities of an app ----------
+     A city is offered when the person may open its page (the menu's rule: wa40Allowed and wave127's profiles decide). With two
+     the rail and the phone's menu show the switch; with one there is no switch and the tile opens it. */
+  var KEY_CITY = 'wa274.city';   /* the last city this person used (a convenience of this browser only) */
+  function tileOf(id) { var a = APPS[id]; return a && a.of && APPS[a.of] ? a.of : id; }
+  function citiesOf(id) { var t = APPS[tileOf(id)]; return t ? (t.cities || [t.id]) : []; }
+  function cities(id) { return citiesOf(id).filter(ownOk); }
+  /* where the tile opens: the last city used, else the profile's own city (opsto: Toronto), else the first (Montreal) */
+  function cityFor(id) {
+    var cs = cities(id); if (cs.length < 2) return cs[0] || id;
+    var last = read(KEY_CITY); if (last && cs.indexOf(last) >= 0) return last;
+    var p = myProfile(), mine = cs.filter(function (c) { return APPS[c].team && APPS[c].team === p; })[0];
+    return mine || cs[0];
   }
   function items(app) {
     var a = APPS[app]; if (!a || !a.groups) return [];
@@ -309,12 +339,12 @@
   function hashNow() { try { return decodeURIComponent(location.hash || ''); } catch (e) { return location.hash || ''; } }
   function pageOf(h) { return String(h || '').replace(/^#/, '').split('/')[0]; }
   /* the app that owns a page (every app page opens its app's frame; the Hub keeps the rest) */
-  function ownerOf(pg) { for (var i = 0; i < ORDER.length; i++) { var a = APPS[ORDER[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }
+  function ownerOf(pg) { for (var i = 0; i < FRAMES.length; i++) { var a = APPS[FRAMES[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }   /* wave274 (one app): the cities too (Toronto owns #toronto) */
   function current() {
     var pg = pageOf(hashNow());
     if (boardMode() || !staffOk()) return null;
     var id = ownerOf(pg);
-    return id && appOk(id) ? id : null;
+    return id && ownOk(id) ? id : null;   /* wave274 (one app): the city's own pages, not its tile's (Toronto alone never frames #volunteering) */
   }
 
   /* ---------- styles ---------- */
@@ -347,8 +377,9 @@
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
     + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
-    /* wave274: with Toronto Volunteers the launcher has ten apps; on a screen up to 960 px tall each blurb keeps to one line, so every app and the Website link fit without scrolling */
-    + '@media (max-height:960px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
+    /* wave274: with Toronto Volunteers the launcher had ten apps; on a screen up to 960 px tall each blurb kept to one line, so every app and the Website link fit without scrolling.
+       wave274 (one app): nine apps again (771 px with every blurb whole, in a box of 100vh - 120): whole blurbs from 900 px tall, one line below */
+    + '@media (max-height:899px){#w153pop .w153tile small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}'
     + '#w153pop .w153ph.w262ph{padding-top:12px;}'
     + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
@@ -368,6 +399,22 @@
     + '#w153rail .w153ah{display:flex;align-items:center;gap:10px;padding:2px 8px 14px;margin-bottom:6px;border-bottom:1px solid rgba(16,63,57,.10);}'
     + '#w153rail .w153ah b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:22px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';line-height:1;}'
     + '#w153rail .w153ah small{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    /* wave274 (one app): the city switch, Montreal | Toronto, under the app's name in the rail (and in the phone's menu, wave163's sheet).
+       The pressed city takes its own colour (Montreal green, Toronto purple, --w153cc). Press feedback only: scale(0.97) in 160 ms;
+       the colour changes with the page, without a transition (switching cities is a page change, not an animation) */
+    + '#w153rail .w153ah.w153ahc{flex-wrap:wrap;row-gap:12px;}'
+    + '#w153rail .w153ah.w153ahc > div:not(.w153city){flex:1 1 0;min-width:0;}'
+    + '#w153rail .w153ah .w153city{flex:1 0 100%;}'
+    + '.w153city{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;border-radius:12px;background:rgba(16,63,57,.07);box-sizing:border-box;font-family:' + BODY + ';}'
+    + '.w153city button{min-height:34px;margin:0;padding:0 8px;border:0;border-radius:9px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:13px;font-weight:600;line-height:1.1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    + '-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;transition:transform 160ms cubic-bezier(0.23, 1, 0.32, 1);}'
+    + '.w153city button[aria-pressed="true"]{background:var(--w153cc,' + GREEN + ');color:' + CREAM + ';font-weight:700;box-shadow:0 1px 2px rgba(16,63,57,.20);cursor:default;}'
+    + '.w153city button:active{transform:scale(0.97);}'
+    + '.w153city button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;}'
+    + '@media (hover:hover) and (pointer:fine){.w153city button[aria-pressed="false"]:hover{background:var(--wa-card);}}'
+    + '@media (prefers-reduced-motion:reduce){.w153city button{transition:none;}.w153city button:active{transform:none;opacity:.85;}}'
+    + '#w163sheet .w153city{margin:2px 16px 8px;}'
+    + '@media (max-width:900px){.w153city button{min-height:44px;font-size:15px;}}'
     + '#w153rail .w153sh{font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.6px;text-transform:uppercase;color:' + MUTED + ';padding:12px 12px 4px;}'
     + '#w153rail .w153it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:7px 12px;border-radius:10px;border:none;background:none;font-family:' + BODY + ';font-weight:500;font-size:13.5px;color:var(--wa-text);line-height:1.3;cursor:pointer;text-decoration:none;box-sizing:border-box;}'
     + '#w153rail .w153it .w153i{width:17px;height:17px;color:' + MUTED + ';}'
@@ -465,7 +512,7 @@
   }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
-    var cur = S.app || 'hub';
+    var cur = tileOf(S.app || 'hub');   /* wave274 (one app): in Toronto the Volunteer Manager's tile is the current one */
     /* wave262: Your apps first, then More apps (the other apps this person can open) */
     var Y = yours(), tiles = function (ids) { return ids.map(function (id) { return tileHtml(APPS[id], id === cur); }).join(''); };
     p.innerHTML = '<div class="w153ph">' + (Y.all ? 'Apps' : 'Your apps') + '</div><div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) +
@@ -503,11 +550,30 @@
     /* the page's own item while the address names a section the rail does not list */
     return !items(app).some(function (g) { return g.items.some(function (x) { return pageOf(x.h) === ip && subOf(x.h) === sub; }); });
   }
+  /* wave274 (one app): the city switch, Montreal | Toronto: two real buttons, the current city pressed in its own colour. Shown
+     only when this person may open both; a press goes to that city's home (#volunteering, #toronto), a page change, not an animation */
+  function switchHtml(app) {
+    app = app || S.app; if (!app || !APPS[app]) return '';
+    var cs = cities(app); if (cs.length < 2) return '';
+    return '<div class="w153city" role="group" aria-label="City">' + cs.map(function (c) {
+      var on = c === app;
+      return '<button type="button" data-w153city="' + E(c) + '" aria-pressed="' + (on ? 'true' : 'false') + '" style="--w153cc:' + APPS[c].color + '">' + E(APPS[c].city || APPS[c].label) + '</button>';
+    }).join('') + '</div>';
+  }
+  function toCity(c) {
+    var a = APPS[c]; if (!a || !ownOk(c)) return;
+    if (c === S.app) return;   /* the city you are in: a pressed button stays pressed */
+    var sw = document.activeElement && document.activeElement.closest ? document.activeElement.closest('.w153city') : null;
+    S.cityFocus = sw && sw.closest('#w153rail') ? { c: c, until: Date.now() + 3000 } : null;   /* the keyboard keeps its place: the new city's button */
+    go(a.home || firstHash(c));
+  }
   function paintRail() {
     var r = document.getElementById('w153rail'); if (!r) return;
     var app = S.app; if (!app) { r.innerHTML = ''; return; }
     var a = APPS[app], gs = items(app);
-    r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
+    var fc = document.activeElement && r.contains(document.activeElement) ? document.activeElement.getAttribute('data-w153city') : null;   /* wave274 (one app) */
+    var sw = switchHtml(app);   /* wave274 (one app): the city's own line, then the switch, under the app's name */
+    r.innerHTML = '<div class="w153ah' + (sw ? ' w153ahc' : '') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.line || a.blurb) + '</small></div>' + sw + '</div>' +
       gs.map(function (g) {
         return '<div class="w153sec">' + (g.solo ? '' : '<div class="w153sh">' + E(g.label) + '</div>') + g.items.map(function (it) {
           var on = isOn(app, it);
@@ -515,6 +581,11 @@
         }).join('') + '</div>';
       }).join('') +
       (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');
+    /* wave274 (one app): a redraw keeps the focus on the switch; after a switch by keyboard it lands on the new city's button */
+    var cf = S.cityFocus && S.cityFocus.until > Date.now() && S.cityFocus.c === app ? app : null;
+    if (cf) S.cityFocus = null;
+    var want = cf || fc, fb = want ? r.querySelector('[data-w153city="' + want + '"]') : null;
+    if (fb) { try { fb.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
   }
   /* the app bar: the app, where you are, its quick actions */
   function whereNow(app) {
@@ -541,11 +612,12 @@
     if (SEC[pn] && sn && S.settled !== hn && SEC[pn].now() !== sn) { S.settled = hn; settle(pn, sn); }
     var was = S.app; S.app = current(); S.sig = sig();
     document.body.classList.toggle('w153app', !!S.app);
-    ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
+    FRAMES.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });   /* wave274 (one app): each city keeps its class (w153volunteer, w153toronto) */
     var dock = document.getElementById('w153dock');
     var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
     if (dock) dock.style.display = any ? '' : 'none';
     if (!S.app) { var h = hashNow(); if (h && pageOf(h) && !ownerOf(pageOf(h))) store(KEY_LAST, h); }
+    else if (citiesOf(S.app).length > 1 && read(KEY_CITY) !== S.app) store(KEY_CITY, S.app);   /* wave274 (one app): the city in use, for the tile next time */
     paintRail(); paintBar(); if (S.open) paintPop();
     if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
     S.drawn++;
@@ -557,6 +629,8 @@
     if (id === 'hub' || !APPS[id]) return close();
     if (!appOk(id)) return;
     var pg = pageOf(hashNow());
+    /* wave274 (one app): the Volunteer Manager stays in the city you are in, else opens the last one used, else the profile's */
+    if (APPS[id].cities) { var inCity = ownerOf(pg); id = inCity && tileOf(inCity) === id && ownOk(inCity) ? inCity : cityFor(id); }   /* (a city named itself, open('toronto'), opens that city) */
     if (APPS[id].pages.indexOf(pg) < 0) { if (APPS[id].home) go(APPS[id].home); else { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = '#mypage'; } } else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
@@ -672,6 +746,7 @@
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
     if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
     if ((el = t.closest('[data-w153back]'))) { ev.preventDefault(); close(); return; }
+    if ((el = t.closest('[data-w153city]'))) { ev.preventDefault(); toCity(el.getAttribute('data-w153city')); return; }   /* wave274 (one app): the city switch (the rail and the phone's menu) */
     if ((el = t.closest('[data-w153go]'))) { ev.preventDefault(); go(el.getAttribute('data-w153go'), el.getAttribute('data-w153sec')); return; }
     if ((el = t.closest('[data-w153menu]'))) { ev.preventDefault(); document.body.classList.toggle('wa-mob-open'); return; }
     if ((el = t.closest('[data-w153act]'))) { ev.preventDefault(); act(el.getAttribute('data-w153act')); return; }
@@ -722,6 +797,7 @@
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS, yours: yours, teamApps: TEAM_APPS };   /* wave262: yours() for the launcher and the What's changed tour */   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS, yours: yours, teamApps: TEAM_APPS,
+    tileOf: tileOf, cities: cities, cityFor: cityFor, switchHtml: switchHtml, toCity: toCity, frames: FRAMES, cityKey: KEY_CITY };   /* wave274 (one app): the Volunteer Manager's cities, for the phone's menu and the tests */   /* wave262: yours() for the launcher and the What's changed tour */   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();

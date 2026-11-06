@@ -86,12 +86,15 @@ async function run(browser, who, width) {
   let wide = true; const flatHere = async () => { if (!(await flat(f))) wide = false; };
 
   /* ---------- the launcher ---------- */
-  const L = await f.ev(() => { const Y = window.WA_APP.yours(); return { ok: window.WA_APP.ok('toronto'), yours: Y.yours, all: Y.all, home: !!document.querySelector('#w272apps [data-w272app="toronto"]'), tab: (wa40Allowed() || []).indexOf('toronto') >= 0 }; });
-  ok(tag + ': Toronto Volunteers is one of the apps' + (who === 'plain' ? ', first under Your apps (opsto)' : '') + ', and on Home', L.ok && L.tab && L.yours.indexOf('toronto') >= 0 && (who !== 'plain' || (!L.all && L.yours[0] === 'toronto')) && L.home, L);
+  /* wave274 (one app, 06/11/26): Steel asked for one Volunteer Manager with a Montreal | Toronto switch, so Toronto is no longer a
+     tile of its own: it is a city of the Volunteer Manager, whose one tile is first under Your apps for opsto and on Home
+     (the switch itself: test/w274onedrive.js) */
+  const L = await f.ev(() => { const Y = window.WA_APP.yours(); return { ok: window.WA_APP.ok('toronto'), cities: window.WA_APP.cities('volunteer'), yours: Y.yours, all: Y.all, home: !!document.querySelector('#w272apps [data-w272app="volunteer"]'), homeTo: !!document.querySelector('#w272apps [data-w272app="toronto"]'), tab: (wa40Allowed() || []).indexOf('toronto') >= 0 }; });
+  ok(tag + ': Toronto is a city of the Volunteer Manager, one tile' + (who === 'plain' ? ', first under Your apps (opsto)' : '') + ', on Home, with no Toronto tile', L.ok && L.tab && L.cities.join(',') === 'volunteer,toronto' && L.yours.indexOf('volunteer') >= 0 && L.yours.indexOf('toronto') < 0 && (who !== 'plain' || (!L.all && L.yours[0] === 'volunteer')) && L.home && !L.homeTo, L);
   if (!phone) {
     await tap(f, '#w153dock .w153grid'); await f.page.waitForTimeout(400);
     const pop = await f.ev(() => { const p = document.getElementById('w153pop'), hs = Array.from(p.querySelectorAll('.w153ph')).map(h => h.textContent), groups = Array.from(p.querySelectorAll('.w153tiles')).map(g => Array.from(g.querySelectorAll('.w153tile b')).map(b => b.textContent)); return { open: p.classList.contains('open'), hs, groups }; });
-    ok(tag + ': the 9 dots list Toronto Volunteers' + (who === 'plain' ? ' under Your apps' : ' after the Volunteer Manager'), pop.open && (who === 'plain' ? pop.hs[0] === 'Your apps' && pop.groups[0].indexOf('Toronto Volunteers') >= 0 : pop.groups[0].indexOf('Toronto Volunteers') === pop.groups[0].indexOf('Volunteer Manager') + 1), pop);
+    ok(tag + ': the 9 dots list the Volunteer Manager once' + (who === 'plain' ? ' under Your apps' : '') + ', and no Toronto Volunteers', pop.open && pop.groups[0].indexOf('Volunteer Manager') >= 0 && [].concat.apply([], pop.groups).filter(x => x === 'Volunteer Manager').length === 1 && [].concat.apply([], pop.groups).indexOf('Toronto Volunteers') < 0 && (who !== 'plain' || pop.hs[0] === 'Your apps'), pop);
     await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
   }
 
@@ -353,8 +356,8 @@ async function edits(browser) {
 }
 async function board(browser) {
   const f = await fresh(browser, { who: 'board', width: 1366, hash: '#mypage', fixture: fx274(), rpcs: RPCS('board'), wait: 5200 });
-  const b = await f.ev(() => ({ tab: (wa40Allowed() || []).indexOf('toronto'), app: window.WA_APP ? window.WA_APP.ok('toronto') : false }));
-  ok('a board viewer gets no Toronto Volunteers', b.tab < 0 && !b.app, b);
+  const b = await f.ev(() => ({ tab: (wa40Allowed() || []).indexOf('toronto'), app: window.WA_APP ? window.WA_APP.ok('toronto') : false, tile: window.WA_APP ? window.WA_APP.ok('volunteer') : false }));
+  ok('a board viewer gets no Toronto Volunteers (nor the Volunteer Manager\'s tile, wave274 one app)', b.tab < 0 && !b.app && !b.tile, b);
   ok('no page errors (board)', f.errs.length === 0, f.errs);
   await f.close();
 }
