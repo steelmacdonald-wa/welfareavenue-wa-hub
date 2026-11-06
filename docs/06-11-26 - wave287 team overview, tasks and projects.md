@@ -89,4 +89,4 @@ Not seen yet: signed in with live data (the counts on each team's Overview and T
 ## Undo (after release)
 
 1. Page: build c4b1dc2 with `build/build_lf.py` (gives 9977c375), stage it, gate it with expected live bae461b9, run host-sync.
-2. Data: run `build/wa287a_undo.sql` (after the page, or before: the old page ignores is_general and project ids it does not know only go back with the undo). A task created after the release in one of the six new projects keeps it; the undo's last line counts them.
+2. Data: run `build/wa287a_undo.sql`. Either order works: the old page ignores `is_general`, and the new page falls back to the "General <team>" project when it is gone. A task created after the release in one of the six new projects keeps it; the undo's last line counts them.
