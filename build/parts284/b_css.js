@@ -12,7 +12,9 @@
       /* the title and its status word on one line: the status keeps its place at the right edge however long the title is */
       + '.w284ch{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}'
       + '.w284 h2,.w284 h3{font-family:' + HEAD + ';color:' + GREEN + ';margin:0;font-weight:500;line-height:1.05;letter-spacing:-.01em;}'
-      + '.w284 h2{font-size:30px;}.w284 h3{font-size:21px;display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;}'
+      + '.w284 h2{font-size:26px;overflow-wrap:break-word;}.w284 h3{font-size:21px;display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;}'
+      /* the Import page opens on the run, not on the CRM's contact counts: the stats strip c_list.js draws above #w284root stays hidden here */
+      + '.w152stats:has(~ #w284root){display:none;}'
       + '.w284t{min-width:0;padding-top:2px;overflow-wrap:break-word;}'
       + '.w284n{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:rgba(16,63,57,.08);font-size:15px;letter-spacing:0;font-variant-numeric:tabular-nums;}'
       + '.w284rule{margin:0;font-size:13.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');}'

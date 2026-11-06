@@ -208,15 +208,41 @@
   /* ---------- painting ---------- */
   function staged(kind) { return S.files.some(function (f) { return f.kind === kind && f.rows != null && f.staged_through === f.rows; }); }
   function statusOf(kind) { var b = S.batches[kind]; return b ? b.status : 'new'; }
+  /* one primary button per screen (wave274): the next step is green, every other button soft */
+  function nextStep() {
+    if (!S.runs || !S.runs.length) return 'new';
+    var r = run(); if (!r || r.purged_at) return 'new';
+    var cf = S.files.filter(function (f) { return f.kind === 'keela_contacts_json'; });
+    if (!cf.length) return 'upload';
+    if (!staged('keela_contacts_json')) return S.stage[cf[0].id] ? '' : 'stage:' + cf[0].id;
+    for (var i = 0; i < KINDS.length; i++) {
+      var K = KINDS[i], st = statusOf(K.k);
+      if (S.busy[K.k]) return '';
+      if (st === 'applied') continue;
+      if (st === 'compared' && !S.stale[K.k]) return 'apply:' + K.k;
+      if (!K.need || staged(K.need)) return 'compare:' + K.k;
+    }
+    return '';
+  }
+  function pri(step) { return nextStep() === step ? 'w284btn' : 'w284btn soft'; }
+  /* the run in one line: "Run 12: 3 of 8 applied, 3 compared, 1 failed" */
+  function runLine() {
+    var r = run(); if (!r) return 'No import run yet';
+    var n = { applied: 0, compared: 0, failed: 0, undone: 0 };
+    KINDS.forEach(function (K) { var st = statusOf(K.k); if (n[st] != null) n[st]++; });
+    var bits = [num(n.applied) + ' of ' + KINDS.length + ' applied'];
+    ['compared', 'failed', 'undone'].forEach(function (k) { if (n[k]) bits.push(num(n[k]) + ' ' + k); });
+    return 'Run ' + r.id + ': ' + bits.join(', ') + (r.purged_at ? ', then purged' : '');
+  }
   function cardHtml(K, i) {
     var b = S.batches[K.k], st = statusOf(K.k), purged = !!(run() && run().purged_at), stale = !!S.stale[K.k], busy = S.busy[K.k];
     var btn = '';
     if (!purged && !busy) {
-      if (st === 'compared' && !stale) btn = '<button class="w284btn" data-w284apply="' + K.k + '">Apply</button>';
+      if (st === 'compared' && !stale) btn = '<button class="' + pri('apply:' + K.k) + '" data-w284apply="' + K.k + '">Apply</button>';
       else if (st === 'applied') btn = K.never ? '<span class="w284note">Applied. Opt-outs and consent are never undone.</span>' : '<button class="w284btn soft" data-w284undo="' + K.k + '">Undo</button>';
       else {
         var ready = !K.need || staged(K.need);
-        btn = '<button class="w284btn" data-w284compare="' + K.k + '"' + (ready ? '' : ' disabled') + '>' + (st === 'compared' ? 'Compare again' : 'Compare') + '</button>'
+        btn = '<button class="' + pri('compare:' + K.k) + '" data-w284compare="' + K.k + '"' + (ready ? '' : ' disabled') + '>' + (st === 'compared' ? 'Compare again' : 'Compare') + '</button>'
           + (ready ? '' : '<span class="w284note">Stage the ' + E(fileLabel(K.need)) + ' first.</span>');
       }
     }
@@ -241,7 +267,7 @@
       : '<div class="w284up"><label class="w284row"><span>Kind of file</span><select class="w284sel" data-w284upkind="1">' + FILES.map(function (f) {
           return '<option value="' + f.k + '"' + (S.upKind === f.k ? ' selected' : '') + '>' + E(f.t) + '</option>'; }).join('') + '</select></label>'
         + '<label class="w284row"><span>File</span><input type="file" data-w284upfile="1" accept=".json,.csv,application/json,text/csv"></label>'
-        + '<button class="w284btn" data-w284upload="1"' + (S.upBusy ? ' disabled' : '') + '>Upload and stage</button></div>'
+        + '<button class="' + pri('upload') + '" data-w284upload="1"' + (S.upBusy ? ' disabled' : '') + '>Upload and stage</button></div>'
         + (S.upMsg ? '<p class="' + (S.upErr ? 'w284err' : 'w284note') + '" role="' + (S.upErr ? 'alert' : 'status') + '">' + E(S.upMsg) + '</p>' : '');   /* red only when something failed (S.upErr), never from the words */
     var keysCfg = obj(S.cfg.keela_keys, {});
     var list = S.files.length ? '<ul class="w284files">' + S.files.map(function (f) {
@@ -264,7 +290,7 @@
       }
       return '<li class="w284file"><div class="w284fh"><b>' + E(base) + '</b><span class="m">' + E(fileLabel(f.kind)) + '</span></div>'
         + '<div class="w284fp"><span role="status">' + E(prog) + '</span>'
-        + (!done && !purged && !S.stage[f.id] ? '<button class="w284btn soft sm" data-w284stage="' + f.id + '">Stage</button>' : '')
+        + (!done && !purged && !S.stage[f.id] ? '<button class="' + pri('stage:' + f.id) + ' sm" data-w284stage="' + f.id + '">Stage</button>' : '')
         + (done ? '<button class="w284btn soft sm" data-w284keys="' + f.id + '" aria-expanded="' + open + '">' + (open ? 'Hide the keys' : 'Keys') + '</button>' : '') + '</div>' + kh + '</li>';
     }).join('') + '</ul>' : (purged ? '' : '<p class="w284note">No file yet. Upload Keela\'s exports here: the contacts and companies first.</p>');
     return '<section class="w284card w284filescard"><div class="w284ch"><h3>Files</h3></div>' + up + list + '</section>';
@@ -276,7 +302,7 @@
     return '<section class="w284card w284purge">'
       + (due ? '<p class="w284warn">It has been ' + plural(days, 'day', 'days') + ' since the last batch was applied. Purge this run to delete the staged rows, the uploaded files and the change records.</p>' : '')
       + (S.purgeAsk ? '<div class="w284ask" role="group" aria-label="Purge this run"><p>Purge deletes this run\'s staged rows, uploaded files and change records. Its batches can no longer be undone.</p>'
-          + '<button class="w284btn" data-w284purgeyes="1">Yes, purge</button><button class="w284btn ghost" data-w284purgeno="1">Cancel</button></div>'
+          + '<button class="w284btn danger" data-w284purgeyes="1">Yes, purge</button><button class="w284btn ghost" data-w284purgeno="1">Cancel</button></div>'
         : '<button class="w284btn soft" data-w284purge="1">Purge this run</button>')
       + (S.purgeMsg ? '<p class="w284note" role="status">' + E(S.purgeMsg) + '</p>' : '') + '</section>';
   }
@@ -285,16 +311,18 @@
     if (!can()) { h.innerHTML = '<div class="w284"><div class="w284empty">Imports are for admins.</div></div>'; return; }
     if (S.runs === null) { h.innerHTML = '<div class="w284"><div class="w284empty">Loading the imports…</div></div>'; if (!S.loading) load(); return; }
     var r = run();
-    var head = '<section class="w284card w284head"><div class="w284ch"><h2>Imports</h2></div>'
+    /* the head: the masthead already says Imports, so the card opens on the run itself (no CRM stats strip, no second title); with no run yet, the
+       empty state lives here, above New run */
+    var head = '<section class="w284card w284head"><h2 class="w284runline">' + E(runLine()) + '</h2>'
       + '<p class="w284rule">Bring Keela\'s exports into the Hub: upload and stage a file, compare each kind of import, then apply it. Undo puts back what has not changed since; opt-outs and consent are never undone.</p>'
+      + (r ? '' : '<p class="w284sum">Name the run, then Start a new run.</p>')
       + '<div class="w284runs">' + (S.runs.length ? '<label class="w284row"><span>Run</span><select class="w284sel" data-w284run="1">' + S.runs.map(function (x) {
           return '<option value="' + x.id + '"' + (x.id === S.run ? ' selected' : '') + '>Run ' + x.id + (x.label ? ': ' + E(x.label) : '') + (x.created_at ? ' (' + E(String(x.created_at).slice(0, 10)) + ')' : '') + (x.purged_at ? ', purged' : '') + '</option>';
         }).join('') + '</select></label>' : '')
       + '<label class="w284row"><span>New run</span><input class="w284in" type="text" maxlength="120" placeholder="A name, for example Keela final export" data-w284label="1" value="' + E(S.label) + '"></label>'
-      + '<button class="w284btn" data-w284new="1">Start a new run</button></div>'
+      + '<button class="' + pri('new') + '" data-w284new="1">Start a new run</button></div>'
       + (S.err ? '<p class="w284err" role="alert">' + E(S.err) + '</p>' : '') + '</section>';
-    var body = r ? filesHtml() + '<div class="w284cards">' + KINDS.map(cardHtml).join('') + '</div>' + purgeHtml()
-      : '<div class="w284empty">No import run yet. Start one to bring in Keela\'s exports.</div>';
+    var body = r ? filesHtml() + '<div class="w284cards">' + KINDS.map(cardHtml).join('') + '</div>' + purgeHtml() : '';
     var focus = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-w284label') ? 1 : 0;
     var caret = focus && document.activeElement.selectionStart;
     h.innerHTML = '<div class="w284">' + head + body + '</div>';
