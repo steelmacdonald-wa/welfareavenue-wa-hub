@@ -214,7 +214,7 @@
     }
     var err = (b && b.status === 'failed' && b.error) ? b.error : '';
     return '<section class="w284card" data-w284card="' + K.k + '" aria-labelledby="w284h-' + K.k + '">'
-      + '<div class="w284ch"><h3 id="w284h-' + K.k + '"><span class="w284n">' + (i + 1) + '</span>' + E(K.t) + '</h3>'
+      + '<div class="w284ch"><h3 id="w284h-' + K.k + '"><span class="w284n">' + (i + 1) + '</span><span class="w284t">' + E(K.t) + '</span></h3>'
       + '<span class="w284st st-' + st + '"><i aria-hidden="true"></i>' + st + '</span></div>'
       + '<p class="w284rule">' + E(K.rule) + '</p>'
       + (b && b.report ? '<p class="w284sum">' + E(sentence(b)) + '</p>' : '')
