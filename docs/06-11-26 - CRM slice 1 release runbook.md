@@ -85,7 +85,7 @@ If another session publishes a page, or deploys one of these functions, before t
 
 ## 5. Undo
 
-In this order.
+In this order. (Only if any Keela batch was applied: while the Import page is still live, undo every applied batch that should be undone, opt-outs and consent never are, and purge every run, as the wave284 document's undo says. After the page is back the same can be done with `wa284_undo` and the purge through the connector.)
 
 1. **The page first.** Republish bae461b9, rebuilt from `origin/wave287-projects-overview` at 940c905, so wave274's single Volunteer Manager, wave285, wave287 and every other live change stay. Never rebuild from "the commit before wave28N's page commit": that would drop other sessions' live work.
    - `git fetch origin`, then `git worktree add --detach <scratch folder> 940c905`.
@@ -94,7 +94,6 @@ In this order.
    - `f/index.html` back to efdb9627: the blob at 940c905 (`git show 940c905:build/f/index.html`, 52,174 bytes, LF), guarded (4adaf708 before, efdb9627 after).
    - host-sync, then re-check both md5s. Remove the scratch worktree.
 2. **Then the undo files, newest first:** `build/data/wa288_undo.sql`, `wa286_undo.sql`, `wa284_undo.sql`, `wa283_undo.sql`, `wa282_undo.sql`, `wa281_undo.sql`, each by pinned fetch, each with its own undo checks (`test/w28Nlive_undo.sql`).
-   - Before wave284's undo: on the Import page (before the page goes back) undo every applied batch that should be undone (opt-outs and consent never are) and purge every run, as its document says. If the page is already back, do it with `wa284_undo` and the purge through the connector.
    - What the undos never take back: opt-outs, consent and what people said. wave281's undo keeps the consent log, do-not-contact, text consent and the chapter rows as data; wave288's keeps the forms' chapter rows, text consent and log rows; wave284's never puts back a consent or opt-out column.
 3. **Then each function back to its version before the slice**, each as a one-line stub at the commit named:
    - form-submit v9 at 0c92b53; receipt-pdf v2 at 79a1de8; mail-send v6 at a9ed5f4; quo-send v8 and whatsapp-send v1 at 94f6942.
