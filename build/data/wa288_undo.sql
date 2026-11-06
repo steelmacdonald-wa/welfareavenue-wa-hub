@@ -4,7 +4,9 @@
 -- closed again: toronto-volunteer gets back the settings and consent live had on 06/11/26 and is closed; each of the three new forms is deleted if
 -- nobody answered it, else closed (its answers stay). The request type toronto-volunteer is deleted if no Request uses it, else switched off (the
 -- Requests stay). volunteer_applications.chapter is dropped and the French word removed. What people said stays as the record of it: the chapter
--- rows (crm_contact_chapters), sms_consent and the consent log rows the forms wrote. The release line stays; an undo line is added.
+-- rows (crm_contact_chapters), sms_consent and the consent log rows the forms wrote, and the tags (toronto, toronto student) and custom fields
+-- (gta_area, days_available, age_16_plus, photo_consent) their answers put on contacts, which wave274's Toronto Volunteers reads (the forms
+-- wrote them through crm_form_apply's own tag and field steps, which this undo does not change). The release line stays; an undo line is added.
 -- Run it before wave281's undo, never after (the chapter column points at crm_chapters, which wave281's undo drops). With it, put back the page's
 -- 152 segment, form-submit v9 and the /f/ page (build/f/index.html) of the commit before wave288, and take the Toronto forms off the website.
 -- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data, and must keep reading the migration's text.

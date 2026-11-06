@@ -24,6 +24,7 @@ create temp table w288_expect as
          (select count(*) from public.hub_i18n where lang = 'fr') as i18n_rows,
          (select count(*) from public.hub_i18n where lang = 'fr' and en = 'Also ask for text consent') as word_before,
          (select count(*) from public.crm_contact_chapters) as chapter_rows,
+         (select count(*) from public.crm_contact_fields) as field_rows,
          (select count(*) from public.crm_consent_events) as consent_rows,
          (select md5(string_agg(to_jsonb(c)::text, '|' order by c.id)) from public.crm_contacts c) as contacts_md5;
 

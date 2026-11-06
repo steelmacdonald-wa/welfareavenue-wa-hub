@@ -172,7 +172,12 @@ begin
 end $wa288$;
 
 -- benevole-toronto (its French twin), toronto-student and etudiant-toronto: drafts with the same settings (and cover photo) as toronto-volunteer
--- and the same two boxes. The student intro is the Keela form's ([FORMS], Toronto Student Registration). The wording of all three is for Steel and
+-- and the same two boxes, except that the two student forms tag people "toronto student" instead of "toronto" (Steel, 06/11/26). Toronto sign-ups
+-- appear in wave274's Toronto Volunteers (Volunteer Manager) through these tags ("toronto"; "toronto student", which also marks a student) and the
+-- four custom fields gta_area, days_available, age_16_plus and photo_consent. crm_form_apply already writes both, so no code is added for them: a
+-- form's settings.tags are merged into the contact's tags (added when missing, never removed), and each question saved to field:<key> is
+-- upserted into crm_contact_fields in the shape every form uses (a choice as its value, several choices as a list, yes or no as true or false),
+-- the latest answer winning; a form without one of those questions writes no row for it. The student intro is the Keela form's ([FORMS], Toronto Student Registration). The wording of all three is for Steel and
 -- Tate to approve (E10): the French intros are the English ones under "Version française à venir." until Tate's draft; the French labels the
 -- brief does not give (photos, days, experience, support, their help lines, the thank-you) are a draft. Added once (a slug already there is kept).
 do $wa288$
@@ -243,8 +248,8 @@ begin
   select settings, consent, intro, thank_you, cover_photo_id into t from public.crm_forms where slug = 'toronto-volunteer';
   insert into public.crm_forms (slug, title, intro, lang, kind, purpose, status, questions, consent, thank_you, settings, cover_photo_id, created_by, updated_by) values
     ('benevole-toronto', 'Faire du bénévolat à Toronto', v_fr || t.intro, 'fr', 'volunteer', 'volunteers', 'draft', q_benevole, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave288', 'wave288'),
-    ('toronto-student', 'Toronto student registration', v_si, 'en', 'volunteer', 'volunteers', 'draft', q_student, t.consent, t.thank_you, t.settings, t.cover_photo_id, 'wave288', 'wave288'),
-    ('etudiant-toronto', 'Inscription étudiante à Toronto', v_fr || v_si, 'fr', 'volunteer', 'volunteers', 'draft', q_etudiant, c_fr, c_thanks_fr, t.settings, t.cover_photo_id, 'wave288', 'wave288')
+    ('toronto-student', 'Toronto student registration', v_si, 'en', 'volunteer', 'volunteers', 'draft', q_student, t.consent, t.thank_you, jsonb_set(t.settings, '{tags}', '["toronto student"]'), t.cover_photo_id, 'wave288', 'wave288'),
+    ('etudiant-toronto', 'Inscription étudiante à Toronto', v_fr || v_si, 'fr', 'volunteer', 'volunteers', 'draft', q_etudiant, c_fr, c_thanks_fr, jsonb_set(t.settings, '{tags}', '["toronto student"]'), t.cover_photo_id, 'wave288', 'wave288')
   on conflict (slug) do nothing;
 end $wa288$;
 

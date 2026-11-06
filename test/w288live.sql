@@ -59,7 +59,8 @@ begin
     raise exception 'w288live: the three new forms are not drafts as the brief gives';
   end if;
   if exists (select 1 from public.crm_forms f where slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto')
-              and (f.settings <> (select settings from public.crm_forms where slug = 'toronto-volunteer') or jsonb_array_length(f.questions) not in (10, 15) or not (f.consent -> 'sms' ->> 'ask')::boolean)) then
+              and ((f.settings - 'tags') <> ((select settings from public.crm_forms where slug = 'toronto-volunteer') - 'tags')
+                   or f.settings -> 'tags' <> case when f.slug like '%student%' or f.slug like 'etudiant%' then '["toronto student"]'::jsonb else '["toronto"]'::jsonb end or jsonb_array_length(f.questions) not in (10, 15) or not (f.consent -> 'sms' ->> 'ask')::boolean)) then
     raise exception 'w288live: a new form does not have toronto-volunteer''s settings, its questions or the text box';
   end if;
   if (select count(*) from public.crm_forms) <> e.forms + 3 then raise exception 'w288live: not exactly three forms added'; end if;
@@ -102,7 +103,7 @@ begin
     '{"first_name": "Fixture", "last_name": "Person", "email": "fixture.person@toronto-fixture.ca", "phone": "+1 416 555 0101", "gta_area": "North York"}',
     '[{"label": "First name", "value": "Fixture"}, {"label": "Last name", "value": "Person"}, {"label": "Email", "value": "fixture.person@toronto-fixture.ca"}, {"label": "Phone", "value": "+1 416 555 0101"},
       {"label": "Which part of the GTA do you live in?", "value": "North York"}, {"label": "Email permission", "value": "Yes"}, {"label": "Text permission", "value": "Yes"}]',
-    '{"contact": {"first_name": "Fixture", "last_name": "Person", "email": "fixture.person@toronto-fixture.ca", "phone": "+1 416 555 0101"}, "fields": {"gta_area": "North York"}, "consent": true}',
+    '{"contact": {"first_name": "Fixture", "last_name": "Person", "email": "fixture.person@toronto-fixture.ca", "phone": "+1 416 555 0101"}, "fields": {"gta_area": "North York", "days_available": ["Sunday"], "age_16_plus": true, "photo_consent": true}, "consent": true}',
     jsonb_build_object('asked', e_label, 'given', true, 'at', '2026-11-06T15:00:00.000Z', 'form', 'toronto-volunteer', 'sms', jsonb_build_object('asked', t_label, 'given', true)),
     'en', 'w288live', '2026-11-06 15:00:00+00'
     from public.crm_forms f where f.slug = 'toronto-volunteer'
@@ -128,6 +129,12 @@ begin
     raise exception 'w288live: the Toronto person does not have express text and email consent as the brief gives';
   end if;
   if d.city is not null then raise exception 'w288live: a city was written on the new Toronto contact'; end if;
+  -- what wave274's Toronto Volunteers reads: the tag and the four custom fields
+  if not ('toronto' = any(d.tags)) or 'toronto student' = any(d.tags) then raise exception 'w288live: the Toronto person is not tagged toronto (or is tagged toronto student)'; end if;
+  if (select string_agg(f.key || '=' || cf.value::text, ' | ' order by f.key) from public.crm_contact_fields cf join public.crm_fields f on f.id = cf.field_id where cf.contact_id = c)
+     is distinct from 'age_16_plus=true | days_available=["Sunday"] | gta_area="North York" | photo_consent=true' then
+    raise exception 'w288live: the Toronto person does not have the four custom fields from the answers';
+  end if;
   if (select string_agg(column_name || '/' || source || '/' || coalesce(words, '-'), ' | ' order by column_name) from public.crm_consent_events where contact_id = c)
      is distinct from 'email_consent/form: toronto-volunteer/' || e_label || ' | email_status/form: toronto-volunteer/' || e_label || ' | sms_consent/form: toronto-volunteer/' || t_label then
     raise exception 'w288live: the consent log rows for the Toronto person are not the three from the form with their words';
@@ -159,6 +166,7 @@ begin
     raise exception 'w288live: a real contact changed';
   end if;
   if (select count(*) from public.crm_consent_events where contact_id not in (c, c2)) <> e.consent_rows then raise exception 'w288live: consent log rows were written for someone else'; end if;
+  if (select count(*) from public.crm_contact_fields where contact_id not in (c, c2)) <> e.field_rows then raise exception 'w288live: custom fields changed for someone else'; end if;
   if (select count(*) from public.crm_contact_chapters where contact_id not in (c, c2)) <> e.chapter_rows then raise exception 'w288live: chapter rows changed for someone else'; end if;
   perform set_config('request.jwt.claims', '', true);
 end $a$;

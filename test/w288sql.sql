@@ -63,7 +63,10 @@ begin
   -- the three new forms
   assert (select string_agg(slug || ':' || lang || ':' || status || ':' || kind || ':' || purpose, ',' order by slug) from public.crm_forms where slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto'))
     = 'benevole-toronto:fr:draft:volunteer:volunteers,etudiant-toronto:fr:draft:volunteer:volunteers,toronto-student:en:draft:volunteer:volunteers', 'three drafts: volunteer forms in the Volunteers group, one English, two French';
-  assert (select bool_and(f.settings = c_set and f.cover_photo_id = 58) from public.crm_forms f where slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto')), 'the same settings and cover photo as toronto-volunteer';
+  assert (select bool_and(f.cover_photo_id = 58) from public.crm_forms f where slug in ('benevole-toronto', 'toronto-student', 'etudiant-toronto'))
+     and (select settings from public.crm_forms where slug = 'benevole-toronto') = c_set, 'the French twin has toronto-volunteer''s settings; all three its cover photo';
+  assert (select bool_and(f.settings = jsonb_set(c_set, '{tags}', '["toronto student"]')) from public.crm_forms f where slug in ('toronto-student', 'etudiant-toronto')),
+    'the student forms have the same settings, tagging people toronto student';
   assert (select consent from public.crm_forms where slug = 'toronto-student') = c_en and (select bool_and(consent = c_fr) from public.crm_forms where slug in ('benevole-toronto', 'etudiant-toronto')),
     'the English boxes on toronto-student, the French ones on the French forms';
   -- benevole-toronto: toronto-volunteer's questions, in French
@@ -149,7 +152,11 @@ begin
     'toronto 1: express text consent, with the form and the day as its source (' || coalesce(d.sms_consent_source, 'none') || ')';
   assert d.email_consent = 'express' and d.email_status = 'subscribed', 'toronto 1: express email consent';
   assert d.city is null, 'toronto 1: no city written from the form';
-  assert 'toronto' = any(d.tags), 'toronto 1: the toronto tag';
+  assert 'toronto' = any(d.tags) and not ('toronto student' = any(d.tags)), 'toronto 1: the toronto tag (not toronto student)';
+  -- the four answers wave274's Toronto Volunteers reads, in the shape every form writes
+  assert (select string_agg(f.key || '=' || cf.value::text || '/' || cf.source, ' | ' order by f.key) from public.crm_contact_fields cf join public.crm_fields f on f.id = cf.field_id where cf.contact_id = c)
+       = 'age_16_plus=true/form:toronto-volunteer | days_available=["Sunday"]/form:toronto-volunteer | gta_area="North York"/form:toronto-volunteer | photo_consent=true/form:toronto-volunteer',
+    'toronto 1: gta_area, days_available, age_16_plus and photo_consent written from the answers';
   -- the consent log: three rows, all from the form, each with the words they saw
   assert (select string_agg(column_name || '=' || new_value || '/' || channel || '/' || source || '/' || coalesce(words, '-'), ' | ' order by column_name) from public.crm_consent_events where contact_id = c)
        = 'email_consent=express/email/form: toronto-volunteer/' || e || ' | email_status=subscribed/email/form: toronto-volunteer/' || e || ' | sms_consent=express/sms/form: toronto-volunteer/' || t,
@@ -157,8 +164,11 @@ begin
   -- applying it again changes nothing
   perform public.crm_form_apply(s);
   assert (select count(*) from public.volunteer_applications where lower(email) = 'fixture.person@toronto-fixture.ca') = 1 and (select count(*) from public.dept_requests) = 1
-     and (select count(*) from public.crm_consent_events where contact_id = c) = 3, 'toronto 1: a second apply adds nothing';
+     and (select count(*) from public.crm_consent_events where contact_id = c) = 3
+     and (select count(*) from public.crm_contact_fields where contact_id = c) = 4 and (select cardinality(array_positions(tags, 'toronto')) from public.crm_contacts where id = c) = 1,
+    'toronto 1: a second apply adds nothing (one toronto tag, four fields)';
 end $$;
+
 
 -- 2. the Montreal volunteer form, the email box ticked (no text box on it): still Montreal, and its settings.city is no longer written
 do $$
@@ -274,6 +284,41 @@ begin
   assert d.sms_consent = 'express' and d.sms_consent_source = 'Hub form: toronto-volunteer (06 Nov 2026)' and d.sms_consent_at = '2026-11-07 02:30:00+00'::timestamptz,
     'a new person in the evening: the day in Toronto (' || coalesce(d.sms_consent_source, 'none') || ')';
 end $$;
+-- 11. the two student forms (Steel, 06/11/26): the tag toronto student, the same four fields, a second answer adds no tag or row
+do $$
+declare v text; s bigint; r jsonb; c bigint; d record; n int := 0;
+begin
+  foreach v in array array['toronto-student', 'etudiant-toronto'] loop
+    n := n + 1;
+    insert into public.crm_form_submissions (form_id, status, answers, display, mapped, consent, lang, created_at)
+    select f.id, 'received', '{}', '[{"label": "School", "value": "Fixture College"}]',
+      jsonb_build_object('contact', jsonb_build_object('first_name', 'Fixture', 'last_name', 'Student' || n, 'email', 'fixture.student' || n || '@toronto-fixture.ca', 'phone', '+1 416 555 017' || n),
+                         'fields', jsonb_build_object('gta_area', 'Scarborough', 'age_16_plus', true, 'photo_consent', false, 'days_available', jsonb_build_array('Saturday', 'Sunday')),
+                         'roles', jsonb_build_array('cook', 'server'), 'consent', false),
+      jsonb_build_object('asked', f.consent ->> 'label', 'given', false, 'form', v, 'sms', jsonb_build_object('asked', f.consent #>> '{sms,label}', 'given', false)),
+      f.lang, '2026-11-06 20:00:00+00'
+      from public.crm_forms f where f.slug = v
+    returning id into s;
+    r := public.crm_form_apply(s);
+    c := (r ->> 'contact_id')::bigint;
+    select * into d from public.crm_contacts where id = c;
+    assert 'toronto student' = any(d.tags) and not ('toronto' = any(d.tags)), v || ': the tag toronto student (' || array_to_string(d.tags, ',') || ')';
+    assert (select string_agg(f.key || '=' || cf.value::text, ' | ' order by f.key) from public.crm_contact_fields cf join public.crm_fields f on f.id = cf.field_id where cf.contact_id = c)
+         = 'age_16_plus=true | days_available=["Saturday", "Sunday"] | gta_area="Scarborough" | photo_consent=false', v || ': the four fields from the answers';
+    assert (select chapter from public.volunteer_applications where lower(email) = 'fixture.student' || n || '@toronto-fixture.ca') = 'toronto'
+       and exists (select 1 from public.crm_contact_chapters where contact_id = c and chapter = 'toronto') and (r ->> 'request_id') is not null, v || ': Toronto, and a Request for Tate';
+    assert (select string_agg(x, ',' order by x) from unnest((select roles from public.volunteer_people where contact_id = c)) x) = 'cook,server', v || ': Either is cook and server';
+    perform public.crm_form_apply(s);
+    insert into public.crm_form_submissions (form_id, status, answers, display, mapped, consent, lang, created_at)
+    select form_id, 'received', answers, display, jsonb_set(mapped, '{fields,gta_area}', '"North York"'), consent, lang, created_at + interval '1 hour' from public.crm_form_submissions where id = s
+    returning id into s;
+    perform public.crm_form_apply(s);
+    assert (select cardinality(array_positions(tags, 'toronto student')) from public.crm_contacts where id = c) = 1 and (select count(*) from public.crm_contact_fields where contact_id = c) = 4
+       and (select cf.value from public.crm_contact_fields cf join public.crm_fields f on f.id = cf.field_id where cf.contact_id = c and f.key = 'gta_area') = '"North York"'::jsonb,
+      v || ': applying again and a second answer add no tag or row (the latest area wins)';
+  end loop;
+end $$;
+
 select set_config('request.jwt.claims', '', true);
 
 -- ---------------------------------------------------------------- staff call wa209_volunteer_apply directly (the Volunteer Manager): Montreal unless they say
