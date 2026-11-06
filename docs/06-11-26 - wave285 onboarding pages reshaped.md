@@ -69,3 +69,17 @@ Signed in on the real page with live data: the numbers for the real cohort, the 
 
 ## Second review fix (06/11/26): plans can complete again
 Locking the headers and the setup-covered steps (finding 3) and completing on the raw count only (finding 1) together meant raw done could never reach raw total, so nobody completed or got the certificate. Now `w285.completeKnown(onbId)` decides (raw complete, or the rule complete with its facts known), wave37 and wave122 both use it, and wave37 writes the derived rows done before it marks the plan completed. Drive checks: the last real step completes Cara's plan with 8 headers and 3 setup steps open in the table, and those 11 rows are written first; a hire who finished her real steps (one of them in the Academy) is complete in wave122, but not while her training_progress is not loaded; HR before wave271 (Hana), a flow more than 30 days old (Otto) and one whose cover is unknown (Uma, no created_at) still do not complete.
+
+## Released 06/11/26 (Steel's yes in advance, "I'm saying yes in advance")
+
+1. Live had moved to b8082fba (the cloud session's wave274, 274b and one app, `origin/ccr-50e3ba2b-mbnz80` e61aa46), which rebuilt byte for byte. It was merged in (3335423, manifest fixed in 62af8c1: 274 then 285).
+2. Candidate 9977c375 (8,301,148 bytes, LF) = b8082fba plus wave285's 122,938 bytes. check_remaps clean.
+3. Drives on the candidate: w285drive 209/0, w279drive 113/0, w272drive 152/0, w274drive 222/0, w274bdrive 134/0, w274onedrive 163/0 (WA_CHROME set to the local Chrome).
+4. Staged in 10 parts in `wa_stage285` (anon access closed right after posting, table dropped after the swap); gated swap with expected live b8082fba and marker `wave285: the one progress rule`; host-sync answered 200 (8,300,972 characters).
+5. Served by hub.welfareavenue.com: md5 9977c375. Signed out: no script errors (the 401s are the signed-out data calls); `window.w285.plan`, `completeKnown` and `wa37PctRaw` present.
+
+Not seen yet: signed in with live data (the real cohort's rows, the panel's actions against onboard-run, a manager's Home).
+
+## Undo
+
+Put back index.html b8082fba: build `origin/ccr-50e3ba2b-mbnz80` at e61aa46 with `build/build_lf.py`, stage and gate it with expected live 9977c375, and run host-sync. wave285 wrote no data at release; from release on, a plan completed through the new rule writes its header, setup and Academy rows as done (done_by 'Hub: ...'), which an undo leaves in place.
