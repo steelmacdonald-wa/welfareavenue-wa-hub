@@ -67,6 +67,11 @@
     }
     if ((el = t.closest('[data-w152log]'))) { e.preventDefault(); el.disabled = true; saveLog(el.getAttribute('data-w152log')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
     if ((el = t.closest('[data-w152delint]'))) { e.preventDefault(); deleteLog(sheetId(), el.getAttribute('data-w152delint')); return; }
+    /* wave293: the timeline's filters, Show more and the Relationship card's Refresh */
+    if ((el = t.closest('[data-w293tlf]')) && S.tl) { e.preventDefault(); S.tl.f = el.getAttribute('data-w293tlf'); S.tl.topic = ''; S.tl.show = TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293tlt]')) && S.tl) { e.preventDefault(); S.tl.topic = el.getAttribute('data-w293tlt'); S.tl.show = TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293more]')) && S.tl) { e.preventDefault(); S.tl.show += TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293refresh]'))) { e.preventDefault(); refreshInsight(el.getAttribute('data-w293refresh')); return; }
     if ((el = t.closest('[data-w152copy]'))) { e.preventDefault(); copy(el.getAttribute('data-w152copy')); return; }
     if ((el = t.closest('[data-w152keep]'))) { e.preventDefault(); S.confirm = 'merge:' + el.getAttribute('data-w152keep') + ':' + el.getAttribute('data-drop'); paint(); return; }
     if ((el = t.closest('[data-w152cancel]'))) { e.preventDefault(); S.confirm = null; paint(); return; }
@@ -92,6 +97,8 @@
     else return;
     S.ui.show = 60; paint();
   });
+  /* wave293: an open email thread stays open when the sheet repaints (toggle does not bubble: listen while capturing) */
+  document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('#w152sheet details[data-w293det]') && S.tl) S.tl.open[d.getAttribute('data-w293det')] = d.open; }, true);
   window.addEventListener('hashchange', function () {
     if (!S.sheet) return;
     if (!/^#crm(\/|$)/.test(location.hash)) closeSheet(true);
@@ -126,13 +133,16 @@
       W.tours.crm = { tab: 'crm', icon: 'people', hash: '#crm', steps: [
         T('#crm > .w118mast', 'CRM', 'Everyone Welfare Avenue knows in one place: volunteers, donors, partners’ contacts and the team, with what each one has done with us.'),
         T('#crm .w152stats', 'At a glance', 'Everyone, the volunteers, who has served at an event, and the donors (or the duplicates to check). A number narrows the list to them.', OPT),
-        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Sends, Forms, Automations and Reports.', OPT),
+        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Sends, Forms, Automations, Reports and Insights.', OPT),
         T('#crm .w152chips', 'Who they are to us', 'Volunteers, donors, partners’ contacts, supporters, staff and alumni. One person can be several.', OPT),
         T('#crm .w152q', 'Find anyone', 'Type a name, an email, a phone number, a school or a tag. Next to it: a volunteer role, their activity, their email permission, and the order.', OPT),
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner’s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
         T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
         { c: 1, t: 'A contact’s page', p: 'Their details (a volunteer’s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website’s history.' },
         { c: 1, t: 'Email permission', p: RULE_TEXT },
+        /* wave293: two steps for the email history */
+        { c: 1, t: 'Their emails with us', p: 'The emails people sent Welfare Avenue (Steel’s mailbox, hub@ and info@) sit on their timeline, one item per conversation with the date, in or out, the mailbox and one line on what it was about, never the email itself. Show the emails opens a conversation; the chips above the timeline show only emails, notes and calls, forms, gifts or volunteering, and under Emails the topics. The Relationship card above says what they are to us, how long we have written, anything still open and a short summary written by the Hub (Refresh writes it again, about 1¢). Lines from Steel’s mailbox are for admins until he opens them to the team.' },
+        T('#w153rail [data-w153go="#crm/insights"] || #crm .w152tabs [data-w152go="#crm/insights"]', 'Insights', 'Insights: the people who emailed with us each year since 2020 by what they are to us, the organisations who write most (all time and the last 12 months), and who has gone quiet: donors, partners, supporters and volunteers we have not heard from, and who have not heard from us, in a year. Click a name to open them.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact’s page has Send an email from the Hub.', OPT),
         T('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'Studio', 'The email studio (wave202): emails in the Welfare Avenue brand, put together with the Hub from your words and photos or from a template, checked before they go out, and sent to one person, a list or saved for the automations. It has its own tour.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
@@ -161,5 +171,6 @@
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
     /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow,
-    /* wave283 */ can: can, caps: function () { return S.caps; } };
+    /* wave283 */ can: can, caps: function () { return S.caps; },
+    /* wave293 */ threads: function (id) { var d = S.detail[String(id)]; return d ? mailThreads(d) : null; }, spanDays: spanDays, refresh: refreshInsight, tl: function () { return S.tl; } };
 })();

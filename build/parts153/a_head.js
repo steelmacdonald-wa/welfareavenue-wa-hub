@@ -140,7 +140,8 @@
           { h: '#crm/campaigns', l: 'Sends', ic: 'send', page: 'crm' },   /* wave283: a Send is one email to many people (crm_campaigns); Campaigns are fundraising events */
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }, { label: 'Reports', items: [
-          { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
+          { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' },
+          { h: '#crm/insights', l: 'Insights', ic: 'chart', page: 'crm' }   /* wave293: the email history's Insights tab */
         ] }];
       },
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus', page: 'crm' }]   /* wave163: on the contacts page only (Partners has its own Add a partner) */

@@ -27,7 +27,7 @@
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
     var o = document.getElementById('w152sheet'); if (o) { o.style.display = 'none'; o.innerHTML = ''; }
-    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null;
+    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null; S.tl = null; if (S.rel && !S.rel.busy) S.rel = null;   /* wave293: the timeline's filters are page state */
     if (!quiet && /^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } }
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
@@ -41,8 +41,17 @@
   function loadDetail(c) {
     var id = String(c.id);
     var q = function (p) { return Promise.resolve(p).then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; }); };
+    /* wave293: the email history (source gmail) has its own query, so a long correspondence never pushes notes and gifts off; with it the
+       Relationship card's row (crm_email_relationship), its counts (crm_email_relationship_v) and two settings. Row security decides what comes
+       back: Steel's mailbox lines and summaries reach admins only until mail_history_steel_open (wave292, H1). */
+    var mail = Promise.all([
+      q(db.from('crm_interactions').select('id,kind,direction,subject,body,occurred_at,source,source_ref,meta,created_by').eq('contact_id', c.id).eq('source', 'gmail').order('occurred_at', { ascending: false }).limit(600)),
+      q(db.from('crm_email_relationship').select('rel_type,rel_conf,topics,open_item,summary,from_steel,stale,generated_at,generated_by').eq('contact_id', c.id).limit(1)),
+      q(db.from('crm_email_relationship_v').select('*').eq('contact_id', c.id).limit(1)),
+      q(db.from('app_config').select('key,value').in('key', ['mail_history_type_unsure', 'mail_history_steel_open']))
+    ]);
     return Promise.all([
-      q(db.from('crm_interactions').select('*').eq('contact_id', c.id).order('occurred_at', { ascending: false }).limit(300)),
+      q(db.from('crm_interactions').select('*').eq('contact_id', c.id).neq('source', 'gmail').order('occurred_at', { ascending: false }).limit(300)),
       q(db.from('crm_donations').select('id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,notes').eq('contact_id', c.id).order('donated_at', { ascending: false }).limit(300)),
       q(db.from('crm_volunteer_history').select('*').eq('contact_id', c.id).order('event_at', { ascending: false }).limit(500)),
       c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at,detail').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
@@ -57,15 +66,20 @@
       Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(c.id) })).then(function (x) { return x && !x.error && typeof x.data === 'string' ? x.data : null; }, function () { return null; }),
       q(db.from('crm_contact_chapters').select('chapter,source').eq('contact_id', c.id)),
       load('chapters'),
-      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null)
+      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null),
+      mail
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
+        var m = r[14] || [[], [], [], []], cfg = {};
+        (m[3] || []).forEach(function (x) { cfg[x.key] = x.value; });
+        S.detail[id] = { ints: (r[0] || []).filter(function (x) { return lower(x.source) !== 'gmail'; }), gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
           age: r[10] || null, chapters: (r[11] || []).map(function (x) { return x.chapter; }),
-          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null };
+          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null,
+          /* wave293 */ mail: m[0] || [], rel: (m[1] || [])[0] || null, relv: (m[2] || [])[0] || null,
+          unsure: isFinite(parseFloat(cfg.mail_history_type_unsure)) ? parseFloat(cfg.mail_history_type_unsure) : 0.5, steelOpen: String(cfg.mail_history_steel_open || '').trim() === 'true' };
         return S.detail[id];
       });
     });
@@ -161,12 +175,13 @@
       var system = /^(crm_sync|wa\d+_import|mail-unsubscribe|mail-events)$/.test(String(x.created_by || ''));
       var sent = lower(x.source) === 'resend' && x.meta && x.meta.send_id; /* wave154: an email the Hub sent, with what happened to it */
       var hubForm = lower(x.source) === 'hub_form'; /* wave156: an answer to one of the CRM's forms */
-      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: hubForm ? 'form' : (ICON[k] || 'note'), t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''), pre: hubForm,
+      out.push({ f: hubForm || k === 'form' ? 'forms' : (k === 'email' || k === 'website_message' || k === 'campaign') ? 'email' : 'notes',   /* wave293: the filter it falls under */
+        at: x.occurred_at || x.created_at, undated: undated, icon: hubForm ? 'form' : (ICON[k] || 'note'), t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''), pre: hubForm,
         st: sent ? (x.meta.status || 'sent') : '', by: hubForm ? 'The form at hub.welfareavenue.com/f/' + ((x.meta && x.meta.slug) || '') : sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
         system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
-      out.push({ at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
+      out.push({ f: 'gifts', at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
         p: [g.campaign, g.designation, g.platform ? 'through ' + (g.platform.charAt(0).toUpperCase() + g.platform.slice(1)) : ''].filter(Boolean).join(' · '),
         rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
     });
@@ -174,7 +189,7 @@
       if (h.attended && h.volunteer_event_id) return; /* served: the Hub roster has it (the old website's events are in MTL volunteering) */
       var role = h.position ? roleName(lower(h.position)) : 'a volunteer';
       var t = h.attended ? 'Served as ' + role : h.withdrawn ? 'Withdrew' : h.waitlisted ? 'On the waiting list' : h.confirmed ? 'Confirmed as ' + role : h.approved ? 'Approved as ' + role : 'Signed up as ' + role;
-      out.push({ at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' · ') + (h.attended && Number(h.hours) ? ' · ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
+      out.push({ f: 'vol', at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' · ') + (h.attended && Number(h.hours) ? ' · ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
     });
     var EV = {}; (d.events || []).forEach(function (e) { EV[String(e.id)] = e; });
     (d.roster || []).forEach(function (r) {
@@ -188,10 +203,127 @@
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
       var old = r.detail && r.detail.source === 'old website';
-      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · ') + (old && Number(r.detail.hours) ? ' · ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
+      out.push({ f: 'vol', at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · ') + (old && Number(r.detail.hours) ? ' · ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
     });
+    mailThreads(d).forEach(function (th) { out.push(th); });   /* wave293: the email history, one item per thread */
     out.sort(function (a, b) { return ((a.undated ? 1 : 0) - (b.undated ? 1 : 0)) || String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
     return out;
+  }
+
+  /* ---------- wave293: the email history on a contact's page (design "03 email history", 5.8 and 5.9) ---------- */
+  var STEEL_BOX = 'steel.macdonald@welfareavenue.com';   /* Open in Gmail is for the mailbox's owner only, on lines from his mailbox */
+  var BOXES = { steel: 'Steel’s mailbox', hub: 'hub@', info: 'info@' };
+  var TOPICS = { donation: 'Donations', partnership: 'Partnerships', volunteering: 'Volunteering', event: 'Events', media: 'Media', supplier: 'Suppliers', government: 'Government', program: 'Programs', other: 'Other' };
+  var TL_KINDS = [['', 'All'], ['email', 'Emails'], ['notes', 'Notes and calls'], ['forms', 'Forms'], ['gifts', 'Gifts'], ['vol', 'Volunteering']];
+  var REL = { donor: 'Donor', partner: 'Partner', volunteer: 'Volunteer', supporter: 'Supporter', vendor: 'Supplier', media: 'Media', government: 'Government', other: 'Other' };
+  var TL_PAGE = 50;
+  function topicName(t) { return TOPICS[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : ''); }
+  function boxesLine(list) { var b = uniq((list || []).filter(Boolean)); return 'From ' + (b.length ? listJoin(b.map(function (x) { return BOXES[x] || x; })) : 'the email history'); }
+  function gmailIdOf(x) { var p = String((x && x.source_ref) || '').split(':'); return p.length >= 2 ? p[1] : ''; }
+  /* "12 Mar to 2 Apr 2021", "30 Dec 2020 to 4 Jan 2021", or one day */
+  function spanDays(a, b) {
+    var A = dayOf(a), B = dayOf(b);
+    if (!A || !B) return fmtDay(a || b);
+    if (A === B) return fmtDay(A);
+    var fa = fmtDay(A);
+    if (A.slice(0, 4) === B.slice(0, 4)) fa = fa.replace(/ \d{4}$/, '');
+    return fa + ' to ' + fmtDay(B);
+  }
+  function mailThreads(d) {
+    var by = {}, order = [];
+    (d.mail || []).forEach(function (x) {
+      var m = x.meta || {}, k = m.thread ? 't:' + m.thread : 'r:' + (x.source_ref || x.id);
+      if (!by[k]) { by[k] = []; order.push(k); }
+      by[k].push(x);
+    });
+    var steelMe = myEmail() === STEEL_BOX;
+    return order.map(function (k) {
+      var L = by[k].slice().sort(function (a, b) { return String(a.occurred_at || '').localeCompare(String(b.occurred_at || '')); });   /* oldest first, as a conversation reads */
+      var first = L[0], last = L[L.length - 1];
+      var boxes = L.map(function (x) { return (x.meta || {}).mailbox; });
+      var steel = boxes.indexOf('steel') >= 0;
+      var thread = (first.meta || {}).thread || '';
+      var gm = steel && steelMe ? 'https://mail.google.com/mail/u/?authuser=' + encodeURIComponent(STEEL_BOX) + '#all/' + encodeURIComponent(thread || gmailIdOf(last)) : '';
+      var item = { f: 'email', mail: true, key: k, topics: uniq(L.map(function (x) { return (x.meta || {}).topic; }).filter(Boolean)), at: last.occurred_at, icon: 'mail',
+        p: last.body || '', by: boxesLine(boxes), steel: steel, gm: gm };
+      if (L.length === 1) item.t = (lower(first.direction) === 'in' ? 'Email from them' : 'Email to them') + (first.subject ? ': ' + first.subject : '');
+      else { item.t = 'Email thread: ' + (first.subject || 'no subject'); item.span = plural(L.length, 'email', 'emails') + ', ' + spanDays(first.occurred_at, last.occurred_at); item.emails = L; }
+      return item;
+    });
+  }
+  function tlState(c) { if (!S.tl || S.tl.id !== String(c.id)) S.tl = { id: String(c.id), f: '', topic: '', show: TL_PAGE, open: {} }; return S.tl; }
+  function tlChip(attr, val, label, n, on) {
+    return '<button class="w293chip' + (on ? ' on' : '') + '" ' + attr + '="' + E(val) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + E(label) + (n != null ? ' <em class="w152num">' + Number(n).toLocaleString('en-CA') + '</em>' : '') + '</button>';
+  }
+  function tlFiltersHtml(items, st) {
+    var n = {}; items.forEach(function (x) { n[x.f] = (n[x.f] || 0) + 1; });
+    var kinds = TL_KINDS.filter(function (k) { return k[0] && n[k[0]]; });
+    var out = '';
+    if (kinds.length > 1 || st.f) out += '<div class="w293chips" role="group" aria-label="Show on the timeline">' + tlChip('data-w293tlf', '', 'All', items.length, !st.f) +
+      kinds.map(function (k) { return tlChip('data-w293tlf', k[0], k[1], n[k[0]], st.f === k[0]); }).join('') + '</div>';
+    if (st.f === 'email') {
+      var tc = {}; items.forEach(function (x) { if (x.f === 'email') (x.topics || []).forEach(function (t) { tc[t] = (tc[t] || 0) + 1; }); });
+      var ts = Object.keys(tc).sort(function (a, b) { return (tc[b] - tc[a]) || topicName(a).localeCompare(topicName(b)); });
+      if (ts.length) out += '<div class="w293chips sub" role="group" aria-label="Email topics">' + tlChip('data-w293tlt', '', 'Every topic', null, !st.topic) +
+        ts.map(function (t) { return tlChip('data-w293tlt', t, topicName(t), tc[t], st.topic === t); }).join('') + '</div>';
+    }
+    return out;
+  }
+  function threadHtml(x, st, d) {
+    var open = !!st.open[x.key];
+    return '<details class="w293em" data-w293det="' + E(x.key) + '"' + (open ? ' open' : '') + '><summary>' + I('chev', 'w293chev') + '<span>Show the ' + x.emails.length.toLocaleString('en-CA') + ' emails</span></summary>' +
+      '<ol class="w293list">' + x.emails.map(function (m) {
+        var mb = (m.meta || {}).mailbox, inn = lower(m.direction) === 'in';
+        return '<li><div class="w293mh"><span class="w293d w152num">' + E(fmtDay(m.occurred_at)) + '</span><span class="w293dir ' + (inn ? 'in' : 'out') + '">' + (inn ? 'From them' : 'To them') + '</span><span class="w293mb">' + E(BOXES[mb] || mb || '') + '</span></div>' +
+          (m.subject && m.subject !== x.emails[0].subject ? '<div class="w293ms">' + E(m.subject) + '</div>' : '') + (m.body ? '<p>' + E(m.body) + '</p>' : '') + '</li>';
+      }).join('') + '</ol></details>';
+  }
+  /* the Relationship card above the timeline (5.9): the type, the counts, the topics, anything open, the summary, Refresh */
+  function relationshipHtml(c, d) {
+    if (!d) return '';
+    var r = d.rel, v = d.relv, mail = d.mail || [];
+    if (!r && !v && !mail.length) return '';
+    var out = [], st = S.rel && S.rel.id === String(c.id) ? S.rel : null;
+    if (r && r.rel_type) {
+      var conf = Number(r.rel_conf), sure = isFinite(conf) && conf >= (d.unsure || 0.5);
+      out.push('<div class="w293type">' + (sure ? '<b>' + E(REL[r.rel_type] || r.rel_type) + '</b><span class="w152num">, ' + Math.round(conf * 100) + '% sure</span>' : '<b>Not sure</b><span>' + E(' (perhaps ' + (REL[r.rel_type] || r.rel_type).toLowerCase() + ')') + '</span>') +
+        (r.stale ? ' <span class="w293stale">May be out of date</span>' : '') + '</div>');
+    }
+    if (v && Number(v.emails_in) + Number(v.emails_out) > 0) {
+      var tot = Number(v.emails_in || 0) + Number(v.emails_out || 0), th = Number(v.threads || 0);
+      var inTh = th > 1 ? ' in ' + plural(th, 'thread', 'threads') : th === 1 ? ' in one thread' : '';
+      var line = tot === 1 ? 'One email, ' + fmtDay(v.first_email_at)
+        : dayOf(v.first_email_at) === dayOf(v.last_email_at) ? plural(tot, 'email', 'emails') + ' on ' + fmtDay(v.first_email_at) + inTh
+        : 'First email ' + fmtDay(v.first_email_at) + ', last ' + fmtDay(v.last_email_at) + ', ' + plural(tot, 'email', 'emails') + inTh;
+      out.push('<div class="w152line w152num" data-w293counts>' + E(line) + '</div>');
+    }
+    var topics = arr(r && r.topics);
+    if (topics.length) out.push('<div class="w293tops">' + topics.map(function (t) { return '<span class="w152rl">' + E(topicName(t)) + '</span>'; }).join('') + '</div>');
+    if (r && r.open_item) out.push('<div class="w293open"><b>Still open</b> ' + E(r.open_item) + (r.generated_at ? ' <span class="m">(as of ' + E(fmtDay(r.generated_at)) + ')</span>' : '') + '</div>');
+    if (r && r.summary) out.push('<p class="w293sum w152measure">' + E(r.summary) + '</p>');
+    if (amAdmin() && !d.steelOpen && (mail.some(function (x) { return (x.meta || {}).mailbox === 'steel'; }) || (r && r.from_steel))) out.push('<div class="w152line m" data-w293adm>' + I('lock') + ' Lines from Steel’s mailbox are visible to admins only for now.</div>');
+    var busyNow = st && st.busy;
+    var foot = (r && r.summary && r.generated_at ? '<span>Written by the Hub on ' + E(fmtDay(r.generated_at)) + '</span>' : '<span>No summary yet.</span>') +
+      '<button class="w152mini w293ref" data-w293refresh="' + E(c.id) + '"' + (busyNow ? ' disabled aria-busy="true"' : '') + '>' + I('spark') + (busyNow ? 'Writing…' : (r && r.summary ? 'Refresh' : 'Write one')) + '</button><span class="m">about 1¢</span>';
+    out.push('<div class="w293foot">' + foot + '</div>' + '<div class="w293msg" role="status" aria-live="polite">' + (st && st.msg ? E(st.msg) : '') + '</div>');
+    return '<div class="w152sec w293rel" data-w293card><h4>Relationship</h4>' + out.join('') + '</div>';
+  }
+  /* Refresh: the one summary path (mail-history insight: crm_insight_input, the mail_history_insight route, crm_insight_save) for one contact */
+  function refreshInsight(id) {
+    var c = contact(id); if (!c || (S.rel && S.rel.busy)) return;
+    S.rel = { id: String(c.id), busy: true, msg: '' };
+    contactSheet(c.id);
+    var done = function (msg) { S.rel = { id: String(c.id), busy: false, msg: msg }; if (S.sheet === 'c:' + c.id) contactSheet(c.id, true); };
+    if (typeof db === 'undefined' || !db || !db.functions) { done('The Hub is offline. Try again in a moment.'); return; }
+    Promise.resolve(db.functions.invoke('mail-history', { body: { action: 'insight', contact_id: Number(c.id) } })).then(function (res) {
+      if (res && res.error) {
+        var ctx = res.error.context;
+        if (ctx && typeof ctx.json === 'function') return ctx.json().then(function (j) { done((j && j.error) || 'The summary could not be written.'); }, function () { done('The summary could not be written.'); });
+        done(res.error.message || 'The summary could not be written.'); return;
+      }
+      if (res && res.data && res.data.error) { done(String(res.data.error)); return; }
+      done('Summary written.');
+    }).catch(function (e) { done('The summary could not be written (' + String((e && e.message) || e) + ').'); });
   }
   function logFormHtml(c) {
     return '<div class="w152log"><div class="r"><select data-w152logk aria-label="What happened">' + LOG_ORDER.map(function (k) { return '<option value="' + k + '">' + E(LOGS[k][2]) + '</option>'; }).join('') + '</select>' +
@@ -201,12 +333,20 @@
   }
   function timelineHtml(c, d) {
     if (!d) return logFormHtml(c) + busy('Loading their history…');
-    var items = timeline(c, d);
-    return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
-      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
-        (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
-        (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
-    }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
+    var all = timeline(c, d), st = tlState(c);
+    /* wave293: the filters by kind (All, Emails, Notes and calls, Forms, Gifts, Volunteering) and, under Emails, the topics; page state only */
+    if (st.f && !all.some(function (x) { return x.f === st.f; })) { st.f = ''; st.topic = ''; }
+    var items = all.filter(function (x) { return (!st.f || x.f === st.f) && (!st.topic || (x.topics || []).indexOf(st.topic) >= 0); });
+    var shown = items.slice(0, st.show);
+    return logFormHtml(c) + (all.length ? tlFiltersHtml(all, st) : '') + (shown.length ? '<ul class="w152tl">' + shown.map(function (x) {
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + (x.mail ? ' w293mail' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
+        (x.span ? '<div class="w293span w152num">' + E(x.span) + '</div>' : '') +
+        (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.emails ? threadHtml(x, st, d) : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
+        (x.by || x.del || x.gm ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + (x.steel && !d.steelOpen && amAdmin() ? ' · admins only for now' : '') + '</span>' : '') +
+          (x.gm ? '<a class="w152mini" href="' + E(x.gm) + '" target="_blank" rel="noopener" data-w293gmail="1">' + I('ext') + 'Open in Gmail</a>' : '') +
+          (x.del && !x.mail ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
+    }).join('') + '</ul>' + (shown.length < items.length ? '<button class="w152btn soft sm w293more" data-w293more="1">Show ' + Math.min(TL_PAGE, items.length - shown.length) + ' more (' + (items.length - shown.length).toLocaleString('en-CA') + ' left)</button>' : '')
+      : all.length ? '<p class="w152pnote">Nothing of this kind on their timeline. <button class="w152mini" data-w293tlf="">Show everything</button></p>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
   }
   /* wave156: custom fields (a form's answers, Keela's fields) */
   function moreHtml(d) {
@@ -246,7 +386,7 @@
       (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
       (d && d.runs && d.runs.length ? '<div class="w152sec"><h4>Automations</h4>' + contactAutosHtml(d) + '</div>' : '') +
       (c.notes ? '<div class="w152sec"><h4>Good to know</h4><p class="w152line" style="white-space:pre-wrap">' + E(c.notes) + '</p></div>' : '') +
-      '</div><div><div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';
+      '</div><div>' + relationshipHtml(c, d) + '<div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';   /* wave293: the Relationship card above the timeline */
   }
   function contactSheet(id, refresh) {
     var c = contact(id);

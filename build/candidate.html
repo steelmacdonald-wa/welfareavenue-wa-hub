@@ -58176,6 +58176,43 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w152sheet{padding:0;}#w152sheet .sh,#w152sheet .sh.narrow{width:100%;min-height:100%;border-radius:0;padding:18px 16px 24px;}'
     + '.w152cols,.w152grid2,.w152dp .two,.w152form{grid-template-columns:minmax(0,1fr);}.w152kv{grid-template-columns:84px minmax(0,1fr);}'
     + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}'
+    /* wave293: the email history on a contact's page: the timeline's filter chips, an email thread's disclosure, the Relationship card.
+       Press: scale .97 at 160ms on the house ease-out, never on a keyboard press (:focus-visible); hover only with a fine pointer; reduced
+       motion keeps fades only. The thread's list fades in (no movement), the chevron turns. */
+    + '.w293chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 2px;}.w293chips.sub{margin-top:4px;}'
+    + '.w293chip{border:1px solid rgba(16,63,57,.16);background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:' + BODY + ';display:inline-flex;align-items:center;gap:5px;white-space:nowrap;'
+    +   'transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease,border-color 150ms ease;}'
+    + '.w293chips.sub .w293chip{font-size:12px;padding:4px 10px;border-style:dashed;}'
+    + '.w293chip em{font-style:normal;font-weight:500;color:var(--wa-muted,' + MUTED + ');font-variant-numeric:tabular-nums;}'
+    + '.w293chip.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';border-style:solid;}.w293chip.on em{color:rgba(255,250,242,.78);}'
+    + '.w293chip:focus-visible,.w293em summary:focus-visible,.w293ref:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '.w293chip:active:not(:focus-visible),.w293em summary:active:not(:focus-visible){transform:scale(.97);}'
+    + '@media (hover:hover) and (pointer:fine){.w293chip:not(.on):hover{background:rgba(16,63,57,.06);border-color:rgba(16,63,57,.3);}.w293em summary:hover{background:rgba(16,63,57,.06);}}'
+    + '.w293span{font-size:12px;color:var(--wa-muted,' + MUTED + ');margin-top:1px;}'
+    + '.w152it.w293mail .t{overflow-wrap:anywhere;}.w152it .by{flex-wrap:wrap;}'
+    + '.w293em{margin-top:6px;}'
+    + '.w293em summary{list-style:none;display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:12.5px;font-weight:700;color:' + GREEN + ';padding:4px 8px 4px 4px;border-radius:8px;margin-left:-4px;'
+    +   'transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease;-webkit-user-select:none;user-select:none;}'
+    + '.w293em summary::-webkit-details-marker{display:none;}'
+    + '.w293chev{width:15px !important;height:15px !important;transition:transform 200ms cubic-bezier(.23,1,.32,1);}.w293em[open] .w293chev{transform:rotate(180deg);}'
+    + '.w293list{list-style:none;margin:6px 0 0;padding:0 0 0 12px;border-left:2px solid rgba(16,63,57,.1);display:flex;flex-direction:column;gap:9px;}'
+    + '.w293em[open] .w293list{animation:w293fade 180ms cubic-bezier(.23,1,.32,1);}@keyframes w293fade{from{opacity:0;}to{opacity:1;}}'
+    + '.w293list li{min-width:0;}.w293list p{margin:2px 0 0 !important;font-size:12.5px !important;}'
+    + '.w293mh{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:12px;}'
+    + '.w293d{font-weight:700;color:var(--wa-text,' + INK + ');}.w293mb{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w293dir{font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;white-space:nowrap;}.w293dir.in{background:rgba(42,140,122,.12);color:#1d6b5c;}.w293dir.out{background:rgba(220,165,39,.18);color:#7a5810;}'
+    + '.w293ms{font-size:12.5px;font-weight:600;overflow-wrap:anywhere;margin-top:1px;}'
+    + '.w293more{margin-top:8px;}'
+    + '.w293rel .w293type{font-size:15px;margin-bottom:4px;line-height:1.4;}.w293rel .w293type b{font-family:' + HEAD + ';font-size:22px;font-weight:600;color:' + GREEN + ';line-height:1.1;}'
+    + '.w293rel .w293type span{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w293stale{display:inline-block;vertical-align:3px;margin-left:8px;font-size:11px !important;font-weight:700;color:#8a6414 !important;background:rgba(220,165,39,.18);border-radius:999px;padding:2px 8px;white-space:nowrap;}'
+    + '.w293tops{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0;}'
+    + '.w293open{font-size:13px;line-height:1.5;background:rgba(220,165,39,.1);border-radius:10px;padding:7px 10px;margin:6px 0;overflow-wrap:anywhere;}.w293open b{color:#7a5810;margin-right:4px;}'
+    + '.w293sum{font-size:13.5px;line-height:1.55;margin:6px 0;overflow-wrap:anywhere;}'
+    + '.w293foot{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:6px;}.w293foot .m{font-size:11px;}'
+    + '.w293ref[disabled]{opacity:.6;cursor:progress;}.w293msg{font-size:12px;color:' + GREEN + ';min-height:0;}.w293msg:empty{display:none;}'
+    + '@media (prefers-reduced-motion:reduce){.w293chip,.w293em summary{transition:background-color 150ms ease,opacity 150ms ease;}.w293chip:active:not(:focus-visible),.w293em summary:active:not(:focus-visible){transform:none;opacity:.85;}.w293chev{transition:none;}}'
+    + '@media (max-width:700px){.w293chip,.w293em summary,.w293more{min-height:44px;box-sizing:border-box;}}'
     /* task 10b: phones get 44px targets and 16px fields (iOS zooms the page on focus below 16px), as wave274 does */
     + '@media (max-width:700px){.w152btn,.w152mini,.w152sel,.w152form .chk,.w152form .kinds label{min-height:44px;box-sizing:border-box;}'
     + '.w152sel,.w152in,.w152q input,.w152form input,.w152form select,.w152form textarea,.w152log select,.w152log input,.w152log textarea,.w152tags input{font-size:16px !important;}'
@@ -58238,7 +58275,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Sends</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
       '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button>' +
-      '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
+      '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button>' +
+      '<button role="tab" class="' + (t === 'insights' ? 'on' : '') + '" data-w152go="#crm/insights">' + I('trend') + ' Insights</button></nav>';   /* wave293 */
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -58319,6 +58357,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else if (S.ui.tab === 'automations') paintAutos(root);
     else if (S.ui.tab === 'reports') paintReports(root);
     else if (S.ui.tab === 'imports') paintImports(root);
+    else if (S.ui.tab === 'insights') paintInsights(root);   /* wave293 */
     else paintContacts(root);
   }
   /* wave284: the Import page (#crm/settings/imports, admins); the page itself is build/parts284 (window.w284), drawn into #w284root */
@@ -58327,6 +58366,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     root.innerHTML = tabsHtml() + '<div class="w284root" id="w284root"></div>';
     var el = document.getElementById('w284root');
     if (window.w284 && window.w284.open) window.w284.open(el); else el.innerHTML = busy('The Import page is loading\u2026');
+  }
+  /* wave293: the Insights tab (#crm/insights); the tab itself is build/parts293 (window.w293), drawn into #w293root from crm_insights_overview() */
+  P.trend = '<path d="M3.5 17.5 9 12l4 4 7.5-8"/><path d="M15 8h5.5v5.5"/>';
+  function paintInsights(root) {
+    root.innerHTML = tabsHtml() + '<div class="w293root" id="w293root"></div>';
+    var el = document.getElementById('w293root');
+    if (window.w293 && window.w293.open) window.w293.open(el); else el.innerHTML = busy('Insights are loading\u2026');
   }
   /* wave202: the email studio's tab; the studio itself is build/parts202 (window.w202), drawn into #w202root */
   function paintStudio(root) {
@@ -58353,7 +58399,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : (sub === 'settings' && parts[2] === 'imports') ? 'imports' : 'contacts';   /* wave284: imports from #crm/settings/imports */
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : sub === 'insights' ? 'insights' : (sub === 'settings' && parts[2] === 'imports') ? 'imports' : 'contacts';   /* wave284: imports from #crm/settings/imports */
     if (sub === 'campaigns') openCampaigns(parts);
     if (sub === 'studio' && window.w202 && window.w202.open) window.w202.open(parts);
     if (sub === 'forms') openForms(parts);
@@ -58397,7 +58443,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
     var o = document.getElementById('w152sheet'); if (o) { o.style.display = 'none'; o.innerHTML = ''; }
-    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null;
+    S.sheet = null; S.confirm = null; S.note = null; S.dnc = null; S.tl = null; if (S.rel && !S.rel.busy) S.rel = null;   /* wave293: the timeline's filters are page state */
     if (!quiet && /^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } }
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
@@ -58411,8 +58457,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function loadDetail(c) {
     var id = String(c.id);
     var q = function (p) { return Promise.resolve(p).then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; }); };
+    /* wave293: the email history (source gmail) has its own query, so a long correspondence never pushes notes and gifts off; with it the
+       Relationship card's row (crm_email_relationship), its counts (crm_email_relationship_v) and two settings. Row security decides what comes
+       back: Steel's mailbox lines and summaries reach admins only until mail_history_steel_open (wave292, H1). */
+    var mail = Promise.all([
+      q(db.from('crm_interactions').select('id,kind,direction,subject,body,occurred_at,source,source_ref,meta,created_by').eq('contact_id', c.id).eq('source', 'gmail').order('occurred_at', { ascending: false }).limit(600)),
+      q(db.from('crm_email_relationship').select('rel_type,rel_conf,topics,open_item,summary,from_steel,stale,generated_at,generated_by').eq('contact_id', c.id).limit(1)),
+      q(db.from('crm_email_relationship_v').select('*').eq('contact_id', c.id).limit(1)),
+      q(db.from('app_config').select('key,value').in('key', ['mail_history_type_unsure', 'mail_history_steel_open']))
+    ]);
     return Promise.all([
-      q(db.from('crm_interactions').select('*').eq('contact_id', c.id).order('occurred_at', { ascending: false }).limit(300)),
+      q(db.from('crm_interactions').select('*').eq('contact_id', c.id).neq('source', 'gmail').order('occurred_at', { ascending: false }).limit(300)),
       q(db.from('crm_donations').select('id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,notes').eq('contact_id', c.id).order('donated_at', { ascending: false }).limit(300)),
       q(db.from('crm_volunteer_history').select('*').eq('contact_id', c.id).order('event_at', { ascending: false }).limit(500)),
       c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at,detail').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
@@ -58427,15 +58482,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       Promise.resolve(db.rpc('crm_age_band', { p_contact: Number(c.id) })).then(function (x) { return x && !x.error && typeof x.data === 'string' ? x.data : null; }, function () { return null; }),
       q(db.from('crm_contact_chapters').select('chapter,source').eq('contact_id', c.id)),
       load('chapters'),
-      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null)
+      can('hr_private') ? q(db.from('crm_contact_private').select('birth_date').eq('contact_id', c.id).limit(1)) : Promise.resolve(null),
+      mail
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
+        var m = r[14] || [[], [], [], []], cfg = {};
+        (m[3] || []).forEach(function (x) { cfg[x.key] = x.value; });
+        S.detail[id] = { ints: (r[0] || []).filter(function (x) { return lower(x.source) !== 'gmail'; }), gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now(),
           age: r[10] || null, chapters: (r[11] || []).map(function (x) { return x.chapter; }),
-          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null };
+          birth: r[13] ? ((r[13][0] && r[13][0].birth_date) || '') : null,
+          /* wave293 */ mail: m[0] || [], rel: (m[1] || [])[0] || null, relv: (m[2] || [])[0] || null,
+          unsure: isFinite(parseFloat(cfg.mail_history_type_unsure)) ? parseFloat(cfg.mail_history_type_unsure) : 0.5, steelOpen: String(cfg.mail_history_steel_open || '').trim() === 'true' };
         return S.detail[id];
       });
     });
@@ -58531,12 +58591,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var system = /^(crm_sync|wa\d+_import|mail-unsubscribe|mail-events)$/.test(String(x.created_by || ''));
       var sent = lower(x.source) === 'resend' && x.meta && x.meta.send_id; /* wave154: an email the Hub sent, with what happened to it */
       var hubForm = lower(x.source) === 'hub_form'; /* wave156: an answer to one of the CRM's forms */
-      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: hubForm ? 'form' : (ICON[k] || 'note'), t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''), pre: hubForm,
+      out.push({ f: hubForm || k === 'form' ? 'forms' : (k === 'email' || k === 'website_message' || k === 'campaign') ? 'email' : 'notes',   /* wave293: the filter it falls under */
+        at: x.occurred_at || x.created_at, undated: undated, icon: hubForm ? 'form' : (ICON[k] || 'note'), t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''), pre: hubForm,
         st: sent ? (x.meta.status || 'sent') : '', by: hubForm ? 'The form at hub.welfareavenue.com/f/' + ((x.meta && x.meta.slug) || '') : sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
         system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
-      out.push({ at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
+      out.push({ f: 'gifts', at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
         p: [g.campaign, g.designation, g.platform ? 'through ' + (g.platform.charAt(0).toUpperCase() + g.platform.slice(1)) : ''].filter(Boolean).join(' \u00b7 '),
         rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
     });
@@ -58544,7 +58605,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (h.attended && h.volunteer_event_id) return; /* served: the Hub roster has it (the old website's events are in MTL volunteering) */
       var role = h.position ? roleName(lower(h.position)) : 'a volunteer';
       var t = h.attended ? 'Served as ' + role : h.withdrawn ? 'Withdrew' : h.waitlisted ? 'On the waiting list' : h.confirmed ? 'Confirmed as ' + role : h.approved ? 'Approved as ' + role : 'Signed up as ' + role;
-      out.push({ at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' \u00b7 ') + (h.attended && Number(h.hours) ? ' \u00b7 ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
+      out.push({ f: 'vol', at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' \u00b7 ') + (h.attended && Number(h.hours) ? ' \u00b7 ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
     });
     var EV = {}; (d.events || []).forEach(function (e) { EV[String(e.id)] = e; });
     (d.roster || []).forEach(function (r) {
@@ -58558,10 +58619,127 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
       var old = r.detail && r.detail.source === 'old website';
-      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' \u00b7 ') + (old && Number(r.detail.hours) ? ' \u00b7 ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
+      out.push({ f: 'vol', at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' \u00b7 ') + (old && Number(r.detail.hours) ? ' \u00b7 ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
     });
+    mailThreads(d).forEach(function (th) { out.push(th); });   /* wave293: the email history, one item per thread */
     out.sort(function (a, b) { return ((a.undated ? 1 : 0) - (b.undated ? 1 : 0)) || String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
     return out;
+  }
+
+  /* ---------- wave293: the email history on a contact's page (design "03 email history", 5.8 and 5.9) ---------- */
+  var STEEL_BOX = 'steel.macdonald@welfareavenue.com';   /* Open in Gmail is for the mailbox's owner only, on lines from his mailbox */
+  var BOXES = { steel: 'Steel\u2019s mailbox', hub: 'hub@', info: 'info@' };
+  var TOPICS = { donation: 'Donations', partnership: 'Partnerships', volunteering: 'Volunteering', event: 'Events', media: 'Media', supplier: 'Suppliers', government: 'Government', program: 'Programs', other: 'Other' };
+  var TL_KINDS = [['', 'All'], ['email', 'Emails'], ['notes', 'Notes and calls'], ['forms', 'Forms'], ['gifts', 'Gifts'], ['vol', 'Volunteering']];
+  var REL = { donor: 'Donor', partner: 'Partner', volunteer: 'Volunteer', supporter: 'Supporter', vendor: 'Supplier', media: 'Media', government: 'Government', other: 'Other' };
+  var TL_PAGE = 50;
+  function topicName(t) { return TOPICS[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : ''); }
+  function boxesLine(list) { var b = uniq((list || []).filter(Boolean)); return 'From ' + (b.length ? listJoin(b.map(function (x) { return BOXES[x] || x; })) : 'the email history'); }
+  function gmailIdOf(x) { var p = String((x && x.source_ref) || '').split(':'); return p.length >= 2 ? p[1] : ''; }
+  /* "12 Mar to 2 Apr 2021", "30 Dec 2020 to 4 Jan 2021", or one day */
+  function spanDays(a, b) {
+    var A = dayOf(a), B = dayOf(b);
+    if (!A || !B) return fmtDay(a || b);
+    if (A === B) return fmtDay(A);
+    var fa = fmtDay(A);
+    if (A.slice(0, 4) === B.slice(0, 4)) fa = fa.replace(/ \d{4}$/, '');
+    return fa + ' to ' + fmtDay(B);
+  }
+  function mailThreads(d) {
+    var by = {}, order = [];
+    (d.mail || []).forEach(function (x) {
+      var m = x.meta || {}, k = m.thread ? 't:' + m.thread : 'r:' + (x.source_ref || x.id);
+      if (!by[k]) { by[k] = []; order.push(k); }
+      by[k].push(x);
+    });
+    var steelMe = myEmail() === STEEL_BOX;
+    return order.map(function (k) {
+      var L = by[k].slice().sort(function (a, b) { return String(a.occurred_at || '').localeCompare(String(b.occurred_at || '')); });   /* oldest first, as a conversation reads */
+      var first = L[0], last = L[L.length - 1];
+      var boxes = L.map(function (x) { return (x.meta || {}).mailbox; });
+      var steel = boxes.indexOf('steel') >= 0;
+      var thread = (first.meta || {}).thread || '';
+      var gm = steel && steelMe ? 'https://mail.google.com/mail/u/?authuser=' + encodeURIComponent(STEEL_BOX) + '#all/' + encodeURIComponent(thread || gmailIdOf(last)) : '';
+      var item = { f: 'email', mail: true, key: k, topics: uniq(L.map(function (x) { return (x.meta || {}).topic; }).filter(Boolean)), at: last.occurred_at, icon: 'mail',
+        p: last.body || '', by: boxesLine(boxes), steel: steel, gm: gm };
+      if (L.length === 1) item.t = (lower(first.direction) === 'in' ? 'Email from them' : 'Email to them') + (first.subject ? ': ' + first.subject : '');
+      else { item.t = 'Email thread: ' + (first.subject || 'no subject'); item.span = plural(L.length, 'email', 'emails') + ', ' + spanDays(first.occurred_at, last.occurred_at); item.emails = L; }
+      return item;
+    });
+  }
+  function tlState(c) { if (!S.tl || S.tl.id !== String(c.id)) S.tl = { id: String(c.id), f: '', topic: '', show: TL_PAGE, open: {} }; return S.tl; }
+  function tlChip(attr, val, label, n, on) {
+    return '<button class="w293chip' + (on ? ' on' : '') + '" ' + attr + '="' + E(val) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + E(label) + (n != null ? ' <em class="w152num">' + Number(n).toLocaleString('en-CA') + '</em>' : '') + '</button>';
+  }
+  function tlFiltersHtml(items, st) {
+    var n = {}; items.forEach(function (x) { n[x.f] = (n[x.f] || 0) + 1; });
+    var kinds = TL_KINDS.filter(function (k) { return k[0] && n[k[0]]; });
+    var out = '';
+    if (kinds.length > 1 || st.f) out += '<div class="w293chips" role="group" aria-label="Show on the timeline">' + tlChip('data-w293tlf', '', 'All', items.length, !st.f) +
+      kinds.map(function (k) { return tlChip('data-w293tlf', k[0], k[1], n[k[0]], st.f === k[0]); }).join('') + '</div>';
+    if (st.f === 'email') {
+      var tc = {}; items.forEach(function (x) { if (x.f === 'email') (x.topics || []).forEach(function (t) { tc[t] = (tc[t] || 0) + 1; }); });
+      var ts = Object.keys(tc).sort(function (a, b) { return (tc[b] - tc[a]) || topicName(a).localeCompare(topicName(b)); });
+      if (ts.length) out += '<div class="w293chips sub" role="group" aria-label="Email topics">' + tlChip('data-w293tlt', '', 'Every topic', null, !st.topic) +
+        ts.map(function (t) { return tlChip('data-w293tlt', t, topicName(t), tc[t], st.topic === t); }).join('') + '</div>';
+    }
+    return out;
+  }
+  function threadHtml(x, st, d) {
+    var open = !!st.open[x.key];
+    return '<details class="w293em" data-w293det="' + E(x.key) + '"' + (open ? ' open' : '') + '><summary>' + I('chev', 'w293chev') + '<span>Show the ' + x.emails.length.toLocaleString('en-CA') + ' emails</span></summary>' +
+      '<ol class="w293list">' + x.emails.map(function (m) {
+        var mb = (m.meta || {}).mailbox, inn = lower(m.direction) === 'in';
+        return '<li><div class="w293mh"><span class="w293d w152num">' + E(fmtDay(m.occurred_at)) + '</span><span class="w293dir ' + (inn ? 'in' : 'out') + '">' + (inn ? 'From them' : 'To them') + '</span><span class="w293mb">' + E(BOXES[mb] || mb || '') + '</span></div>' +
+          (m.subject && m.subject !== x.emails[0].subject ? '<div class="w293ms">' + E(m.subject) + '</div>' : '') + (m.body ? '<p>' + E(m.body) + '</p>' : '') + '</li>';
+      }).join('') + '</ol></details>';
+  }
+  /* the Relationship card above the timeline (5.9): the type, the counts, the topics, anything open, the summary, Refresh */
+  function relationshipHtml(c, d) {
+    if (!d) return '';
+    var r = d.rel, v = d.relv, mail = d.mail || [];
+    if (!r && !v && !mail.length) return '';
+    var out = [], st = S.rel && S.rel.id === String(c.id) ? S.rel : null;
+    if (r && r.rel_type) {
+      var conf = Number(r.rel_conf), sure = isFinite(conf) && conf >= (d.unsure || 0.5);
+      out.push('<div class="w293type">' + (sure ? '<b>' + E(REL[r.rel_type] || r.rel_type) + '</b><span class="w152num">, ' + Math.round(conf * 100) + '% sure</span>' : '<b>Not sure</b><span>' + E(' (perhaps ' + (REL[r.rel_type] || r.rel_type).toLowerCase() + ')') + '</span>') +
+        (r.stale ? ' <span class="w293stale">May be out of date</span>' : '') + '</div>');
+    }
+    if (v && Number(v.emails_in) + Number(v.emails_out) > 0) {
+      var tot = Number(v.emails_in || 0) + Number(v.emails_out || 0), th = Number(v.threads || 0);
+      var inTh = th > 1 ? ' in ' + plural(th, 'thread', 'threads') : th === 1 ? ' in one thread' : '';
+      var line = tot === 1 ? 'One email, ' + fmtDay(v.first_email_at)
+        : dayOf(v.first_email_at) === dayOf(v.last_email_at) ? plural(tot, 'email', 'emails') + ' on ' + fmtDay(v.first_email_at) + inTh
+        : 'First email ' + fmtDay(v.first_email_at) + ', last ' + fmtDay(v.last_email_at) + ', ' + plural(tot, 'email', 'emails') + inTh;
+      out.push('<div class="w152line w152num" data-w293counts>' + E(line) + '</div>');
+    }
+    var topics = arr(r && r.topics);
+    if (topics.length) out.push('<div class="w293tops">' + topics.map(function (t) { return '<span class="w152rl">' + E(topicName(t)) + '</span>'; }).join('') + '</div>');
+    if (r && r.open_item) out.push('<div class="w293open"><b>Still open</b> ' + E(r.open_item) + (r.generated_at ? ' <span class="m">(as of ' + E(fmtDay(r.generated_at)) + ')</span>' : '') + '</div>');
+    if (r && r.summary) out.push('<p class="w293sum w152measure">' + E(r.summary) + '</p>');
+    if (amAdmin() && !d.steelOpen && (mail.some(function (x) { return (x.meta || {}).mailbox === 'steel'; }) || (r && r.from_steel))) out.push('<div class="w152line m" data-w293adm>' + I('lock') + ' Lines from Steel\u2019s mailbox are visible to admins only for now.</div>');
+    var busyNow = st && st.busy;
+    var foot = (r && r.summary && r.generated_at ? '<span>Written by the Hub on ' + E(fmtDay(r.generated_at)) + '</span>' : '<span>No summary yet.</span>') +
+      '<button class="w152mini w293ref" data-w293refresh="' + E(c.id) + '"' + (busyNow ? ' disabled aria-busy="true"' : '') + '>' + I('spark') + (busyNow ? 'Writing\u2026' : (r && r.summary ? 'Refresh' : 'Write one')) + '</button><span class="m">about 1\u00a2</span>';
+    out.push('<div class="w293foot">' + foot + '</div>' + '<div class="w293msg" role="status" aria-live="polite">' + (st && st.msg ? E(st.msg) : '') + '</div>');
+    return '<div class="w152sec w293rel" data-w293card><h4>Relationship</h4>' + out.join('') + '</div>';
+  }
+  /* Refresh: the one summary path (mail-history insight: crm_insight_input, the mail_history_insight route, crm_insight_save) for one contact */
+  function refreshInsight(id) {
+    var c = contact(id); if (!c || (S.rel && S.rel.busy)) return;
+    S.rel = { id: String(c.id), busy: true, msg: '' };
+    contactSheet(c.id);
+    var done = function (msg) { S.rel = { id: String(c.id), busy: false, msg: msg }; if (S.sheet === 'c:' + c.id) contactSheet(c.id, true); };
+    if (typeof db === 'undefined' || !db || !db.functions) { done('The Hub is offline. Try again in a moment.'); return; }
+    Promise.resolve(db.functions.invoke('mail-history', { body: { action: 'insight', contact_id: Number(c.id) } })).then(function (res) {
+      if (res && res.error) {
+        var ctx = res.error.context;
+        if (ctx && typeof ctx.json === 'function') return ctx.json().then(function (j) { done((j && j.error) || 'The summary could not be written.'); }, function () { done('The summary could not be written.'); });
+        done(res.error.message || 'The summary could not be written.'); return;
+      }
+      if (res && res.data && res.data.error) { done(String(res.data.error)); return; }
+      done('Summary written.');
+    }).catch(function (e) { done('The summary could not be written (' + String((e && e.message) || e) + ').'); });
   }
   function logFormHtml(c) {
     return '<div class="w152log"><div class="r"><select data-w152logk aria-label="What happened">' + LOG_ORDER.map(function (k) { return '<option value="' + k + '">' + E(LOGS[k][2]) + '</option>'; }).join('') + '</select>' +
@@ -58571,12 +58749,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function timelineHtml(c, d) {
     if (!d) return logFormHtml(c) + busy('Loading their history\u2026');
-    var items = timeline(c, d);
-    return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
-      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
-        (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
-        (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
-    }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
+    var all = timeline(c, d), st = tlState(c);
+    /* wave293: the filters by kind (All, Emails, Notes and calls, Forms, Gifts, Volunteering) and, under Emails, the topics; page state only */
+    if (st.f && !all.some(function (x) { return x.f === st.f; })) { st.f = ''; st.topic = ''; }
+    var items = all.filter(function (x) { return (!st.f || x.f === st.f) && (!st.topic || (x.topics || []).indexOf(st.topic) >= 0); });
+    var shown = items.slice(0, st.show);
+    return logFormHtml(c) + (all.length ? tlFiltersHtml(all, st) : '') + (shown.length ? '<ul class="w152tl">' + shown.map(function (x) {
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + (x.mail ? ' w293mail' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
+        (x.span ? '<div class="w293span w152num">' + E(x.span) + '</div>' : '') +
+        (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.emails ? threadHtml(x, st, d) : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
+        (x.by || x.del || x.gm ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + (x.steel && !d.steelOpen && amAdmin() ? ' \u00b7 admins only for now' : '') + '</span>' : '') +
+          (x.gm ? '<a class="w152mini" href="' + E(x.gm) + '" target="_blank" rel="noopener" data-w293gmail="1">' + I('ext') + 'Open in Gmail</a>' : '') +
+          (x.del && !x.mail ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
+    }).join('') + '</ul>' + (shown.length < items.length ? '<button class="w152btn soft sm w293more" data-w293more="1">Show ' + Math.min(TL_PAGE, items.length - shown.length) + ' more (' + (items.length - shown.length).toLocaleString('en-CA') + ' left)</button>' : '')
+      : all.length ? '<p class="w152pnote">Nothing of this kind on their timeline. <button class="w152mini" data-w293tlf="">Show everything</button></p>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
   }
   /* wave156: custom fields (a form's answers, Keela's fields) */
   function moreHtml(d) {
@@ -58616,7 +58802,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
       (d && d.runs && d.runs.length ? '<div class="w152sec"><h4>Automations</h4>' + contactAutosHtml(d) + '</div>' : '') +
       (c.notes ? '<div class="w152sec"><h4>Good to know</h4><p class="w152line" style="white-space:pre-wrap">' + E(c.notes) + '</p></div>' : '') +
-      '</div><div><div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';
+      '</div><div>' + relationshipHtml(c, d) + '<div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';   /* wave293: the Relationship card above the timeline */
   }
   function contactSheet(id, refresh) {
     var c = contact(id);
@@ -62683,6 +62869,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     if ((el = t.closest('[data-w152log]'))) { e.preventDefault(); el.disabled = true; saveLog(el.getAttribute('data-w152log')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
     if ((el = t.closest('[data-w152delint]'))) { e.preventDefault(); deleteLog(sheetId(), el.getAttribute('data-w152delint')); return; }
+    /* wave293: the timeline's filters, Show more and the Relationship card's Refresh */
+    if ((el = t.closest('[data-w293tlf]')) && S.tl) { e.preventDefault(); S.tl.f = el.getAttribute('data-w293tlf'); S.tl.topic = ''; S.tl.show = TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293tlt]')) && S.tl) { e.preventDefault(); S.tl.topic = el.getAttribute('data-w293tlt'); S.tl.show = TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293more]')) && S.tl) { e.preventDefault(); S.tl.show += TL_PAGE; contactSheet(S.tl.id); return; }
+    if ((el = t.closest('[data-w293refresh]'))) { e.preventDefault(); refreshInsight(el.getAttribute('data-w293refresh')); return; }
     if ((el = t.closest('[data-w152copy]'))) { e.preventDefault(); copy(el.getAttribute('data-w152copy')); return; }
     if ((el = t.closest('[data-w152keep]'))) { e.preventDefault(); S.confirm = 'merge:' + el.getAttribute('data-w152keep') + ':' + el.getAttribute('data-drop'); paint(); return; }
     if ((el = t.closest('[data-w152cancel]'))) { e.preventDefault(); S.confirm = null; paint(); return; }
@@ -62708,6 +62899,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else return;
     S.ui.show = 60; paint();
   });
+  /* wave293: an open email thread stays open when the sheet repaints (toggle does not bubble: listen while capturing) */
+  document.addEventListener('toggle', function (e) { var d = e.target; if (d && d.matches && d.matches('#w152sheet details[data-w293det]') && S.tl) S.tl.open[d.getAttribute('data-w293det')] = d.open; }, true);
   window.addEventListener('hashchange', function () {
     if (!S.sheet) return;
     if (!/^#crm(\/|$)/.test(location.hash)) closeSheet(true);
@@ -62742,13 +62935,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       W.tours.crm = { tab: 'crm', icon: 'people', hash: '#crm', steps: [
         T('#crm > .w118mast', 'CRM', 'Everyone Welfare Avenue knows in one place: volunteers, donors, partners\u2019 contacts and the team, with what each one has done with us.'),
         T('#crm .w152stats', 'At a glance', 'Everyone, the volunteers, who has served at an event, and the donors (or the duplicates to check). A number narrows the list to them.', OPT),
-        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Sends, Forms, Automations and Reports.', OPT),
+        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Studio, Lists, Sends, Forms, Automations, Reports and Insights.', OPT),
         T('#crm .w152chips', 'Who they are to us', 'Volunteers, donors, partners\u2019 contacts, supporters, staff and alumni. One person can be several.', OPT),
         T('#crm .w152q', 'Find anyone', 'Type a name, an email, a phone number, a school or a tag. Next to it: a volunteer role, their activity, their email permission, and the order.', OPT),
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner\u2019s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
         T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
         { c: 1, t: 'A contact\u2019s page', p: 'Their details (a volunteer\u2019s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website\u2019s history.' },
         { c: 1, t: 'Email permission', p: RULE_TEXT },
+        /* wave293: two steps for the email history */
+        { c: 1, t: 'Their emails with us', p: 'The emails people sent Welfare Avenue (Steel\u2019s mailbox, hub@ and info@) sit on their timeline, one item per conversation with the date, in or out, the mailbox and one line on what it was about, never the email itself. Show the emails opens a conversation; the chips above the timeline show only emails, notes and calls, forms, gifts or volunteering, and under Emails the topics. The Relationship card above says what they are to us, how long we have written, anything still open and a short summary written by the Hub (Refresh writes it again, about 1\u00a2). Lines from Steel\u2019s mailbox are for admins until he opens them to the team.' },
+        T('#w153rail [data-w153go="#crm/insights"] || #crm .w152tabs [data-w152go="#crm/insights"]', 'Insights', 'Insights: the people who emailed with us each year since 2020 by what they are to us, the organisations who write most (all time and the last 12 months), and who has gone quiet: donors, partners, supporters and volunteers we have not heard from, and who have not heard from us, in a year. Click a name to open them.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact\u2019s page has Send an email from the Hub.', OPT),
         T('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'Studio', 'The email studio (wave202): emails in the Welfare Avenue brand, put together with the Hub from your words and photos or from a template, checked before they go out, and sent to one person, a list or saved for the automations. It has its own tour.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
@@ -62777,7 +62973,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
     /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow,
-    /* wave283 */ can: can, caps: function () { return S.caps; } };
+    /* wave283 */ can: can, caps: function () { return S.caps; },
+    /* wave293 */ threads: function (id) { var d = S.detail[String(id)]; return d ? mailThreads(d) : null; }, spanDays: spanDays, refresh: refreshInsight, tl: function () { return S.tl; } };
 })();
 /* =====================================================================
    WA v153 the apps: a 9-dot launcher, an app frame with its own rail, and the CRM as the first app (27/09/26)
@@ -62921,7 +63118,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           { h: '#crm/campaigns', l: 'Sends', ic: 'send', page: 'crm' },   /* wave283: a Send is one email to many people (crm_campaigns); Campaigns are fundraising events */
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }, { label: 'Reports', items: [
-          { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
+          { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' },
+          { h: '#crm/insights', l: 'Insights', ic: 'chart', page: 'crm' }   /* wave293: the email history's Insights tab */
         ] }];
       },
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus', page: 'crm' }]   /* wave163: on the contacts page only (Partners has its own Add a partner) */
@@ -102112,6 +102310,198 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '.w284btn,.w284btn.sm,.w284sel,.w284in{min-height:44px;}.w284 .w284sel,.w284 .w284in{font-size:16px;}.w284det summary{padding:12px 0;}.w284chk{min-height:44px;align-items:center;}}';   /* .w284 .w284in: the Hub's input[type=text] rule is more specific than .w284in */
     document.head.appendChild(st);
   })();
+})();
+/* =====================================================================
+   WA v293 The CRM's Insights tab (#crm/insights): the email history at a glance (07/11/26, design "03 email history" v2, 5.9 and 11.5)
+   =====================================================================
+   One call, crm_insights_overview() (wave293's database file, build/data/wa293_insights.sql; security invoker, so row security decides
+   every count: Steel's mailbox lines count only for admins until mail_history_steel_open). Three sections:
+   - Relationships by type over time: the people who emailed with Welfare Avenue each year since 2020, stacked by their type.
+   - Top organisations: by the people who wrote and their emails, all time or the last 12 months (a switch), with relationship and status.
+   - Gone quiet: donors, partners, supporters and volunteers with history and nothing on their timeline and no gift for
+     mail_insights_quiet_months (12), the 100 most recent; a name opens the contact.
+   No "waiting on a reply" list. No email line, subject or summary is shown here.
+   window.w293.open(host) is called by the CRM page (parts152 c_list.js paintInsights) with #w293root; the names and organisations are
+   buttons the CRM page's own click handler opens (data-w152open, data-w152go). */
+(function () {
+  if (window.__wa293) return; window.__wa293 = true;   /* the ground rule's guard (window.__wa29N) */
+
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#6B6965';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  /* the types, in the order of the stack and the legend (none last: not typed, or a type the reader may not see yet) */
+  var TYPES = [['partner', 'Partners', '#6F64AB', 'partner'], ['donor', 'Donors', '#B9851B', 'donor'], ['volunteer', 'Volunteers', '#2A8C7A', 'volunteer'], ['supporter', 'Supporters', '#C87A2F', 'supporter'],
+    ['government', 'Government', '#4A4F57', 'government'], ['media', 'Media', '#3E7CB1', 'media'], ['vendor', 'Suppliers', '#8C6A2E', 'supplier'], ['other', 'Other', '#A39E93', 'other'], ['none', 'Not typed', 'rgba(16,63,57,.2)', 'not typed']];
+  function tname(t, n) { return Number(n) === 1 ? t[3] : t[1].toLowerCase(); }
+  var QUIET_KINDS = { donor: ['Donor', '#B9851B'], partner: ['Partner', '#6F64AB'], supporter: ['Supporter', '#C87A2F'], volunteer: ['Volunteer', '#2A8C7A'] };
+  var REL_NAMES = { partner: 'Partner', sponsor: 'Sponsor', collaborator: 'Collaborator', supplier: 'Supplier', 'donor organisation': 'Donor organisation' };
+  var STATUS = { active: ['Active', '#1d6b5c'], past: ['Past', MUTED], prospect: ['Prospect', '#7a5810'], declined: ['Declined', '#96331f'] };
+  var S = { data: null, busy: false, err: '', at: 0, sort: 'all' };
+
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function num(n) { return Number(n || 0).toLocaleString('en-CA'); }
+  function plural(n, one, many) { return num(n) + ' ' + (Number(n) === 1 ? one : many); }
+  function fmtDay(s) { try { if (window.w152 && window.w152.fmtDay) return window.w152.fmtDay(s); } catch (e) { /* fine */ } return String(s || '').slice(0, 10); }
+  function ago(s) { try { if (window.w152 && window.w152.ago) return window.w152.ago(s); } catch (e) { /* fine */ } return ''; }
+  function arr(a) { return Array.isArray(a) ? a : []; }
+  function svg(d) { return '<svg class="w293i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; }
+  var IC = { refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>' };
+
+  function load() {
+    if (S.busy) return;
+    if (typeof db === 'undefined' || !db || !db.rpc) { S.err = 'offline'; paint(); return; }
+    S.busy = true; S.err = ''; paint();
+    Promise.resolve(db.rpc('crm_insights_overview')).then(function (r) {
+      S.busy = false;
+      if (r && r.error) { S.err = String(r.error.message || r.error); }
+      else { S.data = (r && r.data && typeof r.data === 'object') ? r.data : { allowed: true, by_type_year: [], orgs: [], quiet: [] }; S.at = Date.now(); }
+      paint();
+    }, function (e) { S.busy = false; S.err = String((e && e.message) || e); paint(); });
+  }
+  function open(host) { if (!host) return; if ((!S.data && !S.err) || Date.now() - S.at > 120000) load(); paint(); }
+  function paint() {
+    var h = document.getElementById('w293root'); if (!h) return;
+    var fk = document.activeElement && h.contains(document.activeElement) ? keyOf(document.activeElement) : null;
+    h.innerHTML = html();
+    if (fk) { var b = h.querySelector(fk); if (b) { try { b.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  function keyOf(el) { for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; if (/^data-w29/.test(a.name)) return '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]'; } return null; }
+
+  function html() {
+    var d = S.data;
+    if (!d) return S.err ? '<div class="w293box w293empty">The insights could not be worked out (' + E(S.err) + '). <button class="w293btn" data-w293reload="1">Try again</button></div>' : '<div class="w293box w293empty" aria-busy="true">Working out the insights\u2026</div>';
+    if (d.allowed === false) return '<div class="w293box w293empty">' + svg(IC.lock) + ' Insights are for the Welfare Avenue team with the CRM.</div>';
+    var asOf = d.as_of ? new Date(d.as_of) : null, when = asOf && !isNaN(asOf) ? asOf.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(/\./g, '') : '';
+    var note = d.steel_open ? '' : d.admin ? 'You see Steel\u2019s mailbox in these counts; the rest of the team does not until he opens it.' : 'These counts leave out Steel\u2019s mailbox until he opens it to the team.';
+    return '<div class="w293hd"><div class="w293hdt"><h2>Insights</h2><p>Who emailed with Welfare Avenue, the organisations who write most, and who has gone quiet. From the email history and every timeline' + (when ? '; worked out at ' + E(when) : '') + '.</p>' +
+      (note ? '<p class="w293note" data-w293note>' + svg(IC.lock) + E(note) + '</p>' : '') + '</div>' +
+      '<button class="w293btn soft" data-w293reload="1"' + (S.busy ? ' disabled aria-busy="true"' : '') + '>' + svg(IC.refresh) + (S.busy ? 'Working\u2026' : 'Refresh') + '</button></div>' +
+      (S.err ? '<div class="w293warn" role="status">The refresh did not finish (' + E(S.err) + '). These are the last numbers.</div>' : '') +
+      byTypeHtml(arr(d.by_type_year)) + orgsHtml(arr(d.orgs), Number(d.orgs_total) || 0) + quietHtml(arr(d.quiet), Number(d.quiet_total) || 0, Number(d.quiet_months) || 12);
+  }
+
+  /* 1. Relationships by type over time: one bar per year, stacked by type, the total at the end */
+  function byTypeHtml(rows) {
+    var head = '<section class="w293box" data-w293sec="types"><h3>Relationships by type over time</h3><p class="w293sub">The people who emailed with us each year since 2020, by what they are to us.</p>';
+    if (!rows.length) return head + '<p class="w293empty0">No email history yet. When the email history is applied on the Import page, the people who wrote each year show here.</p></section>';
+    var years = {}, used = {}, maxY = 2020, nowY = Number(String(new Date().getFullYear()));
+    rows.forEach(function (r) { var y = Number(r.year), t = r.type || 'none'; if (!isFinite(y)) return; (years[y] = years[y] || {})[t] = (years[y][t] || 0) + Number(r.people || 0); used[t] = 1; if (y > maxY) maxY = y; });
+    var last = Math.max(maxY, Math.min(nowY, maxY + 1)), list = [];
+    for (var y = 2020; y <= last; y++) list.push(y);
+    var tot = function (y) { var o = years[y] || {}; return Object.keys(o).reduce(function (s, k) { return s + o[k]; }, 0); };
+    var max = Math.max.apply(null, list.map(tot).concat([1]));
+    var types = TYPES.filter(function (t) { return used[t[0]]; });
+    var legend = '<ul class="w293lg" aria-label="Types">' + types.map(function (t) { return '<li><i style="background:' + t[2] + '"></i>' + E(t[1]) + '</li>'; }).join('') + '</ul>';
+    var bars = '<div class="w293bars">' + list.map(function (y) {
+      var o = years[y] || {}, n = tot(y);
+      var parts = types.filter(function (t) { return o[t[0]]; }).map(function (t) { return [t, o[t[0]]]; });
+      var label = y + ': ' + (n ? plural(n, 'person', 'people') + ' (' + parts.map(function (p) { return num(p[1]) + ' ' + tname(p[0], p[1]); }).join(', ') + ')' : 'nobody');
+      return '<div class="w293yr" role="img" aria-label="' + E(label) + '"><span class="w293y">' + y + '</span><span class="w293track">' +
+        (n ? '<span class="w293stack" style="width:' + Math.max(2, n / max * 100).toFixed(2) + '%">' + parts.map(function (p) { return '<i style="flex-grow:' + p[1] + ';background:' + p[0][2] + '" title="' + E(y + ': ' + num(p[1]) + ' ' + tname(p[0], p[1])) + '"></i>'; }).join('') + '</span>' : '') +
+        '</span><b class="w293n">' + num(n) + '</b></div>';
+    }).join('') + '</div>';
+    return head + legend + bars + '</section>';
+  }
+
+  /* 2. Top organisations: all time or the last 12 months */
+  function orgsHtml(rows, total) {
+    var twelve = S.sort === '12';
+    var head = '<section class="w293box" data-w293sec="orgs"><div class="w293sh"><div><h3>Top organisations</h3><p class="w293sub">By the people who wrote to us and their emails' + (total > rows.length ? '; the top ' + num(rows.length) + ' of ' + num(total) : '') + '.</p></div>' +
+      '<div class="w293seg" role="group" aria-label="Period"><button data-w293sort="all" aria-pressed="' + (!twelve) + '"' + (!twelve ? ' class="on"' : '') + '>All time</button><button data-w293sort="12" aria-pressed="' + twelve + '"' + (twelve ? ' class="on"' : '') + '>Last 12 months</button></div></div>';
+    if (!rows.length) return head + '<p class="w293empty0">No organisation is linked to anyone with email history yet. The email history links people to organisations when its Organisations card is applied.</p></section>';
+    var list = rows.slice().filter(function (o) { return !twelve || Number(o.writers_12) > 0; });
+    list.sort(function (a, b) { return twelve ? (b.writers_12 - a.writers_12) || (b.emails_12 - a.emails_12) || String(a.name).localeCompare(String(b.name)) : (b.writers - a.writers) || (b.emails - a.emails) || String(a.name).localeCompare(String(b.name)); });
+    if (!list.length) return head + '<p class="w293empty0">Nobody from these organisations wrote in the last 12 months.</p></section>';
+    return head + '<ol class="w293orgs">' + list.map(function (o, i) {
+      var st = STATUS[o.status] || [o.status || '', MUTED], w = twelve ? o.writers_12 : o.writers, m = twelve ? o.emails_12 : o.emails;
+      return '<li><span class="w293rk">' + (i + 1) + '</span><div class="w293on"><button class="w293lnk" data-w152go="#partners/' + E(o.id) + '">' + E(o.name) + '</button>' +
+        '<span class="w293tags">' + (o.relationship ? '<span class="w293tag">' + E(REL_NAMES[o.relationship] || o.relationship) + '</span>' : '') + (st[0] ? '<span class="w293tag" style="color:' + st[1] + '">' + E(st[0]) + '</span>' : '') +
+        (o.last_at ? '<span class="w293last">last email ' + E(fmtDay(o.last_at)) + '</span>' : '') + '</span></div>' +
+        '<div class="w293m"><b>' + num(w) + '</b><span>' + (Number(w) === 1 ? 'person' : 'people') + '</span></div><div class="w293m"><b>' + num(m) + '</b><span>' + (Number(m) === 1 ? 'email' : 'emails') + '</span></div></li>';
+    }).join('') + '</ol></section>';
+  }
+
+  /* 3. Gone quiet */
+  function quietHtml(rows, total, months) {
+    var yrs = months % 12 === 0 ? months / 12 : 0;
+    var period = yrs === 1 ? 'a year' : yrs ? plural(yrs, 'year', 'years') : plural(months, 'month', 'months');   /* "for a year or more" */
+    var inLast = yrs === 1 ? 'year' : period;   /* "in the last year", "in the last 18 months" */
+    var head = '<section class="w293box" data-w293sec="quiet"><h3>Gone quiet</h3><p class="w293sub">Donors, partners, supporters and volunteers with nothing on their timeline and no gift for ' + E(period) + ' or more' +
+      (total ? ': ' + plural(total, 'person', 'people') + (total > rows.length ? ', the ' + num(rows.length) + ' who went quiet most recently first' : ', the most recent first') : '') + '.</p>';
+    if (!rows.length) return head + '<p class="w293empty0">Nobody has gone quiet. Everyone with history has heard from us, or we from them, in the last ' + E(inLast) + '.</p></section>';
+    return head + '<ul class="w293quiet">' + rows.map(function (q) {
+      var k = QUIET_KINDS[q.kind] || [q.kind || '', MUTED];
+      return '<li><button class="w293row" data-w152open="' + E(q.contact_id) + '"><span class="w293qn">' + E(q.name || 'Someone') + '</span>' +
+        '<span class="w293qk" style="background:' + k[1] + '1a;color:' + k[1] + '">' + E(k[0]) + '</span>' +
+        '<span class="w293ql">Last ' + (q.last_was === 'gift' ? 'gift' : 'on their timeline') + ' ' + E(fmtDay(q.last_at)) + (ago(q.last_at) ? ' <span>(' + E(ago(q.last_at)) + ')</span>' : '') + '</span>' + svg(IC.arrow) + '</button></li>';
+    }).join('') + '</ul></section>';
+  }
+
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t || !t.closest || !t.closest('#w293root')) return;
+    var el;
+    if ((el = t.closest('[data-w293reload]'))) { ev.preventDefault(); load(); return; }
+    if ((el = t.closest('[data-w293sort]'))) { ev.preventDefault(); S.sort = el.getAttribute('data-w293sort') === '12' ? '12' : 'all'; paint(); return; }
+  });
+
+  window.w293 = { open: open, paint: paint, load: load, state: function () { return S; } };
+  /* ---------- styles: the house press (scale .97, 160ms, the house ease-out, never on a keyboard press), hover only with a fine pointer,
+     reduced motion keeps fades, tabular numbers, 44px targets on a phone ---------- */
+  var css = document.createElement('style'); css.id = 'w293css';
+  css.textContent = ''
+    + '.w293root{display:flex;flex-direction:column;gap:14px;min-width:0;font-family:' + BODY + ';color:var(--wa-text,' + INK + ');animation:w293in 200ms cubic-bezier(.23,1,.32,1);}'
+    + '@keyframes w293in{from{opacity:0;}to{opacity:1;}}'
+    + '.w293i{width:16px;height:16px;flex:none;display:inline-block;vertical-align:middle;}'
+    + '.w293hd{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}'
+    + '.w293hdt{min-width:0;flex:1 1 320px;}.w293hd h2{font-family:' + HEAD + ';font-size:30px;font-weight:600;color:' + GREEN + ';margin:0;line-height:1.05;letter-spacing:-.01em;}'
+    + '.w293hd p{margin:4px 0 0;font-size:13.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');max-width:70ch;}'
+    + '.w293note{display:flex;gap:6px;align-items:flex-start;font-size:12.5px !important;}.w293note .w293i{width:14px;height:14px;margin-top:2px;}'
+    + '.w293warn{background:rgba(220,165,39,.14);border-radius:12px;padding:9px 12px;font-size:13px;}'
+    + '.w293box{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:16px 18px;min-width:0;}'
+    + '.w293box h3{font-family:' + HEAD + ';font-size:21px;font-weight:600;color:' + GREEN + ';margin:0;line-height:1.15;}'
+    + '.w293sub{margin:3px 0 10px;font-size:13px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');max-width:70ch;}'
+    + '.w293empty{font-size:14px;color:var(--wa-muted,' + MUTED + ');display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w293empty0{margin:4px 0 0;font-size:13.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');max-width:70ch;}'
+    + '.w293btn{border:none;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-weight:700;font-size:13px;border-radius:12px;padding:8px 13px;display:inline-flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;}'
+    + '.w293btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}.w293btn[disabled]{opacity:.6;cursor:progress;}'
+    /* the stacked bars, one row a year */
+    + '.w293lg{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w293lg li{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}.w293lg i{width:10px;height:10px;border-radius:3px;display:inline-block;}'
+    + '.w293bars{display:flex;flex-direction:column;gap:7px;}'
+    + '.w293yr{display:grid;grid-template-columns:3.2em minmax(0,1fr) 4em;gap:10px;align-items:center;}'
+    + '.w293y{font-size:12.5px;font-weight:700;color:var(--wa-muted,' + MUTED + ');font-variant-numeric:tabular-nums;}'
+    + '.w293track{height:18px;border-radius:6px;background:rgba(16,63,57,.05);display:flex;min-width:0;overflow:hidden;}'
+    + '.w293stack{display:flex;height:100%;gap:2px;min-width:3px;}.w293stack i{display:block;height:100%;min-width:2px;flex-basis:0;}.w293stack i:first-child{border-radius:6px 0 0 6px;}.w293stack i:last-child{border-radius:0 6px 6px 0;}.w293stack i:only-child{border-radius:6px;}'
+    + '.w293n{font-family:' + HEAD + ';font-size:18px;font-weight:600;color:' + GREEN + ';text-align:right;font-variant-numeric:tabular-nums;}'
+    /* organisations */
+    + '.w293sh{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}.w293sh > div:first-child{min-width:0;flex:1 1 260px;}'
+    + '.w293seg{display:inline-flex;background:rgba(16,63,57,.07);border-radius:11px;padding:3px;gap:2px;flex:none;}'
+    + '.w293seg button{border:none;background:none;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:var(--wa-muted,' + MUTED + ');padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap;}'
+    + '.w293seg button.on{background:var(--wa-card,' + CREAM + ');color:' + GREEN + ';box-shadow:0 1px 3px rgba(16,63,57,.18);}'
+    + '.w293orgs{list-style:none;margin:0;padding:0;}'
+    + '.w293orgs li{display:grid;grid-template-columns:1.6em minmax(0,1fr) 5.2em 5.2em;gap:4px 10px;align-items:center;padding:9px 0;border-top:1px solid rgba(16,63,57,.07);}.w293orgs li:first-child{border-top:none;}'
+    + '.w293rk{font-size:12px;font-weight:700;color:var(--wa-muted,' + MUTED + ');font-variant-numeric:tabular-nums;text-align:right;}'
+    + '.w293on{min-width:0;}.w293lnk{border:none;background:none;padding:0;font-family:' + BODY + ';font-size:14px;font-weight:700;color:' + GREEN + ';cursor:pointer;text-align:left;overflow-wrap:anywhere;border-radius:6px;}'
+    + '.w293tags{display:flex;flex-wrap:wrap;gap:3px 6px;align-items:center;margin-top:2px;font-size:11.5px;}.w293tag{font-weight:700;background:rgba(16,63,57,.06);border-radius:999px;padding:1px 8px;white-space:nowrap;}'
+    + '.w293last{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w293m{text-align:right;line-height:1.1;}.w293m b{display:block;font-family:' + HEAD + ';font-size:20px;font-weight:600;color:' + GREEN + ';font-variant-numeric:tabular-nums;}.w293m span{font-size:11px;color:var(--wa-muted,' + MUTED + ');}'
+    /* gone quiet */
+    + '.w293quiet{list-style:none;margin:0;padding:0;}'
+    + '.w293row{width:100%;border:none;background:none;font-family:' + BODY + ';color:inherit;text-align:left;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto 16px;grid-template-areas:"n k a" "l l a";gap:2px 10px;align-items:center;padding:9px 8px;margin:0;border-radius:10px;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w293quiet li:first-child .w293row{border-top-color:transparent;}'
+    + '.w293qn{grid-area:n;font-weight:700;font-size:14px;min-width:0;overflow-wrap:anywhere;}.w293qk{grid-area:k;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap;justify-self:end;}'
+    + '.w293ql{grid-area:l;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');font-variant-numeric:tabular-nums;}.w293row .w293i{grid-area:a;color:var(--wa-muted,' + MUTED + ');width:15px;height:15px;}'
+    /* press, hover, focus, reduced motion */
+    + '.w293btn,.w293seg button,.w293lnk,.w293row{transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease,box-shadow 150ms ease;}'
+    + '.w293btn:active:not(:disabled):not(:focus-visible),.w293seg button:active:not(:focus-visible),.w293row:active:not(:focus-visible){transform:scale(.97);}'
+    + '.w293btn:focus-visible,.w293seg button:focus-visible,.w293lnk:focus-visible,.w293row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '@media (hover:hover) and (pointer:fine){.w293btn:hover:not(:disabled){background:#0b2f2a;}.w293btn.soft:hover:not(:disabled){background:rgba(16,63,57,.14);}.w293seg button:not(.on):hover{color:' + GREEN + ';}.w293lnk:hover{text-decoration:underline;}.w293row:hover{background:rgba(16,63,57,.04);}}'
+    + '@media (prefers-reduced-motion:reduce){.w293btn,.w293seg button,.w293lnk,.w293row{transition:background-color 150ms ease,opacity 150ms ease;}.w293btn:active:not(:disabled):not(:focus-visible),.w293seg button:active:not(:focus-visible),.w293row:active:not(:focus-visible){transform:none;opacity:.85;}}'
+    + '@media (max-width:700px){.w293box{padding:14px;}.w293hd h2{font-size:26px;}.w293btn,.w293seg button,.w293lnk,.w293row{min-height:44px;box-sizing:border-box;}.w293seg{width:100%;}.w293seg button{flex:1 1 0;}'
+    + '.w293orgs li{grid-template-columns:1.4em minmax(0,1fr) 4.4em;grid-template-areas:"r o o" "r p e";}.w293rk{grid-area:r;align-self:start;padding-top:12px;}.w293on{grid-area:o;}.w293orgs .w293m:nth-of-type(1){grid-area:p;text-align:left;}.w293orgs .w293m:nth-of-type(2){grid-area:e;}'
+    + '.w293orgs .w293m{display:flex;gap:5px;align-items:baseline;}.w293orgs .w293m b{display:inline;font-size:17px;}'
+    + '.w293yr{grid-template-columns:2.8em minmax(0,1fr) 3em;gap:8px;}}';
+  document.head.appendChild(css);
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

@@ -54,7 +54,8 @@
       '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Sends</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
       '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button>' +
-      '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
+      '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button>' +
+      '<button role="tab" class="' + (t === 'insights' ? 'on' : '') + '" data-w152go="#crm/insights">' + I('trend') + ' Insights</button></nav>';   /* wave293 */
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -135,6 +136,7 @@
     else if (S.ui.tab === 'automations') paintAutos(root);
     else if (S.ui.tab === 'reports') paintReports(root);
     else if (S.ui.tab === 'imports') paintImports(root);
+    else if (S.ui.tab === 'insights') paintInsights(root);   /* wave293 */
     else paintContacts(root);
   }
   /* wave284: the Import page (#crm/settings/imports, admins); the page itself is build/parts284 (window.w284), drawn into #w284root */
@@ -143,6 +145,13 @@
     root.innerHTML = tabsHtml() + '<div class="w284root" id="w284root"></div>';
     var el = document.getElementById('w284root');
     if (window.w284 && window.w284.open) window.w284.open(el); else el.innerHTML = busy('The Import page is loading…');
+  }
+  /* wave293: the Insights tab (#crm/insights); the tab itself is build/parts293 (window.w293), drawn into #w293root from crm_insights_overview() */
+  P.trend = '<path d="M3.5 17.5 9 12l4 4 7.5-8"/><path d="M15 8h5.5v5.5"/>';
+  function paintInsights(root) {
+    root.innerHTML = tabsHtml() + '<div class="w293root" id="w293root"></div>';
+    var el = document.getElementById('w293root');
+    if (window.w293 && window.w293.open) window.w293.open(el); else el.innerHTML = busy('Insights are loading…');
   }
   /* wave202: the email studio's tab; the studio itself is build/parts202 (window.w202), drawn into #w202root */
   function paintStudio(root) {
@@ -169,7 +178,7 @@
     }
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : (sub === 'settings' && parts[2] === 'imports') ? 'imports' : 'contacts';   /* wave284: imports from #crm/settings/imports */
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : sub === 'insights' ? 'insights' : (sub === 'settings' && parts[2] === 'imports') ? 'imports' : 'contacts';   /* wave284: imports from #crm/settings/imports */
     if (sub === 'campaigns') openCampaigns(parts);
     if (sub === 'studio' && window.w202 && window.w202.open) window.w202.open(parts);
     if (sub === 'forms') openForms(parts);
