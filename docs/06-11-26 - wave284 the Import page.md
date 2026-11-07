@@ -82,6 +82,15 @@ On the page:
 7. Add the release record to this document and commit `build/candidate.html` with it.
 8. The import itself (Phase 7, Steel's yes for each batch): upload export 15, open Keys, set `keela_keys` (the subscription history key on the page; any other key that differs). **Before any Apply, run each batch's Compare once through the real page** (safe: it rolls back) and record in this document how long each took. A Compare, Apply or Undo has 140 seconds: one that takes longer stops in the database with nothing written and the card says "stopped by the database (57014)"; if that happens, stop and ask before going further (the batch would need splitting or an index). Then compare and apply in the order 1 to 8, reading each report first (batch 1's undated events and the event words the import does not know, and batch 3's new people not emailed).
 
+## Release record (07/11/26, on Steel's yes; database and function only)
+
+- **Before:** waves 281, 282 and 283 (database) live the same day; wave289 not live; live page bae461b9 unchanged.
+- **Rollback checks at c157e49** (281 to 283 left out, since they are live): the migration twice plus the live checks: ROLLBACK_OK. The undo cycle (migration, live checks, undo twice, undo checks, migration again, live checks): ROLLBACK_OK.
+- **Applied** `build/data/wa284_import.sql` (md5 7441da9a8440f2d4d0a426c3af89cd32) by pinned fetch at c157e49, about 14:06 UTC.
+- **Checks:** bucket `imports` private, 100 MB; the three `wa284_imports_*` storage policies; `crm_import_runs`, `crm_import_batches`, `crm_import_changes` with row security; schema `import_stage` with no usage for anon or authenticated; `trg_wa284_import_guard` on nine tables; the seven `keela_*` settings; one release line; none of the 50 `wa284_` functions runnable by anon or authenticated.
+- **crm-import v1** (new) deployed as deployment 1, verify_jwt on, the one-line stub pinned to c157e49 (`./stage.mjs` resolves next to it on GitHub). An OPTIONS request answered 204 with the function's own headers (origin hub.welfareavenue.com), so the module and its imports load. `SUPABASE_DB_URL` is set by Supabase for every function; it is first used at the first Compare.
+- **Not yet:** the page (the slice's one swap), step 6's checks, and any import run. No run, no upload, no batch.
+
 ## Undo
 
 1. On the Import page, undo every applied batch that should be undone (opt-outs and consent never are), then purge every run (the staged rows and the uploaded files). A batch's own undo needs its change records, which the wave undo drops.

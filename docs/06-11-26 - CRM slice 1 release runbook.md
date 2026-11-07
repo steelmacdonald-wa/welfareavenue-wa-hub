@@ -51,7 +51,7 @@ For each wave: first the rollback check (`python3 build/sql_rollback_test.py <re
 3. **wave283, the CRM page's rules and gift rights** (`docs/06-11-26 - wave283 CRM page and gift rights.md`). **LIVE 07/11/26 at c157e49** (database and receipt-pdf deployment 10; page waits for the slice swap).
    - Rollback check: `test/w283live_before.sql build/data/wa283_page.sql test/w283live.sql`.
    - SQL: `build/data/wa283_page.sql`. Function: receipt-pdf v3, pinned stub, after the SQL.
-4. **wave284, the Import page** (`docs/06-11-26 - wave284 the Import page.md`).
+4. **wave284, the Import page** (`docs/06-11-26 - wave284 the Import page.md`). **LIVE 07/11/26 at c157e49** (database and crm-import deployment 1; page waits for the slice swap).
    - Rollback check: `build/data/wa284_import.sql test/w284live.sql`. `test/w284live.sql` always goes last in any block it shares: `wa284_apply` and `wa284_undo` leave their import settings on for the rest of the transaction.
    - SQL: `build/data/wa284_import.sql`. Function: crm-import v1 (new): the Supabase connector's `files` array (`index.ts`, `stage.mjs`) or the one-line stub at the release commit, verify_jwt on.
    - No batch is applied yet. Once the page is live (step 2 below), stage the files and time each batch's Compare through the real page before any Apply.
