@@ -52,7 +52,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--green);box-shadow:0 0
 .choices{display:grid;gap:8px}
 @media (min-width:560px){.choices.two{grid-template-columns:1fr 1fr}}
 .choice{display:flex;align-items:flex-start;gap:10px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;background:#fff}
-.choice:hover{border-color:rgba(16,63,57,.4)}
+@media (hover:hover) and (pointer:fine){.choice:hover{border-color:rgba(16,63,57,.4)}}
 .choice input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--green);flex:none}
 .choice:has(input:checked){border-color:var(--green);background:rgba(16,63,57,.04)}
 .choice small.cd{display:block;margin-top:3px;font-size:12.5px;line-height:1.4;color:var(--muted);font-weight:400}
@@ -61,13 +61,16 @@ input:focus,textarea:focus,select:focus{border-color:var(--green);box-shadow:0 0
 .none{color:var(--muted);font-size:14px;margin:0}
 .err{color:var(--flag);font-size:14px;margin:6px 0 0}
 .bad input[type=text],.bad input[type=email],.bad input[type=tel],.bad textarea,.bad select,.bad .choice{border-color:var(--flag)}
-.consent{border-top:1px solid var(--line);margin-top:26px;padding-top:20px}
+.consent{border-top:1px solid var(--line);margin:26px 0 20px;padding-top:20px}
+.consent .q{margin:0}
+.consent .q+.q{margin-top:10px}
 .consent .choice{border-style:dashed}
-.consent .choice+.choice{margin-top:10px}
 .small{font-size:13px;color:var(--muted);margin:8px 0 0}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
-button{font:inherit;font-weight:600;font-size:17px;border:0;border-radius:999px;padding:13px 28px;background:var(--gold);color:var(--ink);cursor:pointer;margin-top:8px;min-width:170px}
-button:hover{filter:brightness(1.04)}
+button{font:inherit;font-weight:600;font-size:17px;border:0;border-radius:999px;padding:13px 28px;background:var(--gold);color:var(--ink);cursor:pointer;margin-top:8px;min-width:170px;transition:transform 160ms cubic-bezier(.23,1,.32,1)}
+button:active:not([disabled]){transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){button:hover:not([disabled]){filter:brightness(1.04)}}
+@media (prefers-reduced-motion:reduce){button:active:not([disabled]){transform:none;opacity:.85}}
 button:focus-visible{outline:3px solid var(--green);outline-offset:3px}
 button[disabled]{opacity:.6;cursor:progress}
 .banner{border-radius:12px;padding:12px 14px;margin:0 0 18px;font-size:15px}
@@ -212,11 +215,14 @@ a{color:var(--green)}
     app.innerHTML = '<form id="waf" novalidate>' + '<div class="rule"></div>' + (f.intro ? '<p class="intro">' + E(f.intro) + '</p>' : '') +
       (S.banner ? '<div class="banner ' + (Object.keys(S.errors).length ? 'warn' : 'info') + '" role="alert">' + E(S.banner) + '</div>' : '') +
       f.questions.map(function (q) { return field(q, keep); }).join('') +
-      (c.ask || (c.sms && c.sms.ask) ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent">' +
-        (c.ask ? '<label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' : '') +
+      /* the consent block: the email box with its own error in one .q, the text box in a .q of its own, so a missing tick on the email box never
+         marks the text box (that box stays optional, and must look it) */
+      (c.ask || (c.sms && c.sms.ask) ? '<div class="consent">' +
+        (c.ask ? '<div class="q' + (cerr ? ' bad' : '') + '" data-q="_consent"><label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' +
+          (cerr ? '<p class="err" id="q__consent_e">' + E(cerr) + '</p>' : '') + '</div>' : '') +
         /* wave288: the second box, may we text you (consent.sms), under the email box; sent as the top-level consent_sms */
-        (c.sms && c.sms.ask ? '<label class="choice"><input type="checkbox" id="q__consent_sms" name="_consent_sms"' + (keep && keep._consent_sms ? ' checked' : '') + '><span>' + E(c.sms.label) + '</span></label>' : '') +
-        (cerr ? '<p class="err" id="q__consent_e">' + E(cerr) + '</p>' : '') + '<p class="small">' + E((S.org && S.org.address) || 'Welfare Avenue') + ' · ' + E((S.org && S.org.email) || '') + '</p></div>' : '') +
+        (c.sms && c.sms.ask ? '<div class="q" data-q="_consent_sms"><label class="choice"><input type="checkbox" id="q__consent_sms" name="_consent_sms"' + (keep && keep._consent_sms ? ' checked' : '') + '><span>' + E(c.sms.label) + '</span></label></div>' : '') +
+        '<p class="small">' + E((S.org && S.org.address) || 'Welfare Avenue') + ' · ' + E((S.org && S.org.email) || '') + '</p></div>' : '') +
       '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>' +
       '<button type="submit" id="send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button></form>';
     footer();
