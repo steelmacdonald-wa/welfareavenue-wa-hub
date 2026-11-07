@@ -55,7 +55,7 @@ For each wave: first the rollback check (`python3 build/sql_rollback_test.py <re
    - Rollback check: `build/data/wa284_import.sql test/w284live.sql`. `test/w284live.sql` always goes last in any block it shares: `wa284_apply` and `wa284_undo` leave their import settings on for the rest of the transaction.
    - SQL: `build/data/wa284_import.sql`. Function: crm-import v1 (new): the Supabase connector's `files` array (`index.ts`, `stage.mjs`) or the one-line stub at the release commit, verify_jwt on.
    - No batch is applied yet. Once the page is live (step 2 below), stage the files and time each batch's Compare through the real page before any Apply.
-5. **wave286, Toronto crews in the CRM** (`docs/06-11-26 - wave286 Toronto crews in the CRM.md`).
+5. **wave286, Toronto crews in the CRM** (`docs/06-11-26 - wave286 Toronto crews in the CRM.md`). **LIVE 07/11/26 at c157e49.**
    - Rollback check: `test/w286live_before.sql build/data/wa286_vm_chapter.sql test/w286live.sql`. SQL: `build/data/wa286_vm_chapter.sql`. No function, no page.
 6. **wave288, the Toronto forms** (`docs/06-11-26 - wave288 Toronto forms.md`).
    - Rollback check: `test/w288live_before.sql build/data/wa288_toronto.sql test/w288live.sql`. SQL: `build/data/wa288_toronto.sql`. Function: form-submit v10, pinned stub, after the SQL.

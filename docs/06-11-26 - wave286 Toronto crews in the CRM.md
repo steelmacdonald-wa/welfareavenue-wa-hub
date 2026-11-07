@@ -60,6 +60,13 @@ Nothing on any page. In the CRM, someone put on a Toronto event's crew now count
 2. Run `build/data/wa286_vm_chapter.sql` through the Supabase connector. It may go before or after the Toronto forms wave (wave288); it needs neither wave288 nor any page release.
 3. Check: `trg_wa286_toronto_crew` exists; the release line's count is the number of people on Toronto crews who were not in Toronto (0 today); add a test crew member on a Toronto event and see their Toronto chapter row in the CRM.
 
+## Release record (07/11/26, on Steel's yes)
+
+- **Before:** waves 281 to 284 (databases) live the same day; 44 Toronto chapter rows.
+- **Rollback checks at c157e49:** the migration twice plus the live checks: ROLLBACK_OK. The undo cycle (undo twice, undo checks, migration again, live checks): ROLLBACK_OK. The live checks include the step 3 test: a crew add on a test Toronto event adds the Toronto row, a crew add on a Montreal serving adds nothing (made inside the block, rolled back).
+- **Applied** `build/data/wa286_vm_chapter.sql` (md5 6db411c2a83b8aaa0378381e23ff51c4) by pinned fetch at c157e49, about 14:09 UTC.
+- **Checks:** `trg_wa286_toronto_crew` on `event_roster`; one release line, count 0 (no one on a Toronto crew was outside Toronto); Toronto rows still 44.
+
 ## Undo
 
 Run `build/data/wa286_undo.sql`. It drops the trigger and both functions, then removes only the Toronto rows whose source note starts with `Toronto crew:`. Undo wave286 before wave281. Run the other way round, wave286's undo is still harmless, and crew adds keep working in between.
