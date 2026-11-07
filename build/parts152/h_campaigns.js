@@ -9,7 +9,13 @@
   MSTATUS.sending = ['Sending', TEAL]; MSTATUS.cancelled = ['Cancelled', MUTED]; MKIND.volunteer = ['Volunteer call-out', TEAL];
   var LC = { edit: null, prev: null, pT: null, msg: '', err: '', busy: '', sizes: null, c: null, cprev: null, check: null, confirm: false, cmsg: '', cerr: '', cbusy: '', rcp: null, rcpFor: null, newList: null, cid: null };
   LOADERS.lists = function () { return db.from('crm_lists').select('*').order('updated_at', { ascending: false }); };
-  LOADERS.campaigns = function () { return db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(300); };
+  /* task 10b (UI review row 27): the latest LC.climit Sends, and how many there are in all, so the list can say "Latest 300 of 1,004" */
+  LOADERS.campaigns = function () {
+    var lim = LC.climit || 300;
+    return Promise.all([db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(lim),
+      Promise.resolve(db.from('crm_campaigns').select('id', { count: 'exact', head: true })).then(function (r) { return r && !r.error && typeof r.count === 'number' ? r.count : null; }, function () { return null; })])
+      .then(function (x) { LC.ctotal = x[1]; return x[0]; });
+  };
   LOADERS.cstats = function () { return db.from('crm_campaign_stats_v').select('*'); };
   /* wave283: one rule for every kind of Send (Steel, 5 Nov 2026) */
   var CK = { newsletter: ['Newsletter', PURPLE, RULE_TEXT], fundraising: ['Fundraising appeal', '#B9851B', RULE_TEXT],
@@ -196,7 +202,8 @@
   /* ---------- the Campaigns tab ---------- */
   function statsFor(id) { return (S.cstats || []).filter(function (x) { return String(x.campaign_id) === String(id); })[0] || {}; }
   function campById(id) { return (S.campaigns || []).filter(function (x) { return String(x.id) === String(id); })[0] || null; }
-  function pct(a, b) { a = Number(a) || 0; b = Number(b) || 0; return b ? Math.round(a * 100 / b) + '%' : '0%'; }
+  /* task 10b: 1 open of 1,284 reads "<1%", not "0%" */
+  function pct(a, b) { a = Number(a) || 0; b = Number(b) || 0; if (!b || !a) return '0%'; var p = a * 100 / b; return p < 1 ? '<1%' : Math.round(p) + '%'; }
   function myName() { var me = (S.contacts || []).filter(function (c) { return c.emails.map(lower).indexOf(myEmail()) >= 0; })[0]; return me && me.full_name ? me.full_name : myEmail().split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function (x) { return x.toUpperCase(); }); }
   function onDomainMe() { return /@welfareavenue\.com$/.test(myEmail()); }
   function blankCampaign(listId) {
@@ -213,17 +220,20 @@
   function campRow(c) {
     var s = campById(c.id) || c, row = s.vars || {};
     var cs = statsFor(c.id), list = listById(c.list_id), sent = Number(cs.sent) || 0;
-    return '<div class="w155cr" role="listitem"><button class="w155cn" data-w155copen="' + E(c.id) + '"><b>' + E(c.name || c.subject || 'Untitled') + '</b><span class="m">' + E(c.subject || '') + '</span></button>' +
-      '<div>' + lchip(CSTAT, c.status) + '</div><div class="m">' + E(list ? list.name : 'No list') + '<br>' + E((CK[c.kind] || [c.kind])[0]) + '</div>' +
+    /* task 10b: "Untitled Send" everywhere; the kind as a chip beside the list name; named cells, so a phone stacks each Send */
+    var kc = CK[c.kind] || [c.kind || 'Send', MUTED];
+    return '<div class="w155cr" role="listitem"><button class="w155cn" data-w155copen="' + E(c.id) + '"><b>' + E(c.name || c.subject || 'Untitled Send') + '</b><span class="m">' + E(c.subject || '') + '</span></button>' +
+      '<div class="w155st">' + lchip(CSTAT, c.status) + '</div><div class="w155lk">' + lchip({ k: [kc[0], kc[1]] }, 'k') + '<span class="m">' + E(list ? list.name : 'No list') + '</span></div>' +
       '<div class="w155n">' + (c.status === 'draft' ? '<span class="m">not sent</span>' : '<b>' + sent.toLocaleString('en-CA') + '</b> sent · ' + pct(cs.opened, sent) + ' opened · ' + pct(cs.clicked, sent) + ' clicked') + '</div>' +
-      '<div class="m">' + E(fmtDay(c.sent_at || c.queued_at || c.updated_at || c.created_at)) + '</div></div>';
+      '<div class="m w155dt">' + E(fmtDay(c.sent_at || c.queued_at || c.updated_at || c.created_at)) + '</div></div>';
   }
   function campListHtml() {
-    var cs = S.campaigns || [];
-    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + plural(cs.length, 'Send', 'Sends') + '</span></h3>' +
+    var cs = S.campaigns || [], total = LC.ctotal != null ? Math.max(LC.ctotal, cs.length) : cs.length, more = total > cs.length;
+    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + (more ? 'Latest ' + cs.length.toLocaleString('en-CA') + ' of ' + total.toLocaleString('en-CA') : plural(cs.length, 'Send', 'Sends')) + '</span></h3>' +
       '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New Send</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
       (LC.cmsg && !LC.c ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
-      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
+      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>Kind and list</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>' +
+          (more ? '<div class="w154acts"><button class="w152btn soft sm" data-w155cmore>Show ' + Math.min(300, total - cs.length).toLocaleString('en-CA') + ' more</button></div>' : '')
         : '<p class="m">No Send yet. A Send is one message to a list, sent person by person through the email rule.</p>') + '</div>';
   }
   function modeLine() {
@@ -265,7 +275,7 @@
     return '<div class="w155chk"><b>' + plural(k.eligible || 0, 'person gets it', 'people get it') + '</b> of ' + plural(k.audience || 0, 'person', 'people') + ' on the list' +
       (k.duplicates ? ' (' + plural(k.duplicates, 'shared address', 'shared addresses') + ' counted once)' : '') + '.' +
       (k.held ? '<div class="m">Held back by the rule: ' + plural(k.held, 'person', 'people') + '</div><ul>' + why + '</ul>' : '') +
-      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(Number(k.first_contacts).toLocaleString('en-CA') + ' of them have never had an email from Welfare Avenue: send them as a separate Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282) */
+      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(plural(Number(k.first_contacts), 'person', 'people') + ' would get their first email from Welfare Avenue in this Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282); task 10b: Steel's decision 6, says what happens */
       (k.per_day ? '<div class="m">At up to ' + k.per_day + ' a day this takes ' + plural(k.days || 1, 'day', 'days') + '.</div>' : '') +
       (LC.confirm ? (live && k.eligible ? '<div class="w155cf"><b>Send it to ' + plural(k.eligible, 'person', 'people') + ' now?</b> The first ones go within the minute; the rest follow at Resend’s pace.<div class="w154acts"><button class="w152btn" data-w155cgo>' + I('send') + ' Send it</button><button class="w152btn ghost" data-w155cno>Not yet</button></div></div>'
         : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this Send cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
@@ -410,7 +420,11 @@
     + '.w155studio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(220,165,39,.12);font-size:13.5px;line-height:1.45;}.w155studio>span{flex:1;min-width:220px;}'
     + '.w155bar{height:10px;border-radius:99px;background:rgba(16,63,57,.1);overflow:hidden;margin:12px 0 4px;}.w155bar i{display:block;height:100%;background:' + TEAL + ';border-radius:99px;}'
     + '@media (max-width:980px){.w155grid{grid-template-columns:1fr;}.w155ch,.w155cr{grid-template-columns:minmax(0,1.6fr) auto minmax(0,1.2fr);}.w155ch>span:nth-child(n+4),.w155cr>div:nth-child(n+4){display:none;}}'
-    + '@media (max-width:700px){.w155c{grid-template-columns:1fr 1fr;}.w155c>button{justify-self:end;}.w155two{grid-template-columns:1fr;}}';
+    + '.w155lk{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}.w155lk .m{overflow-wrap:anywhere;}.w155cn b{overflow-wrap:anywhere;}.w155n{font-variant-numeric:tabular-nums;}'
+    + '@media (max-width:700px){.w155c{grid-template-columns:1fr 1fr;}.w155c>button{justify-self:end;}.w155two{grid-template-columns:1fr;}'
+    /* task 10b (UI review row 14): a phone stacks each Send: name, then status, kind and list (two lines at most), then the results and the date */
+    + '.w155ch{display:none;}.w155cr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}.w155cr>.w155cn{flex:1 1 100%;}.w155cr>.w155lk{flex:1 1 200px;min-width:0;flex-direction:row;flex-wrap:wrap;align-items:center;}'
+    + '.w155cr>.w155lk .m{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}.w155cr>.w155n,.w155cr>.w155dt{display:block !important;}.w155cr>.w155n{flex:1 1 auto;white-space:normal;}}';
   document.head.appendChild(css155);
 
   /* ---------- wiring ---------- */
@@ -431,6 +445,7 @@
     if ((el = t.closest('[data-w155delok]')) && ed) { e.preventDefault(); delList(); return; }
     if ((el = t.closest('[data-w155cancel]'))) { e.preventDefault(); LC.edit = null; LC.prev = null; LC.err = ''; paint(); return; }
     /* campaigns */
+    if ((el = t.closest('[data-w155cmore]'))) { e.preventDefault(); el.disabled = true; LC.climit = (LC.climit || 300) + 300; load('campaigns', true).then(function () { paint(); }); return; }
     if ((el = t.closest('[data-w155cnew]'))) { e.preventDefault(); LC.c = null; LC.cmsg = ''; go('#crm/campaigns/new'); return; }
     if ((el = t.closest('[data-w155copen]'))) { e.preventDefault(); LC.cmsg = ''; go('#crm/campaigns/' + el.getAttribute('data-w155copen')); return; }
     if ((el = t.closest('[data-w155cclose]'))) { e.preventDefault(); LC.c = null; LC.check = null; LC.cprev = null; LC.confirm = false; go('#crm/campaigns'); return; }
