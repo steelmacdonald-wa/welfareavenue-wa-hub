@@ -430,8 +430,9 @@
     if (live && live.__w284h !== undefined && keyOf(live) === keyOf(fresh) && h.children.length === 1) sync(live, fresh);
     else if (live && live.__w284h !== undefined && h.children.length === 1) swap(live, fresh, true);   /* another page (a run picked, a new run): drawn afresh */
     else { h.innerHTML = ''; h.appendChild(fresh); mark(fresh); [].forEach.call(fresh.querySelectorAll('details[data-w284det]'), function (d) { if (S.open[d.getAttribute('data-w284det')]) d.open = true; }); }
-    var want = S.want; S.want = null;   /* an action that moves focus on purpose (Purge asks: Cancel) */
-    if (want) { var el = h.querySelector(want); if (el) focusEl(el); }
+    /* an action that moves focus on purpose (Purge asks: Cancel; a new run: its line), kept through a "Loading the imports\u2026" draw */
+    var want = S.want;
+    if (want && keyOf(h.firstElementChild) !== 'loading') { S.want = null; var el = h.querySelector(want); if (el) focusEl(el); }
   }
   /* read a result out once (the live region exists before it changes, so screen readers hear it) */
   function say(t) {
