@@ -10,8 +10,8 @@ Read on 06/11/26 (read-only: an md5 over `site_files`, and `list_edge_functions`
 
 | Thing | Live today | After the release |
 |---|---|---|
-| Hub page `index.html` | `bae461b90fba79837582ec328976e4b5`, 8,379,788 bytes, 10 parts (wave287, branch `origin/wave287-projects-overview` at 940c905) | the candidate: **`ff9aeae04a1100ecb43c0ce98d9ca3b4`, 8,447,299 bytes** (232 segments, LF) |
-| Form page `f/index.html` | `efdb9627a2c812f2e8239eb6ee80d8b3`, 52,174 bytes | **`4adaf708d25a2fe4f6f0715c6fa4f244`, 52,764 bytes**: the committed LF blob `build/f/index.html` |
+| Hub page `index.html` | `bae461b90fba79837582ec328976e4b5`, 8,379,788 bytes, 10 parts (wave287, branch `origin/wave287-projects-overview` at 940c905) | the candidate: **`2913f36f4cc98d7e095666ba4593ac89`, 8,485,983 bytes** (232 segments, LF) |
+| Form page `f/index.html` | `efdb9627a2c812f2e8239eb6ee80d8b3`, 52,174 bytes | **`da9c679fa5e1a8d3a20926e918652543`, 53,378 bytes**: the committed LF blob `build/f/index.html` |
 | quo-send | deployment 18, source v8 (wave266) | v9 (wave281) |
 | whatsapp-send | deployment 1, source v1 (wave254) | v2 (wave281, with the final review's SMS stops) |
 | mail-send | deployment 18, source v6 (wave273) | v7 (wave282) |
@@ -21,7 +21,9 @@ Read on 06/11/26 (read-only: an md5 over `site_files`, and `list_edge_functions`
 
 "Deployment" is the number Supabase shows, which goes up by one with each deploy. "Source" is the version in the function's first line.
 
-The candidate is the page built from the release commit with `python3 ".superpowers/sdd/01 foundations and Keela import - design/pybuild.py" build <out>`, then every CRLF turned into LF. Against bae461b9 it changes four segments only: `152_wave152`, `153_wave153`, `202_wave202`, and the new `284_wave284` (added to the manifest after `287_wave287`).
+The candidate is the page built from the release commit with `bash build/build.sh <out>` (tracked in the repo), or with the helper `python3 ".superpowers/sdd/01 foundations and Keela import - design/pybuild.py" build <out>` if that file is present (it gives the same page). Either way, then turn every CRLF into LF. On this PC the checkout writes CRLF, so the raw build has a different md5 (017b8482) and is not the candidate; only the LF copy is. Against bae461b9 it changes four segments only: `152_wave152`, `153_wave153`, `202_wave202`, and the new `284_wave284` (added to the manifest after `287_wave287`).
+
+**Earlier values of this plan, kept as history (do not use them).** Before the UI polish merged, the candidate was `ff9aeae04a1100ecb43c0ce98d9ca3b4`, 8,447,299 bytes, and the committed `f/index.html` blob was `4adaf708d25a2fe4f6f0715c6fa4f244`, 52,764 bytes. A page or blob with those md5s is out of date.
 
 **The old candidates are history, not release instructions.** Each wave's document names the candidate it was tested on, on the older live page 0b8e0fa6: dac9bf9d (wave283), 39bbf0b8 (wave284), be00054e (wave288). The integration onto today's live page gave 64bbeaf6 and then a0cab8b7. None of them is the page to publish. Only the candidate above is, and only while live is still bae461b9.
 
@@ -64,20 +66,21 @@ The whole stack was also checked in one block in release order, and the undo in 
 
 After wave281, wave282, wave283 and wave284's SQL, receipt-pdf v3 and crm-import are in. (The page needs `wa_my_caps` from 281, the gift rights from 283 and the Import functions from 284; Email it for team leads needs mail-send v7 from 282.) wave286 and wave288 can come before or after it.
 
-1. Build the candidate from the release commit (as above). Its md5 must be `ff9aeae04a1100ecb43c0ce98d9ca3b4` and `python3 build/check_remaps.py build/candidate.html` must say clean. Any other md5 means the branch moved: stop.
+1. Build the candidate from the release commit (as above). Its md5 must be `2913f36f4cc98d7e095666ba4593ac89` (8,485,983 bytes, after the CRLF to LF step) and `python3 build/check_remaps.py build/candidate.html` must say clean. Any other md5 means the branch moved: stop.
 2. Stage and gate, as `build/deploy_stage.py` and `build/deploy_gate.py` do:
    - `python3 build/deploy_stage.py build/candidate.html <stage table>`
    - `python3 build/deploy_gate.py <stage table> bae461b90fba79837582ec328976e4b5 data-w281dnc,data-w283spam,__wa284`
    - Run the printed block through the connector. It refuses unless live is still bae461b9, checks every part's md5 and length, the tail and the markers, swaps the ten parts into `site_files` and checks the result.
-3. `f/index.html`: write the committed LF blob, fetched inside the database at the release commit (`build/f/index.html`), never a fresh `build/f/make.py` output (it writes CRLF on this PC). Guard it: live must be efdb9627 before and 4adaf708 after.
+3. `f/index.html`: write the committed LF blob, fetched inside the database at the release commit (`build/f/index.html`), never a fresh `build/f/make.py` output (it writes CRLF on this PC). Guard it: live must be efdb9627 before and da9c679f after.
 4. host-sync (the gate's last line calls it; call it again after `f/index.html`).
-5. Re-check live: `index.html` ff9aeae0, `f/index.html` 4adaf708.
+5. Re-check live: `index.html` 2913f36f, `f/index.html` da9c679f.
+6. **Only now open the four Toronto forms.** The four forms (after wave288's SQL, `toronto-volunteer` is closed and the three new ones are drafts) must not be opened, and the website pull request must not merge, until the new `/f/` page is live and re-checked in step 5. The old form page (efdb9627) does not show the Toronto text box, so a form opened early would take sign-ups without the consent question. Opening them is its own yes from Steel.
 
 The new `/f/` page is safe before wave288: it shows the second box only when form-submit v10 hands it a form whose text box is on, which only wave288's SQL sets.
 
 ## 3. The website
 
-The website pull request, steelmacdonald-wa/welfareavenue-site-frontend#7 (the Toronto forms on the site), merges only after wave288 is live.
+The website pull request, steelmacdonald-wa/welfareavenue-site-frontend#7 (the Toronto forms on the site), merges only after wave288 is live and the new `/f/` page is live (section 2, step 6).
 
 ## 4. If live moves before the release
 
@@ -90,8 +93,8 @@ In this order. (Only if any Keela batch was applied: while the Import page is st
 1. **The page first.** Republish bae461b9, rebuilt from `origin/wave287-projects-overview` at 940c905, so wave274's single Volunteer Manager, wave285, wave287 and every other live change stay. Never rebuild from "the commit before wave28N's page commit": that would drop other sessions' live work.
    - `git fetch origin`, then `git worktree add --detach <scratch folder> 940c905`.
    - `python3 ".superpowers/sdd/01 foundations and Keela import - design/pybuild.py" <scratch folder>/build <out>`, then turn every CRLF into LF. The md5 must be `bae461b90fba79837582ec328976e4b5` and the size 8,379,788 bytes.
-   - Stage and gate it with `deploy_stage.py` and `deploy_gate.py`, the expected live md5 now being the candidate's (ff9aeae0), and markers that bae461b9 holds (for example `__wa287`).
-   - `f/index.html` back to efdb9627: the blob at 940c905 (`git show 940c905:build/f/index.html`, 52,174 bytes, LF), guarded (4adaf708 before, efdb9627 after).
+   - Stage and gate it with `deploy_stage.py` and `deploy_gate.py`, the expected live md5 now being the candidate's (2913f36f), and markers that bae461b9 holds (for example `__wa287`).
+   - `f/index.html` back to efdb9627: the blob at 940c905 (`git show 940c905:build/f/index.html`, 52,174 bytes, LF), guarded (da9c679f before, efdb9627 after).
    - host-sync, then re-check both md5s. Remove the scratch worktree.
 2. **Then the undo files, newest first:** `build/data/wa288_undo.sql`, `wa286_undo.sql`, `wa284_undo.sql`, `wa283_undo.sql`, `wa282_undo.sql`, `wa281_undo.sql`, each by pinned fetch, each with its own undo checks (`test/w28Nlive_undo.sql`).
    - What the undos never take back: opt-outs, consent and what people said. wave281's undo keeps the consent log, do-not-contact, text consent and the chapter rows as data; wave288's keeps the forms' chapter rows, text consent and log rows; wave284's never puts back a consent or opt-out column.

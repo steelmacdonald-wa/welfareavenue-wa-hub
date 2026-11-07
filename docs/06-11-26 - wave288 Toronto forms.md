@@ -69,7 +69,7 @@ The design calls this Phase 5a "wave285"; it is renumbered to 288 because 285 is
 2. Put the page back as `docs/06-11-26 - CRM slice 1 release runbook.md` says (step 5): first, bae461b9 rebuilt from `origin/wave287-projects-overview` 940c905, and `f/index.html` back to efdb9627 (the blob at 940c905). Never the segments of the commit before this wave's page commit: that would drop other sessions' live work.
 3. Redeploy form-submit v9 (the commit before 28337bc). v10 also works on the old database (the old `crm_form_apply` ignores `consent.sms`), so this can wait.
 4. Claude runs `build/data/wa288_undo.sql` through the connector: both functions back exactly as live had them on 06/11/26 (with their grants and comment), `toronto-volunteer` back to its old settings and consent and closed, each new form deleted if nobody answered it (else closed), the request type deleted if no Request uses it (else switched off), `volunteer_applications.chapter` dropped, the word removed, an undo line. What people said stays: chapter rows, `sms_consent` and consent log rows.
-5. Run wave288's undo before wave281's undo, never after (the chapter column points at `crm_chapters`, which wave281's undo drops).
+5. Run wave288's undo before wave281's undo, never after: the slice undoes newest first (288, 286, 284, 283, 282, 281). wave281's undo now keeps `crm_chapters` and `crm_contact_chapters` with their rows as data, so it no longer drops what the chapter column points at. The order stays because wave288's undo is the newest and its files are written to run first.
 
 ## Worth knowing
 
