@@ -313,11 +313,16 @@ async function imports(browser, w) {
     await f.page.mouse.move(vw / 2, 60); await f.page.mouse.wheel(0, 600); await W(300);
     b = await f.ev(() => ({ y: scrollY, lock: getComputedStyle(document.documentElement).overflow }));
     ok('the page behind the confirmation holds still' + at, b.y === y0 && b.lock === 'hidden', Object.assign({ y0 }, b));
-    await f.page.keyboard.press('Enter'); await W(60);
-    b = await f.ev(() => ({ out: !!document.getElementById('w284pop-out'), pop: !!document.getElementById('w284pop'), applied: window.__calls.filter(c => c.body.action === 'apply').length, focus: window.__t.focus() }));
-    await W(350);
-    const gone = await f.ev(() => !document.getElementById('w284pop-out') && getComputedStyle(document.documentElement).overflow !== 'hidden');
-    ok('Enter there cancels: nothing applied, a short fade out, focus back on the card\'s Apply' + at, b.applied === 0 && !b.pop && b.out && gone && b.focus === 'act=' + neverK + ' Apply', Object.assign({ gone }, b));
+    /* the closing dialog goes through its exit state (renamed, a 140 ms opacity fade) and is then removed; read without racing the fade */
+    await f.ev(() => { window.__popEl = document.getElementById('w284pop'); });
+    await f.page.keyboard.press('Enter'); await W(450);
+    b = await f.ev(() => {
+      const probe = document.createElement('div'); probe.className = 'w284pop out'; document.body.appendChild(probe); const cs = getComputedStyle(probe), fade = cs.transitionProperty + ' ' + cs.transitionDuration; probe.remove();
+      return { renamed: window.__popEl.id, removed: !window.__popEl.isConnected, fade, pop: !!document.getElementById('w284pop'), lock: getComputedStyle(document.documentElement).overflow,
+        applied: window.__calls.filter(c => c.body.action === 'apply').length, focus: window.__t.focus() };
+    });
+    ok('Enter there cancels: nothing applied, a 140 ms fade out, the page free again, focus back on the card\'s Apply' + at,
+      b.applied === 0 && !b.pop && b.renamed === 'w284pop-out' && b.removed && b.fade === 'opacity 0.14s' && b.lock !== 'hidden' && b.focus === 'act=' + neverK + ' Apply', b);
   } else note('no never-undone batch to apply in ' + DATA);
   const undoK = await f.ev(() => { const x = document.querySelector('#w284root [data-w284undo]'); return x ? x.getAttribute('data-w284undo') : null; });
   if (undoK) {
