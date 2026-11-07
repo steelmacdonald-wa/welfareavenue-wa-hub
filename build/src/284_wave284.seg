@@ -54,7 +54,7 @@
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
     crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
-    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, purgeAsk: false, purgeMsg: '', seen: {}, pop: null };
+    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function num(n) { n = Number(n || 0); return n.toLocaleString('en-CA'); }
@@ -151,7 +151,7 @@
   function itemHtml(x) { return isPair(x) ? pairHtml(x) : E(itemText(x)); }
   function nonZero(o) { return Object.keys(o || {}).filter(function (k) { return Number(o[k]) > 0; }); }
   function cnt(n) { return ' <em class="w284cnt">' + num(n) + '</em>'; }
-  function listsHtml(b) {
+  function listsHtml(kind, b) {
     var r = b && b.report; if (!r) return '';
     var l = r.lists || {}, sk = (r.counts && r.counts.skipped) || {}, parts = [];
     if (nonZero(sk).length) parts.push('<div class="w284ls"><b>Skipped</b><ul>' + nonZero(sk).map(function (k) { return '<li>' + E(k) + ': ' + num(sk[k]) + '</li>'; }).join('') + '</ul></div>');
@@ -164,11 +164,12 @@
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
       var arr = l[k] || []; if (!arr.length) return;
-      parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + cnt(arr.length) + '</b><ul>' + arr.slice(0, 200).map(function (x) { return '<li>' + itemHtml(x) + '</li>'; }).join('')
+      parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + cnt(arr.length) + '</b><ul data-w284keep="' + kind + '-' + E(k) + '">' + arr.slice(0, 200).map(function (x) { return '<li>' + itemHtml(x) + '</li>'; }).join('')
         + (arr.length > 200 ? '<li class="m">and ' + num(arr.length - 200) + ' more</li>' : '') + '</ul></div>');
     });
     if (!parts.length) return '';
-    return '<details class="w284det"><summary>See the lists</summary>' + parts.join('') + '</details>';
+    /* never drawn with open: paint() opens it again from S.open, so a list you are reading stays open across repaints */
+    return '<details class="w284det" data-w284det="' + kind + '"><summary data-w284sum="' + kind + '">See the lists</summary>' + parts.join('') + '</details>';
   }
 
   /* ---------- the extra controls ---------- */
@@ -236,28 +237,31 @@
   }
   function cardHtml(K, i) {
     var b = S.batches[K.k], st = statusOf(K.k), purged = !!(run() && run().purged_at), stale = !!S.stale[K.k], busy = S.busy[K.k];
-    var btn = '';
+    /* every button that is the card's action carries data-w284act, so keyboard focus can follow the action (Compare, then Apply, then Undo) */
+    var act = ' data-w284act="' + K.k + '"', btn = '';
     if (!purged && !busy) {
-      if (st === 'compared' && !stale) btn = '<button class="' + pri('apply:' + K.k) + '" data-w284apply="' + K.k + '">Apply</button>';
-      else if (st === 'applied') btn = K.never ? '<span class="w284note">Applied. Opt-outs and consent are never undone.</span>' : '<button class="w284btn soft" data-w284undo="' + K.k + '">Undo</button>';
+      if (st === 'compared' && !stale) btn = '<button class="' + pri('apply:' + K.k) + '" data-w284apply="' + K.k + '"' + act + '>Apply</button>';
+      else if (st === 'applied') btn = K.never ? '<span class="w284note">Applied. Opt-outs and consent are never undone.</span>' : '<button class="w284btn soft" data-w284undo="' + K.k + '"' + act + '>Undo</button>';
       else {
         var ready = !K.need || staged(K.need);
-        btn = '<button class="' + pri('compare:' + K.k) + '" data-w284compare="' + K.k + '"' + (ready ? '' : ' disabled') + '>' + (st === 'compared' ? 'Compare again' : 'Compare') + '</button>'
+        btn = '<button class="' + pri('compare:' + K.k) + '" data-w284compare="' + K.k + '"' + act + (ready ? '' : ' disabled') + '>' + (st === 'compared' ? 'Compare again' : 'Compare') + '</button>'
           + (ready ? '' : '<span class="w284note">Stage the ' + E(fileLabel(K.need)) + ' first.</span>');
       }
     }
+    /* busy: the button stays where it was (no jump), says what it is doing, and keeps focus (aria-disabled, not disabled) */
+    if (busy) btn = '<button class="w284btn soft"' + act + ' aria-disabled="true" aria-busy="true">' + E(busy) + '</button>';
     var err = (b && b.status === 'failed' && b.error) ? b.error : '';
-    return '<section class="w284card" data-w284card="' + K.k + '" aria-labelledby="w284h-' + K.k + '">'
-      + '<div class="w284ch"><h3 id="w284h-' + K.k + '"><span class="w284n">' + (i + 1) + '</span><span class="w284t">' + E(K.t) + '</span></h3>'
+    return '<section class="w284card" data-w284b="card-' + K.k + '" data-w284card="' + K.k + '" aria-labelledby="w284h-' + K.k + '">'
+      + '<div class="w284ch"><h3 id="w284h-' + K.k + '" tabindex="-1" data-w284head="' + K.k + '"><span class="w284n">' + (i + 1) + '</span><span class="w284t">' + E(K.t) + '</span></h3>'
       + '<span class="w284st st-' + st + '"><i aria-hidden="true"></i>' + st + '</span></div>'
       + '<p class="w284rule">' + E(K.rule) + '</p>'
       + (b && b.report ? '<p class="w284sum">' + E(sentence(b)) + '</p>' : '')
       + (stale ? '<p class="w284warn">A setting changed: compare again before applying.</p>' : '')
-      + extraHtml(K.k, b) + listsHtml(b)
+      + extraHtml(K.k, b) + listsHtml(K.k, b)
       + (err ? '<p class="w284err" role="alert">Stopped: ' + E(err) + '</p>' : '')
       + (S.msg[K.k] ? '<p class="w284err" role="alert">' + E(S.msg[K.k]) + '</p>' : '')
       + (S.note[K.k] ? '<p class="w284warn">' + E(S.note[K.k]) + '</p>' : '')
-      + '<div class="w284acts">' + (busy ? '<span class="w284busy">' + E(busy) + '</span>' : btn) + '</div>'
+      + (btn ? '<div class="w284acts">' + btn + '</div>' : '')
       + '</section>';
   }
   function filesHtml() {
@@ -267,7 +271,8 @@
       : '<div class="w284up"><label class="w284row"><span>Kind of file</span><select class="w284sel" data-w284upkind="1">' + FILES.map(function (f) {
           return '<option value="' + f.k + '"' + (S.upKind === f.k ? ' selected' : '') + '>' + E(f.t) + '</option>'; }).join('') + '</select></label>'
         + '<label class="w284row"><span>File</span><input type="file" data-w284upfile="1" accept=".json,.csv,application/json,text/csv"></label>'
-        + '<button class="' + pri('upload') + '" data-w284upload="1"' + (S.upBusy ? ' disabled' : '') + '>Upload and stage</button></div>'
+        + (S.upBusy ? '<button class="w284btn soft" data-w284act="upload" aria-disabled="true" aria-busy="true">Uploading\u2026</button>'
+          : '<button class="' + pri('upload') + '" data-w284upload="1" data-w284act="upload">Upload and stage</button>') + '</div>'
         + (S.upMsg ? '<p class="' + (S.upErr ? 'w284err' : 'w284note') + '" role="' + (S.upErr ? 'alert' : 'status') + '">' + E(S.upMsg) + '</p>' : '');   /* red only when something failed (S.upErr), never from the words */
     var keysCfg = obj(S.cfg.keela_keys, {});
     var list = S.files.length ? '<ul class="w284files">' + S.files.map(function (f) {
@@ -288,51 +293,121 @@
           }
         }
       }
-      return '<li class="w284file"><div class="w284fh"><b>' + E(base) + '</b><span class="m">' + E(fileLabel(f.kind)) + '</span></div>'
+      var fa = ' data-w284act="file-' + f.id + '"';   /* Stage, then Keys: focus follows the file's action */
+      return '<li class="w284file" data-w284b="file-' + f.id + '"><div class="w284fh"><b>' + E(base) + '</b><span class="m">' + E(fileLabel(f.kind)) + '</span></div>'
         + '<div class="w284fp"><span role="status">' + E(prog) + '</span>'
-        + (!done && !purged && !S.stage[f.id] ? '<button class="' + pri('stage:' + f.id) + ' sm" data-w284stage="' + f.id + '">Stage</button>' : '')
-        + (done ? '<button class="w284btn soft sm" data-w284keys="' + f.id + '" aria-expanded="' + open + '">' + (open ? 'Hide the keys' : 'Keys') + '</button>' : '') + '</div>' + kh + '</li>';
+        + (!done && !purged ? (S.stage[f.id] ? '<button class="w284btn soft sm"' + fa + ' aria-disabled="true" aria-busy="true">Stage</button>'
+          : '<button class="' + pri('stage:' + f.id) + ' sm" data-w284stage="' + f.id + '"' + fa + '>Stage</button>') : '')
+        + (done ? '<button class="w284btn soft sm" data-w284keys="' + f.id + '"' + fa + ' aria-expanded="' + open + '">' + (open ? 'Hide the keys' : 'Keys') + '</button>' : '') + '</div>' + kh + '</li>';
     }).join('') + '</ul>' : (purged ? '' : '<p class="w284note">No file yet. Upload Keela\'s exports here: the contacts and companies first.</p>');
-    return '<section class="w284card w284filescard"><div class="w284ch"><h3>Files</h3></div>' + up + list + '</section>';
+    return '<section class="w284card w284filescard" data-w284b="files"><div class="w284ch"><h3>Files</h3></div><div class="w284upw" data-w284b="up">' + up + '</div>' + list + '</section>';
   }
   function purgeHtml() {
     var r = run(); if (!r || r.purged_at) return '';
     var days = r.last_applied_at ? Math.floor((Date.now() - new Date(r.last_applied_at).getTime()) / 86400000) : null;
     var due = days != null && days >= 30;
-    return '<section class="w284card w284purge">'
+    return '<section class="w284card w284purge" data-w284b="purge">'
       + (due ? '<p class="w284warn">It has been ' + plural(days, 'day', 'days') + ' since the last batch was applied. Purge this run to delete the staged rows, the uploaded files and the change records.</p>' : '')
       + (S.purgeAsk ? '<div class="w284ask" role="group" aria-label="Purge this run"><p>Purge deletes this run\'s staged rows, uploaded files and change records. Its batches can no longer be undone.</p>'
           + '<button class="w284btn danger" data-w284purgeyes="1">Yes, purge</button><button class="w284btn ghost" data-w284purgeno="1">Cancel</button></div>'
         : '<button class="w284btn soft" data-w284purge="1">Purge this run</button>')
       + (S.purgeMsg ? '<p class="w284note" role="status">' + E(S.purgeMsg) + '</p>' : '') + '</section>';
   }
-  function paint() {
-    var h = host(); if (!h) return;
-    if (!can()) { h.innerHTML = '<div class="w284"><div class="w284empty">Imports are for admins.</div></div>'; return; }
-    if (S.runs === null) { h.innerHTML = '<div class="w284"><div class="w284empty">Loading the imports\u2026</div></div>'; if (!S.loading) load(); return; }
+  function pageHtml() {
     var r = run();
     /* the head: the masthead already says Imports, so the card opens on the run itself (no CRM stats strip, no second title); with no run yet, the
        empty state lives here, above New run */
-    var head = '<section class="w284card w284head"><h2 class="w284runline">' + E(runLine()) + '</h2>'
+    var head = '<section class="w284card w284head" data-w284b="head"><h2 class="w284runline" tabindex="-1" data-w284b="line">' + E(runLine()) + '</h2>'
       + '<p class="w284rule">Bring Keela\'s exports into the Hub: upload and stage a file, compare each kind of import, then apply it. Undo puts back what has not changed since; opt-outs and consent are never undone.</p>'
       + (r ? '' : '<p class="w284sum">Name the run, then Start a new run.</p>')
-      + '<div class="w284runs">' + (S.runs.length ? '<label class="w284row"><span>Run</span><select class="w284sel" data-w284run="1">' + S.runs.map(function (x) {
+      + '<div class="w284runs" data-w284b="ctl">' + (S.runs.length ? '<label class="w284row"><span>Run</span><select class="w284sel" data-w284run="1">' + S.runs.map(function (x) {
           return '<option value="' + x.id + '"' + (x.id === S.run ? ' selected' : '') + '>Run ' + x.id + (x.label ? ': ' + E(x.label) : '') + (x.created_at ? ' (' + E(String(x.created_at).slice(0, 10)) + ')' : '') + (x.purged_at ? ', purged' : '') + '</option>';
         }).join('') + '</select></label>' : '')
       + '<label class="w284row"><span>New run</span><input class="w284in" type="text" maxlength="120" placeholder="A name, for example Keela final export" data-w284label="1" value="' + E(S.label) + '"></label>'
       + '<button class="' + pri('new') + '" data-w284new="1">Start a new run</button></div>'
       + (S.err ? '<p class="w284err" role="alert">' + E(S.err) + '</p>' : '') + '</section>';
-    var body = r ? filesHtml() + '<div class="w284cards">' + KINDS.map(cardHtml).join('') + '</div>' + purgeHtml() : '';
-    var focus = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-w284label') ? 1 : 0;
-    var caret = focus && document.activeElement.selectionStart;
-    h.innerHTML = '<div class="w284">' + head + body + '</div>';
-    /* a card whose content changed crossfades (140 ms) */
-    [].forEach.call(h.querySelectorAll('[data-w284card]'), function (c) {
-      var k = c.getAttribute('data-w284card'), sig = c.innerHTML;
-      if (S.seen[k] !== undefined && S.seen[k] !== sig) c.classList.add('w284fade');
-      S.seen[k] = sig;
+    var body = r ? filesHtml() + '<div class="w284cards" data-w284b="cards">' + KINDS.map(cardHtml).join('') + '</div>' + purgeHtml() : '';
+    return '<div class="w284" data-w284b="page-' + (r ? r.id : 'none') + '">' + head + body
+      + '<p class="w284live w284vh" role="status" aria-live="polite" data-w284b="live"></p></div>';   /* results are read out here (say) */
+  }
+  function paint() {
+    var h = host(); if (!h) return;
+    var html;
+    if (!can()) html = '<div class="w284" data-w284b="admins"><div class="w284empty">Imports are for admins.</div></div>';
+    else if (S.runs === null) { html = '<div class="w284" data-w284b="loading"><div class="w284empty">Loading the imports\u2026</div></div>'; if (!S.loading) load(); }
+    else html = pageHtml();
+    draw(h, html);
+  }
+
+  /* ---------- drawing only what changed ----------
+     Each block carries data-w284b (the page, the head and its run line, the files card, one block per file, the cards grid, one block per card,
+     purge). paint() builds the whole page as html, then compares block by block with the html each block was last drawn from: a block whose
+     html is the same is left alone, a container whose own html is the same is compared child by child, anything else is replaced. A replaced
+     block keeps keyboard focus (found again by its data-w284* attribute, then by the card's action, then by the card's title), the scroll of
+     its lists and tables, and its open "See the lists"; a replaced card crossfades (140 ms). */
+  function keyOf(el) { return el.getAttribute('data-w284b'); }
+  function kidsOf(el) {   /* the nearest blocks inside el */
+    return [].filter.call(el.querySelectorAll('[data-w284b]'), function (d) { var p = d.parentElement; while (p && p !== el && !p.hasAttribute('data-w284b')) p = p.parentElement; return p === el; });
+  }
+  function shellOf(el, kids) { var s = el.outerHTML; kids.forEach(function (k) { s = s.replace(k.outerHTML, '<i data-w284slot="' + keyOf(k) + '"></i>'); }); return s; }
+  function mark(el) { var kids = kidsOf(el); el.__w284h = el.outerHTML; el.__w284s = kids.length ? shellOf(el, kids) : ''; kids.forEach(mark); }
+  function byAttr(root, n, v) {
+    if (root.getAttribute && root.getAttribute(n) === v) return root;
+    var all = root.querySelectorAll('[' + n + ']');
+    for (var i = 0; i < all.length; i++) if (all[i].getAttribute(n) === v && !all[i].disabled) return all[i];
+    return null;
+  }
+  function focusKey(a) {
+    var k = { act: a.getAttribute('data-w284act'), caret: null }, c = a.closest('[data-w284card]');
+    for (var i = 0; i < a.attributes.length; i++) { var n = a.attributes[i].name; if (/^data-w284/.test(n) && n !== 'data-w284b') { k.n = n; k.v = a.attributes[i].value; break; } }
+    k.card = c && c.getAttribute('data-w284card');
+    if (a.tagName === 'INPUT' && a.type === 'text') try { k.caret = [a.selectionStart, a.selectionEnd]; } catch (e) { /* fine */ }
+    return k;
+  }
+  function focusEl(el, caret) {
+    try { el.focus({ preventScroll: true }); } catch (e) { el.focus(); }
+    if (caret) try { el.setSelectionRange(caret[0], caret[1]); } catch (e) { /* fine */ }
+  }
+  function refocus(scope, k) {
+    var el = (k.n && byAttr(scope, k.n, k.v)) || (k.act && byAttr(scope, 'data-w284act', k.act)) || (k.card && byAttr(scope, 'data-w284head', k.card));
+    if (el) focusEl(el, k.caret);
+  }
+  function swap(live, fresh, first) {
+    var a = document.activeElement, had = a && live.contains(a) && a !== live ? focusKey(a) : null, scroll = {};
+    [].forEach.call(live.querySelectorAll('[data-w284keep]'), function (e) { if (e.scrollTop || e.scrollLeft) scroll[e.getAttribute('data-w284keep')] = [e.scrollTop, e.scrollLeft]; });
+    live.parentNode.replaceChild(fresh, live);
+    mark(fresh);
+    [].forEach.call(fresh.querySelectorAll('details[data-w284det]'), function (d) { if (S.open[d.getAttribute('data-w284det')]) d.open = true; });
+    [].forEach.call(fresh.querySelectorAll('[data-w284keep]'), function (e) { var s = scroll[e.getAttribute('data-w284keep')]; if (s) { e.scrollTop = s[0]; e.scrollLeft = s[1]; } });
+    if (!first) [].forEach.call(fresh.hasAttribute('data-w284card') ? [fresh] : [], function (c) {
+      c.classList.add('w284fade'); c.addEventListener('animationend', function () { c.classList.remove('w284fade'); }, { once: true });
     });
-    if (focus) { var inp = h.querySelector('[data-w284label]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
+    if (had) refocus(fresh, had);
+  }
+  function sync(live, fresh) {
+    var fh = fresh.outerHTML;
+    if (live.__w284h === fh) return;
+    var lk = kidsOf(live), fk = kidsOf(fresh);
+    if (fk.length && lk.length === fk.length && lk.every(function (x, i) { return keyOf(x) === keyOf(fk[i]); }) && live.__w284s === shellOf(fresh, fk)) {
+      for (var i = 0; i < fk.length; i++) sync(lk[i], fk[i]);
+      live.__w284h = fh;
+      return;
+    }
+    swap(live, fresh, false);
+  }
+  function draw(h, html) {
+    var tmp = document.createElement('div'); tmp.innerHTML = html;
+    var fresh = tmp.firstElementChild, live = h.firstElementChild;
+    if (live && live.__w284h !== undefined && keyOf(live) === keyOf(fresh) && h.children.length === 1) sync(live, fresh);
+    else if (live && live.__w284h !== undefined && h.children.length === 1) swap(live, fresh, true);   /* another page (a run picked, a new run): drawn afresh */
+    else { h.innerHTML = ''; h.appendChild(fresh); mark(fresh); [].forEach.call(fresh.querySelectorAll('details[data-w284det]'), function (d) { if (S.open[d.getAttribute('data-w284det')]) d.open = true; }); }
+    var want = S.want; S.want = null;   /* an action that moves focus on purpose (Purge asks: Cancel) */
+    if (want) { var el = h.querySelector(want); if (el) focusEl(el); }
+  }
+  /* read a result out once (the live region exists before it changes, so screen readers hear it) */
+  function say(t) {
+    var l = host() && host().querySelector('.w284live'); if (!l) return;
+    l.textContent = ''; setTimeout(function () { l.textContent = t; }, 60);
   }
 
   /* ---------- actions ---------- */
@@ -351,38 +426,61 @@
       if (action === 'compare' && !(r && r.error)) S.stale[kind] = false;
       return loadRun();
     }).then(function () {
-      var b = S.batches[kind];   /* a stop the batch records is shown once, as the card's Stopped line */
+      var b = S.batches[kind], K = kindOf(kind);   /* a stop the batch records is shown once, as the card's Stopped line */
       if (b && b.status === 'failed' && b.error && S.msg[kind] === b.error) S.msg[kind] = '';
       S.busy[kind] = ''; paint();
+      /* the result is read out; a stop is already an alert inside the card */
+      if (!S.msg[kind] && !(b && b.status === 'failed')) say('Batch ' + (KINDS.indexOf(K) + 1) + ', ' + K.t + ': ' + (sentence(b) || 'done.'));
     }, function (e) { S.busy[kind] = ''; S.msg[kind] = String((e && e.message) || e); paint(); });
   }
-  function confirmPop(kind, action) {
+  function confirmPop(kind, action, trigger) {
     var K = kindOf(kind), b = S.batches[kind];
-    closePop();
-    var last = document.activeElement;
+    closePop(true);
+    var last = trigger || document.activeElement;   /* the button itself: Safari does not focus a clicked button */
     var wrap = document.createElement('div'); wrap.id = 'w284pop'; wrap.className = 'w284pop';
     var title = (action === 'apply' ? 'Apply' : 'Undo') + ' batch ' + (KINDS.indexOf(K) + 1) + ': ' + K.t + '?';
-    var what = action === 'apply'
-      ? (sentence(b) || 'Compare first.') + (K.never ? ' Once applied, this batch is never undone.' : ' You can undo it afterwards: values that have not changed since are put back.')
-      : 'Undo puts back every value this batch changed that has not changed since, and removes the rows it added that are unchanged. New contacts, organisations and campaigns stay, listed for you to review. ' + sentence(b);
-    wrap.innerHTML = '<div class="w284box" role="dialog" aria-modal="true" aria-labelledby="w284pt" aria-describedby="w284pd"><h3 id="w284pt">' + E(title) + '</h3><p id="w284pd">' + E(what) + '</p>'
+    var never = action === 'apply' && !!K.never;
+    /* the counts in a paragraph of their own; what cannot be undone on its own warn line, right above the buttons */
+    var body = action === 'apply'
+      ? '<p id="w284pd">' + E(sentence(b) || 'Compare first.') + '</p>'
+        + (never ? '<p class="w284warn" id="w284pw">This cannot be undone.</p>' : '<p class="w284note" id="w284pw">You can undo it afterwards: values that have not changed since are put back.</p>')
+      : '<p id="w284pw">Undo puts back every value this batch changed that has not changed since, and removes the rows it added that are unchanged. New contacts, organisations and campaigns stay, listed for you to review.</p>'
+        + '<p id="w284pd">' + E(sentence(b)) + '</p>';
+    wrap.innerHTML = '<div class="w284box" role="dialog" aria-modal="true" aria-labelledby="w284pt" aria-describedby="w284pd w284pw"><h3 id="w284pt">' + E(title) + '</h3>' + body
       + '<div class="w284acts"><button class="w284btn ghost" data-w284popno="1">Cancel</button><button class="w284btn" data-w284popyes="1">' + (action === 'apply' ? 'Apply' : 'Undo') + '</button></div></div>';
     document.body.appendChild(wrap);
-    S.pop = { kind: kind, action: action, last: last };
-    requestAnimationFrame(function () { wrap.classList.add('on'); var y = wrap.querySelector('[data-w284popyes]'); if (y) y.focus(); });
+    lockPage(true);   /* the page behind holds still */
+    S.pop = { kind: kind, action: action, last: last, key: last && host() && host().contains(last) ? focusKey(last) : null };
+    /* Cancel takes focus when the batch is never undone (opt-outs, consent) and for Undo, so one stray Enter changes nothing; Apply otherwise */
+    var first = wrap.querySelector(never || action === 'undo' ? '[data-w284popno]' : '[data-w284popyes]'); if (first) first.focus();
+    requestAnimationFrame(function () { wrap.classList.add('on'); });
   }
-  function closePop() {
-    var p = document.getElementById('w284pop'); if (p) p.parentNode.removeChild(p);
-    var last = S.pop && S.pop.last; S.pop = null;
-    if (last && last.focus && document.body.contains(last)) try { last.focus(); } catch (e) { /* fine */ }
+  /* no scrolling behind the confirmation; where a scrollbar takes room, the same room is kept as padding so nothing shifts sideways */
+  function lockPage(on) {
+    var de = document.documentElement;
+    if (on) { var sb = window.innerWidth - de.clientWidth; de.classList.add('w284lock'); if (sb > 0) { de.style.paddingRight = sb + 'px'; de.__w284pad = true; } }
+    else { de.classList.remove('w284lock'); if (de.__w284pad) { de.style.paddingRight = ''; de.__w284pad = false; } }
+  }
+  function closePop(now) {
+    var p = document.getElementById('w284pop');
+    if (p) {   /* a 140 ms fade out, then gone; a new confirmation removes the old one at once */
+      p.id = 'w284pop-out'; p.setAttribute('aria-hidden', 'true'); p.classList.add('out');
+      var gone = function () { if (p.parentNode) p.parentNode.removeChild(p); };
+      if (now) gone(); else { p.addEventListener('transitionend', gone, { once: true }); setTimeout(gone, 260); }
+    }
+    lockPage(false);
+    var pop = S.pop; S.pop = null;
+    if (!pop) return;
+    if (pop.last && pop.last !== document.body && document.body.contains(pop.last)) focusEl(pop.last);
+    else if (host()) refocus(host(), pop.key || { card: pop.kind });   /* its card was redrawn meanwhile: the same control, or the card's title */
   }
   function stageFile(fid, offset) {
     S.stage[fid] = 'Staging\u2026'; paint();
     return fn('stage', { file_id: fid, offset: offset || 0 }).then(function (r) {
-      if (r.error) { S.stage[fid] = ''; S.upMsg = 'Staging stopped: ' + r.error; S.upErr = true; return loadRun(); }
+      if (r.error) { S.stage[fid] = ''; S.upMsg = 'Staging stopped: ' + r.error; S.upErr = true; return loadRun().then(paint); }
       var d = r.data;
       if (d.next_offset != null) { S.stage[fid] = 'Staged ' + num(d.staged_through) + ' of ' + num(d.rows) + ' rows\u2026'; paint(); return stageFile(fid, d.next_offset); }
-      S.stage[fid] = ''; S.upMsg = 'Staged ' + plural(d.rows, 'row', 'rows') + '. Check its keys, then compare.'; S.upErr = false;
+      S.stage[fid] = ''; S.upMsg = 'Staged ' + plural(d.rows, 'row', 'rows') + '. Check its keys, then compare.'; S.upErr = false; say(S.upMsg);
       S.openKeys[fid] = true;
       return loadRun().then(function () { return loadKeys(fid); });
     });
@@ -418,32 +516,34 @@
     var root = t.closest('#w284root'); if (!root) return;
     var el;
     if ((el = t.closest('[data-w284compare]'))) act(el.getAttribute('data-w284compare'), 'compare');
-    else if ((el = t.closest('[data-w284apply]'))) confirmPop(el.getAttribute('data-w284apply'), 'apply');
-    else if ((el = t.closest('[data-w284undo]'))) confirmPop(el.getAttribute('data-w284undo'), 'undo');
+    else if ((el = t.closest('[data-w284apply]'))) confirmPop(el.getAttribute('data-w284apply'), 'apply', el);
+    else if ((el = t.closest('[data-w284undo]'))) confirmPop(el.getAttribute('data-w284undo'), 'undo', el);
     else if ((el = t.closest('[data-w284stage]'))) { var fid = Number(el.getAttribute('data-w284stage')); var f = S.files.filter(function (x) { return x.id === fid; })[0]; stageFile(fid, f && f.rows != null && f.staged_through ? f.staged_through : 0); }
     else if ((el = t.closest('[data-w284keys]'))) { var id = Number(el.getAttribute('data-w284keys')); S.openKeys[id] = !S.openKeys[id]; if (S.openKeys[id] && !S.keys[id]) loadKeys(id); paint(); }
     else if (t.closest('[data-w284upload]')) upload();
     else if (t.closest('[data-w284new]')) {
       fn('new_run', { label: S.label }).then(function (r) {
         if (r.error) { S.err = r.error; paint(); return; }
-        S.label = ''; S.run = r.data.run_id; S.runs = null; S.batches = {}; S.files = []; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false;
+        S.label = ''; S.run = r.data.run_id; S.runs = null; S.batches = {}; S.files = []; S.stale = {}; S.msg = {}; S.open = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false;
+        S.want = '.w284runline';   /* the new run's line takes focus, so it is read out */
         load();
       });
     }
-    else if (t.closest('[data-w284purge]')) { S.purgeAsk = true; paint(); }
-    else if (t.closest('[data-w284purgeno]')) { S.purgeAsk = false; paint(); }
+    else if (t.closest('[data-w284purge]')) { S.purgeAsk = true; S.want = '[data-w284purgeno]'; paint(); }   /* the safe choice takes focus */
+    else if (t.closest('[data-w284purgeno]')) { S.purgeAsk = false; S.want = '[data-w284purge]'; paint(); }
     else if (t.closest('[data-w284purgeyes]')) {
       S.purgeAsk = false; S.purgeMsg = 'Purging\u2026'; paint();
       fn('purge', { run_id: S.run }).then(function (r) {
         S.purgeMsg = r.error ? 'Purge stopped: ' + r.error : 'Purged: ' + plural(r.data.removed, 'file', 'files') + ' deleted, with the staged rows and the change records.';
-        S.runs = null; load();
+        say(S.purgeMsg); S.want = '.w284runline';
+        load();   /* the page stays while the runs reload */
       });
     }
   });
   document.addEventListener('change', function (ev) {
     var t = ev.target; if (!t || !t.closest || !t.closest('#w284root')) return;
-    if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false; reloadRun(); }
-    else if (t.hasAttribute('data-w284upkind')) S.upKind = t.value;
+    if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.open = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false; reloadRun(); }
+    else if (t.hasAttribute('data-w284upkind')) { S.upKind = t.value; paint(); }
     else if (t.hasAttribute('data-w284pair')) {
       var parts = t.getAttribute('data-w284pair').split('|'), pair = { keela_company_id: parts[0], partner_id: Number(parts[1]) };
       var ok = obj(S.cfg.keela_org_pairs_ok, []).filter(function (q) { return !(q.keela_company_id === pair.keela_company_id && Number(q.partner_id) === pair.partner_id); });
@@ -468,6 +568,8 @@
     }
   });
   document.addEventListener('input', function (ev) { var t = ev.target; if (t && t.hasAttribute && t.hasAttribute('data-w284label')) S.label = t.value; });
+  /* an open "See the lists" is remembered, so a repaint of its card opens it again (toggle does not bubble: listen while capturing) */
+  document.addEventListener('toggle', function (ev) { var d = ev.target; if (d && d.matches && d.matches('#w284root details[data-w284det]')) S.open[d.getAttribute('data-w284det')] = d.open; }, true);
   document.addEventListener('keydown', function (ev) {
     if (!S.pop) return;
     var p = document.getElementById('w284pop'); if (!p) return;
@@ -506,7 +608,8 @@
       + '.w284note{font-size:13px;color:var(--wa-muted,' + MUTED + ');margin:0;overflow-wrap:anywhere;}'
       + '.w284warn{margin:0;font-size:13px;color:#8a6414;background:rgba(220,165,39,.14);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;}'
       + '.w284err{margin:0;font-size:13px;color:' + RED + ';font-weight:600;overflow-wrap:anywhere;}'
-      + '.w284busy{font-size:13px;font-weight:600;color:' + GREEN + ';}'
+      + '.w284vh{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}'
+      + '.w284 [tabindex="-1"]:focus:not(:focus-visible){outline:none;}'
       + '.w284empty{padding:24px;text-align:center;color:var(--wa-muted,' + MUTED + ');background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';}'
       /* cards keep their own height, so each button stays next to the sentence it acts on */
       + '.w284cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:14px;align-items:start;}'
@@ -549,9 +652,13 @@
       + '.w284keys th{color:var(--wa-muted,' + MUTED + ');font-weight:700;}.w284keys td:last-child,.w284keys th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
       + '.w284card>.w284btn,.w284file>.w284row{align-self:flex-start;}.w284file>.w284row{width:min(100%,420px);}'
       + '.w284ask{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w284ask p{flex:1 1 100%;margin:0;font-size:13px;}'
-      + '.w284pop{position:fixed;inset:0;z-index:9300;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(31,32,30,.42);opacity:0;transition:opacity 180ms ease-out;}'
-      + '.w284pop .w284box{background:' + CREAM + ';border-radius:18px;box-shadow:0 20px 60px rgba(16,63,57,.28);padding:20px 22px;max-width:520px;width:100%;font-family:' + BODY + ';color:' + INK + ';transform:scale(.96);transition:transform 180ms ease-out;}'
+      /* the confirmation: in with the scale on the house curve and the scrim fading (200 ms), out with a 140 ms fade; it stays centred (a modal) */
+      + '.w284pop{position:fixed;inset:0;z-index:9300;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(31,32,30,.42);opacity:0;transition:opacity 200ms ease;}'
+      + '.w284pop .w284box{background:' + CREAM + ';border-radius:18px;box-shadow:0 20px 60px rgba(16,63,57,.28);padding:20px 22px;max-width:520px;width:100%;max-height:calc(100vh - 32px);overflow:auto;font-family:' + BODY + ';color:' + INK + ';transform:scale(.96);transition:transform 200ms cubic-bezier(.23,1,.32,1);}'
       + '.w284pop.on{opacity:1;}.w284pop.on .w284box{transform:scale(1);}'
+      + '.w284pop.out{opacity:0;transition:opacity 140ms ease;pointer-events:none;}.w284pop.out .w284box{transform:scale(1);transition:none;}'
+      + 'html.w284lock{overflow:hidden;}'
+      + '.w284pop .w284warn,.w284pop .w284note{margin:0 0 14px;}'
       + '.w284pop h3{font-family:' + HEAD + ';color:' + GREEN + ';font-size:24px;margin:0 0 8px;font-weight:500;line-height:1.05;letter-spacing:-.01em;}'
       + '.w284pop p{font-size:14px;line-height:1.5;margin:0 0 14px;}'
       + '.w284pop .w284acts{justify-content:flex-end;}'
