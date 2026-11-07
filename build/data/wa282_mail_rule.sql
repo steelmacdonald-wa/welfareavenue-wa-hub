@@ -59,11 +59,12 @@ end $wa282$;
 comment on column public.crm_campaigns.kind is 'What the messages are (a Send''s kind): newsletter, fundraising or volunteer. Since wave282 (Steel''s rule of 5 Nov 2026) all three go to anyone with a working address who has not unsubscribed and is not do-not-contact; transactional is refused, so a Send never takes the transactional path, which ignores unsubscribes. mail-send applies crm_email_permission with this kind.';
 
 -- ============================================================================================ 7.4 first contact
-create or replace function public.crm_email_first_contact(p_contact bigint)
+-- eh-292 fix 1: the rule lives in one service-role core function; crm_email_first_contact keeps the staff gate and calls it, and the email
+-- history's report (wave292) calls the same core, so the two can never drift. Later waves anchor only the core.
+create or replace function public.wa282_first_contact_core(p_contact bigint)
 returns boolean language plpgsql stable security definer set search_path to '' as $function$
 declare v_allowed boolean; v_basis text; v_open text;
 begin
-  if not coalesce(public.is_wa_staff(), false) then return null; end if;
   -- allowed for a newsletter only under the WA rule: no express and no valid implied consent
   select p.allowed, p.basis into v_allowed, v_basis from public.crm_email_permission(p_contact, 'newsletter') p;
   if not coalesce(v_allowed, false) or v_basis is distinct from 'not unsubscribed (WA rule of 5 Nov 2026)' then return false; end if;
@@ -76,9 +77,18 @@ begin
   if v_open ~ '^\d{4}-\d{2}-\d{2}$' and v_open >= to_char(current_date - interval '12 months', 'YYYY-MM-DD') then return false; end if;
   return true;
 end $function$;
+revoke all on function public.wa282_first_contact_core(bigint) from public, anon, authenticated;
+grant execute on function public.wa282_first_contact_core(bigint) to service_role;
+comment on function public.wa282_first_contact_core(bigint) is 'wave282 (eh-292 fix 1): the first-contact rule itself, with no caller check: true when crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026), there is no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and no Keela newsletter was opened in the last 12 months. crm_email_first_contact (staff) and the email history''s report (the service role) both call it. The service role only.';
+create or replace function public.crm_email_first_contact(p_contact bigint)
+returns boolean language plpgsql stable security definer set search_path to '' as $function$
+begin
+  if not coalesce(public.is_wa_staff(), false) then return null; end if;
+  return public.wa282_first_contact_core(p_contact);
+end $function$;
 revoke all on function public.crm_email_first_contact(bigint) from public, anon;
 grant execute on function public.crm_email_first_contact(bigint) to authenticated, service_role;
-comment on function public.crm_email_first_contact(bigint) is 'wave282: true when a person would get their first email from Welfare Avenue: crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026) (no express and no valid implied consent), they have no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and they have not opened a Keela newsletter in the last 12 months (legacy_refs keela email_marketing last_opened, read only when it is YYYY-MM-DD). Null for anyone who is not staff (is_wa_staff), the service role included; mail-send calls it as the signed-in person.';
+comment on function public.crm_email_first_contact(bigint) is 'wave282: true when a person would get their first email from Welfare Avenue: crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026) (no express and no valid implied consent), they have no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and they have not opened a Keela newsletter in the last 12 months (legacy_refs keela email_marketing last_opened, read only when it is YYYY-MM-DD). Null for anyone who is not staff (is_wa_staff), the service role included; mail-send calls it as the signed-in person. The rule itself is wa282_first_contact_core (eh-292 fix 1).';
 
 -- ============================================================================================ 7.5 the first newsletter's two lists (E1: two Sends)
 create or replace function public.wa282_newsletter_lists(p_name text)
