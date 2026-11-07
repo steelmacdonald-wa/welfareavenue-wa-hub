@@ -32,20 +32,20 @@ Purposes 2 and 3 are new uses the legal adviser must confirm before any Send.
 
 ## What it changes
 
-**Database** (`build/data/wa292_batches.sql`, md5 `4c34c1fb7c2aef5ef0b752b09e2605b2`; needs wave289, wave284, wave282 and wave281; safe to run twice):
+**Database** (`build/data/wa292_batches.sql`, md5 `7e9e10d5ddd94240815919a7b64d5631`; needs wave289, wave284, wave282 and wave281; safe to run twice):
 1. The batch kind check gains the five mail kinds.
 2. `wa_partners` gains `domain` (unique when set) and `address`.
 3. `crm_email_relationship`: one row per contact with the type and confidence, topics, anything open, the summary, from Steel's mailbox or not, stale, model, cost, when and by whom. CRM staff read it, except rows from Steel's mailbox, which only admins read until `mail_history_steel_open` is true. Nobody signed in writes it.
 4. `crm_email_relationship_v` (security invoker): first and last email, in and out, threads, by year, mailboxes, live from the email lines.
 5. Two restrictive policies on `crm_interactions`: Steel's mailbox lines are read by admins only until `mail_history_steel_open`; nobody signed in updates an email line.
 6. Two triggers on `crm_contacts`: an address on the suppression list (asked to stop, unsubscribed or bounced) makes a new or changed contact opted out, from any source; deleting a contact with email history suppresses its addresses so a later run never brings them back (Delete created marks its deletions as undo instead, which blocks nothing).
-7. The writers (`wa292_w_optouts`, `_orgs`, `_people`, `_enrich`, `_interactions`), `wa292_write`, `wa292_basis`, the undo checks, `wa292_purge` (never `mail_seen`, `mail_left_alone` or the suppressions), `wa292_delete_created`, and the summary support (`crm_insight_input`, `crm_insight_save`, `wa292_summary_start`, `_todo`, `_done`, `_active`). Every one is the service role's only.
+7. The writers (`wa292_w_optouts`, `_orgs`, `_people`, `_enrich`, `_interactions`), `wa292_write`, `wa292_basis`, the undo checks, `wa292_purge` (the run's staging; its `mail_seen` hashes only when its `mail_interactions` batch was never applied, eh-289 I8; never `mail_left_alone` or the suppressions), `wa292_delete_created`, and the summary support (`crm_insight_input`, `crm_insight_save`, `wa292_summary_start`, `_todo`, `_done`, `_active`). Every one is the service role's only.
 8. Eleven live functions changed by exact anchor (the file stops if an anchor is missing or appears twice): `wa284_write`, `wa284_basis`, `wa284_new_batch` (mail kinds on an email-history run only), `wa284_undo` (bottom up; quarantine), `wa284_unrow`, `wa284_set`, `wa284_upd`, `wa284_purge`, `crm_email_first_contact` (an outgoing email the person answered in the same thread means they already had an email from Welfare Avenue), `crm_email_permission` (a general inbox or a contact waiting for review gets no volunteer, newsletter or fundraising email: "not for bulk email"), `crm_merge_contacts` (the summary row is kept or moved and marked stale).
 9. One release line in `change_log`.
 
 **crm-import v2** (`fn/crm-import/index.ts`, md5 `d85f37c0529c87a143007a0d137b0689`): the five mail kinds, and `delete_created {batch_id}`.
 
-**mail-history v2** (`fn/mail-history/index.ts`, md5 `9a33d92ef41fc1d21cdd0121f344ae6b`; `summary.ts`, md5 `9a4656b5861aad244136dc85587d0d1b`; `scan.ts` unchanged): `summarise {run_id}` and `insight {contact_id}`; continue and pump carry the summary pass.
+**mail-history v2** (`fn/mail-history/index.ts`, md5 `abd40dae6a19eb0ca34af019f21794c4`; `summary.ts`, md5 `ae9726aaa018bd4f17836ba366604a7d`; `scan.ts` unchanged): `summarise {run_id}` and `insight {contact_id}`; continue and pump carry the summary pass.
 
 **The page**: segment 284 (`build/parts284` with the new `c_mail.js`, md5 `7834bf6001c94ecb32e267e490026fda`) and segment 152 (the `email_history` source, md5 `6cfd38e3640e215e0aefdaa66f4e4eba`); candidate md5 `5f309d7c0099778820633c82a118cfbd` (LF).
 
@@ -63,7 +63,7 @@ Purposes 2 and 3 are new uses the legal adviser must confirm before any Send.
 3. Swap the page once, carrying wave292 and wave293.
 4. On the Import page, the five cards in order, each Compare read and approved by Steel before Apply. After the first Hub newsletter's two Sends (H9).
 5. Steel spot-checks his own mailbox's lines; then, on his word, `mail_history_steel_open` to true (H1).
-6. Write the summaries. Purge the run 30 days after the last Apply.
+6. Write the summaries. Purge the run 30 days after the last Apply. (A run purged without its email lines ever applied gives its Message-ID hashes back, so a later run reads that mail again.)
 
 ## Undo
 

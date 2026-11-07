@@ -8,7 +8,7 @@ Built on branch `email-history-289`, from f70a406 (CRM slice 1 with its final fi
 
 When an admin (or Claude, on Steel's yes) starts a run, the `mail-history` function:
 
-1. **Lists** every email in each mailbox since 1 April 2020, leaving out spam, trash, chats and drafts, and saves its place after each page. Emails already imported, left alone or seen in an earlier run are marked done at once.
+1. **Lists** every email in each mailbox since 1 April 2020, leaving out spam, trash, chats and drafts, and saves its place after each page. If Gmail refuses a saved page token, listing starts again from 1 April 2020 (emails already staged are kept as they are, so nothing doubles). Emails already imported, left alone or seen in an earlier run are marked done at once.
 2. **Reads the headers only** and sorts each email by rule, without any model, in this order: Steel's personal never-read list (mybox's rule a); the rule-only personal filter (rule b: every outside address is free mail and the sender shares Steel's family name or the subject has a personal word); security mail; calendar mail; delivery reports (to the bounce parser); automated mail as mybox decides it (a List-Unsubscribe header together with a bulk sign, Google's notices, platforms, anything hub@ sent itself); list mail not addressed to the mailbox (a person writing through a Google Group to info@ is kept); internal mail (in the database). Everything else is kept with its direction, outside addresses, cleaned subject, thread, date and mailbox. A message with the DRAFT label is dropped.
 3. **Dedupes** once both mailboxes are done: later copies of the same Message-ID are skipped (Steel's copy is kept), and every kept Message-ID is remembered (as an md5) so a later run skips it too.
 4. **Parses bounces** without a model: a delivery-status part with Action failed and a 5.x.x status, or a report with exactly one address and 550 or 5.1.x. Anything else is ignored.
@@ -23,7 +23,7 @@ It never labels, files, moves or sends mail and never posts anywhere. It keeps n
 
 ## What it changes
 
-**Database** (`build/data/wa289_scan.sql`, md5 `adc9a22969948a0244c33308412e9445`; needs wave284; changes no live function; safe to run twice):
+**Database** (`build/data/wa289_scan.sql`, md5 `e81e1a902fa43019819ee5ce648d2e1f` after the eh-289 fix round; needs wave284; changes no live function; safe to run twice):
 1. `crm_import_runs.source` (`keela`, the default, or `email_history`).
 2. `crm_mail_scans`: one row per run and mailbox (phase, page token, counts, oldest date, estimate, spend, cap, paused, who and when, the step lease, the last error as a step name and a code). Admins read it.
 3. `crm_email_suppressions`: the table only (md5 of the address, kind, date, source), empty. wave292 fills and checks it; this wave only reads the `deleted` kind when grouping.
@@ -33,11 +33,11 @@ It never labels, files, moves or sends mail and never posts anywhere. It keeps n
 7. The `wa289_*` functions (37, every one for the service role only): runs, leases, phases, spend and cap (`wa289_new_run`, `_lease`, `_scan_set`, `_spend`, `_go`, `_set_cap`, `_pause`, `_active`, `_pump`, `_ready`, `_status`), the free phases (`_context`, `_stage_ids`, `_newest`, `_todo`, `_thread_rows`, `_save_headers`, `_dedupe`, `_save_bounce`, `_leave_alone`, `_sizes`), the paid phases (`_save_thread`, `_match`, `_group`, `_save_person`, `_orgs_todo`, `_save_org`), Look at them (`_people`, `_exclude`, `_is_steel`), and helpers. Every save refuses keys named body, text, snippet, html, payload or raw. `wa289_people` and `wa289_exclude` refuse people from Steel's mailbox to anyone but Steel (M3). `wa289_match` is a thin wrapper over wave284's `wa284_contact` that follows merged contacts (a loop stops it) and lists a signature phone match as phone only.
 8. One release line in `change_log`. Start, go, cap, pause, resume and Leave out are logged with counts only.
 
-**llm v1.7** (`fn/llm/index.ts`, md5 `b7ff78524523330ddbe49deac73d8ca1`): reads `ai_routes.provider` and, when a route has one, sends it as OpenRouter's `provider` field on chat and decide calls; the reply's `_wa.provider` shows it. A route without one sends nothing new. No other change.
+**llm v1.7** (`fn/llm/index.ts`, md5 `5f9cf0a8495fcb14b024be6a3668d4a4` after the fix round): reads `ai_routes.provider` and, when a route has one, sends it as OpenRouter's `provider` field on chat and decide calls; the reply's `_wa.provider` shows it. A route without one sends nothing new. No other change.
 
-**The shared rules** (`fn/_shared/mail_rules.ts`, md5 `a17cf835f38b48698fb9dea8de7f152b`): `NEVER_READ` and `neverRead`, mybox's bulk combination (`isBulk`), Google's notices, calendar, security, noise and info@ tests, `addressedToMailbox`, `freshPart`, `parseAddr`, `addrList`, `cleanSubject`, `normKey`, `probablyPersonal`, the delivery-report parsers, `validateRead`, `validateOrg`, `safeHost`, `robotsRefuses`. mybox and mail-pull keep their own copies until their next reviewed change moves them here.
+**The shared rules** (`fn/_shared/mail_rules.ts`, md5 `acbd36f2a2640bf9fe36f50c554cfd43` after the fix round): `NEVER_READ` and `neverRead`, mybox's bulk combination (`isBulk`), Google's notices, calendar, security, noise and info@ tests, `addressedToMailbox`, `freshPart`, `parseAddr`, `addrList`, `cleanSubject`, `normKey`, `probablyPersonal`, the delivery-report parsers, `validateRead`, `validateOrg`, `safeHost`, `robotsRefuses`. mybox and mail-pull keep their own copies until their next reviewed change moves them here.
 
-**mail-history v1** (`fn/mail-history/index.ts`, md5 `996671b33f0abe71c1297d5f1827742f`; `scan.ts`, md5 `fcc59b104c96ab64c09fb8aea13d0819`; `meta.json` verify_jwt true). Actions, auth and side effects are in its header and in `docs/EDGE_FUNCTIONS.md`. `build/fn.py` refuses it: deploy through the Supabase connector with index.ts, scan.ts and mail_rules.ts in the files array.
+**mail-history v1** (`fn/mail-history/index.ts`, md5 `abd40dae6a19eb0ca34af019f21794c4` as v2 after wave292 and the fix round; `scan.ts`, md5 `c3ae12095011aea191652030caa9a3b9` after the fix round; `meta.json` verify_jwt true). Actions, auth and side effects are in its header and in `docs/EDGE_FUNCTIONS.md`. `build/fn.py` refuses it: deploy through the Supabase connector with index.ts, scan.ts and mail_rules.ts in the files array.
 
 ## Proofs
 
@@ -55,7 +55,7 @@ It never labels, files, moves or sends mail and never posts anywhere. It keeps n
 ## Release steps (after slice 1 is released, each on Steel's yes)
 
 1. Run `build/data/wa289_scan.sql` through the Supabase connector (a rolled-back run first with `build/sql_rollback_test.py`, which now passes). Check the objects exist and the advisor shows no ERROR.
-2. Deploy llm v1.7 alone and run blocking check 1. Then deploy `mail-history` v1 (index.ts, scan.ts, mail_rules.ts) with verify_jwt on.
+2. Deploy llm v1.7 alone and run blocking check 1. Then deploy `mail-history` (index.ts, scan.ts, summary.ts, mail_rules.ts) with verify_jwt on. Before the first `start`, confirm that `Deno.resolveDns` works in the edge runtime (one homepage lookup on a test domain); without it every organisation lookup is refused.
 3. Settle blocking checks 2 and 3. Then `start` through `public.call_edge('mail-history', '{"action": "start", "label": "Email history 2020 to 2026"}')`. Read `status` for the counts by reason, hub@'s oldest email and the sample's estimate. Counts only reach Claude.
 4. On Steel's yes to the estimate and cap: `go`. Watch the spend stay under the cap; the pump exists only while the run works.
 5. Then wave292 (the batches) and wave293 (the profile and Insights).
@@ -64,7 +64,8 @@ It never labels, files, moves or sends mail and never posts anywhere. It keeps n
 
 - **Stop a run:** `pause`, then set the scans to failed. The pump removes itself when no run is working.
 - **The function:** delete `mail-history`; put llm back to v1.6 (it does not read `provider`).
-- **The database:** `build/data/wa289_undo.sql` (md5 `0de685aa682bb6b84f6c6c1ed1a036f9`), after llm v1.6 is back. It refuses while a scan runs, while an email-history run has a batch, while `crm_email_suppressions` holds rows (opt-outs are never dropped) or while another route carries a provider setting. It removes the pump, the functions, the four routes, the settings that still hold wave289's value, `ai_routes.provider`, the email-history runs with their staging, the `mail_` tables, `crm_mail_scans`, `crm_email_suppressions` and `crm_import_runs.source`. wave289 changed no live function, so there is no live text to put back.
+- **Order:** undo wave293, then wave292, then wave289, then wave284. `build/data/wa284_undo.sql` now stops while wave289 is there, because its drop of `import_stage` would take the mail tables with it.
+- **The database:** `build/data/wa289_undo.sql`, after llm v1.6 is back. It refuses while a scan runs, while an email-history run has a batch, while `crm_email_suppressions` holds rows (opt-outs are never dropped) or while another route carries a provider setting. It removes the pump, the functions, the four routes, the settings that still hold wave289's value, `ai_routes.provider`, the email-history runs with their staging, the `mail_` tables, `crm_mail_scans`, `crm_email_suppressions` and `crm_import_runs.source`. `mail_seen` and `mail_left_alone` are dropped only when empty; holding rows they are kept with every grant revoked, so a later scan never reads that mail again. wave289 changed no live function, so there is no live text to put back.
 
 ## Where the build differs from the design, and why
 
@@ -75,6 +76,18 @@ It never labels, files, moves or sends mail and never posts anywhere. It keeps n
 - **Look at them hides a person from anyone but Steel when any of their mail came from his mailbox**, and counts them as hidden; the design says rows for Steel's mailbox answer only Steel, and a person can have mail in both.
 - **The pump** is turned on by `start`, `go` and `resume` and turns itself off when no run is working.
 - **Homepage fetches resolve each host and check every answer before the request**, but Deno's `fetch` cannot be pinned to the checked address, so a host whose DNS changes between the check and the request is a residual risk (DNS rebinding). The fetch is GET only, https on port 443, with no cookies, at most 1 MB and 8 seconds.
+
+## Fix round after the review (eh-289, 07/11/26)
+
+- **WA's own Google Group (C1).** Google Groups add List-Unsubscribe and Precedence: list to every post, so mybox's bulk rule would have dropped people writing to info@. Mail whose List-Id is `<info.welfareavenue.com>`, or with info@ in its addressing headers, now uses mail-pull's rule instead: automated only when Precedence is exactly bulk or a mailing service shows in its unsubscribe link or return path. A realistic group fixture (sender `hello@`, Precedence list, Mailing-list, a groups.google.com unsubscribe link) is kept.
+- **Group posts rewritten for DMARC (I1).** A post From info@ (or "Name via Info") belongs to the person in `X-Original-Sender`, or in a single outside Reply-To, and counts as incoming.
+- **Grouping after a status read (I2).** `wa289_status` no longer leaves an empty `run` object behind, and the people phase groups until a writers count exists.
+- **One step at a time (I3).** `wa289_lease` takes the lease with a transaction advisory lock and one conditional update.
+- **A "remove me" after a left-out verdict (I4).** When the reader leaves a thread out, its later emails are not sent to the model, but a stop-words rule (English and French) still keeps their asks-to-stop flag with the writer.
+- **Checks at every step (I5, M6).** Every router answer must come from the route asked, show the provider setting was sent, and report a cost; otherwise the call is refused and the run pauses. `wa289_ready()` is checked by `go` and at the top of every step, which pauses the run when a route is not ready.
+- **llm without the column (I6).** llm v1.7 reads the routes again without `provider` when the column is missing.
+- **Purge and `mail_seen` (I8, ruling).** Purging a run whose `mail_interactions` batch was never applied deletes that run's `mail_seen` hashes, so its mail is read again by a later run. This lives in wave292's Purge step (`wa292_purge`).
+- **Smaller fixes.** A refused page token relists from the start date (M1). Gmail and router calls have time limits, and a thread cut short by the step's deadline is finished by the next step (M2); a chunk's answer marks only its own emails as read (M3). More private address ranges are refused: `::a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4 `2002::/16` around a private IPv4, `198.18.0.0/15` and `192.0.0.0/24` (M4). The undo keeps the scan's memory (M5). Our own domain and platform names match whole labels only (M7).
 
 ## Files
 
