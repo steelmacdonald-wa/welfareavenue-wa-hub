@@ -8,7 +8,8 @@
    - nothing scrolls sideways or spills, with every list and table open; on phones 44 px targets and 16 px text in inputs;
    - the head is one run line (no CRM stats strip, no second title), the empty state sits in the head card, one primary button per screen;
    - each status word stays at the right of its title's first line; cards keep their own height;
-   - the event words and keys tables scroll inside a 180 to 320 px region under a header that stays put; "Read as" never breaks;
+   - the event words and keys tables, and batch 6's list of the Hub contacts a Keela text opt-out reaches by phone (final review M7, nothing
+     drawn when the list is missing), scroll inside a 180 to 320 px region under a header that stays put; "Read as" never breaks inside a word;
    - select labels wrap and stack, never cut; organisation pairs read on two lines; no "owner 0"; no double brackets; the upload message is
      red only on a failure; a long file name keeps its start and its end; a styled file picker;
    - a repaint touches only the changed card, keeps keyboard focus and keeps open lists open; the confirmation focuses Cancel for a batch that is
@@ -82,7 +83,7 @@ function importRows() {
     batches.push(
       { id: 1, run_id: 1, kind: 'optouts', status: 'applied', report: REP('optouts', { rows_read: 1, matched: 1, updated: { email_status: 1 }, undated_events: 1, undated_optouts_honoured: 1 }, { event_words: [{ words: 'Email Unsubscribed', read_as: 'unsubscribe', count: 1 }] }), error: null },
       { id: 2, run_id: 1, kind: 'people', status: 'applied', report: REP('people', { rows_read: 1, matched: 1, created: 1, updated: { city: 1 }, kept_hub_value: { city: 1 }, skipped: { 'no email or phone': 1 } }, { keela_ids_skipped: [{ keela_id: 'KT001', reason: 'no email or phone' }] }), error: null },
-      { id: 3, run_id: 1, kind: 'consent', status: 'compared', report: REP('consent', { rows_read: 1, matched: 0 }), error: null },
+      { id: 3, run_id: 1, kind: 'consent', status: 'compared', report: REP('consent', { rows_read: 1, matched: 0, updated: { sms_opt_out: 1 } }, { text_optout_by_phone: [{ keela_id: 'KT003', contact_id: 3003 }] }), error: null },
       { id: 4, run_id: 1, kind: 'orgs', status: 'undone', report: { kind: 'orgs', undo: { restored: 1, removed: 1, kept: 1, review: 1 }, counts: {}, lists: {} }, error: null });
     return { runs, batches, files, keys };
   }
@@ -105,7 +106,9 @@ function importRows() {
     { id: 123, run_id: 12, kind: 'people', status: 'applied', report: REP('people', { rows_read: 1284, matched: 1, created: 0, updated: { city: 1284, phones: 1 }, kept_hub_value: { city: 1 } }, { keela_ids_skipped: many(huge ? 1284 : 240), phone_only: many(huge ? 1000 : 12) }), error: null },
     { id: 124, run_id: 12, kind: 'fields', status: 'failed', report: null, error: LONG.err },
     { id: 125, run_id: 12, kind: 'orgs', status: 'compared', report: REP('orgs', { rows_read: 63, matched: 0, created: 1 }, { org_pairs: [{ keela_company_id: 'KC05', keela_name: LONG.org, partner_id: 4002, partner_name: 'Community Foundation of Greater Montreal' }, { keela_company_id: 'KC06', keela_name: 'IGA', partner_id: 4003, partner_name: 'IGA Extra Famille Duchemin' }] }), error: null },
-    { id: 126, run_id: 12, kind: 'consent', status: 'compared', report: REP('consent', { rows_read: 1, matched: 0, updated: { crm_consent_events: 1 } }), error: null },
+    /* final review M7: lists.text_optout_by_phone, the Hub contacts a Keela text opt-out reaches by phone ({keela_id, contact_id}) */
+    { id: 126, run_id: 12, kind: 'consent', status: 'compared', report: REP('consent', { rows_read: 1, matched: 0, updated: { crm_consent_events: 1, sms_opt_out: huge ? 400 : 24 }, skipped: { 'text opt-out by phone followed by a Hub START': 1 } },
+      { text_optout_by_phone: range(huge ? 400 : 24, i => ({ keela_id: 'KT' + String(200000 + i), contact_id: 7000 + i })) }), error: null },
     { id: 127, run_id: 12, kind: 'participation', status: 'compared', report: REP('participation', { rows_read: 1284, matched: 1284 }, { campaigns_to_create: [LONG.waCamp, 'Gala', 'Sunday meals 2019–2020 (archived)'] }), error: null });
   return { runs, batches, files, keys };
 }
@@ -227,6 +230,18 @@ async function imports(browser, w) {
     ra: [...t.querySelectorAll('td.w284ra span')].filter(sp => sp.getClientRects().length).map(sp => { const r = document.createRange(); r.selectNodeContents(sp); const lines = new Set([...r.getClientRects()].map(x => Math.round(x.top))).size; return { t: sp.textContent, lines, ws: getComputedStyle(sp).whiteSpace }; }),
     words: [...t.querySelectorAll('tbody td:first-child')].slice(0, 3).map(td => getComputedStyle(td).overflowWrap) })));
   if (b.length) ok('"Read as" never breaks inside a word (each part nowrap, on one line) and the words wrap with break-word' + at, b.every(t => t.ra.length && t.ra.every(x => x.lines === 1 && x.ws === 'nowrap') && t.words.every(x => x === 'break-word')), b.map(t => ({ n: t.ra.length, bad: t.ra.filter(x => x.lines !== 1 || x.ws !== 'nowrap').slice(0, 4), words: t.words })));
+
+  /* batch 6's list of the Hub contacts a Keela text opt-out reaches by phone (final review M7): a table with its count, or nothing when missing */
+  b = await f.ev(() => {
+    const c = document.querySelector('#w284root [data-w284card="consent"]'), s = c && c.querySelector('[data-w284keep="phone-consent"]');
+    if (!s) return { none: true };
+    const t = s.querySelector('table'), a = t.querySelector('tbody a');
+    return { none: false, cap: (document.getElementById(s.getAttribute('aria-labelledby')) || {}).textContent || '', th: [...t.querySelectorAll('thead th')].map(x => x.textContent), rows: t.querySelectorAll('tbody tr').length, link: a ? a.getAttribute('href') : '' };
+  });
+  const NP = { worst: 24, huge: 400, one: 1 }[DATA] || 0;
+  if (NP) ok('the consent card lists the Hub contacts a Keela text opt-out reaches by phone: a table with its count, each contact a link' + at,
+    !b.none && b.cap === 'Hub contacts a Keela text opt-out reaches by phone ' + NP.toLocaleString('en-CA') && JSON.stringify(b.th) === '["Keela id","Hub contact"]' && b.rows === NP && /^#crm\/c\/\d+$/.test(b.link), b);
+  else ok('with no such list the consent card draws nothing for it' + at, b.none, b);
 
   /* the selects: wrap and stack, never cut */
   b = await f.ev(() => [...document.querySelectorAll('#w284root .w284ctl .w284row')].map(row => {

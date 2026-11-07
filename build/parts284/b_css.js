@@ -76,6 +76,8 @@
       + '.w284words th,.w284words td{overflow-wrap:break-word;}.w284words .w284ra span,.w284words th{white-space:nowrap;}'
       /* small header labels with a little tracking; the table is as wide as its region, wider only for a token that cannot break (it then scrolls, never cut) */
       + '.w284keys th{font-size:11px;letter-spacing:.06em;}.w284scroll .w284keys{width:auto;min-width:100%;}'
+      /* the Hub turns ".panel table" into a block that scrolls itself at 760 px and below; here the region scrolls, so the header can stay put */
+      + '.w284scroll table.w284keys{display:table;overflow:visible;}'
       + '@media (max-width:420px){.w284keys{font-size:12px;}.w284keys th,.w284keys td{padding:4px 5px;}}'
       + '.w284keys th{color:var(--wa-muted,' + MUTED + ');font-weight:700;}.w284keys td:last-child,.w284keys th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
       + '.w284card>.w284btn,.w284file>.w284row{align-self:flex-start;}.w284file>.w284row{width:min(100%,420px);}'
@@ -94,7 +96,7 @@
       + '@media (prefers-reduced-motion: reduce){.w284btn:active:not(:disabled):not([aria-disabled=true]){transform:none;opacity:.85;}.w284pop .w284box{transform:none;transition:none;}}'
       /* phones: 44 px targets, 16 px text in inputs (iOS zooms the page below 16 px) */
       + '@media (max-width:700px){.w284card{padding:14px;}.w284in{width:100%;}.w284runs .w284row,.w284up .w284row{flex:1 1 100%;}.w284ctl .w284row{flex-direction:column;align-items:stretch;}'
-      + '.w284btn,.w284btn.sm,.w284sel,.w284in{min-height:44px;}.w284sel,.w284in{font-size:16px;}.w284det summary{padding:12px 0;}.w284chk{min-height:44px;align-items:center;}}';
+      + '.w284btn,.w284btn.sm,.w284sel,.w284in{min-height:44px;}.w284 .w284sel,.w284 .w284in{font-size:16px;}.w284det summary{padding:12px 0;}.w284chk{min-height:44px;align-items:center;}}';   /* .w284 .w284in: the Hub's input[type=text] rule is more specific than .w284in */
     document.head.appendChild(st);
   })();
 })();

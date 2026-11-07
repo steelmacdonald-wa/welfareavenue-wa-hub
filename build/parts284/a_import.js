@@ -48,11 +48,12 @@
     assignees_unmapped: 'Keela assignees with no Hub person yet', campaigns_to_create: 'Campaigns to create (pick a type)', campaigns_created: 'Campaigns created',
     positions_unmapped: 'Keela positions with no Hub role', company_types_unmapped: 'Keela company types with no Partners category',
     changed_since_kept: 'Changed since the import, so kept', created_review: 'Created by the import: review by hand',
-    unrecognised_event_types: 'Event words the import does not know (check them before applying)' };
+    unrecognised_event_types: 'Event words the import does not know (check them before applying)',
+    text_optout_by_phone: 'Hub contacts a Keela text opt-out reaches by phone' };   /* batch 6 since the final review (M7): drawn as a table, see listsHtml */
   var FIELD_WORDS = { email_status: 'email status', consent_source: 'consent source', email_consent: 'email consent', sms_consent: 'text consent', full_name: 'full name',
     first_name: 'first name', last_name: 'last name', postal_code: 'postal code', primary_email: 'primary email', legacy_refs: 'Keela ids', owner_member_id: 'owner',
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
-    crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
+    crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows', sms_opt_out: 'texts stopped' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
     note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, upFile: null, names: {}, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
 
@@ -191,7 +192,17 @@
       ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td class="w284ra">' + readAs(x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join(''), 'w284words') + '</div>');
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
-      var arr = l[k] || []; if (!arr.length) return;
+      var arr = l[k] || []; if (!arr.length) return;   /* a list that is missing or empty draws nothing */
+      /* batch 6 (final review M7): the Hub contacts a Keela text opt-out reaches by phone, a table like the event words (the Keela id, then the
+         Hub contact as a link to their page), in the same scroll region under a header that stays put */
+      if (k === 'text_optout_by_phone') {
+        parts.push('<div class="w284ls">' + tableHtml('phone-' + kind, E(LISTS[k]) + cnt(arr.length), ['Keela id', 'Hub contact'], arr.map(function (x) {
+          if (!x || typeof x !== 'object') x = { keela_id: x };
+          var id = x.contact_id;
+          return '<tr><td>' + E(x.keela_id == null ? '' : x.keela_id) + '</td><td>' + (id != null && id !== '' ? '<a href="#crm/c/' + E(id) + '">' + E(id) + '</a>' : '') + '</td></tr>';
+        }).join('')) + '</div>');
+        return;
+      }
       parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + cnt(arr.length) + '</b><ul data-w284keep="' + kind + '-' + E(k) + '">' + arr.slice(0, 200).map(function (x) { return '<li>' + itemHtml(x) + '</li>'; }).join('')
         + (arr.length > 200 ? '<li class="m">and ' + num(arr.length - 200) + ' more</li>' : '') + '</ul></div>');
     });

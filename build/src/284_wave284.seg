@@ -48,11 +48,12 @@
     assignees_unmapped: 'Keela assignees with no Hub person yet', campaigns_to_create: 'Campaigns to create (pick a type)', campaigns_created: 'Campaigns created',
     positions_unmapped: 'Keela positions with no Hub role', company_types_unmapped: 'Keela company types with no Partners category',
     changed_since_kept: 'Changed since the import, so kept', created_review: 'Created by the import: review by hand',
-    unrecognised_event_types: 'Event words the import does not know (check them before applying)' };
+    unrecognised_event_types: 'Event words the import does not know (check them before applying)',
+    text_optout_by_phone: 'Hub contacts a Keela text opt-out reaches by phone' };   /* batch 6 since the final review (M7): drawn as a table, see listsHtml */
   var FIELD_WORDS = { email_status: 'email status', consent_source: 'consent source', email_consent: 'email consent', sms_consent: 'text consent', full_name: 'full name',
     first_name: 'first name', last_name: 'last name', postal_code: 'postal code', primary_email: 'primary email', legacy_refs: 'Keela ids', owner_member_id: 'owner',
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
-    crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
+    crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows', sms_opt_out: 'texts stopped' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
     note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, upFile: null, names: {}, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
 
@@ -191,7 +192,17 @@
       ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td class="w284ra">' + readAs(x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join(''), 'w284words') + '</div>');
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
-      var arr = l[k] || []; if (!arr.length) return;
+      var arr = l[k] || []; if (!arr.length) return;   /* a list that is missing or empty draws nothing */
+      /* batch 6 (final review M7): the Hub contacts a Keela text opt-out reaches by phone, a table like the event words (the Keela id, then the
+         Hub contact as a link to their page), in the same scroll region under a header that stays put */
+      if (k === 'text_optout_by_phone') {
+        parts.push('<div class="w284ls">' + tableHtml('phone-' + kind, E(LISTS[k]) + cnt(arr.length), ['Keela id', 'Hub contact'], arr.map(function (x) {
+          if (!x || typeof x !== 'object') x = { keela_id: x };
+          var id = x.contact_id;
+          return '<tr><td>' + E(x.keela_id == null ? '' : x.keela_id) + '</td><td>' + (id != null && id !== '' ? '<a href="#crm/c/' + E(id) + '">' + E(id) + '</a>' : '') + '</td></tr>';
+        }).join('')) + '</div>');
+        return;
+      }
       parts.push('<div class="w284ls"><b>' + E(LISTS[k] || k.replace(/_/g, ' ')) + cnt(arr.length) + '</b><ul data-w284keep="' + kind + '-' + E(k) + '">' + arr.slice(0, 200).map(function (x) { return '<li>' + itemHtml(x) + '</li>'; }).join('')
         + (arr.length > 200 ? '<li class="m">and ' + num(arr.length - 200) + ' more</li>' : '') + '</ul></div>');
     });
@@ -695,6 +706,8 @@
       + '.w284words th,.w284words td{overflow-wrap:break-word;}.w284words .w284ra span,.w284words th{white-space:nowrap;}'
       /* small header labels with a little tracking; the table is as wide as its region, wider only for a token that cannot break (it then scrolls, never cut) */
       + '.w284keys th{font-size:11px;letter-spacing:.06em;}.w284scroll .w284keys{width:auto;min-width:100%;}'
+      /* the Hub turns ".panel table" into a block that scrolls itself at 760 px and below; here the region scrolls, so the header can stay put */
+      + '.w284scroll table.w284keys{display:table;overflow:visible;}'
       + '@media (max-width:420px){.w284keys{font-size:12px;}.w284keys th,.w284keys td{padding:4px 5px;}}'
       + '.w284keys th{color:var(--wa-muted,' + MUTED + ');font-weight:700;}.w284keys td:last-child,.w284keys th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
       + '.w284card>.w284btn,.w284file>.w284row{align-self:flex-start;}.w284file>.w284row{width:min(100%,420px);}'
@@ -713,7 +726,7 @@
       + '@media (prefers-reduced-motion: reduce){.w284btn:active:not(:disabled):not([aria-disabled=true]){transform:none;opacity:.85;}.w284pop .w284box{transform:none;transition:none;}}'
       /* phones: 44 px targets, 16 px text in inputs (iOS zooms the page below 16 px) */
       + '@media (max-width:700px){.w284card{padding:14px;}.w284in{width:100%;}.w284runs .w284row,.w284up .w284row{flex:1 1 100%;}.w284ctl .w284row{flex-direction:column;align-items:stretch;}'
-      + '.w284btn,.w284btn.sm,.w284sel,.w284in{min-height:44px;}.w284sel,.w284in{font-size:16px;}.w284det summary{padding:12px 0;}.w284chk{min-height:44px;align-items:center;}}';
+      + '.w284btn,.w284btn.sm,.w284sel,.w284in{min-height:44px;}.w284 .w284sel,.w284 .w284in{font-size:16px;}.w284det summary{padding:12px 0;}.w284chk{min-height:44px;align-items:center;}}';   /* .w284 .w284in: the Hub's input[type=text] rule is more specific than .w284in */
     document.head.appendChild(st);
   })();
 })();
