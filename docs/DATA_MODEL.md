@@ -1067,6 +1067,7 @@ Model router configuration: one row per AI job (task), with the chain of OpenRou
 - `jev`: True when the job also runs Jev checks.
 - `max_tokens`: Unused (NULL in every row).
 - `system_add`: Text the llm router (v1.6) adds to the end of the system prompt of every call on this route. wave226: the confidentiality rule on the routes whose words the team reads. Admins change it in SQL (logged in change_log, entity ai_route).
+- `provider`: wave289: OpenRouter provider preferences llm v1.7 sends with every call on this route (for example {"data_collection": "deny", "zdr": true}: only providers that neither keep nor train on the data). Null sends none. The mail_history_* routes must carry it (design M2, a blocking release check).
 
 ### `ai_calls`
 
@@ -2359,6 +2360,7 @@ wave284: one Keela import run on the Import page (#crm/settings/imports): its st
 - `created_at`: wave284: when the run was started.
 - `last_applied_at`: wave284: when a batch of this run was last applied. The page reminds the admin to purge the run 30 days after it.
 - `purged_at`: wave284: when the run was purged (wa284_purge): its staged rows, uploaded files and change records are gone, so its batches can no longer be compared, applied or undone.
+- `source`: wave289: where the run's rows come from: keela (wave284's uploaded exports, the default) or email_history (the mail-history scan of Steel's mailbox and hub@).
 
 ### `crm_import_batches`
 
@@ -2388,6 +2390,39 @@ wave284: every change an applied import batch made, one row per changed column o
 - `new_value`: wave284: the value after an update, or the whole inserted row, as JSON; "set" for a sensitive row (a birth date), whose value is never kept.
 - `action`: wave284: insert or update.
 - `sensitive`: wave284: true for a birth date: new_value says "set" and holds no value.
+
+### `crm_mail_scans`
+
+wave289: one email-history scan per run and mailbox (steel, hub): its phase, page token, counts, estimate, spend and cap, and the step lease. Counts, money and times only: never an address, subject or line. Admins (wa_can import_admin) read it; only the wa289_* functions write it (the mail-history edge function).
+
+- `id`: wave289: the scan's number.
+- `run_id`: wave289: the run (crm_import_runs, source email_history).
+- `mailbox`: wave289: steel (steel.macdonald@) or hub (hub@, where info@ arrives).
+- `phase`: wave289: count, headers, dedupe, bounces, sample (free phases), waiting (for go), threads, people, orgs (paid), done; summaries and summarised belong to wave292; failed stops the scan.
+- `page_token`: wave289: Gmail's nextPageToken saved after each listed page, so a step resumes where the last one stopped.
+- `counts`: wave289: counts by state and reason, people and organisations (wa289_status refreshes it). Numbers only.
+- `oldest_at`: wave289: the date of the oldest email staged for the mailbox (hub@'s answers H5).
+- `estimate_usd`: wave289: the calibrated estimate for the paid phases, from the 50-thread sample (section 7).
+- `spend_usd`: wave289: what the router reported for this mailbox's calls (_wa.cost), in US dollars.
+- `cap_usd`: wave289: the run's cap (the same on every row): go sets 1.5 times the estimate, never above mail_history_cap_usd. The run pauses when its spend reaches it.
+- `paused`: wave289: true when paused by an admin or by the cap; continue does nothing while it is true.
+- `started_by`: wave289: the email of the admin who started the run.
+- `started_at`: wave289: when the run was started.
+- `go_by`: wave289: the email of the admin who said go to the paid phases.
+- `go_at`: wave289: when go was said; before it only the sample may spend (mail_history_sample_cap_usd).
+- `step_at`: wave289: the step lease: when the current step started (null when no step runs). A lease older than its length (mail_history_step_seconds) has run out, and the pump restarts it.
+- `finished_at`: wave289: when the scan reached done.
+- `last_error`: wave289: the last error, as the step's name and an error code or HTTP status; never a value from the mail.
+
+### `crm_email_suppressions`
+
+wave289: one suppression list for email addresses (design 6.4), kept across runs and Purge: an md5 of the lower-cased, trimmed address, never the address. Admins read it; no write policies (written by the import functions and wave292's triggers). wave289 creates it empty; the email-history scan never groups an address suppressed as deleted.
+
+- `addr_md5`: wave289: md5 of the address, lower case and trimmed (the key wa284_contact compares).
+- `kind`: wave289: unsubscribed, bounced, asked_to_stop, deleted (a staff deletion: blocks the email-history import only) or undo (an import undo deletion: blocks nothing).
+- `at`: wave289: the date of the request, bounce or deletion.
+- `source`: wave289: where it came from (Email history, a form, the unsubscribe page, a deletion); never a value from the mail.
+- `created_at`: wave289: when the row was added.
 
 - `hub_positions.jd_public_url`: wave216c: the public PDF of the latest JD (content-images/jobs/), for the website and the Join our team form; set by recruit-actions jd_publish while the position is open.
 - `hub_positions.jd_public_hold`: wave216d: true keeps this position's JD off the website and the application form (recruit-actions jd_publish skips it and removes its public PDF).
@@ -2861,4 +2896,41 @@ Functions:
 - `wa284_new_batch(bigint, text)`: wave284: the run's batch of a kind, created (status new) the first time; one per kind per run. The service role only.
 - `wa286_crew_contact(jsonb, bigint)`: wave286: the CRM contact of a roster row: the contact named in detail.contact_id (as wa274_crew_add writes it), else the contact whose volunteer_id is the row's person_id; never a merged contact (null when there is none). Service role only: called by the wave286 trigger and backfill.
 - `wa286_toronto_crew()`: wave286: trigger function on event_roster (trg_wa286_toronto_crew). When the row is on a Toronto event (wave274: kind meal, location Toronto), the crew member's contact (wa286_crew_contact) joins the Toronto chapter through crm_add_chapter (source serving, source note Toronto crew: <event code>); a row already there is kept. It never removes a chapter row and never adds montreal, and it never fails the crew add: an error on the CRM side is raised as a warning and the roster row stands. Security definer: crm_add_chapter is service role only.
+- `wa289_addr(text)`: wave289: the address of an allow-listed mailbox (steel, hub); null for anything else. The allow-list is hard-coded here and in mail-history. The service role only.
+- `wa289_num(text, numeric)`: wave289: a numeric mail_ setting, or the default when it is missing or not a number. The service role only.
+- `wa289_in_list(text, jsonb)`: wave289: true when a domain is in a list of domains (hotmail.com: that domain or a subdomain) or names (hotmail: any of its top-level domains or as a label). Used for mail_history_freemail and mail_history_platforms, as isFreemail does in fn/_shared/mail_rules.ts. The service role only.
+- `wa289_internal(text)`: wave289: true for a welfareavenue.com address, an active team member's address, or a staff alias (wa_email_aliases). Rule h and the match's internal check use it. The service role only.
+- `wa289_body_keys(jsonb)`: wave289: true when a JSON value holds, at any depth, a key named body, text, snippet, html, payload, raw, body_text or page_text. Every wa289 save refuses such input. The service role only.
+- `wa289_vote(text[])`: wave289: the signature vote (5.4) over values listed latest first: the latest value seen at least twice wins; otherwise a value wins only when it is the only one. The service role only.
+- `wa289_scan_of(bigint, text)`: wave289: the scan row of a run and mailbox (null: the first, steel before hub); raises when there is none. The service role only.
+- `wa289_ready()`: wave289: what stops a scan from starting, as plain sentences (an empty list means ready): a mail_history_* route missing, without the no-retention provider setting (M2), or a wording route without wave226's confidentiality rule. mail-history's start refuses while the list is not empty. The service role only.
+- `wa289_new_run(text, text, text[])`: wave289: starts an email-history run (crm_import_runs source email_history) with a scan per mailbox (steel, hub or both) at phase count; the cap starts at the sample cap until go. Refuses while another scan is unfinished. Logged in change_log. The service role only.
+- `wa289_lease(bigint)`: wave289: takes the run's step lease (every scan row's step_at) unless a step holds one younger than mail_history_step_seconds.lease (180 s). Returns true when taken. The service role only.
+- `wa289_scan_set(bigint, text, jsonb)`: wave289: updates a scan (a mailbox, or every mailbox of the run when null): phase, page_token, estimate_usd, last_error (at most 300 characters; mail-history writes step names and codes only), release (frees the lease) and finished. Any other key raises. The service role only.
+- `wa289_spend(bigint, text, numeric)`: wave289: adds a router call's cost to a mailbox's spend (null: the run's first scan) and returns the run's spend and cap; after go the run pauses when its spend reaches the cap; before go sample_over says the sample cap is reached. The service role only.
+- `wa289_go(bigint, text)`: wave289: Steel's yes to the paid phases: every scan of the run must be waiting with an estimate; sets the cap to 1.5 times the estimate, never above mail_history_cap_usd (H2), and moves the scans to threads. Logged. The service role only.
+- `wa289_set_cap(bigint, numeric, text)`: wave289: changes the run's cap after go, never above mail_history_cap_usd; pauses the run when the spend already reaches it. Logged. The service role only.
+- `wa289_pause(bigint, boolean, text)`: wave289: pauses or resumes a run (resume is refused while the spend has reached the cap). Logged. The service role only.
+- `wa289_active()`: wave289: the runs the pump should continue: a scan in a working phase, not paused, whose lease is free or has run out. The service role only.
+- `wa289_pump(boolean)`: wave289: puts the cron job wa-mail-history-pump (every minute: call_edge mail-history pump) on or off. It exists only while a run is active: mail-history turns it on at start and resume and off when no run is left working. The service role only.
+- `wa289_context(bigint)`: wave289: what mail-history needs to apply the rules: Steel's mybox senders, words and family name (rules a and b), every staff alias (direction) and each mailbox's own aliases (B2), and the mail_ settings. Goes to the edge function only, never to a page or a Claude session. The service role only.
+- `wa289_stage_ids(bigint, text, jsonb, text)`: wave289: the count phase: stages a page of Gmail ids ([{id, thread}]; ids are idempotent, so a restarted listing doubles nothing), marks done at once the ids already imported (crm_interactions source gmail), left alone or seen in an earlier run, and saves the next page token. The service role only.
+- `wa289_newest(bigint, text)`: wave289: the newest date staged for a mailbox: when Gmail refuses a saved page token, listing restarts one day before it. The service role only.
+- `wa289_todo(bigint, text, text, int)`: wave289: the next work of a phase, at most 500: headers (listed ids), bounces (unread delivery reports), threads or sample (threads with a kept, unread email; the sample in a fixed random order), people (untyped writers with what the type may see: name, domain, signature, counts, dates, topics, the last five cleaned subjects and lines; never a body). Goes to the edge function only. The service role only.
+- `wa289_thread_rows(bigint, text, text)`: wave289: the kept, unread emails of a thread (id, direction, writer): only these are sent to the thread reader. The service role only.
+- `wa289_save_headers(bigint, text, jsonb)`: wave289: the headers phase: saves the rule outcome of each listed email ({id, thread, state kept|skipped|left_alone, reason, message_id (stored only as its md5) or msg_md5, sent_at, direction, box, writer, writer_name, outside, recipients, subject}). Left-alone mail keeps its id only (and goes to mail_left_alone); Steel's mail that mybox skipped is left alone here too (rule a). Refuses body-like keys. The service role only.
+- `wa289_dedupe(bigint)`: wave289: once every mailbox has finished its headers, one set-based pass: rule h (internal mail skipped), later copies of the same Message-ID skipped as duplicate (Steel's copy first), mail kept by an earlier run marked seen, and every kept hash recorded in mail_seen (kept across runs and Purge, M4). Moves the scans to bounces. The service role only.
+- `wa289_save_bounce(bigint, text, text, text, text)`: wave289: the bounce parser's result for a delivery report: a permanent failure (an address with a 5.x.x status or 550) is staged against that address; anything else marks the report read with nothing staged (M6). The service role only.
+- `wa289_leave_alone(text, text, text)`: wave289: records a Gmail id as left alone (personal, security, confidential, help_seeker, staff_hiring), kept across runs. The service role only.
+- `wa289_sizes(bigint)`: wave289: the sizes the estimate needs (section 7): threads left to read and read, writers, non-free-mail writer domains, writers with two or more emails. Counts only. The service role only.
+- `wa289_save_thread(bigint, text, text, jsonb, numeric)`: wave289: stages a validated read_thread answer ({leave_out, topic, lang, emails [{id, line, asks_to_stop, sig}]}) and adds its cost. A left-out thread keeps only its ids (mail_left_alone) and an asks-to-stop flag from outside (with the writer's key, so it can act). A null answer (rejected by validation) stages nothing and counts a failure. Refuses body-like keys. The service role only.
+- `wa289_match(text, text)`: wave289: the Hub contact for an email-history address (5.6): wave284's wa284_contact (active contacts, primary or any email, lower case and trimmed, the lowest id), then a merged contact's merged_into followed to the active record (a loop raises), then the signature phone's last 10 digits against active contacts (phone_only: listed, never merged or enriched). A team member's contact is internal. Returns {id, kind}. The service role only.
+- `wa289_group(bigint)`: wave289: groups the run's people (5.2): a writer for each address with a kept incoming email (never one suppressed as deleted), plus every address with a staged opt-out (asked to stop, wins; or a permanent bounce). Per person: the most frequent display name, dates, counts by year, threads, mailboxes, topics, signature votes, general inbox, the match preview. Outbound-only recipients are counted, never grouped. Keeps an admin's type, Leave out and Not an opt-out on a re-run. Returns counts only. The service role only.
+- `wa289_save_person(bigint, text, text, numeric, numeric)`: wave289: stages a writer's type and confidence from one Jev decision (null when Jev gave no usable answer) and adds its cost. The service role only.
+- `wa289_orgs_todo(bigint, int)`: wave289: the next organisation domains to look up (5.5): writers' domains that are not free mail, welfareavenue.com or a platform, where a writer is typed partner, donor, vendor, media or government above mail_history_org_type_min, a signature names an organisation, or two or more writers share it; with the Hub organisation whose website has that host, and over_cap past mail_history_org_cap. The service role only.
+- `wa289_save_org(bigint, text, jsonb, numeric)`: wave289: stages an organisation lookup ({partner_id, robots, url, facts {name, kind, description, street, city, province, postal_code, country}, conf, outcome}) and adds its cost. Any other fact key, or a body-like key, raises: nothing about people and no page text. The service role only.
+- `wa289_is_steel(text)`: wave289: true when the caller is Steel (steel.macdonald@ or one of his aliases): only he sees people found in his mailbox (M3). The service role only.
+- `wa289_people(bigint, jsonb, int, text)`: wave289: Look at them (5.7): 50 people of a run at a time (name, address, type and confidence, emails in and out, first and last, organisation, match, opt-out, left out), with filters type, match new|existing, asked_to_stop, bounced, phone_only. People found in Steel's mailbox reach only Steel (M3): for anyone else they are counted as hidden. For the admin's browser only (mail-history's people action, which never takes the trigger secret). The service role only.
+- `wa289_exclude(bigint, text, text, boolean, text)`: wave289: Leave out (what person) or Not an opt-out (what optout) for one person of a run, or put back (p_on false); people from Steel's mailbox only by Steel. Logged without the address. Changes the batches' basis (wave292). The service role only.
+- `wa289_status(bigint)`: wave289: a run's progress as counts only (per mailbox: phase, counts by state, reason and box, bounces and asks-to-stop staged, threads read and rejected, oldest date, estimate, spend, cap, paused; people by type and match; organisations by outcome; what blocks a start). Refreshes crm_mail_scans.counts. What Claude sessions read instead of import_stage. The service role only.
 
