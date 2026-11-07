@@ -44,7 +44,7 @@ For each wave: first the rollback check (`python3 build/sql_rollback_test.py <re
    - SQL: `build/data/wa281_rules.sql`, by pinned fetch at the release commit.
    - Check: the chapter rows the morning's data predicts, the consent rows, 7 Campaigns, the release line, and the trigger `trg_wa281_dnc_hold` (do-not-contact holds texts, WhatsApp and email on its own).
    - Functions: quo-send v9 and whatsapp-send v2, each as the pinned one-line stub. Then the live check in the wave281 document (a STOP phone skipped by both, with `sms_mode` on test).
-2. **wave282, who may be emailed** (`docs/06-11-26 - wave282 who may be emailed.md`).
+2. **wave282, who may be emailed** (`docs/06-11-26 - wave282 who may be emailed.md`). **LIVE 07/11/26 at c157e49** (mail-send deployment 19).
    - Rollback check: `test/w282live_before.sql build/data/wa282_mail_rule.sql test/w282live.sql`.
    - SQL: `build/data/wa282_mail_rule.sql`. Function: mail-send v7, pinned stub, after the SQL.
    - **Hold:** `mail_mode` is live, so no newsletter or fundraising Send goes out until the two planned Sends (the main list, then the first contacts) that the wave282 document describes.

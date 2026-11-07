@@ -82,6 +82,16 @@ There is no page change in this wave.
    - Call `wa282_newsletter_lists` for real the day before the first newsletter (design B.3), or once with a test name and then delete its two lists. It only builds lists.
 6. Add the release record to this document.
 
+## Release record (07/11/26, on Steel's yes)
+
+- **Before:** wave281 live (same day). `crm_email_permission` md5 38706b77 (as wave281 leaves it); `mail_mode` live, caps 100 and 80; no Send in `crm_campaigns` and nothing queued, so the wider rule reached no one at release.
+- **Rollback checks at c157e49** (wave281 left out, since it is live): the migration twice plus the live checks: ROLLBACK_OK. The undo cycle: ROLLBACK_OK.
+- **Applied** `build/data/wa282_mail_rule.sql` (md5 5098809fd655580f972fc72b44aea156) by pinned fetch at c157e49, about 13:57 UTC.
+- **Checks:** "WA rule of 5 Nov 2026" once in `crm_email_permission`, with no mention of the exemption setting; `mail_fundraising_exemption` gone; the kind check is newsletter, fundraising, volunteer; `crm_email_first_contact`, `wa282_first_contact_core` and `wa282_newsletter_lists` exist; one release line in change_log. First contacts today: 351 (349 on 06/11/26).
+- **mail-send v7** deployed as deployment 19 (verify_jwt on), the one-line stub pinned to c157e49. An OPTIONS request to mail-send, quo-send and whatsapp-send each answered 200 from the new code, with a clean boot and no errors in the function logs.
+- **As Steel's WA account, rolled back:** `crm_email_first_contact` answers (false for the first contact by id). The draft-Send count, the settings save and the do-not-contact receipt check need the wave283 page and are left for that release. `wa282_newsletter_lists` not called (it waits for the day before the first newsletter).
+- **Hold in force:** no newsletter or fundraising Send until the planned two Sends.
+
 ## Undo
 
 1. Redeploy mail-send v6 (the source at a9ed5f4).
