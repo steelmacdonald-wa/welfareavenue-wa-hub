@@ -108,6 +108,7 @@ async function profile(browser, D, w) {
     ok(tag + ': an email with no subject reads "Email from them"', mails.some(x => /^Email from them\s*\d/.test(x.t)), mails.map(x => x.t.slice(0, 30)));
     if (D === 'huge') {
       ok(tag + ': a huge history shows 50 items and Show 50 more', s.items.length === 50 && /^Show 50 more \([\d,]+ left\)$/.test(s.more), { n: s.items.length, more: s.more });
+      ok(tag + ': the timeline says it shows the latest 600 of 1,047 emails (eh-293 A-M3)', await f.ev(() => (document.querySelector('#w152sheet [data-w293cut]') || {}).textContent === 'The timeline shows the latest 600 of 1,047 emails.'));
       await click(f, '#w152sheet [data-w293more]'); await f.page.waitForTimeout(400);
       ok(tag + ': Show more adds 50', (await sheetState(f)).items.length === 100);
     }
@@ -139,7 +140,13 @@ async function member(browser, D, w) {
   ok(tag + ': a member reads no line from Steel\'s mailbox and sees no Open in Gmail', mails.every(x => !/Steel’s mailbox/.test(x.by) && !x.gmail), mails);
   ok(tag + ': no admins-only note for a member', !s.adm);
   ok(tag + ': no Delete on an email item for a member', mails.every(x => !x.del));
-  if (D === 'demo') ok(tag + ': the summary marked from Steel\'s mailbox is not shown; the card offers Write one', s.card && /No summary yet\. Write one/.test(s.card) && !/A partner since/.test(s.card), s.card);
+  if (D === 'demo') {
+    ok(tag + ': the summary marked from Steel\'s mailbox is not shown; the card offers Write one', s.card && /No summary yet\. Write one/.test(s.card) && !/A partner since/.test(s.card), s.card);
+    await f.ev(() => { window.__INSIGHT_NONE = true; });
+    await click(f, '#w152sheet [data-w293refresh]'); await f.page.waitForTimeout(700);
+    const m = await sheetState(f);
+    ok(tag + ': Write one answers one neutral line and the sheet never names Steel\'s mailbox (eh-293 A-I1)', m.msg === 'Nothing to summarise yet.' && !/Steel/.test(await f.ev(() => document.getElementById('w152sheet').innerText)), m.msg);
+  }
   await fits(f, '#w152sheet', tag + ' contact');
   if (D === 'demo' || D === 'worst') await shot(f, 'profile-member-' + D + '-' + (ZOOM ? 'zoom200' : w));
   ok(tag + ': member: no page errors', f.errs.length === 0, f.errs);
@@ -174,7 +181,7 @@ async function insights(browser, D, w) {
     ok(tag + ': the organisations, all time, with relationship and status', s.orgs.length === 2 && /^1 Test Food Bank Partner Active last email 14 Aug 2026 5 people 42 emails$/.test(s.orgs[0]), s.orgs);
     await click(f, '#w293root [data-w293sort="12"]'); await f.page.waitForTimeout(200);
     s = await insightsState(f);
-    ok(tag + ': Last 12 months leaves out who did not write this year and counts the year', s.orgs.length === 1 && / 2 people 6 emails$/.test(s.orgs[0]), s.orgs);
+    ok(tag + ': Last 12 months is ranked on its own: an organisation outside the all-time list comes first, and who did not write this year is gone (eh-293 A-M1)', s.orgs.length === 2 && /^1 Test Youth Centre/.test(s.orgs[0]) && / 2 people 6 emails$/.test(s.orgs[1]), s.orgs);
     ok(tag + ': the period switch keeps the focus', await f.ev(() => (document.activeElement || {}).getAttribute && document.activeElement.getAttribute('data-w293sort') === '12'));
     ok(tag + ': gone quiet: two people, the gift named, how long ago', s.quiet.length === 2 && /^Bea Testdonor Donor Last gift 14 Feb 2025 \(\d+ months ago\)$/.test(s.quiet[0]) && /Last on their timeline 2 Nov 2024/.test(s.quiet[1]) && /for a year or more: 2 people, the most recent first\.$/.test(s.quietSub), { q: s.quiet, sub: s.quietSub });
     ok(tag + ': no waiting-on-a-reply list', !/waiting on a reply/i.test(s.text));
@@ -213,7 +220,7 @@ async function roles(browser, D, w) {
   const tag = tagOf(D, w, 'roles');
   let { f } = await boot(browser, D, 'member', w, '#crm/insights');
   let s = await insightsState(f);
-  ok(tag + ': a member is told the counts leave out Steel\'s mailbox', s && s.note === 'These counts leave out Steel’s mailbox until he opens it to the team.', s && s.note);
+  ok(tag + ': a member is told some history is for admins, never whose (eh-293 A-I1, A-M2)', s && s.note === 'Some email history is visible to admins only for now, so these counts can leave people out.' && !/Steel/.test(s.text) && /someone may look quiet who is not\.$/.test(s.quietSub), s && [s.note, s.quietSub]);
   await f.ev(() => { window.w293.state().data = { allowed: false }; window.w293.paint(); });
   ok(tag + ': an overview that says not allowed says Insights are for the team with the CRM', await f.ev(() => /Insights are for the Welfare Avenue team with the CRM\./.test(document.getElementById('w293root').innerText)));
   await f.ev(() => { const S = window.w293.state(); S.data = null; S.err = 'permission denied'; window.w293.paint(); });

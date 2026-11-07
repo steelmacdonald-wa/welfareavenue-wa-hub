@@ -87,6 +87,7 @@ function fixture(DATA, who) {
     rel = [{ contact_id: P, rel_type: 'partner', rel_conf: 0.86, topics: ['partnership', 'event'], open_item: 'They are waiting for a date for the board introduction.', summary: 'A partner since the 2021 spring food drive. Friendly and quick to answer; they now offer an introduction to their board chair.', from_steel: true, stale: false, model: 'haiku', cost: 0.0094, generated_at: '2026-09-20T15:00:00Z', generated_by: 'Email history' }];
     overview = { allowed: true, by_type_year: BY([[2020, 'partner', 3], [2020, 'donor', 2], [2021, 'partner', 5], [2021, 'volunteer', 4], [2021, 'none', 2], [2022, 'supporter', 3], [2023, 'partner', 2], [2024, 'media', 1], [2025, 'donor', 4], [2026, 'partner', 6], [2026, 'government', 1]]),
       orgs: [ORG(81, 'Test Food Bank', 5, 42, 2, 6), ORG(82, 'Test School Board', 3, 12, 0, 0, { status: 'past', relationship: 'collaborator', last_at: '2023-05-01T15:00:00Z' })], orgs_total: 2,
+      orgs_12: [ORG(84, 'Test Youth Centre', 4, 9, 4, 9, { status: 'prospect' }), ORG(81, 'Test Food Bank', 5, 42, 2, 6)], orgs_12_total: 2,
       quiet: [Q(7101, 'Bea Testdonor', 'donor', '2025-02-14T15:00:00Z', 'gift'), Q(7102, 'Cal Testvolunteer', 'volunteer', '2024-11-02T15:00:00Z')], quiet_total: 2, quiet_months: 12, admin: who === 'admin', steel_open: false, as_of: '2026-09-25T20:00:00Z' };
     others = [C(7101, 'Bea Testdonor', { kinds: ['donor'] }), C(7102, 'Cal Testvolunteer', { kinds: ['volunteer'] })];
   }
@@ -108,7 +109,7 @@ function fixture(DATA, who) {
 }
 /* mail-history insight answered and recorded (window.__inv); window.__INSIGHT_ERR makes it refuse with the function's words */
 const INVOKE = 'window.__inv = []; window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__inv.push({ name: name, body: b });' +
-  ' if (name === "mail-history" && b.action === "insight") { if (window.__INSIGHT_ERR) return { data: null, error: { message: "Edge Function returned a non-2xx status code", context: { json: function () { return Promise.resolve({ error: window.__INSIGHT_ERR }); } } } }; return { data: { ok: true, saved: true, model: "haiku", cost: 0.009 }, error: null }; }' +
+  ' if (name === "mail-history" && b.action === "insight") { if (window.__INSIGHT_ERR) return { data: null, error: { message: "Edge Function returned a non-2xx status code", context: { json: function () { return Promise.resolve({ error: window.__INSIGHT_ERR }); } } } }; return { data: window.__INSIGHT_NONE ? { ok: true, saved: false, model: "none", cost: 0 } : { ok: true, saved: true, model: "haiku", cost: 0.009 }, error: null }; }' +
   ' if (name === "mail-send") return { data: { settings: { mail_mode: "test" }, admin: true }, error: null }; return { data: null, error: null }; };';
 
 module.exports = { fixture, INVOKE, LONG };

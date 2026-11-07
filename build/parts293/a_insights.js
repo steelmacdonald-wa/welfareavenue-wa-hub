@@ -60,12 +60,13 @@
     if (!d) return S.err ? '<div class="w293box w293empty">The insights could not be worked out (' + E(S.err) + '). <button class="w293btn" data-w293reload="1">Try again</button></div>' : '<div class="w293box w293empty" aria-busy="true">Working out the insights…</div>';
     if (d.allowed === false) return '<div class="w293box w293empty">' + svg(IC.lock) + ' Insights are for the Welfare Avenue team with the CRM.</div>';
     var asOf = d.as_of ? new Date(d.as_of) : null, when = asOf && !isNaN(asOf) ? asOf.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(/\./g, '') : '';
-    var note = d.steel_open ? '' : d.admin ? 'You see Steel’s mailbox in these counts; the rest of the team does not until he opens it.' : 'These counts leave out Steel’s mailbox until he opens it to the team.';
+    /* eh-293 review: a member is never told whose mailbox is held back (A-I1's ruling), only that some history is for admins for now */
+    var note = d.steel_open ? '' : d.admin ? 'You see Steel’s mailbox in these counts; the rest of the team does not until he opens it.' : 'Some email history is visible to admins only for now, so these counts can leave people out.';
     return '<div class="w293hd"><div class="w293hdt"><p class="w293lead">Who emailed with Welfare Avenue, the organisations who write most, and who has gone quiet. From the email history and every timeline' + (when ? '; worked out at ' + E(when) : '') + '.</p>' +
       (note ? '<p class="w293note" data-w293note>' + svg(IC.lock) + E(note) + '</p>' : '') + '</div>' +
       '<button class="w293btn soft" data-w293reload="1"' + (S.busy ? ' disabled aria-busy="true"' : '') + '>' + svg(IC.refresh) + (S.busy ? 'Working…' : 'Refresh') + '</button></div>' +
       (S.err ? '<div class="w293warn" role="status">The refresh did not finish (' + E(S.err) + '). These are the last numbers.</div>' : '') +
-      byTypeHtml(arr(d.by_type_year)) + orgsHtml(arr(d.orgs), Number(d.orgs_total) || 0) + quietHtml(arr(d.quiet), Number(d.quiet_total) || 0, Number(d.quiet_months) || 12);
+      byTypeHtml(arr(d.by_type_year)) + orgsHtml(d) + quietHtml(arr(d.quiet), Number(d.quiet_total) || 0, Number(d.quiet_months) || 12, !d.admin && !d.steel_open);
   }
 
   /* 1. Relationships by type over time: one bar per year, stacked by type, the total at the end */
@@ -92,14 +93,17 @@
   }
 
   /* 2. Top organisations: all time or the last 12 months */
-  function orgsHtml(rows, total) {
+  function orgsHtml(d) {
     var twelve = S.sort === '12';
+    /* eh-293 A-M1: the last 12 months come ranked on their own (orgs_12), so a busy organisation outside the all-time 25 still shows */
+    var all = arr(d.orgs), rows = twelve && Array.isArray(d.orgs_12) ? d.orgs_12 : all;
+    var total = twelve && Array.isArray(d.orgs_12) ? Number(d.orgs_12_total) || 0 : Number(d.orgs_total) || 0;
     var head = '<section class="w293box" data-w293sec="orgs"><div class="w293sh"><div><h3>Top organisations</h3><p class="w293sub">By the people who wrote to us and their emails' + (total > rows.length ? '; the top ' + num(rows.length) + ' of ' + num(total) : '') + '.</p></div>' +
       '<div class="w293seg" role="group" aria-label="Period"><button data-w293sort="all" aria-pressed="' + (!twelve) + '"' + (!twelve ? ' class="on"' : '') + '>All time</button><button data-w293sort="12" aria-pressed="' + twelve + '"' + (twelve ? ' class="on"' : '') + '>Last 12 months</button></div></div>';
-    if (!rows.length) return head + '<p class="w293empty0">No organisation is linked to anyone with email history yet. The email history links people to organisations when its Organisations card is applied.</p></section>';
+    if (!all.length) return head + '<p class="w293empty0">No organisation is linked to anyone with email history yet. The email history links people to organisations when its Organisations card is applied.</p></section>';
     var list = rows.slice().filter(function (o) { return !twelve || Number(o.writers_12) > 0; });
     list.sort(function (a, b) { return twelve ? (b.writers_12 - a.writers_12) || (b.emails_12 - a.emails_12) || String(a.name).localeCompare(String(b.name)) : (b.writers - a.writers) || (b.emails - a.emails) || String(a.name).localeCompare(String(b.name)); });
-    if (!list.length) return head + '<p class="w293empty0">Nobody from these organisations wrote in the last 12 months.</p></section>';
+    if (!list.length) return head + '<p class="w293empty0">No organisation wrote to us in the last 12 months.</p></section>';
     return head + '<ol class="w293orgs">' + list.map(function (o, i) {
       var st = STATUS[o.status] || [o.status || '', MUTED], w = twelve ? o.writers_12 : o.writers, m = twelve ? o.emails_12 : o.emails;
       return '<li><span class="w293rk">' + (i + 1) + '</span><div class="w293on"><button class="w293lnk" data-w152go="#partners/' + E(o.id) + '">' + E(o.name) + '</button>' +
@@ -110,12 +114,13 @@
   }
 
   /* 3. Gone quiet */
-  function quietHtml(rows, total, months) {
+  function quietHtml(rows, total, months, partial) {
     var yrs = months % 12 === 0 ? months / 12 : 0;
     var period = yrs === 1 ? 'a year' : yrs ? plural(yrs, 'year', 'years') : plural(months, 'month', 'months');   /* "for a year or more" */
     var inLast = yrs === 1 ? 'year' : period;   /* "in the last year", "in the last 18 months" */
     var head = '<section class="w293box" data-w293sec="quiet"><h3>Gone quiet</h3><p class="w293sub">Donors, partners, supporters and volunteers with nothing on their timeline and no gift for ' + E(period) + ' or more' +
-      (total ? ': ' + plural(total, 'person', 'people') + (total > rows.length ? ', the ' + num(rows.length) + ' who went quiet most recently first' : ', the most recent first') : '') + '.</p>';
+      (total ? ': ' + plural(total, 'person', 'people') + (total > rows.length ? ', the ' + num(rows.length) + ' who went quiet most recently first' : ', the most recent first') : '') + '.' +
+      (partial ? ' Some email history is visible to admins only for now, so someone may look quiet who is not.' : '') + '</p>';   /* eh-293 A-M2 */
     if (!rows.length) return head + '<p class="w293empty0">Nobody has gone quiet. Everyone with history has heard from us, or we from them, in the last ' + E(inLast) + '.</p></section>';
     return head + '<ul class="w293quiet">' + rows.map(function (q) {
       var k = QUIET_KINDS[q.kind] || [q.kind || '', MUTED];

@@ -322,7 +322,7 @@
         done(res.error.message || 'The summary could not be written.'); return;
       }
       if (res && res.data && res.data.error) { done(String(res.data.error)); return; }
-      done('Summary written.');
+      done(res && res.data && res.data.saved === false ? 'Nothing to summarise yet.' : 'Summary written.');   /* eh-293 A-I1: one neutral answer */
     }).catch(function (e) { done('The summary could not be written (' + String((e && e.message) || e) + ').'); });
   }
   function logFormHtml(c) {
@@ -338,7 +338,10 @@
     if (st.f && !all.some(function (x) { return x.f === st.f; })) { st.f = ''; st.topic = ''; }
     var items = all.filter(function (x) { return (!st.f || x.f === st.f) && (!st.topic || (x.topics || []).indexOf(st.topic) >= 0); });
     var shown = items.slice(0, st.show);
-    return logFormHtml(c) + (all.length ? tlFiltersHtml(all, st) : '') + (shown.length ? '<ul class="w152tl">' + shown.map(function (x) {
+    /* eh-293 A-M3: the timeline reads the latest 600 email lines; say so when the history holds more */
+    var mailTotal = d.relv ? Number(d.relv.emails_in || 0) + Number(d.relv.emails_out || 0) : 0, mailRead = (d.mail || []).length;
+    var cut = mailTotal > mailRead && mailRead >= 600 ? '<p class="w152pnote w293cut" data-w293cut>The timeline shows the latest ' + mailRead.toLocaleString('en-CA') + ' of ' + mailTotal.toLocaleString('en-CA') + ' emails.</p>' : '';
+    return logFormHtml(c) + (all.length ? tlFiltersHtml(all, st) : '') + cut + (shown.length ? '<ul class="w152tl">' + shown.map(function (x) {
       return '<li class="w152it' + (x.faint ? ' faint' : '') + (x.mail ? ' w293mail' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
         (x.span ? '<div class="w293span w152num">' + E(x.span) + '</div>' : '') +
         (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.emails ? threadHtml(x, st, d) : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
