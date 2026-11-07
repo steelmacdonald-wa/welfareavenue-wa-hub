@@ -128,15 +128,15 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   await f.hash('#crm/c/5001', 1500);
   const sheet = await f.ev(() => ({ open: !!document.getElementById('w152sheet') && document.getElementById('w152sheet').style.display !== 'none', perm: (document.querySelector('#w152sheet .w154perm') || {}).innerText, btn: !!document.querySelector('#w152sheet [data-w154send="5001"]'),
     tl: [...document.querySelectorAll('#w152sheet .w152it')].map(li => li.querySelector('.t').innerText.replace(/\s+/g, ' ').trim() + ' / ' + ((li.querySelector('.by') || {}).innerText || '').replace(/\s+/g, ' ').trim()), del: document.querySelectorAll('#w152sheet [data-w152delint]').length }));
-  ok('Amara’s page: newsletters yes (express consent), confirmations yes, Send an email from the Hub offered', sheet.open && /Newsletters and appeals: yes \(express consent\)/.test(sheet.perm || '') && /Confirmations and reminders: yes/.test(sheet.perm || '') && sheet.btn, sheet.perm);
+  ok('Amara’s page: by the one rule (task 10b), newsletters yes (they have not unsubscribed), receipts yes, Send an email from the Hub offered', sheet.open && /Newsletters, fundraising and volunteer emails: yes \(they have not unsubscribed\)/.test(sheet.perm || '') && /Receipts and confirmations: yes/.test(sheet.perm || '') && sheet.btn, sheet.perm);
   ok('the email the Hub sent shows on her timeline with its status (Delivered) and who sent it, and cannot be deleted like a note', sheet.tl.some(t => /Email to them: Thank you, Amara.*Delivered/.test(t) && /Sent from the Hub \(Thank you for a gift\) by steel/.test(t)) && sheet.del === 1, sheet.tl);
   await shot(f, 'contact_permission');
   await click(f, '#w152sheet [data-w154send="5001"]'); await f.page.waitForTimeout(900);
   const mf = await f.ev(() => ({ h2: (document.querySelector('#w152sheet h2') || {}).innerText, opts: [...document.querySelectorAll('#w152sheet [data-w154tplsel] option')].map(o => o.value), allowed: /Allowed/.test(document.getElementById('w152sheet').innerText), frame: !!document.querySelector('#w152sheet .w154frame'), go: document.querySelector('#w152sheet [data-w154go]') && !document.querySelector('#w152sheet [data-w154go]').disabled, call: window.__calls.filter(c => c.action === 'preview').pop() }));
   ok('Send an email: the templates in use (no test template), the first one previewed for her, Allowed, Send now ready', /Send an email/.test(mf.h2 || '') && mf.opts.join('|') === 'welcome_volunteer|thank_you_gift|serving_reminder|newsletter' && mf.allowed && mf.frame && mf.go && mf.call && mf.call.contact_id === 5001 && mf.call.template_key === 'welcome_volunteer', mf);
   await f.ev(() => { const s = document.querySelector('#w152sheet [data-w154tplsel]'); s.value = 'newsletter'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await f.page.waitForTimeout(700);
-  const nl = await f.ev(() => ({ allowed: /Allowed: express consent/.test(document.getElementById('w152sheet').innerText), go: !document.querySelector('#w152sheet [data-w154go]').disabled }));
-  ok('a newsletter to her is allowed on her express consent', nl.allowed && nl.go, nl);
+  const nl = await f.ev(() => ({ allowed: /Allowed: they have not unsubscribed/.test(document.getElementById('w152sheet').innerText), go: !document.querySelector('#w152sheet [data-w154go]').disabled }));
+  ok('a newsletter to her is allowed (the one rule: she has not unsubscribed)', nl.allowed && nl.go, nl);
   await click(f, '#w152sheet [data-w154go]'); await f.page.waitForTimeout(1200);
   const sent = await f.ev(() => ({ call: window.__calls.filter(c => c.action === 'send').pop(), sheet: window.w152.state().sheet }));
   ok('Send now calls the function for her and the newsletter, then returns to her page', sent.call && sent.call.contact_id === 5001 && sent.call.template_key === 'newsletter' && sent.sheet === 'c:5001', sent);
@@ -144,14 +144,14 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   await f.hash('#crm/c/5002', 1200);
   await click(f, '#w152sheet [data-w154send="5002"]'); await f.page.waitForTimeout(700);
   await f.ev(() => { const s = document.querySelector('#w152sheet [data-w154tplsel]'); s.value = 'newsletter'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await f.page.waitForTimeout(700);
-  const held = await f.ev(() => ({ held: /Held back/.test(document.getElementById('w152sheet').innerText), why: /no permission recorded/.test(document.getElementById('w152sheet').innerText), go: document.querySelector('#w152sheet [data-w154go]').disabled, live: !/test mode/.test(document.getElementById('w152sheet').innerText) }));
-  ok('a newsletter to someone with no permission is held back and Send now is disabled', held.held && held.why && held.go, held);
+  const held = await f.ev(() => ({ held: /Held back/.test(document.getElementById('w152sheet').innerText), allowed: /Allowed: they have not unsubscribed/.test(document.getElementById('w152sheet').innerText), go: document.querySelector('#w152sheet [data-w154go]').disabled }));
+  ok('a newsletter to someone with no consent on file who has not unsubscribed is allowed (Steel’s rule of 5 Nov 2026, task 10b)', !held.held && held.allowed && !held.go, held);
   await f.ev(() => { const s = document.querySelector('#w152sheet [data-w154tplsel]'); s.value = 'welcome_volunteer'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await f.page.waitForTimeout(700);
   const conf = await f.ev(() => ({ allowed: /Allowed: a confirmation or reminder/.test(document.getElementById('w152sheet').innerText), go: !document.querySelector('#w152sheet [data-w154go]').disabled }));
   ok('a confirmation to the same person is allowed (not a commercial message)', conf.allowed && conf.go, conf);
   await f.hash('#crm/c/5004', 1200);
   const bounced = await f.ev(() => ({ btn: !!document.querySelector('#w152sheet [data-w154send="5004"]'), perm: (document.querySelector('#w152sheet .w154perm') || {}).innerText }));
-  ok('a bouncing address gets no Send button and the line says no to everything', !bounced.btn && /Newsletters and appeals: no \(the address bounces\)/.test(bounced.perm || '') && /Confirmations and reminders: no/.test(bounced.perm || ''), bounced);
+  ok('a bouncing address gets no Send button and the line says no to everything', !bounced.btn && /Newsletters, fundraising and volunteer emails: no \(the address bounces\)/.test(bounced.perm || '') && /Receipts and confirmations: no/.test(bounced.perm || ''), bounced);
   ok('no page errors (admin)', f.errs.length === 0, f.errs);
   await f.close();
 

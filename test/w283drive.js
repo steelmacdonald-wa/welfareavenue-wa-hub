@@ -133,8 +133,8 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   /* the do-not-contact banner, and the control */
   await recordRpc(f);
   await f.hash('#crm/c/5002', 2000);
-  b = await f.ev(() => ({ banner: (document.querySelector('#w152sheet .w283dnc') || {}).innerText || '', ask: !!document.querySelector('#w152sheet [data-w283dncask]') }));
-  ok('a do-not-contact contact shows "Do not contact (asked)" under their name, with a way to clear it', /Do not contact \(asked\)/.test(b.banner) && b.ask, b);
+  b = await f.ev(() => ({ banner: (document.querySelector('#w152sheet .w283dnc') || {}).innerText || '', ask: !!document.querySelector('#w152sheet [data-w283dncclear]') }));
+  ok('a do-not-contact contact shows "Do not contact: they asked" under their name (the picker\'s words, task 10b), with a way to clear it', /Do not contact: they asked/.test(b.banner) && b.ask, b);
   /* final review I1: while do not contact is on, the Email permission form shows the email and text boxes disabled, says why, and has no Save */
   await click(f, '#w152sheet [data-w152perm-edit="5002"]'); await f.page.waitForTimeout(500);
   b = await f.ev(() => { const q = (s) => document.querySelector('#w152sheet ' + s) || {}; return { unsub: [q('[data-f="unsub"]').disabled, q('[data-f="unsub"]').checked], sms: [q('[data-f="sms_opt_out"]').disabled, q('[data-f="sms_opt_out"]').checked],
@@ -147,20 +147,21 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
     return { err: (document.querySelector('#w152sheet [data-w152err]') || {}).textContent || '', calls: n }; });
   ok('a save forced anyway writes nothing and says why', b.err === 'Do not contact is on. Clear it first to change these.' && b.calls === 0, b);
   await click(f, '#w152sheet [data-w152back="5002"]'); await f.page.waitForTimeout(400);
-  await click(f, '#w152sheet [data-w283dncask]'); await f.page.waitForTimeout(300);
-  b = await text(f, '#w152sheet .w283cf');
-  ok('clearing asks first and says it does not resubscribe them', /Clear do not contact for Bea Testasked\?/.test(b || '') && /This does not resubscribe them\./.test(b || ''), b);
+  /* task 10b (Steel's decision 3): clearing goes through at once, with a short note; it never resubscribes */
   await click(f, '#w152sheet [data-w283dncclear]'); await f.page.waitForTimeout(500);
-  b = await f.ev(() => ({ rpc: (window.__rpc || []).filter(x => x.fn === 'crm_set_do_not_contact'), banner: !!document.querySelector('#w152sheet .w283dnc'), perm: window.w152.state().contacts.filter(c => c.id === 5002)[0].email_status }));
-  ok('clearing calls crm_set_do_not_contact with no reason, the banner goes, and they stay unsubscribed', b.rpc.length === 1 && b.rpc[0].args.p_contact === 5002 && b.rpc[0].args.p_reason === null && !b.banner && b.perm === 'unsubscribed', b);
+  b = await f.ev(() => ({ rpc: (window.__rpc || []).filter(x => x.fn === 'crm_set_do_not_contact'), banner: !!document.querySelector('#w152sheet .w283dnc'), perm: window.w152.state().contacts.filter(c => c.id === 5002)[0].email_status,
+    note: (document.querySelector('#w152sheet [data-w283note]') || {}).textContent || '' }));
+  ok('clearing calls crm_set_do_not_contact with no reason at once, the banner goes, they stay unsubscribed, and a note says so', b.rpc.length === 1 && b.rpc[0].args.p_contact === 5002 && b.rpc[0].args.p_reason === null && !b.banner && b.perm === 'unsubscribed' && b.note === 'Cleared. This did not resubscribe them.', b);
   await f.hash('#crm/c/5003', 2000);
-  await click(f, '#w152sheet [data-w283dnc]'); await f.page.waitForTimeout(300);
-  ok('setting it without a reason asks for one (in the section)', (await text(f, '#w152sheet [data-w283dncerr]')) === 'Pick why first.');
+  ok('setting it: Do not contact waits for a reason (disabled until one is picked)', (await f.ev(() => document.querySelector('#w152sheet [data-w283dnc]').disabled)) === true);
   await setv(f, '#w152sheet [data-w283dncr]', 'deceased');
-  await click(f, '#w152sheet [data-w283dnc]'); await f.page.waitForTimeout(500);
+  await click(f, '#w152sheet [data-w283dnc]'); await f.page.waitForTimeout(300);
+  b = await f.ev(() => ({ cf: (document.querySelector('#w152sheet [data-w283cf]') || {}).innerText || '', rpc: (window.__rpc || []).filter(x => x.fn === 'crm_set_do_not_contact').length }));
+  ok('setting it asks first ("This unsubscribes them from everything. Clearing it later will not resubscribe them.") and saves nothing yet', /Set do not contact for Cal Testvolunteer\?/.test(b.cf) && /This unsubscribes them from everything\. Clearing it later will not resubscribe them\./.test(b.cf) && b.rpc === 1, b);
+  await click(f, '#w152sheet [data-w283dncyes]'); await f.page.waitForTimeout(500);
   b = await f.ev(() => ({ rpc: (window.__rpc || []).filter(x => x.fn === 'crm_set_do_not_contact'), banner: (document.querySelector('#w152sheet .w283dnc') || {}).innerText || '',
     writes: (window.__WAFIX.crm_contacts || []).length }));
-  ok('setting it calls crm_set_do_not_contact (deceased) and shows the banner', b.rpc.length === 2 && b.rpc[1].args.p_contact === 5003 && b.rpc[1].args.p_reason === 'deceased' && /Do not contact \(deceased\)/.test(b.banner), b);
+  ok('Yes calls crm_set_do_not_contact (deceased) and shows the banner', b.rpc.length === 2 && b.rpc[1].args.p_contact === 5003 && b.rpc[1].args.p_reason === 'deceased' && /Do not contact: deceased/.test(b.banner), b);
   /* the edit form: the birth date with hr_private, read from crm_contact_private */
   await f.hash('#crm/c/5001', 2000);
   await click(f, '#w152sheet [data-w152edit="5001"]'); await f.page.waitForTimeout(700);
@@ -196,7 +197,7 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   b = await f.ev(() => { const L = window.w155.lc(); L.check = { audience: 300, eligible: 290, held: 10, why: { unsubscribed: 10 }, first_contacts: 214, mode: 'test' }; window.w152.paint();
     return { first: (document.querySelector('#crm [data-w283first]') || {}).textContent || '', head: (document.querySelector('#crm .w154card h3') || {}).innerText || '', kind: [...document.querySelectorAll('#crm .w155lb .m')].map(x => x.textContent) }; });
   ok('the composer says New Send and the kind help line is the rule', /New Send/i.test(b.head) && b.kind.indexOf(RULE) >= 0, b);
-  ok('the composer shows the first-contact count', b.first === '214 of them have never had an email from Welfare Avenue: send them as a separate Send', b.first);
+  ok('the composer shows the first-contact count, saying what happens (task 10b, Steel\'s decision 6)', b.first === '214 people would get their first email from Welfare Avenue in this Send', b.first);
   await f.ev(() => { window.w155.lc().check = { audience: 5, eligible: 5, first_contacts: 0, mode: 'test' }; window.w152.paint(); });
   ok('and nothing when there are none', !(await f.ev(() => !!document.querySelector('#crm [data-w283first]'))));
   /* Sources and Leaving Keela */
@@ -221,8 +222,15 @@ const RPCS = (who, caps, cfg) => Object.assign({ wa_org_editor: who === 'admin',
   }
   await f.hash('#crm/c/5003', 2000);
   await click(f, '#w152sheet [data-w152perm-edit="5003"]'); await f.page.waitForTimeout(500);
-  b = await f.ev(() => ({ box: (document.querySelector('#w152sheet [data-f="unsub"]') || {}).checked, line: (document.querySelector('#w152sheet [data-w283spam]') || {}).textContent || '' }));
-  ok('a spam complaint: the box is ticked, with a line that says why it stays', b.box === true && b.line === 'They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.', b);
+  b = await f.ev(() => ({ box: (document.querySelector('#w152sheet [data-f="unsub"]') || {}).checked, dis: (document.querySelector('#w152sheet [data-f="unsub"]') || {}).disabled, line: (document.querySelector('#w152sheet [data-w283spam]') || {}).textContent || '' }));
+  ok('a spam complaint: the box is ticked and disabled (task 10b), with a line that says why it stays', b.box === true && b.dis === true && b.line === 'They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.', b);
+  /* final review M4 re-check: a Save with the box ticked (as drawn) must not turn complained into unsubscribed */
+  b = await f.ev(async () => { const rows = []; const f0 = db.from; db.from = function (t) { const q = f0.apply(db, arguments); if (t === 'crm_contacts') { const u0 = q.update; q.update = function (p) { rows.push(JSON.parse(JSON.stringify(p))); return u0.call(this, p); }; } return q; };
+    const box = document.querySelector('#w152sheet [data-f="unsub"]'); const ticked = box.checked;
+    try { await window.w152.savePerm('5003'); } finally { db.from = f0; }
+    return { ticked, rows, st: window.w152.state().contacts.filter(c => c.id === 5003)[0].email_status }; });
+  ok('a Save with the box ticked leaves complained as it is (no email_status written)', b.ticked === true && b.rows.length === 1 && !('email_status' in b.rows[0]) && b.st === 'complained', b);
+  await click(f, '#w152sheet [data-w152perm-edit="5003"]'); await f.page.waitForTimeout(400);
   b = await f.ev(async () => { const rows = []; const f0 = db.from; db.from = function (t) { const q = f0.apply(db, arguments); if (t === 'crm_contacts') { const u0 = q.update; q.update = function (p) { rows.push(JSON.parse(JSON.stringify(p))); return u0.call(this, p); }; } return q; };
     document.querySelector('#w152sheet [data-f="unsub"]').checked = false;
     try { await window.w152.savePerm('5003'); } finally { db.from = f0; }
