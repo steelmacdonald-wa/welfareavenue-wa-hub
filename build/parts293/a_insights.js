@@ -61,7 +61,7 @@
     if (d.allowed === false) return '<div class="w293box w293empty">' + svg(IC.lock) + ' Insights are for the Welfare Avenue team with the CRM.</div>';
     var asOf = d.as_of ? new Date(d.as_of) : null, when = asOf && !isNaN(asOf) ? asOf.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(/\./g, '') : '';
     var note = d.steel_open ? '' : d.admin ? 'You see Steel’s mailbox in these counts; the rest of the team does not until he opens it.' : 'These counts leave out Steel’s mailbox until he opens it to the team.';
-    return '<div class="w293hd"><div class="w293hdt"><h2>Insights</h2><p>Who emailed with Welfare Avenue, the organisations who write most, and who has gone quiet. From the email history and every timeline' + (when ? '; worked out at ' + E(when) : '') + '.</p>' +
+    return '<div class="w293hd"><div class="w293hdt"><p class="w293lead">Who emailed with Welfare Avenue, the organisations who write most, and who has gone quiet. From the email history and every timeline' + (when ? '; worked out at ' + E(when) : '') + '.</p>' +
       (note ? '<p class="w293note" data-w293note>' + svg(IC.lock) + E(note) + '</p>' : '') + '</div>' +
       '<button class="w293btn soft" data-w293reload="1"' + (S.busy ? ' disabled aria-busy="true"' : '') + '>' + svg(IC.refresh) + (S.busy ? 'Working…' : 'Refresh') + '</button></div>' +
       (S.err ? '<div class="w293warn" role="status">The refresh did not finish (' + E(S.err) + '). These are the last numbers.</div>' : '') +

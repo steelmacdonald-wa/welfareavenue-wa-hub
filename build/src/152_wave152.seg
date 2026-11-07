@@ -937,7 +937,7 @@
   }
   function threadHtml(x, st, d) {
     var open = !!st.open[x.key];
-    return '<details class="w293em" data-w293det="' + E(x.key) + '"' + (open ? ' open' : '') + '><summary>' + I('chev', 'w293chev') + '<span>Show the ' + x.emails.length.toLocaleString('en-CA') + ' emails</span></summary>' +
+    return '<details class="w293em" data-w293det="' + E(x.key) + '"' + (open ? ' open' : '') + '><summary>' + I('chevd', 'w293chev') + '<span>Show the ' + x.emails.length.toLocaleString('en-CA') + ' emails</span></summary>' +
       '<ol class="w293list">' + x.emails.map(function (m) {
         var mb = (m.meta || {}).mailbox, inn = lower(m.direction) === 'in';
         return '<li><div class="w293mh"><span class="w293d w152num">' + E(fmtDay(m.occurred_at)) + '</span><span class="w293dir ' + (inn ? 'in' : 'out') + '">' + (inn ? 'From them' : 'To them') + '</span><span class="w293mb">' + E(BOXES[mb] || mb || '') + '</span></div>' +
