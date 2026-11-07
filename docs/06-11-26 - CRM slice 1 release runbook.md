@@ -39,7 +39,7 @@ The candidate is the page built from the release commit with `bash build/build.s
 
 For each wave: first the rollback check (`python3 build/sql_rollback_test.py <release sha> <files>`, run through the Supabase connector, which must answer ROLLBACK_OK and keeps nothing), then Steel's yes, then the SQL, then its checks, then its functions. The checks for each wave are in its own document under "Release steps". Each wave's rollback block assumes the waves before it are already applied for real.
 
-1. **wave281, the CRM rules** (`docs/06-11-26 - wave281 CRM rules.md`).
+1. **wave281, the CRM rules** (`docs/06-11-26 - wave281 CRM rules.md`). **LIVE 07/11/26 at c157e49** (quo-send deployment 19, whatsapp-send deployment 2); the live STOP text check waits on Steel (see the wave281 release record).
    - Rollback check: `test/w281live_before.sql build/data/wa281_rules.sql test/w281live.sql`.
    - SQL: `build/data/wa281_rules.sql`, by pinned fetch at the release commit.
    - Check: the chapter rows the morning's data predicts, the consent rows, 7 Campaigns, the release line, and the trigger `trg_wa281_dnc_hold` (do-not-contact holds texts, WhatsApp and email on its own).

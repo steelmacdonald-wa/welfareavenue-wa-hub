@@ -64,6 +64,16 @@ Seven live functions are changed by exact replacement of a line in their live te
 5. As Steel, call each new function once: `wa_my_caps()`, `crm_in_chapter(<a contact>, 'toronto')`, `crm_age_band(<a contact>)` (null until birth dates come in), `crm_set_do_not_contact` only on a test contact.
 6. Add the release record to this document.
 
+## Release record (07/11/26, on Steel's yes)
+
+- **Before:** live page bae461b9, form page efdb9627, quo-send deployment 18, whatsapp-send deployment 1, as the runbook expects.
+- **Rollback checks at c157e49:** the migration twice plus the live checks: ROLLBACK_OK. The full undo cycle (migration, undo twice, undo checks, migration again, live checks): ROLLBACK_OK. The first try of the second run hit a GitHub fetch timeout (SSL), not a test failure; the retry passed.
+- **Applied** `build/data/wa281_rules.sql` (md5 c1f836b6612dd80c5884267c40b7ce5b) by pinned fetch at c157e49, about 13:52 UTC.
+- **Checks:** 44 Toronto and 463 Montreal chapter rows; 65 consent rows; 7 Campaigns (in `wa_campaigns`; the older `crm_campaigns` table is unrelated and has 0); `trg_wa281_dnc_hold` present; 2 phones in `wa_stopped_phones_v`; release line change_log 13676.
+- **Functions:** quo-send v9 (deployment 19, verify_jwt on) and whatsapp-send v2 (deployment 2, verify_jwt off, as before), each as the one-line stub pinned to c157e49.
+- **Step 5, as Steel's WA account, in a rolled-back block:** `is_wa_admin` true; `wa_my_caps` gives gifts_edit, hr_private and import_admin true; `crm_in_chapter` true for a Toronto contact; `crm_age_band` null. `crm_set_do_not_contact` on an invented contact set do-not-contact (reason other), all three opt-outs (texts, WhatsApp, email unsubscribed) and 3 consent rows; nothing kept. Note: `is_wa_admin` reads the email in the token, so an impersonation test must put `email` in `request.jwt.claims`.
+- **Step 4 (live STOP check) not run.** `sms_mode` is live, not test, and neither stopped phone is a test phone; both belong to real people. Running it as written would mean texting a person who said STOP if the check failed, or switching every automatic text to test mode. Waiting on Steel: text STOP from a test phone (then START after), or accept the offline and rollback proof.
+
 ## Undo
 
 1. Claude applies `build/data/wa281_undo.sql`. It puts back the seven functions, `crm_contacts_v`, `crm_contact_match` and the policy exactly as live had them on 06/11/26, then drops the functions, triggers, policies, views and grants wave281 added.
