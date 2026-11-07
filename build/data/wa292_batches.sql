@@ -663,20 +663,24 @@ end $function$;
 comment on function public.wa292_delete_created(bigint, text) is 'wave292: Delete created and untouched (5.7), on an undone mail_people batch of a run not purged, after the page''s centred confirmation and Steel''s yes: deletes the contacts the batch created that are unchanged since (apart from the review tag) and hold nothing else (no gift, interaction, organisation link, custom field, form answer, application, Send, type row, Campaign row, roster row or list). The deletions are suppressed as kind undo (wa.suppress_kind), which does not block a later run. Logged in change_log and the batch report (counts only). The service role only.';
 
 -- ============================================================================================ 11. the summary pass (5.9; mail-history v2 calls these)
-create or replace function public.crm_insight_input(p_contact bigint)
+-- eh-293 N1: p_hub_only leaves Steel's mailbox lines out (a non-admin's Refresh while his lines are closed); the one-argument form is replaced
+drop function if exists public.crm_insight_input(bigint);
+create or replace function public.crm_insight_input(p_contact bigint, p_hub_only boolean default false)
 returns jsonb language sql stable security definer set search_path to '' as $function$
   select jsonb_build_object(
     'contact_id', p_contact,
-    'count', (select count(*) from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail'),
-    'from_steel', exists (select 1 from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and i.meta ->> 'mailbox' = 'steel'),
+    'count', (select count(*) from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and (not p_hub_only or (i.meta ->> 'mailbox') is distinct from 'steel')),
+    'from_steel', not p_hub_only and exists (select 1 from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and i.meta ->> 'mailbox' = 'steel'),
     'rows', (select coalesce(jsonb_agg(jsonb_build_object('date', to_char(q.occurred_at at time zone 'America/Toronto', 'YYYY-MM-DD'), 'direction', q.direction,
                                                           'mailbox', q.meta ->> 'mailbox', 'subject', q.subject, 'line', q.body, 'topic', q.meta ->> 'topic') order by q.occurred_at), '[]'::jsonb)
-               from (select * from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' order by i.occurred_at desc
+               from (select * from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and (not p_hub_only or (i.meta ->> 'mailbox') is distinct from 'steel') order by i.occurred_at desc
                       limit coalesce((public.wa284_cfg('mail_history_clips') ->> 'rows_per_summary')::int, 60)) q))
 $function$;
-comment on function public.crm_insight_input(bigint) is 'wave292: what the summary pass and Refresh read for one contact: their email history lines only (crm_interactions source gmail: date, direction, mailbox, cleaned subject, one line, topic), the latest mail_history_clips.rows_per_summary (60), how many there are and whether any came from Steel''s mailbox. Never a body or a left-out thread. The service role only (mail-history checks the caller first).';
+comment on function public.crm_insight_input(bigint, boolean) is 'wave292: what the summary pass and Refresh read for one contact: their email history lines only (crm_interactions source gmail: date, direction, mailbox, cleaned subject, one line, topic), the latest mail_history_clips.rows_per_summary (60), how many there are and whether any came from Steel''s mailbox. With p_hub_only (eh-293 N1: a non-admin''s Refresh while Steel''s lines are closed) his mailbox''s lines are left out entirely and from_steel is false. Never a body or a left-out thread. The service role only (mail-history checks the caller first).';
 
-create or replace function public.crm_insight_save(p_contact bigint, p_row jsonb, p_by text)
+-- eh-293 N1: p_hub_only marks a summary written from hub@ and info@ lines only; it never replaces a row from Steel's mailbox
+drop function if exists public.crm_insight_save(bigint, jsonb, text);
+create or replace function public.crm_insight_save(p_contact bigint, p_row jsonb, p_by text, p_hub_only boolean default false)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare k text; v_topics text[]; v_sum text; v_open text; v_steel boolean; v_bad text := '(https?://|www\.|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|(\+?\d[\s.()-]*){10,})';
 begin
@@ -693,7 +697,14 @@ begin
   if exists (select 1 from unnest(v_topics) t where t not in ('donation', 'partnership', 'volunteering', 'event', 'media', 'supplier', 'government', 'program', 'other')) then
     raise exception 'wa284: email history: unknown topic';
   end if;
-  v_steel := exists (select 1 from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and i.meta ->> 'mailbox' = 'steel');
+  v_steel := not p_hub_only and exists (select 1 from public.crm_interactions i where i.contact_id = p_contact and i.source = 'gmail' and i.meta ->> 'mailbox' = 'steel');
+  -- eh-293 N1: a hub-only summary never overwrites or erases a row from Steel's mailbox: the write is skipped, the log line (the daily quota)
+  -- is still written, and the caller's answer is the same as for any other contact
+  if p_hub_only and exists (select 1 from public.crm_email_relationship x where x.contact_id = p_contact and x.from_steel) then
+    insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+    values ('crm_contact', p_contact::text, 'email summary', null, 'Written by the Hub', left(coalesce(nullif(p_by, ''), 'Email history'), 120));
+    return jsonb_build_object('ok', true, 'from_steel', false);
+  end if;
   insert into public.crm_email_relationship as r (contact_id, topics, open_item, summary, from_steel, stale, model, cost, generated_at, generated_by)
   values (p_contact, v_topics, v_open, v_sum, v_steel, false, left(p_row ->> 'model', 120), greatest(coalesce((p_row ->> 'cost')::numeric, 0), 0), now(), left(coalesce(nullif(p_by, ''), 'Email history'), 120))
   on conflict (contact_id) do update set topics = excluded.topics, open_item = excluded.open_item, summary = excluded.summary, from_steel = r.from_steel or excluded.from_steel,
@@ -702,7 +713,7 @@ begin
   values ('crm_contact', p_contact::text, 'email summary', null, 'Written by the Hub', left(coalesce(nullif(p_by, ''), 'Email history'), 120));
   return jsonb_build_object('ok', true, 'from_steel', v_steel);
 end $function$;
-comment on function public.crm_insight_save(bigint, jsonb, text) is 'wave292: saves one contact''s relationship summary ({topics, open_item, summary, model, cost}) into crm_email_relationship (upsert; stale false; from_steel when any of their lines came from Steel''s mailbox). Refuses other keys, body-like keys, a summary over 600 characters or anything open over 300, a link, address or phone, and unknown topics. Logged in change_log without the text. The service role only.';
+comment on function public.crm_insight_save(bigint, jsonb, text, boolean) is 'wave292: saves one contact''s relationship summary ({topics, open_item, summary, model, cost}) into crm_email_relationship (eh-293 N1: with p_hub_only, a summary from hub@ and info@ lines only, the row is left untouched when it is from Steel''s mailbox, and the log line is written either way; upsert; stale false; from_steel when any of their lines came from Steel''s mailbox). Refuses other keys, body-like keys, a summary over 600 characters or anything open over 300, a link, address or phone, and unknown topics. Logged in change_log without the text. The service role only.';
 
 -- eh-292 minor: Refresh has a daily limit per person (mail_history_refresh_daily, 20 by default), counted from crm_insight_save's change_log lines
 insert into public.app_config (key, value) values ('mail_history_refresh_daily', '20') on conflict (key) do nothing;

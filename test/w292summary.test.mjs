@@ -151,20 +151,48 @@ test('Refresh one contact: the same three steps, no run', async () => {
   assert.deepEqual(S.validateSummary({ topics: ['donation'], summary: 'Gave twice — thanks.' }).value.summary, 'Gave twice, thanks.');
 });
 
-test('eh-293 A-I1: a member cannot tell a contact with Steel\'s lines from a contact with none', async () => {
-  const steelMixed = await contact('new.writer@neworg.example.org');   // lines from Steel's mailbox
-  const none = 4004;                                                   // Test Phone Person: no email lines
+test('eh-293 A-I1 and N1: a member cannot tell a contact who wrote to Steel from one who did not', async () => {
+  const steelOnly = await contact('new.writer@neworg.example.org');   // two lines, both from Steel's mailbox
+  const none = (await q(`select id from public.crm_contacts where id = 4004`))[0].id;   // no email lines
   const member = { email: 'w293.member@example.invalid', admin: false, open: false };
+  const left = async (e) => (await q(`select public.wa292_refresh_left($1) as n`, [e]))[0].n;
+  // a contact with only Steel's lines gets the no-lines answer
   const a = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
-  const b = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
-  const rs = await S.insightAnswer(a.deps, steelMixed, member);
-  const rn = await S.insightAnswer(b.deps, none, member);
-  assert.deepEqual(rs, rn, 'the same status and body for both');
-  assert.deepEqual(rs, { status: 200, body: { ok: true, saved: false, model: 'none', cost: 0 } });
-  assert.ok(!/steel|mailbox/i.test(JSON.stringify(rs)), 'nothing mentions Steel\'s mailbox');
-  assert.equal(a.calls.length + b.calls.length, 0, 'no router call for either');
-  // an admin is answered with a summary for the same contact
-  const adm = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
-  const ra = await S.insightAnswer(adm.deps, steelMixed, { email: 'w293.admin@example.invalid', admin: true, open: false });
-  assert.equal(ra.status, 200); assert.equal(ra.body.saved, true);
+  const rs = await S.insightAnswer(a.deps, steelOnly, member);
+  const rn = await S.insightAnswer(makeDeps([null]).deps, none, member);
+  assert.deepEqual(rs, rn); assert.deepEqual(rs, { status: 200, body: { ok: true, saved: false, model: 'none', cost: 0 } });
+  assert.equal(a.calls.length, 0, 'no router call');
+  // a mixed contact (Steel's lines and two hub@ lines) and a hub-only contact (two hub@ lines)
+  const hubOnly = (await q(`select id from public.crm_contacts where id = 9302`))[0].id;
+  const add = async (cid, tag) => {
+    for (const k of [1, 2]) await q(`insert into public.crm_interactions (contact_id, kind, direction, channel, subject, body, occurred_at, source, source_ref, meta, created_by)
+      values ($1, 'email', 'in', 'email', 'Test subject', 'A test line about the next drive.', now() - ($2 || ' days')::interval, 'gmail', $3, $4, 'Email history')`,
+      [cid, String(10 + k), 'hub:gm293N' + tag + k + ':k', JSON.stringify({ mailbox: 'hub', thread: 'th293' + tag, topic: 'event' })]);
+  };
+  await add(steelOnly, 'M'); await add(hubOnly, 'H');
+  // the admin's summary from Steel's mailbox, first
+  const adm = makeDeps([{ topics: ['partnership'], summary: 'The admin summary from every line.' }]);
+  assert.equal((await S.insightAnswer(adm.deps, steelOnly, { email: 'w293.admin@example.invalid', admin: true, open: false })).body.saved, true);
+  const before = (await q(`select summary, from_steel from public.crm_email_relationship where contact_id = $1`, [steelOnly]))[0];
+  assert.equal(before.summary, 'The admin summary from every line.'); assert.equal(before.from_steel, true);
+  // the member, on both
+  const m1 = makeDeps([{ topics: ['event'], summary: 'Asks about the next drive.' }]);
+  const m2 = makeDeps([{ topics: ['event'], summary: 'Asks about the next drive.' }]);
+  const q0 = await left(member.email);
+  const rm = await S.insightAnswer(m1.deps, steelOnly, member);
+  const q1 = await left(member.email);
+  const rh = await S.insightAnswer(m2.deps, hubOnly, member);
+  const q2 = await left(member.email);
+  assert.deepEqual(rm, rh, 'identical status and body for the mixed and the hub-only contact');
+  assert.deepEqual(Object.keys(rm.body).sort(), ['cost', 'model', 'ok', 'saved']);
+  assert.equal(rm.body.saved, true);
+  assert.equal(q0 - q1, 1); assert.equal(q1 - q2, 1, 'the same quota charge for both');
+  assert.equal(m1.calls.length, 1); assert.equal(m2.calls.length, 1, 'the same work: one router call each');
+  assert.ok(!/Steel|steel/.test(m1.calls[0].body), 'the member\'s summary never reads a line from Steel\'s mailbox');
+  assert.ok(!/steel/i.test(JSON.stringify(rm)), 'nothing mentions his mailbox');
+  // the admin's summary survives
+  const after = (await q(`select summary, from_steel from public.crm_email_relationship where contact_id = $1`, [steelOnly]))[0];
+  assert.deepEqual(after, before, 'the member never overwrites a summary from Steel\'s mailbox');
+  const hub = (await q(`select summary, from_steel from public.crm_email_relationship where contact_id = $1`, [hubOnly]))[0];
+  assert.equal(hub.summary, 'Asks about the next drive.'); assert.equal(hub.from_steel, false, 'a hub-only summary is not marked from Steel\'s mailbox');
 });

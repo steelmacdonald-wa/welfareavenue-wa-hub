@@ -95,6 +95,7 @@ Purposes 2 and 3 are new uses the legal adviser must confirm before any Send.
 - **The " via " swap** happens only for the group's own posts (its List-Id) or a From at welfareavenue.com, so "X via Eventbrite" keeps its own sender.
 - **Deleting a contact** with email history removes that address's staging rows from unpurged runs (`wa292_suppress_on_delete`), so a batch compared before the delete needs a new Compare before Apply.
 - **eh-293 review:** a later run's new lines mark an existing summary stale (the summary pass writes it again) and a line or type from Steel's mailbox marks the row `from_steel` (B-M2); `no_reply@`, `noreply-x@` and `newsletter+fr@` through the group are automated (B-M3); the header names `wa282_first_contact_core` as anchored (B-M1).
+- **eh-293 N1:** `crm_insight_input(contact, p_hub_only)` and `crm_insight_save(..., p_hub_only)`: a non-admin's Refresh reads hub@ and info@ lines only, and a hub-only save never replaces a row from Steel's mailbox (the write is skipped, the quota line still logged).
 - **Runbook: never re-run wave282 after wave292.** Its `create or replace` of `wa282_first_contact_core` drops wave292's thread clause; if it ever happens, run `wa292_batches.sql` again straight after.
 
 ## Files

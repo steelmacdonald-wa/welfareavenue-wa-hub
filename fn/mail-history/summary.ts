@@ -75,13 +75,13 @@ export function validateSummary(raw: unknown): { value: { topics: string[]; open
 /** One contact: input, the route (or no model), save. Returns counts only. */
 /** onCost (eh-292 fix 2): called after every router call with that call's cost, so the run's spend is recorded call by call (a later failure
  *  loses nothing); it returns true when the run must stop (paused or at its cap), and then no further call is made for this contact. */
-export async function summariseContact(deps: SummaryDeps, contactId: number, by: string, onCost?: (usd: number) => Promise<boolean>): Promise<{ saved: boolean; model: string; cost: number; rejected: number; calls: number; stopped: boolean }> {
-  const input = await deps.rpc('crm_insight_input', { p_contact: contactId });
+export async function summariseContact(deps: SummaryDeps, contactId: number, by: string, onCost?: (usd: number) => Promise<boolean>, hubOnly = false): Promise<{ saved: boolean; model: string; cost: number; rejected: number; calls: number; stopped: boolean }> {
+  const input = await deps.rpc('crm_insight_input', { p_contact: contactId, p_hub_only: hubOnly });   // eh-293 N1: hub@ and info@ lines only for a non-admin
   const rows: Row[] = (input && input.rows) || [];
   const count = Number((input && input.count) || 0);
   if (!count || !rows.length) return { saved: false, model: 'none', cost: 0, rejected: 0, calls: 0, stopped: false };
   if (count === 1) {
-    await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: oneEmail(rows[0]), topics: rows[0].topic ? [rows[0].topic] : [], model: 'none', cost: 0 }, p_by: by });
+    await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: oneEmail(rows[0]), topics: rows[0].topic ? [rows[0].topic] : [], model: 'none', cost: 0 }, p_by: by, p_hub_only: hubOnly });
     return { saved: true, model: 'none', cost: 0, rejected: 0, calls: 0, stopped: false };
   }
   let cost = 0, rejected = 0, calls = 0, stopped = false;
@@ -97,27 +97,27 @@ export async function summariseContact(deps: SummaryDeps, contactId: number, by:
     if (v.value) {
       const model = clip(String((res.out && res.out.model) || 'mail_history_insight'), 120);
       try {
-        await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { ...v.value, model, cost }, p_by: by });
+        await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { ...v.value, model, cost }, p_by: by, p_hub_only: hubOnly });
         return { saved: true, model, cost, rejected, calls, stopped };
       } catch (_) { /* the database refused it (a check the code missed): try once more, then the counts line */ }
     }
     rejected++;
     if (stopped) break;   // paused or at the cap: no second call; the counts line below costs nothing
   }
-  await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: countsOnly(rows, count), topics: [], model: 'none', cost }, p_by: by });
+  await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: countsOnly(rows, count), topics: [], model: 'none', cost }, p_by: by, p_hub_only: hubOnly });
   return { saved: true, model: 'none', cost, rejected, calls, stopped };
 }
 
 export const REFRESH_LIMIT = "You have reached today's limit for writing summaries. Try again tomorrow.";
-/** Refresh one contact (mail-history insight) for a signed-in staff member. eh-293 A-I1: a non-admin, while Steel's lines are closed (H1),
- *  gets for a contact with lines from Steel's mailbox exactly the answer a contact with no lines gets ({ok, saved: false}), so the call
- *  never tells them which contacts Steel corresponds with; nothing mentions his mailbox. The daily limit is checked first, for everyone. */
+/** Refresh one contact (mail-history insight) for a signed-in staff member. eh-293 A-I1 and N1: a non-admin, while Steel's lines are closed
+ *  (H1), gets a summary built from hub@ and info@ lines only, on the same path, with the same answer, the same quota charge and about the same
+ *  work as a contact who never wrote to Steel: his mailbox's lines are left out of the input, a contact with only his lines gets the no-lines
+ *  answer, and a summary from his mailbox already stored is never overwritten (the write is skipped, the log line that counts the quota is
+ *  kept). Nothing mentions his mailbox. The daily limit is checked first, for everyone. */
 export async function insightAnswer(deps: SummaryDeps, contactId: number, staff: { email: string; admin: boolean; open: boolean }): Promise<{ status: number; body: Record<string, unknown> }> {
   const left = Number(await deps.rpc('wa292_refresh_left', { p_by: staff.email }));
   if (Number.isFinite(left) && left <= 0) return { status: 429, body: { error: REFRESH_LIMIT } };
-  const input = await deps.rpc('crm_insight_input', { p_contact: contactId });
-  if (input && input.from_steel && !staff.admin && !staff.open) return { status: 200, body: { ok: true, saved: false, model: 'none', cost: 0 } };
-  const r = await summariseContact(deps, contactId, staff.email);
+  const r = await summariseContact(deps, contactId, staff.email, undefined, !staff.admin && !staff.open);
   return { status: 200, body: { ok: true, saved: r.saved, model: r.model, cost: r.cost } };
 }
 
