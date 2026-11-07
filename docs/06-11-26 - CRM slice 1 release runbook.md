@@ -48,7 +48,7 @@ For each wave: first the rollback check (`python3 build/sql_rollback_test.py <re
    - Rollback check: `test/w282live_before.sql build/data/wa282_mail_rule.sql test/w282live.sql`.
    - SQL: `build/data/wa282_mail_rule.sql`. Function: mail-send v7, pinned stub, after the SQL.
    - **Hold:** `mail_mode` is live, so no newsletter or fundraising Send goes out until the two planned Sends (the main list, then the first contacts) that the wave282 document describes.
-3. **wave283, the CRM page's rules and gift rights** (`docs/06-11-26 - wave283 CRM page and gift rights.md`).
+3. **wave283, the CRM page's rules and gift rights** (`docs/06-11-26 - wave283 CRM page and gift rights.md`). **LIVE 07/11/26 at c157e49** (database and receipt-pdf deployment 10; page waits for the slice swap).
    - Rollback check: `test/w283live_before.sql build/data/wa283_page.sql test/w283live.sql`.
    - SQL: `build/data/wa283_page.sql`. Function: receipt-pdf v3, pinned stub, after the SQL.
 4. **wave284, the Import page** (`docs/06-11-26 - wave284 the Import page.md`).

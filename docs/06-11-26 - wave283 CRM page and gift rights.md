@@ -59,6 +59,15 @@ Hub CRM slice 1, Phase 3 (design CRM-S1 v2, items 12 to 22; Part A.9). Built on 
 6. Live checks, signed in as Steel: the rail says Sends; Record a gift is there; a contact shows the Do not contact section; Edit shows the chapters and the birth date; Email settings has no fundraising switch; `wa_my_caps()` gives all three. Then, with a team lead's account if one is at hand, Record a gift is there and the receipts settings are not.
 7. Add the release record to this document and commit `build/candidate.html` with it.
 
+## Release record (07/11/26, on Steel's yes; database and function only)
+
+- **Before:** waves 281 and 282 live (same day); live page bae461b9 and form page efdb9627 unchanged. The five receipt functions' md5s before: crm_receipt_issue 3322eddd, crm_receipt_replace cc327753, crm_receipt_cancel 09a7b4d8, crm_receipt_config 68243b92, crm_receipt_doc 9675fe7e.
+- **Rollback checks at c157e49** (wave281 left out, since it is live): the migration twice plus the live checks: ROLLBACK_OK. The undo cycle (undo twice, undo checks, migration again, live checks): ROLLBACK_OK.
+- **Applied** `build/data/wa283_page.sql` (md5 d6be2bbd1994ce043998d7d30a6cb47e) by pinned fetch at c157e49, about 14:01 UTC.
+- **Checks:** all five functions changed (now d3dda478, eecb5efb, 4786f435, 0b7bfd67, bb842c58); `crm_donations` policies are staff_read (SELECT) and gifts_insert, gifts_update, gifts_delete; `trg_wa283_gift_audit` present; the three French words (Envois, Importations, Ne pas contacter); one release line in change_log.
+- **receipt-pdf v3** deployed as deployment 10 (verify_jwt on), the one-line stub pinned to c157e49 (its index.ts is the built bundle, fonts inside). An OPTIONS request answered "ok" from the new code.
+- **Not yet:** the page. It goes out once for the whole slice (runbook section 2), so step 6's checks (Sends in the rail, Record a gift, Do not contact, chapters and birth date, no fundraising switch) wait for that swap. Until then the old page shows the old labels; gift changes on it now follow the new rights (team leads, admins, finance).
+
 ## Undo
 
 1. Put the page back as `docs/06-11-26 - CRM slice 1 release runbook.md` says (step 5): bae461b9 rebuilt from `origin/wave287-projects-overview` 940c905, first, before any undo file. Never the segments of the commit before this wave's page commit: that would drop other sessions' live work (wave274's one Volunteer Manager, wave285, wave287).
