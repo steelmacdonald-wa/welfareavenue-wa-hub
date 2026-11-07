@@ -78,6 +78,9 @@ After wave281, wave282, wave283 and wave284's SQL, receipt-pdf v3 and crm-import
 
 The new `/f/` page is safe before wave288: it shows the second box only when form-submit v10 hands it a form whose text box is on, which only wave288's SQL sets.
 
+
+**Page swap done 07/11/26, about 14:20 UTC, on Steel's yes.** Live was bae461b9 and efdb9627. The candidate was built from the git objects at c157e49 (`git -c core.autocrlf=false archive`, then the MANIFEST order joined in Python, CRLF to LF, one final newline): md5 ffb1d928, 8,486,307 bytes, check_remaps clean. Staged in `wa_stage_slice1` (insert-only for anon while posting, closed straight after; all 10 parts 201), the gate passed (live, parts, assembled md5, tail, markers data-w281dnc, data-w283spam, __wa284) and swapped the ten parts; host-sync 200. `f/index.html` written from the blob at c157e49 (da9c679f, 53,378 bytes), guarded efdb9627 before; host-sync 200. The live site served both byte for byte (curl: ffb1d928 and da9c679f). The stage table was dropped. Signed in as Steel in the browser: the CRM rail shows Imports after Sources and Sends under Email; a contact shows Record a gift, the 5 Nov email wording and the Do not contact section; no console errors. The four Toronto forms are still closed or draft (step 6 is its own yes).
+
 ## 3. The website
 
 The website pull request, steelmacdonald-wa/welfareavenue-site-frontend#7 (the Toronto forms on the site), merges only after wave288 is live and the new `/f/` page is live (section 2, step 6).
