@@ -163,5 +163,6 @@
     /* task 10b: phones get 44px targets and 16px fields (iOS zooms the page on focus below 16px), as wave274 does */
     + '@media (max-width:700px){.w152btn,.w152mini,.w152sel,.w152form .chk,.w152form .kinds label{min-height:44px;box-sizing:border-box;}'
     + '.w152sel,.w152in,.w152q input,.w152form input,.w152form select,.w152form textarea,.w152log select,.w152log input,.w152log textarea,.w152tags input{font-size:16px !important;}'
+    + '.w152sel{max-width:100%;min-width:0;}.w152st b{font-size:clamp(22px,7vw,34px);}'
     + '#w152sheet .xb{width:44px;height:44px;}.w152tags .w152tg button{min-width:32px;min-height:32px;}}';
   document.head.appendChild(css);
