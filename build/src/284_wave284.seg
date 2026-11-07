@@ -151,6 +151,19 @@
   function itemHtml(x) { return isPair(x) ? pairHtml(x) : E(itemText(x)); }
   function nonZero(o) { return Object.keys(o || {}).filter(function (k) { return Number(o[k]) > 0; }); }
   function cnt(n) { return ' <em class="w284cnt">' + num(n) + '</em>'; }
+  /* how the import read an event: the kind ("opt-out") and what it does ("(unsubscribed)") each never break; in a narrow card the second goes
+     under the first, never a word cut in two */
+  function readAs(v) {
+    var t = READ_AS[v] || String(v || ''), m = /^(\S+) (\(.+\))$/.exec(t);
+    return m ? '<span>' + E(m[1]) + '</span> <span>' + E(m[2]) + '</span>' : '<span>' + E(t) + '</span>';
+  }
+  /* a long table scrolls inside its own region (180 to 320 px) under a header that stays put, so the card stays short enough to check before Apply */
+  function tableHtml(key, capHtml, heads, rows, cls) {
+    var id = 'w284c-' + key;
+    return '<p class="w284cap" id="' + id + '">' + capHtml + '</p>'
+      + '<div class="w284scroll" role="region" tabindex="0" aria-labelledby="' + id + '" data-w284keep="' + E(key) + '"><table class="w284keys' + (cls ? ' ' + cls : '') + '" aria-labelledby="' + id + '"><thead><tr>'
+      + heads.map(function (h) { return '<th scope="col">' + E(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
   function listsHtml(kind, b) {
     var r = b && b.report; if (!r) return '';
     var l = r.lists || {}, sk = (r.counts && r.counts.skipped) || {}, parts = [];
@@ -159,8 +172,8 @@
     if (nonZero(kept).length) parts.push('<div class="w284ls"><b>The Hub kept its value</b><ul>' + nonZero(kept).map(function (k) { return '<li>' + E(FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ': ' + num(kept[k]) + '</li>'; }).join('') + '</ul></div>');
     /* round 3: every Keela event wording with how the import read it, so staff can check the reading before Apply (event types, not personal data) */
     var ew = l.event_words || [];
-    if (ew.length) parts.push('<div class="w284ls"><table class="w284keys w284words"><caption>Event words and how the import read them</caption><thead><tr><th scope="col">Words</th><th scope="col">Read as</th><th scope="col">Events</th></tr></thead><tbody>'
-      + ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td>' + E(READ_AS[x.read_as] || x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join('') + '</tbody></table></div>');
+    if (ew.length) parts.push('<div class="w284ls">' + tableHtml('words-' + kind, 'Event words and how the import read them' + cnt(ew.length), ['Words', 'Read as', 'Events'],
+      ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td class="w284ra">' + readAs(x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join(''), 'w284words') + '</div>');
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
       var arr = l[k] || []; if (!arr.length) return;
@@ -284,8 +297,8 @@
         if (!keys) kh = '<p class="w284note">Reading the keys\u2026</p>';
         else if (keys.error) kh = '<p class="w284err">' + E(keys.error) + '</p>';
         else {
-          kh = '<table class="w284keys"><caption>Keys in this file (never values)</caption><thead><tr><th scope="col">Key</th><th scope="col">Rows with a value</th></tr></thead><tbody>'
-            + keys.map(function (k) { return '<tr><td>' + E(k.key) + '</td><td>' + num(k.filled) + '</td></tr>'; }).join('') + '</tbody></table>';
+          kh = tableHtml('keys-' + f.id, 'Keys in this file (never values)' + cnt(keys.length), ['Key', 'Rows with a value'],
+            keys.map(function (k) { return '<tr><td>' + E(k.key) + '</td><td>' + num(k.filled) + '</td></tr>'; }).join(''));
           if (f.kind === 'keela_contacts_json') {
             var cur = keysCfg.subscription_history || '';
             kh += '<label class="w284row"><span>Subscription history key (opt-outs and consent read it)</span><select class="w284sel" data-w284subkey="1"><option value="">Pick the key</option>'
@@ -646,9 +659,18 @@
       + '.w284file{border-top:1px solid rgba(16,63,57,.1);padding-top:10px;display:flex;flex-direction:column;gap:8px;min-width:0;}'
       + '.w284fh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;overflow-wrap:anywhere;}.w284fh .m{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}'
       + '.w284fp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;font-variant-numeric:tabular-nums;}'
-      + '.w284keys{border-collapse:collapse;font-size:12.5px;width:100%;max-width:560px;}'
-      + '.w284keys caption{text-align:left;font-weight:700;color:' + GREEN + ';padding-bottom:4px;}'
+      + '.w284keys{border-collapse:collapse;font-size:12.5px;width:100%;}'
+      + '.w284cap{margin:0 0 4px;font-size:12.5px;font-weight:700;color:' + GREEN + ';overflow-wrap:break-word;}'
+      /* the scroll region: 180 to 320 px tall, the header row stays at the top while the rows scroll under it */
+      + '.w284scroll{max-height:clamp(180px,40vh,320px);overflow:auto;max-width:560px;border:1px solid rgba(16,63,57,.1);border-radius:10px;background:var(--wa-card,' + CREAM + ');}'
+      + '.w284scroll thead th{position:sticky;top:0;z-index:1;background:var(--wa-card,' + CREAM + ');border-bottom:0;box-shadow:inset 0 -1px 0 rgba(16,63,57,.14);}'
       + '.w284keys th,.w284keys td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(16,63,57,.08);overflow-wrap:anywhere;}'
+      + '.w284keys tbody tr:last-child td{border-bottom:0;}'
+      /* event words: the words wrap between words (a very long one may break), the reading and the count never break */
+      + '.w284words th,.w284words td{overflow-wrap:break-word;}.w284words .w284ra span,.w284words th{white-space:nowrap;}'
+      /* small header labels with a little tracking; the table is as wide as its region, wider only for a token that cannot break (it then scrolls, never cut) */
+      + '.w284keys th{font-size:11px;letter-spacing:.06em;}.w284scroll .w284keys{width:auto;min-width:100%;}'
+      + '@media (max-width:420px){.w284keys{font-size:12px;}.w284keys th,.w284keys td{padding:4px 5px;}}'
       + '.w284keys th{color:var(--wa-muted,' + MUTED + ');font-weight:700;}.w284keys td:last-child,.w284keys th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
       + '.w284card>.w284btn,.w284file>.w284row{align-self:flex-start;}.w284file>.w284row{width:min(100%,420px);}'
       + '.w284ask{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w284ask p{flex:1 1 100%;margin:0;font-size:13px;}'

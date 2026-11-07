@@ -151,6 +151,19 @@
   function itemHtml(x) { return isPair(x) ? pairHtml(x) : E(itemText(x)); }
   function nonZero(o) { return Object.keys(o || {}).filter(function (k) { return Number(o[k]) > 0; }); }
   function cnt(n) { return ' <em class="w284cnt">' + num(n) + '</em>'; }
+  /* how the import read an event: the kind ("opt-out") and what it does ("(unsubscribed)") each never break; in a narrow card the second goes
+     under the first, never a word cut in two */
+  function readAs(v) {
+    var t = READ_AS[v] || String(v || ''), m = /^(\S+) (\(.+\))$/.exec(t);
+    return m ? '<span>' + E(m[1]) + '</span> <span>' + E(m[2]) + '</span>' : '<span>' + E(t) + '</span>';
+  }
+  /* a long table scrolls inside its own region (180 to 320 px) under a header that stays put, so the card stays short enough to check before Apply */
+  function tableHtml(key, capHtml, heads, rows, cls) {
+    var id = 'w284c-' + key;
+    return '<p class="w284cap" id="' + id + '">' + capHtml + '</p>'
+      + '<div class="w284scroll" role="region" tabindex="0" aria-labelledby="' + id + '" data-w284keep="' + E(key) + '"><table class="w284keys' + (cls ? ' ' + cls : '') + '" aria-labelledby="' + id + '"><thead><tr>'
+      + heads.map(function (h) { return '<th scope="col">' + E(h) + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
   function listsHtml(kind, b) {
     var r = b && b.report; if (!r) return '';
     var l = r.lists || {}, sk = (r.counts && r.counts.skipped) || {}, parts = [];
@@ -159,8 +172,8 @@
     if (nonZero(kept).length) parts.push('<div class="w284ls"><b>The Hub kept its value</b><ul>' + nonZero(kept).map(function (k) { return '<li>' + E(FIELD_WORDS[k] || k.replace(/_/g, ' ')) + ': ' + num(kept[k]) + '</li>'; }).join('') + '</ul></div>');
     /* round 3: every Keela event wording with how the import read it, so staff can check the reading before Apply (event types, not personal data) */
     var ew = l.event_words || [];
-    if (ew.length) parts.push('<div class="w284ls"><table class="w284keys w284words"><caption>Event words and how the import read them</caption><thead><tr><th scope="col">Words</th><th scope="col">Read as</th><th scope="col">Events</th></tr></thead><tbody>'
-      + ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td>' + E(READ_AS[x.read_as] || x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join('') + '</tbody></table></div>');
+    if (ew.length) parts.push('<div class="w284ls">' + tableHtml('words-' + kind, 'Event words and how the import read them' + cnt(ew.length), ['Words', 'Read as', 'Events'],
+      ew.map(function (x) { return '<tr><td>' + E(x.words) + '</td><td class="w284ra">' + readAs(x.read_as) + '</td><td>' + num(x.count) + '</td></tr>'; }).join(''), 'w284words') + '</div>');
     Object.keys(l).forEach(function (k) {
       if (k === 'event_words') return;
       var arr = l[k] || []; if (!arr.length) return;
@@ -284,8 +297,8 @@
         if (!keys) kh = '<p class="w284note">Reading the keys…</p>';
         else if (keys.error) kh = '<p class="w284err">' + E(keys.error) + '</p>';
         else {
-          kh = '<table class="w284keys"><caption>Keys in this file (never values)</caption><thead><tr><th scope="col">Key</th><th scope="col">Rows with a value</th></tr></thead><tbody>'
-            + keys.map(function (k) { return '<tr><td>' + E(k.key) + '</td><td>' + num(k.filled) + '</td></tr>'; }).join('') + '</tbody></table>';
+          kh = tableHtml('keys-' + f.id, 'Keys in this file (never values)' + cnt(keys.length), ['Key', 'Rows with a value'],
+            keys.map(function (k) { return '<tr><td>' + E(k.key) + '</td><td>' + num(k.filled) + '</td></tr>'; }).join(''));
           if (f.kind === 'keela_contacts_json') {
             var cur = keysCfg.subscription_history || '';
             kh += '<label class="w284row"><span>Subscription history key (opt-outs and consent read it)</span><select class="w284sel" data-w284subkey="1"><option value="">Pick the key</option>'

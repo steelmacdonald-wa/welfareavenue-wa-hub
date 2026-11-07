@@ -60,9 +60,18 @@
       + '.w284file{border-top:1px solid rgba(16,63,57,.1);padding-top:10px;display:flex;flex-direction:column;gap:8px;min-width:0;}'
       + '.w284fh{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;overflow-wrap:anywhere;}.w284fh .m{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}'
       + '.w284fp{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;font-variant-numeric:tabular-nums;}'
-      + '.w284keys{border-collapse:collapse;font-size:12.5px;width:100%;max-width:560px;}'
-      + '.w284keys caption{text-align:left;font-weight:700;color:' + GREEN + ';padding-bottom:4px;}'
+      + '.w284keys{border-collapse:collapse;font-size:12.5px;width:100%;}'
+      + '.w284cap{margin:0 0 4px;font-size:12.5px;font-weight:700;color:' + GREEN + ';overflow-wrap:break-word;}'
+      /* the scroll region: 180 to 320 px tall, the header row stays at the top while the rows scroll under it */
+      + '.w284scroll{max-height:clamp(180px,40vh,320px);overflow:auto;max-width:560px;border:1px solid rgba(16,63,57,.1);border-radius:10px;background:var(--wa-card,' + CREAM + ');}'
+      + '.w284scroll thead th{position:sticky;top:0;z-index:1;background:var(--wa-card,' + CREAM + ');border-bottom:0;box-shadow:inset 0 -1px 0 rgba(16,63,57,.14);}'
       + '.w284keys th,.w284keys td{text-align:left;padding:4px 8px;border-bottom:1px solid rgba(16,63,57,.08);overflow-wrap:anywhere;}'
+      + '.w284keys tbody tr:last-child td{border-bottom:0;}'
+      /* event words: the words wrap between words (a very long one may break), the reading and the count never break */
+      + '.w284words th,.w284words td{overflow-wrap:break-word;}.w284words .w284ra span,.w284words th{white-space:nowrap;}'
+      /* small header labels with a little tracking; the table is as wide as its region, wider only for a token that cannot break (it then scrolls, never cut) */
+      + '.w284keys th{font-size:11px;letter-spacing:.06em;}.w284scroll .w284keys{width:auto;min-width:100%;}'
+      + '@media (max-width:420px){.w284keys{font-size:12px;}.w284keys th,.w284keys td{padding:4px 5px;}}'
       + '.w284keys th{color:var(--wa-muted,' + MUTED + ');font-weight:700;}.w284keys td:last-child,.w284keys th:last-child{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
       + '.w284card>.w284btn,.w284file>.w284row{align-self:flex-start;}.w284file>.w284row{width:min(100%,420px);}'
       + '.w284ask{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w284ask p{flex:1 1 100%;margin:0;font-size:13px;}'
