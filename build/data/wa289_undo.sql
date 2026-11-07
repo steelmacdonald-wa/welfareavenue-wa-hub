@@ -96,6 +96,8 @@ begin
   end loop;
 end $wa289u$;
 drop table if exists public.crm_mail_scans;
+drop trigger if exists trg_wa292_suppress on public.crm_contacts;   -- eh-292 minor: wave292's undo leaves the suppression trigger to this one
+drop function if exists public.wa292_suppress_check();
 drop table if exists public.crm_email_suppressions;
 alter table public.crm_import_runs drop constraint if exists crm_import_runs_source_check;
 alter table public.crm_import_runs drop column if exists source;

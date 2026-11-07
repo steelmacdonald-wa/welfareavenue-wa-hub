@@ -37,20 +37,20 @@ async function runAssertions(db, label) {
   ok(line === 'w292sql: all assertions passed', label + ': the assertion script finished (' + line + ')');
   console.log(label + ': ' + line);
 }
-const LIVE_FNS = ['wa284_write', 'wa284_basis', 'wa284_new_batch', 'wa284_undo', 'wa284_unrow', 'wa284_set', 'wa284_upd', 'wa284_purge', 'crm_email_first_contact', 'crm_email_permission', 'crm_merge_contacts'];
+const LIVE_FNS = ['wa284_write', 'wa284_basis', 'wa284_new_batch', 'wa284_undo', 'wa284_unrow', 'wa284_set', 'wa284_upd', 'wa284_purge', 'wa282_first_contact_core', 'crm_email_permission', 'crm_merge_contacts'];
 const DEFS = `select string_agg(p.proname || ' ' || md5(pg_get_functiondef(p.oid)) || ' ' || coalesce(p.proacl::text, '') || ' ' || coalesce(md5(obj_description(p.oid, 'pg_proc')), ''), E'\\n' order by p.proname) as s
   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${LIVE_FNS.map((f) => `'${f}'`).join(', ')})`;
 const OBJECTS = `select coalesce(string_agg(x, E'\\n' order by x), '') as s from (
   select 'fn ' || p.oid::regprocedure::text || ' ' || md5(pg_get_functiondef(p.oid)) || ' ' || coalesce(p.proacl::text, '') || ' ' || coalesce(md5(obj_description(p.oid, 'pg_proc')), '') as x
-    from pg_proc p where p.pronamespace = 'public'::regnamespace and (p.proname like 'wa292\\_%' or p.proname like 'crm_insight\\_%' or p.proname = 'crm_mail_steel_open')
+    from pg_proc p where p.pronamespace = 'public'::regnamespace and (p.proname like 'wa292\\_%' or p.proname like 'crm_insight\\_%' or p.proname = 'crm_mail_steel_open') and p.proname <> 'wa292_suppress_check'
   union all select 'table ' || c.oid::regclass::text || ' ' || coalesce(c.relacl::text, '') || ' ' || c.relrowsecurity || ' ' || coalesce(md5(obj_description(c.oid, 'pg_class')), '')
-    from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('crm_email_relationship', 'crm_email_relationship_v', 'wa_partners_domain_uq')
+    from pg_class c where c.relnamespace = 'public'::regnamespace and c.relname in ('crm_email_relationship', 'crm_email_relationship_v', 'wa_partners_domain_uq', 'wa292_fn_backup')
   union all select 'col ' || a.attrelid::regclass::text || '.' || a.attname || ' ' || coalesce(md5(col_description(a.attrelid, a.attnum)), '')
     from pg_attribute a join pg_class c on c.oid = a.attrelid
    where a.attnum > 0 and not a.attisdropped and c.relnamespace = 'public'::regnamespace and (c.relname = 'crm_email_relationship' or (c.relname = 'wa_partners' and a.attname in ('domain', 'address')))
   union all select 'policy ' || polrelid::regclass::text || ' ' || polname || ' ' || md5(coalesce(pg_get_expr(polqual, polrelid), '') || coalesce(pg_get_expr(polwithcheck, polrelid), ''))
     from pg_policy where polname like '%wa292%' or polrelid = 'public.crm_interactions'::regclass and polname like 'crm_interactions_wa292%' or polname = 'crm_email_relationship_staff_read'
-  union all select 'trigger ' || tgname from pg_trigger where tgname like 'trg_wa292%'
+  union all select 'trigger ' || tgname from pg_trigger where tgname like 'trg_wa292%' and tgname <> 'trg_wa292_suppress'
   union all select 'constraint ' || md5(pg_get_constraintdef(oid)) from pg_constraint where conname = 'crm_import_batches_kind_check'
 ) q`;
 const COUNTS = `select (select count(*)::int from pg_proc where pronamespace = 'public'::regnamespace and proname like 'wa292\\_%') as functions,
@@ -76,8 +76,8 @@ try {
   console.log('wa292: applied twice with no error', JSON.stringify(second));
   ok(JSON.stringify(first) === JSON.stringify(second), 'a second run adds nothing');
   ok(objOnce === (await one(db, OBJECTS)).s && defsOnce === (await one(db, DEFS)).s, 'a second run leaves every body, grant and comment as the first left it');
-  ok(first.functions >= 24 && first.release_rows === 1 && first.triggers === 2, 'the functions, one release line, two triggers (' + JSON.stringify(first) + ')');
-  ok(defsOnce.split('\n').length === 11 && defsOnce.split('\n').every((l, i) => l !== defsBefore.split('\n')[i] || /crm_email_permission|crm_email_first_contact/.test(l) === false ? true : true), 'eleven live functions read');
+  ok(first.functions >= 23 && first.release_rows === 1 && first.triggers === 2, 'the functions, one release line, two triggers (' + JSON.stringify(first) + ')');
+  ok(defsOnce.split('\n').length === 11 && defsOnce.split('\n').every((l, i) => l !== defsBefore.split('\n')[i] || /crm_email_permission|wa282_first_contact_core/.test(l) === false ? true : true), 'eleven live functions read');
   ok(defsOnce.split('\n').filter((l, i) => l.split(' ')[1] !== defsBefore.split('\n')[i].split(' ')[1]).length === 11, 'all eleven live function bodies changed');
   ok(objOnce.split('\n').filter((l) => l.startsWith('col ') || l.startsWith('fn ')).every((l) => !/ $/.test(l)), 'every new column and function has a comment');
 
@@ -102,6 +102,28 @@ try {
   ok((await one(db, OBJECTS)).s === objBefore, 'no wave292 object is left (' + (await one(db, OBJECTS)).s + ')');
   ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'release' and entity_id = 'wave292' and field = 'wave292 undo'`)).n === 1, 'one undo line after two runs');
   ok((await one(db, `select count(*)::int as n from public.crm_email_suppressions`)).n >= 1, 'suppressions are kept');
+  ok((await one(db, `select exists (select 1 from pg_trigger where tgname = 'trg_wa292_suppress') and to_regprocedure('public.wa292_suppress_check()') is not null as x`)).x === true, 'the suppression trigger stays after the undo (eh-292 minor)');
+  await db.exec(`insert into public.crm_email_suppressions (addr_md5, kind, at, source) values (md5('w292.undo.test@example.org'), 'unsubscribed', '2026-01-02', 'test')`);
+  await db.exec(`insert into public.crm_contacts (id, full_name, emails) overriding system value values (9399, 'Test Born Suppressed', array['w292.undo.test@example.org'])`);
+  ok((await one(db, `select email_status as s from public.crm_contacts where id = 9399`)).s === 'unsubscribed', 'after the undo a suppressed address is still born opted out');
+  await db.exec(`delete from public.crm_contacts where id = 9399`);
+  await db.exec(`delete from public.crm_email_suppressions where source = 'test'`);
+
+  // eh-292 fix 4: the undo puts back the saved definitions, even when wave292's text was changed since (the reversal would stop)
+  await db.exec(migration);
+  ok((await one(db, `select count(*)::int as n from public.wa292_fn_backup`)).n === 11, 'the migration saved the eleven definitions');
+  ok((await one(db, `select bool_and(position('wa292_' in def) = 0) as x from public.wa292_fn_backup`)).x === true, 'the saved definitions are the ones before wave292');
+  ok((await one(db, `select has_table_privilege('authenticated', 'public.wa292_fn_backup', 'select') or has_table_privilege('service_role', 'public.wa292_fn_backup', 'select') as x`)).x === false, 'the backup table has no grants');
+  await db.exec(`do $t$ declare v text := pg_get_functiondef('public.wa284_purge(bigint)'::regprocedure); begin execute replace(v, 'perform public.wa292_purge(p_run);', 'perform public.wa292_purge(p_run);   -- changed since'); end $t$`);
+  await db.exec(undo);
+  ok((await one(db, DEFS)).s === defsBefore, 'the undo restores from the saved definitions when the text no longer matches');
+  ok((await one(db, `select to_regclass('public.wa292_fn_backup') is null as x`)).x === true, 'and drops the backup table');
+  // and without the backup table it falls back to taking the text back out
+  await db.exec(migration);
+  await db.exec(`drop table public.wa292_fn_backup`);
+  await db.exec(undo);
+  ok((await one(db, DEFS)).s === defsBefore, 'without saved definitions the undo takes the text back out');
+  console.log('undo from the saved definitions, and the fallback: passed');
 
   // a kept summary keeps its table
   await db.exec(migration);

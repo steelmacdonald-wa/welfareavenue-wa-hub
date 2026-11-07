@@ -83,6 +83,18 @@ Purposes 2 and 3 are new uses the legal adviser must confirm before any Send.
 - **The policies call `crm_mail_steel_open()`**, a small function signed-in users may run, because `wa284_cfg` is the service role's only.
 - **A card cannot compare until the scan has finished**, and the page says so.
 
+## The eh-292 fix round (07/11/26, from the review)
+
+- **One first-contact rule.** The rule now lives in `wa282_first_contact_core(p_contact)` (wave282's file, the service role only). `crm_email_first_contact` keeps its staff gate and calls it; the mail_interactions report calls it too (the copy `wa292_first_contact` is gone). wave292 anchors its thread clause into the core only. A test checks both give the same answer for every contact.
+- **The summary pass honours Pause and the cap before spending.** `wa292_summary_gate(run)` is read at the top of every summary step and before each contact; `wa292_summary_start` refuses a paused run or one at its cap; every router call's cost is added to the run as it happens (`wa289_spend` inside the attempt loop), so a later failure loses nothing, and a call that reaches the cap is the last.
+- **Newsletters through info@ add no one.** For a post through WA's group, `groupBulk` also looks at the original sender: a bulk domain (news., updates., ...) or a no-reply, newsletter or notifications local part is automated; hello@, info@ and contact@ never count.
+- **The undo restores the saved live definitions** (ground rule 11.1). The migration saves the eleven functions it changes into `wa292_fn_backup` (no grants) before changing them; the undo executes those definitions, falls back to taking the text back out when the table is missing, and drops the table.
+- **No forged email lines.** A third restrictive policy on `crm_interactions` refuses a signed-in insert of a `gmail` row.
+- **Suppression after an undo.** The undo keeps `trg_wa292_suppress` and `wa292_suppress_check` (they need only wave289's `crm_email_suppressions`), so a suppressed address is still born opted out; wave289's undo drops them with the table.
+- **A Refresh limit.** `mail_history_refresh_daily` (20 by default): `wa292_refresh_left(email)` counts the person's email summary lines today (Toronto day) and mail-history `insight` refuses at 0 with "You have reached today's limit for writing summaries. Try again tomorrow."
+- **The " via " swap** happens only for the group's own posts (its List-Id) or a From at welfareavenue.com, so "X via Eventbrite" keeps its own sender.
+- **Deleting a contact** with email history removes that address's staging rows from unpurged runs (`wa292_suppress_on_delete`), so a batch compared before the delete needs a new Compare before Apply.
+
 ## Files
 
 `build/data/wa292_batches.sql`, `build/data/wa292_undo.sql`, `fn/crm-import/index.ts`, `fn/mail-history/index.ts`, `fn/mail-history/summary.ts`, `build/parts284/a_import.js`, `build/parts284/c_mail.js`, `build/parts284/b_css.js`, `build/parts284/assemble.py`, `build/parts152/a_head.js`, `build/src/284_wave284.seg`, `build/src/152_wave152.seg`, `build/candidate.html`, `test/w292schema.sql`, `test/w292sql.sql`, `test/w292sql.mjs`, `test/w292live.sql`, `test/w292live_undo.sql`, `test/w292summary.test.mjs`, `test/w292drive.js`, `test/w292fx.js`, `docs/EDGE_FUNCTIONS.md`, `docs/DATA_MODEL.md`.

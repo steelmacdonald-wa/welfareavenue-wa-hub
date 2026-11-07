@@ -29,7 +29,7 @@ begin
      and not has_table_privilege('authenticated', 'public.crm_email_relationship', 'update') and not has_table_privilege('anon', 'public.crm_email_relationship', 'select'), 'signed-in users only read the relationship rows';
   assert not exists (select 1 from pg_attribute a where a.attrelid = 'public.crm_email_relationship'::regclass and a.attnum > 0 and not a.attisdropped and col_description(a.attrelid, a.attnum) is null), 'every column has a comment';
   assert (select reloptions::text from pg_class where oid = 'public.crm_email_relationship_v'::regclass) like '%security_invoker=true%', 'the view is security_invoker';
-  assert (select count(*) from pg_policy where polrelid = 'public.crm_interactions'::regclass and not polpermissive and polname like 'crm_interactions_wa292_%') = 2, 'two restrictive policies on crm_interactions';
+  assert (select count(*) from pg_policy where polrelid = 'public.crm_interactions'::regclass and not polpermissive and polname like 'crm_interactions_wa292_%') = 3, 'three restrictive policies on crm_interactions (read, update, insert)';
   assert exists (select 1 from pg_trigger where tgname = 'trg_wa292_suppress') and exists (select 1 from pg_trigger where tgname = 'trg_wa292_suppress_del'), 'the suppression triggers';
   assert not exists (select 1 from pg_trigger where tgname = 'trg_wa292_gmail_cleanup'), 'the cascade holds, so no cleanup trigger';
   for f in select p.oid::regprocedure as sig, p.proname from pg_proc p where p.pronamespace = 'public'::regnamespace and (p.proname like 'wa292\_%' or p.proname like 'crm_insight\_%') loop
@@ -155,12 +155,18 @@ begin
   assert (select source_ref from public.crm_interactions where contact_id = v and direction = 'out') = 'steel:gm292A2:' || left(md5('new.writer@neworg.example.org'), 8), 'source_ref has no address';
   assert (r #>> '{lists,mail,by_direction,out}')::int = 1 and (r #>> '{lists,mail,by_mailbox,steel}')::int = 2, 'counts by mailbox and direction: ' || r::text;
   assert (r #>> '{lists,mail,first_contacts}')::int = 1, 'one first contact (the existing writer); the new writer answered: ' || r::text;
-  assert not public.wa292_first_contact(v) and public.wa292_first_contact(4001), 'first contact follows the thread rule';
+  assert not public.wa282_first_contact_core(v) and public.wa282_first_contact_core(4001), 'first contact follows the thread rule (the core, eh-292 fix 1)';
   assert (select threads from public.crm_email_relationship_v where contact_id = v) = 1, 'the view counts threads';
   assert pg_temp.err('select public.wa284_undo(' || pg_temp.batch('mail_people') || ', ''test'')') like 'wa284: email history: undo mail_interactions, mail_enrich first%', 'Undo goes bottom up';
 end $$;
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.admin@example.invalid","sub":"00000000-0000-0000-0000-000000000002"}', true);
 do $$ begin assert public.crm_email_first_contact(pg_temp.id('new')) = false and public.crm_email_first_contact(4001) = true, 'crm_email_first_contact has the clause'; end $$;
+-- eh-292 fix 1: one rule: staff's crm_email_first_contact and the report's core answer the same for every contact
+do $$ begin
+  assert (select bool_and(public.crm_email_first_contact(c.id) is not distinct from public.wa282_first_contact_core(c.id)) from public.crm_contacts c), 'crm_email_first_contact and wa282_first_contact_core give the same answer';
+  assert position('wa282_first_contact_core' in pg_get_functiondef('public.crm_email_first_contact(bigint)'::regprocedure)) > 0 and position('gmail' in pg_get_functiondef('public.crm_email_first_contact(bigint)'::regprocedure)) = 0, 'the staff function only gates and calls the core';
+  assert not has_function_privilege('authenticated', 'public.wa282_first_contact_core(bigint)', 'execute'), 'the core is the service role''s';
+end $$;
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.member@example.invalid","sub":"00000000-0000-0000-0000-000000000001"}', true);
 set local role authenticated;
 do $$
@@ -180,6 +186,9 @@ begin
   update public.crm_interactions set body = 'changed' where source = 'gmail';
   get diagnostics n = row_count;
   assert n = 0, 'nobody signed in updates an email line';
+  -- eh-292 minor: nor writes one (a forged line from Steel's mailbox), while a note still saves
+  assert pg_temp.err($q$insert into public.crm_interactions (contact_id, kind, direction, source, source_ref, meta) values (4001, 'email', 'in', 'gmail', 'steel:forged:1', '{"mailbox": "steel"}')$q$) like '%row-level security%', 'nobody signed in writes an email line';
+  insert into public.crm_interactions (contact_id, kind, direction, source, body) values (4001, 'note', 'internal', 'hub', 'A test note.');
 end $$;
 reset role;
 select set_config('request.jwt.claims', '{"role":"authenticated","email":"w281.admin@example.invalid","sub":"00000000-0000-0000-0000-000000000002"}', true);

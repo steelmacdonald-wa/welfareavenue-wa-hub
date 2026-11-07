@@ -56,14 +56,27 @@ export function isBulk(h: Hdr, fromEmail: string): boolean {
  *  so mybox's bulk rule would drop a person writing to info@. A post is WA's group when its List-Id is <info.welfareavenue.com> or info@ is in
  *  the addressing headers. */
 export function isWaGroup(h: Hdr): boolean {
-  return /(^|[<\s])info\.welfareavenue\.com>?\s*$/i.test(h('List-Id').trim()) || toInfo(h);
+  return isWaGroupList(h) || toInfo(h);
+}
+/** The group's own List-Id (<info.welfareavenue.com>), without the addressing test (eh-292 minor: the " via " swap trusts only this). */
+export function isWaGroupList(h: Hdr): boolean {
+  return /(^|[<\s])info\.welfareavenue\.com>?\s*$/i.test(h('List-Id').trim());
+}
+/** eh-292 fix 3: the original sender of a group post looks automated: a bulk domain (news., updates., ...) or a no-reply, newsletter or
+ *  notifications local part. hello@, info@ and contact@ are people's and small organisations' addresses and never count here. */
+export const GROUP_BULK_LOCAL = /(^|[._-])(no-?reply|do-?not-?reply|newsletters?|notifications?)@/i;
+export function groupSenderBulk(fromEmail: string): boolean {
+  const from = String(fromEmail || '').toLowerCase(), dom = from.split('@')[1] || '';
+  if (!dom || dom === 'welfareavenue.com' || dom.endsWith('.welfareavenue.com')) return false;
+  if (/^(hello|info|contact)@/.test(from)) return false;
+  return GROUP_BULK_LOCAL.test(from) || BULK_DOMAIN.test(dom);
 }
 /** For WA's group only (mail-pull's rule for hub@): bulk when Precedence is exactly bulk, or a mailing service shows in the unsubscribe or return
  *  path (the group's own groups.google.com unsubscribe link does not count). Precedence: list, a bulk-looking local part (hello@) and the group's
  *  List-Unsubscribe never decide it. */
-export function groupBulk(h: Hdr): boolean {
+export function groupBulk(h: Hdr, fromEmail = ''): boolean {
   const unsub = h('List-Unsubscribe').replace(/<[^>]*google(groups)?\.com[^>]*>/gi, '').replace(/<[^>]*googlegroups[^>]*>/gi, '');
-  return /^bulk$/i.test(h('Precedence').trim()) || BULK_ESP.test(unsub + ' ' + h('Return-Path'));
+  return /^bulk$/i.test(h('Precedence').trim()) || BULK_ESP.test(unsub + ' ' + h('Return-Path')) || groupSenderBulk(fromEmail);   // eh-292 fix 3: the original sender too
 }
 /** Google's own notices (sign-in, Drive shares, Chat, Calendar). */
 export function isGoogleNotice(fromEmail: string): boolean { return NOISE_SENDERS.test(String(fromEmail || '')); }

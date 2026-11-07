@@ -18,8 +18,9 @@ do $wa292$
 begin
   if to_regclass('public.crm_mail_scans') is null or to_regprocedure('public.wa289_match(text,text)') is null
      or to_regprocedure('public.wa284_write(bigint,boolean)') is null or to_regprocedure('public.wa_can(text)') is null
-     or to_regprocedure('public.crm_email_first_contact(bigint)') is null or to_regclass('public.crm_email_suppressions') is null then
-    raise exception 'wave292 needs wave289, wave284, wave282 and wave281 first (crm_mail_scans, wa289_match, wa284_write, wa_can or crm_email_first_contact is missing)';
+     or to_regprocedure('public.crm_email_first_contact(bigint)') is null or to_regclass('public.crm_email_suppressions') is null
+     or to_regprocedure('public.wa282_first_contact_core(bigint)') is null then
+    raise exception 'wave292 needs wave289, wave284, wave282 and wave281 first (crm_mail_scans, wa289_match, wa284_write, wa_can, crm_email_first_contact or wa282_first_contact_core is missing)';
   end if;
 end $wa292$;
 
@@ -132,6 +133,11 @@ create policy crm_interactions_wa292_steel_read on public.crm_interactions as re
 drop policy if exists crm_interactions_wa292_no_update on public.crm_interactions;
 create policy crm_interactions_wa292_no_update on public.crm_interactions as restrictive for update to authenticated
   using (source is distinct from 'gmail');
+-- eh-292 minor: nobody signed in can write an email history line either (only the import functions, as the service role, do), so a staff
+-- member cannot forge a line from Steel's mailbox
+drop policy if exists crm_interactions_wa292_no_insert on public.crm_interactions;
+create policy crm_interactions_wa292_no_insert on public.crm_interactions as restrictive for insert to authenticated
+  with check (source is distinct from 'gmail');
 
 -- ============================================================================================ 7. suppressions (B3, M7)
 create or replace function public.wa292_suppress_check()
@@ -228,21 +234,7 @@ begin
 end $function$;
 comment on function public.wa292_field(bigint, bigint, text, jsonb) is 'wave292: sets a custom field (the LinkedIn profile) for a contact only when it has none, with source email history, and records the insert; says set, kept or missing. The service role only.';
 
-create or replace function public.wa292_first_contact(p_contact bigint)
-returns boolean language plpgsql stable security definer set search_path to '' as $function$
-declare v_allowed boolean; v_basis text; v_open text;
-begin
-  -- the same rules as crm_email_first_contact (wave282 and wave292's clause), for the report: that function answers only signed-in staff
-  select p.allowed, p.basis into v_allowed, v_basis from public.crm_email_permission(p_contact, 'newsletter') p;
-  if not coalesce(v_allowed, false) or v_basis is distinct from 'not unsubscribed (WA rule of 5 Nov 2026)' then return false; end if;
-  if exists (select 1 from public.crm_email_sends s where s.contact_id = p_contact and s.is_test = false and s.status in ('sent', 'delivered')) then return false; end if;
-  select c.legacy_refs -> 'keela' -> 'email_marketing' ->> 'last_opened' into v_open from public.crm_contacts c where c.id = p_contact;
-  if v_open ~ '^\d{4}-\d{2}-\d{2}$' and v_open >= to_char(current_date - interval '12 months', 'YYYY-MM-DD') then return false; end if;
-  if exists (select 1 from public.crm_interactions o join public.crm_interactions i on i.contact_id = o.contact_id and i.source = 'gmail' and i.direction = 'in' and i.meta->>'thread' = o.meta->>'thread'
-              where o.contact_id = p_contact and o.source = 'gmail' and o.direction = 'out') then return false; end if;
-  return true;
-end $function$;
-comment on function public.wa292_first_contact(bigint) is 'wave292: the first-contact rule (crm_email_first_contact with wave292''s clause) for the mail_interactions report, which runs as the service role: allowed a newsletter only under the WA rule of 5 Nov 2026, never sent a Hub email, no Keela newsletter opened in 12 months, and no outgoing email they answered in the same thread. The service role only.';
+-- eh-292 fix 1: the report counts first contacts with wave282's core rule (wa282_first_contact_core), which carries wave292's clause (section 12).
 
 -- ============================================================================================ 9. the writers (5.7), on wave284's helpers; no exception blocks of their own
 -- Each returns wave284's writer result; the email-history counts that wave284's report does not carry go in lists.mail (an object of counts).
@@ -511,7 +503,7 @@ begin
     end loop;
   end loop;
   -- first contacts among this run's people after the apply (6.3): the rule reads the rows just written
-  w := jsonb_set(w, '{lists,mail,first_contacts}', to_jsonb((select count(*) from unnest(v_ids) x where public.wa292_first_contact(x))), true);
+  w := jsonb_set(w, '{lists,mail,first_contacts}', to_jsonb((select count(*) from unnest(v_ids) x where public.wa282_first_contact_core(x))), true);
   return w;
 end $function$;
 comment on function public.wa292_w_interactions(bigint, bigint, boolean) is 'wave292: batch 5 (mail_interactions). For each writer not left out with a Hub contact (matched by email at write time), one crm_interactions row per kept email they wrote or received (as one of at most mail_history_max_recipients): kind and channel email, direction, the cleaned subject, the validated one line as body (never the email''s text), the email''s date, source gmail, source_ref <mailbox>:<gmail id>:<short md5 of the address>, meta {mailbox steel, hub or info; thread; topic; run; import_batch}, created_by Email history. Left-out threads never appear. Counts by mailbox, year and direction, and the first contacts among the run''s people after the apply. Adds only; Undo removes its rows unchanged since. The service role only.';
@@ -695,6 +687,26 @@ begin
 end $function$;
 comment on function public.crm_insight_save(bigint, jsonb, text) is 'wave292: saves one contact''s relationship summary ({topics, open_item, summary, model, cost}) into crm_email_relationship (upsert; stale false; from_steel when any of their lines came from Steel''s mailbox). Refuses other keys, body-like keys, a summary over 600 characters or anything open over 300, a link, address or phone, and unknown topics. Logged in change_log without the text. The service role only.';
 
+-- eh-292 minor: Refresh has a daily limit per person (mail_history_refresh_daily, 20 by default), counted from crm_insight_save's change_log lines
+insert into public.app_config (key, value) values ('mail_history_refresh_daily', '20') on conflict (key) do nothing;
+create or replace function public.wa292_refresh_left(p_by text)
+returns int language sql stable security definer set search_path to '' as $function$
+  select greatest(coalesce(least(greatest(public.wa289_num('mail_history_refresh_daily', 20), 0), 1000)::int, 20)
+                  - (select count(*)::int from public.change_log l
+                      where l.entity_type = 'crm_contact' and l.field = 'email summary' and l.changed_by = left(coalesce(nullif(p_by, ''), 'Email history'), 120)
+                        and l.changed_at >= (date_trunc('day', now() at time zone 'America/Toronto') at time zone 'America/Toronto')), 0)
+$function$;
+comment on function public.wa292_refresh_left(text) is 'wave292 (eh-292 minor): how many more summaries a person may write with Refresh today (Toronto day): mail_history_refresh_daily (20 by default, 0 to 1,000) less the email summary lines crm_insight_save logged for them since midnight. mail-history insight refuses at 0. The service role only.';
+
+-- eh-292 fix 2: the summary pass stops before spending when a scan of the run is paused or the run's spend has reached its cap
+create or replace function public.wa292_summary_gate(p_run bigint)
+returns jsonb language sql stable security definer set search_path to '' as $function$
+  select jsonb_build_object('paused', coalesce(bool_or(s.paused), false), 'spend', coalesce(sum(s.spend_usd), 0), 'cap', max(s.cap_usd),
+                            'stop', coalesce(bool_or(s.paused), false) or (max(s.cap_usd) is not null and coalesce(sum(s.spend_usd), 0) >= max(s.cap_usd)))
+    from public.crm_mail_scans s where s.run_id = p_run
+$function$;
+comment on function public.wa292_summary_gate(bigint) is 'wave292 (eh-292 fix 2): whether the summary pass of a run may spend: stop is true when any scan of the run is paused or the run''s spend has reached its cap. Read at the top of every summary step and before each contact. The service role only.';
+
 create or replace function public.wa292_summary_start(p_run bigint, p_by text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 begin
@@ -703,6 +715,13 @@ begin
   end if;
   if exists (select 1 from public.crm_mail_scans s where s.run_id = p_run and s.phase not in ('done', 'summaries', 'summarised')) then
     raise exception 'wa284: email history: the scan of run % has not finished', p_run;
+  end if;
+  -- eh-292 fix 2: not while the run is paused or its spend has reached the cap
+  if exists (select 1 from public.crm_mail_scans s where s.run_id = p_run and s.paused) then
+    raise exception 'wa284: email history: run % is paused; resume it before the summaries', p_run;
+  end if;
+  if (select coalesce(sum(s.spend_usd), 0) >= max(s.cap_usd) from public.crm_mail_scans s where s.run_id = p_run) then
+    raise exception 'wa284: email history: run % has reached its spend cap; raise the cap before the summaries', p_run;
   end if;
   update public.crm_mail_scans s set phase = 'summaries', step_at = null, finished_at = null where s.run_id = p_run;
   insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
@@ -734,6 +753,25 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
      and (s.step_at is null or s.step_at < now() - make_interval(secs => coalesce((public.wa284_cfg('mail_history_step_seconds') ->> 'lease')::int, 180)))
 $function$;
 comment on function public.wa292_summary_active() is 'wave292: the runs whose summary pass the pump should continue: phase summaries, not paused, lease free or run out. The service role only.';
+
+-- ============================================================================================ 11b. the live definitions, saved before section 12
+-- eh-292 fix 4 (ground rule 11.1): each of the eleven functions section 12 changes is saved as it is now, once (a second run keeps the first
+-- copy), so build/data/wa292_undo.sql can put back exactly what was live. No grants: the service role and the owner only.
+create table if not exists public.wa292_fn_backup (fn text primary key, def text not null, saved_at timestamptz not null default now());
+alter table public.wa292_fn_backup enable row level security;
+revoke all on table public.wa292_fn_backup from public, anon, authenticated, service_role;
+comment on table public.wa292_fn_backup is 'wave292 (eh-292 fix 4): the definitions of the eleven live functions wave292 changes, saved by the migration before it changed them; build/data/wa292_undo.sql restores them from here and then drops the table. No grants.';
+comment on column public.wa292_fn_backup.fn is 'wave292: the function''s signature (regprocedure text).';
+comment on column public.wa292_fn_backup.def is 'wave292: pg_get_functiondef of the function before wave292 changed it.';
+comment on column public.wa292_fn_backup.saved_at is 'wave292: when it was saved.';
+insert into public.wa292_fn_backup (fn, def)
+select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
+  from pg_proc p
+ where p.oid in ('public.wa284_write(bigint,boolean)'::regprocedure, 'public.wa284_basis(bigint)'::regprocedure, 'public.wa284_new_batch(bigint,text)'::regprocedure,
+                 'public.wa284_undo(bigint,text)'::regprocedure, 'public.wa284_unrow(text,text,jsonb)'::regprocedure, 'public.wa284_set(text,bigint,text,jsonb)'::regprocedure,
+                 'public.wa284_upd(bigint,text,bigint,text,jsonb)'::regprocedure, 'public.wa284_purge(bigint)'::regprocedure, 'public.wa282_first_contact_core(bigint)'::regprocedure,
+                 'public.crm_email_permission(bigint,text)'::regprocedure, 'public.crm_merge_contacts(bigint,bigint)'::regprocedure)
+on conflict (fn) do nothing;
 
 -- ============================================================================================ 12. the live functions, by exact anchor
 -- Each block skips when its wave292 text is already there; otherwise every anchor must appear exactly once, or the file stops. Inserted text is
@@ -807,12 +845,13 @@ begin
     if length(v) - length(replace(v, a, '')) <> length(a) then raise exception '%wa284_purge', function_moved; end if;
     execute replace(v, a, n);
   end if;
-  -- crm_email_first_contact: an outgoing WA email they answered in the same thread means they had an email from WA (6.3, B1, H8)
-  v := pg_get_functiondef('public.crm_email_first_contact(bigint)'::regprocedure);
+  -- wa282_first_contact_core (crm_email_first_contact and the report both call it; eh-292 fix 1): an outgoing WA email they answered in the
+  -- same thread means they had an email from WA (6.3, B1, H8)
+  v := pg_get_functiondef('public.wa282_first_contact_core(bigint)'::regprocedure);
   if position('gmail' in v) = 0 then
     a := $x$if v_open ~ '^\d{4}-\d{2}-\d{2}$' and v_open >= to_char(current_date - interval '12 months', 'YYYY-MM-DD') then return false; end if;$x$;
     n := a || nl || $x$  if exists (select 1 from public.crm_interactions o join public.crm_interactions i on i.contact_id = o.contact_id and i.source = 'gmail' and i.direction = 'in' and i.meta->>'thread' = o.meta->>'thread' where o.contact_id = p_contact and o.source = 'gmail' and o.direction = 'out') then return false; end if;$x$;
-    if length(v) - length(replace(v, a, '')) <> length(a) then raise exception '%crm_email_first_contact', function_moved; end if;
+    if length(v) - length(replace(v, a, '')) <> length(a) then raise exception '%wa282_first_contact_core', function_moved; end if;
     execute replace(v, a, n);
   end if;
   -- crm_email_permission: general inboxes and contacts waiting for review are not for bulk email (6.3)
@@ -835,7 +874,7 @@ begin
   end if;
 end $wa292$;
 comment on function public.crm_email_permission(bigint, text) is 'The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising (wave282, Steel''s rule of 5 Nov 2026): any working address that has not unsubscribed; the basis is express consent or implied consent (within two years of a gift or a serving) when there is one, otherwise not unsubscribed (WA rule of 5 Nov 2026). Bounced and complained get nothing; since wave281 a do-not-contact person gets nothing either, transactional included (basis do not contact). Since wave292 a contact tagged general inbox or email history: review gets no volunteer, newsletter or fundraising email (basis not for bulk email).';
-comment on function public.crm_email_first_contact(bigint) is 'wave282: true when a person would get their first email from Welfare Avenue: crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026) (no express and no valid implied consent), they have no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and they have not opened a Keela newsletter in the last 12 months (legacy_refs keela email_marketing last_opened, read only when it is YYYY-MM-DD). Since wave292 not when the email history holds an outgoing WA email to them in a thread where they also wrote (a gmail row out and a gmail row in with the same meta thread). Null for anyone who is not staff (is_wa_staff), the service role included; mail-send calls it as the signed-in person.';
+comment on function public.wa282_first_contact_core(bigint) is 'wave282 (eh-292 fix 1): the first-contact rule itself, with no caller check: true when crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026), there is no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and no Keela newsletter was opened in the last 12 months. Since wave292 not when the email history holds an outgoing WA email to them in a thread where they also wrote (a gmail row out and a gmail row in with the same meta thread). crm_email_first_contact (staff) and the email history''s report (the service role) both call it. The service role only.';
 
 -- ============================================================================================ 13. grants: every wa292_ function the service role's only
 do $wa292$

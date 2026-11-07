@@ -73,6 +73,7 @@ grant execute on function public.crm_email_permission(bigint, text) to authentic
 -- ============================================================================================ 2. the two new functions
 drop function if exists public.wa282_newsletter_lists(text);
 drop function if exists public.crm_email_first_contact(bigint);
+drop function if exists public.wa282_first_contact_core(bigint);   -- eh-292 fix 1
 
 -- ============================================================================================ 3. the old kind check on Sends (live text, 06/11/26)
 do $u282$

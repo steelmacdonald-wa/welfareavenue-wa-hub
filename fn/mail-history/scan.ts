@@ -3,7 +3,7 @@
 // No Deno or Node globals here: everything outside comes in through Deps. It never logs or returns an address, subject, line or page text:
 // errors are a step name and a status code.
 import {
-  addrList, addressedToMailbox, asksToStop, clip, cleanSubject, domainOf, freshPart, groupBulk, headerReader, isBulk, isCalendar, isDeliveryReport,
+  addrList, addressedToMailbox, asksToStop, clip, cleanSubject, domainOf, freshPart, groupBulk, headerReader, isBulk, isWaGroupList, isCalendar, isDeliveryReport,
   isFreemail, isGoogleNotice, isNoiseSubject, isPlatform, isSecurity, isWaGroup, neverRead, normKey, parseAddr, parseBounceText, parseDeliveryStatus,
   probablyPersonal, registeredDomain, robotsRefuses, safeHost, TOPICS, TYPES, toInfo, validateOrg, validateRead,
 } from './mail_rules.ts';
@@ -48,7 +48,9 @@ export const META_HEADERS = ['From', 'To', 'Cc', 'Reply-To', 'Date', 'Subject', 
 /** eh-289 I1: a post Google Groups rewrote for DMARC comes From info@ (or "Name via Info") with the person in X-Original-Sender or a single outside
  *  Reply-To. That person is the writer, and the email is incoming. Returns the writer's address, or null when the From is the real sender. */
 export function groupSender(h: (n: string) => string, from: { email: string; name: string }): string | null {
-  const rewritten = from.email === INFO_ADDR || / via /i.test(h('From'));
+  // eh-292 minor: only the group's own posts (its List-Id) or a From at welfareavenue.com, so "X via Eventbrite" never swaps to its Reply-To
+  const ours = isWaGroupList(h) || from.email === INFO_ADDR || from.email.endsWith('@welfareavenue.com');
+  const rewritten = ours && (from.email === INFO_ADDR || / via /i.test(h('From')));
   if (!rewritten) return null;
   const isOurs = (a: string) => a === 'welfareavenue.com' || a.endsWith('@welfareavenue.com');
   const xos = parseAddr(h('X-Original-Sender')).email;
@@ -90,7 +92,7 @@ export function classify(msg: any, mailbox: Mailbox, ctx: Ctx): Record<string, u
   // f. automated, as mybox decides it (for WA's own Google Group, mail-pull's rule instead: eh-289 C1); Google's notices; a platform sender
   //    (whole labels, M7); anything hub@ itself sent
   const dom = domainOf(from.email);
-  const bulk = isWaGroup(h) ? groupBulk(h) : isBulk(h, from.email);
+  const bulk = isWaGroup(h) ? groupBulk(h, from.email) : isBulk(h, from.email);
   if (bulk || isGoogleNotice(from.email) || isNoiseSubject(subject) || (dom && isPlatform(dom, ctx.platforms || [])) || (mailbox === 'hub' && from.email === mine))
     return { ...base, state: 'skipped', reason: 'automated' };
   // g. list mail not addressed to the mailbox (B2)

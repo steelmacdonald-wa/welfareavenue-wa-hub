@@ -199,6 +199,9 @@ Deno.serve(async (req: Request) => {
     try {
       const input = await rpc('crm_insight_input', { p_contact: cid });
       if (input && input.from_steel && !staff.admin && !staff.open) return json(req, { error: "Only admins refresh summaries from Steel's mailbox for now." }, 403);
+      // eh-292 minor: a daily limit per person (mail_history_refresh_daily, 20 by default)
+      const left = Number(await rpc('wa292_refresh_left', { p_by: staff.email }));
+      if (Number.isFinite(left) && left <= 0) return json(req, { error: 'You have reached today\'s limit for writing summaries. Try again tomorrow.' }, 429);
       const r = await summariseContact({ rpc, router, now: () => Date.now() }, cid, staff.email);
       console.log('mail-history insight', cid, r.saved, r.calls);   // ids and counts only
       return json(req, { ok: true, saved: r.saved, model: r.model, cost: r.cost });

@@ -346,6 +346,18 @@ test('I1: a group post rewritten for DMARC belongs to the person in X-Original-S
   assert.ok(S.META_HEADERS.includes('X-Original-Sender'));
 });
 
+test('eh-292: "X via Eventbrite" never swaps to its Reply-To; a newsletter through the group adds no one', () => {
+  const ev = S.classify(msg('gmailG0000021', { from: 'Test Gala via Eventbrite <noreply@events.example.invalid>', to: 'info@welfareavenue.com',
+    headers: { 'Reply-To': 'Test Organiser <organiser@smallorg.example.org>' } }), 'hub', CTX);
+  assert.notEqual(ev.writer, 'organiser@smallorg.example.org', 'an outside "via" sender is not a group post: ' + JSON.stringify(ev));
+  const nl = S.classify(msg('gmailG0000022', { from: 'Test Vendor News <newsletter@news.vendor.example.org>', to: 'info@welfareavenue.com',
+    headers: { 'List-ID': '<info.welfareavenue.com>', Precedence: 'list', 'List-Unsubscribe': '<mailto:googlegroups-manage+1+unsubscribe@googlegroups.com>' } }), 'hub', CTX);
+  assert.equal(nl.reason, 'automated', 'a vendor newsletter to info@ through the group (eh-292 fix 3)');
+  const p = S.classify(msg('gmailG0000023', { from: 'Test Person <test.person@smallorg.example.org>', to: 'info@welfareavenue.com',
+    headers: { 'List-ID': '<info.welfareavenue.com>', Precedence: 'list', 'List-Unsubscribe': '<mailto:googlegroups-manage+1+unsubscribe@googlegroups.com>' } }), 'hub', CTX);
+  assert.equal(p.state, 'kept'); assert.equal(p.writer, 'test.person@smallorg.example.org');
+});
+
 test('I5 and M6: a router answer from another route, without the provider setting or without a cost is refused and pauses', () => {
   const ok = { _wa: { task: 'mail_history_thread', provider: { data_collection: 'deny', zdr: true }, cost: 0.004 } };
   assert.equal(S.checkRouted('mail_history_thread', ok), 0.004);

@@ -202,3 +202,19 @@ test('M4: more private ranges, written every way', () => {
   for (const ip of ['198.20.0.1', '192.0.1.1', '2002:5db8:d822::1', '::ffff:93.184.216.34'])
     assert.equal(isPrivateIp(ip), false, ip);
 });
+
+/* ---- eh-292 fix round ---- */
+test('eh-292 fix 3: a vendor newsletter sent to info@ through the group is automated; a person\'s post is kept', () => {
+  const group = { To: 'info@welfareavenue.com', 'List-ID': '<info.welfareavenue.com>', Precedence: 'list',
+    'List-Unsubscribe': '<mailto:googlegroups-manage+123+unsubscribe@googlegroups.com>' };
+  const vendor = H({ ...group, From: 'Test Vendor News <newsletter@news.vendor.example.org>' });
+  assert.equal(isWaGroup(vendor), true);
+  assert.equal(groupBulk(vendor, 'newsletter@news.vendor.example.org'), true, 'a newsletter local part through the group is automated');
+  assert.equal(groupBulk(vendor, 'deals@news.vendor.example.org'), true, 'a bulk domain (news.) through the group is automated');
+  assert.equal(groupBulk(vendor, 'no-reply@vendor.example.org'), true, 'a no-reply sender through the group is automated');
+  assert.equal(groupBulk(vendor, 'notifications@vendor.example.org'), true, 'a notifications sender through the group is automated');
+  const person = H({ ...group, From: 'Test Person <test.person@smallorg.example.org>' });
+  assert.equal(groupBulk(person, 'test.person@smallorg.example.org'), false, 'a real person\'s post is kept');
+  for (const a of ['hello@smallorg.example.org', 'info@smallorg.example.org', 'contact@smallorg.example.org'])
+    assert.equal(groupBulk(person, a), false, a + ' stays a person\'s address');
+});

@@ -1,7 +1,9 @@
 -- Welfare Avenue Hub: wave292 undo, 07/11/26. Takes build/data/wa292_batches.sql back out.
--- Refuses while any email-history batch is applied (undo the batches on the Import page first, bottom up). Otherwise: takes wave292's text back
--- out of the eleven live functions by exactly the text the migration inserted (so each returns to its definition before wave292), drops the
--- triggers, the two crm_interactions policies, the wa292_ functions, crm_insight_input and crm_insight_save and the view; drops
+-- Refuses while any email-history batch is applied (undo the batches on the Import page first, bottom up). Otherwise: puts the eleven live
+-- functions back from the definitions the migration saved (wa292_fn_backup, eh-292 fix 4), falling back to taking wave292's text back out by
+-- exactly the text the migration inserted; drops the delete trigger, the three crm_interactions policies, the wa292_ functions (but keeps the
+-- suppression trigger and wa292_suppress_check, which need only wave289's table; wave289's undo drops them), crm_insight_input,
+-- crm_insight_save, the view and the backup table; drops
 -- crm_email_relationship only when it is empty (with its policy and crm_mail_steel_open), wa_partners.domain and address only when every row is
 -- empty, and puts the batch kind check back when no email-history batch row remains. crm_email_suppressions is kept: opt-outs are never undone.
 -- Safe to run twice. No transaction control. Proved offline: node test/w292sql.mjs.
@@ -13,7 +15,19 @@ begin
   end if;
 end $wa292u$;
 
--- 1. the live functions: wave292's text taken back out (the same text the migration built)
+-- 0. eh-292 fix 4 (ground rule 11.1): the live functions back from the definitions the migration saved before it changed them
+--    (wa292_fn_backup); a function with no saved definition falls back to step 1, which takes wave292's text back out.
+do $wa292u$
+declare b record;
+begin
+  if to_regclass('public.wa292_fn_backup') is not null then
+    for b in select x.fn, x.def from public.wa292_fn_backup x order by x.fn loop
+      if to_regprocedure(b.fn) is not null and pg_get_functiondef(to_regprocedure(b.fn)) is distinct from b.def then execute b.def; end if;
+    end loop;
+  end if;
+end $wa292u$;
+
+-- 1. the live functions: wave292's text taken back out (the same text the migration built), for any function step 0 did not restore
 do $wa292u$
 declare v text; a text; n text; a2 text; n2 text; nl text := chr(10);
 begin
@@ -75,11 +89,11 @@ begin
     if length(v) - length(replace(v, n, '')) <> length(n) then raise exception 'wave292 undo: wa284_purge changed since wave292'; end if;
     execute replace(v, n, a);
   end if;
-  v := pg_get_functiondef('public.crm_email_first_contact(bigint)'::regprocedure);
+  v := pg_get_functiondef('public.wa282_first_contact_core(bigint)'::regprocedure);
   if position('gmail' in v) > 0 then
     a := $x$if v_open ~ '^\d{4}-\d{2}-\d{2}$' and v_open >= to_char(current_date - interval '12 months', 'YYYY-MM-DD') then return false; end if;$x$;
     n := a || nl || $x$  if exists (select 1 from public.crm_interactions o join public.crm_interactions i on i.contact_id = o.contact_id and i.source = 'gmail' and i.direction = 'in' and i.meta->>'thread' = o.meta->>'thread' where o.contact_id = p_contact and o.source = 'gmail' and o.direction = 'out') then return false; end if;$x$;
-    if length(v) - length(replace(v, n, '')) <> length(n) then raise exception 'wave292 undo: crm_email_first_contact changed since wave292'; end if;
+    if length(v) - length(replace(v, n, '')) <> length(n) then raise exception 'wave292 undo: wa282_first_contact_core changed since wave292'; end if;
     execute replace(v, n, a);
   end if;
   v := pg_get_functiondef('public.crm_email_permission(bigint,text)'::regprocedure);
@@ -100,14 +114,16 @@ begin
   end if;
 end $wa292u$;
 comment on function public.crm_email_permission(bigint, text) is 'The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising (wave282, Steel''s rule of 5 Nov 2026): any working address that has not unsubscribed; the basis is express consent or implied consent (within two years of a gift or a serving) when there is one, otherwise not unsubscribed (WA rule of 5 Nov 2026). Bounced and complained get nothing; since wave281 a do-not-contact person gets nothing either, transactional included (basis do not contact).';
-comment on function public.crm_email_first_contact(bigint) is 'wave282: true when a person would get their first email from Welfare Avenue: crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026) (no express and no valid implied consent), they have no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and they have not opened a Keela newsletter in the last 12 months (legacy_refs keela email_marketing last_opened, read only when it is YYYY-MM-DD). Null for anyone who is not staff (is_wa_staff), the service role included; mail-send calls it as the signed-in person.';
+comment on function public.wa282_first_contact_core(bigint) is 'wave282 (eh-292 fix 1): the first-contact rule itself, with no caller check: true when crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026), there is no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and no Keela newsletter was opened in the last 12 months. crm_email_first_contact (staff) and the email history''s report (the service role) both call it. The service role only.';
 
 -- 2. triggers and policies
-drop trigger if exists trg_wa292_suppress on public.crm_contacts;
+-- eh-292 minor: trg_wa292_suppress and wa292_suppress_check stay (they need only wave289's crm_email_suppressions), so a suppressed address
+-- is still born opted out after this undo; wave289's undo drops them with the table.
 drop trigger if exists trg_wa292_suppress_del on public.crm_contacts;
 drop trigger if exists trg_wa292_gmail_cleanup on public.crm_contacts;
 drop policy if exists crm_interactions_wa292_steel_read on public.crm_interactions;
 drop policy if exists crm_interactions_wa292_no_update on public.crm_interactions;
+drop policy if exists crm_interactions_wa292_no_insert on public.crm_interactions;
 
 -- 3. the view and the functions
 drop view if exists public.crm_email_relationship_v;
@@ -115,10 +131,12 @@ do $wa292u$
 declare f record;
 begin
   for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname = 'public' and (p.proname like 'wa292\_%' or p.proname in ('crm_insight_input', 'crm_insight_save')) loop
+            where n.nspname = 'public' and (p.proname like 'wa292\_%' or p.proname in ('crm_insight_input', 'crm_insight_save')) and p.proname <> 'wa292_suppress_check' loop
     execute format('drop function %s', f.sig);
   end loop;
 end $wa292u$;
+drop table if exists public.wa292_fn_backup;   -- eh-292 fix 4: step 0 has used it
+delete from public.app_config where key = 'mail_history_refresh_daily' and value = '20';   -- eh-292 minor: the Refresh limit, when unchanged
 
 -- 4. crm_email_relationship only when empty (an email summary is kept otherwise, with its read policy)
 do $wa292u$

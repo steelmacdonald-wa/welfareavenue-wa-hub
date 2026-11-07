@@ -73,21 +73,24 @@ export function validateSummary(raw: unknown): { value: { topics: string[]; open
 }
 
 /** One contact: input, the route (or no model), save. Returns counts only. */
-export async function summariseContact(deps: SummaryDeps, contactId: number, by: string): Promise<{ saved: boolean; model: string; cost: number; rejected: number; calls: number }> {
+/** onCost (eh-292 fix 2): called after every router call with that call's cost, so the run's spend is recorded call by call (a later failure
+ *  loses nothing); it returns true when the run must stop (paused or at its cap), and then no further call is made for this contact. */
+export async function summariseContact(deps: SummaryDeps, contactId: number, by: string, onCost?: (usd: number) => Promise<boolean>): Promise<{ saved: boolean; model: string; cost: number; rejected: number; calls: number; stopped: boolean }> {
   const input = await deps.rpc('crm_insight_input', { p_contact: contactId });
   const rows: Row[] = (input && input.rows) || [];
   const count = Number((input && input.count) || 0);
-  if (!count || !rows.length) return { saved: false, model: 'none', cost: 0, rejected: 0, calls: 0 };
+  if (!count || !rows.length) return { saved: false, model: 'none', cost: 0, rejected: 0, calls: 0, stopped: false };
   if (count === 1) {
     await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: oneEmail(rows[0]), topics: rows[0].topic ? [rows[0].topic] : [], model: 'none', cost: 0 }, p_by: by });
-    return { saved: true, model: 'none', cost: 0, rejected: 0, calls: 0 };
+    return { saved: true, model: 'none', cost: 0, rejected: 0, calls: 0, stopped: false };
   }
-  let cost = 0, rejected = 0, calls = 0;
+  let cost = 0, rejected = 0, calls = 0, stopped = false;
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await deps.router('mail_history_insight', { max_tokens: 900, temperature: 0, system: SUMMARY_SYSTEM,
       messages: [{ role: 'user', content: count + ' emails in all; the latest ' + rows.length + ' notes, oldest first:\n' + promptOf(rows) }],
       tools: [RELATIONSHIP_TOOL], tool_choice: { type: 'tool', name: 'relationship' } });
     calls++; cost += res.cost || 0;
+    if (onCost && (await onCost(res.cost || 0))) stopped = true;
     // deno-lint-ignore no-explicit-any
     const tu = ((res.out && res.out.content) || []).find((c: any) => c && c.type === 'tool_use');
     const v = validateSummary(tu ? tu.input : null);
@@ -95,13 +98,14 @@ export async function summariseContact(deps: SummaryDeps, contactId: number, by:
       const model = clip(String((res.out && res.out.model) || 'mail_history_insight'), 120);
       try {
         await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { ...v.value, model, cost }, p_by: by });
-        return { saved: true, model, cost, rejected, calls };
+        return { saved: true, model, cost, rejected, calls, stopped };
       } catch (_) { /* the database refused it (a check the code missed): try once more, then the counts line */ }
     }
     rejected++;
+    if (stopped) break;   // paused or at the cap: no second call; the counts line below costs nothing
   }
   await deps.rpc('crm_insight_save', { p_contact: contactId, p_row: { summary: countsOnly(rows, count), topics: [], model: 'none', cost }, p_by: by });
-  return { saved: true, model: 'none', cost, rejected, calls };
+  return { saved: true, model: 'none', cost, rejected, calls, stopped };
 }
 
 /** One step of a run's pass, within a budget: summarise the next contacts, add each cost to the run's spend, stop at the cap. Counts only. */
@@ -113,6 +117,9 @@ export async function summaryStep(deps: SummaryDeps, run: number, budgetMs = 100
     await deps.rpc('wa289_pause', { p_run: run, p_on: true, p_by: 'mail-history (not ready)' });
     return { error: 'not ready', paused: true };
   }
+  // eh-292 fix 2: nothing is spent while the run is paused or its spend has reached the cap
+  const gate0 = await deps.rpc('wa292_summary_gate', { p_run: run });
+  if (gate0 && gate0.stop) return { paused: true, stopped: 'paused or at the cap', summarised: 0, calls: 0 };
   if (!(await deps.rpc('wa289_lease', { p_run: run }))) return { busy: true };
   let done = 0, rejected = 0, calls = 0, paused = false, finished = false;
   try {
@@ -121,12 +128,14 @@ export async function summaryStep(deps: SummaryDeps, run: number, budgetMs = 100
       if (!todo.length) { await deps.rpc('wa292_summary_done', { p_run: run }); finished = true; break; }
       for (const id of todo) {
         if (deps.now() >= deadline) break;
-        const r = await summariseContact(deps, Number(id), by);
+        const gate = await deps.rpc('wa292_summary_gate', { p_run: run });   // before each contact: a Pause or the cap stops the pass here
+        if (gate && gate.stop) { paused = true; break; }
+        const r = await summariseContact(deps, Number(id), by, async (usd: number) => {
+          const spend = await deps.rpc('wa289_spend', { p_run: run, p_mailbox: null, p_usd: usd });
+          return !!(spend && spend.paused);
+        });
         done++; rejected += r.rejected; calls += r.calls;
-        if (r.cost > 0 || r.calls > 0) {
-          const spend = await deps.rpc('wa289_spend', { p_run: run, p_mailbox: null, p_usd: r.cost });
-          if (spend && spend.paused) { paused = true; break; }
-        }
+        if (r.stopped) { paused = true; break; }
       }
       if (paused) break;
     }

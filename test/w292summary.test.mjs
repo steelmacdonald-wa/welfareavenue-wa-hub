@@ -93,12 +93,50 @@ test('a refused answer twice falls back to counts and dates; a stale row is rewr
   assert.match(row.summary, /^2 emails, \d+ \w{3} \d{4} to \d+ \w{3} \d{4}\.$/); assert.equal(row.model, 'none'); assert.equal(row.stale, false);
   // the cap
   await q(`update public.crm_email_relationship set stale = true`);
-  await q(`update public.crm_mail_scans set cap_usd = 2.0 where run_id = 9201`);
+  await q(`update public.crm_mail_scans set cap_usd = 10, spend_usd = case when mailbox = 'steel' then 9.999 else 0 end where run_id = 9201`);   // one call (0.002) reaches the cap
   await q(`select public.wa292_summary_start(9201, 'test')`);
-  const capped = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  const capped = makeDeps([null, { topics: ['event'], summary: 'Asked about an event.' }]);
   const r = await S.summaryStep(capped.deps, 9201, 60000);
   assert.equal(r.paused, true, 'the pass pauses at the cap');
+  assert.equal(capped.calls.length, 1, 'eh-292 fix 2: the call that reached the cap is the last one (no second attempt, no next contact)');
   assert.deepEqual((await q(`select bool_and(paused) as p from public.crm_mail_scans where run_id = 9201`))[0].p, true);
+});
+
+test('eh-292 fix 2: Pause and the cap are honoured before spending, and every call is counted', async () => {
+  // paused: the start refuses, and a step spends nothing
+  await q(`update public.crm_mail_scans set paused = true, cap_usd = 100 where run_id = 9201`);
+  await assert.rejects(q(`select public.wa292_summary_start(9201, 'test')`), /is paused/);
+  const p = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  const rp = await S.summaryStep(p.deps, 9201, 60000);
+  assert.equal(rp.paused, true); assert.equal(p.calls.length, 0, 'a paused run makes no router call');
+  // at the cap: the start refuses
+  await q(`update public.crm_mail_scans set paused = false, cap_usd = (select sum(spend_usd) from public.crm_mail_scans where run_id = 9201) where run_id = 9201`);
+  await assert.rejects(q(`select public.wa292_summary_start(9201, 'test')`), /reached its spend cap/);
+  const c = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  assert.equal((await S.summaryStep(c.deps, 9201, 60000)).paused, true); assert.equal(c.calls.length, 0, 'a run at its cap makes no router call');
+  // a call that fails after a paid one: the paid one is already counted
+  await q(`update public.crm_mail_scans set cap_usd = 100 where run_id = 9201`);
+  await q(`update public.crm_email_relationship set stale = true`);
+  await q(`select public.wa292_summary_start(9201, 'test')`);
+  const before = Number((await q(`select sum(spend_usd) as s from public.crm_mail_scans where run_id = 9201`))[0].s);
+  const f = makeDeps([null]);
+  let n = 0; const r0 = f.deps.router;
+  f.deps.router = async (task, body) => { if (++n === 2) throw new Error('router down'); return r0(task, body); };
+  await assert.rejects(S.summaryStep(f.deps, 9201, 60000), /router down/);
+  const after = Number((await q(`select sum(spend_usd) as s from public.crm_mail_scans where run_id = 9201`))[0].s);
+  assert.ok(Math.abs(after - before - 0.002) < 1e-9, 'the cost of the first call was recorded before the second failed (' + (after - before) + ')');
+});
+
+test('eh-292 minor: Refresh has a daily limit per person', async () => {
+  await q(`update public.app_config set value = '2' where key = 'mail_history_refresh_daily'`);
+  const who = 'w292.refresher@example.invalid';
+  assert.equal((await q(`select public.wa292_refresh_left($1) as n`, [who]))[0].n, 2);
+  const v = await contact('existing.writer@org.example.org');
+  const { deps } = makeDeps([null]);
+  await S.summariseContact(deps, v, who); await S.summariseContact(deps, v, who);
+  assert.equal((await q(`select public.wa292_refresh_left($1) as n`, [who]))[0].n, 0, 'two summaries written today: none left');
+  assert.equal((await q(`select public.wa292_refresh_left($1) as n`, ['someone.else@example.invalid']))[0].n, 2, 'counted per person');
+  await q(`update public.app_config set value = '20' where key = 'mail_history_refresh_daily'`);
 });
 
 test('Refresh one contact: the same three steps, no run', async () => {
