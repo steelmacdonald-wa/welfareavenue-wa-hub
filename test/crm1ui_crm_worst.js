@@ -140,6 +140,12 @@ async function contact(browser, D, w) {
   }
   /* setting it: the button waits for a reason, then asks, with Cancel focused; Yes sets it and the focus lands on Clear */
   await f.hash('#crm/c/' + X.plain, 1600);
+  /* positive control: a contact who is not do not contact does show the ways to reach them, so the zero-reach checks above cannot pass by accident */
+  const pc = X.fx.crm_contacts_v.filter(c => c.id === X.plain)[0];
+  b = await f.ev(() => { const s = document.getElementById('w152sheet'); const n = q => s.querySelectorAll(q).length;
+    return { mail: n('.w152qa a[href^="mailto:"]'), tel: n('.w152qa a[href^="tel:"]'), sms: n('.w152qa a[href^="sms:"]'), send: n('.w152qa [data-w154send]'), copy: n('.w152qa [data-w152copy]'), banner: n('.w283dnc') }; });
+  const hasPhone = pc.phones.length > 0 && !pc.sms_opt_out;
+  ok(tag + ': positive control: a contact who is not do not contact shows Email, Copy and Send' + (hasPhone ? ', Call and Text' : ''), b.mail === 1 && b.copy === 1 && b.send === 1 && b.banner === 0 && (!hasPhone || (b.tel === 1 && b.sms === 1)), b);
   b = await f.ev(() => ({ dis: (document.querySelector('#w152sheet [data-w283dnc]') || {}).disabled, desc: (document.querySelector('#w152sheet [data-w283dncr]') || { getAttribute: () => '' }).getAttribute('aria-describedby') }));
   ok(tag + ': Do not contact is disabled until a reason is picked, and the picker is described', b.dis === true && /w283dnch-/.test(b.desc || ''), b);
   await f.ev(() => { const s = document.querySelector('#w152sheet [data-w283dncr]'); s.focus(); s.value = 'asked'; s.dispatchEvent(new Event('change', { bubbles: true })); });

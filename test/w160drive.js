@@ -132,7 +132,7 @@ const card = (f, h) => f.ev(x => { const c = [...document.querySelectorAll('#crm
   ok('where it came from: kinds, campaigns (and gifts with none), the platform with the method, the receipts', /Donation · 10 gifts\s*\$1,050\.50/.test(c) && /Registration · 2 gifts\s*\$200/.test(c) && /Spring appeal · 6 gifts, 5 donors\s*\$700/.test(c) &&
     /No campaign · 6 gifts, 4 donors/.test(c) && /Keela · 8 gifts/.test(c) && /The Hub \(Cheque\) · 4 gifts\s*\$400/.test(c) && /8 gifts receipted, 3 gifts receipt due and 1 gift no receipt/.test(c) && !/Keela’s gifts came in as donations/.test(c), c);
   c = await card(f, 'Gift sizes');
-  ok('gift sizes with the average, middle and largest, and the largest donors (someone gone from the CRM without a link)', /average \$104\.21, middle \$80, largest \$400/.test(c) && /\$250 to \$499 · \$400\s*1 gift/.test(c) && /Amara Test · 3 gifts\s*\$400/.test(c) && /Gone Person/.test(c), c);
+  ok('gift sizes with the average, middle and largest, and the largest donors (someone gone from the CRM without a link)', /average \$104\.21, middle \$80, largest \$400/.test(c) && /\$250 to \$499 · \$400\.00\s*1 gift/.test(c) && /Amara Test · 3 gifts\s*\$400\.00/.test(c) && /Gone Person/.test(c), c);
   b = await f.ev(() => [...document.querySelectorAll('#crm .w160rep a[href^="#crm/c/"]')].map(a => a.getAttribute('href') + ' ' + a.textContent));
   ok('names open their contact page', b.indexOf('#crm/c/5001 Amara Test') >= 0 && b.indexOf('#crm/c/5003 Cal Test') >= 0 && !b.some(x => /Gone Person|5099/.test(x)), b);
 
@@ -159,10 +159,10 @@ const card = (f, h) => f.ev(x => { const c = [...document.querySelectorAll('#crm
   ok('from applying to serving, and the hours and meals in words', /Applied in 2025-26\s*10/.test(c) && /Served at least once since\s*4/.test(c) && /Three times or more\s*1/.test(c) &&
     /Hours are not recorded for servings in the Hub; the old website recorded them until 9 Feb 2025\./.test(c) && /Meals served are not recorded since 19 Jan 2025 \(the old website\)\./.test(c), c);
   c = await card(f, 'Email');
-  ok('email permission today from the contacts: newsletter reach, express, implied, ending within 90 days', /3 can get a newsletter/.test(c) && /1 said yes \(express\)/.test(c) && /2 implied: gave or served/.test(c) && /1 implied ends within 90 days/.test(c) &&
-    /1 person has unsubscribed, 1 address bounces, 1 person has no permission on file \(confirmations only\), and 10 contacts have no email address\./.test(c) && /No email has gone out from the Hub in 2025-26/.test(c) && /No form answer yet/.test(c), c);
+  ok('email permission today from the contacts: newsletter reach by Steel’s rule of 5 Nov 2026 (task 10b), express, implied, ending within 90 days', /4 can get a newsletter/.test(c) && /1 said yes \(express\)/.test(c) && /2 implied: gave or served/.test(c) && /1 implied ends within 90 days/.test(c) &&
+    /1 person has unsubscribed, 1 address bounces, 1 person has no consent on file \(the rule still emails them\), and 10 contacts have no email address\./.test(c) && /No email has gone out from the Hub in 2025-26/.test(c) && /No form answer yet/.test(c), c);
   b = await f.ev(() => window.w160.perm());
-  ok('the permission rule is the CRM’s own (permKey)', b.reach === 3 && b.express === 1 && b.implied === 2 && b.ending === 1 && b.unsub === 1 && b.bounced === 1 && b.none === 1 && b.noemail === 10 && b.total === 16, b);
+  ok('the permission rule is the CRM’s own (permKey)', b.reach === 4 && b.express === 1 && b.implied === 2 && b.ending === 1 && b.unsub === 1 && b.bounced === 1 && b.none === 1 && b.noemail === 10 && b.total === 16, b);
   c = await card(f, 'How it is counted');
   ok('how it is counted', /1 October to 30 September; 2025-26 began on 1 Oct 2025/.test(c) && /at the same date \(25 Sep 2025\)/.test(c) && /Possible duplicates/.test(c), c);
   b = await f.ev(() => ({ print: !!document.querySelector('#crm [data-w160print]'), css: /@media print\{body \*\{visibility:hidden !important;\}\.w160rep/.test((document.getElementById('w160css') || {}).textContent || ''),
