@@ -542,6 +542,11 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
                 from public.mybox_owners o where o.email = 'steel.macdonald@welfareavenue.com'),
     'aliases', (select coalesce(jsonb_agg(distinct lower(btrim(x))), '[]'::jsonb) from public.wa_email_aliases a,
                        lateral unnest(array[a.email] || coalesce(a.aliases, '{}'::text[])) x where nullif(btrim(x), '') is not null),
+    'own', jsonb_build_object(
+       'steel', (select coalesce(jsonb_agg(distinct lower(btrim(x))), '[]'::jsonb) from public.wa_email_aliases a, lateral unnest(coalesce(a.aliases, '{}'::text[])) x
+                  where lower(btrim(a.email)) = 'steel.macdonald@welfareavenue.com' and nullif(btrim(x), '') is not null),
+       'hub', (select coalesce(jsonb_agg(distinct lower(btrim(x))), '[]'::jsonb) from public.wa_email_aliases a, lateral unnest(coalesce(a.aliases, '{}'::text[])) x
+                  where lower(btrim(a.email)) = 'hub@welfareavenue.com' and nullif(btrim(x), '') is not null)),
     'since', coalesce((select value from public.app_config where key = 'mail_history_since'), '2020-04-01'),
     'personal_words', coalesce(public.wa284_cfg('mail_history_personal_words'), '[]'::jsonb),
     'platforms', coalesce(public.wa284_cfg('mail_history_platforms'), '[]'::jsonb),
@@ -554,7 +559,7 @@ returns jsonb language sql stable security definer set search_path to '' as $fun
     'type_unsure', public.wa289_num('mail_history_type_unsure', 0.5),
     'run', p_run)
 $function$;
-comment on function public.wa289_context(bigint) is 'wave289: what mail-history needs to apply the rules: Steel''s mybox senders, words and family name (rules a and b), the staff aliases (B2, direction), and the mail_ settings. Goes to the edge function only, never to a page or a Claude session. The service role only.';
+comment on function public.wa289_context(bigint) is 'wave289: what mail-history needs to apply the rules: Steel''s mybox senders, words and family name (rules a and b), every staff alias (direction) and each mailbox''s own aliases (B2), and the mail_ settings. Goes to the edge function only, never to a page or a Claude session. The service role only.';
 
 create or replace function public.wa289_stage_ids(p_run bigint, p_mailbox text, p_ids jsonb, p_token text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
@@ -643,7 +648,8 @@ begin
     else
       update import_stage.mail_messages m set state = v_state, reason = case when v_state = 'kept' then null else v_reason end,
              thread_id = coalesce(nullif(r ->> 'thread', ''), m.thread_id),
-             msg_md5 = case when coalesce(r ->> 'msg_md5', '') ~ '^[0-9a-f]{32}$' then r ->> 'msg_md5' end,
+             msg_md5 = case when nullif(btrim(r ->> 'message_id'), '') is not null then md5(lower(btrim(r ->> 'message_id')))
+                            when coalesce(r ->> 'msg_md5', '') ~ '^[0-9a-f]{32}$' then r ->> 'msg_md5' end,
              sent_at = nullif(r ->> 'sent_at', '')::timestamptz,
              direction = case when v_state = 'kept' then r ->> 'direction' end,
              box = case when v_state = 'kept' then r ->> 'box' end,
@@ -661,7 +667,7 @@ begin
    where s.run_id = p_run and s.mailbox = p_mailbox;
   return jsonb_build_object('saved', n);
 end $function$;
-comment on function public.wa289_save_headers(bigint, text, jsonb) is 'wave289: the headers phase: saves the rule outcome of each listed email ({id, thread, state kept|skipped|left_alone, reason, msg_md5, sent_at, direction, box, writer, writer_name, outside, recipients, subject}). Left-alone mail keeps its id only (and goes to mail_left_alone); Steel''s mail that mybox skipped is left alone here too (rule a). Refuses body-like keys. The service role only.';
+comment on function public.wa289_save_headers(bigint, text, jsonb) is 'wave289: the headers phase: saves the rule outcome of each listed email ({id, thread, state kept|skipped|left_alone, reason, message_id (stored only as its md5) or msg_md5, sent_at, direction, box, writer, writer_name, outside, recipients, subject}). Left-alone mail keeps its id only (and goes to mail_left_alone); Steel''s mail that mybox skipped is left alone here too (rule a). Refuses body-like keys. The service role only.';
 
 create or replace function public.wa289_dedupe(p_run bigint)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
