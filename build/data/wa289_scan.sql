@@ -430,12 +430,16 @@ create or replace function public.wa289_lease(p_run bigint)
 returns boolean language plpgsql security definer set search_path to '' as $function$
 declare v_lease int := coalesce((public.wa284_cfg('mail_history_step_seconds') ->> 'lease')::int, 180); n int;
 begin
-  if exists (select 1 from public.crm_mail_scans s where s.run_id = p_run and s.step_at is not null and s.step_at > now() - make_interval(secs => v_lease)) then return false; end if;
-  update public.crm_mail_scans s set step_at = now() where s.run_id = p_run;
+  -- eh-289 I3: one taker at a time. The advisory lock (held to the end of this short transaction) makes a second caller give up at once, and the
+  -- single update takes the lease only when no row holds a young one, so two steps never run together
+  if not pg_try_advisory_xact_lock(hashtext('wa289_lease'), p_run::int) then return false; end if;
+  update public.crm_mail_scans s set step_at = now()
+   where s.run_id = p_run
+     and not exists (select 1 from public.crm_mail_scans x where x.run_id = p_run and x.step_at is not null and x.step_at > now() - make_interval(secs => v_lease));
   get diagnostics n = row_count;
   return n > 0;
 end $function$;
-comment on function public.wa289_lease(bigint) is 'wave289: takes the run''s step lease (every scan row''s step_at) unless a step holds one younger than mail_history_step_seconds.lease (180 s). Returns true when taken. The service role only.';
+comment on function public.wa289_lease(bigint) is 'wave289: takes the run''s step lease (every scan row''s step_at) unless a step holds one younger than mail_history_step_seconds.lease (180 s), atomically (a transaction advisory lock on the run, then one update; eh-289 I3). Returns true when taken. The service role only.';
 
 create or replace function public.wa289_scan_set(p_run bigint, p_mailbox text, p_patch jsonb)
 returns void language plpgsql security definer set search_path to '' as $function$
@@ -475,6 +479,9 @@ begin
   if exists (select 1 from public.crm_mail_scans s where s.run_id = p_run and s.phase <> 'waiting') or not exists (select 1 from public.crm_mail_scans s where s.run_id = p_run) then
     raise exception 'wa284: email history: go needs every scan of run % waiting after its sample', p_run;
   end if;
+  if jsonb_array_length(public.wa289_ready()) > 0 then
+    raise exception 'wa284: email history: not ready (%)', (select string_agg(x, '; ') from jsonb_array_elements_text(public.wa289_ready()) x);
+  end if;
   select sum(s.estimate_usd) into v_est from public.crm_mail_scans s where s.run_id = p_run;
   if v_est is null then raise exception 'wa284: email history: run % has no estimate yet', p_run; end if;
   v_cap := least(round(v_est * 1.5, 2), public.wa289_num('mail_history_cap_usd', 60));
@@ -483,7 +490,7 @@ begin
   values ('crm_mail_scans', p_run::text, 'go', null, 'Email history paid phases started: estimate $' || round(v_est, 2) || ', cap $' || v_cap, coalesce(nullif(p_by, ''), 'mail-history'));
   return jsonb_build_object('estimate', round(v_est, 2), 'cap', v_cap);
 end $function$;
-comment on function public.wa289_go(bigint, text) is 'wave289: Steel''s yes to the paid phases: every scan of the run must be waiting with an estimate; sets the cap to 1.5 times the estimate, never above mail_history_cap_usd (H2), and moves the scans to threads. Logged. The service role only.';
+comment on function public.wa289_go(bigint, text) is 'wave289: Steel''s yes to the paid phases: wa289_ready must list nothing (eh-289 I5), every scan of the run must be waiting with an estimate; sets the cap to 1.5 times the estimate, never above mail_history_cap_usd (H2), and moves the scans to threads. Logged. The service role only.';
 
 create or replace function public.wa289_set_cap(p_run bigint, p_usd numeric, p_by text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
@@ -756,8 +763,10 @@ begin
                      (select jsonb_object_agg(k, left(v, 160)) from jsonb_each_text(e -> 'sig') x(k, v) where k in ('name', 'title', 'organization', 'phone', 'website') and btrim(v) <> '') end
        where m.run_id = p_run and m.mailbox = p_mailbox and m.thread_id = p_thread and m.gmail_id = e ->> 'id' and m.state = 'kept';
     end loop;
+    -- eh-289 M3: only the emails in this answer are marked read, so a thread cut short by the step's deadline is finished by the next step
     update import_stage.mail_messages m set topic = v_topic, lang = coalesce(v_lang, 'other'), read_at = now()
-     where m.run_id = p_run and m.mailbox = p_mailbox and m.thread_id = p_thread and m.state = 'kept' and m.read_at is null;
+     where m.run_id = p_run and m.mailbox = p_mailbox and m.thread_id = p_thread and m.state = 'kept' and m.read_at is null
+       and m.gmail_id in (select j.v ->> 'id' from jsonb_array_elements(coalesce(p_result -> 'emails', '[]'::jsonb)) as j(v));
   else
     -- a left-out thread: only the id (in mail_left_alone) and an asks-to-stop flag from outside are kept
     for e in select * from jsonb_array_elements(coalesce(p_result -> 'emails', '[]'::jsonb)) loop
@@ -997,8 +1006,8 @@ begin
       'bounces_staged', (select count(*) from import_stage.mail_messages m where m.run_id = p_run and m.mailbox = s.mailbox and m.bounce_addr is not null),
       'asks_to_stop', (select count(*) from import_stage.mail_messages m where m.run_id = p_run and m.mailbox = s.mailbox and m.asks_to_stop),
       'threads_read', (select count(distinct m.thread_id) from import_stage.mail_messages m where m.run_id = p_run and m.mailbox = s.mailbox and m.read_at is not null),
-      'threads_rejected', (select count(distinct m.thread_id) from import_stage.mail_messages m where m.run_id = p_run and m.mailbox = s.mailbox and m.read_fail >= 2),
-      'run', coalesce(s.counts -> 'run', '{}'::jsonb));
+      'threads_rejected', (select count(distinct m.thread_id) from import_stage.mail_messages m where m.run_id = p_run and m.mailbox = s.mailbox and m.read_fail >= 2))
+      || case when s.counts ? 'run' then jsonb_build_object('run', s.counts -> 'run') else '{}'::jsonb end;   -- eh-289 I2: no empty run object
     update public.crm_mail_scans x set counts = c where x.id = s.id;
     v_boxes := v_boxes || jsonb_build_array(jsonb_build_object('mailbox', s.mailbox, 'phase', s.phase, 'counts', c, 'oldest_at', s.oldest_at, 'estimate_usd', s.estimate_usd,
                'spend_usd', s.spend_usd, 'cap_usd', s.cap_usd, 'paused', s.paused, 'go_at', s.go_at, 'finished_at', s.finished_at, 'last_error', s.last_error,

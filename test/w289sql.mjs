@@ -15,6 +15,7 @@ const read = (p) => readFileSync(join(here, p), 'utf8');
 const base = ['w281schema.sql', '../build/data/wa281_rules.sql', 'w284schema.sql', '../build/data/wa284_import.sql', 'w289schema.sql'].map(read);
 const migration = read('../build/data/wa289_scan.sql');
 const undo = read('../build/data/wa289_undo.sql');
+const undo284 = read('../build/data/wa284_undo.sql');
 const assertions = read('w289sql.sql');
 const live = read('w289live.sql');
 const liveUndo = read('w289live_undo.sql');
@@ -116,6 +117,27 @@ try {
   // ---- and the migration goes back on after an undo
   await db.exec(`delete from public.app_config where key = 'mail_history_cap_usd';`);
   await db.exec(migration);
+  // ---- eh-289 I7: wave284's undo stops while wave289 is there (its drop of import_stage would take the mail tables with it)
+  {
+    let msg = '';
+    try { await db.exec('begin;\n' + undo284 + '\ncommit;'); } catch (e) { msg = String(e.message); }
+    await db.exec('rollback').catch(() => {});
+    ok(msg.includes('undo wave289 first'), 'wave284 undo refuses while wave289 is there (' + msg + ')');
+    ok((await one(db, `select to_regclass('import_stage.mail_messages') is not null and to_regclass('public.crm_import_runs') is not null as x`)).x === true, 'and nothing was dropped');
+    console.log('wave284 undo stops while wave289 is there (eh-289 I7)');
+  }
+  // ---- eh-289 M5: the scan's memory is kept, with no grant, when it holds rows
+  {
+    await db.exec(`insert into import_stage.mail_seen (msg_md5, mailbox, gmail_id) values (md5('kept'), 'hub', 'gmailKEEP001');`);
+    await db.exec(undo);
+    ok((await one(db, `select to_regclass('import_stage.mail_seen') is not null as x`)).x === true, 'mail_seen holding rows is kept by the undo');
+    ok((await one(db, `select to_regclass('import_stage.mail_left_alone') is null as x`)).x === true, 'an empty mail_left_alone goes');
+    ok((await one(db, `select not has_table_privilege('service_role', 'import_stage.mail_seen', 'select') and not has_table_privilege('authenticated', 'import_stage.mail_seen', 'select') as x`)).x === true, 'with every grant revoked');
+    await db.exec(migration);
+    ok((await one(db, `select count(*)::int as n from import_stage.mail_seen`)).n === 1, 'and a re-applied migration finds it again');
+    await db.exec(`delete from import_stage.mail_seen;`);
+    console.log('undo keeps mail_seen with rows (eh-289 M5)');
+  }
   await runAssertions(db, 're-applied assertions');
   const again = await one(db, COUNTS);
   ok(again.functions === first.functions && again.settings === 18, 'the same functions and settings again after an undo');

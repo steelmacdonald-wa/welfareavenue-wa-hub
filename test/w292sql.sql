@@ -258,6 +258,12 @@ begin
   perform public.wa284_purge(9201);
   assert not exists (select 1 from import_stage.mail_people where run_id = 9201) and not exists (select 1 from import_stage.mail_messages where run_id = 9201) and not exists (select 1 from import_stage.mail_orgs where run_id = 9201), 'Purge empties the mail staging';
   assert exists (select 1 from import_stage.mail_seen where gmail_id = 'gm292A1') and exists (select 1 from public.crm_email_suppressions), 'and keeps mail_seen and the suppressions';
+  -- eh-289 I8: a run whose email lines were never applied gives its mail_seen hashes back
+  insert into public.crm_import_runs (id, label, source) overriding system value values (9202, 'Test unapplied run', 'email_history');
+  insert into import_stage.mail_seen (msg_md5, mailbox, gmail_id, run_id) values (md5('m9'), 'hub', 'gm292U1', 9202);
+  perform public.wa284_purge(9202);
+  assert not exists (select 1 from import_stage.mail_seen where gmail_id = 'gm292U1'), 'Purge of an unapplied run deletes its mail_seen rows';
+  assert exists (select 1 from import_stage.mail_seen where gmail_id = 'gm292A1'), 'an applied run''s rows stay';
 end $$;
 
 select 'w292sql: all assertions passed' as result;

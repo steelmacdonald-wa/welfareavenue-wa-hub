@@ -107,6 +107,12 @@ export async function summariseContact(deps: SummaryDeps, contactId: number, by:
 /** One step of a run's pass, within a budget: summarise the next contacts, add each cost to the run's spend, stop at the cap. Counts only. */
 export async function summaryStep(deps: SummaryDeps, run: number, budgetMs = 100000, by = 'Email history'): Promise<Record<string, unknown>> {
   const deadline = deps.now() + budgetMs;
+  // eh-289 I5: the routes are checked at every step
+  const problems = await deps.rpc('wa289_ready', {});
+  if (Array.isArray(problems) && problems.length) {
+    await deps.rpc('wa289_pause', { p_run: run, p_on: true, p_by: 'mail-history (not ready)' });
+    return { error: 'not ready', paused: true };
+  }
   if (!(await deps.rpc('wa289_lease', { p_run: run }))) return { busy: true };
   let done = 0, rejected = 0, calls = 0, paused = false, finished = false;
   try {

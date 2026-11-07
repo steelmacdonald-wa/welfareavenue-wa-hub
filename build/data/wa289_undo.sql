@@ -4,8 +4,8 @@
 -- run has a batch (wave292 must be undone first), or while crm_email_suppressions holds rows (opt-outs are never dropped), or while a route other
 -- than the mail_history_* ones carries a provider setting. Otherwise it: removes the pump; drops the wa289_* functions; deletes the four
 -- mail_history_* routes and the mail_ settings wave289 added when they still hold its value; drops ai_routes.provider; deletes the email-history
--- runs (their scans and staged rows go with them); drops the import_stage mail tables (mail_seen and mail_left_alone too: the scan goes, so its
--- memory goes), crm_mail_scans, crm_email_suppressions and crm_import_runs.source. wave289 changed no live function. Safe to run twice.
+-- runs (their scans and staged rows go with them); drops the import_stage mail tables (mail_seen and mail_left_alone only when empty: holding
+-- rows they are kept with every grant revoked, eh-289 M5 and design 11.8), crm_mail_scans, crm_email_suppressions and crm_import_runs.source. wave289 changed no live function. Safe to run twice.
 -- No transaction control. Proved offline: node test/w289sql.mjs.
 
 do $wa289u$
@@ -82,8 +82,19 @@ end $wa289u$;
 drop table if exists import_stage.mail_messages;
 drop table if exists import_stage.mail_people;
 drop table if exists import_stage.mail_orgs;
-drop table if exists import_stage.mail_seen;
-drop table if exists import_stage.mail_left_alone;
+-- eh-289 M5 (design 11.8): mail_seen and mail_left_alone are the scan's memory (hashes and ids only). When they hold rows they are kept, with
+-- every grant revoked, so a later scan never reads that mail again; empty, they go.
+do $wa289u$
+declare t text; v boolean;
+begin
+  foreach t in array array['mail_seen', 'mail_left_alone'] loop
+    if to_regclass('import_stage.' || t) is not null then
+      execute format('select exists (select 1 from import_stage.%I)', t) into v;
+      if v then execute format('revoke all on table import_stage.%I from public, anon, authenticated, service_role', t);
+      else execute format('drop table import_stage.%I', t); end if;
+    end if;
+  end loop;
+end $wa289u$;
 drop table if exists public.crm_mail_scans;
 drop table if exists public.crm_email_suppressions;
 alter table public.crm_import_runs drop constraint if exists crm_import_runs_source_check;

@@ -6,6 +6,13 @@
 -- crm_import_changes, crm_import_batches, crm_import_runs, the schema import_stage, the storage policies, the Keela id index; the bucket imports
 -- when it is empty; the keela_ settings wave284 added, when they still hold the value wave284 gave them (a setting an admin filled in stays).
 -- Safe to run twice. No transaction control. Proved offline: node test/w284sql.mjs.
+-- Order (eh-289 I7): undo wave293, then wave292, then wave289, then this file. Its drop of import_stage would take wave289's staging tables with it,
+-- so it stops while wave289 is there.
+
+do $wa284u0$
+begin
+  if to_regclass('public.crm_mail_scans') is not null then raise exception 'wave284 undo: undo wave289 first (build/data/wa289_undo.sql)'; end if;
+end $wa284u0$;
 
 do $wa284u$
 declare t text;

@@ -49,8 +49,21 @@ export function headerReader(msg: any): Hdr {
 export function isBulk(h: Hdr, fromEmail: string): boolean {
   const from = String(fromEmail || '').toLowerCase(), dom = from.split('@')[1] || '';
   const unsub = h('List-Unsubscribe');
-  if (!unsub || dom.endsWith('welfareavenue.com')) return false;
+  if (!unsub || dom === 'welfareavenue.com' || dom.endsWith('.welfareavenue.com')) return false;   // eh-289 M7: whole labels only
   return BULK_LOCAL.test(from) || BULK_DOMAIN.test(dom) || BULK_ESP.test(unsub + ' ' + h('List-Id') + ' ' + h('Return-Path')) || /^(bulk|list)$/i.test(h('Precedence').trim());
+}
+/** eh-289 C1: mail through Welfare Avenue's own Google Group (info@). Google Groups add List-Unsubscribe and Precedence: list to every post,
+ *  so mybox's bulk rule would drop a person writing to info@. A post is WA's group when its List-Id is <info.welfareavenue.com> or info@ is in
+ *  the addressing headers. */
+export function isWaGroup(h: Hdr): boolean {
+  return /(^|[<\s])info\.welfareavenue\.com>?\s*$/i.test(h('List-Id').trim()) || toInfo(h);
+}
+/** For WA's group only (mail-pull's rule for hub@): bulk when Precedence is exactly bulk, or a mailing service shows in the unsubscribe or return
+ *  path (the group's own groups.google.com unsubscribe link does not count). Precedence: list, a bulk-looking local part (hello@) and the group's
+ *  List-Unsubscribe never decide it. */
+export function groupBulk(h: Hdr): boolean {
+  const unsub = h('List-Unsubscribe').replace(/<[^>]*google(groups)?\.com[^>]*>/gi, '').replace(/<[^>]*googlegroups[^>]*>/gi, '');
+  return /^bulk$/i.test(h('Precedence').trim()) || BULK_ESP.test(unsub + ' ' + h('Return-Path'));
 }
 /** Google's own notices (sign-in, Drive shares, Chat, Calendar). */
 export function isGoogleNotice(fromEmail: string): boolean { return NOISE_SENDERS.test(String(fromEmail || '')); }
@@ -152,6 +165,19 @@ export function isFreemail(domain: string, list: string[] = FREEMAIL_DEFAULT): b
     return d.split('.')[0] === k || d.startsWith(k + '.');
   });
 }
+/** eh-289 M7: a platform sender. A full domain (stripe.com) matches it or a subdomain; a bare name (stripe) matches only a whole label of the
+ *  domain other than its top-level one (mail.stripe.com, stripe.ca), never a part of a label (stripey.org). */
+export function isPlatform(domain: string, list: string[] = []): boolean {
+  const d = normKey(domain);
+  if (!d) return false;
+  const labels = d.split('.').slice(0, -1);
+  return list.some(x => {
+    const k = normKey(x);
+    if (!k) return false;
+    if (k.includes('.')) return d === k || d.endsWith('.' + k);
+    return labels.includes(k);
+  });
+}
 export const PERSONAL_WORDS_DEFAULT = ['birthday', 'condolence', 'condolences', 'funeral', 'wedding', 'mom', 'dad', 'maman', 'papa', 'family dinner', 'vacation photos', 'anniversaire', 'funérailles', 'mariage', 'souper de famille'];
 /** Rule b: every outside address is free mail and either the sender shares the owner's family name or the subject has a personal word. */
 export function probablyPersonal(p: { outside: string[]; fromName: string; ownerFamily: string | null; subject: string; words?: string[]; freemail?: string[] }): boolean {
@@ -194,6 +220,10 @@ export function parseBounceText(text: string, ignore: string[] = []): { addr: st
 }
 
 /* ---- validation of model answers (M10) ---- */
+/** eh-289 I4: the writer asks Welfare Avenue to stop emailing them or to remove them (English and French). Used, without a model, on the emails of
+ *  a thread after the reader has already left the thread out, so a later "remove me" is never lost. */
+export const STOP_WORDS = /\b(unsubscribe me|remove me|take me off|stop (emailing|e-mailing|sending|contacting|writing to) me|do not (email|contact|write to) me|don'?t (email|contact|write to) me|no longer (wish|want) to (receive|hear|get)|d[ée]sabonnez[- ]moi|me d[ée]sabonner|retirez[- ]moi|enlevez[- ]moi|ne (plus|veux plus|souhaite plus) recevoir|arr[êe]tez de m'?[ée]crire|ne m'?[ée]crivez plus)\b/i;
+export function asksToStop(text: string): boolean { return STOP_WORDS.test(String(text || '').slice(0, 4000)); }
 export const LEAVE_OUT = ['none', 'personal', 'confidential', 'help_seeker', 'staff_hiring'];
 export const TOPICS = ['donation', 'partnership', 'volunteering', 'event', 'media', 'supplier', 'government', 'program', 'other'];
 export const LANGS = ['en', 'fr', 'other'];
@@ -284,14 +314,26 @@ function v4(ip: string): number[] | null {
 /** True when an IP address is private, loopback, link-local, carrier-grade NAT, unique-local, unspecified or multicast. */
 export function isPrivateIp(ip: string): boolean {
   const s = String(ip || '').trim().toLowerCase().replace(/^\[|\]$/g, '');
-  const mapped = s.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  // ::ffff:a.b.c.d (mapped) and ::a.b.c.d (compatible) carry an IPv4 address (eh-289 M4)
+  const mapped = s.match(/^::(?:ffff:)?(\d+\.\d+\.\d+\.\d+)$/);
   const a = v4(mapped ? mapped[1] : s);
   if (a) {
     return a[0] === 10 || a[0] === 127 || a[0] === 0 || (a[0] === 172 && a[1] >= 16 && a[1] <= 31) || (a[0] === 192 && a[1] === 168)
-      || (a[0] === 169 && a[1] === 254) || (a[0] === 100 && a[1] >= 64 && a[1] <= 127) || a[0] >= 224;
+      || (a[0] === 169 && a[1] === 254) || (a[0] === 100 && a[1] >= 64 && a[1] <= 127) || a[0] >= 224
+      || (a[0] === 198 && (a[1] === 18 || a[1] === 19)) || (a[0] === 192 && a[1] === 0 && a[2] === 0);   // 198.18.0.0/15, 192.0.0.0/24
   }
   if (!s.includes(':')) return true;   // neither IPv4 nor IPv6: refuse
   if (s === '::1' || s === '::') return true;
+  if (/^::(ffff:)?[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(s)) {   // the same two, written in hex: ::ffff:a00:1, ::a00:1
+    const g = s.split(':').slice(-2).map(x => parseInt(x, 16));
+    return isPrivateIp([g[0] >> 8, g[0] & 255, g[1] >> 8, g[1] & 255].join('.'));
+  }
+  if (/^64:ff9b:/.test(s)) return true;   // 64:ff9b::/96 (NAT64) can reach any IPv4 address: refused
+  if (/^2002:/.test(s)) {   // 6to4: the IPv4 address in the next 32 bits
+    const g = s.split(':');
+    const hi = parseInt(g[1] || '0', 16), lo = parseInt(g[2] || '0', 16);
+    return isPrivateIp([hi >> 8, hi & 255, lo >> 8, lo & 255].join('.'));
+  }
   const head = parseInt(s.split(':')[0] || '0', 16);
   if ((head & 0xfe00) === 0xfc00) return true;   // fc00::/7 unique local
   if ((head & 0xffc0) === 0xfe80) return true;   // fe80::/10 link local

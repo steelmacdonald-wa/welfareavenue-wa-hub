@@ -186,6 +186,10 @@ begin
   assert pg_temp.err(format('select public.wa289_go(%s, %L)', v_run, 'x')) like '%needs every scan%waiting%', 'go needs both scans waiting';
   perform public.wa289_scan_set(v_run, 'steel', '{"phase": "waiting", "estimate_usd": 3.2}');
   perform public.wa289_scan_set(v_run, 'hub', '{"phase": "waiting", "estimate_usd": 0.8}');
+  -- eh-289 I5: go refuses while a route is not ready
+  update public.ai_routes set provider = null where task = 'mail_history_org';
+  assert pg_temp.err(format('select public.wa289_go(%s, %L)', v_run, 'x')) like 'wa284: email history: not ready (route mail_history_org has no no-retention provider setting)%', 'go checks the routes';
+  update public.ai_routes set provider = '{"data_collection": "deny", "zdr": true}' where task = 'mail_history_org';
   r := public.wa289_go(v_run, 'w281.admin@example.invalid');
   assert r = '{"cap": 6.00, "estimate": 4.00}', 'go sets 1.5 times the estimate: ' || r::text;
   assert (select count(*) from public.crm_mail_scans where run_id = v_run and phase = 'threads' and cap_usd = 6 and go_at is not null) = 2, 'both scans go to threads with the cap';
@@ -283,6 +287,8 @@ begin
   assert public.wa289_active() = jsonb_build_array(v_run), 'an active run with a free lease';
   assert public.wa289_lease(v_run), 'the lease is taken';
   assert not public.wa289_lease(v_run), 'only once';
+  assert position('pg_try_advisory_xact_lock' in pg_get_functiondef('public.wa289_lease(bigint)'::regprocedure)) > 0
+     and position('not exists' in pg_get_functiondef('public.wa289_lease(bigint)'::regprocedure)) > 0, 'eh-289 I3: the lease is one locked, conditional update';
   assert public.wa289_active() = '[]', 'a held lease is not pumped';
   update public.crm_mail_scans set step_at = now() - interval '200 seconds' where run_id = v_run;
   assert public.wa289_active() = jsonb_build_array(v_run) and public.wa289_lease(v_run), 'an expired lease is restarted';

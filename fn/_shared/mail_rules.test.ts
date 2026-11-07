@@ -6,6 +6,7 @@ import {
   addressedToMailbox, addrList, cleanSubject, cutAtContact, freshPart, isBulk, isCalendar, isDeliveryReport, isFreemail, isGoogleNotice,
   isNoiseSubject, isPrivateIp, isSecurity, neverRead, normKey, parseAddr, parseBounceText, parseDeliveryStatus, probablyPersonal,
   registeredDomain, robotsRefuses, safeHost, toInfo, validateOrg, validateRead, websiteOk, type Hdr,
+  isWaGroup, groupBulk, isPlatform, asksToStop,
 } from './mail_rules.ts';
 
 const H = (o: Record<string, string>): Hdr => (n: string) => { const k = Object.keys(o).find(x => x.toLowerCase() === n.toLowerCase()); return k ? o[k] : ''; };
@@ -160,4 +161,44 @@ test('robots.txt and registered domains', () => {
   assert.equal(robotsRefuses('User-agent: OtherBot\nDisallow: /\n\nUser-agent: *\nDisallow:'), false);
   assert.equal(registeredDomain('www.org.example.org'), 'example.org');
   assert.equal(registeredDomain('a.ville.qc.ca'), 'ville.qc.ca');
+});
+
+/* ---- eh-289 fix round ---- */
+test('C1: a post through WA\'s own Google Group (info@) is the group, and only Precedence bulk or a mailing service makes it bulk', () => {
+  const h = H({ From: 'Test Hello <hello@smallorg.example.org>', To: 'info@welfareavenue.com', 'List-ID': '<info.welfareavenue.com>', Precedence: 'list',
+    'Mailing-list': 'list info@welfareavenue.com; contact info+owners@welfareavenue.com',
+    'List-Unsubscribe': '<mailto:googlegroups-manage+123+unsubscribe@googlegroups.com>, <https://groups.google.com/a/welfareavenue.com/group/info/subscribe>' });
+  assert.equal(isBulk(h, 'hello@smallorg.example.org'), true, 'mybox\'s rule alone would drop it');
+  assert.equal(isWaGroup(h), true);
+  assert.equal(groupBulk(h), false, 'the group\'s own headers never make it bulk');
+  assert.equal(isWaGroup(H({ 'List-Id': 'Info <info.welfareavenue.com>' })), true);
+  assert.equal(isWaGroup(H({ 'List-Id': '<friends.groups.example.invalid>', To: 'friends@groups.example.invalid' })), false);
+  assert.equal(groupBulk(H({ Precedence: 'bulk', To: 'info@welfareavenue.com' })), true, 'Precedence bulk');
+  assert.equal(groupBulk(H({ To: 'info@welfareavenue.com', 'List-Unsubscribe': '<https://x.list-manage.com/u>' })), true, 'a mailing service');
+});
+
+test('M7: our domain and platform names match whole labels only', () => {
+  assert.equal(isBulk(H({ 'List-Unsubscribe': '<mailto:u@example.invalid>' }), 'news@notwelfareavenue.com'), true, 'a look-alike domain is not ours');
+  assert.equal(isBulk(H({ 'List-Unsubscribe': '<mailto:u@example.invalid>' }), 'news@mail.welfareavenue.com'), false, 'our subdomain is ours');
+  assert.equal(isPlatform('mail.stripe.com', ['stripe']), true);
+  assert.equal(isPlatform('stripe.ca', ['stripe']), true);
+  assert.equal(isPlatform('stripey.example.org', ['stripe']), false, 'not part of a label');
+  assert.equal(isPlatform('square.example.org', ['squareup.com']), false);
+  assert.equal(isPlatform('billing.squareup.com', ['squareup.com']), true);
+  assert.equal(isPlatform('zoom', ['zoom']), false, 'never the top-level label alone');
+});
+
+test('I4: the stop-words rule, in English and French', () => {
+  for (const t of ['Please remove me from your list.', 'Unsubscribe me please', 'Stop emailing me.', 'Merci de me désabonner.', 'Retirez-moi de votre liste svp', 'Je ne veux plus recevoir vos courriels'])
+    assert.equal(asksToStop(t), true, t);
+  for (const t of ['Can you remove the old date from the flyer?', 'We will stop by on Friday.', 'Le désabonnement des autres est réglé.'])
+    assert.equal(asksToStop(t), false, t);
+});
+
+test('M4: more private ranges, written every way', () => {
+  for (const ip of ['::10.0.0.1', '::ffff:10.0.0.1', '::ffff:a00:1', '::a00:1', '64:ff9b::93.184.216.34', '64:ff9b::5db8:d822', '2002:0a00:0001::1', '2002:c0a8:0101::',
+                    '198.18.0.1', '198.19.255.255', '192.0.0.8'])
+    assert.equal(isPrivateIp(ip), true, ip);
+  for (const ip of ['198.20.0.1', '192.0.1.1', '2002:5db8:d822::1', '::ffff:93.184.216.34'])
+    assert.equal(isPrivateIp(ip), false, ip);
 });

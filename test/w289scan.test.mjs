@@ -142,9 +142,8 @@ async function newRun(boxes = ['steel', 'hub']) {
 }
 
 /* ---- pure pieces ---- */
-test('the list query leaves out spam, trash, chats and drafts; a refused token restarts one day before the newest date', () => {
+test('the list query leaves out spam, trash, chats and drafts', () => {
   assert.equal(S.listQuery('2020-04-01'), 'after:2020/04/01 -in:spam -in:trash -in:chats -in:drafts');
-  assert.equal(S.listQuery('2020-04-01', S.dayBefore('2021-03-12T10:00:00Z')), 'after:2021/03/11 -in:spam -in:trash -in:chats -in:drafts');
 });
 
 test('classify: drafts dropped; personal by list and by rule; security, calendar, bounce, automated, list; direction and recipients', () => {
@@ -272,7 +271,7 @@ test('a run end to end: free phases, the sample and estimate, go, threads, peopl
   assert.ok(!JSON.stringify(status).includes('@'), 'status holds no address');
 });
 
-test('a step stopped by its budget resumes where it was, and a refused page token restarts from the newest date', async () => {
+test('a step stopped by its budget resumes where it was, and a refused page token relists from since (eh-289 M1)', async () => {
   const run = await newRun(['steel']);
   const f = makeDeps({ tag: 'B' });
   // a tiny budget: the step stops early; the next one goes on
@@ -293,7 +292,8 @@ test('a step stopped by its budget resumes where it was, and a refused page toke
   const g = makeDeps({ tag: 'B' });
   const r = await S.step(g.deps, run2, 100000);
   assert.ok(!r.error, JSON.stringify(r));
-  assert.ok(g.calls.gmail.some((p) => p.includes(encodeURIComponent('after:2021/03/11'))), 'listing restarted one day before the newest date: ' + g.calls.gmail[1]);
+  assert.ok(g.calls.gmail.filter((p) => p.includes(encodeURIComponent('after:2020/04/01')) && !p.includes('pageToken')).length >= 1, 'listing restarted from since without the token: ' + g.calls.gmail[1]);
+  assert.ok(!g.calls.gmail.some((p) => p.includes(encodeURIComponent('after:2021/03/11'))), 'no restart from a later date');
   assert.equal((await q(`select count(*)::int as n from import_stage.mail_messages where run_id = $1 and gmail_id = 'gmailA0000001'`, [run2]))[0].n, 1, 'nothing doubles');
 });
 
@@ -318,4 +318,99 @@ test('the sample cap stops the sample; after go the cap pauses the run; rejected
   await S.step(j.deps, run2, 100000);
   const rej = (await q(`select count(*)::int as n from import_stage.mail_messages where run_id = $1 and read_fail > 0 and line is null`, [run2]))[0].n;
   assert.ok(rej > 0, 'a rejected answer stages nothing and is counted');
+});
+
+/* ---- eh-289 fix round ---- */
+const CTX = { owner: { skip_senders: [], skip_words: [], family: 'testerson' }, aliases: [], own: { steel: [], hub: [] }, personal_words: [], platforms: ['stripe'], freemail: ['gmail.com'], max_recipients: 5, clips: { subject: 300 } };
+test('C1: a person writing to info@ through WA\'s own Google Group is kept, even from hello@ with Precedence list', () => {
+  const m = msg('gmailG0000001', { from: 'Test Hello <hello@smallorg.example.org>', to: 'info@welfareavenue.com', subject: 'A question about volunteering', headers: {
+    'List-ID': '<info.welfareavenue.com>', Precedence: 'list', 'Mailing-list': 'list info@welfareavenue.com; contact info+owners@welfareavenue.com',
+    'List-Unsubscribe': '<mailto:googlegroups-manage+123+unsubscribe@googlegroups.com>, <https://groups.google.com/a/welfareavenue.com/group/info/subscribe>' } });
+  const c = S.classify(m, 'hub', CTX);
+  assert.equal(c.state, 'kept', JSON.stringify(c)); assert.equal(c.box, 'info'); assert.equal(c.writer, 'hello@smallorg.example.org');
+  const bulk = S.classify(msg('gmailG0000002', { from: 'News <news@vendor.example.invalid>', to: 'info@welfareavenue.com', headers: { 'List-ID': '<info.welfareavenue.com>', Precedence: 'bulk',
+    'List-Unsubscribe': '<https://vendor.list-manage.com/u>' } }), 'hub', CTX);
+  assert.equal(bulk.reason, 'automated', 'a real mailing through the group is still automated');
+  assert.equal(S.classify(msg('gmailG0000003', { from: 'Billing <billing@mail.stripe.com>', to: 'info@welfareavenue.com' }), 'hub', CTX).reason, 'automated', 'a platform by whole label (M7)');
+  assert.equal(S.classify(msg('gmailG0000004', { from: 'Test Stripey <a.person@stripey.example.org>', to: 'info@welfareavenue.com' }), 'hub', CTX).state, 'kept', 'not part of a label');
+});
+
+test('I1: a group post rewritten for DMARC belongs to the person in X-Original-Sender, or a single outside Reply-To', () => {
+  const a = S.classify(msg('gmailG0000011', { from: 'Test Person via Info <info@welfareavenue.com>', to: 'info@welfareavenue.com', subject: 'Hello',
+    headers: { 'X-Original-Sender': 'test.person@example.org', 'List-ID': '<info.welfareavenue.com>', 'Reply-To': 'test.person@example.org' } }), 'hub', CTX);
+  assert.equal(a.state, 'kept'); assert.equal(a.direction, 'in'); assert.equal(a.writer, 'test.person@example.org'); assert.equal(a.writer_name, 'Test Person');
+  const b = S.classify(msg('gmailG0000012', { from: 'Test Other via Info <info@welfareavenue.com>', to: 'info@welfareavenue.com', headers: { 'Reply-To': 'Test Other <test.other@example.org>' } }), 'hub', CTX);
+  assert.equal(b.direction, 'in'); assert.equal(b.writer, 'test.other@example.org');
+  const c = S.classify(msg('gmailG0000013', { from: 'Info <info@welfareavenue.com>', to: 'someone@example.org' }), 'hub', CTX);
+  assert.equal(c.direction, 'out', 'info@ writing itself stays outgoing');
+  assert.ok(S.META_HEADERS.includes('X-Original-Sender'));
+});
+
+test('I5 and M6: a router answer from another route, without the provider setting or without a cost is refused and pauses', () => {
+  const ok = { _wa: { task: 'mail_history_thread', provider: { data_collection: 'deny', zdr: true }, cost: 0.004 } };
+  assert.equal(S.checkRouted('mail_history_thread', ok), 0.004);
+  for (const [bad, why] of [[{ _wa: { ...ok._wa, task: 'default' } }, 'another route'], [{ _wa: { ...ok._wa, provider: null } }, 'provider'], [{ _wa: { ...ok._wa, cost: null } }, 'cost'], [{}, 'nothing']]) {
+    assert.throws(() => S.checkRouted('mail_history_thread', bad), (e) => e.pause === true, why);
+  }
+});
+
+async function stageThread(run, rows) {
+  for (const x of rows) await q(`insert into import_stage.mail_messages (run_id, mailbox, gmail_id, thread_id, sent_at, state, direction, writer, box) values ($1, 'steel', $2, 'thX', $3, 'kept', $4, $5, 'steel')`,
+    [run, x.id, x.date, x.dir, x.dir === 'in' ? 'later.stop@example.org' : null]);
+}
+test('I4: a "remove me" after the reader left the thread out is still kept, without a model', async () => {
+  const run = await newRun(['steel']);
+  await stageThread(run, [{ id: 'gmailX0000001', date: '2022-01-01T10:00:00Z', dir: 'in' }, { id: 'gmailX0000002', date: '2022-01-02T10:00:00Z', dir: 'out' }, { id: 'gmailX0000003', date: '2022-01-03T10:00:00Z', dir: 'in' }]);
+  const boxes = { steel: [
+    msg('gmailX0000001', { from: 'Later Stop <later.stop@example.org>', to: STEEL, thread: 'thX', date: '2022-01-01T10:00:00Z', body: 'PERSONAL-STOP about my health' }),
+    msg('gmailX0000002', { from: STEEL, to: 'later.stop@example.org', thread: 'thX', date: '2022-01-02T10:00:00Z', body: 'Take care.' }),
+    msg('gmailX0000003', { from: 'Later Stop <later.stop@example.org>', to: STEEL, thread: 'thX', date: '2022-01-03T10:00:00Z', body: 'Also, please remove me from your list.' }) ], hub: [] };
+  const f = makeDeps({ boxes });
+  await S.readThread(f.deps, run, 'steel', 'thX', { clips: { emails_per_call: 1, line: 140, fresh: 1200 } });
+  assert.equal(f.calls.router.length, 1, 'only the first chunk went to the model');
+  const rows = Object.fromEntries((await q(`select gmail_id, state, asks_to_stop, writer from import_stage.mail_messages where run_id = $1`, [run])).map((x) => [x.gmail_id, x]));
+  assert.deepEqual(rows.gmailX0000003, { gmail_id: 'gmailX0000003', state: 'left_alone', asks_to_stop: true, writer: 'later.stop@example.org' }, 'the later request is kept with its writer');
+  assert.equal(rows.gmailX0000002.state, 'left_alone'); assert.equal(rows.gmailX0000002.asks_to_stop, false);
+});
+
+test('M2 and M3: a thread cut short by the deadline marks only the answered emails read, and the next call finishes it', async () => {
+  const run = await newRun(['steel']);
+  await stageThread(run, [{ id: 'gmailY0000001', date: '2022-02-01T10:00:00Z', dir: 'in' }, { id: 'gmailY0000002', date: '2022-02-02T10:00:00Z', dir: 'in' }]);
+  const boxes = { steel: [msg('gmailY0000001', { from: 'Later Stop <later.stop@example.org>', to: STEEL, thread: 'thX', body: 'First question' }),
+                          msg('gmailY0000002', { from: 'Later Stop <later.stop@example.org>', to: STEEL, thread: 'thX', body: 'Second question' })], hub: [] };
+  const f = makeDeps({ boxes });
+  await S.readThread(f.deps, run, 'steel', 'thX', { clips: { emails_per_call: 1, line: 140, fresh: 1200 } }, 0);
+  let read = (await q(`select gmail_id from import_stage.mail_messages where run_id = $1 and read_at is not null order by 1`, [run])).map((x) => x.gmail_id);
+  assert.deepEqual(read, ['gmailY0000001'], 'only the first email is read');
+  await S.readThread(f.deps, run, 'steel', 'thX', { clips: { emails_per_call: 1, line: 140, fresh: 1200 } });
+  read = (await q(`select gmail_id from import_stage.mail_messages where run_id = $1 and read_at is not null order by 1`, [run])).map((x) => x.gmail_id);
+  assert.deepEqual(read, ['gmailY0000001', 'gmailY0000002'], 'the next call finishes the thread');
+  assert.equal(f.calls.router.length, 2, 'no email is read twice');
+});
+
+test('I2: a status read before grouping leaves no run object, and the people phase still groups', async () => {
+  const run = await newRun(['steel']);
+  await stageThread(run, [{ id: 'gmailZ0000001', date: '2022-03-01T10:00:00Z', dir: 'in' }]);
+  await q(`update import_stage.mail_messages set read_at = now(), line = 'A question.', topic = 'other' where run_id = $1`, [run]);
+  await q(`update public.crm_mail_scans set phase = 'people', go_at = now(), cap_usd = 10 where run_id = $1`, [run]);
+  const st = (await q(`select public.wa289_status($1) as s`, [run]))[0].s;
+  assert.ok(!('run' in st.mailboxes[0].counts), 'no empty run object: ' + JSON.stringify(st.mailboxes[0].counts));
+  const f = makeDeps({});
+  const r = await S.step(f.deps, run, 100000);
+  assert.ok(!r.error, JSON.stringify(r)); assert.equal(r.grouped, 1, 'grouped after the status read');
+  assert.equal((await q(`select count(*)::int as n from import_stage.mail_people where run_id = $1`, [run]))[0].n, 1);
+});
+
+test('I5: a step pauses the run when a route is not ready', async () => {
+  const run = await newRun(['steel']);
+  const keep = (await q(`select system_add from public.ai_routes where task = 'mail_history_thread'`))[0].system_add;
+  await q(`update public.ai_routes set system_add = null where task = 'mail_history_thread'`);
+  try {
+    const f = makeDeps({});
+    const r = await S.step(f.deps, run, 100000);
+    assert.equal(r.error, 'not ready'); assert.equal(f.calls.gmail.length, 0, 'nothing was read');
+    assert.equal((await q(`select bool_and(paused) as p from public.crm_mail_scans where run_id = $1`, [run]))[0].p, true);
+  } finally {
+    await q(`update public.ai_routes set system_add = $1 where task = 'mail_history_thread'`, [keep]);
+  }
 });

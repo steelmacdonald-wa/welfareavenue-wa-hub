@@ -3,6 +3,8 @@
 // chat and decide call on that route; the reply's _wa shows it. The email history routes (mail_history_*) carry {"data_collection": "deny",
 // "zdr": true} so only providers that neither keep nor train on the data serve them (design M2, Law 25: information leaving Quebec). A route
 // without one sends nothing new. No other change. Undo: deploy v1.6 again.
+// v1.7 fix round (eh-289 I6): when the provider column is missing (deployed before wave289's database, or after its undo), routes() reads the
+// routes again without it, so every route keeps working.
 // v1.6 (wave226): a route can carry system_add, text the router adds to the end of the job's system prompt. Steel (09/10/26)
 // wants confidential topics (leadership changes, board matters, anyone's personal or HR situation) kept out of everything the
 // Hub's AI writes for the team, while the work itself still gets its task in plain, neutral words; the rule lives once, in
@@ -68,7 +70,9 @@ type Route = { task: string; label: string; chain: string[]; jev: boolean; mode:
 const routeCache: { at: number; rows: Route[] } = { at: 0, rows: [] };
 async function routes(force = false): Promise<Route[]> {
   if (!force && routeCache.rows.length && Date.now() - routeCache.at < 60000) return routeCache.rows;
-  const { data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add,provider').order('task');
+  let { data, error } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add,provider').order('task');
+  // eh-289 I6: deployed before wave289's database (or after its undo) the provider column is missing; read the routes without it
+  if (error) ({ data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add').order('task'));
   routeCache.rows = (data || []) as Route[]; routeCache.at = Date.now();
   return routeCache.rows;
 }

@@ -33,7 +33,7 @@
 // (fn/_shared); build/fn.py refuses it and says so.
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { step, type Deps, type Mailbox, MAILBOX_ADDR, USER_AGENT } from './scan.ts';
+import { checkRouted, step, type Deps, type Mailbox, MAILBOX_ADDR, USER_AGENT } from './scan.ts';
 import { summariseContact, summaryStep } from './summary.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
@@ -116,9 +116,16 @@ async function tokenFor(mailbox: Mailbox): Promise<string> {
   TOKENS[sub] = { value: body.access_token, exp: Date.now() + (body.expires_in || 3600) * 1000 };
   return TOKENS[sub].value;
 }
+/* eh-289 M2: every outside call has a time limit, so a hung request never outlives the step's lease */
+async function timed(url: string, init: RequestInit, ms: number): Promise<Response> {
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await fetch(url, { ...init, signal: ctl.signal }); }
+  catch (e) { if ((e as Error)?.name === 'AbortError') { const t = new Error('timeout'); (t as any).status = 'timeout'; throw t; } throw e; }
+  finally { clearTimeout(timer); }
+}
 async function gmail(mailbox: Mailbox, path: string) {
   if (!/^\/(messages|threads)(\/|\?)/.test(path)) throw new Error('gmail path not allowed');   // read-only paths only
-  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me' + path, { headers: { Authorization: 'Bearer ' + (await tokenFor(mailbox)) } });
+  const res = await timed('https://gmail.googleapis.com/gmail/v1/users/me' + path, { headers: { Authorization: 'Bearer ' + (await tokenFor(mailbox)) } }, 30000);
   const b = await res.json().catch(() => null);
   if (!res.ok) { const e = new Error('gmail ' + res.status + ' ' + String(b?.error?.errors?.[0]?.reason || '')); (e as any).status = res.status; throw e; }
   return b;
@@ -126,11 +133,13 @@ async function gmail(mailbox: Mailbox, path: string) {
 
 /* ---- the router (every model call goes through llm; its _wa.cost is the spend) ---- */
 async function router(task: string, body: Record<string, unknown>) {
-  const res = await fetch(SUPABASE_URL + '/functions/v1/llm', { method: 'POST',
-    headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'x-wa-task': task, 'x-wa-caller': 'mail-history', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const res = await timed(SUPABASE_URL + '/functions/v1/llm', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'x-wa-task': task, 'x-wa-caller': 'mail-history', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, 60000);
   const out = await res.json().catch(() => null);
   if (!res.ok) { const e = new Error('router'); (e as any).status = res.status; throw e; }
-  return { out, cost: typeof out?._wa?.cost === 'number' ? out._wa.cost : 0 };
+  // eh-289 I5 and M6: the route that answered is the one asked, its no-retention provider setting was sent, and it reported a cost; otherwise the
+  // call is refused (the error carries pause, and the step pauses the run)
+  return { out, cost: checkRouted(task, out) };
 }
 
 /* ---- the network for homepages: DNS answers checked by scan.ts (safeHost), GET only, no redirects followed here, size and time limits ---- */
@@ -244,8 +253,15 @@ Deno.serve(async (req: Request) => {
       if (!run) return json(req, { error: 'run_id expected' }, 400);
       const phases = (await deps.scans(run)).map((x) => x.phase);
       const summaries = phases.length > 0 && phases.every((ph) => ph === 'summaries');
-      const result = summaries ? await summaryStep({ rpc, router, now: () => Date.now() }, run, (await stepSeconds()) * 1000)
-                               : await step(deps, run, (await stepSeconds()) * 1000);
+      let result: Record<string, unknown>;
+      if (summaries) {
+        try { result = await summaryStep({ rpc, router, now: () => Date.now() }, run, (await stepSeconds()) * 1000); }
+        catch (e) {   // a router check pauses the run (eh-289 I5); anything else is recorded as a step name and a code
+          if ((e as any)?.pause) await rpc('wa289_pause', { p_run: run, p_on: true, p_by: 'mail-history (router check)' }).catch(() => null);
+          await rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { last_error: 'summaries: ' + ((e as any)?.pause ? 'router check' : String((e as any)?.status || 'error')) } }).catch(() => null);
+          result = { error: 'summaries', paused: !!(e as any)?.pause };
+        }
+      } else result = await step(deps, run, (await stepSeconds()) * 1000);
       if (!result.busy && !result.error && !result.paused && !result.finished) {
         const active: number[] = [...((await rpc('wa289_active', {})) || []), ...((await rpc('wa292_summary_active', {})) || [])];
         if (active.includes(run)) selfCall({ action: 'continue', run_id: run });

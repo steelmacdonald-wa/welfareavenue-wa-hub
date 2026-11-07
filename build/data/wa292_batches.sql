@@ -601,8 +601,13 @@ begin
   delete from import_stage.mail_messages x where x.run_id = p_run;
   delete from import_stage.mail_people x where x.run_id = p_run;
   delete from import_stage.mail_orgs x where x.run_id = p_run;
+  -- eh-289 I8 (ruling): a run whose email lines were never applied gives its Message-ID hashes back, so purging it does not hide that mail from
+  -- every later run; once mail_interactions was applied (even if undone since) they stay
+  if not exists (select 1 from public.crm_import_batches b where b.run_id = p_run and b.kind = 'mail_interactions' and b.applied_at is not null) then
+    delete from import_stage.mail_seen x where x.run_id = p_run;
+  end if;
 end $function$;
-comment on function public.wa292_purge(bigint) is 'wave292: wa284_purge''s step for an email-history run: deletes the run''s staged messages, people and organisations. Never mail_seen, mail_left_alone or crm_email_suppressions, which are kept across runs. The service role only.';
+comment on function public.wa292_purge(bigint) is 'wave292: wa284_purge''s step for an email-history run: deletes the run''s staged messages, people and organisations, and, when the run never had its mail_interactions batch applied, the mail_seen hashes it recorded (eh-289 I8), so a later run reads that mail again. mail_seen rows of an applied run, mail_left_alone and crm_email_suppressions are kept across runs. The service role only.';
 
 create or replace function public.wa292_delete_created(p_batch bigint, p_by text)
 returns jsonb language plpgsql security definer set search_path to '' as $function$

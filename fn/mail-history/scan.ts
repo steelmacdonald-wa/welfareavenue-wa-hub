@@ -3,9 +3,9 @@
 // No Deno or Node globals here: everything outside comes in through Deps. It never logs or returns an address, subject, line or page text:
 // errors are a step name and a status code.
 import {
-  addrList, addressedToMailbox, clip, cleanSubject, domainOf, freshPart, headerReader, isBulk, isCalendar, isDeliveryReport, isFreemail,
-  isGoogleNotice, isNoiseSubject, isSecurity, neverRead, normKey, parseAddr, parseBounceText, parseDeliveryStatus, probablyPersonal,
-  registeredDomain, robotsRefuses, safeHost, TOPICS, TYPES, toInfo, validateOrg, validateRead,
+  addrList, addressedToMailbox, asksToStop, clip, cleanSubject, domainOf, freshPart, groupBulk, headerReader, isBulk, isCalendar, isDeliveryReport,
+  isFreemail, isGoogleNotice, isNoiseSubject, isPlatform, isSecurity, isWaGroup, neverRead, normKey, parseAddr, parseBounceText, parseDeliveryStatus,
+  probablyPersonal, registeredDomain, robotsRefuses, safeHost, TOPICS, TYPES, toInfo, validateOrg, validateRead,
 } from './mail_rules.ts';
 
 export type Mailbox = 'steel' | 'hub';
@@ -31,7 +31,7 @@ export type Deps = {
 // deno-lint-ignore no-explicit-any
 export type Ctx = any;
 
-/* ---- the count phase's query ---- */
+/* ---- the count phase's query (eh-289 M1: a refused page token relists from since; staging is keyed by id, so nothing doubles) ---- */
 export function listQuery(since: string, restartFrom?: string | null): string {
   const d = restartFrom ? restartFrom : since;
   const ymd = String(d).slice(0, 10).replace(/-/g, '/');
@@ -43,7 +43,19 @@ export function dayBefore(iso: string): string {
 }
 
 export const META_HEADERS = ['From', 'To', 'Cc', 'Reply-To', 'Date', 'Subject', 'Message-ID', 'List-Id', 'List-Unsubscribe', 'Precedence', 'Auto-Submitted',
-  'Return-Path', 'Delivered-To', 'X-Original-To', 'Content-Type'];
+  'Return-Path', 'Delivered-To', 'X-Original-To', 'Content-Type', 'X-Original-Sender', 'Mailing-list'];
+
+/** eh-289 I1: a post Google Groups rewrote for DMARC comes From info@ (or "Name via Info") with the person in X-Original-Sender or a single outside
+ *  Reply-To. That person is the writer, and the email is incoming. Returns the writer's address, or null when the From is the real sender. */
+export function groupSender(h: (n: string) => string, from: { email: string; name: string }): string | null {
+  const rewritten = from.email === INFO_ADDR || / via /i.test(h('From'));
+  if (!rewritten) return null;
+  const isOurs = (a: string) => a === 'welfareavenue.com' || a.endsWith('@welfareavenue.com');
+  const xos = parseAddr(h('X-Original-Sender')).email;
+  if (/@/.test(xos) && !isOurs(xos)) return xos;
+  const rt = addrList(h('Reply-To')).filter(a => !isOurs(a));
+  return rt.length === 1 ? rt[0] : null;
+}
 
 /* ---- the headers rules (5.1 table, a to i; h runs in the database) ---- */
 // deno-lint-ignore no-explicit-any
@@ -53,7 +65,9 @@ export function classify(msg: any, mailbox: Mailbox, ctx: Ctx): Record<string, u
   const labels: string[] = msg.labelIds || [];
   if (labels.includes('DRAFT')) return { ...base, state: 'skipped', reason: 'draft' };
   const h = headerReader(msg);
-  const from = parseAddr(h('From'));
+  let from = parseAddr(h('From'));
+  const orig = groupSender(h, from);   // I1: the person behind a DMARC-rewritten group post
+  if (orig) from = { email: orig, name: from.name.replace(/\s+via\s+.*$/i, '').trim() };
   const subject = h('Subject');
   const ct = h('Content-Type') || String((msg.payload && msg.payload.mimeType) || '');
   const mine = MAILBOX_ADDR[mailbox];
@@ -73,9 +87,11 @@ export function classify(msg: any, mailbox: Mailbox, ctx: Ctx): Record<string, u
   if (isCalendar(subject, ct)) return { ...base, state: 'skipped', reason: 'calendar' };
   // e. delivery reports go to the bounce parser
   if (isDeliveryReport(from.email, ct)) return { ...base, state: 'skipped', reason: 'bounce' };
-  // f. automated, as mybox decides it; Google's notices; a platform sender; anything hub@ itself sent
+  // f. automated, as mybox decides it (for WA's own Google Group, mail-pull's rule instead: eh-289 C1); Google's notices; a platform sender
+  //    (whole labels, M7); anything hub@ itself sent
   const dom = domainOf(from.email);
-  if (isBulk(h, from.email) || isGoogleNotice(from.email) || isNoiseSubject(subject) || (dom && isFreemail(dom, ctx.platforms || [])) || (mailbox === 'hub' && from.email === mine))
+  const bulk = isWaGroup(h) ? groupBulk(h) : isBulk(h, from.email);
+  if (bulk || isGoogleNotice(from.email) || isNoiseSubject(subject) || (dom && isPlatform(dom, ctx.platforms || [])) || (mailbox === 'hub' && from.email === mine))
     return { ...base, state: 'skipped', reason: 'automated' };
   // g. list mail not addressed to the mailbox (B2)
   if (h('List-Id') && !addressedToMailbox(h, mine, own)) return { ...base, state: 'skipped', reason: 'list' };
@@ -147,6 +163,18 @@ export function readBounce(msg: any, mailbox: Mailbox): { addr: string; code: st
   return parseBounceText(p.text.join('\n') || stripHtml(p.html.join('\n')), [MAILBOX_ADDR[mailbox], INFO_ADDR]);
 }
 
+/* ---- every router answer is checked (eh-289 I5, M6): the route that answered must be the one asked, its provider setting must have been sent,
+   and its cost must be a number. Otherwise the call is refused and the run pauses (the error carries pause). ---- */
+// deno-lint-ignore no-explicit-any
+export function checkRouted(task: string, out: any): number {
+  const wa = out && out._wa;
+  const fail = (why: string) => { const e = new Error('router check: ' + why); (e as any).pause = true; (e as any).status = 'router check'; return e; };
+  if (!wa || wa.task !== task) throw fail('another route answered');
+  if (!wa.provider || typeof wa.provider !== 'object') throw fail('no provider setting was sent');
+  if (typeof wa.cost !== 'number' || !isFinite(wa.cost) || wa.cost < 0) throw fail('no cost');
+  return wa.cost;
+}
+
 /* ---- the thread reader (5.3) ---- */
 export const READ_TOOL = {
   name: 'read_thread',
@@ -177,7 +205,7 @@ export function threadPrompt(items: Array<{ n: number; inbound: boolean; date: s
 }
 
 // deno-lint-ignore no-explicit-any
-export async function readThread(deps: Deps, run: number, mailbox: Mailbox, threadId: string, ctx: Ctx): Promise<{ spend: any; rejected: number; calls: number; cost: number }> {
+export async function readThread(deps: Deps, run: number, mailbox: Mailbox, threadId: string, ctx: Ctx, deadline = Infinity): Promise<{ spend: any; rejected: number; calls: number; cost: number }> {
   const rows: Array<{ id: string; direction: string; writer: string | null }> = await deps.rpc('wa289_thread_rows', { p_run: run, p_mailbox: mailbox, p_thread: threadId });
   // deno-lint-ignore no-explicit-any
   let spend: any = null, rejected = 0, calls = 0, cost = 0;
@@ -187,6 +215,7 @@ export async function readThread(deps: Deps, run: number, mailbox: Mailbox, thre
   const byId = new Map<string, any>(((thread && thread.messages) || []).map((m: any) => [String(m.id), m]));
   const per = Number((ctx.clips && ctx.clips.emails_per_call) || 8), fresh = Number((ctx.clips && ctx.clips.fresh) || 1200);
   for (let i = 0; i < rows.length; i += per) {
+    if (i > 0 && deps.now() >= deadline) break;   // eh-289 M2: the rest of the thread waits for the next step (only answered emails are marked read)
     const chunk = rows.slice(i, i + per);
     const items = chunk.map((r, k) => {
       const m = byId.get(r.id);
@@ -197,7 +226,7 @@ export async function readThread(deps: Deps, run: number, mailbox: Mailbox, thre
     });
     const res = await deps.router('mail_history_thread', { max_tokens: 1400, temperature: 0, system: READ_SYSTEM, messages: [{ role: 'user', content: threadPrompt(items) }],
       tools: [READ_TOOL], tool_choice: { type: 'tool', name: 'read_thread' } });
-    calls++; cost += res.cost || 0;
+    calls++; cost += res.cost;
     // deno-lint-ignore no-explicit-any
     const tu = ((res.out && res.out.content) || []).find((c: any) => c && c.type === 'tool_use');
     const v = validateRead(tu ? tu.input : null, items.map(x => ({ n: x.n, writerDomain: x.writerDomain, inbound: x.inbound })), Number((ctx.clips && ctx.clips.line) || 140));
@@ -205,8 +234,16 @@ export async function readThread(deps: Deps, run: number, mailbox: Mailbox, thre
     if (v.value) {
       result = { leave_out: v.value.leave_out, topic: v.value.topic, lang: v.value.lang,
         emails: v.value.emails.map(e => ({ id: items[e.n - 1].id, line: e.line, asks_to_stop: e.asks_to_stop, sig: e.sig })) };
+      if (v.value.leave_out !== 'none') {
+        // eh-289 I4: the thread is left out, so its later emails are never sent to the model; a "remove me" in any of them is still kept,
+        // by the stop-words rule, before the whole thread is set aside
+        const later = rows.slice(i + per).filter(rw => rw.direction === 'in');
+        const extra = later.filter(rw => { const m = byId.get(rw.id); return m ? asksToStop(freshPart(textOf(m))) : false; })
+          .map(rw => ({ id: rw.id, line: '', asks_to_stop: true, sig: null }));
+        (result.emails as unknown[]).push(...extra);
+      }
     } else rejected++;
-    spend = await deps.rpc('wa289_save_thread', { p_run: run, p_mailbox: mailbox, p_thread: threadId, p_result: result, p_cost: res.cost || 0 });
+    spend = await deps.rpc('wa289_save_thread', { p_run: run, p_mailbox: mailbox, p_thread: threadId, p_result: result, p_cost: res.cost });
     if (result && result.leave_out !== 'none') break;   // the whole thread is left out
     if (spend && (spend.paused || spend.sample_over)) break;
   }
@@ -296,6 +333,13 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
   const bump = (k: string, n = 1) => { done[k] = (done[k] || 0) + n; };
   let where = 'start';
   try {
+    // eh-289 I5: the routes are checked at every step, not only at start
+    const problems = await deps.rpc('wa289_ready', {});
+    if (Array.isArray(problems) && problems.length) {
+      await deps.rpc('wa289_pause', { p_run: run, p_on: true, p_by: 'mail-history (not ready)' });
+      await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { last_error: 'ready: ' + problems.length + ' problem(s)' } });
+      return { ...done, error: 'not ready', paused: true };
+    }
     const ctx: Ctx = await deps.rpc('wa289_context', { p_run: run });
     const rate = ctx.read_rate || {}, parallel = Number(rate.parallel || 5), perSecond = Number(rate.per_second || 10), backoff = Number(rate.backoff_ms || 2000);
     while (deps.now() < deadline) {
@@ -315,8 +359,7 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
             // deno-lint-ignore no-explicit-any
             const st = (e as any)?.status;
             if (token && (st === 400 || st === 404)) {
-              const newest = await deps.rpc('wa289_newest', { p_run: run, p_mailbox: s.mailbox });
-              restart = newest ? dayBefore(newest) : null; token = null;
+              restart = null; token = null;   // eh-289 M1: relist from since; ids already staged are kept as they are
               list = await withBackoff(deps, () => deps.gmail(s.mailbox, '/messages?maxResults=500&q=' + encodeURIComponent(listQuery(ctx.since, restart))), backoff);
               bump('restarted');
             } else throw e;
@@ -361,7 +404,7 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
           if (!threads.length) { await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: s.mailbox, p_patch: { phase: 'people' } }); progressed = true; continue; }
           for (const t of threads) {
             if (deps.now() >= deadline) break;
-            const r = await readThread(deps, run, s.mailbox, t, ctx);
+            const r = await readThread(deps, run, s.mailbox, t, ctx, deadline);
             bump('threads'); bump('rejected', r.rejected);
             if (r.spend && r.spend.paused) return { ...done, paused: true };
           }
@@ -376,7 +419,8 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
         if (ph === 'dedupe') { await deps.rpc('wa289_dedupe', { p_run: run }); bump('dedupe'); progressed = true; }
         else if (ph === 'sample') { await runSample(deps, run, scans.map(s => s.mailbox), ctx, deadline, done); progressed = true; }
         else if (ph === 'people') {
-          if (!scans[0].counts || !scans[0].counts.run) { await deps.rpc('wa289_group', { p_run: run }); bump('grouped'); }
+          // eh-289 I2: grouped once, known by its writers count (a status read leaves no empty run object behind)
+          if (scans[0].counts?.run?.writers == null) { await deps.rpc('wa289_group', { p_run: run }); bump('grouped'); }
           // deno-lint-ignore no-explicit-any
           const people: any[] = await deps.rpc('wa289_todo', { p_run: run, p_mailbox: null, p_phase: 'people', p_limit: 50 });
           if (!people.length) await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { phase: 'orgs' } });
@@ -387,7 +431,7 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
             const a = (res.out && res.out.answers && res.out.answers.type) || {};
             const choice = TYPES.includes(String(a.choice)) ? String(a.choice) : null;
             const conf = typeof a.confidence === 'number' && a.confidence >= 0 && a.confidence <= 1 ? a.confidence : null;
-            const sp = await deps.rpc('wa289_save_person', { p_run: run, p_key: p.key, p_type: choice && conf !== null ? choice : null, p_conf: conf, p_cost: res.cost || 0 });
+            const sp = await deps.rpc('wa289_save_person', { p_run: run, p_key: p.key, p_type: choice && conf !== null ? choice : null, p_conf: conf, p_cost: res.cost });
             bump('typed');
             if (sp && sp.paused) return { ...done, paused: true };
           }
@@ -405,7 +449,7 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
             if (site.outcome === 'found' && site.text) {
               const res = await deps.router('mail_history_org', { max_tokens: 800, temperature: 0, system: ORG_SYSTEM, messages: [{ role: 'user', content: 'Domain: ' + o.domain + '\n\n' + site.text }],
                 tools: [ORG_TOOL], tool_choice: { type: 'tool', name: 'org_facts' } });
-              cost = res.cost || 0;
+              cost = res.cost;
               // deno-lint-ignore no-explicit-any
               const tu = ((res.out && res.out.content) || []).find((c: any) => c && c.type === 'tool_use');
               const v = validateOrg(tu ? tu.input : null);
@@ -424,9 +468,10 @@ export async function step(deps: Deps, run: number, budgetMs = 100000): Promise<
     return done;
   } catch (e) {
     // deno-lint-ignore no-explicit-any
-    const st = (e as any)?.status;
-    await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { last_error: where + ': ' + (st ? 'HTTP ' + st : String((e as Error)?.name || 'error')) } }).catch(() => null);
-    return { ...done, error: where + (st ? ': HTTP ' + st : '') };
+    const st = (e as any)?.status, pause = !!(e as any)?.pause;
+    if (pause) await deps.rpc('wa289_pause', { p_run: run, p_on: true, p_by: 'mail-history (router check)' }).catch(() => null);   // I5
+    await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { last_error: where + ': ' + (pause ? 'router check' : st ? 'HTTP ' + st : String((e as Error)?.name || 'error')) } }).catch(() => null);
+    return { ...done, error: where + (pause ? ': router check' : st ? ': HTTP ' + st : ''), ...(pause ? { paused: true } : {}) };
   } finally {
     await deps.rpc('wa289_scan_set', { p_run: run, p_mailbox: null, p_patch: { release: true } }).catch(() => null);
   }
@@ -444,7 +489,7 @@ async function runSample(deps: Deps, run: number, boxes: Mailbox[], ctx: Ctx, de
     for (const t of todo) {
       if (deps.now() >= deadline) { more = true; break; }
       if (read >= 50 || over) break;
-      const r = await readThread(deps, run, mb, t, ctx);
+      const r = await readThread(deps, run, mb, t, ctx, deadline);
       read++; done.sampled = (done.sampled || 0) + 1;
       if (r.spend && r.spend.sample_over) over = true;
     }
