@@ -44,10 +44,15 @@
       + '.w284 :focus-visible,.w284pop :focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.45);}'
       + '.w284runs,.w284up{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;}'
       + '.w284row{display:flex;flex-direction:column;gap:4px;font-size:12.5px;font-weight:600;color:var(--wa-muted,' + MUTED + ');min-width:0;max-width:100%;}'
-      + '.w284ctl .w284row{flex-direction:row;align-items:center;justify-content:space-between;gap:10px;color:' + INK + ';font-weight:500;}'
+      /* a name and its select: side by side when there is room, the select under the name in a narrow card; the name wraps, the choice is never cut */
+      + '.w284ctl .w284row{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 10px;color:' + INK + ';font-weight:500;}'
+      + '.w284ctl .w284row>span{flex:1 1 12rem;min-width:0;overflow-wrap:anywhere;}.w284ctl .w284row>select{flex:1 1 auto;max-width:100%;}'
       + '.w284sel,.w284in{border:1px solid rgba(16,63,57,.18);border-radius:12px;padding:8px 10px;font-family:' + BODY + ';font-size:13px;background:var(--wa-card,' + CREAM + ');color:' + INK + ';max-width:100%;min-width:0;}'
       + '.w284in{width:300px;}'
-      + '.w284 input[type=file]{font-family:' + BODY + ';font-size:12.5px;max-width:100%;}'
+      /* the file picker: a soft button around a hidden input, then the chosen file's name */
+      + '.w284pickrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;}'
+      + '.w284pick{position:relative;cursor:pointer;}.w284pick:has(input:focus-visible){outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.45);}'
+      + '.w284picked{font-size:13px;font-weight:500;color:' + INK + ';min-width:0;overflow-wrap:anywhere;}.w284picked.m{color:var(--wa-muted,' + MUTED + ');font-weight:400;}'
       + '.w284ctl{border:1px solid rgba(16,63,57,.12);border-radius:12px;padding:10px 12px;margin:0;display:flex;flex-direction:column;gap:8px;min-width:0;}'
       + '.w284ctl legend{font-size:12.5px;font-weight:700;color:' + GREEN + ';padding:0 4px;}'
       + '.w284chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;}'

@@ -54,7 +54,7 @@
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
     crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
-    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
+    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, upFile: null, names: {}, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function num(n) { n = Number(n || 0); return n.toLocaleString('en-CA'); }
@@ -65,6 +65,21 @@
   function fileLabel(k) { for (var i = 0; i < FILES.length; i++) if (FILES[i].k === k) return FILES[i].t; return k; }
   function run() { var r = null; (S.runs || []).forEach(function (x) { if (x.id === S.run) r = x; }); return r; }
   function obj(v, dflt) { if (v && typeof v === 'object') return v; try { var j = JSON.parse(v); return j && typeof j === 'object' ? j : dflt; } catch (e) { return dflt; } }
+  /* a long file name keeps its start and its end (the version and the extension), cut in the middle at a separator; the whole name goes in the title */
+  function middle(s, n) {
+    s = String(s || ''); if (s.length <= n + 12) return s;   /* a name only a little long stays whole (it wraps) */
+    var t = Math.min(28, Math.floor(n * 0.45)), head = s.slice(0, n - t - 1), tail = s.slice(-t), cut = head.search(/[-_ .][^-_ .]*$/), j = tail.search(/[-_ .]/);
+    if (cut > head.length * 0.6) head = head.slice(0, cut);
+    if (j > 0 && j <= 6) tail = tail.slice(j + 1);
+    return head + '…' + tail;
+  }
+  /* the name the file is stored under: storage-safe characters, no "..", at most 80 characters with its start, its end and its extension kept */
+  function storeName(name) {
+    var s = String(name || 'file').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/\.{2,}/g, '.').replace(/^[.-]+/, '') || 'file';
+    if (s.length <= 80) return s;
+    var m = /(\.[A-Za-z0-9]{1,8})$/.exec(s), ext = m ? m[1] : '', stem = s.slice(0, s.length - ext.length);
+    return stem.slice(0, 50) + '-' + stem.slice(-(29 - ext.length)) + ext;
+  }
 
   /* ---------- the function and the data ---------- */
   function fn(action, body) {
@@ -283,13 +298,14 @@
     var up = purged ? '<p class="w284note">This run was purged: its staged rows, uploaded files and change records are gone. Start a new run to import again.</p>'
       : '<div class="w284up"><label class="w284row"><span>Kind of file</span><select class="w284sel" data-w284upkind="1">' + FILES.map(function (f) {
           return '<option value="' + f.k + '"' + (S.upKind === f.k ? ' selected' : '') + '>' + E(f.t) + '</option>'; }).join('') + '</select></label>'
-        + '<label class="w284row"><span>File</span><input type="file" data-w284upfile="1" accept=".json,.csv,application/json,text/csv"></label>'
+        + '<div class="w284row"><span>File</span><div class="w284pickrow"><label class="w284btn soft w284pick"><input type="file" class="w284vh" data-w284upfile="1" accept=".json,.csv,application/json,text/csv" aria-describedby="w284fn">Choose a file</label>'
+        + (S.upFile ? '<span class="w284picked" id="w284fn" title="' + E(S.upFile.name) + '">' + E(middle(S.upFile.name, 48)) + '</span>' : '<span class="w284picked m" id="w284fn">No file chosen</span>') + '</div></div>'
         + (S.upBusy ? '<button class="w284btn soft" data-w284act="upload" aria-disabled="true" aria-busy="true">Uploading…</button>'
           : '<button class="' + pri('upload') + '" data-w284upload="1" data-w284act="upload">Upload and stage</button>') + '</div>'
         + (S.upMsg ? '<p class="' + (S.upErr ? 'w284err' : 'w284note') + '" role="' + (S.upErr ? 'alert' : 'status') + '">' + E(S.upMsg) + '</p>' : '');   /* red only when something failed (S.upErr), never from the words */
     var keysCfg = obj(S.cfg.keela_keys, {});
     var list = S.files.length ? '<ul class="w284files">' + S.files.map(function (f) {
-      var done = f.rows != null && f.staged_through === f.rows, base = String(f.name || '').split('/').pop().replace(/^\d+-/, '');
+      var done = f.rows != null && f.staged_through === f.rows, base = S.names[f.name] || String(f.name || '').split('/').pop().replace(/^\d+-/, '');
       var prog = S.stage[f.id] || (done ? 'Staged: ' + plural(f.rows, 'row', 'rows') + '.' : f.rows != null ? 'Staged ' + num(f.staged_through || 0) + ' of ' + num(f.rows) + ' rows.' : 'Not staged yet.');
       var keys = S.keys[f.id], open = !!S.openKeys[f.id];
       var kh = '';
@@ -307,7 +323,7 @@
         }
       }
       var fa = ' data-w284act="file-' + f.id + '"';   /* Stage, then Keys: focus follows the file's action */
-      return '<li class="w284file" data-w284b="file-' + f.id + '"><div class="w284fh"><b>' + E(base) + '</b><span class="m">' + E(fileLabel(f.kind)) + '</span></div>'
+      return '<li class="w284file" data-w284b="file-' + f.id + '"><div class="w284fh"><b title="' + E(base) + '">' + E(middle(base, 60)) + '</b><span class="m">' + E(fileLabel(f.kind)) + '</span></div>'
         + '<div class="w284fp"><span role="status">' + E(prog) + '</span>'
         + (!done && !purged ? (S.stage[f.id] ? '<button class="w284btn soft sm"' + fa + ' aria-disabled="true" aria-busy="true">Stage</button>'
           : '<button class="' + pri('stage:' + f.id) + ' sm" data-w284stage="' + f.id + '"' + fa + '>Stage</button>') : '')
@@ -502,17 +518,19 @@
     return fn('keys', { file_id: fid }).then(function (r) { S.keys[fid] = r.error ? { error: r.error } : (r.data.keys || []); paint(); });
   }
   function upload() {
-    var inp = host() && host().querySelector('[data-w284upfile]'), file = inp && inp.files && inp.files[0];
+    /* the chosen file lives in S.upFile, so a repaint of the picker never loses it */
+    var inp = host() && host().querySelector('[data-w284upfile]'), file = S.upFile || (inp && inp.files && inp.files[0]);
     if (!file) { S.upMsg = 'Choose a file first.'; S.upErr = true; paint(); return; }
     var spec = FILES.filter(function (f) { return f.k === S.upKind; })[0];
-    var path = S.run + '/' + Date.now() + '-' + String(file.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80);
+    var path = S.run + '/' + Date.now() + '-' + storeName(file.name);
+    S.names[path] = file.name;   /* shown as you named it, for as long as this page is open */
     S.upBusy = true; S.upMsg = 'Uploading ' + file.name + '…'; S.upErr = false; paint();
     Promise.resolve(db.storage.from('imports').upload(path, file, { contentType: spec.type, upsert: false })).then(function (u) {
       if (u && u.error) throw new Error('The file could not be uploaded (' + (u.error.message || u.error) + ').');
       return fn('register', { run_id: S.run, path: path, kind: S.upKind });
     }).then(function (r) {
       if (r.error) throw new Error('The file was not recorded: ' + r.error);
-      S.upBusy = false; S.upMsg = 'Uploaded. Staging…'; S.upErr = false;
+      S.upBusy = false; S.upMsg = 'Uploaded. Staging…'; S.upErr = false; S.upFile = null;
       return loadRun().then(function () { return stageFile(r.data.file_id, 0); });
     }).catch(function (e) { S.upBusy = false; S.upMsg = String((e && e.message) || e); S.upErr = true; paint(); });
   }
@@ -557,6 +575,7 @@
     var t = ev.target; if (!t || !t.closest || !t.closest('#w284root')) return;
     if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.open = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false; reloadRun(); }
     else if (t.hasAttribute('data-w284upkind')) { S.upKind = t.value; paint(); }
+    else if (t.hasAttribute('data-w284upfile')) { S.upFile = (t.files && t.files[0]) || null; S.upMsg = ''; S.upErr = false; paint(); }
     else if (t.hasAttribute('data-w284pair')) {
       var parts = t.getAttribute('data-w284pair').split('|'), pair = { keela_company_id: parts[0], partner_id: Number(parts[1]) };
       var ok = obj(S.cfg.keela_org_pairs_ok, []).filter(function (q) { return !(q.keela_company_id === pair.keela_company_id && Number(q.partner_id) === pair.partner_id); });
