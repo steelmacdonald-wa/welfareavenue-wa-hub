@@ -63,6 +63,16 @@ The design calls this Phase 5a "wave285"; it is renumbered to 288 because 285 is
 7. Steel and Tate approve the wording (E10: the French intros and the French labels marked as drafts below), then the four forms are put live (step 7.7 of the design). Only then, with wave288 live, does the website pull request (steelmacdonald-wa/welfareavenue-site-frontend#7) merge.
 8. Add the release record to this document and commit `build/candidate.html` with it.
 
+## Release record (07/11/26, on Steel's yes; database and function only)
+
+- **Before:** waves 281 to 284 (databases) and 286 live the same day. `toronto-volunteer` already closed; no other Toronto form. Function md5s before: crm_form_apply dafd2ac5, wa209_volunteer_apply 2031a873.
+- **Rollback checks at c157e49** (281 and 283 left out, since they are live): the migration twice plus the live checks: ROLLBACK_OK. The undo cycle: ROLLBACK_OK.
+- **Applied** `build/data/wa288_toronto.sql` (md5 a951bf59754631d8ee53a53e8af48bb5) by pinned fetch at c157e49, about 14:11 UTC.
+- **Checks:** request type "Toronto volunteer sign-up", enabled, assigned to Tate; `volunteer_applications.chapter`; both functions changed (now 04c8a374, c489dcfc); `toronto-volunteer` closed, `benevole-toronto`, `toronto-student`, `etudiant-toronto` drafts, all chapter toronto, no city, tags `toronto` or `toronto student`; the word "Demander aussi le consentement par texto"; one release line.
+- **form-submit v10** deployed as deployment 16 (verify_jwt on), the one-line stub pinned to c157e49. A GET of the public form `benevole` answered 200 with the form; a GET of `toronto-volunteer` answered closed.
+- **Step 6 test answer** on the draft `toronto-student` (trigger secret, `test: true`, wave288-check@example.com, 416-555-0188, both boxes ticked): submission 118, marked test, consent.sms `{asked: "Text me about volunteering. I can reply STOP at any time.", given: true}`. No text, email, WhatsApp or Request. **Correction to step 6's wording:** a test answer is not "nothing filed". Since wave261 a test (or reserved-domain) answer skips the Request, pledge and applicant only; it still makes the contact. It made contact 3335 ("Zz Test Wave288 Check", tag `toronto student`, Toronto chapter row, 4 custom fields, 3 consent log rows, 1 timeline line) and volunteer_people 830. They stay until Steel says whether to remove them (the consent log rows cannot be removed; it is append-only).
+- **Not yet:** the page and `f/index.html` (the slice's one swap); opening the four forms (Steel and Tate approve the wording first); the website pull request.
+
 ## Undo
 
 1. Take the Toronto forms off the website (revert pull request #7 if it merged) and close the four forms.

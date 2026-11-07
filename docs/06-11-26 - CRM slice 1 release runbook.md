@@ -57,7 +57,7 @@ For each wave: first the rollback check (`python3 build/sql_rollback_test.py <re
    - No batch is applied yet. Once the page is live (step 2 below), stage the files and time each batch's Compare through the real page before any Apply.
 5. **wave286, Toronto crews in the CRM** (`docs/06-11-26 - wave286 Toronto crews in the CRM.md`). **LIVE 07/11/26 at c157e49.**
    - Rollback check: `test/w286live_before.sql build/data/wa286_vm_chapter.sql test/w286live.sql`. SQL: `build/data/wa286_vm_chapter.sql`. No function, no page.
-6. **wave288, the Toronto forms** (`docs/06-11-26 - wave288 Toronto forms.md`).
+6. **wave288, the Toronto forms** (`docs/06-11-26 - wave288 Toronto forms.md`). **LIVE 07/11/26 at c157e49** (database and form-submit deployment 16; forms stay closed or draft).
    - Rollback check: `test/w288live_before.sql build/data/wa288_toronto.sql test/w288live.sql`. SQL: `build/data/wa288_toronto.sql`. Function: form-submit v10, pinned stub, after the SQL.
 
 The whole stack was also checked in one block in release order, and the undo in one block in reverse order (the final fixes report, `task-9-report.md`, has the runs). On release day each wave is still applied and checked on its own.
