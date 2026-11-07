@@ -54,6 +54,7 @@
     zeffy: ['Zeffy', 'Donors from Zeffy.'],
     website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],
     keela: ['Keela', 'Contacts from the Keela export.'],
+    email_history: ['Email history', 'People who wrote to Steel or info@ since April 2020 (wave292).'],
     /* wave283: the other sources in the CRM today */
     cabm: ['CABM', 'Volunteers who came to us through the CABM.'],
     drive: ['Drive 2020-2023', 'Volunteers from the 2020 to 2023 sheets on the Drive.'],

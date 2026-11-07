@@ -93,6 +93,11 @@
       + '.w284pop p{font-size:14px;line-height:1.5;margin:0 0 14px;}'
       + '.w284pop .w284acts{justify-content:flex-end;}'
       /* reduced motion: the fades stay (a changed card, the confirmation), every movement goes; the press answers with opacity */
+      /* wave292: the Scan card and Look at them (c_mail.js) */
+      + '.w284mfilt{flex-direction:row;flex-wrap:wrap;align-items:flex-end;margin:10px 0;}.w284mfilt .w284row{flex:0 1 auto;}'
+      + '.w284scroll:has(.w284mpeople){max-width:100%;}.w284mpeople td:last-child{white-space:normal;}.w284mpeople .w284macts{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}'
+      + '.w284mpeople .w284maddr{overflow-wrap:anywhere;}.w284mpeople tr.w284mout td{opacity:.55;}'
+      + '.w284mcap{flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;}.w284mcap .w284in{width:8em;}.w284mbox .w284fh{flex-wrap:wrap;gap:8px;}'
       + '@media (prefers-reduced-motion: reduce){.w284btn:active:not(:disabled):not([aria-disabled=true]){transform:none;opacity:.85;}.w284pop .w284box{transform:none;transition:none;}}'
       /* phones: 44 px targets, 16 px text in inputs (iOS zooms the page below 16 px) */
       + '@media (max-width:700px){.w284card{padding:14px;}.w284in{width:100%;}.w284runs .w284row,.w284up .w284row{flex:1 1 100%;}.w284ctl .w284row{flex-direction:column;align-items:stretch;}'

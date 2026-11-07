@@ -2,7 +2,7 @@
 """Assemble build/parts284/*.js into build/src/284_wave284.seg (non-ASCII escaped, LF)."""
 import os
 D = os.path.dirname(os.path.abspath(__file__))
-parts = ["a_import.js", "b_css.js"]
+parts = ["a_import.js", "c_mail.js", "b_css.js"]   # c_mail.js (wave292) sits inside a_import.js's closure, which b_css.js closes
 src = ''.join(open(os.path.join(D, f), encoding='utf8').read().replace('\r\n', '\n') for f in parts)
 out = []
 for ch in src:

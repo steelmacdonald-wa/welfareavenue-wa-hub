@@ -9,7 +9,10 @@
    counts; nothing else pops up (Purge asks inside its own row). Extra controls write the keela_ settings: the orgs card's ticks
    (keela_org_pairs_ok), the legacy_fields card's assignee selects (keela_assignee_map), the participation card's campaign types
    (keela_campaign_types), and the contacts file's subscription history key (keela_keys). A changed setting asks for a new compare.
-   window.w284.open(host) is called by the CRM page (parts152 c_list.js) with #w284root. */
+   window.w284.open(host) is called by the CRM page (parts152 c_list.js) with #w284root.
+   wave292 (07/11/26): a run has a source (crm_import_runs.source). An email-history run shows the Scan card (c_mail.js) instead of the files
+   card, and the five mail cards (MAIL) instead of Keela's eight: Compare needs every card above applied, Undo needs every card below not applied.
+   New run offers both sources; Purge's question says Undo ends with it. */
 (function () {
   if (window.__wa284) return; window.__wa284 = true;   /* the ground rule's guard (window.__wa28N) */
 
@@ -18,7 +21,7 @@
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var KINDS = [
-    { k: 'optouts', t: 'Opt-outs', need: 'keela_contacts_json', never: true,
+    { k: 'optouts', t: 'Opt-outs', need: 'keela_contacts_json', never: true, src: 'keela',
       rule: 'People whose latest Keela email event is an unsubscribe, a hard bounce or a spam complaint, or who have an opt-out with no readable date, stop getting email here too (a complaint is marked complained). On the same day an opt-out wins over an opt-in. Never undone.' },
     { k: 'legacy_fields', t: 'Keela fields already in the Hub', need: null,
       rule: 'From the Keela details the first import kept: positions, availability, dates volunteered, Rally Paper team, donor readiness and the assignee. Fills empty fields only.' },
@@ -34,6 +37,20 @@
       rule: 'Keela tags become Campaign parts, the Toronto chapter or Hub tags; the donor and welcome-series tags are skipped. Adds only.' },
     { k: 'form_answers', t: 'Form answers', need: 'keela_responses_json',
       rule: 'Keela form responses not yet in the Hub become timeline items, without birth date, health or home address answers. Adds only.' }
+  ];
+  KINDS.forEach(function (K) { K.src = 'keela'; });
+  /* wave292: the email history's five cards, in order (Compare top down, Undo bottom up) */
+  var MAIL = [
+    { k: 'mail_optouts', t: 'Opt-outs from the email history', never: true, ordered: true, src: 'email_history',
+      rule: 'People who asked Welfare Avenue to stop emailing them, and addresses that bounced for good, go on the suppression list and stop getting email, on every contact holding the address. A bounce counts only on the address the Hub sends to, and not when they wrote again later. Newer consent is listed, not changed. Never undone.' },
+    { k: 'mail_orgs', t: 'Organisations', ordered: true, src: 'email_history',
+      rule: 'Organisations found on their own homepages: matched to Partners by domain, website or name, with blanks filled; new ones added with what the homepage prints. The Hub\'s value wins. New organisations are never deleted by Undo.' },
+    { k: 'mail_people', t: 'New people', ordered: true, src: 'email_history', undoText: 'Undo removes the organisation links, LinkedIn fields and types it added that are unchanged. The new contacts stay, tagged email history: review so no Send reaches them, and are listed; Delete created and untouched removes them afterwards.',
+      rule: 'A contact for each person who wrote in and is not in the Hub yet: name, address, signature phone, title, organisation, language and their type. No consent is set; an address on the suppression list arrives opted out. Left out, deleted and phone-only matches make no contact.' },
+    { k: 'mail_enrich', t: 'People already in the Hub', ordered: true, src: 'email_history',
+      rule: 'Contacts the history matched by email: empty fields filled from their signature, the tag email history and their type. Never an opt-out or consent. The Hub\'s value wins.' },
+    { k: 'mail_interactions', t: 'Emails on the timeline', ordered: true, src: 'email_history',
+      rule: 'One timeline item per email per person: the date, in or out, the mailbox, the cleaned subject and one line saying what it was about. Never the email itself, and never a left-out thread. Adds only.' }
   ];
   var FILES = [
     { k: 'keela_contacts_json', t: 'Keela contacts and companies (export 15, JSON)', type: 'application/json' },
@@ -55,14 +72,16 @@
     job_title: 'job title', keela_company_id: 'Keela company id', crm_contact_fields: 'custom fields', crm_contact_private: 'birth dates', crm_contact_orgs: 'organisation links',
     crm_contact_chapters: 'chapters', wa_campaign_people: 'Campaign parts', crm_interactions: 'timeline items', crm_consent_events: 'consent log rows', sms_opt_out: 'texts stopped' };
   var S = { runs: null, run: null, batches: {}, files: [], keys: {}, openKeys: {}, cfg: {}, err: '', loading: false, busy: {}, msg: {}, stale: {}, stage: {},
-    note: {}, label: '', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, upFile: null, names: {}, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
+    note: {}, label: '', newSrc: 'keela', upKind: 'keela_contacts_json', upMsg: '', upErr: false, upBusy: false, upFile: null, names: {}, purgeAsk: false, purgeMsg: '', open: {}, want: null, pop: null };
 
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function num(n) { n = Number(n || 0); return n.toLocaleString('en-CA'); }
   function plural(n, one, many) { return num(n) + ' ' + (Number(n) === 1 ? one : many); }
   function can() { try { return !!(window.w152 && window.w152.can && window.w152.can('import_admin')); } catch (e) { return false; } }
   function host() { return document.getElementById('w284root'); }
-  function kindOf(k) { for (var i = 0; i < KINDS.length; i++) if (KINDS[i].k === k) return KINDS[i]; return null; }
+  function kindOf(k) { var all = KINDS.concat(MAIL); for (var i = 0; i < all.length; i++) if (all[i].k === k) return all[i]; return null; }
+  function src() { var r = run(); return r && r.source === 'email_history' ? 'email_history' : 'keela'; }
+  function kinds() { return src() === 'email_history' ? MAIL : KINDS; }
   function fileLabel(k) { for (var i = 0; i < FILES.length; i++) if (FILES[i].k === k) return FILES[i].t; return k; }
   function run() { var r = null; (S.runs || []).forEach(function (x) { if (x.id === S.run) r = x; }); return r; }
   function obj(v, dflt) { if (v && typeof v === 'object') return v; try { var j = JSON.parse(v); return j && typeof j === 'object' ? j : dflt; } catch (e) { return dflt; } }
@@ -118,6 +137,7 @@
       S.files = (res[1] && res[1].data && res[1].data.files) || [];
       if (res[1] && res[1].error) S.err = res[1].error;
       S.cfg = {}; ((res[2] && res[2].data) || []).forEach(function (x) { S.cfg[x.key] = x.value; });
+      if (src() === 'email_history') return mLoad(id);   /* wave292: the scans (c_mail.js) */
     });
   }
   function reloadRun() { return loadRun().then(paint); }
@@ -213,6 +233,7 @@
 
   /* ---------- the extra controls ---------- */
   function extraHtml(kind, b) {
+    if (/^mail_/.test(kind)) return mExtra(kind, b);   /* wave292 (c_mail.js) */
     var r = (b && b.report) || {}, l = r.lists || {}, h = '';
     if (kind === 'orgs') {
       var ok = obj(S.cfg.keela_org_pairs_ok, []), pairs = (l.org_pairs || []).slice();
@@ -252,6 +273,7 @@
   function nextStep() {
     if (!S.runs || !S.runs.length) return 'new';
     var r = run(); if (!r || r.purged_at) return 'new';
+    if (src() === 'email_history') return mNext();   /* wave292 (c_mail.js) */
     var cf = S.files.filter(function (f) { return f.kind === 'keela_contacts_json'; });
     if (!cf.length) return 'upload';
     if (!staged('keela_contacts_json')) return S.stage[cf[0].id] ? '' : 'stage:' + cf[0].id;
@@ -269,18 +291,25 @@
   function runLine() {
     var r = run(); if (!r) return 'No import run yet';
     var n = { applied: 0, compared: 0, failed: 0, undone: 0 };
-    KINDS.forEach(function (K) { var st = statusOf(K.k); if (n[st] != null) n[st]++; });
-    var bits = [num(n.applied) + ' of ' + KINDS.length + ' applied'];
+    kinds().forEach(function (K) { var st = statusOf(K.k); if (n[st] != null) n[st]++; });
+    var bits = [num(n.applied) + ' of ' + kinds().length + ' applied'];
     ['compared', 'failed', 'undone'].forEach(function (k) { if (n[k]) bits.push(num(n[k]) + ' ' + k); });
-    return 'Run ' + r.id + ': ' + bits.join(', ') + (r.purged_at ? ', then purged' : '');
+    return 'Run ' + r.id + (src() === 'email_history' ? ' (email history)' : '') + ': ' + bits.join(', ') + (r.purged_at ? ', then purged' : '');
   }
   function cardHtml(K, i) {
     var b = S.batches[K.k], st = statusOf(K.k), purged = !!(run() && run().purged_at), stale = !!S.stale[K.k], busy = S.busy[K.k];
     /* every button that is the card's action carries data-w284act, so keyboard focus can follow the action (Compare, then Apply, then Undo) */
     var act = ' data-w284act="' + K.k + '"', btn = '';
-    if (!purged && !busy) {
+    /* wave292: an ordered card compares only when every card above is applied, and undoes only when every card below is not */
+    var list = kinds(), at = list.indexOf(K);
+    var above = !K.ordered || list.slice(0, at).every(function (x) { return statusOf(x.k) === 'applied'; });
+    var below = !K.ordered || list.slice(at + 1).every(function (x) { return statusOf(x.k) !== 'applied'; });
+    if (!purged && !busy && K.src === 'email_history' && st !== 'applied' && !mPhaseAll(['done', 'summaries', 'summarised'])) btn = '<span class="w284note">The scan has not finished reading yet.</span>';
+    else if (!purged && !busy && K.ordered && st !== 'applied' && !above) btn = '<span class="w284note">Apply the cards above first.</span>';
+    else if (!purged && !busy && K.ordered && st === 'applied' && !K.never && !below) btn = '<span class="w284note">Applied. Undo the cards below first.</span>';
+    else if (!purged && !busy) {
       if (st === 'compared' && !stale) btn = '<button class="' + pri('apply:' + K.k) + '" data-w284apply="' + K.k + '"' + act + '>Apply</button>';
-      else if (st === 'applied') btn = K.never ? '<span class="w284note">Applied. Opt-outs and consent are never undone.</span>' : '<button class="w284btn soft" data-w284undo="' + K.k + '"' + act + '>Undo</button>';
+      else if (st === 'applied') btn = K.never ? '<span class="w284note">Applied. ' + (K.src === 'email_history' ? 'Opt-outs are never undone.' : 'Opt-outs and consent are never undone.') + '</span>' : '<button class="w284btn soft" data-w284undo="' + K.k + '"' + act + '>Undo</button>';
       else {
         var ready = !K.need || staged(K.need);
         btn = '<button class="' + pri('compare:' + K.k) + '" data-w284compare="' + K.k + '"' + act + (ready ? '' : ' disabled') + '>' + (st === 'compared' ? 'Compare again' : 'Compare') + '</button>'
@@ -294,7 +323,7 @@
       + '<div class="w284ch"><h3 id="w284h-' + K.k + '" tabindex="-1" data-w284head="' + K.k + '"><span class="w284n">' + (i + 1) + '</span><span class="w284t">' + E(K.t) + '</span></h3>'
       + '<span class="w284st st-' + st + '"><i aria-hidden="true"></i>' + st + '</span></div>'
       + '<p class="w284rule">' + E(K.rule) + '</p>'
-      + (b && b.report ? '<p class="w284sum">' + E(sentence(b)) + '</p>' : '')
+      + (b && b.report ? '<p class="w284sum">' + E(sentence(b)) + (K.src === 'email_history' ? E(mMore(b)) : '') + '</p>' : '')
       + (stale ? '<p class="w284warn">A setting changed: compare again before applying.</p>' : '')
       + extraHtml(K.k, b) + listsHtml(K.k, b)
       + (err ? '<p class="w284err" role="alert">Stopped: ' + E(err) + '</p>' : '')
@@ -348,7 +377,7 @@
     var due = days != null && days >= 30;
     return '<section class="w284card w284purge" data-w284b="purge">'
       + (due ? '<p class="w284warn">It has been ' + plural(days, 'day', 'days') + ' since the last batch was applied. Purge this run to delete the staged rows, the uploaded files and the change records.</p>' : '')
-      + (S.purgeAsk ? '<div class="w284ask" role="group" aria-label="Purge this run"><p>Purge deletes this run\'s staged rows, uploaded files and change records. Its batches can no longer be undone.</p>'
+      + (S.purgeAsk ? '<div class="w284ask" role="group" aria-label="Purge this run"><p>Purge deletes this run\'s ' + (src() === 'email_history' ? 'staged emails, people and organisations' : 'staged rows, uploaded files') + ' and change records. Undo ends with it: its batches can no longer be undone.</p>'
           + '<button class="w284btn danger" data-w284purgeyes="1">Yes, purge</button><button class="w284btn ghost" data-w284purgeno="1">Cancel</button></div>'
         : '<button class="w284btn soft" data-w284purge="1">Purge this run</button>')
       + (S.purgeMsg ? '<p class="w284note" role="status">' + E(S.purgeMsg) + '</p>' : '') + '</section>';
@@ -358,15 +387,18 @@
     /* the head: the masthead already says Imports, so the card opens on the run itself (no CRM stats strip, no second title); with no run yet, the
        empty state lives here, above New run */
     var head = '<section class="w284card w284head" data-w284b="head"><h2 class="w284runline" tabindex="-1" data-w284b="line">' + E(runLine()) + '</h2>'
-      + '<p class="w284rule">Bring Keela\'s exports into the Hub: upload and stage a file, compare each kind of import, then apply it. Undo puts back what has not changed since; opt-outs and consent are never undone.</p>'
+      + '<p class="w284rule">' + (r && src() === 'email_history' ? 'Bring the email history into the Hub: read the mailboxes, look at the people found, compare each card with the Hub, then apply it, top down. Undo goes bottom up and puts back what has not changed since; opt-outs are never undone.'
+          : 'Bring Keela\'s exports into the Hub: upload and stage a file, compare each kind of import, then apply it. Undo puts back what has not changed since; opt-outs and consent are never undone.') + '</p>'
       + (r ? '' : '<p class="w284sum">Name the run, then Start a new run.</p>')
       + '<div class="w284runs" data-w284b="ctl">' + (S.runs.length ? '<label class="w284row"><span>Run</span><select class="w284sel" data-w284run="1">' + S.runs.map(function (x) {
           return '<option value="' + x.id + '"' + (x.id === S.run ? ' selected' : '') + '>Run ' + x.id + (x.label ? ': ' + E(x.label) : '') + (x.created_at ? ' (' + E(String(x.created_at).slice(0, 10)) + ')' : '') + (x.purged_at ? ', purged' : '') + '</option>';
         }).join('') + '</select></label>' : '')
-      + '<label class="w284row"><span>New run</span><input class="w284in" type="text" maxlength="120" placeholder="A name, for example Keela final export" data-w284label="1" value="' + E(S.label) + '"></label>'
+      + '<label class="w284row"><span>New run from</span><select class="w284sel" data-w284newsrc="1"><option value="keela"' + (S.newSrc !== 'email_history' ? ' selected' : '') + '>Keela\'s exports</option>'
+      + '<option value="email_history"' + (S.newSrc === 'email_history' ? ' selected' : '') + '>Email history (Steel\'s mailbox and hub@)</option></select></label>'
+      + '<label class="w284row"><span>New run</span><input class="w284in" type="text" maxlength="120" placeholder="' + (S.newSrc === 'email_history' ? 'A name, for example Email history 2020 to 2026' : 'A name, for example Keela final export') + '" data-w284label="1" value="' + E(S.label) + '"></label>'
       + '<button class="' + pri('new') + '" data-w284new="1">Start a new run</button></div>'
       + (S.err ? '<p class="w284err" role="alert">' + E(S.err) + '</p>' : '') + '</section>';
-    var body = r ? filesHtml() + '<div class="w284cards" data-w284b="cards">' + KINDS.map(cardHtml).join('') + '</div>' + purgeHtml() : '';
+    var body = r ? (src() === 'email_history' ? mScanHtml() : filesHtml()) + '<div class="w284cards" data-w284b="cards">' + kinds().map(cardHtml).join('') + '</div>' + purgeHtml() : '';
     return '<div class="w284" data-w284b="page-' + (r ? r.id : 'none') + '">' + head + body
       + '<p class="w284live w284vh" role="status" aria-live="polite" data-w284b="live"></p></div>';   /* results are read out here (say) */
   }
@@ -471,7 +503,7 @@
       if (b && b.status === 'failed' && b.error && S.msg[kind] === b.error) S.msg[kind] = '';
       S.busy[kind] = ''; paint();
       /* the result is read out; a stop is already an alert inside the card */
-      if (!S.msg[kind] && !(b && b.status === 'failed')) say('Batch ' + (KINDS.indexOf(K) + 1) + ', ' + K.t + ': ' + (sentence(b) || 'done.'));
+      if (!S.msg[kind] && !(b && b.status === 'failed')) say('Batch ' + (kinds().indexOf(K) + 1) + ', ' + K.t + ': ' + (sentence(b) || 'done.'));
     }, function (e) { S.busy[kind] = ''; S.msg[kind] = String((e && e.message) || e); paint(); });
   }
   function confirmPop(kind, action, trigger) {
@@ -479,13 +511,13 @@
     closePop(true);
     var last = trigger || document.activeElement;   /* the button itself: Safari does not focus a clicked button */
     var wrap = document.createElement('div'); wrap.id = 'w284pop'; wrap.className = 'w284pop';
-    var title = (action === 'apply' ? 'Apply' : 'Undo') + ' batch ' + (KINDS.indexOf(K) + 1) + ': ' + K.t + '?';
+    var title = (action === 'apply' ? 'Apply' : 'Undo') + ' batch ' + (kinds().indexOf(K) + 1) + ': ' + K.t + '?';
     var never = action === 'apply' && !!K.never;
     /* the counts in a paragraph of their own; what cannot be undone on its own warn line, right above the buttons */
     var body = action === 'apply'
       ? '<p id="w284pd">' + E(sentence(b) || 'Compare first.') + '</p>'
         + (never ? '<p class="w284warn" id="w284pw">This cannot be undone.</p>' : '<p class="w284note" id="w284pw">You can undo it afterwards: values that have not changed since are put back.</p>')
-      : '<p id="w284pw">Undo puts back every value this batch changed that has not changed since, and removes the rows it added that are unchanged. New contacts, organisations and campaigns stay, listed for you to review.</p>'
+      : '<p id="w284pw">' + E(K.undoText || 'Undo puts back every value this batch changed that has not changed since, and removes the rows it added that are unchanged. New contacts, organisations and campaigns stay, listed for you to review.') + '</p>'
         + '<p id="w284pd">' + E(sentence(b)) + '</p>';
     wrap.innerHTML = '<div class="w284box" role="dialog" aria-modal="true" aria-labelledby="w284pt" aria-describedby="w284pd w284pw"><h3 id="w284pt">' + E(title) + '</h3>' + body
       + '<div class="w284acts"><button class="w284btn ghost" data-w284popno="1">Cancel</button><button class="w284btn" data-w284popyes="1">' + (action === 'apply' ? 'Apply' : 'Undo') + '</button></div></div>';
@@ -565,6 +597,7 @@
     else if ((el = t.closest('[data-w284keys]'))) { var id = Number(el.getAttribute('data-w284keys')); S.openKeys[id] = !S.openKeys[id]; if (S.openKeys[id] && !S.keys[id]) loadKeys(id); paint(); }
     else if (t.closest('[data-w284upload]')) upload();
     else if (t.closest('[data-w284new]')) {
+      if (S.newSrc === 'email_history') { mStart(S.label); return; }   /* wave292: mail-history starts the run and its free phases */
       fn('new_run', { label: S.label }).then(function (r) {
         if (r.error) { S.err = r.error; paint(); return; }
         S.label = ''; S.run = r.data.run_id; S.runs = null; S.batches = {}; S.files = []; S.stale = {}; S.msg = {}; S.open = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false;
@@ -587,6 +620,7 @@
     var t = ev.target; if (!t || !t.closest || !t.closest('#w284root')) return;
     if (t.hasAttribute('data-w284run')) { S.run = Number(t.value); S.batches = {}; S.files = []; S.keys = {}; S.openKeys = {}; S.stale = {}; S.msg = {}; S.open = {}; S.purgeAsk = false; S.purgeMsg = ''; S.upMsg = ''; S.upErr = false; reloadRun(); }
     else if (t.hasAttribute('data-w284upkind')) { S.upKind = t.value; paint(); }
+    else if (t.hasAttribute('data-w284newsrc')) { S.newSrc = t.value; paint(); }
     else if (t.hasAttribute('data-w284upfile')) { S.upFile = (t.files && t.files[0]) || null; S.upMsg = ''; S.upErr = false; paint(); }
     else if (t.hasAttribute('data-w284pair')) {
       var parts = t.getAttribute('data-w284pair').split('|'), pair = { keela_company_id: parts[0], partner_id: Number(parts[1]) };
@@ -627,4 +661,4 @@
   });
 
   function open(h) { if (!h) return; if (S.runs === null && can() && !S.loading) load(); paint(); }
-  window.w284 = { open: open, paint: paint, load: load, state: function () { return S; }, kinds: KINDS.map(function (k) { return k.k; }), sentence: sentence };
+  window.w284 = { open: open, paint: paint, load: load, state: function () { return S; }, kinds: KINDS.map(function (k) { return k.k; }), mailKinds: MAIL.map(function (k) { return k.k; }), sentence: sentence };
