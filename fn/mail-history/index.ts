@@ -1,17 +1,19 @@
-// Welfare Avenue: mail-history (v1, 07/11/26, wave289; built, not deployed)
+// Welfare Avenue: mail-history (v2, 07/11/26, wave292: summarise and insight; v1 07/11/26, wave289; built, not deployed)
 // Purpose: the email history scan (design "03 email history, interactions and insights" v2, 5.1 to 5.5). Reads Steel's mailbox
 // (steel.macdonald@) and hub@ (where info@ arrives) back to April 2020 with gmail.readonly, applies the shared mail rules without a model,
 // reads the kept threads with the llm router (one line per email, never a body), groups the people who wrote in, types them with Jev and looks
 // up their organisations' homepages. It fills the private holding area only (import_stage.mail_*, crm_mail_scans): nothing reaches the CRM
-// until wave292's batches. It never labels, files, moves or sends mail, and never posts anywhere.
+// until wave292's batches. It never labels, files, moves or sends mail, and never posts anywhere. v2 (wave292) adds the summary pass after the
+// mail_interactions batch is applied (summarise; summary.ts) and one contact's Refresh (insight).
 // Triggers: the Import page (wave292) and Claude through public.call_edge on Steel's yes (control actions); itself (continue) and the cron job
 // wa-mail-history-pump (pump), which exists only while a run is active.
 // Auth (verify_jwt on):
-//   start, status, go, pause, resume, cap   wa_can('import_admin') as the caller, or the trigger secret (x-wa-secret). Counts only.
+//   start, status, go, pause, resume, cap, summarise   wa_can('import_admin') as the caller, or the trigger secret (x-wa-secret). Counts only.
 //   continue, pump                          the trigger secret only.
 //   people, exclude                         an admin's own sign-in only, never the secret (they return or touch personal data, which must never
 //                                           reach a Claude conversation); people from Steel's mailbox answer only Steel (M3).
-//   (summarise and insight come with wave292.)
+//   insight                                 CRM staff (is_wa_staff and the CRM page) with their own sign-in; an admin when the contact has lines
+//                                           from Steel's mailbox while mail_history_steel_open is false (H1). Never the secret.
 // Actions (POST {action, ...}):
 //   start {label, mailboxes?}  -> {run_id}: refuses while wa289_ready lists a problem (a route without the no-retention provider setting or a
 //                                 wording route without the confidentiality rule); creates the run, turns the pump on and starts the free phases
@@ -21,14 +23,18 @@
 //   continue {run_id}          -> one step (100 s by mail_history_step_seconds), then calls itself while the run has work
 //   pump                       -> continues every active run whose lease is free or ran out; turns itself off when none is left
 //   people {run_id, filter, offset}, exclude {run_id, key, what, on}
+//   summarise {run_id}         -> {todo}: the summary pass (wave292), after mail_interactions is applied; resumable, the run's cap; continue and
+//                                 pump carry it on while the scans are at phase summaries
+//   insight {contact_id}       -> {saved, model}: Refresh one contact's summary (about 1 cent); no run, no cap
 // Tables: crm_import_runs, crm_mail_scans, crm_email_suppressions (read), import_stage.mail_* (through the wa289_* functions only), change_log,
 // ai_calls (through the router). Side effects: none outside the database (Gmail is read-only; homepages are fetched with GET only).
 // Logs: step names, counts and status codes only; never an address, subject, line or page text.
-// Deploy: through the Supabase connector (deploy_edge_function) with files index.ts and scan.ts (fn/mail-history) and mail_rules.ts
+// Deploy: through the Supabase connector (deploy_edge_function) with files index.ts, scan.ts and summary.ts (fn/mail-history) and mail_rules.ts
 // (fn/_shared); build/fn.py refuses it and says so.
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { step, type Deps, type Mailbox, MAILBOX_ADDR, USER_AGENT } from './scan.ts';
+import { summariseContact, summaryStep } from './summary.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -36,7 +42,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app'];
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
-const CONTROL = ['start', 'status', 'go', 'pause', 'resume', 'cap'];
+const CONTROL = ['start', 'status', 'go', 'pause', 'resume', 'cap', 'summarise'];
 
 function cors(req: Request) {
   const o = req.headers.get('origin') || '';
@@ -69,6 +75,20 @@ async function caller(req: Request): Promise<Caller> {
   if (!email) return null;
   const { data: ok } = await asUser.rpc('wa_can', { p_cap: 'import_admin' });
   return ok === true ? { kind: 'admin', email } : null;
+}
+
+// insight: CRM staff with their own sign-in (never the secret); admin and Steel's-lines answers asked as the caller
+async function staffCaller(req: Request): Promise<{ email: string; admin: boolean; open: boolean } | null> {
+  if (req.headers.get('x-wa-secret')) return null;
+  const auth = req.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ') || auth === 'Bearer ' + SERVICE_KEY || auth === 'Bearer ' + ANON_KEY) return null;
+  const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } }, auth: { persistSession: false } });
+  const { data: u } = await asUser.auth.getUser();
+  const email = String(u?.user?.email || '').toLowerCase();
+  if (!email) return null;
+  const [staff, page, admin, open] = await Promise.all([asUser.rpc('is_wa_staff'), asUser.rpc('wa_page_ok', { p_tab: 'crm' }), asUser.rpc('is_wa_admin'), asUser.rpc('crm_mail_steel_open')]);
+  if (staff.data !== true || page.data === false) return null;
+  return { email, admin: admin.data === true, open: open.data === true };
 }
 
 /* ---- Google: the service account acts for the two allow-listed mailboxes only, read-only ---- */
@@ -162,6 +182,22 @@ Deno.serve(async (req: Request) => {
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch (_) { return json(req, { error: 'JSON body expected' }, 400); }
   const action = String(body.action || '');
+  if (action === 'insight') {
+    const staff = await staffCaller(req);
+    if (!staff) return json(req, { error: 'CRM staff only' }, 403);
+    const cid = Number(body.contact_id || 0);
+    if (!Number.isInteger(cid) || cid <= 0) return json(req, { error: 'contact_id expected' }, 400);
+    try {
+      const input = await rpc('crm_insight_input', { p_contact: cid });
+      if (input && input.from_steel && !staff.admin && !staff.open) return json(req, { error: "Only admins refresh summaries from Steel's mailbox for now." }, 403);
+      const r = await summariseContact({ rpc, router, now: () => Date.now() }, cid, staff.email);
+      console.log('mail-history insight', cid, r.saved, r.calls);   // ids and counts only
+      return json(req, { ok: true, saved: r.saved, model: r.model, cost: r.cost });
+    } catch (e) {
+      console.log('mail-history insight error', (e as any)?.status || '', (e as any)?.db ? 'db' : '');
+      return json(req, { error: (e as any)?.db ? String((e as Error).message) : 'failed (' + ((e as any)?.status || 'error') + ')' }, 500);
+    }
+  }
   const who = await caller(req);
   if (!who) return json(req, { error: 'unauthorized' }, 401);
   const by = who.kind === 'admin' ? who.email : 'mail-history (trigger)';
@@ -187,13 +223,18 @@ Deno.serve(async (req: Request) => {
       if (action === 'pause') { await rpc('wa289_pause', { p_run: run, p_on: true, p_by: by }); return json(req, { ok: true }); }
       if (action === 'resume') { await rpc('wa289_pause', { p_run: run, p_on: false, p_by: by }); await rpc('wa289_pump', { p_on: true }); selfCall({ action: 'continue', run_id: run }); return json(req, { ok: true }); }
       if (action === 'cap') return json(req, { ok: true, ...(await rpc('wa289_set_cap', { p_run: run, p_usd: Number(body.usd), p_by: by })) });
+      if (action === 'summarise') {
+        const r = await rpc('wa292_summary_start', { p_run: run, p_by: by });
+        await rpc('wa289_pump', { p_on: true }); selfCall({ action: 'continue', run_id: run });
+        return json(req, { ok: true, ...r });
+      }
     }
     if (action === 'continue' || action === 'pump') {
       if (who.kind !== 'secret') return json(req, { error: 'the trigger secret only' }, 403);
       if (action === 'pump') {
-        const runs: number[] = await rpc('wa289_active', {});
+        const runs: number[] = [...new Set([...((await rpc('wa289_active', {})) || []), ...((await rpc('wa292_summary_active', {})) || [])])];
         if (!runs.length) {
-          const { data } = await svc.from('crm_mail_scans').select('run_id').in('phase', ['count', 'headers', 'dedupe', 'bounces', 'sample', 'threads', 'people', 'orgs']).eq('paused', false).limit(1);
+          const { data } = await svc.from('crm_mail_scans').select('run_id').in('phase', ['count', 'headers', 'dedupe', 'bounces', 'sample', 'threads', 'people', 'orgs', 'summaries']).eq('paused', false).limit(1);
           if (!data || !data.length) await rpc('wa289_pump', { p_on: false });
           return json(req, { ok: true, runs: 0 });
         }
@@ -201,9 +242,12 @@ Deno.serve(async (req: Request) => {
         return json(req, { ok: true, runs: runs.length });
       }
       if (!run) return json(req, { error: 'run_id expected' }, 400);
-      const result = await step(deps, run, (await stepSeconds()) * 1000);
+      const phases = (await deps.scans(run)).map((x) => x.phase);
+      const summaries = phases.length > 0 && phases.every((ph) => ph === 'summaries');
+      const result = summaries ? await summaryStep({ rpc, router, now: () => Date.now() }, run, (await stepSeconds()) * 1000)
+                               : await step(deps, run, (await stepSeconds()) * 1000);
       if (!result.busy && !result.error && !result.paused && !result.finished) {
-        const active: number[] = await rpc('wa289_active', {});
+        const active: number[] = [...((await rpc('wa289_active', {})) || []), ...((await rpc('wa292_summary_active', {})) || [])];
         if (active.includes(run)) selfCall({ action: 'continue', run_id: run });
       }
       console.log('mail-history step', run, JSON.stringify(result));   // counts and step names only

@@ -1,4 +1,4 @@
-// Welfare Avenue: crm-import (v1, 06/11/26, wave284; built, not deployed; review fix round: compare, apply and undo over a direct connection)
+// Welfare Avenue: crm-import (v2, 07/11/26, wave292: the five email-history batch kinds and delete_created; v1 06/11/26, wave284; built, not deployed)
 // The Import page (#crm/settings/imports, CRM slice 1 Phase 4): an admin stages Keela's exports, compares each kind of import with the Hub,
 // applies it in reviewed batches and undoes what can be undone. The database does the work (the wa284_* functions, the service role only);
 // this function checks the caller and moves the files.
@@ -22,6 +22,10 @@
 //   too slow for it stops in the database with nothing written, never after the page has given up. Without SUPABASE_DB_URL they fall back
 //   to the API and the reply says so (note), on success and on error.
 //   purge {run_id}                -> {removed}: deletes the run's staged rows, change records and uploaded files
+//   delete_created {batch_id}     -> {deleted, kept}: wave292, on an undone mail_people batch, after the page's centred confirmation: deletes the
+//                                    contacts it created that are unchanged since and hold nothing else (wa292_delete_created; counts only)
+//   batch also takes the email-history kinds mail_optouts, mail_orgs, mail_people, mail_enrich, mail_interactions (wave292; an email-history
+//   run only, which the database checks); their errors start with "wa284: email history:", so clean() passes them.
 // Tables: crm_import_runs, crm_import_batches, crm_import_changes, import_stage.files, import_stage.rows (all through the wa284_* functions);
 // storage bucket imports. Side effects: none outside these (the database's guard refuses requests, emails, texts, automations, notifications,
 // applications, form answers and roster rows while a batch runs). Errors report row numbers, key names or error codes, never values.
@@ -39,7 +43,8 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const svc = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app'];
 const BUCKET = 'imports';
-const BATCHES = ['optouts', 'legacy_fields', 'people', 'fields', 'orgs', 'consent', 'participation', 'form_answers'];
+const BATCHES = ['optouts', 'legacy_fields', 'people', 'fields', 'orgs', 'consent', 'participation', 'form_answers',
+  'mail_optouts', 'mail_orgs', 'mail_people', 'mail_enrich', 'mail_interactions'];
 const DB_URL = Deno.env.get('SUPABASE_DB_URL') || '';
 let pool = null;
 
@@ -157,6 +162,11 @@ Deno.serve(async (req) => {
         if (a === 'apply') await svc.rpc('wa284_fail', { p_batch: bid, p_error: msg });   // the apply rolled back; the batch says why
         return reply(req, { error: msg, note });   // the fallback note on the error branch too
       }
+    }
+    if (a === 'delete_created') {
+      const bid = id(body.batch_id);
+      if (!bid) return reply(req, { error: 'wa284: which batch?' }, 400);
+      return reply(req, await rpc('wa292_delete_created', { p_batch: bid, p_by: by }));
     }
     if (a === 'purge') {
       const run = id(body.run_id);
