@@ -39,10 +39,10 @@
     /* task 10b (the UI review's Emil rows): every CRM control answers the press (wave274's press: scale .97, 160ms on the house ease-out), hover
        only where there is a fine pointer and never on a disabled control, and reduced motion keeps the press as an opacity change */
     + '.w152btn,.w152mini,.w152chip,button.w152st{transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease,box-shadow 150ms ease;}'
-    + '.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:scale(.97);}'
+    + '.w152btn:active:not(:disabled):not(:focus-visible),.w152mini:active:not(:disabled):not(:focus-visible),.w152chip:active:not(:focus-visible),button.w152st:active:not(:focus-visible){transform:scale(.97);}'
     + '@media (hover:hover) and (pointer:fine){.w152btn:hover:not(:disabled){background:#0b2f2a;}.w152btn.soft:hover:not(:disabled){background:rgba(16,63,57,.14);}.w152btn.ghost:hover:not(:disabled){background:rgba(16,63,57,.06);}'
     + '.w152btn.danger:hover:not(:disabled){background:#96331f;}.w152mini:hover:not(:disabled){background:rgba(16,63,57,.08);}button.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}.w152row:hover{background:rgba(16,63,57,.035);}}'
-    + '@media (prefers-reduced-motion:reduce){.w152btn,.w152mini,.w152chip,button.w152st{transition:background-color 150ms ease,opacity 150ms ease;}.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:none;opacity:.85;}}'
+    + '@media (prefers-reduced-motion:reduce){.w152btn,.w152mini,.w152chip,button.w152st{transition:background-color 150ms ease,opacity 150ms ease;}.w152btn:active:not(:disabled):not(:focus-visible),.w152mini:active:not(:disabled):not(:focus-visible),.w152chip:active:not(:focus-visible),button.w152st:active:not(:focus-visible){transform:none;opacity:.85;}}'
     + '.w152num,.w152kv .w152num{font-variant-numeric:tabular-nums;}.w152measure{max-width:70ch;}'
     + '.w152hist{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}.w152hl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');}'
     + '.w152empty{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:22px;color:var(--wa-muted,' + MUTED + ');font-size:14px;line-height:1.5;}'

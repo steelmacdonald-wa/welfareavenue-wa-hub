@@ -94,7 +94,7 @@
         '<span class="amt">' + E(cents(p.amount)) + '<small> a month</small>' + (p.tribute_kind ? '<div class="m">' + E((p.tribute_kind === 'memory' ? 'In memory of ' : 'In honour of ') + (p.tribute_name || '')) + '</div>' : '') + '</span>' +
         '<span>' + dgChip(planState(p)) + (note ? '<div class="m">' + E(note) + '</div>' : '') + '</span>' +
         '<span>' + E(p.designation || '–') + '<div class="m">Since ' + E(fmtDay(p.started_at)) + '</div></span>' +
-        '<span>' + E(money(sum(paid, 'amount'))) + '<div class="m">' + plural(paid.length, 'payment', 'payments') + (p.last_paid_at ? ', the last ' + E(fmtDay(p.last_paid_at)) : '') + '</div></span>' +
+        '<span>' + E(cents(sum(paid, 'amount'))) + '<div class="m">' + plural(paid.length, 'payment', 'payments') + (p.last_paid_at ? ', the last ' + E(fmtDay(p.last_paid_at)) : '') + '</div></span>' +
         '<span><a class="w152mini" href="https://dashboard.stripe.com/subscriptions/' + E(p.external_id) + '" target="_blank" rel="noopener">' + I('ext') + ' Stripe</a></span></div>';
     };
     var monthly = '<div class="w154card w161plans"><h3>' + I('refresh') + ' Monthly gifts <span class="m">' + plural(going.length, 'going', 'going') + ' of ' + plans.length + '</span></h3>' +

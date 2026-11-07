@@ -76,7 +76,9 @@
       o.total++;
       if (!c.emails.length) { o.noemail++; return; }
       var p = c._perm;
-      if (p === 'express' || p === 'implied') { o.reach++; o[p]++; }
+      /* task 10b: Steel's rule of 5 Nov 2026: everyone with a working address who has not unsubscribed and is not do not contact can get a newsletter */
+      if (p !== 'unsub' && p !== 'bounced' && !c.do_not_contact) o.reach++;
+      if (p === 'express' || p === 'implied') o[p]++;
       else if (p === 'unsub') o.unsub++;
       else if (p === 'bounced') o.bounced++;
       else o.none++;
@@ -116,9 +118,9 @@
   function rpGiftsHtml(d) {
     var g = d.gifts || {}, months = g.by_month || [], tot = Number(g.total) || 0;
     var best = months.reduce(function (a, r) { return Number(r.total) > Number(a.total || 0) ? r : a; }, {});
-    var kinds = (g.by_kind || []).map(function (k) { var nm = (GKIND[k.kind] || [rpCap(k.kind)])[0]; return [E(nm), money(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts')]; });
-    var camps = (g.by_campaign || []).slice(0, 10).map(function (k) { return [E(k.campaign || 'No campaign'), money(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts') + ', ' + plural(k.donors, 'donor', 'donors')]; });
-    var srcs = (g.by_source || []).map(function (k) { var m = rpMethod(k.method); return [E(platName(k.platform) + (m ? ' (' + m + ')' : '')), money(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts')]; });
+    var kinds = (g.by_kind || []).map(function (k) { var nm = (GKIND[k.kind] || [rpCap(k.kind)])[0]; return [E(nm), cents(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts')]; });
+    var camps = (g.by_campaign || []).slice(0, 10).map(function (k) { return [E(k.campaign || 'No campaign'), cents(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts') + ', ' + plural(k.donors, 'donor', 'donors')]; });
+    var srcs = (g.by_source || []).map(function (k) { var m = rpMethod(k.method); return [E(platName(k.platform) + (m ? ' (' + m + ')' : '')), cents(k.total), tot ? k.total / tot : 0, plural(k.count, 'gift', 'gifts')]; });
     var rc = g.receipts || {}, rcl = Object.keys(RSTS).filter(function (k) { return rc[k]; }).map(function (k) { return plural(rc[k], 'gift', 'gifts') + ' ' + RSTS[k][0].toLowerCase(); });
     var allKeela = (g.by_source || []).length && (g.by_source || []).every(function (k) { return k.platform === 'keela'; });
     return '<section class="w154card wide"><h3>' + I('heart') + ' Gifts by month <span class="m">' + E(money(tot)) + ' in ' + E(d.label) + (g.prev ? ', ' + E(money(g.prev.total)) + ' in ' + E(d.prev_label) : '') + '</span></h3>' +
@@ -134,14 +136,14 @@
   function rpSizesHtml(d) {
     var g = d.gifts || {}, dn = d.donors || {}, bands = g.bands || [], most = 0;
     bands.forEach(function (b) { most = Math.max(most, Number(b.count) || 0); });
-    var rows = bands.map(function (b) { return [E(b.band), plural(b.count, 'gift', 'gifts'), most ? b.count / most : 0, Number(b.total) ? money(b.total) : '']; });
-    var top = (dn.top || []).map(function (x, i) { return [rpWho(x.contact_id, x.name), money(x.total), dn.top[0] && Number(dn.top[0].total) ? x.total / dn.top[0].total : 0, plural(x.count, 'gift', 'gifts')]; });
+    var rows = bands.map(function (b) { return [E(b.band), plural(b.count, 'gift', 'gifts'), most ? b.count / most : 0, Number(b.total) ? cents(b.total) : '']; });
+    var top = (dn.top || []).map(function (x, i) { return [rpWho(x.contact_id, x.name), cents(x.total), dn.top[0] && Number(dn.top[0].total) ? x.total / dn.top[0].total : 0, plural(x.count, 'gift', 'gifts')]; });
     return '<section class="w154card"><h3>' + I('spark') + ' Gift sizes <span class="m">' + (g.count ? 'average ' + E(money(g.average)) + ', middle ' + E(money(g.median)) + ', largest ' + E(money(g.largest)) : '') + '</span></h3>' +
       rpRows(rows, 'No gift this year.') + '<div class="w160h4">The largest donors of ' + E(d.label) + '</div>' + rpRows(top, 'No donor this year.') + '</section>';
   }
   function rpDonorsHtml(d) {
     var dn = d.donors || {}, lap = dn.lapsed_list || [], shown = RP.showLapsed ? lap : lap.slice(0, 8);
-    var rows = shown.map(function (x) { return [rpWho(x.contact_id, x.name), money(x.prev_total), 0, 'last gave ' + fmtDay(x.last_day) + ', ' + plural(x.gifts_ever, 'gift', 'gifts') + ' in all']; });
+    var rows = shown.map(function (x) { return [rpWho(x.contact_id, x.name), cents(x.prev_total), 0, 'last gave ' + fmtDay(x.last_day) + ', ' + plural(x.gifts_ever, 'gift', 'gifts') + ' in all']; });
     return '<section class="w154card"><h3>' + I('people') + ' Donors <span class="m">' + E(plural(dn.this_year || 0, 'donor', 'donors')) + ' in ' + E(d.label) + '</span></h3>' +
       '<div class="w160ret">' + rpBox(rpNum(dn.new), 'gave for the first time') + rpBox(rpNum(dn.retained), 'gave again after ' + d.prev_label) +
       rpBox(rpNum(dn.recaptured), 'came back after a gap') + rpBox(rpNum(dn.lapsed), 'gave in ' + d.prev_label + ', not ' + (d.in_progress ? 'yet ' : '') + 'in ' + d.label) + '</div>' +
@@ -181,7 +183,7 @@
     var frows = forms.map(function (x) { return [E(x.title || x.slug || 'A form'), plural(x.answers, 'answer', 'answers'), 0, '']; });
     return '<section class="w154card"><h3>' + I('mail') + ' Email <span class="m">permission today</span></h3>' +
       '<div class="w160ret">' + rpBox(rpNum(p.reach), 'can get a newsletter') + rpBox(rpNum(p.express), 'said yes (express)') + rpBox(rpNum(p.implied), 'implied: gave or served') + rpBox(rpNum(p.ending), 'implied ends within 90 days') + '</div>' +
-      '<p class="w160note">' + E(plural(p.unsub, 'person has', 'people have') + ' unsubscribed, ' + plural(p.bounced, 'address bounces', 'addresses bounce') + ', ' + plural(p.none, 'person has', 'people have') + ' no permission on file (confirmations only), and ' + plural(p.noemail, 'contact has', 'contacts have') + ' no email address.') + (p.ending ? ' Asking the people whose implied consent ends soon to say yes keeps them on the newsletter.' : '') + '</p>' +
+      '<p class="w160note">' + E(plural(p.unsub, 'person has', 'people have') + ' unsubscribed, ' + plural(p.bounced, 'address bounces', 'addresses bounce') + ', ' + plural(p.none, 'person has', 'people have') + ' no consent on file (the rule still emails them), and ' + plural(p.noemail, 'contact has', 'contacts have') + ' no email address.') + '</p>' +
       '<div class="w160h4">Sent in ' + E(d.label) + '</div>' +
       (em.sent ? rpRows([['Emails sent', rpNum(em.sent), 1, ''], ['Delivered', rpNum(em.delivered), em.delivered / em.sent, ''], ['Opened', rpNum(em.opened), em.opened / em.sent, rpPct(em.opened, em.sent)],
         ['Clicked', rpNum(em.clicked), em.clicked / em.sent, rpPct(em.clicked, em.sent)], ['Unsubscribed', rpNum(em.unsubscribed), em.unsubscribed / em.sent, '']]) +
