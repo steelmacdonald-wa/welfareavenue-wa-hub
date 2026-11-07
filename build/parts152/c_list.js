@@ -63,12 +63,13 @@
     var donors = all.filter(function (c) { return c._donor; }).length;
     var pairs = S.dupes ? dupePairs().length : 0;
     function st(key, n, label, on) { return '<button class="w152st' + (on ? ' on' : '') + '" data-w152set="' + key + '"><b>' + Number(n).toLocaleString('en-CA') + '</b><span>' + E(label) + '</span></button>'; }
+    var one = function (n, a, b) { return n === 1 ? a : b; };   /* task 10b: "1 volunteer", never "1 volunteers" */
     return '<div class="w152stats">' +
-      st('all', all.length, 'contacts in the CRM', plain && !u.kind && !u.act) +
-      st('volunteer', vol, 'volunteers', plain && u.kind === 'volunteer' && !u.act) +
-      st('served', served, 'have served at an event', plain && !u.kind && u.act === 'served') +
-      (donors ? st('donor', donors, 'donors', plain && u.kind === 'donor' && !u.act)
-        : '<button class="w152st" data-w152go="#crm/dupes"><b>' + pairs + '</b><span>possible duplicates to check</span></button>') + '</div>';
+      st('all', all.length, one(all.length, 'contact in the CRM', 'contacts in the CRM'), plain && !u.kind && !u.act) +
+      st('volunteer', vol, one(vol, 'volunteer', 'volunteers'), plain && u.kind === 'volunteer' && !u.act) +
+      st('served', served, one(served, 'has served at an event', 'have served at an event'), plain && !u.kind && u.act === 'served') +
+      (donors ? st('donor', donors, one(donors, 'donor', 'donors'), plain && u.kind === 'donor' && !u.act)
+        : '<button class="w152st" data-w152go="#crm/dupes"><b>' + pairs.toLocaleString('en-CA') + '</b><span>' + one(pairs, 'possible duplicate to check', 'possible duplicates to check') + '</span></button>') + '</div>';
   }
   function opts(list, cur) { return list.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(cur) === String(o[0]) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join(''); }
   function barHtml(all) {
@@ -138,7 +139,8 @@
   }
   /* wave284: the Import page (#crm/settings/imports, admins); the page itself is build/parts284 (window.w284), drawn into #w284root */
   function paintImports(root) {
-    root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + '<div class="w284root" id="w284root"></div>';
+    /* task 10b (UI review row 22): no CRM stats strip on the Import page; its first screen is about the run (build/parts284 heads it) */
+    root.innerHTML = tabsHtml() + '<div class="w284root" id="w284root"></div>';
     var el = document.getElementById('w284root');
     if (window.w284 && window.w284.open) window.w284.open(el); else el.innerHTML = busy('The Import page is loading…');
   }

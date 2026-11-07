@@ -7,9 +7,9 @@
     /* numbers at the top */
     + '.w152stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}'
     + '.w152st{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:14px 16px;display:flex;flex-direction:column;gap:3px;min-width:0;border:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;}'
-    + '.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}'
+    + 'div.w152st{cursor:default;}'
     + '.w152st.on{box-shadow:0 0 0 2px ' + GOLD + ',' + SH1 + ';}'
-    + '.w152st b{font-family:' + HEAD + ';font-size:34px;font-weight:600;line-height:1;color:' + GREEN + ';}'
+    + '.w152st b{font-family:' + HEAD + ';font-size:34px;font-weight:600;line-height:1;color:' + GREEN + ';font-variant-numeric:tabular-nums;}'
     + '.w152st span{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');line-height:1.35;}'
     /* tabs */
     + '.w152tabs{display:flex;gap:6px;border-bottom:1px solid rgba(16,63,57,.12);overflow-x:auto;scrollbar-width:none;}'
@@ -29,13 +29,22 @@
     + '.w152q .w152i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--wa-muted,' + MUTED + ');width:16px;height:16px;pointer-events:none;}'
     + '.w152q input{width:100%;box-sizing:border-box;padding:9px 12px 9px 34px !important;border:1px solid rgba(16,63,57,.16);border-radius:12px;font-family:' + BODY + ';font-size:13.5px;background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');}'
     + '.w152btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:12px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-weight:700;font-size:13.5px;padding:10px 14px;cursor:pointer;white-space:nowrap;text-decoration:none;}'
-    + '.w152btn:hover{background:#0b2f2a;}.w152btn:disabled{opacity:.55;cursor:default;}'
-    + '.w152btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}.w152btn.soft:hover{background:rgba(16,63,57,.14);}'
-    + '.w152btn.ghost{background:none;color:var(--wa-muted,' + MUTED + ');}.w152btn.ghost:hover{background:rgba(16,63,57,.06);}'
-    + '.w152btn.danger{background:' + FLAG + ';color:' + CREAM + ';}.w152btn.danger:hover{background:#96331f;}'
+    + '.w152btn:disabled{opacity:.55;cursor:default;}'
+    + '.w152btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w152btn.ghost{background:none;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152btn.danger{background:' + FLAG + ';color:' + CREAM + ';}'
     + '.w152btn.sm{padding:7px 11px;font-size:12.5px;border-radius:10px;}'
     + '.w152mini{border:none;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-weight:700;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;}'
-    + '.w152mini:hover{background:rgba(16,63,57,.08);}.w152mini .w152i{width:14px;height:14px;}'
+    + '.w152mini .w152i{width:14px;height:14px;}'
+    /* task 10b (the UI review's Emil rows): every CRM control answers the press (wave274's press: scale .97, 160ms on the house ease-out), hover
+       only where there is a fine pointer and never on a disabled control, and reduced motion keeps the press as an opacity change */
+    + '.w152btn,.w152mini,.w152chip,button.w152st{transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease,box-shadow 150ms ease;}'
+    + '.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:scale(.97);}'
+    + '@media (hover:hover) and (pointer:fine){.w152btn:hover:not(:disabled){background:#0b2f2a;}.w152btn.soft:hover:not(:disabled){background:rgba(16,63,57,.14);}.w152btn.ghost:hover:not(:disabled){background:rgba(16,63,57,.06);}'
+    + '.w152btn.danger:hover:not(:disabled){background:#96331f;}.w152mini:hover:not(:disabled){background:rgba(16,63,57,.08);}button.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}.w152row:hover{background:rgba(16,63,57,.035);}}'
+    + '@media (prefers-reduced-motion:reduce){.w152btn,.w152mini,.w152chip,button.w152st{transition:background-color 150ms ease,opacity 150ms ease;}.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:none;opacity:.85;}}'
+    + '.w152num,.w152kv .w152num{font-variant-numeric:tabular-nums;}.w152measure{max-width:70ch;}'
+    + '.w152hist{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}.w152hl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');}'
     + '.w152empty{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:22px;color:var(--wa-muted,' + MUTED + ');font-size:14px;line-height:1.5;}'
     + '.w152count{font-size:13px;color:var(--wa-muted,' + MUTED + ');}'
     + '.w152kd{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:2px 6px;white-space:nowrap;}'
@@ -50,7 +59,7 @@
     + '.w152lh,.w152row{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,.8fr) minmax(0,1fr);gap:12px;align-items:center;padding:10px 16px;}'
     + '.w152lh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');border-bottom:1px solid rgba(16,63,57,.08);padding-top:12px;}'
     + '.w152row{width:100%;border:none;background:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;border-top:1px solid rgba(16,63,57,.06);}'
-    + '.w152row:first-of-type{border-top:none;}.w152row:hover{background:rgba(16,63,57,.035);}.w152row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
+    + '.w152row:first-of-type{border-top:none;}.w152row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
     + '.w152row .who{display:flex;gap:10px;align-items:center;min-width:0;}'
     + '.w152row .nm{font-weight:700;font-size:14.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
     + '.w152row .ks{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}'
@@ -77,7 +86,7 @@
     + '.w152kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;font-size:13.5px;line-height:1.45;}'
     + '.w152kv b{color:var(--wa-muted,' + MUTED + ');font-weight:600;font-size:12.5px;}'
     + '.w152kv a{color:' + GREEN + ';font-weight:600;text-decoration:none;word-break:break-all;}.w152kv a:hover{text-decoration:underline;}'
-    + '.w152kv span{word-break:break-word;}'
+    + '.w152kv span{word-break:break-word;}.w152kv .w152txt{word-break:break-all;}'
     + '.w152line{font-size:13.5px;line-height:1.5;margin:3px 0;}'
     + '.w152line .m{color:var(--wa-muted,' + MUTED + ');}'
     + '.w152pnote{font-size:12.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');margin:6px 0 0;}'
@@ -150,5 +159,9 @@
     + '.w152row .sv{text-align:right;font-size:18px;}.w152row .la{display:none;}'
     + '#w152sheet{padding:0;}#w152sheet .sh,#w152sheet .sh.narrow{width:100%;min-height:100%;border-radius:0;padding:18px 16px 24px;}'
     + '.w152cols,.w152grid2,.w152dp .two,.w152form{grid-template-columns:minmax(0,1fr);}.w152kv{grid-template-columns:84px minmax(0,1fr);}'
-    + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}';
+    + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}'
+    /* task 10b: phones get 44px targets and 16px fields (iOS zooms the page on focus below 16px), as wave274 does */
+    + '@media (max-width:700px){.w152btn,.w152mini,.w152sel,.w152form .chk,.w152form .kinds label{min-height:44px;box-sizing:border-box;}'
+    + '.w152sel,.w152in,.w152q input,.w152form input,.w152form select,.w152form textarea,.w152log select,.w152log input,.w152log textarea,.w152tags input{font-size:16px !important;}'
+    + '#w152sheet .xb{width:44px;height:44px;}.w152tags .w152tg button{min-width:32px;min-height:32px;}}';
   document.head.appendChild(css);
