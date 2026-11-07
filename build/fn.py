@@ -112,6 +112,9 @@ def deploy(name, verify=None):
     if "'./platforms.ts'" in src:
         print(name + ' imports ./platforms.ts, which fn-deploy cannot carry yet. Deploy it through the Supabase connector (deploy_edge_function) with files index.ts and platforms.ts (from fn/_shared), plus any adapters/*.ts.')
         sys.exit(2)
+    if "'./mail_rules.ts'" in src or "'./scan.ts'" in src:
+        print(name + ' imports ./mail_rules.ts (wave289), which fn-deploy cannot carry. Deploy it through the Supabase connector (deploy_edge_function) with files index.ts, scan.ts (from fn/' + name + ') and mail_rules.ts (from fn/_shared).')
+        sys.exit(2)
     if verify is None:
         mp = os.path.join(ROOT, 'fn', name, 'meta.json')
         if os.path.exists(mp):
