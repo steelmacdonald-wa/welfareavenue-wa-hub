@@ -63036,6 +63036,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     chart: '<path d="M4 19h16"/><path d="M7 16V9M12 16V5M17 16v-6"/>',
+    trend: '<path d="M3.5 17.5 9 12l4 4 7.5-8"/><path d="M15 8h5.5v5.5"/>',   /* wave293: Insights (the same icon as its CRM tab) */
     mail: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 6 7.5-6"/>',
     list: '<path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4.5" cy="7" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17" r="1"/>',
     send: '<path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5z"/>',
@@ -63122,7 +63123,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }, { label: 'Reports', items: [
           { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' },
-          { h: '#crm/insights', l: 'Insights', ic: 'chart', page: 'crm' }   /* wave293: the email history's Insights tab */
+          { h: '#crm/insights', l: 'Insights', ic: 'trend', page: 'crm' }   /* wave293: the email history's Insights tab */
         ] }];
       },
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus', page: 'crm' }]   /* wave163: on the contacts page only (Partners has its own Add a partner) */

@@ -234,6 +234,9 @@ async function roles(browser, D, w) {
   ({ f } = await boot(browser, D, 'admin', w, '#crm/insights'));
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail [data-w153go]')].map(a => a.getAttribute('data-w153go')));
   if (rail.length) ok(tag + ': the rail lists Insights after Reports', rail.indexOf('#crm/insights') === rail.indexOf('#crm/reports') + 1, rail);
+  const icons = await f.ev(() => { const d = el => el ? [...el.querySelectorAll('svg path')].map(p => p.getAttribute('d')).join('|') : null;
+    return { rail: d(document.querySelector('#w153rail [data-w153go="#crm/insights"]')), tab: d(document.querySelector('#crm .w152tabs [data-w152go="#crm/insights"]')) }; });
+  if (icons.rail) ok(tag + ': the rail and the tab use the same Insights icon (eh-293 A-M4)', icons.rail === icons.tab && /M3\.5 17\.5/.test(icons.tab || ''), icons);
   const seg = fs.readFileSync(path.join(__dirname, '../build/src/MANIFEST.txt'), 'utf8').split(/\r?\n/).filter(l => l && !l.startsWith('#'));
   ok(tag + ': segment 293 comes right after 284 in the manifest', seg.indexOf('293_wave293') === seg.indexOf('284_wave284') + 1);
   ok(tag + ': admin roles: no page errors', f.errs.length === 0, f.errs);

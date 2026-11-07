@@ -27,7 +27,7 @@ The CRM tour gains two steps (the emails and the Relationship card on a contact'
 - `build/parts152`: `d_sheet.js` (the split query, the thread grouping, the filters, the disclosure, the Relationship card, Refresh), `c_list.js` (the Insights tab and route, `paintInsights` into `#w293root`), `f_wire.js` (the handlers, the open threads kept across repaints, two tour steps, test hooks), `b_css.js` (the chips, the disclosure, the card). Segment `152_wave152.seg` regenerated.
 - `build/parts293` (new, a guarded IIFE, `window.__wa293`): `a_insights.js` and `b_css.js`, the Insights tab (`window.w293.open(host)`). Segment `293_wave293.seg`, listed in `build/src/MANIFEST.txt` right after `284_wave284`.
 - `build/parts153/a_head.js`: the rail item `#crm/insights` after Reports. Segment `153_wave153.seg` regenerated.
-- Segment md5s: 152 `31b6ad95452f99641fcf41daff9846d0`, 153 `1fe4d45bfffeac82edd70854779c3278`, 293 `8a505bb5ae0168b85ba0d70d0c6fa1a1`; candidate `fd3b3590af1d76204d4d98a87a6c9bc1` (LF, 233 segments, check_remaps clean).
+- Segment md5s: 152 `31b6ad95452f99641fcf41daff9846d0`, 153 `9ae0c5925601231a3ad212cd0edaf612`, 293 `8a505bb5ae0168b85ba0d70d0c6fa1a1`; candidate `c1588fe0a459e725f6fc012497536745` (LF, 233 segments, check_remaps clean).
 - The house style: press scale .97 at 160ms on `cubic-bezier(0.23, 1, 0.32, 1)`, never on a keyboard press (`:not(:focus-visible)`); hover only under `(hover: hover) and (pointer: fine)`; reduced motion keeps fades only (the thread list fades, the chevron turns); tabular numbers; 44px targets on a phone.
 
 ## Proofs
@@ -58,13 +58,14 @@ wave293 rides with wave292 (design 11.7 steps 5 and 6):
 - **Last 12 months ranked on its own (A-M1):** the overview returns `orgs_12` and `orgs_12_total`.
 - **A member's quiet list says it may be partial (A-M2)**, without naming the mailbox.
 - **The timeline says when it shows only the latest 600 emails (A-M3).**
-- The tab strip's icon is `trend`; the rail's is `chart` (A-M4).
+- **Refresh, second pass (N1, N2):** a non-admin's Refresh, while Steel's lines are closed, builds the summary from hub@ and info@ lines only (`crm_insight_input(contact, true)`), on the same path with the same answer, quota charge and work as a contact who never wrote to Steel. A summary from Steel's mailbox already stored is never overwritten: `crm_insight_save(..., true)` skips the write and still logs the line that counts the quota (chosen over a second store: no new column, policy or reader). A contact with only his lines gets the no-lines answer.
+- **Icons (A-M4):** the tab and the rail both use `trend` for Insights (Reports keeps `chart`).
 
 ## Where the build differs from the design, and why
 
 - **The Insights tab is its own segment (`build/parts293`)**: new page code is a guarded IIFE with its manifest line after the newest slice wave (the controller's build rule), as wave284's Import page is; the design now says so. parts152 keeps the hooks (the tab, the route, `paintInsights`), exactly as it does for `#w284root`.
 - **Gone quiet also counts a gift as being heard from, and leaves out do-not-contact people** (deceased and merged ones too); the design now says so.
-- **The rail icon is `chart`, as the design says;** the tab strip uses `trend`.
+- **The Insights icon is `trend`** on the tab and the rail (the design said `chart`, the same as Reports); the design now says `trend`.
 
 ## Files
 
