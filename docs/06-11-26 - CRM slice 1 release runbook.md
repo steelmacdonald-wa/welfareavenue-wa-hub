@@ -88,6 +88,8 @@ If another session publishes a page, or deploys one of these functions, before t
 
 ## 5. Undo
 
+**If any email-history wave (289, 292, 293) is live, undo those first, newest first: wave293, then wave292, then wave289.** wave284's undo stops while wave289 is live.
+
 In this order. (Only if any Keela batch was applied: while the Import page is still live, undo every applied batch that should be undone, opt-outs and consent never are, and purge every run, as the wave284 document's undo says. After the page is back the same can be done with `wa284_undo` and the purge through the connector.)
 
 1. **The page first.** Republish bae461b9, rebuilt from `origin/wave287-projects-overview` at 940c905, so wave274's single Volunteer Manager, wave285, wave287 and every other live change stay. Never rebuild from "the commit before wave28N's page commit": that would drop other sessions' live work.
