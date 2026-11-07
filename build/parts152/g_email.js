@@ -28,19 +28,22 @@
   function canTest() { return testList().indexOf(myEmail()) >= 0; }
   function mailAdmin() { return MAIL.st ? !!MAIL.st.admin : amAdmin(); }
   function tplByKey(k) { return (S.templates || []).filter(function (t) { return t.key === k; })[0] || null; }
-  /* what a contact may receive today, in the words the rule uses (the server checks again before every send) */
+  /* what a contact may receive today, by Steel's one rule of 5 Nov 2026 (the server checks again before every send, in crm_email_permission):
+     do not contact (said first), no address, a bounce or a spam complaint stop everything; an unsubscribe stops newsletters, fundraising and
+     volunteer emails; everyone else gets them. Express and implied consent no longer decide anything (task 10b: they are history on the page). */
   function permWhy(c) {
-    var k = c._perm, st = lower(c.email_status);
-    var trans = c.emails.length > 0 && st !== 'bounced' && st !== 'complained';
-    var news = k === 'express' || k === 'implied';
-    var why = k === 'express' ? 'express consent' : k === 'implied' ? 'implied consent until ' + fmtDay(c.implied_consent_until) : k === 'unsub' ? 'unsubscribed' : k === 'bounced' ? 'the address bounces' :
-      k === 'none' ? 'no consent' : (c.email_consent === 'implied' ? 'their implied consent ran out' : 'no permission recorded');
-    return { news: news, trans: trans, why: why };
+    var st = lower(c.email_status), has = c.emails.length > 0;
+    var stop = c.do_not_contact ? 'do not contact' : !has ? 'no email address' : st === 'bounced' ? 'the address bounces' : st === 'complained' ? 'they marked one of our emails as spam' : '';
+    var trans = !stop, news = !stop && st !== 'unsubscribed';
+    return { news: news, trans: trans, why: stop || (news ? 'they have not unsubscribed' : 'they unsubscribed'),
+      twhy: stop === 'do not contact' ? 'do not contact: receipts are issued and kept, not emailed' : stop || 'a working address' };
   }
   function permLine(c) {
     var w = permWhy(c);
-    if (!c.emails.length) return '<div class="w152line m">No email address on file, so nothing can be sent.</div>';
-    return '<div class="w152line m w154perm">Newsletters and appeals: <b style="color:' + (w.news ? GREEN : FLAG) + '">' + (w.news ? 'yes' : 'no') + '</b> (' + E(w.why) + ') · Confirmations and reminders: <b style="color:' + (w.trans ? GREEN : FLAG) + '">' + (w.trans ? 'yes' : 'no') + '</b></div>';
+    if (!c.emails.length) return '<div class="w152line m w154perm">No email address on file, so nothing can be sent.</div>';
+    var yn = function (ok) { return '<b style="color:' + (ok ? GREEN : FLAG) + '">' + (ok ? 'yes' : 'no') + '</b>'; };
+    return '<div class="w154perm"><div class="w152line">Newsletters, fundraising and volunteer emails: ' + yn(w.news) + ' <span class="m">(' + E(w.why) + ')</span></div>' +
+      '<div class="w152line">Receipts and confirmations: ' + yn(w.trans) + ' <span class="m">(' + E(w.twhy) + ')</span></div></div>';
   }
 
   /* ---------- the numbers: who can be emailed today ---------- */
@@ -51,7 +54,7 @@
     return '<div class="w152stats w154stats">' +
       st('express', n.express, 'said yes to our emails (express consent)', GREEN) +
       st('implied', n.implied, 'gave or served in the last two years (implied consent)', TEAL) +
-      st('unknown', n.unknown, 'with an address but no permission: confirmations only', MUTED) +
+      st('unknown', n.unknown, 'with an address and no consent on file (the rule still emails them)', MUTED) +   /* task 10b: Steel's rule of 5 Nov 2026 */
       st('unsub', n.unsub + n.bounced, 'unsubscribed or bouncing: never a newsletter', FLAG) + '</div>';
   }
 
@@ -96,10 +99,11 @@
       if (st.domain_id) acts.push('<button class="w152btn soft sm" data-w154act="domain_verify">' + I('check') + ' Check the domain</button>');
       if (st.key_present && !(st.webhook_id && st.webhook_secret_present)) acts.push('<button class="w152btn soft sm" data-w154act="webhook_setup">' + I('link') + ' Connect the webhook</button>');
       acts.push('<button class="w152btn ghost sm" data-w154cfg="1">' + I('edit') + ' Change the settings</button>');
-      acts.push('<button class="w152btn ghost sm" data-w154act="refresh_consent">' + I('shield') + ' Refresh implied consent</button>');
+      acts.push('<button class="w152btn ghost sm" data-w154act="refresh_consent" aria-describedby="w154refwhy">' + I('shield') + ' Refresh implied consent</button>');
     }
+    /* task 10b (Steel's decision 13): the button stays, with why it still matters under the one rule */
     return '<section class="w154card">' + head + lines + (MAIL.msg ? '<div class="w154msg">' + E(MAIL.msg) + '</div>' : '') +
-      (acts.length ? '<div class="w154acts">' + acts.join('') + '</div>' : '') + (MAIL.busy ? '<div class="w152count">' + E(MAIL.busy) + '…</div>' : '') +
+      (acts.length ? '<div class="w154acts">' + acts.join('') + '</div><p class="w152pnote" id="w154refwhy" data-w154refwhy>Refresh implied consent keeps the reason on each record up to date. It doesn’t change who gets email.</p>' : '') + (MAIL.busy ? '<div class="w152count">' + E(MAIL.busy) + '…</div>' : '') +
       (MAIL.form && adm ? settingsFormHtml(s) : '') + (dom ? dnsHtml(dom) : '') +
       (!st.key_present ? '<p class="w152pnote">The Resend key (RESEND_API_KEY) is missing from the function secrets, so nothing can be sent or set up. An admin adds it in Supabase; the Hub never stores it.</p>' : '') +
       '</section>';
@@ -295,7 +299,7 @@
     + '.w154pv{margin-top:10px;}.w154frame{width:100%;height:640px;border:1px solid rgba(16,63,57,.12);border-radius:12px;background:' + CREAM + ';margin-top:8px;}.w154frame.sheet{height:520px;}'
     + '.w154sl{border:1px solid rgba(16,63,57,.1);border-radius:12px;overflow:hidden;}.w154sh,.w154sr{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr) minmax(0,1.6fr) minmax(0,1.3fr);gap:10px;padding:9px 12px;font-size:13px;align-items:start;}'
     + '.w154sh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');background:rgba(16,63,57,.04);}.w154sr{border-top:1px solid rgba(16,63,57,.07);}.w154sr a{color:' + GREEN + ';font-weight:700;text-decoration:none;}'
-    + '.w154rule p{font-size:14px;line-height:1.6;}.w154perm b{font-weight:700;}'
+    + '.w154rule p{font-size:14px;line-height:1.6;max-width:70ch;}.w154perm b{font-weight:700;}'   /* task 10b: a 70ch measure for the rule */
     + '.w154st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;}'
     + '@media (max-width:980px){.w154grid{grid-template-columns:1fr;}.w154dh,.w154dr{grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.6fr);}.w154dh>span:last-child,.w154dr>span:last-child{display:none;}}'
     + '@media (max-width:700px){.w154sh,.w154sr{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);}.w154sh>span:nth-child(3),.w154sr>span:nth-child(3){display:none;}.w154kv{grid-template-columns:1fr;gap:2px;}.w154frame{height:520px;}}';

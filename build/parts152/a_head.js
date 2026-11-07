@@ -63,12 +63,13 @@
     hub_form: ['Hub form', 'People who answered one of the CRM’s forms (hub.welfareavenue.com/f/).']
   };
   var LANGS = [['', 'Not known'], ['en', 'English'], ['fr', 'French'], ['other', 'Another language']];
-  /* the email permission (Canada's anti-spam law, CASL) */
+  /* the email permission. task 10b: Steel's rule of 5 Nov 2026 (RULE_TEXT) decides who gets email; express, implied and no consent are what
+     the record says they agreed to, kept as history (no consent stops nothing: only an unsubscribe, a bounce or do not contact does) */
   var PERM = {
     express: ['Express consent', TEAL, 'They said yes to our emails.'],
     implied: ['Implied consent', '#B9851B', 'They gave, volunteered or bought with us in the last two years.'],
-    none: ['No consent', FLAG, 'Do not send them newsletters or campaigns.'],
-    unknown: ['Not recorded', MUTED, 'No permission on file yet.'],
+    none: ['No consent', MUTED, 'Recorded as no consent. Under the rule they still get newsletters, fundraising and volunteer emails until they unsubscribe.'],
+    unknown: ['Not recorded', MUTED, 'No consent on file. Under the rule they still get newsletters, fundraising and volunteer emails until they unsubscribe.'],
     unsub: ['Unsubscribed', FLAG, 'They asked for no more emails.'],
     bounced: ['Email bounces', FLAG, 'Their address does not accept email.']
   };
