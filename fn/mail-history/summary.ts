@@ -64,10 +64,10 @@ export function validateSummary(raw: unknown): { value: { topics: string[]; open
   const r = raw as any;
   if (!r || typeof r !== 'object') return { value: null, cuts };
   const topics = Array.isArray(r.topics) ? [...new Set(r.topics.map(String))].filter(t => TOPICS.includes(t as string)).slice(0, 9) as string[] : [];
-  const s = cutAtContact(String(r.summary || '').replace(/\s*—\s*/g, ', ')); if (s.cut) cuts++;
+  const s = cutAtContact(String(r.summary || '').replace(/\s*\u2014\s*/g, ', ')); if (s.cut) cuts++;
   const summary = clip(s.text, 600);
   let open_item: string | null = null;
-  if (r.open_item != null && String(r.open_item).trim()) { const o = cutAtContact(String(r.open_item).replace(/\s*—\s*/g, ', ')); if (o.cut) cuts++; open_item = clip(o.text, 300) || null; }
+  if (r.open_item != null && String(r.open_item).trim()) { const o = cutAtContact(String(r.open_item).replace(/\s*\u2014\s*/g, ', ')); if (o.cut) cuts++; open_item = clip(o.text, 300) || null; }
   if (summary.length < 3) return { value: null, cuts };
   return { value: { topics, open_item, summary }, cuts };
 }
