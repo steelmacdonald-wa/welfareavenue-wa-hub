@@ -1,4 +1,8 @@
-// Welfare Avenue: llm (v1.6, 09/10/26)
+// Welfare Avenue: llm (v1.7, 07/11/26; built, not deployed)
+// v1.7 (wave289): a route can carry provider, OpenRouter's provider preferences (ai_routes.provider, jsonb), sent in the request body of every
+// chat and decide call on that route; the reply's _wa shows it. The email history routes (mail_history_*) carry {"data_collection": "deny",
+// "zdr": true} so only providers that neither keep nor train on the data serve them (design M2, Law 25: information leaving Quebec). A route
+// without one sends nothing new. No other change. Undo: deploy v1.6 again.
 // v1.6 (wave226): a route can carry system_add, text the router adds to the end of the job's system prompt. Steel (09/10/26)
 // wants confidential topics (leadership changes, board matters, anyone's personal or HR situation) kept out of everything the
 // Hub's AI writes for the team, while the work itself still gets its task in plain, neutral words; the rule lives once, in
@@ -60,11 +64,11 @@ async function who(req: Request): Promise<Who | null> {
   return null;
 }
 
-type Route = { task: string; label: string; chain: string[]; jev: boolean; mode: string; max_tokens: number | null; notes?: string | null; system_add?: string | null };
+type Route = { task: string; label: string; chain: string[]; jev: boolean; mode: string; max_tokens: number | null; notes?: string | null; system_add?: string | null; provider?: Record<string, unknown> | null };
 const routeCache: { at: number; rows: Route[] } = { at: 0, rows: [] };
 async function routes(force = false): Promise<Route[]> {
   if (!force && routeCache.rows.length && Date.now() - routeCache.at < 60000) return routeCache.rows;
-  const { data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add').order('task');
+  const { data } = await svc.from('ai_routes').select('task,label,chain,jev,mode,max_tokens,notes,system_add,provider').order('task');
   routeCache.rows = (data || []) as Route[]; routeCache.at = Date.now();
   return routeCache.rows;
 }
@@ -137,6 +141,9 @@ async function chat(task: string, caller: string | null, body: Record<string, un
     if (Array.isArray(req.system)) req.system = [...(req.system as unknown[]), { type: 'text', text: add }];
     else req.system = (typeof req.system === 'string' && req.system ? req.system + '\n\n' : '') + add;
   }
+  /* v1.7: the route's provider preferences (wave289: the no-retention setting), sent as OpenRouter's provider field */
+  const provider = route.provider && typeof route.provider === 'object' && !Array.isArray(route.provider) ? route.provider : null;
+  if (provider) req.provider = provider;
   const streaming = req.stream === true;
   const baseMax = Number(req.max_tokens);
   let via: string = only ? 'test' : 'chain';
@@ -197,7 +204,7 @@ async function chat(task: string, caller: string | null, body: Record<string, un
       await log({ task, caller, requested_model: model, model: used, ok: true, status: res.status, ms,
         input_tokens: typeof u.input_tokens === 'number' ? u.input_tokens : null, output_tokens: typeof u.output_tokens === 'number' ? u.output_tokens : null,
         cost: typeof u.cost === 'number' ? u.cost : null, fallback_used: i > 0 || (used !== model && !used.startsWith(model)), via });
-      out._wa = { task, model: used, ms, cost: typeof u.cost === 'number' ? u.cost : null, attempt: i + 1, wanted: wanted || null, via, pick: pick ? { model: pick.model, confidence: pick.confidence } : null };
+      out._wa = { task, model: used, ms, cost: typeof u.cost === 'number' ? u.cost : null, attempt: i + 1, wanted: wanted || null, via, pick: pick ? { model: pick.model, confidence: pick.confidence } : null, provider };
       return json(out);
     }
     lastErr = model + ': ' + res.status + ' ' + text.slice(0, 300);
@@ -210,10 +217,13 @@ async function chat(task: string, caller: string | null, body: Record<string, un
 /* ---- decide: Jev, OpenRouter's decision model ---- */
 async function decide(task: string, caller: string | null, body: Record<string, unknown>, key: string): Promise<Response> {
   const model = String(body.model || JEV);
+  /* v1.7: the route's provider preferences travel with a decision too */
+  const route = await routeFor(task);
+  const provider = route.task === task && route.provider && typeof route.provider === 'object' && !Array.isArray(route.provider) ? route.provider : null;
   const t0 = Date.now();
   let res: Response;
   try {
-    res = await fetch(OR + '/alpha/decisions', { method: 'POST', headers: orHeaders(key), body: JSON.stringify({ model, state: body.state, questions: body.questions }) });
+    res = await fetch(OR + '/alpha/decisions', { method: 'POST', headers: orHeaders(key), body: JSON.stringify({ model, state: body.state, questions: body.questions, ...(provider ? { provider } : {}) }) });
   } catch (e) {
     const err = String(e).slice(0, 300);
     await log({ task, caller, requested_model: model, ok: false, ms: Date.now() - t0, error: err });
@@ -230,7 +240,7 @@ async function decide(task: string, caller: string | null, body: Record<string, 
   const u = out.usage || {};
   await log({ task, caller, requested_model: model, model: out.model || model, ok: true, status: 200, ms,
     input_tokens: typeof u.input_tokens === 'number' ? u.input_tokens : null, output_tokens: typeof u.output_tokens === 'number' ? u.output_tokens : null, cost: typeof u.cost === 'number' ? u.cost : null });
-  out._wa = { task, model: out.model || model, ms, cost: typeof u.cost === 'number' ? u.cost : null };
+  out._wa = { task, model: out.model || model, ms, cost: typeof u.cost === 'number' ? u.cost : null, provider };
   return json(out);
 }
 
