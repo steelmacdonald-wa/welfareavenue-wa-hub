@@ -63,12 +63,13 @@
     hub_form: ['Hub form', 'People who answered one of the CRM\u2019s forms (hub.welfareavenue.com/f/).']
   };
   var LANGS = [['', 'Not known'], ['en', 'English'], ['fr', 'French'], ['other', 'Another language']];
-  /* the email permission (Canada's anti-spam law, CASL) */
+  /* the email permission. task 10b: Steel's rule of 5 Nov 2026 (RULE_TEXT) decides who gets email; express, implied and no consent are what
+     the record says they agreed to, kept as history (no consent stops nothing: only an unsubscribe, a bounce or do not contact does) */
   var PERM = {
     express: ['Express consent', TEAL, 'They said yes to our emails.'],
     implied: ['Implied consent', '#B9851B', 'They gave, volunteered or bought with us in the last two years.'],
-    none: ['No consent', FLAG, 'Do not send them newsletters or campaigns.'],
-    unknown: ['Not recorded', MUTED, 'No permission on file yet.'],
+    none: ['No consent', MUTED, 'Recorded as no consent. Under the rule they still get newsletters, fundraising and volunteer emails until they unsubscribe.'],
+    unknown: ['Not recorded', MUTED, 'No consent on file. Under the rule they still get newsletters, fundraising and volunteer emails until they unsubscribe.'],
     unsub: ['Unsubscribed', FLAG, 'They asked for no more emails.'],
     bounced: ['Email bounces', FLAG, 'Their address does not accept email.']
   };
@@ -271,9 +272,9 @@
     /* numbers at the top */
     + '.w152stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}'
     + '.w152st{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:14px 16px;display:flex;flex-direction:column;gap:3px;min-width:0;border:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;}'
-    + '.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}'
+    + 'div.w152st{cursor:default;}'
     + '.w152st.on{box-shadow:0 0 0 2px ' + GOLD + ',' + SH1 + ';}'
-    + '.w152st b{font-family:' + HEAD + ';font-size:34px;font-weight:600;line-height:1;color:' + GREEN + ';}'
+    + '.w152st b{font-family:' + HEAD + ';font-size:34px;font-weight:600;line-height:1;color:' + GREEN + ';font-variant-numeric:tabular-nums;}'
     + '.w152st span{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');line-height:1.35;}'
     /* tabs */
     + '.w152tabs{display:flex;gap:6px;border-bottom:1px solid rgba(16,63,57,.12);overflow-x:auto;scrollbar-width:none;}'
@@ -293,13 +294,22 @@
     + '.w152q .w152i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--wa-muted,' + MUTED + ');width:16px;height:16px;pointer-events:none;}'
     + '.w152q input{width:100%;box-sizing:border-box;padding:9px 12px 9px 34px !important;border:1px solid rgba(16,63,57,.16);border-radius:12px;font-family:' + BODY + ';font-size:13.5px;background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');}'
     + '.w152btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:12px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-weight:700;font-size:13.5px;padding:10px 14px;cursor:pointer;white-space:nowrap;text-decoration:none;}'
-    + '.w152btn:hover{background:#0b2f2a;}.w152btn:disabled{opacity:.55;cursor:default;}'
-    + '.w152btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}.w152btn.soft:hover{background:rgba(16,63,57,.14);}'
-    + '.w152btn.ghost{background:none;color:var(--wa-muted,' + MUTED + ');}.w152btn.ghost:hover{background:rgba(16,63,57,.06);}'
-    + '.w152btn.danger{background:' + FLAG + ';color:' + CREAM + ';}.w152btn.danger:hover{background:#96331f;}'
+    + '.w152btn:disabled{opacity:.55;cursor:default;}'
+    + '.w152btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w152btn.ghost{background:none;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152btn.danger{background:' + FLAG + ';color:' + CREAM + ';}'
     + '.w152btn.sm{padding:7px 11px;font-size:12.5px;border-radius:10px;}'
     + '.w152mini{border:none;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-weight:700;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;}'
-    + '.w152mini:hover{background:rgba(16,63,57,.08);}.w152mini .w152i{width:14px;height:14px;}'
+    + '.w152mini .w152i{width:14px;height:14px;}'
+    /* task 10b (the UI review's Emil rows): every CRM control answers the press (wave274's press: scale .97, 160ms on the house ease-out), hover
+       only where there is a fine pointer and never on a disabled control, and reduced motion keeps the press as an opacity change */
+    + '.w152btn,.w152mini,.w152chip,button.w152st{transition:transform 160ms cubic-bezier(.23,1,.32,1),background-color 150ms ease,box-shadow 150ms ease;}'
+    + '.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:scale(.97);}'
+    + '@media (hover:hover) and (pointer:fine){.w152btn:hover:not(:disabled){background:#0b2f2a;}.w152btn.soft:hover:not(:disabled){background:rgba(16,63,57,.14);}.w152btn.ghost:hover:not(:disabled){background:rgba(16,63,57,.06);}'
+    + '.w152btn.danger:hover:not(:disabled){background:#96331f;}.w152mini:hover:not(:disabled){background:rgba(16,63,57,.08);}button.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}.w152row:hover{background:rgba(16,63,57,.035);}}'
+    + '@media (prefers-reduced-motion:reduce){.w152btn,.w152mini,.w152chip,button.w152st{transition:background-color 150ms ease,opacity 150ms ease;}.w152btn:active:not(:disabled),.w152mini:active:not(:disabled),.w152chip:active,button.w152st:active{transform:none;opacity:.85;}}'
+    + '.w152num,.w152kv .w152num{font-variant-numeric:tabular-nums;}.w152measure{max-width:70ch;}'
+    + '.w152hist{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}.w152hl{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');}'
     + '.w152empty{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:22px;color:var(--wa-muted,' + MUTED + ');font-size:14px;line-height:1.5;}'
     + '.w152count{font-size:13px;color:var(--wa-muted,' + MUTED + ');}'
     + '.w152kd{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:2px 6px;white-space:nowrap;}'
@@ -314,7 +324,7 @@
     + '.w152lh,.w152row{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,.8fr) minmax(0,1fr);gap:12px;align-items:center;padding:10px 16px;}'
     + '.w152lh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');border-bottom:1px solid rgba(16,63,57,.08);padding-top:12px;}'
     + '.w152row{width:100%;border:none;background:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;border-top:1px solid rgba(16,63,57,.06);}'
-    + '.w152row:first-of-type{border-top:none;}.w152row:hover{background:rgba(16,63,57,.035);}.w152row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
+    + '.w152row:first-of-type{border-top:none;}.w152row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
     + '.w152row .who{display:flex;gap:10px;align-items:center;min-width:0;}'
     + '.w152row .nm{font-weight:700;font-size:14.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
     + '.w152row .ks{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}'
@@ -341,7 +351,7 @@
     + '.w152kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;font-size:13.5px;line-height:1.45;}'
     + '.w152kv b{color:var(--wa-muted,' + MUTED + ');font-weight:600;font-size:12.5px;}'
     + '.w152kv a{color:' + GREEN + ';font-weight:600;text-decoration:none;word-break:break-all;}.w152kv a:hover{text-decoration:underline;}'
-    + '.w152kv span{word-break:break-word;}'
+    + '.w152kv span{word-break:break-word;}.w152kv .w152txt{word-break:break-all;}'
     + '.w152line{font-size:13.5px;line-height:1.5;margin:3px 0;}'
     + '.w152line .m{color:var(--wa-muted,' + MUTED + ');}'
     + '.w152pnote{font-size:12.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');margin:6px 0 0;}'
@@ -414,7 +424,12 @@
     + '.w152row .sv{text-align:right;font-size:18px;}.w152row .la{display:none;}'
     + '#w152sheet{padding:0;}#w152sheet .sh,#w152sheet .sh.narrow{width:100%;min-height:100%;border-radius:0;padding:18px 16px 24px;}'
     + '.w152cols,.w152grid2,.w152dp .two,.w152form{grid-template-columns:minmax(0,1fr);}.w152kv{grid-template-columns:84px minmax(0,1fr);}'
-    + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}';
+    + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}'
+    /* task 10b: phones get 44px targets and 16px fields (iOS zooms the page on focus below 16px), as wave274 does */
+    + '@media (max-width:700px){.w152btn,.w152mini,.w152sel,.w152form .chk,.w152form .kinds label{min-height:44px;box-sizing:border-box;}'
+    + '.w152sel,.w152in,.w152q input,.w152form input,.w152form select,.w152form textarea,.w152log select,.w152log input,.w152log textarea,.w152tags input{font-size:16px !important;}'
+    + '.w152sel{max-width:100%;min-width:0;}.w152st b{font-size:clamp(22px,7vw,34px);}'
+    + '#w152sheet .xb{width:44px;height:44px;}.w152tags .w152tg button{min-width:32px;min-height:32px;}}';
   document.head.appendChild(css);
   /* ======================= the contacts (#crm) ======================= */
   var ACTS = [['', 'Any activity'], ['served12', 'Served in the last 12 months'], ['served', 'Has served at an event'], ['never', 'Volunteers who have not served yet'],
@@ -481,12 +496,13 @@
     var donors = all.filter(function (c) { return c._donor; }).length;
     var pairs = S.dupes ? dupePairs().length : 0;
     function st(key, n, label, on) { return '<button class="w152st' + (on ? ' on' : '') + '" data-w152set="' + key + '"><b>' + Number(n).toLocaleString('en-CA') + '</b><span>' + E(label) + '</span></button>'; }
+    var one = function (n, a, b) { return n === 1 ? a : b; };   /* task 10b: "1 volunteer", never "1 volunteers" */
     return '<div class="w152stats">' +
-      st('all', all.length, 'contacts in the CRM', plain && !u.kind && !u.act) +
-      st('volunteer', vol, 'volunteers', plain && u.kind === 'volunteer' && !u.act) +
-      st('served', served, 'have served at an event', plain && !u.kind && u.act === 'served') +
-      (donors ? st('donor', donors, 'donors', plain && u.kind === 'donor' && !u.act)
-        : '<button class="w152st" data-w152go="#crm/dupes"><b>' + pairs + '</b><span>possible duplicates to check</span></button>') + '</div>';
+      st('all', all.length, one(all.length, 'contact in the CRM', 'contacts in the CRM'), plain && !u.kind && !u.act) +
+      st('volunteer', vol, one(vol, 'volunteer', 'volunteers'), plain && u.kind === 'volunteer' && !u.act) +
+      st('served', served, one(served, 'has served at an event', 'have served at an event'), plain && !u.kind && u.act === 'served') +
+      (donors ? st('donor', donors, one(donors, 'donor', 'donors'), plain && u.kind === 'donor' && !u.act)
+        : '<button class="w152st" data-w152go="#crm/dupes"><b>' + pairs.toLocaleString('en-CA') + '</b><span>' + one(pairs, 'possible duplicate to check', 'possible duplicates to check') + '</span></button>') + '</div>';
   }
   function opts(list, cur) { return list.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(cur) === String(o[0]) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join(''); }
   function barHtml(all) {
@@ -556,7 +572,8 @@
   }
   /* wave284: the Import page (#crm/settings/imports, admins); the page itself is build/parts284 (window.w284), drawn into #w284root */
   function paintImports(root) {
-    root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + '<div class="w284root" id="w284root"></div>';
+    /* task 10b (UI review row 22): no CRM stats strip on the Import page; its first screen is about the run (build/parts284 heads it) */
+    root.innerHTML = tabsHtml() + '<div class="w284root" id="w284root"></div>';
     var el = document.getElementById('w284root');
     if (window.w284 && window.w284.open) window.w284.open(el); else el.innerHTML = busy('The Import page is loading\u2026');
   }
@@ -613,10 +630,18 @@
     var same = S.sheet === tag;
     S.sheet = tag || 'sheet';
     var keep = same ? o.scrollTop : 0;
+    var fk = same ? focusKey(document.activeElement, o) : null;   /* task 10b: a repaint of the same sheet keeps the keyboard focus */
     o.innerHTML = '<div class="sh' + (narrow ? ' narrow' : '') + '"><button class="xb" data-w152close="1" aria-label="Close">' + I('x') + '</button>' + html + '</div>';
     o.style.display = 'flex';
     o.scrollTop = keep;
+    if (fk) { var back = o.querySelector(fk); if (back) { try { back.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
     if (!same) { var f = o.querySelector('.w152form input,.w152form select,.w152form textarea') || o.querySelector('.xb'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  /* the element's own data attribute (data-w283dncr="5003", data-f="notes") finds it again after a repaint */
+  function focusKey(el, root) {
+    if (!el || !root || !root.contains(el) || !el.attributes) return null;
+    for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; if (/^data-(w\d|f$)/.test(a.name)) return '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]'; }
+    return null;
   }
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
@@ -626,7 +651,11 @@
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
   }
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.sheet) closeSheet(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !S.sheet) return;
+    if (S.dnc && S.dnc.ask && S.sheet === 'c:' + S.dnc.id) { dncCancel(S.dnc.id); return; }   /* task 10b: Escape steps back out of the do-not-contact question first */
+    closeSheet();
+  });
 
   function loadDetail(c) {
     var id = String(c.id);
@@ -670,8 +699,9 @@
   function postalIn(addr, pc) { var a = String(addr || '').replace(/\s+/g, '').toLowerCase(), p = String(pc || '').replace(/\s+/g, '').toLowerCase(); return !!p && a.indexOf(p) >= 0; }
   function detailsHtml(c, d) {
     var rows = [];
-    if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
-    if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
+    var dnc = !!c.do_not_contact;   /* task 10b: for a do-not-contact person the address and phone are text, not mailto or tel links */
+    if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return dnc ? '<span class="w152txt">' + E(e) + '</span>' : '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
+    if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return !dnc && telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
     var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), postalIn(c.address, c.postal_code) ? '' : c.postal_code].filter(Boolean).join(' \u00b7 ');
     if (place) rows.push(['Address', E(place)]);
     if (c.job_title) rows.push(['Job title', E(c.job_title)]);   /* wave283 */
@@ -690,7 +720,7 @@
       if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
       if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in the Volunteer Manager.</div>');
     }
-    if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b>' + money(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
+    if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b class="w152num">' + cents(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
     if (c.kinds.indexOf('staff') >= 0 || c.kinds.indexOf('alumni') >= 0) out.push('<div class="w152line">' + (c.kinds.indexOf('staff') >= 0 ? 'On the team' : 'Was on the team') + ' (the Hub roster)</div>');
     /* organizations from Partners */
     var orgs = (d && d.orgs) || [];
@@ -723,15 +753,16 @@
     out.push('<div class="w152line">' + links.join(' ') + '</div>');
     return out.join('');
   }
+  /* task 10b: the one rule (Steel, 5 Nov 2026) decides, do not contact first (permWhy); the consent they gave is kept below as history only */
   function permHtml(c) {
-    var p = PERM[c._perm] || PERM.unknown, bits = [];
-    if (c.email_consent === 'express' && (c.consent_source || c.consent_at)) bits.push('Given ' + [c.consent_source ? '(' + c.consent_source + ')' : '', c.consent_at ? 'on ' + fmtDay(c.consent_at) : ''].filter(Boolean).join(' '));
-    if (c.email_consent === 'implied' && c.implied_consent_until) bits.push((dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : ''));
-    if (c._perm === 'unknown' && c.email_consent === 'implied') bits.push('Their implied consent ran out' + (c.implied_consent_until ? ' on ' + fmtDay(c.implied_consent_until) : '') + '.');
-    return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' \u00b7 ')) + '</div>' : '') +
-      permLine(c) +
+    var k = lower(c.email_consent), hist = '';
+    if (k === 'express') hist = permChip('express') + ' <span class="m">' + E(['Given', c.consent_source ? '(' + c.consent_source + ')' : '', c.consent_at ? 'on ' + fmtDay(c.consent_at) : ''].filter(Boolean).join(' ')) + '</span>';
+    else if (k === 'implied') hist = permChip('implied') + ' <span class="m">' + E(c.implied_consent_until ? (dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : '') : (c.consent_source || 'Recorded by the team')) + '</span>';
+    else if (k === 'none') hist = permChip('none') + ' <span class="m">' + E(PERM.none[2]) + '</span>';
+    return permLine(c) +
+      (hist ? '<div class="w152line w152hist"><span class="w152hl">History</span> ' + hist + '</div>' : '') +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
+      '<p class="w152pnote w152measure">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">\u00d7</button></span>'; }).join('') +
@@ -754,7 +785,7 @@
         system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
-      out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
+      out.push({ at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
         p: [g.campaign, g.designation, g.platform ? 'through ' + (g.platform.charAt(0).toUpperCase() + g.platform.slice(1)) : ''].filter(Boolean).join(' \u00b7 '),
         rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
     });
@@ -809,14 +840,20 @@
   }
   function contactHtml(c, d) {
     var srcLine = 'From ' + sourceName(c.source) + (c.created_at ? ' \u00b7 in the CRM since ' + fmtDay(c.created_at) : '');
-    var qa = [];
-    if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
-    if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
-    if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    var qa = [], dnc = !!c.do_not_contact;
+    /* task 10b (UI review top fix 1): a do-not-contact person shows no way to reach them (no mailto, tel, sms or Send, which would go round
+       every server check); the banner says why, and a deceased person never shows a Call button */
+    if (!dnc) {
+      if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
+      if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
+      if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    }
     if (can('gifts_edit')) qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');   /* wave283: gifts_edit */
-    if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
-    return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
-      (c.do_not_contact ? '<div class="w283dnc" role="status">' + I('lock') + ' <b>' + E(dncWords(c)) + '</b></div>' : '') +   /* wave283 */
+    if (!dnc && c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
+    /* the header names email only when it is stopped; the consent they gave is history, under Email permission */
+    var stop = !dnc && (c._perm === 'unsub' || c._perm === 'bounced') ? permChip(c._perm) : '';
+    return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + stop + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
+      (dnc ? '<div class="w283dnc" role="status" data-w283banner>' + I('lock') + '<span><b>' + E(dncWords(c)) + '</b><span class="w283dncm">No email, calls or texts.</span></span></div>' : '') +   /* wave283 */
       (S.note && S.note.id === String(c.id) ? '<div class="w152warn" role="status">' + E(S.note.msg) + '</div>' : '') +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +
@@ -845,7 +882,7 @@
 
   /* ---------- the forms ---------- */
   function field(label, html, full, hint) { return '<label' + (full ? ' class="full"' : '') + '>' + E(label) + (hint ? ' <span class="hint">' + E(hint) + '</span>' : '') + html + '</label>'; }
-  function inp(name, val, ph, type) { return '<input data-f="' + name + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + E(val == null ? '' : val) + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>'; }
+  function inp(name, val, ph, type, max) { return '<input data-f="' + name + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + E(val == null ? '' : val) + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + (max ? ' maxlength="' + max + '"' : '') + '>'; }
   function area(name, val, ph) { return '<textarea data-f="' + name + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>' + E(val == null ? '' : val) + '</textarea>'; }
   function sel(name, list, cur) { return '<select data-f="' + name + '">' + opts(list, cur) + '</select>'; }
   function formVals() {
@@ -883,7 +920,7 @@
       field('Street address', inp('address', x.address), true) +
       field('City', inp('city', x.city, 'Montreal')) + field('Province', inp('province', x.province, 'QC')) +
       field('Postal code', inp('postal_code', x.postal_code, 'H2X 1Y4')) + field('Language', sel('language', LANGS, x.language || '')) +
-      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer')) +   /* wave283 */
+      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer', null, 120)) +   /* wave283; task 10b: 120 characters (Keela or the API may still bring a longer one) */
       '<div class="full lbl">What they are to us' + kindsBoxes(c, isNew) + '</div>' +
       '<div class="full lbl w283">Chapter' + chapterBoxes(c) + '</div>' +   /* wave283: one toggle per active chapter (crm_contact_chapters, source hand) */
       (can('hr_private') ? birthField(c) : '') +   /* wave283: HR and admins only (crm_contact_private) */
@@ -903,7 +940,7 @@
     if (!ready) return '<div class="kinds" data-w283chs data-ready="0"><span class="m">Loading the chapters\u2026</span></div>';
     return '<div class="kinds" data-w283chs data-ready="1" data-had="' + E(had.join(',')) + '">' + (S.chapters || []).map(function (ch) {
       return '<label><input type="checkbox" data-w283ch="' + E(ch.code) + '"' + (had.indexOf(ch.code) >= 0 ? ' checked' : '') + '> ' + E(ch.name_en || ch.code) + '</label>';
-    }).join('') + '<span class="w152count">No chapter means Montreal in the lists.</span></div>';
+    }).join('') + '<span class="w152count">No chapter: counted as Montreal.</span></div>';   /* task 10b: Steel's decision 5, the same sentence as the form editor */
   }
   function birthField(c) {
     var d = c ? S.detail[String(c.id)] : null, v = d && typeof d.birth === 'string' ? d.birth : '';
@@ -962,69 +999,100 @@
     return errs;
   }
   var DNC_REASONS = [['deceased', 'Deceased'], ['asked', 'They asked'], ['other', 'Other']];
-  function dncWords(c) { return 'Do not contact' + (c.dnc_reason ? ' (' + String(c.dnc_reason) + ')' : ''); }
+  /* task 10b: the picker's words, never the stored code ("Do not contact: they asked"). "Other" keeps no note: crm_set_do_not_contact and the
+     dnc_reason column accept only deceased, asked or other, and Steel's ruling allows no schema change in this slice */
+  var DNC_WORDS = { deceased: 'deceased', asked: 'they asked', other: 'other' };
+  function dncWords(c) { var r = lower(c.dnc_reason); return 'Do not contact' + (r ? ': ' + (DNC_WORDS[r] || r) : ''); }
+  function dncReasonOk(r) { return DNC_REASONS.some(function (x) { return x[0] === r; }); }
+  function dncFocus(sel) { var el = document.querySelector('#w152sheet ' + sel); if (el) { try { el.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  /* task 10b (Steel's decision 3): confirm the set, not the clear. Setting it unsubscribes them for good, so it asks first; clearing never
+     resubscribes anyone, so it goes through at once with a short note. The button waits for a reason (no late "Pick why first.") */
   function dncHtml(c) {
-    var st = S.dnc && S.dnc.id === String(c.id) ? S.dnc : {};
-    var err = '<span class="w152err" data-w283dncerr role="status">' + E(st.err || '') + '</span>';
+    var id = String(c.id), st = S.dnc && S.dnc.id === id ? S.dnc : {};
+    var err = '<span class="w152err" data-w283dncerr id="w283dncerr-' + E(id) + '" role="status">' + E(st.err || '') + '</span>';
     if (c.do_not_contact) {
       return '<div class="w152line">' + E(dncWords(c)) + '. <span class="w283m">No email of any kind, no texts and no WhatsApp. Receipts are still issued and kept, not emailed.</span></div>' +
-        (st.confirm ? '<div class="w283cf"><b>Clear do not contact for ' + E(c.full_name) + '?</b> This does not resubscribe them.' +
-            '<div class="w283acts"><button class="w152btn sm" data-w283dncclear="' + E(c.id) + '">Yes, clear it</button><button class="w152btn sm ghost" data-w283dnckeep="' + E(c.id) + '">Keep it</button></div></div>'
-          : '<button class="w152mini" data-w283dncask="' + E(c.id) + '">' + I('x') + 'Clear do not contact</button>') + err;
+        '<div class="w283acts"><button class="w152btn sm soft" data-w283dncclear="' + E(id) + '">' + I('x') + ' Clear do not contact</button></div>' +
+        '<p class="w283m">Clearing it does not resubscribe them.</p>' + err;
     }
-    return '<div class="w283acts"><select class="w152sel" data-w283dncr aria-label="Why they are not to be contacted"><option value="">Why\u2026</option>' +
-      DNC_REASONS.map(function (r) { return '<option value="' + r[0] + '">' + E(r[1]) + '</option>'; }).join('') + '</select>' +
-      '<button class="w152btn sm ghost" data-w283dnc="' + E(c.id) + '">' + I('lock') + ' Do not contact</button></div>' +
-      '<p class="w283m">Stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>' + err;
+    var r = dncReasonOk(st.reason) ? st.reason : '';
+    return (st.note ? '<div class="w283said ok" role="status" data-w283note>' + E(st.note) + '</div>' : '') +
+      '<div class="w283acts"><select class="w152sel" data-w283dncr="' + E(id) + '" aria-label="Why they are not to be contacted" aria-describedby="w283dnch-' + E(id) + ' w283dncerr-' + E(id) + '"><option value="">Why\u2026</option>' +
+      DNC_REASONS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === r ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select>' +
+      '<button class="w152btn sm soft" data-w283dnc="' + E(id) + '"' + (r && !st.ask ? '' : ' disabled') + '>' + I('lock') + ' Do not contact</button></div>' +
+      (st.ask ? '<div class="w283cf" data-w283cf><b>Set do not contact for ' + E(c.full_name) + '?</b> This unsubscribes them from everything. Clearing it later will not resubscribe them.' +
+          '<div class="w283acts"><button class="w152btn sm danger" data-w283dncyes="' + E(id) + '">Yes, set do not contact</button><button class="w152btn sm ghost" data-w283dncno="' + E(id) + '">Cancel</button></div></div>'
+        : '<p class="w283m" id="w283dnch-' + E(id) + '">Pick why, then Do not contact. It stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>') + err;
   }
   function saveDnc(id, reason) {
     var c = contact(id); if (!c) return;
-    if (reason !== null && DNC_REASONS.map(function (r) { return r[0]; }).indexOf(reason) < 0) { S.dnc = { id: String(c.id), err: 'Pick why first.' }; contactSheet(c.id); return; }
-    S.dnc = { id: String(c.id), err: '' };
+    var sid = String(c.id);
+    if (reason !== null && !dncReasonOk(reason)) { S.dnc = { id: sid, err: 'Pick why first.' }; contactSheet(c.id); dncFocus('[data-w283dncr]'); return; }
+    S.dnc = { id: sid, err: '', reason: reason || '' };
+    var failed = function (m) { S.dnc = { id: sid, err: 'Not saved: ' + String(m).slice(0, 160), reason: reason || '' }; contactSheet(c.id); dncFocus(reason ? '[data-w283dncr]' : '[data-w283dncclear]'); };
     Promise.resolve(db.rpc('crm_set_do_not_contact', { p_contact: Number(c.id), p_reason: reason })).then(function (r) {
-      if (r && r.error) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String(r.error.message || r.error).slice(0, 160) }; contactSheet(c.id); return; }
+      if (r && r.error) { failed(r.error.message || r.error); return; }
       var before = c.do_not_contact ? dncWords(c) : null, st = lower(c.email_status);
       /* what crm_set_do_not_contact did (wave281): with a reason, the flag and every opt-out; with none, the flag only (never a resubscribe) */
       applyLocal(c.id, reason ? { do_not_contact: true, dnc_reason: reason, email_status: st === 'bounced' || st === 'complained' ? c.email_status : 'unsubscribed', sms_opt_out: true }
         : { do_not_contact: false, dnc_reason: null });
       if (reason) audit(c.id, 'do_not_contact', before, 'do not contact: ' + reason);   /* clearing is logged by the function itself */
-      S.dnc = null;
+      S.dnc = reason ? null : { id: sid, note: 'Cleared. This did not resubscribe them.' };
       toastS(reason ? 'Do not contact is set' : 'Do not contact is cleared');
       contactSheet(c.id); repaintBehind();
-    }, function (e) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String((e && e.message) || e).slice(0, 160) }; contactSheet(c.id); });
+      dncFocus(reason ? '[data-w283dncclear]' : '[data-w283dncr]');   /* focus stays where the control was */
+    }, function (e) { failed((e && e.message) || e); });
   }
+  function dncCancel(id) { S.dnc = { id: String(id), reason: (S.dnc && S.dnc.reason) || '' }; contactSheet(id); dncFocus('[data-w283dnc]'); }
   document.addEventListener('click', function (e) {
     var t = e.target, el; if (!t || !t.closest || !t.closest('#w152sheet')) return;
-    if ((el = t.closest('[data-w283dnc]'))) { e.preventDefault(); var sl = document.querySelector('#w152sheet [data-w283dncr]'); saveDnc(el.getAttribute('data-w283dnc'), sl && sl.value ? sl.value : ''); return; }
-    if ((el = t.closest('[data-w283dncask]'))) { e.preventDefault(); S.dnc = { id: el.getAttribute('data-w283dncask'), confirm: true, err: '' }; contactSheet(el.getAttribute('data-w283dncask')); return; }
-    if ((el = t.closest('[data-w283dnckeep]'))) { e.preventDefault(); S.dnc = null; contactSheet(el.getAttribute('data-w283dnckeep')); return; }
-    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+    if ((el = t.closest('[data-w283dnc]'))) {
+      e.preventDefault(); var id0 = el.getAttribute('data-w283dnc'), sl = document.querySelector('#w152sheet [data-w283dncr]'), r0 = sl && sl.value ? sl.value : '';
+      if (!dncReasonOk(r0)) { saveDnc(id0, ''); return; }
+      S.dnc = { id: String(id0), ask: true, reason: r0, err: '' }; contactSheet(id0); dncFocus('[data-w283dncno]');   /* the safe choice has the focus */
+      return;
+    }
+    if ((el = t.closest('[data-w283dncyes]'))) { e.preventDefault(); el.disabled = true; saveDnc(el.getAttribute('data-w283dncyes'), (S.dnc && S.dnc.reason) || ''); return; }
+    if ((el = t.closest('[data-w283dncno]'))) { e.preventDefault(); dncCancel(el.getAttribute('data-w283dncno')); return; }
+    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); el.disabled = true; saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+  });
+  /* picking a reason enables the button in place: no repaint, so the focus and the select stay (a closed select on Windows fires change on each arrow key) */
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-w283dncr')) return;
+    var v = dncReasonOk(t.value) ? t.value : '';
+    S.dnc = { id: String(t.getAttribute('data-w283dncr')), reason: v, err: '' };
+    var b = document.querySelector('#w152sheet [data-w283dnc]'); if (b) b.disabled = !v;
+    var er = document.querySelector('#w152sheet [data-w283dncerr]'); if (er) er.textContent = '';
+    var nt = document.querySelector('#w152sheet [data-w283note]'); if (nt) nt.remove();
   });
   var css283 = document.createElement('style'); css283.id = 'w283css';
   css283.textContent = ''
-    + '.w283dnc{display:flex;align-items:center;gap:8px;margin:10px 40px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;}'
-    + '.w283dnc .w152i{width:16px;height:16px;flex:none;}'
+    + '.w283dnc{display:flex;align-items:flex-start;gap:8px;margin:10px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;line-height:1.45;}'
+    + '.w283dnc .w152i{width:16px;height:16px;flex:none;margin-top:2px;}.w283dnc>span{min-width:0;display:flex;flex-wrap:wrap;column-gap:10px;row-gap:2px;}'
+    + '.w283dncm{color:#6B6965;font-weight:500;}'
     + '.w283acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0;}.w283acts .w152sel{width:auto;}'
     + '.w283m{color:#6B6965;font-size:12.5px;line-height:1.45;}'
-    + '.w283cf{background:rgba(16,63,57,.05);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
-    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}'
+    + '.w283cf{background:rgba(179,64,47,.06);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
+    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}.w283said.ok{color:' + GREEN + ';margin:2px 0 4px;}'
     + '.w283first{margin:8px 0 4px;font-size:13.5px;font-weight:600;line-height:1.45;}'
     + '.w283 button:focus-visible,.w283 select:focus-visible,.w283 input:focus-visible,.w283cf button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.35);}'
-    + '@keyframes w283in{from{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.w283cf{animation:none;}}';
+    /* task 10b: the confirmation fades in, reduced motion included (opacity is not movement) */
+    + '@keyframes w283in{from{opacity:0}to{opacity:1}}';
   document.head.appendChild(css283);
   function permForm(id) {
     var c = contact(id); if (!c) return;
     var until = c.implied_consent_until ? dayOf(c.implied_consent_until) : (c._last ? addYears(c._last, 2) : '');
-    var html = '<h2>Email permission</h2><div class="sub">' + E(c.full_name) + '. What they agreed to, so newsletters and campaigns only go to people who said yes.</div><div class="w152form">' +
+    var spam = lower(c.email_status) === 'complained';
+    var html = '<h2>Email permission</h2><div class="sub">' + E(c.full_name) + '. Their opt-outs decide what they get; the consent they gave is kept as history.</div><div class="w152form">' +
       field('Permission', sel('email_consent', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: an existing relationship'], ['none', 'No consent']], c.email_consent || ''), true) +
       field('Where it came from', inp('consent_source', c.consent_source, 'the website form, a sign-up sheet, an email'), true) +
       field('Date they said yes', inp('consent_at', c.consent_at ? dayOf(c.consent_at) : '', '', 'date'), false, 'express consent') +
       field('Implied consent runs until', inp('implied_consent_until', until, '', 'date'), false, 'two years after the last gift, membership or volunteering') +
-      '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + '> They unsubscribed: no newsletters or campaigns</label>' +
-      (lower(c.email_status) === 'complained' ? '<div class="note" data-w283spam>They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.</div>' : '') +   /* final review M4 */
+      '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + (spam ? ' disabled aria-describedby="w283spam"' : '') + '> They unsubscribed: no newsletters, fundraising or volunteer emails</label>' +
+      (spam ? '<div class="note" data-w283spam id="w283spam">They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.</div>' : '') +   /* final review M4; task 10b: the box is disabled too */
       '<label class="chk full"><input type="checkbox" data-f="sms_opt_out"' + (c.sms_opt_out ? ' checked' : '') + '> No text messages</label>' +
       (c.do_not_contact ? '<div class="note" data-w281dnc>Do not contact is on. Clear it first to change these.</div>' : '') +
-      '<div class="note">Implied consent under CASL: an existing relationship in the last two years, such as a gift or volunteering for a registered charity, or a membership. It runs out two years after the last one. When in doubt, ask for express consent.</div>' +
+      '<div class="note">' + E(RULE_TEXT) + ' Express and implied consent are kept on the record as history.</div>' +   /* task 10b: Steel's rule of 5 Nov 2026, not the CASL note */
       '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button>' + (c.do_not_contact ? '' : '<button class="w152btn" data-w152savep="' + E(id) + '">' + I('check') + ' Save</button>') + '</div>';
     if (c.do_not_contact) html = html.replace(/<(input|select) /g, '<$1 disabled ');   /* final review I1: do not contact holds these (the database too), so the form only shows them */
     openSheet(html, 'perm:' + id, true);
@@ -1147,8 +1215,9 @@
     if (v.email_consent === 'implied') { if (!v.implied_consent_until) { showErr('Say until when the implied consent runs (two years after the last gift or volunteering).'); return; } row.implied_consent_until = v.implied_consent_until; }
     else row.implied_consent_until = null;
     var st = lower(c.email_status);
-    if (v.unsub) row.email_status = 'unsubscribed';
-    else if (st === 'unsubscribed') row.email_status = 'unknown';   /* final review M4: a spam complaint (complained) is never cleared from here */
+    if (st === 'complained') { /* final review M4: a spam complaint is never changed from here (task 10b: not even into unsubscribed) */ }
+    else if (v.unsub) row.email_status = 'unsubscribed';
+    else if (st === 'unsubscribed') row.email_status = 'unknown';
     try {
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;
@@ -1369,12 +1438,15 @@
     var rc = g.receipt_number ? '<span class="rc">' + (g.receipt_url ? '<a href="' + E(g.receipt_url) + '" target="_blank" rel="noopener">Receipt ' + E(g.receipt_number) + ' ' + I('ext') + '</a>' : 'Receipt ' + E(g.receipt_number)) + (g.receipt_issued_at ? ' \u00b7 ' + E(fmtDay(g.receipt_issued_at)) : '') + '</span>'
       : '<span class="rc">' + gchip(RSTS, rule[0]) + '<div class="m">' + E(rule[0] === 'due' ? 'for ' + cents(eligibleOf(g)) : rule[1]) + '</div></span>';
     var kind = g.kind && g.kind !== 'donation' ? ' ' + gchip(GKIND, g.kind) : '';
+    /* task 10b: amounts with their cents, right-aligned in tabular figures; each cell named, so a phone lays the row out as a card (donor and
+       amount first) and a long name, email or campaign wraps inside the card instead of running off it */
     return '<div class="w152row w158row" role="listitem" data-w158open="' + E(g.id) + '" tabindex="0" aria-label="Open the gift">' +
-      '<span>' + E(fmtDay(g.donated_at)) + '</span>' +
-      '<span><a href="#crm/c/' + E(g.contact_id) + '">' + E(nm) + '</a>' + (c && c.emails[0] ? '<div class="m">' + E(c.emails[0]) + '</div>' : '') + '</span>' +
-      '<span class="amt">' + E(money(g.amount)) + (g.recurring ? '<small> monthly</small>' : '') + kind + (Number(g.refunded_amount) > 0 ? ' <span class="rfd">' + gchip(RFD, Number(g.amount) > 0 ? 'part' : 'all') + '</span>' : '') + (g.tribute_kind ? '<div class="m">' + E((g.tribute_kind === 'memory' ? 'In memory of ' : 'In honour of ') + (g.tribute_name || '')) + '</div>' : '') + '</span>' +
-      '<span>' + E([g.campaign, g.designation].filter(Boolean).join(' \u00b7 ') || '\u2013') + '<div class="m">' + E(platName(g.platform)) + (g.method ? ' \u00b7 ' + E((GMETH.filter(function (m) { return m[0] === g.method; })[0] || ['', g.method])[1]) : '') + '</div></span>' +
-      '<span>' + rc + '</span></div>';
+      '<span class="wh">' + E(fmtDay(g.donated_at)) + '</span>' +
+      '<span class="dn"><a href="#crm/c/' + E(g.contact_id) + '">' + E(nm) + '</a>' + (c && c.emails[0] ? '<div class="m">' + E(c.emails[0]) + '</div>' : '') + '</span>' +
+      '<span class="amt"><b class="w152num">' + E(cents(g.amount)) + '</b>' + (g.recurring ? '<small> monthly</small>' : '') + kind + (Number(g.refunded_amount) > 0 ? ' <span class="rfd">' + gchip(RFD, Number(g.amount) > 0 ? 'part' : 'all') + '</span>' : '') + '</span>' +
+      '<span class="cp">' + E([g.campaign, g.designation].filter(Boolean).join(' \u00b7 ') || '\u2013') + (g.tribute_kind ? '<div class="m">' + E((g.tribute_kind === 'memory' ? 'In memory of ' : 'In honour of ') + (g.tribute_name || '')) + '</div>' : '') +
+        '<div class="m">' + E(platName(g.platform)) + (g.method ? ' \u00b7 ' + E((GMETH.filter(function (m) { return m[0] === g.method; })[0] || ['', g.method])[1]) : '') + '</div></span>' +
+      '<span class="rx">' + rc + '</span></div>';
   }
   function paintGifts(root) {
     var u = S.ui;
@@ -1397,17 +1469,18 @@
     var caret = focus && document.activeElement.selectionStart;
     root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() +
       '<div class="w152stats">' +
-      '<div class="w152st"><b>' + E(money(total)) + '</b><span>given, all time (' + plural(all.length, 'gift', 'gifts') + ')</span></div>' +
-      '<div class="w152st"><b>' + E(money(thisTot)) + '</b><span>this fiscal year (to 30 Sep ' + E(fyNow) + ', ' + plural(thisFy.length, 'gift', 'gifts') + ')</span></div>' +
-      '<div class="w152st"><b>' + Object.keys(donors).length.toLocaleString('en-CA') + '</b><span>donors</span></div>' +
+      /* task 10b (Steel's decision 15): whole dollars only in these big headline totals; every list and table shows the cents */
+      '<div class="w152st"><b>' + E(money(Math.round(total))) + '</b><span>given, all time (' + plural(all.length, 'gift', 'gifts') + ')</span></div>' +
+      '<div class="w152st"><b>' + E(money(Math.round(thisTot))) + '</b><span>this fiscal year (to 30 Sep ' + E(fyNow) + ', ' + plural(thisFy.length, 'gift', 'gifts') + ')</span></div>' +
+      '<div class="w152st"><b>' + Object.keys(donors).length.toLocaleString('en-CA') + '</b><span>' + (Object.keys(donors).length === 1 ? 'donor' : 'donors') + '</span></div>' +
       '<div class="w152st"><b>' + receipted.toLocaleString('en-CA') + '</b><span>with a tax receipt</span></div></div>' +
       '<div class="w152bar"><label class="w152q">' + I('search') + '<input type="search" data-w152gq="1" value="' + E(u.gq) + '" placeholder="Search a donor, campaign, receipt number or platform" aria-label="Search the gifts"></label>' +
       '<select class="w152sel" data-w152gplat aria-label="Platform"><option value="">Every platform</option>' + Object.keys(plats).sort().map(function (p) { return '<option value="' + E(p) + '"' + (u.gplat === p ? ' selected' : '') + '>' + E(platName(p)) + '</option>'; }).join('') + '</select>' +
       '<select class="w152sel" data-w152gyear aria-label="Fiscal year"><option value="">Every year</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option value="' + E(y) + '"' + (u.gyear === y ? ' selected' : '') + '>FY ' + E(y) + ' (Oct ' + (Number(y) - 1) + ' to Sep ' + E(y) + ')</option>'; }).join('') + '</select>' +
       (can('gifts_edit') ? '<button class="w152btn" data-w158new="1">' + I('plus') + ' Record a gift</button>' : '') + '<button class="w152btn ghost" data-w152go="#crm/gifts/receipts">' + I('note') + ' Receipts</button><button class="w152btn ghost" data-w152go="#crm/gifts/online">' + I('card') + ' Online giving</button></div>' + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
-      '<div class="w152count">' + (filtered ? plural(list.length, 'gift matches', 'gifts match') + ' (' + E(money(sel)) + ') \u00b7 <button class="w152mini" data-w152gclear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'gift', 'gifts') + ', newest first') +
+      '<div class="w152count">' + (filtered ? plural(list.length, 'gift matches', 'gifts match') + ' (' + E(cents(sel)) + ') \u00b7 <button class="w152mini" data-w152gclear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'gift', 'gifts') + ', newest first') +
       (shown.length < list.length ? ' \u00b7 showing the first ' + shown.length : '') + '</div>' +
-      (shown.length ? '<div class="w152list w153gifts" role="list"><div class="w152lh" aria-hidden="true"><span>When</span><span>Donor</span><span>Amount</span><span>Campaign and platform</span><span>Receipt</span></div>' + shown.map(giftRow).join('') + '</div>' +
+      (shown.length ? '<div class="w152list w153gifts" role="list"><div class="w152lh" aria-hidden="true"><span>When</span><span>Donor</span><span class="amt">Amount</span><span>Campaign and platform</span><span>Receipt</span></div>' + shown.map(giftRow).join('') + '</div>' +
         (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152gmore="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
         : '<div class="w152empty">' + (all.length ? 'No gift matches. Try another word, or <button class="w152mini" data-w152gclear="1">clear the filters</button>.' : 'No gifts in the CRM yet. Zeffy joins next; until then the Keela export is the record.') + '</div>');
     if (focus) { var inp = root.querySelector('[data-w152gq]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
@@ -1460,19 +1533,22 @@
   function canTest() { return testList().indexOf(myEmail()) >= 0; }
   function mailAdmin() { return MAIL.st ? !!MAIL.st.admin : amAdmin(); }
   function tplByKey(k) { return (S.templates || []).filter(function (t) { return t.key === k; })[0] || null; }
-  /* what a contact may receive today, in the words the rule uses (the server checks again before every send) */
+  /* what a contact may receive today, by Steel's one rule of 5 Nov 2026 (the server checks again before every send, in crm_email_permission):
+     do not contact (said first), no address, a bounce or a spam complaint stop everything; an unsubscribe stops newsletters, fundraising and
+     volunteer emails; everyone else gets them. Express and implied consent no longer decide anything (task 10b: they are history on the page). */
   function permWhy(c) {
-    var k = c._perm, st = lower(c.email_status);
-    var trans = c.emails.length > 0 && st !== 'bounced' && st !== 'complained';
-    var news = k === 'express' || k === 'implied';
-    var why = k === 'express' ? 'express consent' : k === 'implied' ? 'implied consent until ' + fmtDay(c.implied_consent_until) : k === 'unsub' ? 'unsubscribed' : k === 'bounced' ? 'the address bounces' :
-      k === 'none' ? 'no consent' : (c.email_consent === 'implied' ? 'their implied consent ran out' : 'no permission recorded');
-    return { news: news, trans: trans, why: why };
+    var st = lower(c.email_status), has = c.emails.length > 0;
+    var stop = c.do_not_contact ? 'do not contact' : !has ? 'no email address' : st === 'bounced' ? 'the address bounces' : st === 'complained' ? 'they marked one of our emails as spam' : '';
+    var trans = !stop, news = !stop && st !== 'unsubscribed';
+    return { news: news, trans: trans, why: stop || (news ? 'they have not unsubscribed' : 'they unsubscribed'),
+      twhy: stop === 'do not contact' ? 'do not contact: receipts are issued and kept, not emailed' : stop || 'a working address' };
   }
   function permLine(c) {
     var w = permWhy(c);
-    if (!c.emails.length) return '<div class="w152line m">No email address on file, so nothing can be sent.</div>';
-    return '<div class="w152line m w154perm">Newsletters and appeals: <b style="color:' + (w.news ? GREEN : FLAG) + '">' + (w.news ? 'yes' : 'no') + '</b> (' + E(w.why) + ') \u00b7 Confirmations and reminders: <b style="color:' + (w.trans ? GREEN : FLAG) + '">' + (w.trans ? 'yes' : 'no') + '</b></div>';
+    if (!c.emails.length) return '<div class="w152line m w154perm">No email address on file, so nothing can be sent.</div>';
+    var yn = function (ok) { return '<b style="color:' + (ok ? GREEN : FLAG) + '">' + (ok ? 'yes' : 'no') + '</b>'; };
+    return '<div class="w154perm"><div class="w152line">Newsletters, fundraising and volunteer emails: ' + yn(w.news) + ' <span class="m">(' + E(w.why) + ')</span></div>' +
+      '<div class="w152line">Receipts and confirmations: ' + yn(w.trans) + ' <span class="m">(' + E(w.twhy) + ')</span></div></div>';
   }
 
   /* ---------- the numbers: who can be emailed today ---------- */
@@ -1483,7 +1559,7 @@
     return '<div class="w152stats w154stats">' +
       st('express', n.express, 'said yes to our emails (express consent)', GREEN) +
       st('implied', n.implied, 'gave or served in the last two years (implied consent)', TEAL) +
-      st('unknown', n.unknown, 'with an address but no permission: confirmations only', MUTED) +
+      st('unknown', n.unknown, 'with an address and no consent on file (the rule still emails them)', MUTED) +   /* task 10b: Steel's rule of 5 Nov 2026 */
       st('unsub', n.unsub + n.bounced, 'unsubscribed or bouncing: never a newsletter', FLAG) + '</div>';
   }
 
@@ -1528,10 +1604,11 @@
       if (st.domain_id) acts.push('<button class="w152btn soft sm" data-w154act="domain_verify">' + I('check') + ' Check the domain</button>');
       if (st.key_present && !(st.webhook_id && st.webhook_secret_present)) acts.push('<button class="w152btn soft sm" data-w154act="webhook_setup">' + I('link') + ' Connect the webhook</button>');
       acts.push('<button class="w152btn ghost sm" data-w154cfg="1">' + I('edit') + ' Change the settings</button>');
-      acts.push('<button class="w152btn ghost sm" data-w154act="refresh_consent">' + I('shield') + ' Refresh implied consent</button>');
+      acts.push('<button class="w152btn ghost sm" data-w154act="refresh_consent" aria-describedby="w154refwhy">' + I('shield') + ' Refresh implied consent</button>');
     }
+    /* task 10b (Steel's decision 13): the button stays, with why it still matters under the one rule */
     return '<section class="w154card">' + head + lines + (MAIL.msg ? '<div class="w154msg">' + E(MAIL.msg) + '</div>' : '') +
-      (acts.length ? '<div class="w154acts">' + acts.join('') + '</div>' : '') + (MAIL.busy ? '<div class="w152count">' + E(MAIL.busy) + '\u2026</div>' : '') +
+      (acts.length ? '<div class="w154acts">' + acts.join('') + '</div><p class="w152pnote" id="w154refwhy" data-w154refwhy>Refresh implied consent keeps the reason on each record up to date. It doesn\u2019t change who gets email.</p>' : '') + (MAIL.busy ? '<div class="w152count">' + E(MAIL.busy) + '\u2026</div>' : '') +
       (MAIL.form && adm ? settingsFormHtml(s) : '') + (dom ? dnsHtml(dom) : '') +
       (!st.key_present ? '<p class="w152pnote">The Resend key (RESEND_API_KEY) is missing from the function secrets, so nothing can be sent or set up. An admin adds it in Supabase; the Hub never stores it.</p>' : '') +
       '</section>';
@@ -1727,7 +1804,7 @@
     + '.w154pv{margin-top:10px;}.w154frame{width:100%;height:640px;border:1px solid rgba(16,63,57,.12);border-radius:12px;background:' + CREAM + ';margin-top:8px;}.w154frame.sheet{height:520px;}'
     + '.w154sl{border:1px solid rgba(16,63,57,.1);border-radius:12px;overflow:hidden;}.w154sh,.w154sr{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr) minmax(0,1.6fr) minmax(0,1.3fr);gap:10px;padding:9px 12px;font-size:13px;align-items:start;}'
     + '.w154sh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');background:rgba(16,63,57,.04);}.w154sr{border-top:1px solid rgba(16,63,57,.07);}.w154sr a{color:' + GREEN + ';font-weight:700;text-decoration:none;}'
-    + '.w154rule p{font-size:14px;line-height:1.6;}.w154perm b{font-weight:700;}'
+    + '.w154rule p{font-size:14px;line-height:1.6;max-width:70ch;}.w154perm b{font-weight:700;}'   /* task 10b: a 70ch measure for the rule */
     + '.w154st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;}'
     + '@media (max-width:980px){.w154grid{grid-template-columns:1fr;}.w154dh,.w154dr{grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.6fr);}.w154dh>span:last-child,.w154dr>span:last-child{display:none;}}'
     + '@media (max-width:700px){.w154sh,.w154sr{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);}.w154sh>span:nth-child(3),.w154sr>span:nth-child(3){display:none;}.w154kv{grid-template-columns:1fr;gap:2px;}.w154frame{height:520px;}}';
@@ -1767,7 +1844,13 @@
   MSTATUS.sending = ['Sending', TEAL]; MSTATUS.cancelled = ['Cancelled', MUTED]; MKIND.volunteer = ['Volunteer call-out', TEAL];
   var LC = { edit: null, prev: null, pT: null, msg: '', err: '', busy: '', sizes: null, c: null, cprev: null, check: null, confirm: false, cmsg: '', cerr: '', cbusy: '', rcp: null, rcpFor: null, newList: null, cid: null };
   LOADERS.lists = function () { return db.from('crm_lists').select('*').order('updated_at', { ascending: false }); };
-  LOADERS.campaigns = function () { return db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(300); };
+  /* task 10b (UI review row 27): the latest LC.climit Sends, and how many there are in all, so the list can say "Latest 300 of 1,004" */
+  LOADERS.campaigns = function () {
+    var lim = LC.climit || 300;
+    return Promise.all([db.from('crm_campaigns').select('*').order('created_at', { ascending: false }).limit(lim),
+      Promise.resolve(db.from('crm_campaigns').select('id', { count: 'exact', head: true })).then(function (r) { return r && !r.error && typeof r.count === 'number' ? r.count : null; }, function () { return null; })])
+      .then(function (x) { LC.ctotal = x[1]; return x[0]; });
+  };
   LOADERS.cstats = function () { return db.from('crm_campaign_stats_v').select('*'); };
   /* wave283: one rule for every kind of Send (Steel, 5 Nov 2026) */
   var CK = { newsletter: ['Newsletter', PURPLE, RULE_TEXT], fundraising: ['Fundraising appeal', '#B9851B', RULE_TEXT],
@@ -1954,7 +2037,8 @@
   /* ---------- the Campaigns tab ---------- */
   function statsFor(id) { return (S.cstats || []).filter(function (x) { return String(x.campaign_id) === String(id); })[0] || {}; }
   function campById(id) { return (S.campaigns || []).filter(function (x) { return String(x.id) === String(id); })[0] || null; }
-  function pct(a, b) { a = Number(a) || 0; b = Number(b) || 0; return b ? Math.round(a * 100 / b) + '%' : '0%'; }
+  /* task 10b: 1 open of 1,284 reads "<1%", not "0%" */
+  function pct(a, b) { a = Number(a) || 0; b = Number(b) || 0; if (!b || !a) return '0%'; var p = a * 100 / b; return p < 1 ? '<1%' : Math.round(p) + '%'; }
   function myName() { var me = (S.contacts || []).filter(function (c) { return c.emails.map(lower).indexOf(myEmail()) >= 0; })[0]; return me && me.full_name ? me.full_name : myEmail().split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, function (x) { return x.toUpperCase(); }); }
   function onDomainMe() { return /@welfareavenue\.com$/.test(myEmail()); }
   function blankCampaign(listId) {
@@ -1971,17 +2055,20 @@
   function campRow(c) {
     var s = campById(c.id) || c, row = s.vars || {};
     var cs = statsFor(c.id), list = listById(c.list_id), sent = Number(cs.sent) || 0;
-    return '<div class="w155cr" role="listitem"><button class="w155cn" data-w155copen="' + E(c.id) + '"><b>' + E(c.name || c.subject || 'Untitled') + '</b><span class="m">' + E(c.subject || '') + '</span></button>' +
-      '<div>' + lchip(CSTAT, c.status) + '</div><div class="m">' + E(list ? list.name : 'No list') + '<br>' + E((CK[c.kind] || [c.kind])[0]) + '</div>' +
+    /* task 10b: "Untitled Send" everywhere; the kind as a chip beside the list name; named cells, so a phone stacks each Send */
+    var kc = CK[c.kind] || [c.kind || 'Send', MUTED];
+    return '<div class="w155cr" role="listitem"><button class="w155cn" data-w155copen="' + E(c.id) + '"><b>' + E(c.name || c.subject || 'Untitled Send') + '</b><span class="m">' + E(c.subject || '') + '</span></button>' +
+      '<div class="w155st">' + lchip(CSTAT, c.status) + '</div><div class="w155lk">' + lchip({ k: [kc[0], kc[1]] }, 'k') + '<span class="m">' + E(list ? list.name : 'No list') + '</span></div>' +
       '<div class="w155n">' + (c.status === 'draft' ? '<span class="m">not sent</span>' : '<b>' + sent.toLocaleString('en-CA') + '</b> sent \u00b7 ' + pct(cs.opened, sent) + ' opened \u00b7 ' + pct(cs.clicked, sent) + ' clicked') + '</div>' +
-      '<div class="m">' + E(fmtDay(c.sent_at || c.queued_at || c.updated_at || c.created_at)) + '</div></div>';
+      '<div class="m w155dt">' + E(fmtDay(c.sent_at || c.queued_at || c.updated_at || c.created_at)) + '</div></div>';
   }
   function campListHtml() {
-    var cs = S.campaigns || [];
-    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + plural(cs.length, 'Send', 'Sends') + '</span></h3>' +
+    var cs = S.campaigns || [], total = LC.ctotal != null ? Math.max(LC.ctotal, cs.length) : cs.length, more = total > cs.length;
+    return '<div class="w154card wide"><h3>' + I('send') + ' Sends <span class="m">' + (more ? 'Latest ' + cs.length.toLocaleString('en-CA') + ' of ' + total.toLocaleString('en-CA') : plural(cs.length, 'Send', 'Sends')) + '</span></h3>' +
       '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New Send</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
       (LC.cmsg && !LC.c ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
-      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
+      (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Send</span><span>Status</span><span>Kind and list</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>' +
+          (more ? '<div class="w154acts"><button class="w152btn soft sm" data-w155cmore>Show ' + Math.min(300, total - cs.length).toLocaleString('en-CA') + ' more</button></div>' : '')
         : '<p class="m">No Send yet. A Send is one message to a list, sent person by person through the email rule.</p>') + '</div>';
   }
   function modeLine() {
@@ -2023,7 +2110,7 @@
     return '<div class="w155chk"><b>' + plural(k.eligible || 0, 'person gets it', 'people get it') + '</b> of ' + plural(k.audience || 0, 'person', 'people') + ' on the list' +
       (k.duplicates ? ' (' + plural(k.duplicates, 'shared address', 'shared addresses') + ' counted once)' : '') + '.' +
       (k.held ? '<div class="m">Held back by the rule: ' + plural(k.held, 'person', 'people') + '</div><ul>' + why + '</ul>' : '') +
-      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(Number(k.first_contacts).toLocaleString('en-CA') + ' of them have never had an email from Welfare Avenue: send them as a separate Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282) */
+      (Number(k.first_contacts) > 0 ? '<div class="w283first" data-w283first>' + E(plural(Number(k.first_contacts), 'person', 'people') + ' would get their first email from Welfare Avenue in this Send') + '</div>' : '') +   /* wave283 (mail-send campaign_check, wave282); task 10b: Steel's decision 6, says what happens */
       (k.per_day ? '<div class="m">At up to ' + k.per_day + ' a day this takes ' + plural(k.days || 1, 'day', 'days') + '.</div>' : '') +
       (LC.confirm ? (live && k.eligible ? '<div class="w155cf"><b>Send it to ' + plural(k.eligible, 'person', 'people') + ' now?</b> The first ones go within the minute; the rest follow at Resend\u2019s pace.<div class="w154acts"><button class="w152btn" data-w155cgo>' + I('send') + ' Send it</button><button class="w152btn ghost" data-w155cno>Not yet</button></div></div>'
         : !live ? '<div class="w155cf test">' + I('lock') + ' The Hub is in test mode, so this Send cannot go to the list yet. Send yourself a test; an admin switches the mode to live in the Email tab when the team is ready.</div>' : '<div class="w155cf test">Nobody on this list can receive it.</div>') : '') + '</div>';
@@ -2168,7 +2255,11 @@
     + '.w155studio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(220,165,39,.12);font-size:13.5px;line-height:1.45;}.w155studio>span{flex:1;min-width:220px;}'
     + '.w155bar{height:10px;border-radius:99px;background:rgba(16,63,57,.1);overflow:hidden;margin:12px 0 4px;}.w155bar i{display:block;height:100%;background:' + TEAL + ';border-radius:99px;}'
     + '@media (max-width:980px){.w155grid{grid-template-columns:1fr;}.w155ch,.w155cr{grid-template-columns:minmax(0,1.6fr) auto minmax(0,1.2fr);}.w155ch>span:nth-child(n+4),.w155cr>div:nth-child(n+4){display:none;}}'
-    + '@media (max-width:700px){.w155c{grid-template-columns:1fr 1fr;}.w155c>button{justify-self:end;}.w155two{grid-template-columns:1fr;}}';
+    + '.w155lk{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;}.w155lk .m{overflow-wrap:anywhere;}.w155cn b{overflow-wrap:anywhere;}.w155n{font-variant-numeric:tabular-nums;}'
+    + '@media (max-width:700px){.w155c{grid-template-columns:1fr 1fr;}.w155c>button{justify-self:end;}.w155two{grid-template-columns:1fr;}'
+    /* task 10b (UI review row 14): a phone stacks each Send: name, then status, kind and list (two lines at most), then the results and the date */
+    + '.w155ch{display:none;}.w155cr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;}.w155cr>.w155cn{flex:1 1 100%;}.w155cr>.w155lk{flex:1 1 200px;min-width:0;flex-direction:row;flex-wrap:wrap;align-items:center;}'
+    + '.w155cr>.w155lk .m{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}.w155cr>.w155n,.w155cr>.w155dt{display:block !important;}.w155cr>.w155n{flex:1 1 auto;white-space:normal;}}';
   document.head.appendChild(css155);
 
   /* ---------- wiring ---------- */
@@ -2189,6 +2280,7 @@
     if ((el = t.closest('[data-w155delok]')) && ed) { e.preventDefault(); delList(); return; }
     if ((el = t.closest('[data-w155cancel]'))) { e.preventDefault(); LC.edit = null; LC.prev = null; LC.err = ''; paint(); return; }
     /* campaigns */
+    if ((el = t.closest('[data-w155cmore]'))) { e.preventDefault(); el.disabled = true; LC.climit = (LC.climit || 300) + 300; load('campaigns', true).then(function () { paint(); }); return; }
     if ((el = t.closest('[data-w155cnew]'))) { e.preventDefault(); LC.c = null; LC.cmsg = ''; go('#crm/campaigns/new'); return; }
     if ((el = t.closest('[data-w155copen]'))) { e.preventDefault(); LC.cmsg = ''; go('#crm/campaigns/' + el.getAttribute('data-w155copen')); return; }
     if ((el = t.closest('[data-w155cclose]'))) { e.preventDefault(); LC.c = null; LC.check = null; LC.cprev = null; LC.confirm = false; go('#crm/campaigns'); return; }
@@ -2230,6 +2322,9 @@
   SOURCES.hub_form = ['Hub forms', 'People who filled in a form on hub.welfareavenue.com/f/.'];
   var FORM_HOST = 'https://hub.welfareavenue.com/f/';
   var CONSENT_DEFAULT = 'Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.';
+  /* task 10b: the email box's words in French too (a draft for Steel), so a form's words follow its language */
+  var CONSENT_DEFAULTS = { en: CONSENT_DEFAULT, fr: 'Oui, Welfare Avenue peut m\u2019envoyer par courriel des nouvelles, des appels aux b\u00e9n\u00e9voles et des fa\u00e7ons d\u2019aider. Je peux me d\u00e9sabonner en tout temps.' };
+  function consentDefault(lang) { return CONSENT_DEFAULTS[lang === 'fr' ? 'fr' : 'en']; }
   var FM = { group: '', fid: null, f: null, sub: '', msg: '', err: '', busy: '', confirm: '', subs: null, subsFor: null, showSpam: false, showTests: false, openSub: null, counts: null };
   LOADERS.forms = function () { return db.from('crm_forms').select('*').order('created_at', { ascending: true }); };
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
@@ -2250,12 +2345,12 @@
     var ch = chapterOf288(cur);
     return '<div class="w155two"><label class="w155lb">Chapter<select class="w152sel" data-w288set="chapter">' + chOpts + '</select></label>' +
       '<label class="w155lb">Campaign<select class="w152sel" data-w288set="campaign_id">' + cpOpts + '</select></label></div>' +
-      '<p class="m">' + (cur ? 'Everyone who answers joins ' + E((ch && ch.name_en) || cur) + '.' + (f.kind === 'volunteer' ? ' The serving dates are its servings.' : '') : 'No chapter: answers join no chapter.') + '</p>';
+      '<p class="m">' + (cur ? 'Everyone who answers joins ' + E((ch && ch.name_en) || cur) + '.' + (f.kind === 'volunteer' ? ' The serving dates are its servings.' : '') : 'No chapter: counted as Montreal.') + '</p>';   /* task 10b: Steel's decision 5, the same sentence as the contact form */
   }
   function smsHtml288(f) {
     var sm = (f.consent && f.consent.sms) || {};
     return '<div class="w288sms"><label class="w156ck"><input type="checkbox" data-w288sms="ask"' + (sm.ask ? ' checked' : '') + '> Also ask for text consent</label>' +
-      (sm.ask ? '<label class="w155lb">The words next to the text box<textarea class="w152in" data-w288sms="label" rows="2">' + E(sm.label || '') + '</textarea></label>' +
+      (sm.ask ? '<label class="w155lb">The words next to the text box<textarea class="w152in" data-w288sms="label" rows="2">' + E(sm.label || '') + '</textarea></label>' + langWarn156(f, 'sms') +
         '<p class="m">A second box under the email one. A ticked box records express consent to texts with these words, the form and the date. Replying STOP still stops every text.</p>' : '') + '</div>';
   }
   var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED], application: ['Join the team (HR centre)', GREEN] };
@@ -2450,9 +2545,9 @@
         chapCampHtml288(f) + '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +
       '<h4 class="w156h4">Questions</h4>' + f.questions.map(function (q, i) { return qHtml(q, i, f.questions.length, f.kind); }).join('') +
       '<div class="w154acts"><button class="w152btn ghost" data-w156qadd="text">' + I('plus') + ' Add a question</button></div>' +
-      '<h4 class="w156h4">Email permission</h4><div class="w156box"><label class="w156ck"><input type="checkbox" data-w156c="ask"' + (f.consent.ask ? ' checked' : '') + '> Ask for permission to email them (a box they tick themselves)</label>' +
+      '<h4 class="w156h4">Permission to contact</h4><div class="w156box"><label class="w156ck"><input type="checkbox" data-w156c="ask"' + (f.consent.ask ? ' checked' : '') + '> Ask for permission to email them (a box they tick themselves)</label>' +   /* task 10b: Steel's decision 14 (it holds the text box too) */
       (f.consent.ask ? '<label class="w156ck"><input type="checkbox" data-w156c="required"' + (f.consent.required ? ' checked' : '') + '> They must tick it to send the form (a newsletter sign-up)</label>' +
-        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label><p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue\u2019s address and email beside it.</p>' : '') + smsHtml288(f) + '</div>' +
+        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label>' + langWarn156(f, 'email') + '<p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue\u2019s address and email beside it.</p>' : '') + smsHtml288(f) + '</div>' +
       inp('thank_you', 'Thank-you message (after they send it)', 'Thank you. We have your answers.', true) +
       '<div class="w154acts"><button class="w152btn" data-w156save="1">' + I('check') + ' Save</button>' +
       (f.id && !live ? '<button class="w152btn ghost" data-w156pub="1">' + I('send') + ' Put it live\u2026</button>' : '') +
@@ -2494,7 +2589,7 @@
     return '<div class="w154card w156pv"><h3>' + I('eye') + ' Preview</h3>' + (f.status !== 'published' ? '<p class="m">Not live yet: only the team sees this form.</p>' : '<p class="m">Live at <a href="' + E(FORM_HOST + f.slug) + '" target="_blank" rel="noopener">hub.welfareavenue.com/f/' + E(f.slug) + '</a>.</p>') +
       bandHtml168(f) + '<div class="w156page"><i class="w156rule"></i>' + (f.intro ? '<p>' + E(f.intro) + '</p>' : '') +
       f.questions.map(function (q) { return '<div class="w156pq">' + one(q) + '</div>'; }).join('') +
-      (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || CONSENT_DEFAULT) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
+      (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || consentDefault(f.lang)) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
       (f.consent && f.consent.sms && f.consent.sms.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.sms.label || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']) + '</span></div>' : '') +
       '<span class="w156send">' + (f.lang === 'fr' ? 'Envoyer' : 'Send') + '</span></div></div></div>';
   }
@@ -2614,7 +2709,7 @@
     return newFields(f).then(function () {
       var tags = String(f._tags || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
       var row = { slug: f.slug, title: String(f.title).trim(), intro: String(f.intro || '').trim() || null, lang: f.lang === 'fr' ? 'fr' : 'en', kind: FKIND[f.kind] ? f.kind : 'general',
-        questions: cleanQuestions(f.questions), consent: Object.assign(f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
+        questions: cleanQuestions(f.questions), consent: Object.assign(f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || consentDefault(f.lang) } : { ask: false },
           f.consent.sms && f.consent.sms.ask ? { sms: { ask: true, label: String(f.consent.sms.label || '').trim() || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en'] } } : {}),
         thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, purpose: purposeOf(f), updated_by: actor() };
       if (row.kind !== 'volunteer') delete row.settings.volunteer_record;
@@ -2687,14 +2782,14 @@
     + '.w156url{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--wa-muted,' + MUTED + ');}.w156url .w152in{flex:1;min-width:0;}'
     + '.w156sheet{border-radius:16px;overflow:hidden;border:1px solid rgba(16,63,57,.12);background:rgba(16,63,57,.05);}.w156band{position:relative;background:' + GREEN + ' center/cover no-repeat;color:' + CREAM + ';padding:12px 16px 30px;min-height:150px;display:flex;flex-direction:column;}'
     + '.w156band:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.5),rgba(16,63,57,.92));}.w156band > *{position:relative;}'
-    + '.w168top{display:flex;align-items:center;justify-content:space-between;}.w168top img{height:30px;width:auto;}.w168top .w168star{height:30px;transform:rotate(12deg);}'
+    + '.w168top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px;}.w168top img{height:30px;width:auto;min-width:0;max-width:100%;object-fit:contain;}.w168top .w168star{height:30px;transform:rotate(12deg);}'
     + '.w168ey{margin-top:auto;padding-top:18px;font-size:10.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';}.w156band .w156t{color:' + CREAM + ';font-size:26px;}'
     + '.w168cov .w168now{display:flex;gap:10px;align-items:center;margin:0 0 10px;}.w168cov .w168now .im{flex:0 0 96px;height:60px;border-radius:10px;background:' + GREEN + ' center/cover;}.w168cov .w168now b{display:block;font-size:13.5px;}.w168cov .w168now .w152btn{margin-top:6px;}'
     + '.w168grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;max-height:232px;overflow-y:auto;padding:2px;}'
     + '.w168th{aspect-ratio:3/2;border:2px solid transparent;border-radius:9px;background:' + GREEN + ' center/cover;cursor:pointer;padding:0;}.w168th:hover{border-color:' + GOLD + ';}.w168th.on{border-color:' + GOLD + ';box-shadow:0 0 0 2px ' + GREEN + ';}.w168th:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
     + '.w156page{background:' + CREAM + ';margin:-18px 12px 12px;border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(16,63,57,.08);position:relative;}.w156t{font-family:' + HEAD + ';font-weight:700;font-size:24px;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;}'
     + '.w156rule{display:block;width:44px;height:3px;border-radius:3px;background:' + GOLD + ';margin:8px 0 10px;}.w156page p{font-size:13.5px;margin:0 0 12px;color:#3d3c39;}'
-    + '.w156pq{margin:0 0 12px;}.w156pl{font-weight:600;font-size:13.5px;margin-bottom:4px;}.w156req{color:' + FLAG + ';margin-left:2px;}.w156pc{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '.w156pq{margin:0 0 12px;min-width:0;}.w156pq .w152in{width:100%;max-width:100%;min-width:0;box-sizing:border-box;}.w156pl{font-weight:600;font-size:13.5px;margin-bottom:4px;}.w156req{color:' + FLAG + ';margin-left:2px;}.w156pc{display:flex;flex-wrap:wrap;gap:6px;}'
     + '.w156pr,.w156pb{border:1px solid rgba(16,63,57,.18);border-radius:10px;padding:6px 10px;font-size:13px;background:' + CREAM + ';}.w156pr:before{content:"\\25CB  ";color:' + MUTED + ';}.w156pb:before{content:"\\2610  ";color:' + MUTED + ';}'
     + '.w156pcons .w156pb{border-style:dashed;display:block;}.w156send{display:inline-block;background:' + GOLD + ';color:' + INK + ';font-weight:600;border-radius:999px;padding:8px 20px;font-size:14px;}.w156page .w152in[disabled]{background:' + CREAM + ';}'
     + '.w156subs{display:flex;flex-direction:column;}.w156sub{border-top:1px solid rgba(16,63,57,.08);}.w156sh{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:10px 4px;font-size:14px;}'
@@ -2738,9 +2833,9 @@
     var t = e.target, f = FM.f; if (!f || !t || !t.closest || !t.closest('.w152root')) return;
     var key, i;
     if (t.hasAttribute('data-w156k')) {
-      key = t.getAttribute('data-w156k'); f[key] = t.value;
-      if (key === 'kind' && e.type === 'change') { if (t.value === 'volunteer' && f.settings.volunteer_record == null) f.settings.volunteer_record = true; paint(); }
-      else if (key === 'lang' && e.type === 'change') paint();
+      key = t.getAttribute('data-w156k'); var was = f[key]; f[key] = t.value;
+      if (key === 'kind' && e.type === 'change') { if (t.value === 'volunteer' && f.settings.volunteer_record == null) f.settings.volunteer_record = true; repaint156(t); }
+      else if (key === 'lang' && e.type === 'change') { langSwap156(f, was, t.value); repaint156(t); }
       else if (key === 'title' || key === 'intro') previewSoon156();
       return;
     }
@@ -2752,15 +2847,21 @@
         if (t.value) { f.settings.chapter = t.value; var ch = chapterOf288(t.value); if (ch && ch.name_en && f.kind === 'volunteer') f.settings.serving_location = ch.name_en; }
         else delete f.settings.chapter;
       } else if (key === 'campaign_id') { if (t.value) f.settings.campaign_id = Number(t.value); else delete f.settings.campaign_id; }
-      paint(); return;
+      repaint156(t); return;
     }
     if (t.hasAttribute('data-w288sms')) {
       key = t.getAttribute('data-w288sms'); f.consent.sms = f.consent.sms || {};
-      if (key === 'ask') { f.consent.sms.ask = t.checked; if (t.checked && !f.consent.sms.label) f.consent.sms.label = SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']; paint(); }
-      else { f.consent.sms[key] = t.value; previewSoon156(); }
+      if (key === 'ask') { f.consent.sms.ask = t.checked; if (t.checked && !f.consent.sms.label) f.consent.sms.label = SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']; repaint156(t); }
+      else { f.consent.sms[key] = t.value; if (FM.langWarn) { delete FM.langWarn.sms; var ws = document.querySelector('#crm [data-w156langwarn="sms"]'); if (ws) ws.remove(); } previewSoon156(); }
       return;
     }
-    if (t.hasAttribute('data-w156c')) { key = t.getAttribute('data-w156c'); f.consent[key] = t.type === 'checkbox' ? t.checked : t.value; if (key === 'ask' && t.checked && !f.consent.label) f.consent.label = CONSENT_DEFAULT; if (t.type === 'checkbox') paint(); return; }
+    if (t.hasAttribute('data-w156c')) {
+      key = t.getAttribute('data-w156c'); f.consent[key] = t.type === 'checkbox' ? t.checked : t.value;
+      if (key === 'ask' && t.checked && !f.consent.label) f.consent.label = consentDefault(f.lang);
+      if (key === 'label' && FM.langWarn) { delete FM.langWarn.email; var we = document.querySelector('#crm [data-w156langwarn="email"]'); if (we) we.remove(); }
+      if (t.type === 'checkbox') repaint156(t);
+      return;
+    }
     if (t.hasAttribute('data-w156qk')) {
       i = qAt(t); if (i < 0) return; key = t.getAttribute('data-w156qk'); var q = f.questions[i];
       q[key] = t.type === 'checkbox' ? t.checked : t.value;
@@ -2768,6 +2869,28 @@
       if (key === 'type' || (key === 'to' && e.type === 'change') || key === 'required') paint();
       else if (key === 'label' || key === '_opts' || key === 'help') previewSoon156();
     }
+  }
+  /* task 10b: a repaint after a select or a box keeps the keyboard focus on that control (a closed select on Windows fires change on each
+     arrow key, so without it a keyboard user moved one step at a time) */
+  function repaint156(t) {
+    var sel = null;
+    ['data-w156k', 'data-w288set', 'data-w288sms', 'data-w156c', 'data-w156set'].some(function (a) { if (t && t.hasAttribute && t.hasAttribute(a)) { sel = '#crm [' + a + '="' + t.getAttribute(a) + '"]'; return true; } return false; });
+    paint();
+    var back = sel && document.querySelector(sel); if (back) { try { back.focus({ preventScroll: true }); } catch (x) { /* fine */ } }
+  }
+  /* task 10b (UI review row 11): when a form changes language, words still at the other language's default follow it; words someone wrote
+     stay, with a line saying they may be in the other language */
+  function langSwap156(f, from, to) {
+    if (!from || from === to) return;
+    var name = { en: 'English', fr: 'French' }, warn = {};
+    var c = f.consent || {}, sm = c.sms || {};
+    if (c.ask && c.label) { if (c.label === consentDefault(from)) c.label = consentDefault(to); else if (c.label !== consentDefault(to)) warn.email = name[from] || from; }
+    if (sm.ask && sm.label) { if (sm.label === SMS_DEFAULT[from === 'fr' ? 'fr' : 'en']) sm.label = SMS_DEFAULT[to === 'fr' ? 'fr' : 'en']; else if (sm.label !== SMS_DEFAULT[to === 'fr' ? 'fr' : 'en']) warn.sms = name[from] || from; }
+    FM.langWarn = (warn.email || warn.sms) ? Object.assign({ id: f.id }, warn) : null;
+  }
+  function langWarn156(f, box) {
+    var w = FM.langWarn; if (!w || w.id !== f.id || !w[box]) return '';
+    return '<p class="w156warn" data-w156langwarn="' + box + '" role="status">These words were written for the ' + E(w[box]) + ' form: check them before you save.</p>';
   }
   var pv156 = null;
   function previewSoon156() { clearTimeout(pv156); pv156 = setTimeout(function () { var pv = document.querySelector('#crm .w156pv'); if (pv && FM.f) pv.outerHTML = previewHtml156(); }, 350); }
@@ -3684,8 +3807,10 @@
       : '<input data-f="donor" list="w158donors" placeholder="Type a name or an email" autocomplete="off"><datalist id="w158donors">' + (S.contacts || []).filter(function (k) { return !/^\(no name\)$/i.test(k.full_name || ''); }).slice(0, 3000).map(function (k) { return '<option value="' + E(k.full_name + (k.emails[0] ? ' \u00b7 ' + k.emails[0] : '') + ' (#' + k.id + ')') + '"></option>'; }).join('') + '</datalist>';
     var kinds = Object.keys(GKIND).map(function (k) { return [k, GKIND[k][0]]; });
     var ro = hub ? '' : ' disabled';
-    var html = '<h2>' + (isNew ? 'Record a gift' : 'A gift of ' + E(money(x.amount))) + '</h2>' +
-      '<div class="sub">' + (isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : lower(x.platform) === 'stripe' ? stripeSub(x) : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.') + '</div>' +
+    var sub = isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : lower(x.platform) === 'stripe' ? stripeSub(x) : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.';
+    if (!mayEdit) { giftReadView(x, c, id, sub); return; }   /* task 10b (Steel's decision 7): a read view, not a form of disabled fields */
+    var html = '<h2>' + (isNew ? 'Record a gift' : 'A gift of ' + E(cents(x.amount))) + '</h2>' +
+      '<div class="sub">' + sub + '</div>' +
       '<div class="w152form" data-w158gift="' + E(id || 'new') + '">' +
       field('Donor', donor, true) +
       field('Amount ($)', '<input data-f="amount" type="number" step="0.01" min="0" value="' + E(x.amount) + '"' + ro + '>') + field('Date received', '<input data-f="donated_at" type="date" value="' + E(dayOf(x.donated_at) || today()) + '"' + ro + '>') +
@@ -3699,14 +3824,33 @@
       field('In honour or memory of', sel('tribute_kind', [['', 'No'], ['honour', 'In honour of'], ['memory', 'In memory of']], x.tribute_kind || '')) + field('Their name', inp('tribute_name', x.tribute_name, 'Their name')) +
       field('Notes', area('notes', x.notes, 'Cheque number, who dropped it off, anything the treasurer should know'), true) +
       '<div class="note full w158rule" data-w158rule>' + E(receiptRule(x)[1]) + '</div>' +
-      (mayEdit ? '' : '<div class="note full" data-w283ro>' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>') +
       '</div><div class="w152foot"><span class="w152err" data-w152err role="status"></span>' +
-      (!isNew && hub && mayEdit ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
+      (!isNew && hub ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
       (!isNew ? '<button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button>' : '') +
-      (mayEdit ? '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button>'
-        : '<button class="w152btn" data-w152close="1">Close</button>') + '</div>';
-    if (!mayEdit) html = html.replace(/<(input|select|textarea)\b/g, '<$1 disabled');   /* read-only: every field, no save or delete */
+      '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button></div>';
     openSheet(html, 'gift:' + (id || 'new'), true);
+  }
+  /* task 10b: someone without gifts_edit reads a gift as text they can select and copy (the Contact details layout), with the note on top,
+     no field, no save and no delete (row security refuses the writes anyway) */
+  function giftReadView(x, c, id, sub) {
+    var kv = function (l, v) { return v === '' || v == null ? '' : '<b>' + E(l) + '</b><span>' + v + '</span>'; };
+    var meth = (GMETH.filter(function (m) { return m[0] === x.method; })[0] || ['', x.method || ''])[1];
+    var rs = rcptFor(x.id), rnote = rs && rs.receipt_note ? rs.receipt_note : receiptRule(x)[1];
+    var rows = kv('Donor', c ? E(c.full_name) + (c.emails[0] ? '<span class="m w158rm">' + E(c.emails[0]) + '</span>' : '') : E('Contact ' + (x.contact_id || ''))) +
+      kv('Amount', '<span class="w152num">' + E(cents(x.amount)) + '</span>' + (x.recurring ? ' a month' : '')) +
+      kv('Date received', E(fmtDay(x.donated_at))) +
+      kv('What kind of money', E((GKIND[x.kind] || [x.kind || 'Donation'])[0])) +
+      kv('How it came', E(meth || 'Not recorded')) +
+      kv('Campaign', E(x.campaign || '')) + kv('Designation', E(x.designation || '')) +
+      (Number(x.advantage_amount) ? kv('What they received', '<span class="w152num">' + E(cents(x.advantage_amount)) + '</span>' + (x.advantage_desc ? ' (' + E(x.advantage_desc) + ')' : '')) : '') +
+      (x.kind === 'in_kind' ? kv('The gift in kind', E(x.in_kind_desc || '')) + kv('Appraised by', E(x.appraiser || '')) : '') +
+      (x.tribute_kind ? kv(x.tribute_kind === 'memory' ? 'In memory of' : 'In honour of', E(x.tribute_name || '')) : '') +
+      kv('Notes', x.notes ? '<span class="w158pre">' + E(x.notes) + '</span>' : '') +
+      kv('Receipt', E(rnote));
+    openSheet('<h2>A gift of ' + E(cents(x.amount)) + '</h2><div class="sub">' + sub + '</div>' +
+      '<div class="w158ronote" data-w283ro role="note">' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>' +
+      '<div class="w152kv w158read" data-w158read="' + E(id) + '">' + rows + '</div>' +
+      '<div class="w152foot"><button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button><button class="w152btn" data-w152close="1">Close</button></div>', 'gift:' + id, true);
   }
   function giftFormValues(box) {
     var v = {}; box.querySelectorAll('[data-f]').forEach(function (el) { v[el.getAttribute('data-f')] = el.value; });
@@ -3822,7 +3966,8 @@
       (admin ? '<div class="w154acts"><button class="w152btn" data-w158cfgsave="1">' + I('check') + ' Save the settings</button></div>' : '<p class="m">Only an admin changes these.</p>') + '</div>' +
       '<div class="w154card"><h3>' + I('heart') + ' Receipts due for ' + E(yr) + ' <select class="w152sel w158yr" data-w158year aria-label="Tax year">' + ys.map(function (y) { return '<option' + (y === yr ? ' selected' : '') + '>' + E(y) + '</option>'; }).join('') + '</select></h3>' +
       '<p class="m">Receipts follow the donor\u2019s tax year (January to December), not the fiscal year. The year-end run gives each donor one receipt for the year.</p>' +
-      '<div class="w152stats"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done + '</b><span>already receipted</span></div></div>' +
+      /* task 10b (UI review row 4): these tiles take their content's width and wrap, so an amount is never cut ($12,000.00 ran into "1 donor") */
+      '<div class="w152stats w158due"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length.toLocaleString('en-CA') + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done.toLocaleString('en-CA') + '</b><span>already receipted</span></div></div>' +
       rbRunHtml(donors.length, yr) +
       (donors.length ? '<div class="w156fl">' + donors.map(function (d) {
         var c = contact(d.id), noAddr = c && !String(c.address || '').trim();
@@ -3853,7 +3998,11 @@
     + '.w158rl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:10px;padding:5px 0;border-bottom:1px dashed rgba(16,63,57,.12);font-size:13.5px;}.w158rl b{font-weight:600;}.w158miss{color:' + FLAG + ';}'
     + '.w158sig{display:flex;flex-direction:column;gap:4px;margin:18px 0 6px;font-size:13px;}.w158line{display:block;width:220px;border-bottom:1px solid ' + INK + ';height:26px;}.w158cra{font-size:12px;color:' + MUTED + ';margin-top:8px;}'
     + '.w158yr{display:inline-block;width:auto;margin-left:8px;vertical-align:middle;}'
-    + '@media (max-width:700px){.w158adv,.w158ink{grid-template-columns:1fr;}.w158rl{grid-template-columns:1fr;gap:2px;}}'
+    /* task 10b: the receipts-due tiles (content width, wrapping) and the read-only gift */
+    + '.w152stats.w158due{display:flex;flex-wrap:wrap;gap:12px;}.w158due .w152st{flex:1 1 auto;min-width:max-content;}.w158due .w152st b{white-space:nowrap;}'
+    + '.w158ronote{font-size:12.5px;line-height:1.5;background:rgba(220,165,39,.12);border-radius:10px;padding:8px 10px;margin:12px 0 10px;}'
+    + '.w158read{grid-template-columns:150px minmax(0,1fr);margin-top:4px;}.w158read span{overflow-wrap:anywhere;}.w158read .w158rm{display:block;}.w158pre{white-space:pre-wrap;}'
+    + '@media (max-width:700px){.w158adv,.w158ink{grid-template-columns:1fr;}.w158rl{grid-template-columns:1fr;gap:2px;}.w158read{grid-template-columns:112px minmax(0,1fr);}}'
     + '@media print{body *{visibility:hidden !important;}#w152sheet .w158rc,#w152sheet .w158rc *{visibility:visible !important;}#w152sheet .w158rc{position:fixed;left:0;top:0;width:100%;border:none;}}';
   document.head.appendChild(css158);
 
@@ -3915,7 +4064,6 @@
   /* wave283: issuing, replacing, cancelling and drawing follow can_issue (team leads, admins and finance: wa_can gifts_edit); is_admin only while the
      database is older than wave283. Email it too (final review M5: mail-send v7 sends a receipt for anyone with gifts_edit). The settings, the mode, the signature and the automatic switch stay with admins (their functions check admin). */
   function rbAdmin() { var c = GF.cfg || {}; return !!(c.can_issue === undefined ? c.is_admin : c.can_issue); }
-  function rbIsAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
   function rbSave(bytes, name, type) {
     try {
       var blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: type || 'application/pdf' }), url = URL.createObjectURL(blob);

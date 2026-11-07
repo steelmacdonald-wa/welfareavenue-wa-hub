@@ -11,6 +11,9 @@
   SOURCES.hub_form = ['Hub forms', 'People who filled in a form on hub.welfareavenue.com/f/.'];
   var FORM_HOST = 'https://hub.welfareavenue.com/f/';
   var CONSENT_DEFAULT = 'Yes, Welfare Avenue can email me news, volunteer call-outs and ways to help. I can unsubscribe at any time.';
+  /* task 10b: the email box's words in French too (a draft for Steel), so a form's words follow its language */
+  var CONSENT_DEFAULTS = { en: CONSENT_DEFAULT, fr: 'Oui, Welfare Avenue peut m’envoyer par courriel des nouvelles, des appels aux bénévoles et des façons d’aider. Je peux me désabonner en tout temps.' };
+  function consentDefault(lang) { return CONSENT_DEFAULTS[lang === 'fr' ? 'fr' : 'en']; }
   var FM = { group: '', fid: null, f: null, sub: '', msg: '', err: '', busy: '', confirm: '', subs: null, subsFor: null, showSpam: false, showTests: false, openSub: null, counts: null };
   LOADERS.forms = function () { return db.from('crm_forms').select('*').order('created_at', { ascending: true }); };
   LOADERS.fstats = function () { return db.from('crm_form_stats_v').select('*'); };
@@ -31,12 +34,12 @@
     var ch = chapterOf288(cur);
     return '<div class="w155two"><label class="w155lb">Chapter<select class="w152sel" data-w288set="chapter">' + chOpts + '</select></label>' +
       '<label class="w155lb">Campaign<select class="w152sel" data-w288set="campaign_id">' + cpOpts + '</select></label></div>' +
-      '<p class="m">' + (cur ? 'Everyone who answers joins ' + E((ch && ch.name_en) || cur) + '.' + (f.kind === 'volunteer' ? ' The serving dates are its servings.' : '') : 'No chapter: answers join no chapter.') + '</p>';
+      '<p class="m">' + (cur ? 'Everyone who answers joins ' + E((ch && ch.name_en) || cur) + '.' + (f.kind === 'volunteer' ? ' The serving dates are its servings.' : '') : 'No chapter: counted as Montreal.') + '</p>';   /* task 10b: Steel's decision 5, the same sentence as the contact form */
   }
   function smsHtml288(f) {
     var sm = (f.consent && f.consent.sms) || {};
     return '<div class="w288sms"><label class="w156ck"><input type="checkbox" data-w288sms="ask"' + (sm.ask ? ' checked' : '') + '> Also ask for text consent</label>' +
-      (sm.ask ? '<label class="w155lb">The words next to the text box<textarea class="w152in" data-w288sms="label" rows="2">' + E(sm.label || '') + '</textarea></label>' +
+      (sm.ask ? '<label class="w155lb">The words next to the text box<textarea class="w152in" data-w288sms="label" rows="2">' + E(sm.label || '') + '</textarea></label>' + langWarn156(f, 'sms') +
         '<p class="m">A second box under the email one. A ticked box records express consent to texts with these words, the form and the date. Replying STOP still stops every text.</p>' : '') + '</div>';
   }
   var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED], application: ['Join the team (HR centre)', GREEN] };
@@ -231,9 +234,9 @@
         chapCampHtml288(f) + '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +
       '<h4 class="w156h4">Questions</h4>' + f.questions.map(function (q, i) { return qHtml(q, i, f.questions.length, f.kind); }).join('') +
       '<div class="w154acts"><button class="w152btn ghost" data-w156qadd="text">' + I('plus') + ' Add a question</button></div>' +
-      '<h4 class="w156h4">Email permission</h4><div class="w156box"><label class="w156ck"><input type="checkbox" data-w156c="ask"' + (f.consent.ask ? ' checked' : '') + '> Ask for permission to email them (a box they tick themselves)</label>' +
+      '<h4 class="w156h4">Permission to contact</h4><div class="w156box"><label class="w156ck"><input type="checkbox" data-w156c="ask"' + (f.consent.ask ? ' checked' : '') + '> Ask for permission to email them (a box they tick themselves)</label>' +   /* task 10b: Steel's decision 14 (it holds the text box too) */
       (f.consent.ask ? '<label class="w156ck"><input type="checkbox" data-w156c="required"' + (f.consent.required ? ' checked' : '') + '> They must tick it to send the form (a newsletter sign-up)</label>' +
-        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label><p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue’s address and email beside it.</p>' : '') + smsHtml288(f) + '</div>' +
+        '<label class="w155lb">The words next to the box<textarea class="w152in" data-w156c="label" rows="2">' + E(f.consent.label || '') + '</textarea></label>' + langWarn156(f, 'email') + '<p class="m">A ticked box records express consent with these words and the date (CASL). The page shows Welfare Avenue’s address and email beside it.</p>' : '') + smsHtml288(f) + '</div>' +
       inp('thank_you', 'Thank-you message (after they send it)', 'Thank you. We have your answers.', true) +
       '<div class="w154acts"><button class="w152btn" data-w156save="1">' + I('check') + ' Save</button>' +
       (f.id && !live ? '<button class="w152btn ghost" data-w156pub="1">' + I('send') + ' Put it live…</button>' : '') +
@@ -275,7 +278,7 @@
     return '<div class="w154card w156pv"><h3>' + I('eye') + ' Preview</h3>' + (f.status !== 'published' ? '<p class="m">Not live yet: only the team sees this form.</p>' : '<p class="m">Live at <a href="' + E(FORM_HOST + f.slug) + '" target="_blank" rel="noopener">hub.welfareavenue.com/f/' + E(f.slug) + '</a>.</p>') +
       bandHtml168(f) + '<div class="w156page"><i class="w156rule"></i>' + (f.intro ? '<p>' + E(f.intro) + '</p>' : '') +
       f.questions.map(function (q) { return '<div class="w156pq">' + one(q) + '</div>'; }).join('') +
-      (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || CONSENT_DEFAULT) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
+      (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || consentDefault(f.lang)) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
       (f.consent && f.consent.sms && f.consent.sms.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.sms.label || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']) + '</span></div>' : '') +
       '<span class="w156send">' + (f.lang === 'fr' ? 'Envoyer' : 'Send') + '</span></div></div></div>';
   }
@@ -395,7 +398,7 @@
     return newFields(f).then(function () {
       var tags = String(f._tags || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
       var row = { slug: f.slug, title: String(f.title).trim(), intro: String(f.intro || '').trim() || null, lang: f.lang === 'fr' ? 'fr' : 'en', kind: FKIND[f.kind] ? f.kind : 'general',
-        questions: cleanQuestions(f.questions), consent: Object.assign(f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
+        questions: cleanQuestions(f.questions), consent: Object.assign(f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || consentDefault(f.lang) } : { ask: false },
           f.consent.sms && f.consent.sms.ask ? { sms: { ask: true, label: String(f.consent.sms.label || '').trim() || SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en'] } } : {}),
         thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, purpose: purposeOf(f), updated_by: actor() };
       if (row.kind !== 'volunteer') delete row.settings.volunteer_record;
@@ -468,14 +471,14 @@
     + '.w156url{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--wa-muted,' + MUTED + ');}.w156url .w152in{flex:1;min-width:0;}'
     + '.w156sheet{border-radius:16px;overflow:hidden;border:1px solid rgba(16,63,57,.12);background:rgba(16,63,57,.05);}.w156band{position:relative;background:' + GREEN + ' center/cover no-repeat;color:' + CREAM + ';padding:12px 16px 30px;min-height:150px;display:flex;flex-direction:column;}'
     + '.w156band:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.5),rgba(16,63,57,.92));}.w156band > *{position:relative;}'
-    + '.w168top{display:flex;align-items:center;justify-content:space-between;}.w168top img{height:30px;width:auto;}.w168top .w168star{height:30px;transform:rotate(12deg);}'
+    + '.w168top{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px;}.w168top img{height:30px;width:auto;min-width:0;max-width:100%;object-fit:contain;}.w168top .w168star{height:30px;transform:rotate(12deg);}'
     + '.w168ey{margin-top:auto;padding-top:18px;font-size:10.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';}.w156band .w156t{color:' + CREAM + ';font-size:26px;}'
     + '.w168cov .w168now{display:flex;gap:10px;align-items:center;margin:0 0 10px;}.w168cov .w168now .im{flex:0 0 96px;height:60px;border-radius:10px;background:' + GREEN + ' center/cover;}.w168cov .w168now b{display:block;font-size:13.5px;}.w168cov .w168now .w152btn{margin-top:6px;}'
     + '.w168grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;max-height:232px;overflow-y:auto;padding:2px;}'
     + '.w168th{aspect-ratio:3/2;border:2px solid transparent;border-radius:9px;background:' + GREEN + ' center/cover;cursor:pointer;padding:0;}.w168th:hover{border-color:' + GOLD + ';}.w168th.on{border-color:' + GOLD + ';box-shadow:0 0 0 2px ' + GREEN + ';}.w168th:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
     + '.w156page{background:' + CREAM + ';margin:-18px 12px 12px;border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(16,63,57,.08);position:relative;}.w156t{font-family:' + HEAD + ';font-weight:700;font-size:24px;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;}'
     + '.w156rule{display:block;width:44px;height:3px;border-radius:3px;background:' + GOLD + ';margin:8px 0 10px;}.w156page p{font-size:13.5px;margin:0 0 12px;color:#3d3c39;}'
-    + '.w156pq{margin:0 0 12px;}.w156pl{font-weight:600;font-size:13.5px;margin-bottom:4px;}.w156req{color:' + FLAG + ';margin-left:2px;}.w156pc{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '.w156pq{margin:0 0 12px;min-width:0;}.w156pq .w152in{width:100%;max-width:100%;min-width:0;box-sizing:border-box;}.w156pl{font-weight:600;font-size:13.5px;margin-bottom:4px;}.w156req{color:' + FLAG + ';margin-left:2px;}.w156pc{display:flex;flex-wrap:wrap;gap:6px;}'
     + '.w156pr,.w156pb{border:1px solid rgba(16,63,57,.18);border-radius:10px;padding:6px 10px;font-size:13px;background:' + CREAM + ';}.w156pr:before{content:"\\25CB  ";color:' + MUTED + ';}.w156pb:before{content:"\\2610  ";color:' + MUTED + ';}'
     + '.w156pcons .w156pb{border-style:dashed;display:block;}.w156send{display:inline-block;background:' + GOLD + ';color:' + INK + ';font-weight:600;border-radius:999px;padding:8px 20px;font-size:14px;}.w156page .w152in[disabled]{background:' + CREAM + ';}'
     + '.w156subs{display:flex;flex-direction:column;}.w156sub{border-top:1px solid rgba(16,63,57,.08);}.w156sh{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;padding:10px 4px;font-size:14px;}'
@@ -519,9 +522,9 @@
     var t = e.target, f = FM.f; if (!f || !t || !t.closest || !t.closest('.w152root')) return;
     var key, i;
     if (t.hasAttribute('data-w156k')) {
-      key = t.getAttribute('data-w156k'); f[key] = t.value;
-      if (key === 'kind' && e.type === 'change') { if (t.value === 'volunteer' && f.settings.volunteer_record == null) f.settings.volunteer_record = true; paint(); }
-      else if (key === 'lang' && e.type === 'change') paint();
+      key = t.getAttribute('data-w156k'); var was = f[key]; f[key] = t.value;
+      if (key === 'kind' && e.type === 'change') { if (t.value === 'volunteer' && f.settings.volunteer_record == null) f.settings.volunteer_record = true; repaint156(t); }
+      else if (key === 'lang' && e.type === 'change') { langSwap156(f, was, t.value); repaint156(t); }
       else if (key === 'title' || key === 'intro') previewSoon156();
       return;
     }
@@ -533,15 +536,21 @@
         if (t.value) { f.settings.chapter = t.value; var ch = chapterOf288(t.value); if (ch && ch.name_en && f.kind === 'volunteer') f.settings.serving_location = ch.name_en; }
         else delete f.settings.chapter;
       } else if (key === 'campaign_id') { if (t.value) f.settings.campaign_id = Number(t.value); else delete f.settings.campaign_id; }
-      paint(); return;
+      repaint156(t); return;
     }
     if (t.hasAttribute('data-w288sms')) {
       key = t.getAttribute('data-w288sms'); f.consent.sms = f.consent.sms || {};
-      if (key === 'ask') { f.consent.sms.ask = t.checked; if (t.checked && !f.consent.sms.label) f.consent.sms.label = SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']; paint(); }
-      else { f.consent.sms[key] = t.value; previewSoon156(); }
+      if (key === 'ask') { f.consent.sms.ask = t.checked; if (t.checked && !f.consent.sms.label) f.consent.sms.label = SMS_DEFAULT[f.lang === 'fr' ? 'fr' : 'en']; repaint156(t); }
+      else { f.consent.sms[key] = t.value; if (FM.langWarn) { delete FM.langWarn.sms; var ws = document.querySelector('#crm [data-w156langwarn="sms"]'); if (ws) ws.remove(); } previewSoon156(); }
       return;
     }
-    if (t.hasAttribute('data-w156c')) { key = t.getAttribute('data-w156c'); f.consent[key] = t.type === 'checkbox' ? t.checked : t.value; if (key === 'ask' && t.checked && !f.consent.label) f.consent.label = CONSENT_DEFAULT; if (t.type === 'checkbox') paint(); return; }
+    if (t.hasAttribute('data-w156c')) {
+      key = t.getAttribute('data-w156c'); f.consent[key] = t.type === 'checkbox' ? t.checked : t.value;
+      if (key === 'ask' && t.checked && !f.consent.label) f.consent.label = consentDefault(f.lang);
+      if (key === 'label' && FM.langWarn) { delete FM.langWarn.email; var we = document.querySelector('#crm [data-w156langwarn="email"]'); if (we) we.remove(); }
+      if (t.type === 'checkbox') repaint156(t);
+      return;
+    }
     if (t.hasAttribute('data-w156qk')) {
       i = qAt(t); if (i < 0) return; key = t.getAttribute('data-w156qk'); var q = f.questions[i];
       q[key] = t.type === 'checkbox' ? t.checked : t.value;
@@ -549,6 +558,28 @@
       if (key === 'type' || (key === 'to' && e.type === 'change') || key === 'required') paint();
       else if (key === 'label' || key === '_opts' || key === 'help') previewSoon156();
     }
+  }
+  /* task 10b: a repaint after a select or a box keeps the keyboard focus on that control (a closed select on Windows fires change on each
+     arrow key, so without it a keyboard user moved one step at a time) */
+  function repaint156(t) {
+    var sel = null;
+    ['data-w156k', 'data-w288set', 'data-w288sms', 'data-w156c', 'data-w156set'].some(function (a) { if (t && t.hasAttribute && t.hasAttribute(a)) { sel = '#crm [' + a + '="' + t.getAttribute(a) + '"]'; return true; } return false; });
+    paint();
+    var back = sel && document.querySelector(sel); if (back) { try { back.focus({ preventScroll: true }); } catch (x) { /* fine */ } }
+  }
+  /* task 10b (UI review row 11): when a form changes language, words still at the other language's default follow it; words someone wrote
+     stay, with a line saying they may be in the other language */
+  function langSwap156(f, from, to) {
+    if (!from || from === to) return;
+    var name = { en: 'English', fr: 'French' }, warn = {};
+    var c = f.consent || {}, sm = c.sms || {};
+    if (c.ask && c.label) { if (c.label === consentDefault(from)) c.label = consentDefault(to); else if (c.label !== consentDefault(to)) warn.email = name[from] || from; }
+    if (sm.ask && sm.label) { if (sm.label === SMS_DEFAULT[from === 'fr' ? 'fr' : 'en']) sm.label = SMS_DEFAULT[to === 'fr' ? 'fr' : 'en']; else if (sm.label !== SMS_DEFAULT[to === 'fr' ? 'fr' : 'en']) warn.sms = name[from] || from; }
+    FM.langWarn = (warn.email || warn.sms) ? Object.assign({ id: f.id }, warn) : null;
+  }
+  function langWarn156(f, box) {
+    var w = FM.langWarn; if (!w || w.id !== f.id || !w[box]) return '';
+    return '<p class="w156warn" data-w156langwarn="' + box + '" role="status">These words were written for the ' + E(w[box]) + ' form: check them before you save.</p>';
   }
   var pv156 = null;
   function previewSoon156() { clearTimeout(pv156); pv156 = setTimeout(function () { var pv = document.querySelector('#crm .w156pv'); if (pv && FM.f) pv.outerHTML = previewHtml156(); }, 350); }

@@ -11,10 +11,18 @@
     var same = S.sheet === tag;
     S.sheet = tag || 'sheet';
     var keep = same ? o.scrollTop : 0;
+    var fk = same ? focusKey(document.activeElement, o) : null;   /* task 10b: a repaint of the same sheet keeps the keyboard focus */
     o.innerHTML = '<div class="sh' + (narrow ? ' narrow' : '') + '"><button class="xb" data-w152close="1" aria-label="Close">' + I('x') + '</button>' + html + '</div>';
     o.style.display = 'flex';
     o.scrollTop = keep;
+    if (fk) { var back = o.querySelector(fk); if (back) { try { back.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
     if (!same) { var f = o.querySelector('.w152form input,.w152form select,.w152form textarea') || o.querySelector('.xb'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  /* the element's own data attribute (data-w283dncr="5003", data-f="notes") finds it again after a repaint */
+  function focusKey(el, root) {
+    if (!el || !root || !root.contains(el) || !el.attributes) return null;
+    for (var i = 0; i < el.attributes.length; i++) { var a = el.attributes[i]; if (/^data-(w\d|f$)/.test(a.name)) return '[' + a.name + '="' + String(a.value).replace(/["\\]/g, '\\$&') + '"]'; }
+    return null;
   }
   /* closing a contact puts the address back to the list (no page repaint) */
   function closeSheet(quiet) {
@@ -24,7 +32,11 @@
     if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
     lastFocus = null;
   }
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.sheet) closeSheet(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !S.sheet) return;
+    if (S.dnc && S.dnc.ask && S.sheet === 'c:' + S.dnc.id) { dncCancel(S.dnc.id); return; }   /* task 10b: Escape steps back out of the do-not-contact question first */
+    closeSheet();
+  });
 
   function loadDetail(c) {
     var id = String(c.id);
@@ -68,8 +80,9 @@
   function postalIn(addr, pc) { var a = String(addr || '').replace(/\s+/g, '').toLowerCase(), p = String(pc || '').replace(/\s+/g, '').toLowerCase(); return !!p && a.indexOf(p) >= 0; }
   function detailsHtml(c, d) {
     var rows = [];
-    if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
-    if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
+    var dnc = !!c.do_not_contact;   /* task 10b: for a do-not-contact person the address and phone are text, not mailto or tel links */
+    if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return dnc ? '<span class="w152txt">' + E(e) + '</span>' : '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
+    if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return !dnc && telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
     var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), postalIn(c.address, c.postal_code) ? '' : c.postal_code].filter(Boolean).join(' · ');
     if (place) rows.push(['Address', E(place)]);
     if (c.job_title) rows.push(['Job title', E(c.job_title)]);   /* wave283 */
@@ -88,7 +101,7 @@
       if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
       if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in the Volunteer Manager.</div>');
     }
-    if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b>' + money(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
+    if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b class="w152num">' + cents(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
     if (c.kinds.indexOf('staff') >= 0 || c.kinds.indexOf('alumni') >= 0) out.push('<div class="w152line">' + (c.kinds.indexOf('staff') >= 0 ? 'On the team' : 'Was on the team') + ' (the Hub roster)</div>');
     /* organizations from Partners */
     var orgs = (d && d.orgs) || [];
@@ -121,15 +134,16 @@
     out.push('<div class="w152line">' + links.join(' ') + '</div>');
     return out.join('');
   }
+  /* task 10b: the one rule (Steel, 5 Nov 2026) decides, do not contact first (permWhy); the consent they gave is kept below as history only */
   function permHtml(c) {
-    var p = PERM[c._perm] || PERM.unknown, bits = [];
-    if (c.email_consent === 'express' && (c.consent_source || c.consent_at)) bits.push('Given ' + [c.consent_source ? '(' + c.consent_source + ')' : '', c.consent_at ? 'on ' + fmtDay(c.consent_at) : ''].filter(Boolean).join(' '));
-    if (c.email_consent === 'implied' && c.implied_consent_until) bits.push((dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : ''));
-    if (c._perm === 'unknown' && c.email_consent === 'implied') bits.push('Their implied consent ran out' + (c.implied_consent_until ? ' on ' + fmtDay(c.implied_consent_until) : '') + '.');
-    return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' · ')) + '</div>' : '') +
-      permLine(c) +
+    var k = lower(c.email_consent), hist = '';
+    if (k === 'express') hist = permChip('express') + ' <span class="m">' + E(['Given', c.consent_source ? '(' + c.consent_source + ')' : '', c.consent_at ? 'on ' + fmtDay(c.consent_at) : ''].filter(Boolean).join(' ')) + '</span>';
+    else if (k === 'implied') hist = permChip('implied') + ' <span class="m">' + E(c.implied_consent_until ? (dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : '') : (c.consent_source || 'Recorded by the team')) + '</span>';
+    else if (k === 'none') hist = permChip('none') + ' <span class="m">' + E(PERM.none[2]) + '</span>';
+    return permLine(c) +
+      (hist ? '<div class="w152line w152hist"><span class="w152hl">History</span> ' + hist + '</div>' : '') +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
+      '<p class="w152pnote w152measure">' + E(RULE_TEXT) + ' Nobody marked do not contact gets any email, and a bouncing address stops everything.</p>';   /* final review M6: Steel's rule of 5 Nov 2026 */
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">×</button></span>'; }).join('') +
@@ -152,7 +166,7 @@
         system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
-      out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
+      out.push({ at: g.donated_at, icon: 'heart', t: cents(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),   /* task 10b: two decimals in lists */
         p: [g.campaign, g.designation, g.platform ? 'through ' + (g.platform.charAt(0).toUpperCase() + g.platform.slice(1)) : ''].filter(Boolean).join(' · '),
         rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
     });
@@ -207,14 +221,20 @@
   }
   function contactHtml(c, d) {
     var srcLine = 'From ' + sourceName(c.source) + (c.created_at ? ' · in the CRM since ' + fmtDay(c.created_at) : '');
-    var qa = [];
-    if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
-    if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
-    if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    var qa = [], dnc = !!c.do_not_contact;
+    /* task 10b (UI review top fix 1): a do-not-contact person shows no way to reach them (no mailto, tel, sms or Send, which would go round
+       every server check); the banner says why, and a deceased person never shows a Call button */
+    if (!dnc) {
+      if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
+      if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
+      if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    }
     if (can('gifts_edit')) qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');   /* wave283: gifts_edit */
-    if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
-    return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
-      (c.do_not_contact ? '<div class="w283dnc" role="status">' + I('lock') + ' <b>' + E(dncWords(c)) + '</b></div>' : '') +   /* wave283 */
+    if (!dnc && c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
+    /* the header names email only when it is stopped; the consent they gave is history, under Email permission */
+    var stop = !dnc && (c._perm === 'unsub' || c._perm === 'bounced') ? permChip(c._perm) : '';
+    return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + stop + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
+      (dnc ? '<div class="w283dnc" role="status" data-w283banner>' + I('lock') + '<span><b>' + E(dncWords(c)) + '</b><span class="w283dncm">No email, calls or texts.</span></span></div>' : '') +   /* wave283 */
       (S.note && S.note.id === String(c.id) ? '<div class="w152warn" role="status">' + E(S.note.msg) + '</div>' : '') +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +
@@ -243,7 +263,7 @@
 
   /* ---------- the forms ---------- */
   function field(label, html, full, hint) { return '<label' + (full ? ' class="full"' : '') + '>' + E(label) + (hint ? ' <span class="hint">' + E(hint) + '</span>' : '') + html + '</label>'; }
-  function inp(name, val, ph, type) { return '<input data-f="' + name + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + E(val == null ? '' : val) + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>'; }
+  function inp(name, val, ph, type, max) { return '<input data-f="' + name + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + E(val == null ? '' : val) + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + (max ? ' maxlength="' + max + '"' : '') + '>'; }
   function area(name, val, ph) { return '<textarea data-f="' + name + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>' + E(val == null ? '' : val) + '</textarea>'; }
   function sel(name, list, cur) { return '<select data-f="' + name + '">' + opts(list, cur) + '</select>'; }
   function formVals() {
@@ -281,7 +301,7 @@
       field('Street address', inp('address', x.address), true) +
       field('City', inp('city', x.city, 'Montreal')) + field('Province', inp('province', x.province, 'QC')) +
       field('Postal code', inp('postal_code', x.postal_code, 'H2X 1Y4')) + field('Language', sel('language', LANGS, x.language || '')) +
-      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer')) +   /* wave283 */
+      field('Job title', inp('job_title', x.job_title, 'Chef, Teacher, Program officer', null, 120)) +   /* wave283; task 10b: 120 characters (Keela or the API may still bring a longer one) */
       '<div class="full lbl">What they are to us' + kindsBoxes(c, isNew) + '</div>' +
       '<div class="full lbl w283">Chapter' + chapterBoxes(c) + '</div>' +   /* wave283: one toggle per active chapter (crm_contact_chapters, source hand) */
       (can('hr_private') ? birthField(c) : '') +   /* wave283: HR and admins only (crm_contact_private) */
@@ -301,7 +321,7 @@
     if (!ready) return '<div class="kinds" data-w283chs data-ready="0"><span class="m">Loading the chapters…</span></div>';
     return '<div class="kinds" data-w283chs data-ready="1" data-had="' + E(had.join(',')) + '">' + (S.chapters || []).map(function (ch) {
       return '<label><input type="checkbox" data-w283ch="' + E(ch.code) + '"' + (had.indexOf(ch.code) >= 0 ? ' checked' : '') + '> ' + E(ch.name_en || ch.code) + '</label>';
-    }).join('') + '<span class="w152count">No chapter means Montreal in the lists.</span></div>';
+    }).join('') + '<span class="w152count">No chapter: counted as Montreal.</span></div>';   /* task 10b: Steel's decision 5, the same sentence as the form editor */
   }
   function birthField(c) {
     var d = c ? S.detail[String(c.id)] : null, v = d && typeof d.birth === 'string' ? d.birth : '';
@@ -360,69 +380,100 @@
     return errs;
   }
   var DNC_REASONS = [['deceased', 'Deceased'], ['asked', 'They asked'], ['other', 'Other']];
-  function dncWords(c) { return 'Do not contact' + (c.dnc_reason ? ' (' + String(c.dnc_reason) + ')' : ''); }
+  /* task 10b: the picker's words, never the stored code ("Do not contact: they asked"). "Other" keeps no note: crm_set_do_not_contact and the
+     dnc_reason column accept only deceased, asked or other, and Steel's ruling allows no schema change in this slice */
+  var DNC_WORDS = { deceased: 'deceased', asked: 'they asked', other: 'other' };
+  function dncWords(c) { var r = lower(c.dnc_reason); return 'Do not contact' + (r ? ': ' + (DNC_WORDS[r] || r) : ''); }
+  function dncReasonOk(r) { return DNC_REASONS.some(function (x) { return x[0] === r; }); }
+  function dncFocus(sel) { var el = document.querySelector('#w152sheet ' + sel); if (el) { try { el.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  /* task 10b (Steel's decision 3): confirm the set, not the clear. Setting it unsubscribes them for good, so it asks first; clearing never
+     resubscribes anyone, so it goes through at once with a short note. The button waits for a reason (no late "Pick why first.") */
   function dncHtml(c) {
-    var st = S.dnc && S.dnc.id === String(c.id) ? S.dnc : {};
-    var err = '<span class="w152err" data-w283dncerr role="status">' + E(st.err || '') + '</span>';
+    var id = String(c.id), st = S.dnc && S.dnc.id === id ? S.dnc : {};
+    var err = '<span class="w152err" data-w283dncerr id="w283dncerr-' + E(id) + '" role="status">' + E(st.err || '') + '</span>';
     if (c.do_not_contact) {
       return '<div class="w152line">' + E(dncWords(c)) + '. <span class="w283m">No email of any kind, no texts and no WhatsApp. Receipts are still issued and kept, not emailed.</span></div>' +
-        (st.confirm ? '<div class="w283cf"><b>Clear do not contact for ' + E(c.full_name) + '?</b> This does not resubscribe them.' +
-            '<div class="w283acts"><button class="w152btn sm" data-w283dncclear="' + E(c.id) + '">Yes, clear it</button><button class="w152btn sm ghost" data-w283dnckeep="' + E(c.id) + '">Keep it</button></div></div>'
-          : '<button class="w152mini" data-w283dncask="' + E(c.id) + '">' + I('x') + 'Clear do not contact</button>') + err;
+        '<div class="w283acts"><button class="w152btn sm soft" data-w283dncclear="' + E(id) + '">' + I('x') + ' Clear do not contact</button></div>' +
+        '<p class="w283m">Clearing it does not resubscribe them.</p>' + err;
     }
-    return '<div class="w283acts"><select class="w152sel" data-w283dncr aria-label="Why they are not to be contacted"><option value="">Why…</option>' +
-      DNC_REASONS.map(function (r) { return '<option value="' + r[0] + '">' + E(r[1]) + '</option>'; }).join('') + '</select>' +
-      '<button class="w152btn sm ghost" data-w283dnc="' + E(c.id) + '">' + I('lock') + ' Do not contact</button></div>' +
-      '<p class="w283m">Stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>' + err;
+    var r = dncReasonOk(st.reason) ? st.reason : '';
+    return (st.note ? '<div class="w283said ok" role="status" data-w283note>' + E(st.note) + '</div>' : '') +
+      '<div class="w283acts"><select class="w152sel" data-w283dncr="' + E(id) + '" aria-label="Why they are not to be contacted" aria-describedby="w283dnch-' + E(id) + ' w283dncerr-' + E(id) + '"><option value="">Why…</option>' +
+      DNC_REASONS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === r ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select>' +
+      '<button class="w152btn sm soft" data-w283dnc="' + E(id) + '"' + (r && !st.ask ? '' : ' disabled') + '>' + I('lock') + ' Do not contact</button></div>' +
+      (st.ask ? '<div class="w283cf" data-w283cf><b>Set do not contact for ' + E(c.full_name) + '?</b> This unsubscribes them from everything. Clearing it later will not resubscribe them.' +
+          '<div class="w283acts"><button class="w152btn sm danger" data-w283dncyes="' + E(id) + '">Yes, set do not contact</button><button class="w152btn sm ghost" data-w283dncno="' + E(id) + '">Cancel</button></div></div>'
+        : '<p class="w283m" id="w283dnch-' + E(id) + '">Pick why, then Do not contact. It stops every email (a receipt is still issued and kept, not emailed), texts and WhatsApp, and unsubscribes them.</p>') + err;
   }
   function saveDnc(id, reason) {
     var c = contact(id); if (!c) return;
-    if (reason !== null && DNC_REASONS.map(function (r) { return r[0]; }).indexOf(reason) < 0) { S.dnc = { id: String(c.id), err: 'Pick why first.' }; contactSheet(c.id); return; }
-    S.dnc = { id: String(c.id), err: '' };
+    var sid = String(c.id);
+    if (reason !== null && !dncReasonOk(reason)) { S.dnc = { id: sid, err: 'Pick why first.' }; contactSheet(c.id); dncFocus('[data-w283dncr]'); return; }
+    S.dnc = { id: sid, err: '', reason: reason || '' };
+    var failed = function (m) { S.dnc = { id: sid, err: 'Not saved: ' + String(m).slice(0, 160), reason: reason || '' }; contactSheet(c.id); dncFocus(reason ? '[data-w283dncr]' : '[data-w283dncclear]'); };
     Promise.resolve(db.rpc('crm_set_do_not_contact', { p_contact: Number(c.id), p_reason: reason })).then(function (r) {
-      if (r && r.error) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String(r.error.message || r.error).slice(0, 160) }; contactSheet(c.id); return; }
+      if (r && r.error) { failed(r.error.message || r.error); return; }
       var before = c.do_not_contact ? dncWords(c) : null, st = lower(c.email_status);
       /* what crm_set_do_not_contact did (wave281): with a reason, the flag and every opt-out; with none, the flag only (never a resubscribe) */
       applyLocal(c.id, reason ? { do_not_contact: true, dnc_reason: reason, email_status: st === 'bounced' || st === 'complained' ? c.email_status : 'unsubscribed', sms_opt_out: true }
         : { do_not_contact: false, dnc_reason: null });
       if (reason) audit(c.id, 'do_not_contact', before, 'do not contact: ' + reason);   /* clearing is logged by the function itself */
-      S.dnc = null;
+      S.dnc = reason ? null : { id: sid, note: 'Cleared. This did not resubscribe them.' };
       toastS(reason ? 'Do not contact is set' : 'Do not contact is cleared');
       contactSheet(c.id); repaintBehind();
-    }, function (e) { S.dnc = { id: String(c.id), err: 'Not saved: ' + String((e && e.message) || e).slice(0, 160) }; contactSheet(c.id); });
+      dncFocus(reason ? '[data-w283dncclear]' : '[data-w283dncr]');   /* focus stays where the control was */
+    }, function (e) { failed((e && e.message) || e); });
   }
+  function dncCancel(id) { S.dnc = { id: String(id), reason: (S.dnc && S.dnc.reason) || '' }; contactSheet(id); dncFocus('[data-w283dnc]'); }
   document.addEventListener('click', function (e) {
     var t = e.target, el; if (!t || !t.closest || !t.closest('#w152sheet')) return;
-    if ((el = t.closest('[data-w283dnc]'))) { e.preventDefault(); var sl = document.querySelector('#w152sheet [data-w283dncr]'); saveDnc(el.getAttribute('data-w283dnc'), sl && sl.value ? sl.value : ''); return; }
-    if ((el = t.closest('[data-w283dncask]'))) { e.preventDefault(); S.dnc = { id: el.getAttribute('data-w283dncask'), confirm: true, err: '' }; contactSheet(el.getAttribute('data-w283dncask')); return; }
-    if ((el = t.closest('[data-w283dnckeep]'))) { e.preventDefault(); S.dnc = null; contactSheet(el.getAttribute('data-w283dnckeep')); return; }
-    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+    if ((el = t.closest('[data-w283dnc]'))) {
+      e.preventDefault(); var id0 = el.getAttribute('data-w283dnc'), sl = document.querySelector('#w152sheet [data-w283dncr]'), r0 = sl && sl.value ? sl.value : '';
+      if (!dncReasonOk(r0)) { saveDnc(id0, ''); return; }
+      S.dnc = { id: String(id0), ask: true, reason: r0, err: '' }; contactSheet(id0); dncFocus('[data-w283dncno]');   /* the safe choice has the focus */
+      return;
+    }
+    if ((el = t.closest('[data-w283dncyes]'))) { e.preventDefault(); el.disabled = true; saveDnc(el.getAttribute('data-w283dncyes'), (S.dnc && S.dnc.reason) || ''); return; }
+    if ((el = t.closest('[data-w283dncno]'))) { e.preventDefault(); dncCancel(el.getAttribute('data-w283dncno')); return; }
+    if ((el = t.closest('[data-w283dncclear]'))) { e.preventDefault(); el.disabled = true; saveDnc(el.getAttribute('data-w283dncclear'), null); return; }
+  });
+  /* picking a reason enables the button in place: no repaint, so the focus and the select stay (a closed select on Windows fires change on each arrow key) */
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-w283dncr')) return;
+    var v = dncReasonOk(t.value) ? t.value : '';
+    S.dnc = { id: String(t.getAttribute('data-w283dncr')), reason: v, err: '' };
+    var b = document.querySelector('#w152sheet [data-w283dnc]'); if (b) b.disabled = !v;
+    var er = document.querySelector('#w152sheet [data-w283dncerr]'); if (er) er.textContent = '';
+    var nt = document.querySelector('#w152sheet [data-w283note]'); if (nt) nt.remove();
   });
   var css283 = document.createElement('style'); css283.id = 'w283css';
   css283.textContent = ''
-    + '.w283dnc{display:flex;align-items:center;gap:8px;margin:10px 40px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;}'
-    + '.w283dnc .w152i{width:16px;height:16px;flex:none;}'
+    + '.w283dnc{display:flex;align-items:flex-start;gap:8px;margin:10px 0 0;padding:9px 12px;border-radius:10px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13.5px;line-height:1.45;}'
+    + '.w283dnc .w152i{width:16px;height:16px;flex:none;margin-top:2px;}.w283dnc>span{min-width:0;display:flex;flex-wrap:wrap;column-gap:10px;row-gap:2px;}'
+    + '.w283dncm{color:#6B6965;font-weight:500;}'
     + '.w283acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0;}.w283acts .w152sel{width:auto;}'
     + '.w283m{color:#6B6965;font-size:12.5px;line-height:1.45;}'
-    + '.w283cf{background:rgba(16,63,57,.05);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
-    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}'
+    + '.w283cf{background:rgba(179,64,47,.06);border-radius:10px;padding:9px 11px;margin:6px 0;font-size:13px;line-height:1.5;animation:w283in 140ms ease-out;}'
+    + '.w283said{color:' + FLAG + ';font-weight:600;font-size:13px;}.w283said.ok{color:' + GREEN + ';margin:2px 0 4px;}'
     + '.w283first{margin:8px 0 4px;font-size:13.5px;font-weight:600;line-height:1.45;}'
     + '.w283 button:focus-visible,.w283 select:focus-visible,.w283 input:focus-visible,.w283cf button:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:2px;box-shadow:0 0 0 5px rgba(220,165,39,.35);}'
-    + '@keyframes w283in{from{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.w283cf{animation:none;}}';
+    /* task 10b: the confirmation fades in, reduced motion included (opacity is not movement) */
+    + '@keyframes w283in{from{opacity:0}to{opacity:1}}';
   document.head.appendChild(css283);
   function permForm(id) {
     var c = contact(id); if (!c) return;
     var until = c.implied_consent_until ? dayOf(c.implied_consent_until) : (c._last ? addYears(c._last, 2) : '');
-    var html = '<h2>Email permission</h2><div class="sub">' + E(c.full_name) + '. What they agreed to, so newsletters and campaigns only go to people who said yes.</div><div class="w152form">' +
+    var spam = lower(c.email_status) === 'complained';
+    var html = '<h2>Email permission</h2><div class="sub">' + E(c.full_name) + '. Their opt-outs decide what they get; the consent they gave is kept as history.</div><div class="w152form">' +
       field('Permission', sel('email_consent', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: an existing relationship'], ['none', 'No consent']], c.email_consent || ''), true) +
       field('Where it came from', inp('consent_source', c.consent_source, 'the website form, a sign-up sheet, an email'), true) +
       field('Date they said yes', inp('consent_at', c.consent_at ? dayOf(c.consent_at) : '', '', 'date'), false, 'express consent') +
       field('Implied consent runs until', inp('implied_consent_until', until, '', 'date'), false, 'two years after the last gift, membership or volunteering') +
-      '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + '> They unsubscribed: no newsletters or campaigns</label>' +
-      (lower(c.email_status) === 'complained' ? '<div class="note" data-w283spam>They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.</div>' : '') +   /* final review M4 */
+      '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + (spam ? ' disabled aria-describedby="w283spam"' : '') + '> They unsubscribed: no newsletters, fundraising or volunteer emails</label>' +
+      (spam ? '<div class="note" data-w283spam id="w283spam">They marked one of our emails as spam, so this stays ticked: a spam complaint cannot be cleared here.</div>' : '') +   /* final review M4; task 10b: the box is disabled too */
       '<label class="chk full"><input type="checkbox" data-f="sms_opt_out"' + (c.sms_opt_out ? ' checked' : '') + '> No text messages</label>' +
       (c.do_not_contact ? '<div class="note" data-w281dnc>Do not contact is on. Clear it first to change these.</div>' : '') +
-      '<div class="note">Implied consent under CASL: an existing relationship in the last two years, such as a gift or volunteering for a registered charity, or a membership. It runs out two years after the last one. When in doubt, ask for express consent.</div>' +
+      '<div class="note">' + E(RULE_TEXT) + ' Express and implied consent are kept on the record as history.</div>' +   /* task 10b: Steel's rule of 5 Nov 2026, not the CASL note */
       '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button>' + (c.do_not_contact ? '' : '<button class="w152btn" data-w152savep="' + E(id) + '">' + I('check') + ' Save</button>') + '</div>';
     if (c.do_not_contact) html = html.replace(/<(input|select) /g, '<$1 disabled ');   /* final review I1: do not contact holds these (the database too), so the form only shows them */
     openSheet(html, 'perm:' + id, true);
@@ -545,8 +596,9 @@
     if (v.email_consent === 'implied') { if (!v.implied_consent_until) { showErr('Say until when the implied consent runs (two years after the last gift or volunteering).'); return; } row.implied_consent_until = v.implied_consent_until; }
     else row.implied_consent_until = null;
     var st = lower(c.email_status);
-    if (v.unsub) row.email_status = 'unsubscribed';
-    else if (st === 'unsubscribed') row.email_status = 'unknown';   /* final review M4: a spam complaint (complained) is never cleared from here */
+    if (st === 'complained') { /* final review M4: a spam complaint is never changed from here (task 10b: not even into unsubscribed) */ }
+    else if (v.unsub) row.email_status = 'unsubscribed';
+    else if (st === 'unsubscribed') row.email_status = 'unknown';
     try {
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;

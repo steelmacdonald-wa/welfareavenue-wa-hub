@@ -127,7 +127,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
     chips: [...document.querySelectorAll('#crm [data-w152kind]')].map(b => b.textContent.trim())
   }));
   ok('#crm opens the CRM with its masthead (the crumb names Apps; in the app the app bar names it)', a.active && a.crumb === 'Apps' && a.h1 === 'Contacts', a);   /* wave197: the title is the page (Contacts) */
-  ok('the numbers: contacts (more than one page), volunteers, who served, donors', a.stats.join('|') === '1,049|1,046|71|1' && /donors/.test(a.statTxt[3] || ''), a);
+  ok('the numbers: contacts (more than one page), volunteers, who served, donors', a.stats.join('|') === '1,049|1,046|71|1' && a.statTxt[3] === 'donor' && a.statTxt[1] === 'volunteers', a);   /* task 10b: labelled by count (1 donor) */
   ok('eleven tabs, with the duplicate pairs counted (Gifts since wave153, Email since wave154, Lists and Campaigns since wave155, Forms since wave156, Automations since wave157, Reports since wave160, Studio since wave202)', a.tabs.length === 11 && /Studio/.test(a.tabs[5]) && /Forms/.test(a.tabs[8]) && /Automations/.test(a.tabs[9]) && /Reports/.test(a.tabs[10]) && /Lists/.test(a.tabs[6]) && /Sends/.test(a.tabs[7]) && /Possible duplicates\s*2/.test(a.tabs[1]) && /Sources/.test(a.tabs[2]) && /Gifts/.test(a.tabs[3]) && /Email/.test(a.tabs[4]), a.tabs);
   ok('the list shows 60 at a time, with Show more', a.rows === 60 && /Show 60 more/.test(a.more) && /1,049 contacts/.test(a.count), a);
   ok('a chip per kind that has people, with counts', a.chips.some(c => /^Volunteer\s*1046$/.test(c)) && a.chips.some(c => /^Donor\s*1$/.test(c)) && a.chips.some(c => /^Partner contact\s*1$/.test(c)) && a.chips.some(c => /^Staff\s*1$/.test(c)) && a.chips.some(c => /^Alumni\s*1$/.test(c)), a.chips);
@@ -171,9 +171,9 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   /* ---------- a contact's page ---------- */
   await click(f, '#crm [data-w152open="5001"]'); await f.page.waitForTimeout(700);
   let s = await sheet(f);
-  const h = await f.ev(() => ({ hash: location.hash, perm: (document.querySelector('#w152sheet .w152hd .w152pm') || {}).textContent, links: [...document.querySelectorAll('#w152sheet .w152qa a')].map(a => a.getAttribute('href')),
+  const h = await f.ev(() => ({ hash: location.hash, perm: (document.querySelector('#w152sheet .w152hd .w152pm') || {}).textContent, hist: (document.querySelector('#w152sheet .w152hist') || {}).innerText || '', links: [...document.querySelectorAll('#w152sheet .w152qa a')].map(a => a.getAttribute('href')),
     tl: [...document.querySelectorAll('#w152sheet .w152it .t')].map(t => t.childNodes[0].textContent), tld: [...document.querySelectorAll('#w152sheet .w152it .t .d')].map(t => t.textContent), by: [...document.querySelectorAll('#w152sheet .w152it .by span')].map(t => t.textContent) }));
-  ok('a contact opens at #crm/c/<id>, with their name and email permission', h.hash === '#crm/c/5001' && /Amara Okafor/.test(s) && h.perm === 'Express consent', h);
+  ok('a contact opens at #crm/c/<id>, with their name; the consent they gave is history under Email permission, not a header chip (task 10b)', h.hash === '#crm/c/5001' && /Amara Okafor/.test(s) && h.perm === undefined && /Express consent/.test(h.hist), h);
   ok('Email, Call and Text buttons use their email and phone', h.links.join(' ') === 'mailto:amara.okafor@example.com tel:+15145550101 sms:+15145550101', h.links);
   ok('their details: emails, phone, address, language, school', /amara\.okafor@example\.com/.test(s) && /514-555-0101/.test(s) && /12 Rue Example · Montreal, QC/.test(s) && /French/.test(s) && /Concordia/.test(s), s.slice(0, 600));
   ok('what they did with us: roles, servings, the old website', /5 servings with us \(Volunteer Manager\), the last on 13 Sep 2026/.test(s) && /3 servings on the old website, not yet in the Volunteer Manager \(9 hours\)/.test(s) && /Cook/.test(s), s.slice(0, 900));

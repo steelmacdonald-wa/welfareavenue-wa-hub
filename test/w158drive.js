@@ -84,9 +84,9 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   let b = await f.ev(() => ({ rows: [...document.querySelectorAll('#crm .w158row')].map(r => r.innerText.replace(/\s+/g, ' ')), bar: !!document.querySelector('#crm [data-w158new="1"]') && !!document.querySelector('#crm [data-w152go="#crm/gifts/receipts"]') }));
   const row = n => b.rows.filter(r => r.indexOf(n) >= 0);
   ok('the bar offers Record a gift and Receipts', b.bar, b);
-  ok('each gift says its receipt status in words: Keela’s receipt, due for the eligible amount, none for a sponsorship', b.rows.length === 5 && /Receipt KEE-2026-29/.test(row('$156.75')[0] || '') && /Receipt due/i.test(row('$100 ')[0] || '') && /for \$100\.00/.test(row('$100 ')[0] || '') &&
-    /Registration/i.test(row('$50 ')[0] || '') && /for \$20\.00/.test(row('$50 ')[0] || '') && /Sponsorship/i.test(row('$500 ')[0] || '') && /No receipt/i.test(row('$500 ')[0] || '') && /invoice or a thank-you/.test(row('$500 ')[0] || ''), b.rows);
-  ok('a tribute and how it came show on the row', /In memory of Rose Okafor/.test(row('$25 ')[0] || '') && /Cheque/.test(row('$100 ')[0] || '') && /E-transfer/.test(row('$500 ')[0] || ''), b.rows);
+  ok('each gift says its receipt status in words: Keela’s receipt, due for the eligible amount, none for a sponsorship', b.rows.length === 5 && /Receipt KEE-2026-29/.test(row('$156.75')[0] || '') && /Receipt due/i.test(row('$100.00 ')[0] || '') && /for \$100\.00/.test(row('$100.00 ')[0] || '') &&
+    /Registration/i.test(row('$50.00 ')[0] || '') && /for \$20\.00/.test(row('$50.00 ')[0] || '') && /Sponsorship/i.test(row('$500.00 ')[0] || '') && /No receipt/i.test(row('$500.00 ')[0] || '') && /invoice or a thank-you/.test(row('$500.00 ')[0] || ''), b.rows);
+  ok('a tribute and how it came show on the row', /In memory of Rose Okafor/.test(row('$25.00 ')[0] || '') && /Cheque/.test(row('$100.00 ')[0] || '') && /E-transfer/.test(row('$500.00 ')[0] || ''), b.rows);
   await shot(f, 'gifts_list');
 
   /* record a gift */

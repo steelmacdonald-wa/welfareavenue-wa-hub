@@ -109,7 +109,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('this fiscal year (1 Oct 2025 to 30 Sep 2026) counts all three gifts', /\$350 this fiscal year \(to 30 Sep 2026, 3 gifts\)/.test(g.txt), g.txt.slice(0, 400));
   await f.ev(() => { const i = document.querySelector('[data-w152gq]'); i.value = 'winter'; i.dispatchEvent(new Event('input', { bubbles: true })); }); await f.page.waitForTimeout(400);
   const g2 = await f.ev(() => ({ rows: [...document.querySelectorAll('#crm .w153gifts .w152row')].map(x => x.innerText.replace(/\s+/g, ' ').slice(0, 80)), count: document.querySelector('#crm .w152count').innerText }));
-  ok('a search narrows the gifts (a campaign) with the total of what matches', g2.rows.length === 1 && /Priya Raman/.test(g2.rows[0]) && /1 gift matches \(\$125\)/.test(g2.count), g2);
+  ok('a search narrows the gifts (a campaign) with the total of what matches', g2.rows.length === 1 && /Priya Raman/.test(g2.rows[0]) && /1 gift matches \(\$125\.00\)/.test(g2.count), g2);
   await f.ev(() => { const s2 = document.querySelector('[data-w152gyear]'); s2.value = '2026'; s2.dispatchEvent(new Event('change', { bubbles: true })); }); await f.page.waitForTimeout(300);
   ok('the fiscal year filter keeps the December 2025 gift (FY 2026 starts 1 Oct 2025)', await f.ev(() => document.querySelectorAll('#crm .w153gifts .w152row').length === 1));
   await click(f, '[data-w152gclear]'); await f.page.waitForTimeout(300);
