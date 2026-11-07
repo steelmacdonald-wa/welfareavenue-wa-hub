@@ -64,7 +64,7 @@ export function isWaGroupList(h: Hdr): boolean {
 }
 /** eh-292 fix 3: the original sender of a group post looks automated: a bulk domain (news., updates., ...) or a no-reply, newsletter or
  *  notifications local part. hello@, info@ and contact@ are people's and small organisations' addresses and never count here. */
-export const GROUP_BULK_LOCAL = /(^|[._-])(no-?reply|do-?not-?reply|newsletters?|notifications?)@/i;
+export const GROUP_BULK_LOCAL = /(^|[._-])(no[-_]?reply|do[-_]?not[-_]?reply|newsletters?|notifications?)([-._+][^@]*)?@/i;   // eh-293 B-M3: no_reply@, noreply-x@
 export function groupSenderBulk(fromEmail: string): boolean {
   const from = String(fromEmail || '').toLowerCase(), dom = from.split('@')[1] || '';
   if (!dom || dom === 'welfareavenue.com' || dom.endsWith('.welfareavenue.com')) return false;

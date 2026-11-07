@@ -10,7 +10,7 @@
 -- read those on the contacts list already). No "waiting on a reply" list (5.9).
 -- Needs wave292 first (crm_email_relationship) and wave281 (do_not_contact): the file stops at the top without them. Safe to run twice.
 -- No transaction control. Proved offline first: node test/w293sql.mjs (PGlite). Built 07/11/26, not released.
--- Undo: build/data/wa293_undo.sql.
+-- Undo: build/data/wa293_undo.sql. Fix round 07/11/26 (eh-293): do-not-contact people never go quiet (A-I2); the last 12 months ranked on their own (A-M1).
 
 do $wa293$
 begin
@@ -28,10 +28,10 @@ returns jsonb language plpgsql stable security invoker set search_path to '' as 
 declare
   v_months int := 12;
   v_raw text;
-  v_by jsonb; v_orgs jsonb; v_org_total int; v_quiet jsonb; v_quiet_total int;
+  v_by jsonb; v_orgs jsonb; v_org_total int; v_orgs12 jsonb; v_org12_total int; v_quiet jsonb; v_quiet_total int;
 begin
   if not coalesce(public.is_wa_staff(), false) or coalesce(public.wa_page_ok('crm'), true) = false then
-    return jsonb_build_object('allowed', false, 'by_type_year', '[]'::jsonb, 'orgs', '[]'::jsonb, 'orgs_total', 0, 'quiet', '[]'::jsonb, 'quiet_total', 0,
+    return jsonb_build_object('allowed', false, 'by_type_year', '[]'::jsonb, 'orgs', '[]'::jsonb, 'orgs_total', 0, 'orgs_12', '[]'::jsonb, 'orgs_12_total', 0, 'quiet', '[]'::jsonb, 'quiet_total', 0,
                               'quiet_months', v_months, 'admin', false, 'steel_open', false, 'as_of', now());
   end if;
   select c.value into v_raw from public.app_config c where c.key = 'mail_insights_quiet_months';
@@ -62,18 +62,24 @@ begin
          coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'relationship', x.relationship, 'status', x.status, 'category', x.category,
                                                        'writers', x.writers, 'emails', x.emails, 'writers_12', x.writers_12, 'emails_12', x.emails_12, 'last_at', x.last_at)
                                     order by x.writers desc, x.emails desc, x.name)
-                     from (select * from o order by writers desc, emails desc, name limit 25) x), '[]'::jsonb)
-    into v_org_total, v_orgs;
+                     from (select * from o order by writers desc, emails desc, name limit 25) x), '[]'::jsonb),
+         -- eh-293 A-M1: the last 12 months ranked on their own (an organisation busy this year may be outside the all-time 25)
+         (select count(*)::int from o where o.writers_12 > 0),
+         coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'relationship', x.relationship, 'status', x.status, 'category', x.category,
+                                                       'writers', x.writers, 'emails', x.emails, 'writers_12', x.writers_12, 'emails_12', x.emails_12, 'last_at', x.last_at)
+                                    order by x.writers_12 desc, x.emails_12 desc, x.name)
+                     from (select * from o where o.writers_12 > 0 order by writers_12 desc, emails_12 desc, name limit 25) x), '[]'::jsonb)
+    into v_org_total, v_orgs, v_org12_total, v_orgs12;
 
   -- gone quiet: donors, partners, supporters and volunteers with some history and nothing on their timeline (any source) and no gift for
-  -- mail_insights_quiet_months; never a merged contact or someone marked deceased. The 100 who went quiet most recently first.
+  -- mail_insights_quiet_months; never a merged contact, someone marked deceased or anyone marked do not contact (eh-293 A-I2). The 100 who went quiet most recently first.
   with k as (
     select c.id, c.full_name, c.kinds, r.rel_type,
            (select max(i.occurred_at) from public.crm_interactions i where i.contact_id = c.id) as last_int,
            (select max(d.donated_at) from public.crm_donations d where d.contact_id = c.id) as last_gift
       from public.crm_contacts c
       left join public.crm_email_relationship r on r.contact_id = c.id
-     where c.merged_into is null and coalesce(c.dnc_reason, '') <> 'deceased'),
+     where c.merged_into is null and coalesce(c.dnc_reason, '') <> 'deceased' and not coalesce(c.do_not_contact, false)),   -- eh-293 A-I2
   q as (
     select k.id, k.full_name, k.last_int, k.last_gift, greatest(k.last_int, k.last_gift) as last_at,
            case when k.last_gift is not null or 'donor' = any(k.kinds) then 'donor'
@@ -91,12 +97,12 @@ begin
                             order by q.last_at desc, q.id limit 100) x), '[]'::jsonb)
     into v_quiet_total, v_quiet;
 
-  return jsonb_build_object('allowed', true, 'by_type_year', v_by, 'orgs', v_orgs, 'orgs_total', v_org_total, 'quiet', v_quiet, 'quiet_total', v_quiet_total,
+  return jsonb_build_object('allowed', true, 'by_type_year', v_by, 'orgs', v_orgs, 'orgs_total', v_org_total, 'orgs_12', v_orgs12, 'orgs_12_total', v_org12_total, 'quiet', v_quiet, 'quiet_total', v_quiet_total,
                             'quiet_months', v_months, 'admin', coalesce(public.is_wa_admin(), false), 'steel_open', coalesce(public.crm_mail_steel_open(), false), 'as_of', now());
 end $function$;
 revoke all on function public.crm_insights_overview() from public, anon;
 grant execute on function public.crm_insights_overview() to authenticated, service_role;
-comment on function public.crm_insights_overview() is 'wave293: the CRM Insights tab (#crm/insights) in one call: by_type_year (people who emailed with Welfare Avenue each year since 2020, by their email-history type, none when untyped), orgs (the 25 organisations with the most writers and emails, all time and the last 12 months, with relationship and status; orgs_total), quiet (the 100 donors, partners, supporters and volunteers with history but nothing on their timeline and no gift for mail_insights_quiet_months, most recent first; quiet_total), quiet_months, admin, steel_open and as_of. Security invoker: the reader''s row security decides every count, so Steel''s mailbox lines count only for admins until mail_history_steel_open; someone without the CRM page gets allowed false and empty lists. No email line, subject or summary is returned. Signed-in users.';
+comment on function public.crm_insights_overview() is 'wave293: the CRM Insights tab (#crm/insights) in one call: by_type_year (people who emailed with Welfare Avenue each year since 2020, by their email-history type, none when untyped), orgs (the 25 organisations with the most writers and emails all time, with relationship and status; orgs_total), orgs_12 (the 25 with the most in the last 12 months, ranked on their own; orgs_12_total), quiet (the 100 donors, partners, supporters and volunteers with history but nothing on their timeline and no gift for mail_insights_quiet_months, most recent first, never deceased, merged or do-not-contact people; quiet_total), quiet_months, admin, steel_open and as_of. Security invoker: the reader''s row security decides every count, so Steel''s mailbox lines count only for admins until mail_history_steel_open; someone without the CRM page gets allowed false and empty lists. No email line, subject or summary is returned. Signed-in users.';
 
 -- ============================================================================================ 2. the release record (once)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)

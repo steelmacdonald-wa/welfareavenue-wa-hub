@@ -108,6 +108,19 @@ export async function summariseContact(deps: SummaryDeps, contactId: number, by:
   return { saved: true, model: 'none', cost, rejected, calls, stopped };
 }
 
+export const REFRESH_LIMIT = "You have reached today's limit for writing summaries. Try again tomorrow.";
+/** Refresh one contact (mail-history insight) for a signed-in staff member. eh-293 A-I1: a non-admin, while Steel's lines are closed (H1),
+ *  gets for a contact with lines from Steel's mailbox exactly the answer a contact with no lines gets ({ok, saved: false}), so the call
+ *  never tells them which contacts Steel corresponds with; nothing mentions his mailbox. The daily limit is checked first, for everyone. */
+export async function insightAnswer(deps: SummaryDeps, contactId: number, staff: { email: string; admin: boolean; open: boolean }): Promise<{ status: number; body: Record<string, unknown> }> {
+  const left = Number(await deps.rpc('wa292_refresh_left', { p_by: staff.email }));
+  if (Number.isFinite(left) && left <= 0) return { status: 429, body: { error: REFRESH_LIMIT } };
+  const input = await deps.rpc('crm_insight_input', { p_contact: contactId });
+  if (input && input.from_steel && !staff.admin && !staff.open) return { status: 200, body: { ok: true, saved: false, model: 'none', cost: 0 } };
+  const r = await summariseContact(deps, contactId, staff.email);
+  return { status: 200, body: { ok: true, saved: r.saved, model: r.model, cost: r.cost } };
+}
+
 /** One step of a run's pass, within a budget: summarise the next contacts, add each cost to the run's spend, stop at the cap. Counts only. */
 export async function summaryStep(deps: SummaryDeps, run: number, budgetMs = 100000, by = 'Email history'): Promise<Record<string, unknown>> {
   const deadline = deps.now() + budgetMs;

@@ -218,3 +218,10 @@ test('eh-292 fix 3: a vendor newsletter sent to info@ through the group is autom
   for (const a of ['hello@smallorg.example.org', 'info@smallorg.example.org', 'contact@smallorg.example.org'])
     assert.equal(groupBulk(person, a), false, a + ' stays a person\'s address');
 });
+
+test('eh-293 B-M3: no_reply@ and noreply-x@ through the group are automated', () => {
+  const g = H({ To: 'info@welfareavenue.com', 'List-ID': '<info.welfareavenue.com>', Precedence: 'list' });
+  for (const a of ['no_reply@vendor.example.org', 'noreply-billing@vendor.example.org', 'newsletter+fr@vendor.example.org', 'do_not_reply@vendor.example.org'])
+    assert.equal(groupBulk(g, a), true, a);
+  assert.equal(groupBulk(g, 'noreen.reply@smallorg.example.org'), false, 'a person whose name starts with no is a person');
+});

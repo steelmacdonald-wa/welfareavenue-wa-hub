@@ -109,21 +109,39 @@ try {
   await db.exec(`delete from public.crm_contacts where id = 9399`);
   await db.exec(`delete from public.crm_email_suppressions where source = 'test'`);
 
-  // eh-292 fix 4: the undo puts back the saved definitions, even when wave292's text was changed since (the reversal would stop)
+  // eh-292 fix 4 and eh-293 B-I1: the undo puts back the saved definitions only while each function is still as wave292 left it
+  const PURGE = `pg_get_functiondef('public.wa284_purge(bigint)'::regprocedure)`;
   await db.exec(migration);
   ok((await one(db, `select count(*)::int as n from public.wa292_fn_backup`)).n === 11, 'the migration saved the eleven definitions');
   ok((await one(db, `select bool_and(position('wa292_' in def) = 0) as x from public.wa292_fn_backup`)).x === true, 'the saved definitions are the ones before wave292');
+  ok((await one(db, `select bool_and(def_after is not null and def_after <> def and def_after = pg_get_functiondef(to_regprocedure(fn))) as x from public.wa292_fn_backup`)).x === true, 'and each as wave292 left it (def_after)');
   ok((await one(db, `select has_table_privilege('authenticated', 'public.wa292_fn_backup', 'select') or has_table_privilege('service_role', 'public.wa292_fn_backup', 'select') as x`)).x === false, 'the backup table has no grants');
-  await db.exec(`do $t$ declare v text := pg_get_functiondef('public.wa284_purge(bigint)'::regprocedure); begin execute replace(v, 'perform public.wa292_purge(p_run);', 'perform public.wa292_purge(p_run);   -- changed since'); end $t$`);
+  await db.exec(migration);
+  ok((await one(db, `select bool_and(def_after = pg_get_functiondef(to_regprocedure(fn))) as x from public.wa292_fn_backup`)).x === true, 'a second run keeps def_after');
+  // a later change to wave292's own text: the undo stops ("changed since wave292") and overwrites nothing
+  await db.exec(`do $t$ declare v text := ${PURGE}; begin execute replace(v, 'perform public.wa292_purge(p_run);', 'perform public.wa292_purge(p_run);   -- changed since'); end $t$`);
+  let stop = '';
+  try { await db.exec(undo); } catch (e) { stop = String(e.message); }
+  ok(/wa284_purge changed since wave292/.test(stop), 'a function changed since wave292 stops the undo (' + stop + ')');
+  ok((await one(db, `select position('-- changed since' in ${PURGE}) > 0 and to_regclass('public.wa292_fn_backup') is not null as x`)).x === true, 'and nothing was overwritten or dropped');
+  await db.exec(`do $t$ declare v text := ${PURGE}; begin execute replace(v, 'perform public.wa292_purge(p_run);   -- changed since', 'perform public.wa292_purge(p_run);'); end $t$`);
+  // a later change elsewhere in a function: only wave292's text is taken out, the later change stays
+  await db.exec(`do $t$ declare v text := ${PURGE}; begin execute replace(v, 'AS $function$', 'AS $function$ -- a later wave'); end $t$`);
   await db.exec(undo);
-  ok((await one(db, DEFS)).s === defsBefore, 'the undo restores from the saved definitions when the text no longer matches');
-  ok((await one(db, `select to_regclass('public.wa292_fn_backup') is null as x`)).x === true, 'and drops the backup table');
-  // and without the backup table it falls back to taking the text back out
+  ok((await one(db, `select position('-- a later wave' in ${PURGE}) > 0 and position('wa292_' in ${PURGE}) = 0 as x`)).x === true, 'a later change elsewhere stays; only the text of wave292 goes');
+  await db.exec(`do $t$ declare v text := ${PURGE}; begin execute replace(v, 'AS $function$ -- a later wave', 'AS $function$'); end $t$`);
+  ok((await one(db, DEFS)).s === defsBefore, 'every other function is back exactly as before wave292');
+  // the clean case: nothing changed since, the saved definitions are restored and the table dropped
+  await db.exec(migration);
+  await db.exec(undo);
+  ok((await one(db, DEFS)).s === defsBefore, 'the clean case: the saved definitions are restored');
+  ok((await one(db, `select to_regclass('public.wa292_fn_backup') is null as x`)).x === true, 'and the backup table is dropped');
+  // without the backup table it falls back to taking the text back out
   await db.exec(migration);
   await db.exec(`drop table public.wa292_fn_backup`);
   await db.exec(undo);
   ok((await one(db, DEFS)).s === defsBefore, 'without saved definitions the undo takes the text back out');
-  console.log('undo from the saved definitions, and the fallback: passed');
+  console.log('undo from the saved definitions (clean, a later change stops it, a change elsewhere kept), and the fallback: passed');
 
   // a kept summary keeps its table
   await db.exec(migration);
@@ -151,6 +169,26 @@ try {
     ok(true, label);
     console.log('live check files, offline: ' + label + ': passed');
     await db4.close();
+  }
+
+  // eh-293 B-M2: a later run's new lines (one from Steel's mailbox) mark an existing summary stale and the row from_steel
+  {
+    const db5 = await fresh();
+    await db5.exec(migration);
+    await db5.exec(`insert into public.crm_email_relationship (contact_id, summary, from_steel, stale, generated_at, generated_by) values (4001, 'An older summary.', false, false, now() - interval '1 year', 'Email history')`);
+    await db5.exec(`insert into import_stage.mail_messages (run_id, mailbox, gmail_id, thread_id, msg_md5, sent_at, state, direction, box, writer, writer_name, recipients, subject, line, topic, lang, asks_to_stop, read_at)
+      values (9201, 'steel', 'gm293B1', 'thB', md5('b1'), '2026-08-01 10:00+00', 'kept', 'in', 'steel', 'existing.writer@org.example.org', 'Test Existing Writer', null, 'Follow-up', 'Asks about the next drive.', 'event', 'en', false, now())`);
+    for (const k of ['mail_optouts', 'mail_orgs', 'mail_people', 'mail_enrich', 'mail_interactions']) {
+      const b = (await one(db5, `select public.wa284_new_batch(9201, '${k}') as b`)).b;
+      const c = (await one(db5, `select public.wa284_compare(${b}, 'test') as r`)).r;
+      ok(!c.error, k + ' compared (' + JSON.stringify(c.error) + ')');
+      await db5.exec(`select public.wa284_apply(${b}, 'test')`);
+    }
+    const r = await one(db5, `select from_steel, stale from public.crm_email_relationship where contact_id = 4001`);
+    ok(r.from_steel === true && r.stale === true, 'a new line from Steel\'s mailbox marks the row from_steel and its summary stale (' + JSON.stringify(r) + ')');
+    ok((await one(db5, `select count(*)::int as n from public.wa292_summary_todo(9201, 100) t where t = 4001`)).n === 1, 'so the summary pass writes it again');
+    await db5.close();
+    console.log('a later run marks summaries stale and Steel\'s rows from_steel: passed');
   }
 
   console.log(`w292sql.mjs: OK (${checks} runner checks, plus the assertion runs)`);

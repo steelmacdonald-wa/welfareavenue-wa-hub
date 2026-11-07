@@ -150,3 +150,21 @@ test('Refresh one contact: the same three steps, no run', async () => {
   assert.equal(S.dayText('2021-03-12'), '12 Mar 2021');
   assert.deepEqual(S.validateSummary({ topics: ['donation'], summary: 'Gave twice — thanks.' }).value.summary, 'Gave twice, thanks.');
 });
+
+test('eh-293 A-I1: a member cannot tell a contact with Steel\'s lines from a contact with none', async () => {
+  const steelMixed = await contact('new.writer@neworg.example.org');   // lines from Steel's mailbox
+  const none = 4004;                                                   // Test Phone Person: no email lines
+  const member = { email: 'w293.member@example.invalid', admin: false, open: false };
+  const a = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  const b = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  const rs = await S.insightAnswer(a.deps, steelMixed, member);
+  const rn = await S.insightAnswer(b.deps, none, member);
+  assert.deepEqual(rs, rn, 'the same status and body for both');
+  assert.deepEqual(rs, { status: 200, body: { ok: true, saved: false, model: 'none', cost: 0 } });
+  assert.ok(!/steel|mailbox/i.test(JSON.stringify(rs)), 'nothing mentions Steel\'s mailbox');
+  assert.equal(a.calls.length + b.calls.length, 0, 'no router call for either');
+  // an admin is answered with a summary for the same contact
+  const adm = makeDeps([{ topics: ['event'], summary: 'Asked about an event.' }]);
+  const ra = await S.insightAnswer(adm.deps, steelMixed, { email: 'w293.admin@example.invalid', admin: true, open: false });
+  assert.equal(ra.status, 200); assert.equal(ra.body.saved, true);
+});

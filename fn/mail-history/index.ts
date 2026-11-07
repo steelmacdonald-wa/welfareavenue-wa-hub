@@ -12,8 +12,9 @@
 //   continue, pump                          the trigger secret only.
 //   people, exclude                         an admin's own sign-in only, never the secret (they return or touch personal data, which must never
 //                                           reach a Claude conversation); people from Steel's mailbox answer only Steel (M3).
-//   insight                                 CRM staff (is_wa_staff and the CRM page) with their own sign-in; an admin when the contact has lines
-//                                           from Steel's mailbox while mail_history_steel_open is false (H1). Never the secret.
+//   insight                                 CRM staff (is_wa_staff and the CRM page) with their own sign-in. Never the secret. For a non-admin
+//                                           while mail_history_steel_open is false (H1), a contact with lines from Steel's mailbox gets the same
+//                                           answer as a contact with no lines ({ok, saved: false}; eh-293 A-I1).
 // Actions (POST {action, ...}):
 //   start {label, mailboxes?}  -> {run_id}: refuses while wa289_ready lists a problem (a route without the no-retention provider setting or a
 //                                 wording route without the confidentiality rule); creates the run, turns the pump on and starts the free phases
@@ -34,7 +35,7 @@
 // @ts-nocheck
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { checkRouted, step, type Deps, type Mailbox, MAILBOX_ADDR, USER_AGENT } from './scan.ts';
-import { summariseContact, summaryStep } from './summary.ts';
+import { insightAnswer, summaryStep } from './summary.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -197,14 +198,10 @@ Deno.serve(async (req: Request) => {
     const cid = Number(body.contact_id || 0);
     if (!Number.isInteger(cid) || cid <= 0) return json(req, { error: 'contact_id expected' }, 400);
     try {
-      const input = await rpc('crm_insight_input', { p_contact: cid });
-      if (input && input.from_steel && !staff.admin && !staff.open) return json(req, { error: "Only admins refresh summaries from Steel's mailbox for now." }, 403);
-      // eh-292 minor: a daily limit per person (mail_history_refresh_daily, 20 by default)
-      const left = Number(await rpc('wa292_refresh_left', { p_by: staff.email }));
-      if (Number.isFinite(left) && left <= 0) return json(req, { error: 'You have reached today\'s limit for writing summaries. Try again tomorrow.' }, 429);
-      const r = await summariseContact({ rpc, router, now: () => Date.now() }, cid, staff.email);
-      console.log('mail-history insight', cid, r.saved, r.calls);   // ids and counts only
-      return json(req, { ok: true, saved: r.saved, model: r.model, cost: r.cost });
+      // eh-293 A-I1: the daily limit first; a non-admin gets the no-lines answer for a contact with Steel's lines (never a word about them)
+      const a = await insightAnswer({ rpc, router, now: () => Date.now() }, cid, staff);
+      console.log('mail-history insight', cid, a.status, a.body.saved === true);   // ids and counts only
+      return json(req, a.body, a.status);
     } catch (e) {
       console.log('mail-history insight error', (e as any)?.status || '', (e as any)?.db ? 'db' : '');
       return json(req, { error: (e as any)?.db ? String((e as Error).message) : 'failed (' + ((e as any)?.status || 'error') + ')' }, 500);

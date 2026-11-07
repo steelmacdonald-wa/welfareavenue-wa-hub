@@ -1,6 +1,6 @@
 -- Welfare Avenue Hub: wave292 undo, 07/11/26. Takes build/data/wa292_batches.sql back out.
 -- Refuses while any email-history batch is applied (undo the batches on the Import page first, bottom up). Otherwise: puts the eleven live
--- functions back from the definitions the migration saved (wa292_fn_backup, eh-292 fix 4), falling back to taking wave292's text back out by
+-- functions back from the definitions the migration saved (wa292_fn_backup, eh-292 fix 4) while each is still as wave292 left it, falling back to taking wave292's text back out by
 -- exactly the text the migration inserted; drops the delete trigger, the three crm_interactions policies, the wa292_ functions (but keeps the
 -- suppression trigger and wa292_suppress_check, which need only wave289's table; wave289's undo drops them), crm_insight_input,
 -- crm_insight_save, the view and the backup table; drops
@@ -16,13 +16,15 @@ begin
 end $wa292u$;
 
 -- 0. eh-292 fix 4 (ground rule 11.1): the live functions back from the definitions the migration saved before it changed them
---    (wa292_fn_backup); a function with no saved definition falls back to step 1, which takes wave292's text back out.
+--    (wa292_fn_backup), each only while its live definition still equals what wave292 left (def_after, eh-293 B-I1); any other function
+--    falls back to step 1, which takes wave292's text back out, or stops with "changed since wave292" when a later change touched it.
 do $wa292u$
 declare b record;
 begin
   if to_regclass('public.wa292_fn_backup') is not null then
-    for b in select x.fn, x.def from public.wa292_fn_backup x order by x.fn loop
-      if to_regprocedure(b.fn) is not null and pg_get_functiondef(to_regprocedure(b.fn)) is distinct from b.def then execute b.def; end if;
+    for b in select x.fn, x.def, x.def_after from public.wa292_fn_backup x order by x.fn loop
+      -- eh-293 B-I1: only while the live definition is still exactly what wave292 left; otherwise step 1 takes wave292's text out, or stops
+      if to_regprocedure(b.fn) is not null and b.def_after is not null and pg_get_functiondef(to_regprocedure(b.fn)) = b.def_after then execute b.def; end if;
     end loop;
   end if;
 end $wa292u$;

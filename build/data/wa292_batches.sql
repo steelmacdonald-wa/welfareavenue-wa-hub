@@ -7,7 +7,8 @@
 -- suppression triggers on crm_contacts (a suppressed address is born opted out; deleting a contact with email history suppresses its addresses);
 -- wa_partners.domain and address; the delete-created action; crm_insight_input and crm_insight_save for the summary pass (mail-history v2).
 -- It changes these live functions by exact anchor (each anchor must appear exactly once, or the file stops): wa284_write, wa284_basis,
--- wa284_new_batch, wa284_undo, wa284_unrow, wa284_set, wa284_upd, wa284_purge, crm_email_first_contact, crm_email_permission, crm_merge_contacts.
+-- wa284_new_batch, wa284_undo, wa284_unrow, wa284_set, wa284_upd, wa284_purge, wa282_first_contact_core, crm_email_permission, crm_merge_contacts.
+-- Never re-run wave282 after this file (its create or replace drops the thread clause from the core), or run this file again straight after.
 -- The undo (build/data/wa292_undo.sql) takes each insertion back out by the same exact text, so the definitions return to what they were.
 -- Never kept anywhere: a body, a quoted history, a snippet or a page's text. Reports hold counts, Hub ids and organisation names only.
 -- Needs wave289, wave284, wave282 and wave281 first: the file stops at the top without them. Every step is guarded, so the file is safe to run twice.
@@ -465,6 +466,11 @@ begin
         perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'rel_type', to_jsonb(p.rel_type));
         perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'rel_conf', to_jsonb(round(p.rel_conf, 2)));
       end if;
+      -- eh-293 B-M2: a type that came from Steel's mailbox marks the row from_steel (admins only until H1), and an existing summary stale
+      if r.id is not null and not r.from_steel and 'steel' = any(coalesce(p.mailboxes, '{}'::text[])) then
+        perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'from_steel', 'true'::jsonb);
+        if r.summary is not null and not r.stale then perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'stale', 'true'::jsonb); end if;
+      end if;
     end if;
   end loop;
   return w;
@@ -475,6 +481,7 @@ comment on function public.wa292_w_enrich(bigint, bigint, boolean) is 'wave292: 
 create or replace function public.wa292_w_interactions(p_batch bigint, p_run bigint, p_rehearse boolean)
 returns jsonb language plpgsql security definer set search_path to '' as $function$
 declare w jsonb := public.wa284_w0(); p record; e record; m jsonb; v_id bigint; v_k text; v_ref text; i public.crm_interactions; v_ids bigint[] := '{}';
+  v_new int; v_steel boolean; r public.crm_email_relationship;
 begin
   w := jsonb_set(w, '{lists,mail}', '{"by_mailbox": {}, "by_year": {}, "by_direction": {}, "first_contacts": 0}'::jsonb, true);
   for p in select * from import_stage.mail_people x where x.run_id = p_run and x.writer order by x.key loop
@@ -487,6 +494,7 @@ begin
     v_id := (m ->> 'id')::bigint; v_k := left(md5(p.key), 8);
     w := public.wa284_bump(w, '{counts,matched}');
     if not (v_id = any(v_ids)) then v_ids := v_ids || v_id; end if;
+    v_new := 0; v_steel := false;
     for e in select * from import_stage.mail_messages x where x.run_id = p_run and x.state = 'kept'
                 and (x.writer = p.key or p.key = any(coalesce(x.recipients, '{}'::text[]))) order by x.sent_at, x.gmail_id loop
       v_ref := e.mailbox || ':' || e.gmail_id || ':' || v_k;
@@ -500,7 +508,16 @@ begin
       w := public.wa284_bump(w, array['lists', 'mail', 'by_mailbox', coalesce(e.box, e.mailbox)]);
       w := public.wa284_bump(w, array['lists', 'mail', 'by_year', coalesce(extract(year from e.sent_at)::int::text, 'undated')]);
       w := public.wa284_bump(w, array['lists', 'mail', 'by_direction', coalesce(e.direction, 'in')]);
+      v_new := v_new + 1; v_steel := v_steel or coalesce(e.box, e.mailbox) = 'steel';
     end loop;
+    -- eh-293 B-M2: new lines make an existing summary stale (the summary pass writes it again), and a line from Steel's mailbox marks the row
+    if v_new > 0 then
+      select * into r from public.crm_email_relationship x where x.contact_id = v_id;
+      if r.id is not null then
+        if v_steel and not r.from_steel then perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'from_steel', 'true'::jsonb); end if;
+        if r.summary is not null and not r.stale then perform public.wa284_upd(p_batch, 'crm_email_relationship', r.id, 'stale', 'true'::jsonb); end if;
+      end if;
+    end if;
   end loop;
   -- first contacts among this run's people after the apply (6.3): the rule reads the rows just written
   w := jsonb_set(w, '{lists,mail,first_contacts}', to_jsonb((select count(*) from unnest(v_ids) x where public.wa282_first_contact_core(x))), true);
@@ -758,12 +775,14 @@ comment on function public.wa292_summary_active() is 'wave292: the runs whose su
 -- eh-292 fix 4 (ground rule 11.1): each of the eleven functions section 12 changes is saved as it is now, once (a second run keeps the first
 -- copy), so build/data/wa292_undo.sql can put back exactly what was live. No grants: the service role and the owner only.
 create table if not exists public.wa292_fn_backup (fn text primary key, def text not null, saved_at timestamptz not null default now());
+alter table public.wa292_fn_backup add column if not exists def_after text;
 alter table public.wa292_fn_backup enable row level security;
 revoke all on table public.wa292_fn_backup from public, anon, authenticated, service_role;
 comment on table public.wa292_fn_backup is 'wave292 (eh-292 fix 4): the definitions of the eleven live functions wave292 changes, saved by the migration before it changed them; build/data/wa292_undo.sql restores them from here and then drops the table. No grants.';
 comment on column public.wa292_fn_backup.fn is 'wave292: the function''s signature (regprocedure text).';
 comment on column public.wa292_fn_backup.def is 'wave292: pg_get_functiondef of the function before wave292 changed it.';
 comment on column public.wa292_fn_backup.saved_at is 'wave292: when it was saved.';
+comment on column public.wa292_fn_backup.def_after is 'wave292 (eh-293 B-I1): pg_get_functiondef of the function as wave292 left it (saved after section 12). The undo restores def only while the live definition still equals this; a later change makes it fall back to taking wave292''s text out, which stops with changed since wave292.';
 insert into public.wa292_fn_backup (fn, def)
 select p.oid::regprocedure::text, pg_get_functiondef(p.oid)
   from pg_proc p
@@ -875,6 +894,9 @@ begin
 end $wa292$;
 comment on function public.crm_email_permission(bigint, text) is 'The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising (wave282, Steel''s rule of 5 Nov 2026): any working address that has not unsubscribed; the basis is express consent or implied consent (within two years of a gift or a serving) when there is one, otherwise not unsubscribed (WA rule of 5 Nov 2026). Bounced and complained get nothing; since wave281 a do-not-contact person gets nothing either, transactional included (basis do not contact). Since wave292 a contact tagged general inbox or email history: review gets no volunteer, newsletter or fundraising email (basis not for bulk email).';
 comment on function public.wa282_first_contact_core(bigint) is 'wave282 (eh-292 fix 1): the first-contact rule itself, with no caller check: true when crm_email_permission allows a newsletter with the basis exactly not unsubscribed (WA rule of 5 Nov 2026), there is no crm_email_sends row that is not a test and was sent, delivered, opened or clicked, and no Keela newsletter was opened in the last 12 months. Since wave292 not when the email history holds an outgoing WA email to them in a thread where they also wrote (a gmail row out and a gmail row in with the same meta thread). crm_email_first_contact (staff) and the email history''s report (the service role) both call it. The service role only.';
+
+-- eh-293 B-I1: each function as wave292 left it, once (a second run keeps the first copy), so the undo can tell whether anything changed it since
+update public.wa292_fn_backup b set def_after = pg_get_functiondef(to_regprocedure(b.fn)) where b.def_after is null and to_regprocedure(b.fn) is not null;
 
 -- ============================================================================================ 13. grants: every wa292_ function the service role's only
 do $wa292$

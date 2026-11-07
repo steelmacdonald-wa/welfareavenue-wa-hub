@@ -30,9 +30,11 @@ insert into public.crm_contacts (id, full_name, emails, kinds) overriding system
   (9406, 'Test Deceased Donor', array['deceased.donor@example.org'], '{donor}'),
   (9407, 'Test Merged Partner', array['merged.partner@example.org'], '{partner}'),
   (9408, 'Test Quiet Typed', array['quiet.typed@example.org'], '{}'),
-  (9409, 'Test Staff Only', array['staff.only@example.org'], '{staff}');
+  (9409, 'Test Staff Only', array['staff.only@example.org'], '{staff}'),
+  (9410, 'Test Asked Donor', array['asked.donor@example.org'], '{donor}');
 update public.crm_contacts set do_not_contact = true, dnc_reason = 'deceased' where id = 9406;
 update public.crm_contacts set merged_into = 9401 where id = 9407;
+update public.crm_contacts set do_not_contact = true, dnc_reason = 'asked' where id = 9410;
 insert into public.wa_partners (id, name, relationship, status, category) overriding system value values (9491, 'Test Org 293', 'partner', 'active', 'partner'), (9492, 'Test Leaders Org', 'sponsor', 'past', 'sponsor');
 update public.wa_partners set visibility = 'leadership' where id = 9492;
 insert into public.crm_contact_orgs (contact_id, partner_id) values (9401, 9491), (9402, 9491), (9408, 9492);
@@ -48,7 +50,7 @@ insert into public.crm_interactions (contact_id, kind, direction, channel, subje
   (9407, 'email', 'in', 'email', 'Test subject', 'Test line.', '2021-01-01 15:00+00', 'gmail', 'hub:gm293h:k7', '{"mailbox": "hub", "thread": "t7"}', 'Email history'),
   (9408, 'email', 'in', 'email', 'Test subject', 'Test line.', '2019-01-01 15:00+00', 'gmail', 'steel:gm293i:k8', '{"mailbox": "steel", "thread": "t8"}', 'Email history'),
   (9409, 'note', 'internal', null, null, 'Test note.', '2020-01-01 15:00+00', 'hub', null, '{}', 'w281.admin@example.invalid');
-insert into public.crm_donations (contact_id, amount, donated_at, platform) values (9405, 25, now() - interval '20 days', 'hub');
+insert into public.crm_donations (contact_id, amount, donated_at, platform) values (9405, 25, now() - interval '20 days', 'hub'), (9410, 40, '2023-02-01 15:00+00', 'hub');
 insert into public.crm_email_relationship (contact_id, rel_type, rel_conf, from_steel) values (9401, 'partner', 0.9, false), (9402, 'donor', 0.8, true), (9408, 'media', 0.7, true);
 
 -- ---------------------------------------------------------------- an admin sees everything, Steel's lines included
@@ -73,6 +75,9 @@ begin
   assert exists (select 1 from jsonb_array_elements(q) x where (x ->> 'contact_id')::bigint = 9403 and x ->> 'kind' = 'donor' and x ->> 'last_was' = 'timeline'), 'the quiet donor is listed: ' || q::text;
   assert exists (select 1 from jsonb_array_elements(q) x where (x ->> 'contact_id')::bigint = 9408 and x ->> 'kind' = 'media') = false, 'a media type is not a quiet kind';
   assert not exists (select 1 from jsonb_array_elements(q) x where (x ->> 'contact_id')::bigint in (9401, 9404, 9405, 9406, 9407, 9409)), 'recent, giving, deceased, merged and staff-only contacts are not quiet: ' || q::text;
+  assert not exists (select 1 from jsonb_array_elements(q) x where (x ->> 'contact_id')::bigint = 9410), 'eh-293 A-I2: a do-not-contact donor who is not deceased is never quiet: ' || q::text;
+  -- eh-293 A-M1: the last 12 months ranked on their own
+  assert (o ->> 'orgs_12_total')::int = 1 and jsonb_array_length(o -> 'orgs_12') = 1 and o -> 'orgs_12' -> 0 ->> 'name' = 'Test Org 293', 'the last 12 months list only the organisations that wrote this year: ' || (o -> 'orgs_12')::text;
   assert (o ->> 'quiet_total')::int = jsonb_array_length(q), 'the total matches the list under 100';
   assert position('Test subject' in o::text) = 0 and position('Test line' in o::text) = 0 and position('@' in o::text) = 0, 'no subject, line or address in the answer';
 end $$;
