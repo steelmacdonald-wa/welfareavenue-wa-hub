@@ -109,9 +109,12 @@
     /* search everything: contacts */
     + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'
     /* the gifts tab in the CRM */
-    + '#crm .w153gifts .w152lh,#crm .w153gifts .w152row{grid-template-columns:110px 1.4fr 110px 1fr 1fr;}'
-    + '#crm .w153gifts .w152row{cursor:default;}'
-    + '#crm .w153gifts .w152row .amt{font-weight:700;color:' + GREEN + ';}'
+    /* task 10b (UI review rows 5 and 21): the amount column right-aligned in tabular figures and wide enough for $1,000,000.00; every column
+       may shrink (minmax(0,…)) so a long email or campaign wraps in its cell, never past the card */
+    + '#crm .w153gifts .w152lh,#crm .w153gifts .w152row{grid-template-columns:104px minmax(0,1.4fr) 128px minmax(0,1fr) minmax(0,1fr);}'
+    + '#crm .w153gifts .w152row{cursor:default;}#crm .w153gifts .w152row>span{min-width:0;}'
+    + '#crm .w153gifts .w152row .amt{font-weight:700;color:' + GREEN + ';text-align:right;font-variant-numeric:tabular-nums;}#crm .w153gifts .w152lh .amt{text-align:right;}'
+    + '#crm .w153gifts .w152row .amt b{font-weight:700;white-space:nowrap;}#crm .w153gifts .dn,#crm .w153gifts .cp{overflow-wrap:anywhere;}'
     + '#crm .w153gifts .w152row a{color:' + GREEN + ';font-weight:600;text-decoration:none;}'
     + '#crm .w153gifts .w152row a:hover{text-decoration:underline;}'
     + '#crm .w153gifts .rc{font-size:12px;color:' + MUTED + ';}'
@@ -125,6 +128,9 @@
     + '#w153bar .w153menu{display:inline-flex;}'
     + '#w153bar .w153acts{margin-left:0;width:100%;justify-content:space-between;}'
     + '#crm .w153gifts .w152lh{display:none;}'
-    + '#crm .w153gifts .w152row{grid-template-columns:1fr 1fr;}'
+    /* task 10b: a gift as a card: who and how much, then the campaign and the date, then the receipt */
+    + '#crm .w153gifts .w152row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"dn amt" "cp wh" "rx rx";gap:4px 12px;align-items:start;}'
+    + '#crm .w153gifts .w152row>.dn{grid-area:dn;}#crm .w153gifts .w152row>.amt{grid-area:amt;}#crm .w153gifts .w152row>.cp{grid-area:cp;font-size:12.5px;}'
+    + '#crm .w153gifts .w152row>.wh{grid-area:wh;text-align:right;font-size:12.5px;color:' + MUTED + ';white-space:nowrap;}#crm .w153gifts .w152row>.rx{grid-area:rx;}'
     + '}';
   if (!document.getElementById('wa153css')) { var st = document.createElement('style'); st.id = 'wa153css'; st.textContent = css; document.head.appendChild(st); }

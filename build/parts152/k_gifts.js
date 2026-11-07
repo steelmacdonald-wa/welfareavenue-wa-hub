@@ -49,8 +49,10 @@
       : '<input data-f="donor" list="w158donors" placeholder="Type a name or an email" autocomplete="off"><datalist id="w158donors">' + (S.contacts || []).filter(function (k) { return !/^\(no name\)$/i.test(k.full_name || ''); }).slice(0, 3000).map(function (k) { return '<option value="' + E(k.full_name + (k.emails[0] ? ' · ' + k.emails[0] : '') + ' (#' + k.id + ')') + '"></option>'; }).join('') + '</datalist>';
     var kinds = Object.keys(GKIND).map(function (k) { return [k, GKIND[k][0]]; });
     var ro = hub ? '' : ' disabled';
-    var html = '<h2>' + (isNew ? 'Record a gift' : 'A gift of ' + E(money(x.amount))) + '</h2>' +
-      '<div class="sub">' + (isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : lower(x.platform) === 'stripe' ? stripeSub(x) : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.') + '</div>' +
+    var sub = isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : lower(x.platform) === 'stripe' ? stripeSub(x) : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.';
+    if (!mayEdit) { giftReadView(x, c, id, sub); return; }   /* task 10b (Steel's decision 7): a read view, not a form of disabled fields */
+    var html = '<h2>' + (isNew ? 'Record a gift' : 'A gift of ' + E(cents(x.amount))) + '</h2>' +
+      '<div class="sub">' + sub + '</div>' +
       '<div class="w152form" data-w158gift="' + E(id || 'new') + '">' +
       field('Donor', donor, true) +
       field('Amount ($)', '<input data-f="amount" type="number" step="0.01" min="0" value="' + E(x.amount) + '"' + ro + '>') + field('Date received', '<input data-f="donated_at" type="date" value="' + E(dayOf(x.donated_at) || today()) + '"' + ro + '>') +
@@ -64,14 +66,33 @@
       field('In honour or memory of', sel('tribute_kind', [['', 'No'], ['honour', 'In honour of'], ['memory', 'In memory of']], x.tribute_kind || '')) + field('Their name', inp('tribute_name', x.tribute_name, 'Their name')) +
       field('Notes', area('notes', x.notes, 'Cheque number, who dropped it off, anything the treasurer should know'), true) +
       '<div class="note full w158rule" data-w158rule>' + E(receiptRule(x)[1]) + '</div>' +
-      (mayEdit ? '' : '<div class="note full" data-w283ro>' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>') +
       '</div><div class="w152foot"><span class="w152err" data-w152err role="status"></span>' +
-      (!isNew && hub && mayEdit ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
+      (!isNew && hub ? '<button class="w152btn ghost" data-w158del="' + E(id) + '">' + I('trash') + ' Delete</button>' : '') +   /* wave283: the delete policy is gifts_edit */
       (!isNew ? '<button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button>' : '') +
-      (mayEdit ? '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button>'
-        : '<button class="w152btn" data-w152close="1">Close</button>') + '</div>';
-    if (!mayEdit) html = html.replace(/<(input|select|textarea)\b/g, '<$1 disabled');   /* read-only: every field, no save or delete */
+      '<button class="w152btn ghost" data-w152close="1">Cancel</button><button class="w152btn" data-w158save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Record it' : ' Save') + '</button></div>';
     openSheet(html, 'gift:' + (id || 'new'), true);
+  }
+  /* task 10b: someone without gifts_edit reads a gift as text they can select and copy (the Contact details layout), with the note on top,
+     no field, no save and no delete (row security refuses the writes anyway) */
+  function giftReadView(x, c, id, sub) {
+    var kv = function (l, v) { return v === '' || v == null ? '' : '<b>' + E(l) + '</b><span>' + v + '</span>'; };
+    var meth = (GMETH.filter(function (m) { return m[0] === x.method; })[0] || ['', x.method || ''])[1];
+    var rs = rcptFor(x.id), rnote = rs && rs.receipt_note ? rs.receipt_note : receiptRule(x)[1];
+    var rows = kv('Donor', c ? E(c.full_name) + (c.emails[0] ? '<span class="m w158rm">' + E(c.emails[0]) + '</span>' : '') : E('Contact ' + (x.contact_id || ''))) +
+      kv('Amount', '<span class="w152num">' + E(cents(x.amount)) + '</span>' + (x.recurring ? ' a month' : '')) +
+      kv('Date received', E(fmtDay(x.donated_at))) +
+      kv('What kind of money', E((GKIND[x.kind] || [x.kind || 'Donation'])[0])) +
+      kv('How it came', E(meth || 'Not recorded')) +
+      kv('Campaign', E(x.campaign || '')) + kv('Designation', E(x.designation || '')) +
+      (Number(x.advantage_amount) ? kv('What they received', '<span class="w152num">' + E(cents(x.advantage_amount)) + '</span>' + (x.advantage_desc ? ' (' + E(x.advantage_desc) + ')' : '')) : '') +
+      (x.kind === 'in_kind' ? kv('The gift in kind', E(x.in_kind_desc || '')) + kv('Appraised by', E(x.appraiser || '')) : '') +
+      (x.tribute_kind ? kv(x.tribute_kind === 'memory' ? 'In memory of' : 'In honour of', E(x.tribute_name || '')) : '') +
+      kv('Notes', x.notes ? '<span class="w158pre">' + E(x.notes) + '</span>' : '') +
+      kv('Receipt', E(rnote));
+    openSheet('<h2>A gift of ' + E(cents(x.amount)) + '</h2><div class="sub">' + sub + '</div>' +
+      '<div class="w158ronote" data-w283ro role="note">' + E(GIFT_REFUSED) + ' This gift is shown read-only.</div>' +
+      '<div class="w152kv w158read" data-w158read="' + E(id) + '">' + rows + '</div>' +
+      '<div class="w152foot"><button class="w152btn ghost" data-w158sample="' + E(id) + '">' + I('note') + ' Sample receipt</button><button class="w152btn" data-w152close="1">Close</button></div>', 'gift:' + id, true);
   }
   function giftFormValues(box) {
     var v = {}; box.querySelectorAll('[data-f]').forEach(function (el) { v[el.getAttribute('data-f')] = el.value; });
@@ -187,7 +208,8 @@
       (admin ? '<div class="w154acts"><button class="w152btn" data-w158cfgsave="1">' + I('check') + ' Save the settings</button></div>' : '<p class="m">Only an admin changes these.</p>') + '</div>' +
       '<div class="w154card"><h3>' + I('heart') + ' Receipts due for ' + E(yr) + ' <select class="w152sel w158yr" data-w158year aria-label="Tax year">' + ys.map(function (y) { return '<option' + (y === yr ? ' selected' : '') + '>' + E(y) + '</option>'; }).join('') + '</select></h3>' +
       '<p class="m">Receipts follow the donor’s tax year (January to December), not the fiscal year. The year-end run gives each donor one receipt for the year.</p>' +
-      '<div class="w152stats"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done + '</b><span>already receipted</span></div></div>' +
+      /* task 10b (UI review row 4): these tiles take their content's width and wrap, so an amount is never cut ($12,000.00 ran into "1 donor") */
+      '<div class="w152stats w158due"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length.toLocaleString('en-CA') + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done.toLocaleString('en-CA') + '</b><span>already receipted</span></div></div>' +
       rbRunHtml(donors.length, yr) +
       (donors.length ? '<div class="w156fl">' + donors.map(function (d) {
         var c = contact(d.id), noAddr = c && !String(c.address || '').trim();
@@ -218,7 +240,11 @@
     + '.w158rl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:10px;padding:5px 0;border-bottom:1px dashed rgba(16,63,57,.12);font-size:13.5px;}.w158rl b{font-weight:600;}.w158miss{color:' + FLAG + ';}'
     + '.w158sig{display:flex;flex-direction:column;gap:4px;margin:18px 0 6px;font-size:13px;}.w158line{display:block;width:220px;border-bottom:1px solid ' + INK + ';height:26px;}.w158cra{font-size:12px;color:' + MUTED + ';margin-top:8px;}'
     + '.w158yr{display:inline-block;width:auto;margin-left:8px;vertical-align:middle;}'
-    + '@media (max-width:700px){.w158adv,.w158ink{grid-template-columns:1fr;}.w158rl{grid-template-columns:1fr;gap:2px;}}'
+    /* task 10b: the receipts-due tiles (content width, wrapping) and the read-only gift */
+    + '.w152stats.w158due{display:flex;flex-wrap:wrap;gap:12px;}.w158due .w152st{flex:1 1 auto;min-width:max-content;}.w158due .w152st b{white-space:nowrap;}'
+    + '.w158ronote{font-size:12.5px;line-height:1.5;background:rgba(220,165,39,.12);border-radius:10px;padding:8px 10px;margin:12px 0 10px;}'
+    + '.w158read{grid-template-columns:150px minmax(0,1fr);margin-top:4px;}.w158read span{overflow-wrap:anywhere;}.w158read .w158rm{display:block;}.w158pre{white-space:pre-wrap;}'
+    + '@media (max-width:700px){.w158adv,.w158ink{grid-template-columns:1fr;}.w158rl{grid-template-columns:1fr;gap:2px;}.w158read{grid-template-columns:112px minmax(0,1fr);}}'
     + '@media print{body *{visibility:hidden !important;}#w152sheet .w158rc,#w152sheet .w158rc *{visibility:visible !important;}#w152sheet .w158rc{position:fixed;left:0;top:0;width:100%;border:none;}}';
   document.head.appendChild(css158);
 

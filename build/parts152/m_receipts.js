@@ -38,7 +38,6 @@
   /* wave283: issuing, replacing, cancelling and drawing follow can_issue (team leads, admins and finance: wa_can gifts_edit); is_admin only while the
      database is older than wave283. Email it too (final review M5: mail-send v7 sends a receipt for anyone with gifts_edit). The settings, the mode, the signature and the automatic switch stay with admins (their functions check admin). */
   function rbAdmin() { var c = GF.cfg || {}; return !!(c.can_issue === undefined ? c.is_admin : c.can_issue); }
-  function rbIsAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
   function rbSave(bytes, name, type) {
     try {
       var blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: type || 'application/pdf' }), url = URL.createObjectURL(blob);
