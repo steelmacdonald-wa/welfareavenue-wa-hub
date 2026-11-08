@@ -1,0 +1,67 @@
+/* =====================================================================
+   WA v296 a link to each applicant (08/11/26)
+   =====================================================================
+   Steel: "in each applicant ... share a link to that applicant, like just
+   copying a link to the applicant so that we can send it on Slack and
+   have the person open up the applicant."
+   #hrcentre/applications/<id> opens the board with that applicant's sheet
+   (the address 197 already accepts: its page is the second part). The
+   sheet gets a "Copy link" button beside its title. The HR channel post
+   for a new applicant (recruit-actions new_applicant) uses the same link.
+   Page only; reads w197.state(), w197.loadCands and w197.openSheet.
+   ===================================================================== */
+(function () {
+  if (window.w296) return;
+  var RE = /^#hrcentre\/applications\/(\d+)/;
+  function linkFor(id) { return location.origin + '/#hrcentre/applications/' + id; }
+  function say(t) { try { toast(t); } catch (e) { /* fine */ } }
+  var tries = 0, want = null;
+  function openWanted() {
+    var m = String(location.hash || '').match(RE); if (!m) { want = null; return; }
+    if (want !== m[1]) { want = m[1]; tries = 0; }
+    var W = window.w197; if (!W || !W.state) { if (tries++ < 60) setTimeout(openWanted, 500); return; }
+    var S = W.state(); var s = document.getElementById('w197sheet');
+    if (s && s.classList.contains('open') && String(S.open) === want) return;
+    var has = (S.cands || []).some(function (c) { return String(c.id) === want; });
+    if (!has) {
+      if (tries === 8 && typeof W.loadCands === 'function') { try { W.loadCands(); } catch (e) { /* fine */ } }
+      if (tries++ < 40) { setTimeout(openWanted, 500); return; }
+      say('That applicant is not on the board any more (or you cannot see it)'); return;
+    }
+    try { W.openSheet(want); } catch (e) { /* fine */ }
+  }
+  async function copy(id) {
+    var u = linkFor(id);
+    try { await navigator.clipboard.writeText(u); say('Link copied: paste it in Slack'); }
+    catch (e) { try { window.prompt('Copy this link', u); } catch (x) { /* fine */ } }
+  }
+  function addButton() {
+    var s = document.getElementById('w197sheet'); if (!s || !s.classList.contains('open')) return;
+    var S = window.w197 && window.w197.state ? window.w197.state() : null; if (!S || !S.open) return;
+    var h = s.querySelector('.pn h3'); if (!h) return;
+    var b = s.querySelector('[data-w296copy]');
+    if (b && b.getAttribute('data-w296copy') === String(S.open)) return;
+    if (b) b.remove();
+    b = document.createElement('button'); b.type = 'button'; b.className = 'w197b sm'; b.setAttribute('data-w296copy', String(S.open));
+    b.textContent = 'Copy link'; b.title = 'Copy a link that opens this applicant';
+    b.style.cssText = 'margin:0 0 10px;';
+    var role = s.querySelector('.pn p.role'); (role || h).insertAdjacentElement('afterend', b);
+    /* the address follows the open applicant, so the browser's own Share or copy works too */
+    var want2 = '#hrcentre/applications/' + S.open;
+    if (String(location.hash).indexOf('#hrcentre/applications') === 0 && location.hash !== want2) { try { history.replaceState(null, '', want2); } catch (e) { /* fine */ } }
+  }
+  function onShut() {
+    var s = document.getElementById('w197sheet');
+    if (s && !s.classList.contains('open') && RE.test(String(location.hash || ''))) { try { history.replaceState(null, '', '#hrcentre/applications'); } catch (e) { /* fine */ } want = null; }
+  }
+  document.addEventListener('click', function (e) { var t = e.target && e.target.closest ? e.target.closest('[data-w296copy]') : null; if (t) { e.preventDefault(); copy(t.getAttribute('data-w296copy')); } });
+  (function watch() {
+    var s = document.getElementById('w197sheet');
+    if (!s) { setTimeout(watch, 1000); return; }
+    new MutationObserver(function () { addButton(); onShut(); }).observe(s, { childList: true, attributes: true, attributeFilter: ['class'] });
+    addButton();
+  })();
+  window.addEventListener('hashchange', function () { if (RE.test(String(location.hash || ''))) setTimeout(openWanted, 200); });
+  if (RE.test(String(location.hash || ''))) setTimeout(openWanted, 1500);
+  window.w296 = { link: linkFor, copy: copy, open: openWanted };
+})();
