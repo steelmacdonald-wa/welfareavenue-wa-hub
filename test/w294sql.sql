@@ -75,6 +75,7 @@ declare s regprocedure := 'public.crm_tag_aliases()'::regprocedure; w regprocedu
 begin
   assert not has_function_privilege('anon', s, 'execute'), 'anon cannot run crm_tag_aliases';
   assert has_function_privilege('authenticated', s, 'execute'), 'authenticated can run crm_tag_aliases';
+  assert has_function_privilege('service_role', s, 'execute'), 'the service role can run crm_tag_aliases (Send queues)';
   assert not exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = s and a.grantee = 0), 'public has no grant on crm_tag_aliases';
   assert (select prosecdef from pg_proc where oid = s) and (select provolatile from pg_proc where oid = s) = 's', 'security definer and stable';
   assert (select proconfig::text from pg_proc where oid = s) like '%search_path=%', 'the search_path is pinned';

@@ -10,6 +10,7 @@ begin
   -- the function, its grants and its comment
   if has_function_privilege('anon', s, 'execute') then raise exception 'w294live: anon can run crm_tag_aliases'; end if;
   if not has_function_privilege('authenticated', s, 'execute') then raise exception 'w294live: authenticated cannot run crm_tag_aliases'; end if;
+  if not has_function_privilege('service_role', s, 'execute') then raise exception 'w294live: the service role cannot run crm_tag_aliases'; end if;
   if exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a where p.oid = s and a.grantee = 0) then raise exception 'w294live: public can run crm_tag_aliases'; end if;
   if not (select prosecdef from pg_proc where oid = s) or (select provolatile from pg_proc where oid = s) <> 's' or (select proconfig::text from pg_proc where oid = s) not like '%search_path=%' then
     raise exception 'w294live: crm_tag_aliases is not security definer, stable and pinned';

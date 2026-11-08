@@ -166,7 +166,7 @@ begin
      order by 1, 2;
 end $function$;
 revoke all on function public.crm_tag_aliases() from public, anon, authenticated;
-grant execute on function public.crm_tag_aliases() to authenticated;
+grant execute on function public.crm_tag_aliases() to authenticated, service_role;  -- service_role: mail-send builds a Send's queue with crm_list_preview, and wave295's tag condition reads this
 comment on function public.crm_tag_aliases() is 'wave294: the Keela names that find a Hub tag, as (alias, tag) pairs: every keela_tag_map entry that names a Hub tag ({"tag": "server"}), key and tag lower-cased, one row per pair, in alias order. Entries that go to a campaign or skip give no row (a chapter entry that also names a tag does). Read-only; an unreadable map gives no rows. The Contacts filters and search (wave295) use it so "volunteer server" finds server. Signed-in users only.';
 
 -- ============================================================================================ 4. the release record (once)
