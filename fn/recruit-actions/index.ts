@@ -9,7 +9,9 @@
 // wave271, 01/11/26: the offer email gets Accept and Decline buttons (hub.welfareavenue.com/o/<token>, the page and function of onboard-link; the
 // token is its 'offer' token, copied here as offerToken), and offer_send saves the letter's reply-by and start dates on the card
 // (hub_candidates.offer_respond_by, offer_start). The letter, its PDF and the "just reply to this email" line are unchanged.
-// Welfare Avenue: recruit-actions (v7, 15/10/26, wave245: the stage_moved DM to the person handling an applicant goes through
+// Welfare Avenue: recruit-actions (v9, 08/11/26, wave296: new_applicant {id, dry_run?} (trigger): a new card is posted in the HR
+// channel @-ing the team's leads from app_config applicant_watchers, with a link that opens the applicant.)
+// Earlier: (v7, 15/10/26, wave245: the stage_moved DM to the person handling an applicant goes through
 // notify (event applicant): their own switch for that kind in the notification centre, the Hub notification on their devices,
 // and the log the centre shows them; the direct DM from here is the fallback when notify cannot be reached. Steel: "The
 // notifications need to be even more robust and descriptive". v6, 07/10/26, wave216d: jd_public_hold.
@@ -303,6 +305,68 @@ async function stageMoved(b: any) {
     }
   }
   return { ok: true, posted, channel: ch?.name || null, dm: dmed, hub };
+}
+
+/* v9 (wave296, 08/11/26): a new application on the board is posted in the HR channel, @-ing the leads who hire for that
+   team (app_config applicant_watchers: team code -> emails), with a link that opens the applicant. A lead who is not in
+   the HR channel also gets it as a DM through notify (their switch for applicants). Steel: "The managers should be
+   knowing that an applicant is there". */
+const TEAM_WORDS: [string, RegExp][] = [
+  ['opsto', /toronto/i],
+  ['fundraising', /fundrais|grant|outreach|partnership|donor|sponsor|event/i],
+  ['progdev', /program|kitchen|cuisine/i],
+  ['opsmtl', /operation|logistic|volunteer relations/i],
+];
+async function watchersFor(dept: string): Promise<string[]> {
+  const { data } = await svc.from('app_config').select('value').eq('key', 'applicant_watchers').maybeSingle();
+  let map: Record<string, string[]> = {};
+  try { map = JSON.parse(String((data as { value?: string } | null)?.value || '{}')); } catch (_) { map = {}; }
+  return (map[dept] || []).map(e => String(e).toLowerCase().trim()).filter(Boolean);
+}
+async function slackIdFor(tok: string, email: string): Promise<string | null> {
+  try { const { data } = await svc.from('wa_slack_ids').select('slack_id').ilike('email', email).maybeSingle(); const u = (data as { slack_id?: string } | null)?.slack_id; if (u) return u; } catch (_) { /* look it up */ }
+  try { const r = await fetch('https://slack.com/api/users.lookupByEmail?email=' + encodeURIComponent(email), { headers: { Authorization: 'Bearer ' + tok } }); const b = await r.json(); return b?.user?.id || null; } catch (_) { return null; }
+}
+async function channelMembers(tok: string, id: string): Promise<Set<string>> {
+  const out = new Set<string>(); let cursor = '';
+  for (let i = 0; i < 10; i++) {
+    const r = await fetch('https://slack.com/api/conversations.members?limit=500&channel=' + encodeURIComponent(id) + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { headers: { Authorization: 'Bearer ' + tok } });
+    const b = await r.json(); for (const m of (b.members || [])) out.add(String(m));
+    cursor = b.response_metadata?.next_cursor || ''; if (!cursor) break;
+  }
+  return out;
+}
+// deno-lint-ignore no-explicit-any
+async function newApplicant(b: any) {
+  const dry = !!b.dry_run;
+  const { data: c } = await svc.from('hub_candidates').select('id,name,role,position_id,status,source,practice,summary').eq('id', b.id).maybeSingle();
+  if (!c) return { ok: true, skipped: 'no such card' };
+  if (c.practice) return { ok: true, skipped: 'practice card' };
+  if (!dry && !['new', 'reviewing'].includes(String(c.status || 'new'))) return { ok: true, skipped: 'not on the board (' + c.status + ')' };
+  let role = c.role || '', dept = '';
+  if (c.position_id) { const { data: p } = await svc.from('hub_positions').select('title,dept').eq('id', c.position_id).maybeSingle(); if (p?.title) role = p.title; if (p?.dept) dept = p.dept; }
+  if (!dept) { for (const [d, re] of TEAM_WORDS) if (re.test(role)) { dept = d; break; } }
+  const emails = dept ? await watchersFor(dept) : [];
+  const link = HUB + '/#hrcentre/applications/' + c.id;
+  const tok = await getSecret('SLACK_BOT_TOKEN');
+  const ids: { email: string; uid: string | null }[] = [];
+  for (const e of emails) ids.push({ email: e, uid: await slackIdFor(tok, e) });
+  const tags = ids.filter(x => x.uid).map(x => '<@' + x.uid + '>');
+  const src = c.source ? ' (via ' + String(c.source) + ')' : '';
+  const text = ':wave: New applicant: *<' + link + '|' + (c.name || 'Someone') + '>*' + (role ? ' for *' + role + '*' : '') + src + '.' + (tags.length ? ' ' + tags.join(' ') + ' heads up, this one is for your team.' : '') + ' <' + link + '|Open the applicant>';
+  const ch = await hrChannel(tok);
+  if (dry) return { ok: true, dry_run: true, dept, role, channel: ch?.name || null, text, watchers: ids };
+  let posted = false; const dms: Record<string, string> = {};
+  if (ch) { const p = await slack(tok, 'chat.postMessage', { channel: ch.id, text, unfurl_links: false }); posted = !!p.ok; }
+  const inChan = ch ? await channelMembers(tok, ch.id) : new Set<string>();
+  for (const x of ids) {
+    if (posted && x.uid && inChan.has(x.uid)) continue;
+    const dmText = ':wave: New applicant for your team: *' + (c.name || 'Someone') + '*' + (role ? ' for *' + role + '*' : '') + src + '. <' + link + '|Open the applicant>';
+    const via = await viaNotify('applicant', [x.email], dmText, 'New applicant: ' + (c.name || 'Someone'), (role ? role + '. ' : '') + 'A new application for your team.', '#hrcentre/applications/' + c.id, 'applicant-new-' + c.id);
+    dms[x.email] = via ? via.slack : ((await dm(tok, x.email, dmText)) ? 'sent (directly)' : 'failed');
+  }
+  await svc.from('change_log').insert({ entity_type: 'candidate', entity_id: String(c.id), field: 'new_applicant_ping', old_value: null, new_value: (posted ? 'posted in #' + (ch?.name || '') : 'not posted') + (dept ? '; team ' + dept : '; no team matched') + '; tagged ' + tags.length, changed_by: 'Hub' });
+  return { ok: true, posted, channel: ch?.name || null, dept, tagged: tags.length, dms };
 }
 
 /* ---------- Google Drive (the wa-hub-drive service account) ---------- */
@@ -930,6 +994,7 @@ Deno.serve(async (req) => {
     }
     if (action === 'offer_send') return json(await offerSend(Number(b.id), b.f || {}, !!b.email, who));
     if (action === 'offer_signer_set') { if (bySecret) return json({ error: 'staff only' }, 403); return json(await signerSet(String(b.email || ''), who, req.headers.get('Authorization') || '')); }
+    if (action === 'new_applicant') { if (!bySecret) return json({ error: 'system only' }, 403); return json(await newApplicant(b)); }
     if (action === 'stage_moved') { if (!bySecret) return json({ error: 'system only' }, 403); return json(await stageMoved(b)); }
     if (action === 'quo_calls') return json(await quoCalls(Number(b.id)));
     if (action === 'quo_log') return json(await quoLog(Number(b.id), String(b.call_id || ''), String(b.stage || ''), who));
