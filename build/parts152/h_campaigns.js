@@ -29,54 +29,257 @@
   function listById(id) { return (S.lists || []).filter(function (l) { return String(l.id) === String(id); })[0] || null; }
 
   /* ---------- the conditions a list can hold ---------- */
+  /* wave295: the same conditions drive the Contacts page's Filters builder (build/parts152/p_filters.js), so Contacts and Lists ask the database
+     the same question. New since wave295: Chapter, Phone number, Organisation, Job title, Do not contact, every custom field by its label ("Keela and
+     profile fields"), and several values at once for Contact type, Volunteer role and Tag (option boxes; a tag picker with counts and Keela names).
+     One value is still saved as one value, so a list saved before wave295 keeps its exact shape. */
   var LF = [
-    ['kind', 'Contact type', 'sel', ['is', 'not']], ['role', 'Volunteer role', 'sel', ['is', 'not']], ['tag', 'Tag', 'text', ['has', 'not']],
-    ['perm', 'Email permission', 'sel', ['is', 'not']], ['email', 'Email address', 'none', ['has', 'none']],
+    ['kind', 'Contact type', 'multi', ['is', 'not']], ['role', 'Volunteer role', 'multi', ['is', 'not']], ['tag', 'Tag', 'tags', ['has', 'all', 'not']],
+    ['chapter', 'Chapter', 'sel', ['is', 'not']],
+    ['perm', 'Email permission', 'sel', ['is', 'not']], ['email', 'Email address', 'none', ['has', 'none']], ['phone', 'Phone number', 'none', ['has', 'none']],
     ['served', 'Served at an event', 'num', ['ever', 'never', 'within', 'count_gte']], ['gave', 'Gave a gift', 'num', ['ever', 'never', 'within', 'lapsed', 'total_gte', 'count_gte']],
     ['city', 'City', 'text', ['contains', 'not']], ['language', 'Language', 'sel', ['is', 'not']], ['source', 'Came from', 'sel', ['is', 'not']],
     ['added', 'Added to the CRM', 'num', ['within']], ['active', 'Last activity', 'num', ['within']],
     ['opened', 'Opened a Hub email', 'num', ['within']], ['clicked', 'Clicked a Hub email', 'num', ['within']],
+    ['org', 'Organisation', 'text', ['contains', 'not']], ['job_title', 'Job title', 'text', ['contains', 'not']], ['dnc', 'Do not contact', 'none', ['is', 'not']],
     ['review', 'Volunteer record needs a review', 'none', ['is', 'not']], ['search', 'Name, email or organization', 'text', ['contains']]
   ];
-  var LOP = { is: 'is', not: 'is not', has: 'has', none: 'has none', ever: 'ever', never: 'never', within: 'in the last … days', count_gte: 'at least … times', lapsed: 'not in the last … days', total_gte: 'at least $… in total', contains: 'contains' };
+  var LOP = { is: 'is', not: 'is not', has: 'has', none: 'has none', ever: 'ever', never: 'never', within: 'in the last … days', count_gte: 'at least … times', lapsed: 'not in the last … days', total_gte: 'at least $… in total', contains: 'contains',
+    all: 'has all of', any: 'has any of', set: 'is filled in', empty: 'is empty', before: 'is before', after: 'is after' };
+  /* wave295: words that read better for one field (the older fields keep theirs, so a saved list reads as it did) */
+  var LOP_BY = { tag: { not: 'does not have' }, dnc: { is: 'is on', not: 'is off' }, org: { not: 'does not contain' }, job_title: { not: 'does not contain' } };
+  /* a custom field's type: the value control and the operators that fit it */
+  var FTYPE = { choice: ['fchoice', ['is', 'set', 'empty']], multi: ['fchoice', ['any', 'set', 'empty']], yes_no: ['fyes', ['is', 'set', 'empty']],
+    date: ['date', ['before', 'after', 'set', 'empty']], number: ['fnum', ['is', 'before', 'after', 'set', 'empty']],
+    text: ['text', ['contains', 'is', 'set', 'empty']], long_text: ['text', ['contains', 'set', 'empty']] };
   function lf(f) { return LF.filter(function (x) { return x[0] === f; })[0] || LF[0]; }
+  function cfieldByKey(key) { return (S.cfields || []).filter(function (x) { return x.key === key; })[0] || null; }
+  function defOf(k) {
+    k = k || {};
+    if (k.f === 'field') {
+      var cf = cfieldByKey(k.key), t = FTYPE[(cf && cf.type) || 'text'] || FTYPE.text;
+      return { id: 'field:' + (k.key || ''), f: 'field', key: k.key, label: cf ? cf.label : (k.key || 'A field'), type: t[0], ops: t[1], missing: !cf };
+    }
+    var d = lf(k.f);
+    return { id: d[0], f: d[0], label: d[1], type: d[2], ops: d[3] };
+  }
+  function opLabel(d, op) {
+    if (d.type === 'fnum' && (op === 'before' || op === 'after')) return op === 'before' ? 'is less than' : 'is more than';
+    return (LOP_BY[d.f] || {})[op] || LOP[op] || op;
+  }
   function lopts(f) {
     if (f === 'kind') return KIND_ORDER.map(function (k) { return [k, (KINDS[k] || [k])[0]]; });
     if (f === 'role') return ROLE_ORDER.map(function (r) { return [r, ROLES[r]]; });
     if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['unsub', 'Unsubscribed or bouncing']];
     if (f === 'language') return [['en', 'English'], ['fr', 'French']];
     if (f === 'source') return Object.keys(SOURCES).map(function (k) { return [k, SOURCES[k][0]]; });
+    if (f === 'chapter') return [['montreal', 'Montreal'], ['toronto', 'Toronto']];
     return [];
   }
+  /* the values of a condition as a list (one value, a list, or none yet) */
+  function vals(k) { return Array.isArray(k.v) ? k.v.map(String) : (k.v == null || k.v === '' ? [] : [String(k.v)]); }
+  function isMultiDef(d) { return d.type === 'multi' || d.type === 'tags' || d.type === 'fchoice'; }
+  function fieldOpts(k) {
+    var cf = cfieldByKey(k.key), o = (cf && Array.isArray(cf.options) ? cf.options : []).map(String);
+    vals(k).forEach(function (v) { if (o.indexOf(v) < 0) o.push(v); });
+    return o.map(function (x) { return [x, x]; });
+  }
   function needsValue(k) {
-    var d = lf(k.f);
-    if (d[2] === 'none') return false;
+    var d = defOf(k);
+    if (d.type === 'none') return false;
     if (k.f === 'served' || k.f === 'gave') return ['within', 'lapsed', 'count_gte', 'total_gte'].indexOf(k.op) >= 0;
+    if (k.f === 'field') return k.op !== 'set' && k.op !== 'empty';
     return true;
   }
-  function defVal(f, op) {
+  /* wave295: a condition still waiting for its value (no option ticked, no date) is left out of the filter until it has one */
+  function condReady(k) {
+    if (!k || !k.f) return false;
+    if (!needsValue(k)) return true;
+    var d = defOf(k);
+    if (isMultiDef(d) || Array.isArray(k.v)) return vals(k).length > 0;
+    if (d.type === 'date' || k.f === 'field') return String(k.v == null ? '' : k.v).trim() !== '';
+    return true;
+  }
+  function defVal(f, op, k) {
     if (op === 'within' || op === 'lapsed') return f === 'added' ? '30' : f === 'opened' || f === 'clicked' || f === 'active' ? '90' : '365';
     if (op === 'count_gte') return f === 'served' ? '3' : '2';
     if (op === 'total_gte') return '100';
+    if (f === 'tag') return [];
+    if (f === 'field') { var d = defOf(k || { f: 'field' }); return d.type === 'fyes' ? 'yes' : d.type === 'fchoice' ? [] : ''; }
     var o = lopts(f); return o.length ? o[0][0] : '';
   }
-  function newCond(f) { var d = lf(f || 'kind'); var op = d[3][0]; return { f: d[0], op: op, v: defVal(d[0], op) }; }
-  function condHtml(k, gi, ci) {
-    var d = lf(k.f), at = gi + '.' + ci;
-    var fs = '<select class="w152sel" data-w155cf="' + at + '" aria-label="Field">' + LF.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === k.f ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select>';
-    var os = '<select class="w152sel" data-w155co="' + at + '" aria-label="Condition">' + d[3].map(function (o) { return '<option value="' + o + '"' + (o === k.op ? ' selected' : '') + '>' + E(LOP[o]) + '</option>'; }).join('') + '</select>';
-    var vs = '';
+  function newCond(id) {
+    if (/^field:/.test(id || '')) { var k = { f: 'field', key: id.slice(6) }; k.op = defOf(k).ops[0]; k.v = defVal('field', k.op, k); return k; }
+    var d = lf(id || 'kind'); var op = d[3][0]; return { f: d[0], op: op, v: defVal(d[0], op) };
+  }
+  /* after the operator changes: keep the value when it still fits, else the default */
+  function fixValue(k) {
+    if (!needsValue(k)) return;
+    var d = defOf(k);
+    if (k.f === 'field') {
+      if (d.type === 'fchoice') { if (!Array.isArray(k.v)) k.v = vals(k); }
+      else if (Array.isArray(k.v) || (d.type === 'fyes' && k.v !== 'yes' && k.v !== 'no')) k.v = defVal('field', k.op, k);
+      return;
+    }
+    if (k.v === '' || k.v == null || !/^\d/.test(String(k.v)) && d.type === 'num') k.v = defVal(k.f, k.op);
+  }
+  /* counts for the option boxes (kept until the contacts reload) */
+  var CNT = { at: null, kind: {}, role: {}, tags: [] };
+  function counts() {
+    if (CNT.at === S.contacts) return CNT;
+    var kc = {}, rc = {}, tg = {};
+    (S.contacts || []).forEach(function (c) {
+      KIND_ORDER.forEach(function (k) { if (hasKind(c, k)) kc[k] = (kc[k] || 0) + 1; });
+      c._roles.forEach(function (r) { rc[r] = (rc[r] || 0) + 1; });
+      uniq(c.tags.map(function (t) { return String(t).trim(); }).filter(Boolean)).forEach(function (t) {
+        var key = fold(t), x = tg[key] || (tg[key] = { tag: t, n: 0, sp: {} });
+        x.n++; x.sp[t] = (x.sp[t] || 0) + 1;
+      });
+    });
+    var tags = Object.keys(tg).map(function (key) { var x = tg[key], best = Object.keys(x.sp).sort(function (a, b) { return x.sp[b] - x.sp[a] || a.localeCompare(b); })[0]; return { tag: best, n: x.n }; })
+      .sort(function (a, b) { return b.n - a.n || fold(a.tag).localeCompare(fold(b.tag)); });
+    CNT = { at: S.contacts, kind: kc, role: rc, tags: tags };
+    return CNT;
+  }
+  /* wave294's Keela names for Hub tags (crm_tag_aliases), read once; nothing when the database does not have them */
+  var TAGAL = { rows: null, busy: false };
+  function loadAliases() {
+    if (TAGAL.rows || TAGAL.busy || typeof db === 'undefined' || !db || !db.rpc) return;
+    TAGAL.busy = true;
+    Promise.resolve(db.rpc('crm_tag_aliases')).then(function (r) {
+      TAGAL.busy = false; TAGAL.rows = (r && !r.error && Array.isArray(r.data)) ? r.data.filter(function (x) { return x && x.alias && x.tag; }) : [];
+      refreshTagLists();
+    }, function () { TAGAL.busy = false; TAGAL.rows = []; });
+  }
+  function aliasesFor(q) {
+    var qf = fold(String(q || '').trim()); if (qf.length < 3) return [];
+    var out = [];
+    (TAGAL.rows || []).forEach(function (x) { var a = fold(x.alias); if ((a === qf || a.indexOf(qf) === 0) && fold(x.tag) !== a) out.push({ alias: x.alias, tag: x.tag }); });
+    return out.slice(0, 4);
+  }
+  var TQ = {};   /* what someone typed in each tag picker's search box, by builder and position */
+  function tagListHtml(k, at, ns) {
+    var q = TQ[ns + at] || '', qf = fold(q.trim()), on = vals(k), onF = on.map(fold), C = counts();
+    var known = {}; C.tags.forEach(function (t) { known[fold(t.tag)] = 1; });
+    var list = on.filter(function (v) { return !known[fold(v)]; }).map(function (v) { return { tag: v, n: 0, extra: true }; })
+      .concat(C.tags.filter(function (t) { return !qf || fold(t.tag).indexOf(qf) >= 0 || onF.indexOf(fold(t.tag)) >= 0; }));
+    list.sort(function (a, b) { return (onF.indexOf(fold(b.tag)) >= 0) - (onF.indexOf(fold(a.tag)) >= 0); });
+    var al = aliasesFor(q).map(function (x) {
+      return '<button type="button" class="w295alias" data-' + ns + 'alias="' + at + '" data-tag="' + E(x.tag) + '">' + E(x.alias) + ' <span aria-hidden="true">→</span><span class="sr"> is the tag </span> <b>' + E(x.tag) + '</b></button>';
+    }).join('');
+    var shown = list.slice(0, 300);
+    return (al ? '<div class="w295al">' + al + '</div>' : '') +
+      (shown.length ? '<div class="w295opts col" role="group" aria-label="Tags">' + shown.map(function (t) {
+        var chk = onF.indexOf(fold(t.tag)) >= 0;
+        return '<label class="w295opt"><input type="checkbox" data-' + ns + 'ck="' + at + '" value="' + E(t.tag) + '"' + (chk ? ' checked' : '') + '><span>' + E(t.tag) + '</span><em>' + (t.extra ? 'Keela name or no one yet' : Number(t.n).toLocaleString('en-CA')) + '</em></label>';
+      }).join('') + '</div>' : '<div class="m w295none">' + (qf ? 'No tag called “' + E(q.trim()) + '”.' : 'No contact has a tag yet.') + '</div>') +
+      (list.length > shown.length ? '<div class="m">Showing ' + shown.length + ' of ' + list.length + ' tags. Type to find the others.</div>' : '');
+  }
+  function refreshTagLists() {
+    ['w155', 'w295'].forEach(function (ns) {
+      [].forEach.call(document.querySelectorAll('#crm [data-' + ns + 'tl]'), function (el) {
+        var at = el.getAttribute('data-' + ns + 'tl'), a = atOf(at), gs = ns === 'w155' ? (LC.edit && LC.edit.groups) : fbDraft(), k = gs && gs[a.g] && gs[a.g].all[a.c];
+        if (k) el.innerHTML = tagListHtml(k, at, ns);
+      });
+    });
+  }
+  function fieldPicker(k, at, ns) {
+    var cur = defOf(k).id, op = function (v, label) { return '<option value="' + E(v) + '"' + (v === cur ? ' selected' : '') + '>' + E(label) + '</option>'; };
+    var base = LF.filter(function (x) { return ns !== 'w295' || x[0] !== 'search' || cur === 'search'; }).map(function (x) { return op(x[0], x[1]); }).join('');
+    var cfs = (S.cfields || []).filter(function (x) { return !x.archived_at || 'field:' + x.key === cur; });
+    var grp = cfs.map(function (x) { return op('field:' + x.key, x.label); }).join('');
+    if (k.f === 'field' && !cfieldByKey(k.key)) grp += op(cur, (k.key || 'A field') + ' (no longer a field)');
+    return '<select class="w152sel" data-' + ns + 'cf="' + at + '" aria-label="Field">' + base + (grp ? '<optgroup label="Keela and profile fields">' + grp + '</optgroup>' : '') + '</select>';
+  }
+  function condHtml(k, gi, ci, ns) {
+    ns = ns || 'w155';
+    var d = defOf(k), at = gi + '.' + ci, A = function (s) { return 'data-' + ns + s + '="' + at + '"'; };
+    var os = '<select class="w152sel" ' + A('co') + ' aria-label="Condition">' + d.ops.map(function (o) { return '<option value="' + o + '"' + (o === k.op ? ' selected' : '') + '>' + E(opLabel(d, o)) + '</option>'; }).join('') + '</select>';
+    var vs = '', wide = false, help = '';
     if (needsValue(k)) {
       var opts = lopts(k.f);
-      if (d[2] === 'sel' && opts.length) vs = '<select class="w152sel" data-w155cv="' + at + '" aria-label="Value">' + opts.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(o[0]) === String(k.v) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('') + '</select>';
-      else vs = '<input class="w152in" data-w155cv="' + at + '" aria-label="Value" ' + (d[2] === 'num' ? 'type="number" min="0" ' : 'type="text" ') + 'value="' + E(k.v) + '">';
+      if (d.type === 'multi' || d.type === 'fchoice') {
+        wide = true;
+        var o2 = d.type === 'fchoice' ? fieldOpts(k) : opts.concat(vals(k).filter(function (v) { return !opts.some(function (p) { return p[0] === v; }); }).map(function (v) { return [v, v]; }));
+        var cn = d.f === 'kind' ? counts().kind : d.f === 'role' ? counts().role : null, on = vals(k);
+        vs = '<div class="w295opts" role="group" aria-label="' + E(d.label) + '">' + o2.map(function (o) {
+          return '<label class="w295opt"><input type="checkbox" ' + A('ck') + ' value="' + E(o[0]) + '"' + (on.indexOf(String(o[0])) >= 0 ? ' checked' : '') + '><span>' + E(o[1]) + '</span>' + (cn ? '<em>' + Number(cn[o[0]] || 0).toLocaleString('en-CA') + '</em>' : '') + '</label>';
+        }).join('') + (o2.length ? '' : '<span class="m">This field has no choices yet.</span>') + '</div>';
+      } else if (d.type === 'tags') {
+        wide = true; loadAliases();
+        vs = '<div class="w295tp"><input class="w152in" type="search" ' + A('tq') + ' value="' + E(TQ[ns + at] || '') + '" placeholder="Find a tag or a Keela name" aria-label="Find a tag"><div class="w295tl" ' + A('tl') + '>' + tagListHtml(k, at, ns) + '</div></div>';
+      } else if (d.type === 'fyes') {
+        vs = '<select class="w152sel" ' + A('cv') + ' aria-label="Value"><option value="yes"' + (k.v === 'no' ? '' : ' selected') + '>Yes</option><option value="no"' + (k.v === 'no' ? ' selected' : '') + '>No</option></select>';
+      } else if (d.type === 'sel' && opts.length) {
+        vs = '<select class="w152sel" ' + A('cv') + ' aria-label="Value">' + opts.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(o[0]) === String(k.v) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('') + '</select>';
+      } else if (d.type === 'date') {
+        vs = '<input class="w152in" ' + A('cv') + ' aria-label="Date" type="date" value="' + E(k.v) + '">';
+      } else {
+        vs = '<input class="w152in" ' + A('cv') + ' aria-label="Value" ' + (d.type === 'num' ? 'type="number" min="0" ' : d.type === 'fnum' ? 'type="number" step="any" inputmode="decimal" ' : 'type="text" ') + 'value="' + E(k.v) + '">';
+      }
     }
-    return '<div class="w155c">' + fs + os + vs + '<button class="w152mini" data-w155cx="' + at + '" aria-label="Remove this condition">' + I('x') + '</button></div>';
+    if (k.f === 'chapter' && String(k.v) === 'montreal') help = '<div class="w295help m">No chapter: counted as Montreal.</div>';
+    if (d.missing) help += '<div class="w295help m">This field is no longer in the CRM, so this condition matches no one.</div>';
+    else if (!condReady(k)) help += '<div class="w295help m">' + (isMultiDef(d) ? 'Choose at least one.' : 'Fill this in.') + ' Until then this condition is left out.</div>';
+    return '<div class="w155c' + (wide ? ' w295wide' : '') + '">' + fieldPicker(k, at, ns) + os + (wide ? '' : vs) + '<button class="w152mini" ' + A('cx') + ' aria-label="Remove this condition">' + I('x') + '</button>' +
+      (wide ? '<div class="w295val">' + vs + '</div>' : '') + help + '</div>';
+  }
+  /* the groups of a builder: Lists (w155) or the Contacts filters (w295) */
+  function groupsHtml(groups, ns) {
+    var lists = ns === 'w155';
+    return groups.map(function (g, gi) {
+      return (gi ? '<div class="w155or"><span>or</span></div>' : '') + '<div class="w155g"><div class="w155gh">' + (groups.length > 1 ? 'Group ' + (gi + 1) : 'People who match all of these') +
+        (groups.length > 1 ? '<button class="w152mini" data-' + ns + 'gx="' + gi + '">' + I('x') + ' Remove the group</button>' : '') + '</div>' +
+        (g.all.length ? g.all.map(function (k, ci) { return condHtml(k, gi, ci, ns); }).join('<div class="w155and">and</div>') : '<div class="m">' + (lists ? 'No condition yet: everyone in the CRM.' : 'No condition yet. Add one below.') + '</div>') +
+        '<button class="w152btn sm ghost" data-' + ns + 'and="' + gi + '">' + I('plus') + (lists ? ' And' : ' Add a condition') + '</button></div>';
+    }).join('') + '<button class="w152btn sm ghost" data-' + ns + 'or>' + I('plus') + (lists ? ' Or: another group' : ' Or another group') + '</button>';
+  }
+  /* one change in a builder's controls; 'paint' when the controls must be drawn again, 'soft' when only the count follows, '' when it is not one */
+  function condEvent(groups, ns, t, type) {
+    var x, a, k;
+    if (!groups) return '';
+    if ((x = t.getAttribute('data-' + ns + 'cf')) != null) { if (type !== 'change') return ''; a = atOf(x); groups[a.g].all[a.c] = newCond(t.value); return 'paint'; }
+    if ((x = t.getAttribute('data-' + ns + 'co')) != null) { if (type !== 'change') return ''; a = atOf(x); k = groups[a.g].all[a.c]; k.op = t.value; fixValue(k); return 'paint'; }
+    if ((x = t.getAttribute('data-' + ns + 'cv')) != null) { a = atOf(x); k = groups[a.g].all[a.c]; k.v = t.value; return type === 'change' && (k.f === 'chapter' || t.type === 'date' || k.f === 'field') ? 'paint' : 'soft'; }
+    if ((x = t.getAttribute('data-' + ns + 'ck')) != null) {
+      if (type !== 'change') return '';
+      a = atOf(x); k = groups[a.g].all[a.c];
+      var vs = vals(k), i = vs.map(fold).indexOf(fold(t.value));
+      if (t.checked && i < 0) vs.push(t.value); else if (!t.checked && i >= 0) vs.splice(i, 1);
+      k.v = vs; return 'paint';
+    }
+    return '';
+  }
+  /* the clicks a builder shares: and, or, remove a group or a condition, a Keela name's tag */
+  function condClick(groups, ns, t) {
+    var el;
+    if (!groups) return false;
+    if ((el = t.closest('[data-' + ns + 'and]'))) { var gi = Number(el.getAttribute('data-' + ns + 'and')); groups[gi].all.push(newCond(ns === 'w155' ? 'served' : 'tag')); return { focus: '[data-' + ns + 'cf="' + gi + '.' + (groups[gi].all.length - 1) + '"]' }; }
+    if ((el = t.closest('[data-' + ns + 'or]'))) { groups.push({ all: [newCond(ns === 'w155' ? 'kind' : 'tag')] }); return { focus: '[data-' + ns + 'cf="' + (groups.length - 1) + '.0"]' }; }
+    if ((el = t.closest('[data-' + ns + 'gx]'))) { groups.splice(Number(el.getAttribute('data-' + ns + 'gx')), 1); if (!groups.length) groups.push({ all: [] }); return { focus: '[data-' + ns + 'or]' }; }
+    if ((el = t.closest('[data-' + ns + 'cx]'))) { var a = atOf(el.getAttribute('data-' + ns + 'cx')); groups[a.g].all.splice(a.c, 1); return { focus: '[data-' + ns + 'and="' + a.g + '"]' }; }
+    if ((el = t.closest('[data-' + ns + 'alias]'))) {
+      var b = atOf(el.getAttribute('data-' + ns + 'alias')), k = groups[b.g].all[b.c], tag = el.getAttribute('data-tag'), vs = vals(k);
+      if (vs.map(fold).indexOf(fold(tag)) < 0) vs.push(tag);
+      k.v = vs; TQ[ns + b.g + '.' + b.c] = '';
+      return { focus: '[data-' + ns + 'tq="' + b.g + '.' + b.c + '"]' };
+    }
+    return false;
   }
   function cleanGroups(groups) {
-    return (groups || []).map(function (g) { return { all: (g.all || []).filter(function (k) { return k && k.f; }).map(function (k) { var o = { f: k.f, op: k.op }; if (needsValue(k)) o.v = String(k.v == null ? '' : k.v); return o; }) }; });
+    return (groups || []).map(function (g) {
+      return { all: (g.all || []).filter(condReady).map(function (k) {
+        var o = { f: k.f, op: k.op };
+        if (k.f === 'field') o.key = k.key;
+        if (needsValue(k)) {
+          if (Array.isArray(k.v) || isMultiDef(defOf(k))) { var a = vals(k); o.v = a.length === 1 && k.f !== 'field' ? a[0] : a; }
+          else o.v = String(k.v == null ? '' : k.v);
+        }
+        return o;
+      }) };
+    });
   }
-  /* the Contacts tab's filters as one group */
+  /* the Contacts tab's filters as one group; wave295: with the Filters builder on, each of its groups and the quick menus */
   function groupsFromFilters() {
     var u = S.ui, all = [];
     if (u.kind) all.push({ f: 'kind', op: 'is', v: u.kind });
@@ -89,19 +292,30 @@
     else if (u.act === 'new30') all.push({ f: 'added', op: 'within', v: '30' });
     if (u.perm) all.push({ f: 'perm', op: 'is', v: u.perm });
     if (u.q) all.push({ f: 'search', op: 'contains', v: u.q });
+    var fb = fbGroups();
+    if (fb.length) return fb.map(function (g) { return { all: JSON.parse(JSON.stringify(g.all)).concat(JSON.parse(JSON.stringify(all))) }; });
     return [{ all: all }];
+  }
+  function condWords(k) {
+    var d = defOf(k), op = opLabel(d, k.op);
+    if (!needsValue(k)) return d.label + ' ' + op;
+    if (isMultiDef(d)) {
+      var o = d.type === 'fchoice' ? fieldOpts(k) : lopts(k.f);
+      var names = vals(k).map(function (v) { var x = o.filter(function (p) { return String(p[0]) === v; })[0]; return x ? x[1] : v; });
+      if (!names.length) return d.label + ' ' + op + ' …';
+      if (names.length === 1) return d.label + ' ' + op + ' ' + names[0];
+      if (k.op === 'not') return d.label + ' ' + (k.f === 'tag' ? 'has none of' : 'is none of') + ' ' + names.join(', ');
+      return d.label + ' ' + (k.f === 'tag' ? (k.op === 'all' ? 'has all of' : 'has') : op) + ' ' + names.slice(0, -1).join(', ') + (k.op === 'all' ? ' and ' : ' or ') + names[names.length - 1];
+    }
+    var lab = lopts(k.f).filter(function (x) { return String(x[0]) === String(k.v); })[0];
+    var val = lab ? lab[1] : d.type === 'fyes' ? (k.v === 'no' ? 'No' : 'Yes') : k.v;
+    if (op.indexOf('…') >= 0) return d.label + ' ' + op.replace('…', val || '…');
+    return d.label + ' ' + op + (val ? ' ' + val : '');
   }
   function describe(groups) {
     var gs = cleanGroups(groups);
     if (!gs.length || gs.every(function (g) { return !g.all.length; })) return 'Everyone in the CRM';
-    return gs.map(function (g) {
-      return g.all.map(function (k) {
-        var d = lf(k.f), o = lopts(k.f), lab = o.filter(function (x) { return String(x[0]) === String(k.v); })[0];
-        var val = lab ? lab[1] : k.v, op = LOP[k.op] || k.op;
-        if (op.indexOf('…') >= 0) return d[1] + ' ' + op.replace('…', val || '…');
-        return d[1] + ' ' + op + (needsValue(k) && val ? ' ' + val : '');
-      }).join(' and ') || 'everyone';
-    }).join('; or ');
+    return gs.map(function (g) { return g.all.map(condWords).join(' and ') || 'everyone'; }).join('; or ');
   }
 
   /* ---------- the live count while a list is being built ---------- */
@@ -139,21 +353,17 @@
     var n = LC.sizes && LC.sizes[String(l.id)] != null ? LC.sizes[String(l.id)] : (l.kind === 'static' ? (l.member_ids || []).length : null);
     return '<div class="w155row" role="listitem"><div class="w155nm"><b>' + E(l.name) + '</b><span class="m">' + E(l.description || describe((l.filter || {}).groups || [])) + '</span></div>' +
       '<div>' + lchip({ dynamic: ['Live', TEAL], static: ['Fixed', PURPLE] }, l.kind) + '</div><div class="w155n">' + (n == null ? '…' : plural(n, 'person', 'people')) + '</div>' +
-      '<div class="w155ra"><button class="w152btn sm ghost" data-w155edit="' + E(l.id) + '">' + I('edit') + ' Open</button><button class="w152btn sm" data-w155mail="' + E(l.id) + '">' + I('mail') + ' Email this list</button></div></div>';
+      '<div class="w155ra"><button class="w152btn sm ghost" data-w155edit="' + E(l.id) + '">' + I('edit') + ' Open</button>' +
+      /* wave295: a live list's conditions as the Contacts page's filter */
+      (l.kind === 'dynamic' && l.filter && Array.isArray(l.filter.groups) ? '<button class="w152btn sm ghost" data-w295view="' + E(l.id) + '">' + I('people') + ' View in Contacts</button>' : '') + '<button class="w152btn sm" data-w155mail="' + E(l.id) + '">' + I('mail') + ' Email this list</button></div></div>';
   }
   function builderHtml() {
     var ed = LC.edit;
     if (!ed) return '<div class="w154card"><h3>' + I('list') + ' Build a list</h3><p>A list is a set of conditions: everyone who matches them today. Conditions in one group must all hold (and); a person who matches any group is in (or).</p><p class="m">Live lists follow the data, so a volunteer who serves on Sunday is in the “served in the last year” list on Monday. Fixed lists keep the people they had when saved.</p></div>';
-    var gs = ed.groups.map(function (g, gi) {
-      return (gi ? '<div class="w155or"><span>or</span></div>' : '') + '<div class="w155g"><div class="w155gh">' + (ed.groups.length > 1 ? 'Group ' + (gi + 1) : 'People who match all of these') +
-        (ed.groups.length > 1 ? '<button class="w152mini" data-w155gx="' + gi + '">' + I('x') + ' Remove the group</button>' : '') + '</div>' +
-        (g.all.length ? g.all.map(function (k, ci) { return condHtml(k, gi, ci); }).join('<div class="w155and">and</div>') : '<div class="m">No condition yet: everyone in the CRM.</div>') +
-        '<button class="w152btn sm ghost" data-w155and="' + gi + '">' + I('plus') + ' And</button></div>';
-    }).join('');
     return '<div class="w154card w155b"><h3>' + I('list') + (ed.id ? ' Edit the list' : ' New list') + '</h3>' +
       '<label class="w155lb">Name<input class="w152in" data-w155f="name" value="' + E(ed.name) + '" placeholder="Toronto volunteers who served this year"></label>' +
       '<label class="w155lb">What it is for<input class="w152in" data-w155f="description" value="' + E(ed.description) + '" placeholder="Optional"></label>' +
-      gs + '<button class="w152btn sm ghost" data-w155or>' + I('plus') + ' Or: another group</button>' +
+      groupsHtml(ed.groups, 'w155') +
       '<div data-w155res>' + prevHtml() + '</div>' +
       (ed.del ? '<div class="w154msg">Delete “' + E(ed.name) + '”? Sends that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
       (LC.err ? '<div class="w152err">' + E(LC.err) + '</div>' : '') +
@@ -435,10 +645,7 @@
     if ((el = t.closest('[data-w155fromf]'))) { e.preventDefault(); LC.edit = { id: null, name: '', description: 'From the Contacts filters', groups: groupsFromFilters() }; LC.prev = null; LC.msg = ''; LC.err = ''; paint(); return; }
     if ((el = t.closest('[data-w155edit]'))) { e.preventDefault(); var l = listById(el.getAttribute('data-w155edit')); if (!l) return; var g = (l.filter && Array.isArray(l.filter.groups)) ? l.filter.groups : [{ all: [] }]; LC.edit = { id: l.id, name: l.name, description: l.description || '', groups: JSON.parse(JSON.stringify(g)) }; LC.prev = null; LC.msg = ''; LC.err = ''; paint(); return; }
     if ((el = t.closest('[data-w155mail]'))) { e.preventDefault(); LC.newList = el.getAttribute('data-w155mail'); LC.c = null; go('#crm/campaigns/new'); return; }
-    if ((el = t.closest('[data-w155and]')) && ed) { e.preventDefault(); ed.groups[Number(el.getAttribute('data-w155and'))].all.push(newCond('served')); previewSoon(); paint(); return; }
-    if ((el = t.closest('[data-w155or]')) && ed) { e.preventDefault(); ed.groups.push({ all: [newCond('kind')] }); previewSoon(); paint(); return; }
-    if ((el = t.closest('[data-w155gx]')) && ed) { e.preventDefault(); ed.groups.splice(Number(el.getAttribute('data-w155gx')), 1); if (!ed.groups.length) ed.groups.push({ all: [] }); previewSoon(); paint(); return; }
-    if ((el = t.closest('[data-w155cx]')) && ed) { e.preventDefault(); var a = atOf(el.getAttribute('data-w155cx')); ed.groups[a.g].all.splice(a.c, 1); previewSoon(); paint(); return; }
+    if (ed) { var cc = condClick(ed.groups, 'w155', t); if (cc) { e.preventDefault(); previewSoon(); paint(); focusSoon(cc.focus); return; } }
     if ((el = t.closest('[data-w155save]')) && ed) { e.preventDefault(); saveList(el.getAttribute('data-w155save')); return; }
     if ((el = t.closest('[data-w155del]')) && ed) { e.preventDefault(); ed.del = true; paint(); return; }
     if ((el = t.closest('[data-w155delno]')) && ed) { e.preventDefault(); ed.del = false; paint(); return; }
@@ -463,14 +670,13 @@
     var t = e.target; if (!t || !t.closest || !t.closest('.w152root')) return;
     var ed = LC.edit, a;
     if (t.hasAttribute('data-w155f') && ed) { ed[t.getAttribute('data-w155f')] = t.value; return; }
-    if (t.hasAttribute('data-w155cf') && ed) { a = atOf(t.getAttribute('data-w155cf')); ed.groups[a.g].all[a.c] = newCond(t.value); previewSoon(); paint(); return; }
-    if (t.hasAttribute('data-w155co') && ed) { a = atOf(t.getAttribute('data-w155co')); var k = ed.groups[a.g].all[a.c]; k.op = t.value; if (needsValue(k) && (k.v === '' || k.v == null || !/^\d/.test(String(k.v)) && lf(k.f)[2] === 'num')) k.v = defVal(k.f, k.op); previewSoon(); paint(); return; }
-    if (t.hasAttribute('data-w155cv') && ed) { a = atOf(t.getAttribute('data-w155cv')); ed.groups[a.g].all[a.c].v = t.value; previewSoon(); return; }
+    if (ed && t.hasAttribute('data-w155tq') && e.type === 'input') { var at = t.getAttribute('data-w155tq'); TQ['w155' + at] = t.value; var tl = document.querySelector('#crm [data-w155tl="' + at + '"]'); if (tl) { a = atOf(at); tl.innerHTML = tagListHtml(ed.groups[a.g].all[a.c], at, 'w155'); } return; }
+    if (ed) { var r = condEvent(ed.groups, 'w155', t, e.type); if (r) { previewSoon(); if (r === 'paint') paint(); return; } }
     if (t.hasAttribute('data-w155k') && LC.c) {
       var key = t.getAttribute('data-w155k'); LC.c[key] = t.value;
       if (key === 'kind' || key === 'from' || key === 'list_id') { LC.check = null; LC.confirm = false; if (e.type === 'change') paint(); }
     }
   }
   document.addEventListener('input', onField);
-  document.addEventListener('change', function (e) { var t = e.target; if (t && t.tagName === 'SELECT') onField(e); });
+  document.addEventListener('change', function (e) { var t = e.target; if (t && (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'date')) onField(e); });   /* wave295: option boxes and dates too */
 

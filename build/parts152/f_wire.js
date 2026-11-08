@@ -49,7 +49,7 @@
       paint(); return;
     }
     if ((el = t.closest('[data-w152kind]'))) { S.ui.kind = el.getAttribute('data-w152kind'); S.ui.show = 60; paint(); return; }
-    if ((el = t.closest('[data-w152clear]'))) { e.preventDefault(); setFilter({ q: '' }); paint(); return; }
+    if ((el = t.closest('[data-w152clear]'))) { e.preventDefault(); setFilter({ q: '' }); if (fbOn() || FB.err) { FB.err = ''; FB.msg = ''; fbApply([]); return; } paint(); return; }   /* wave295: the Filters builder's conditions too */
     if ((el = t.closest('[data-w152more]'))) { S.ui.show += 60; paint(); return; }
     if ((el = t.closest('[data-w152add]'))) { e.preventDefault(); S.confirm = null; editForm(null); return; }
     if ((el = t.closest('[data-w152edit]'))) { e.preventDefault(); editForm(el.getAttribute('data-w152edit')); return; }

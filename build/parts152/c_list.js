@@ -29,10 +29,12 @@
     if (ds.length >= 4 && ds.length >= q.replace(/[\s()+.-]/g, '').length - 1) return c._digits.some(function (d) { return d.indexOf(ds) >= 0; });
     return fold(q).split(/\s+/).filter(Boolean).every(function (t) { return c._hay.indexOf(t) >= 0; });
   }
-  function matches(c) {
+  function quickOk(c) {
     var u = S.ui;
     return (!u.kind || hasKind(c, u.kind)) && (!u.role || c._roles.indexOf(u.role) >= 0) && actOk(c, u.act) && permOk(c, u.perm) && qOk(c, u.q);
   }
+  /* wave295: and the Filters builder's answer from the database, when one is in use */
+  function matches(c) { return quickOk(c) && (!fbOn() || !FB.ids || !!FB.ids[String(c.id)]); }
   function sortRows(list) {
     var s = S.ui.sort;
     var byName = function (a, b) { return fold(a.full_name).localeCompare(fold(b.full_name)); };
@@ -57,7 +59,7 @@
       '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
   }
   function statsHtml(all) {
-    var u = S.ui, plain = !u.role && !u.perm && !u.q;
+    var u = S.ui, plain = !u.role && !u.perm && !u.q && !fbOn();   /* wave295: no tile is the whole story while a filter is on */
     var vol = all.filter(function (c) { return hasKind(c, 'volunteer'); }).length;
     var served = all.filter(function (c) { return c._served > 0; }).length;
     var donors = all.filter(function (c) { return c._donor; }).length;
@@ -89,6 +91,7 @@
       '<select class="w152sel" data-w152role aria-label="Volunteer role"><option value="">Every volunteer role</option>' + roles.map(function (r) { return '<option value="' + E(r) + '"' + (u.role === r ? ' selected' : '') + '>' + E(roleName(r)) + ' (' + rc[r] + ')</option>'; }).join('') + '</select>' +
       '<select class="w152sel" data-w152act aria-label="Activity">' + opts(ACTS, u.act) + '</select>' +
       '<select class="w152sel" data-w152perm aria-label="Email permission">' + opts(PERMS, u.perm) + '</select>' +
+      fbButtonHtml() +   /* wave295 */
       '<select class="w152sel" data-w152sort aria-label="Sort">' + opts(SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), u.sort) + '</select>' +
       '<button class="w152btn" data-w152add="1">' + I('plus') + ' Add a contact</button></div>';
   }
@@ -109,14 +112,20 @@
     var caret = focus && document.activeElement.selectionStart;
     var list = sortRows(all.filter(matches));
     var shown = list.slice(0, u.show);
-    var filtered = u.kind || u.role || u.act || u.perm || u.q;
-    root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) +
-      '<div class="w152count">' + (filtered ? plural(list.length, 'contact matches', 'contacts match') + ' · <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
-      (shown.length < list.length ? ' · showing the first ' + shown.length : '') + '</div>' +
-      (shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +
+    var filtered = u.kind || u.role || u.act || u.perm || u.q || fbOn();
+    /* wave295: the Filters builder, its chips, its message or error; while the first answer is on its way the list waits (no flash of everyone) */
+    var waiting = fbOn() && FB.busy && !FB.ids;
+    root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) + (FB.open ? fbPanelHtml() : '') + fbChipsHtml() +
+      (FB.err ? '<div class="w295err" role="alert">The filter did not run: ' + E(FB.err) + '. The list has not changed.</div>' : '') +
+      (FB.msg && fbOn() ? '<p class="w295msg m">' + E(FB.msg) + '</p>' : '') +
+      '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches…' : filtered ? (fbOn() ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' · <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
+      (!waiting && shown.length < list.length ? ' · showing the first ' + shown.length : '') + (fbOn() && FB.busy && FB.ids ? ' · <span class="m">updating…</span>' : '') + '</div>' +
+      (waiting ? '' : shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +
         shown.map(rowHtml).join('') + '</div>' +
         (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152more="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
+        : fbOn() ? '<div class="w152empty">No one matches. Remove a condition, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>'
         : '<div class="w152empty">Nobody matches. Try another word, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>');
+    fbSyncHash();
     if (focus) { var inp = root.querySelector('[data-w152q="' + focus + '"]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
   }
   function paint() {
@@ -124,6 +133,9 @@
     if (!staffOk() || boardMode()) { root.innerHTML = '<div class="w152empty">' + I('lock') + ' The CRM is for the Welfare Avenue team.</div>'; return; }
     if (!S.contacts) { root.innerHTML = busy('Loading the contacts…'); return; }
     if (S.err.contacts && !S.contacts.length) { root.innerHTML = '<div class="w152empty">The contacts could not load (' + E(S.err.contacts) + ').</div>'; return; }
+    keepUi(function () { paintTab(root); });   /* wave295: a builder drawn again keeps the focus and its tag lists' scroll */
+  }
+  function paintTab(root) {
     if (S.ui.tab === 'dupes') paintDupes(root);
     else if (S.ui.tab === 'sources') paintSources(root);
     else if (S.ui.tab === 'gifts') paintGifts(root);
@@ -170,6 +182,7 @@
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
     S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : (sub === 'settings' && parts[2] === 'imports') ? 'imports' : 'contacts';   /* wave284: imports from #crm/settings/imports */
+    if (sub === 'f' && parts[2]) fbFromHash(parts.slice(2).join('/'));   /* wave295: #crm/f/<filter>, the Contacts filters from the address */
     if (sub === 'campaigns') openCampaigns(parts);
     if (sub === 'studio' && window.w202 && window.w202.open) window.w202.open(parts);
     if (sub === 'forms') openForms(parts);
@@ -177,6 +190,8 @@
     if (sub === 'reports') openReports(parts);
     if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : parts[2] === 'online' ? 'online' : ''; DG.confirm = false; DG.msg = ''; DG.err = ''; DG.draft = {}; if (GF.view === 'receipts') { GF.cfg = null; S.rcpts = null; RB.act = null; RB.confirmOn = false; } GF.msg = ''; GF.err = ''; RB.msg = ''; RB.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
+    /* wave295: the custom fields and lists the Filters builder offers come with the contacts, so opening it draws once */
+    if (!sub || sub === 'f' || sub === 'c') { load('cfields'); load('lists'); }
     Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'studio' ? [load('templates'), load('lists')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
