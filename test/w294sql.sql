@@ -14,7 +14,9 @@ begin
   -- wave284's campaign, chapter and skip entries, exactly
   assert m -> 'Rally Paper Participant' = '{"campaign": "Rally Paper 2026", "part": "participant"}'::jsonb and m -> 'Flag Football 2025' = '{"campaign": "Football Fundraiser 2025", "part": "participant"}'::jsonb
      and m -> '2026 Gift Basket Volunteer' = '{"campaign": "Gift Basket Drive 2026", "part": "volunteer"}'::jsonb and m -> 'Toronto Contacts' = '{"chapter": "toronto"}'::jsonb
-     and m -> 'Toronto Volunteers' = '{"chapter": "toronto"}'::jsonb and m -> 'Welcome Series Exit #1' = '{"skip": true}'::jsonb, 'the campaign, chapter and skip entries are wave284''s';
+     and m -> 'Welcome Series Exit #1' = '{"skip": true}'::jsonb, 'the campaign, chapter and skip entries are wave284''s';
+  assert m -> 'Toronto Volunteers' = '{"chapter": "toronto", "tag": "toronto volunteer"}'::jsonb and m -> 'Toronto Organizations' = '{"chapter": "toronto"}'::jsonb
+     and m -> 'Welcome to WA #1 - Opened - Automation Trigger' = '{"skip": true}'::jsonb, 'Toronto Volunteers keeps its chapter and names the Hub tag; Toronto Organizations is a chapter; the welcome trigger is skipped';
   -- the three donor tags are renames now
   assert m -> 'Donor' = '{"tag": "donor"}'::jsonb and m -> 'Past Donor' = '{"tag": "past donor"}'::jsonb and m -> 'Reoccurring Donor' = '{"tag": "recurring donor"}'::jsonb, 'the donor tags are renames, not skips';
   foreach k in array array['Volunteer Server', 'Server', 'Volunteer Cook', 'Monthly Newsletter Subscriber', 'Volunteer Driver New', 'Reoccuring Volunteers', 'WA Team Applicants',
@@ -40,19 +42,24 @@ declare n int; prev text := '';
   r record;
 begin
   select count(*) into n from public.crm_tag_aliases();
-  assert n = 26, 'crm_tag_aliases gives 26 pairs (' || n || ')';
+  assert n = 27, 'crm_tag_aliases gives 27 pairs (' || n || ')';
+  assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'toronto volunteers' and a.tag = 'toronto volunteer'), 'toronto volunteers finds toronto volunteer';
   assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'volunteer server' and a.tag = 'server'), 'volunteer server finds server';
   assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'server' and a.tag = 'server'), 'server finds server';
   assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'wa admin 2026' and a.tag = 'wa admin'), 'wa admin 2026 finds wa admin';
   assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'reoccuring volunteers' and a.tag = 'recurring volunteer'), 'Keela''s own spelling is an alias';
   assert exists (select 1 from public.crm_tag_aliases() a where a.alias = 'donor' and a.tag = 'donor'), 'donor';
-  assert not exists (select 1 from public.crm_tag_aliases() a where a.alias in ('toronto volunteers', 'toronto contacts', 'welcome series exit #1', 'rally paper participant', 'flag football 2025', '2026 gift basket volunteer')),
-    'campaign, chapter and skip entries give no alias';
+  assert not exists (select 1 from public.crm_tag_aliases() a where a.alias in ('toronto contacts', 'toronto organizations', 'welcome series exit #1', 'welcome to wa #1 - opened - automation trigger', 'rally paper participant', 'flag football 2025', '2026 gift basket volunteer')),
+    'campaign, chapter-only and skip entries give no alias';
   assert not exists (select 1 from public.crm_tag_aliases() a where a.alias <> lower(a.alias) or a.tag <> lower(a.tag)), 'lower case throughout';
   for r in select a.alias from public.crm_tag_aliases() a loop
     assert r.alias >= prev, 'in alias order'; prev := r.alias;
   end loop;
   assert (select count(*) from (select distinct alias, tag from public.crm_tag_aliases()) d) = n, 'no repeated pair';
+  -- the writer takes any boolean spelling of skip and a campaign before a tag: neither is an alias
+  update public.app_config set value = (value::jsonb || '{"Test Skip Yes": {"skip": "yes", "tag": "x"}, "Test Skip False": {"skip": false, "tag": "y"}, "Test Camp Tag": {"campaign": "C", "tag": "z"}}'::jsonb)::text where key = 'keela_tag_map';
+  assert not exists (select 1 from public.crm_tag_aliases() a where a.alias like 'test %'), 'an entry with skip or campaign gives no alias';
+  assert (select count(*) from public.crm_tag_aliases()) = 27, 'and the others are unchanged';
   -- an unreadable map gives nothing, not an error
   update public.app_config set value = 'not json' where key = 'keela_tag_map';
   assert (select count(*) from public.crm_tag_aliases()) = 0, 'an unreadable map gives no rows';
@@ -79,7 +86,7 @@ begin
   begin perform 1 from public.crm_tag_aliases(); assert false, 'anon ran crm_tag_aliases'; exception when insufficient_privilege then null; end;
   reset role;
   set local role authenticated;
-  assert (select count(*) from public.crm_tag_aliases()) = 26, 'authenticated reads the aliases';
+  assert (select count(*) from public.crm_tag_aliases()) = 27, 'authenticated reads the aliases';
   reset role;
 end $$;
 
@@ -89,7 +96,9 @@ insert into public.crm_contacts (id, full_name, emails, tags, legacy_refs) overr
   (9401, 'Test Rename One', array['rename.one@example.invalid'], '{}', '{"keela": {"contact_id": "KT9401"}}'),
   (9402, 'Test Rename Two', array['rename.two@example.invalid'], array['Server'], '{"keela": {"contact_id": "KT9402"}}'),
   (9403, 'Test Rename Three', array['rename.three@example.invalid'], '{}', '{"keela": {"contact_id": "KT9403"}}'),
-  (9404, 'Test Rename Four', array['rename.four@example.invalid'], array['donor'], '{"keela": {"contact_id": "KT9404"}}');
+  (9404, 'Test Rename Four', array['rename.four@example.invalid'], array['donor'], '{"keela": {"contact_id": "KT9404"}}'),
+  (9405, 'Test Rename Five', array['rename.five@example.invalid'], '{}', '{"keela": {"contact_id": "KT9405"}}'),
+  (9406, 'Test Rename Six', array['rename.six@example.invalid'], '{}', '{"keela": {"contact_id": "KT9406"}}');
 do $$
 declare v_run bigint; v_file bigint; b bigint; r jsonb;
 begin
@@ -103,13 +112,15 @@ begin
      "Tags": ["Volunteer Cook", "Monthly Newsletter Subscriber", "Volunteer Driver New", "Reoccuring Volunteers", "WA Team Applicants", "Donated Essential Items", "Program Event Collaboration",
               "Trajet Volunteers", "Workshop Opportunities", "Partner", "Photographer", "Volunteer Applicant", "Corporate Fundraising", "Team Leader Volunteer", "Drop-Off", "Pickup",
               "Pending Location Check", "Location Approved"]},
-    {"Contact Id": "KT9404", "Contact Type": "Individual", "Primary Email": "rename.four@example.invalid", "Tags": ["Donor"]}
-  ]$j$::jsonb, 4);
+    {"Contact Id": "KT9404", "Contact Type": "Individual", "Primary Email": "rename.four@example.invalid", "Tags": ["Donor"]},
+    {"Contact Id": "KT9405", "Contact Type": "Individual", "Primary Email": "rename.five@example.invalid", "Tags": ["Toronto Volunteers", "Toronto Organizations"]},
+    {"Contact Id": "KT9406", "Contact Type": "Individual", "Primary Email": "rename.six@example.invalid", "Tags": ["Volunteer Cook", "Cook", "Foo Raw", "foo raw"]}
+  ]$j$::jsonb, 6);
   b := public.wa284_new_batch(v_run, 'participation');
   insert into w294ids values ('run', v_run), ('batch', b);
   r := public.wa284_compare(b);
   assert (select status from public.crm_import_batches where id = b) = 'compared', 'the participation batch compared (' || coalesce((select error from public.crm_import_batches where id = b), '') || ')';
-  assert r #>> '{counts,skipped,tag skipped}' = '1' and r #>> '{counts,updated,crm_contact_chapters}' = '1', 'one tag skipped (the welcome series marker), one chapter (' || r::text || ')';
+  assert r #>> '{counts,skipped,tag skipped}' = '1' and r #>> '{counts,updated,crm_contact_chapters}' = '2', 'one tag skipped (the welcome series marker), two chapters (' || r::text || ')';
   assert (select tags from public.crm_contacts where id = 9401) = '{}'::text[], 'compare changes nothing';
   r := public.wa284_apply(b, 'w294.admin@example.invalid');
   assert (select status from public.crm_import_batches where id = b) = 'applied', 'the batch applied';
@@ -122,6 +133,11 @@ begin
     'contact 1 holds server, donor, past donor, recurring donor, wa admin once, and the unmapped label under its own name (' || array_to_string(t1, ' | ') || ')';
   assert not exists (select 1 from unnest(t1) t where lower(t) in ('volunteer server', 'reoccurring donor', 'wa admin 2026', 'welcome series exit #1', 'toronto contacts')), 'no raw Keela label of a mapped tag is added';
   assert exists (select 1 from public.crm_contact_chapters where contact_id = 9401 and chapter = 'toronto'), 'the chapter entry still works';
+  -- Toronto Volunteers names a tag for the aliases, but batch 7 still files it as the chapter: the chapter wins, no tag is added
+  assert exists (select 1 from public.crm_contact_chapters where contact_id = 9405 and chapter = 'toronto') and (select tags from public.crm_contacts where id = 9405) = '{}'::text[],
+    'Toronto Volunteers and Toronto Organizations put the person in the Toronto chapter and add no tag';
+  -- a raw label that matches a renamed tag is not added again; two raw labels differing in case add one
+  assert (select tags from public.crm_contacts where id = 9406) = array['cook', 'Foo Raw'], 'Volunteer Cook and Cook add cook once; Foo Raw and foo raw add one (' || array_to_string((select tags from public.crm_contacts where id = 9406), ' | ') || ')';
   -- an existing tag is not duplicated, whatever the case
   assert (select tags from public.crm_contacts where id = 9402) = array['Server'], 'Server is not added again as server';
   assert (select tags from public.crm_contacts where id = 9404) = array['donor'], 'an existing donor tag is not duplicated';
@@ -129,7 +145,7 @@ begin
     'photographer', 'pickup', 'program collaboration', 'recurring volunteer', 'team applicant', 'team leader', 'trajet volunteer', 'volunteer applicant', 'workshop opportunities'],
     'contact 3 holds the 18 Hub tags (' || array_to_string(t3, ' | ') || ')';
   -- the change records say what moved
-  assert (select count(*) from public.crm_import_changes where batch_id = pg_temp.id('batch') and table_name = 'crm_contacts' and column_name = 'tags') = 2, 'a change record for each contact whose tags moved (2)';
+  assert (select count(*) from public.crm_import_changes where batch_id = pg_temp.id('batch') and table_name = 'crm_contacts' and column_name = 'tags') = 3, 'a change record for each contact whose tags moved (3)';
 end $$;
 do $$
 declare r jsonb;
@@ -138,7 +154,7 @@ begin
   r := public.wa284_undo(pg_temp.id('batch'), 'w294.admin@example.invalid');
   assert (select tags from public.crm_contacts where id = 9401) = '{}'::text[] and (select tags from public.crm_contacts where id = 9403) = '{}'::text[], 'undo puts the tags back';
   assert (select tags from public.crm_contacts where id = 9402) = array['Server'] and (select tags from public.crm_contacts where id = 9404) = array['donor'], 'and leaves the others as they were';
-  assert not exists (select 1 from public.crm_contact_chapters where contact_id = 9401), 'and the chapter row goes';
+  assert not exists (select 1 from public.crm_contact_chapters where contact_id in (9401, 9405)) and (select tags from public.crm_contacts where id = 9406) = '{}'::text[], 'and the chapter rows go';
 end $$;
 
 select 'w294sql: all assertions passed' as result;

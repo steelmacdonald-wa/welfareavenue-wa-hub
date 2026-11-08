@@ -85,8 +85,9 @@ try {
   {
     const a = def284.split('\n'); const b = def294.split('\n');
     ok(b.length === a.length + 3, 'the writer has exactly three more lines than wave284\'s (' + a.length + ' to ' + b.length + ')');
-    const rest = b.filter((l) => !/wave294: a rename|m \? 'tag' and nullif|lower\(a\) = lower\(btrim\(m ->> 'tag'\)\)/.test(l));
-    ok(rest.join('\n') === a.join('\n'), 'removing those three lines gives wave284\'s text exactly');
+    const rest = b.filter((l) => !/wave294: a rename|m \? 'tag' and nullif|lower\(a\) = lower\(btrim\(m ->> 'tag'\)\)/.test(l))
+      .map((l) => l === '        if not exists (select 1 from unnest(v_add) a where lower(a) = lower(v_tag)) then v_add := v_add || v_tag; end if;' ? '        v_add := v_add || v_tag;' : l);
+    ok(rest.join('\n') === a.join('\n'), 'removing those three lines, and undoing the one guarded line (a raw label already in the list is not added twice), gives wave284\'s text exactly');
     ok((await writerComment(db)) !== com284 && (await writerComment(db)).startsWith('wave284 (changed by wave294):'), 'the writer comment says wave294 changed it');
   }
 
@@ -130,7 +131,7 @@ try {
     ok(m['VOLUNTEER SERVER'].skip === true && m['Volunteer Server'] === undefined, 'the admin\'s skip of Volunteer Server is kept');
     ok(m['Test Admin Label'].tag === 'test admin tag', 'a key of the admin\'s own stays');
     ok(m['Past Donor'].tag === 'past donor' && m.Partner.tag === 'partner' && m['Toronto Contacts'].chapter === 'toronto', 'absent wave294 keys are added');
-    ok(Object.keys(m).length === 4 + 32 - 3, 'the merged map has the admin\'s 4 keys and the 29 absent ones (' + Object.keys(m).length + ')');
+    ok(Object.keys(m).length === 4 + 34 - 3, 'the merged map has the admin\'s 4 keys and the 31 absent ones (' + Object.keys(m).length + ')');
     const rec = await one(db2, `select old_value, new_value from public.change_log where entity_id = 'wave294' and field = 'keela_tag_map'`);
     ok(JSON.stringify(JSON.parse(rec.old_value)) === JSON.stringify(JSON.parse(admin)), 'the record holds the admin\'s value as the before value');
     ok((await one(db2, `select count(*)::int as n from public.change_log where entity_id = 'wave294' and field = 'keela_tag_map'`)).n === 1, 'one map record after two runs');
@@ -141,6 +142,21 @@ try {
     await db2.exec(undo);
     ok((await mapText(db2)) === admin, 'the undo puts the admin\'s earlier value back');
     await db2.close();
+  }
+  {
+    // m2: wave284's default map plus one unrelated admin key: the donor tags still change, the admin's key stays
+    const db8 = await fresh();
+    await db8.exec(`update public.app_config set value = (value::jsonb || '{"Unrelated Admin Key": {"tag": "unrelated"}}')::text where key = 'keela_tag_map'`);
+    await db8.exec(migration);
+    await db8.exec(migration);
+    const m8 = JSON.parse(await mapText(db8));
+    ok(m8.Donor.tag === 'donor' && m8['Past Donor'].tag === 'past donor' && m8['Reoccurring Donor'].tag === 'recurring donor', 'an unrelated admin key does not block the donor tags');
+    ok(m8['Unrelated Admin Key'].tag === 'unrelated' && Object.keys(m8).length === 35, 'and the admin\'s key stays beside the full map (' + Object.keys(m8).length + ')');
+    ok((await one(db8, `select count(*)::int as n from public.change_log where entity_id = 'wave294' and field = 'keela_tag_map'`)).n === 1, 'one record after two runs');
+    await db8.exec(undo);
+    const u8 = JSON.parse(await mapText(db8));
+    ok(u8.Donor.skip === true && u8['Unrelated Admin Key'].tag === 'unrelated', 'the undo puts the earlier value back, the admin\'s key included');
+    await db8.close();
   }
   {
     const db3 = await fresh();
@@ -188,7 +204,7 @@ try {
     let msg = '';
     try { await db6.exec('begin;\n' + migration + '\ncommit;'); } catch (e) { msg = String(e.message); }
     await db6.exec('rollback').catch(() => {});
-    ok(msg.includes('anchor line moved'), 'a moved writer stops the migration (' + msg + ')');
+    ok(msg.includes('its stored text changed'), 'a changed writer stops the migration (' + msg + ')');
     ok((await one(db6, `select to_regprocedure('public.crm_tag_aliases()') is null as x`)).x === true && JSON.parse(await mapText(db6)).Donor.skip === true, 'and nothing is kept');
     await db6.close();
   }

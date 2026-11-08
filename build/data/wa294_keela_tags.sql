@@ -2,9 +2,9 @@
 -- (wave284) can now rename a Keela tag to the Hub's own tag, the map app_config keela_tag_map names a Hub tag for every Keela tag seen on contacts, and a
 -- small read-only function, crm_tag_aliases(), lets the Contacts filters and search find a Hub tag by Keela's name ("volunteer server" finds server). It:
 --   1. replaces public.wa284_w_participation: the one new line of behaviour is a map entry {"tag": "<hub tag>"}, which adds that Hub tag to the contact (once,
---      case-insensitive, never Keela's raw label). Every other line is wave284's text unchanged (the diff against wave284's body is those three lines);
---   2. sets app_config keela_tag_map to the full map, only when it still holds wave284's default value; if an admin has changed it since, only the keys it
---      does not have yet (case-insensitive) are added and no entry is overwritten. The value before and after is recorded in change_log (entity_id wave294,
+--      case-insensitive, never Keela's raw label). Every other line is wave284's text unchanged (the diff against wave284's body is those three lines and one guarded line: a raw label already in the list is not added twice);
+--   2. sets app_config keela_tag_map to the full map, per key: a key the map lacks (case-insensitive) is added, an entry still equal to wave284's default entry for that key is replaced,
+--      and any other entry (an admin's change) is kept, with a notice naming it. The value before and after is recorded in change_log (entity_id wave294,
 --      field keela_tag_map) so the undo can put it back;
 --   3. adds public.crm_tag_aliases() returning (alias, tag) from the map's tag entries, lower-cased, stable, security definer, authenticated only;
 --   4. one release line in change_log.
@@ -20,9 +20,10 @@ begin
      or not exists (select 1 from public.app_config where key = 'keela_tag_map') then
     raise exception 'wave294 needs wave284 first (the Import page functions or the keela_tag_map setting are missing)';
   end if;
-  -- the live writer must still be wave284's text (or wave294's own, on a second run): its anchor line is the proof
-  if position('v_add := v_add || v_tag;' in pg_get_functiondef('public.wa284_w_participation(bigint, bigint, boolean)'::regprocedure)) = 0 then
-    raise exception 'wave294: wa284_w_participation is not the text wave284 left (its anchor line moved); nothing was changed';
+  -- the live writer must still be wave284's text, or wave294's own on a second run: the md5 of its stored text is the proof (anything else stops the file,
+  -- so a later edit of the writer is never overwritten by this file or by its undo)
+  if not exists (select 1 from pg_proc p where p.oid = 'public.wa284_w_participation(bigint, bigint, boolean)'::regprocedure and md5(p.prosrc) in ('adc335abd649c226355e9a8b99986955', '43f4cd0ba7b787038f9149d28e85a1aa')) then
+    raise exception 'wave294: wa284_w_participation is not the text wave284 left (its stored text changed); nothing was changed';
   end if;
 end $wa294$;
 
@@ -88,7 +89,7 @@ begin
         -- wave294: a rename. The Hub's own tag goes in, not Keela's label; once per contact, whatever the case (WA Admin and WA Admin 2026 are both wa admin)
         if not exists (select 1 from unnest(v_add) a where lower(a) = lower(btrim(m ->> 'tag'))) then v_add := v_add || btrim(m ->> 'tag'); end if;
       else
-        v_add := v_add || v_tag;
+        if not exists (select 1 from unnest(v_add) a where lower(a) = lower(v_tag)) then v_add := v_add || v_tag; end if;
       end if;
     end loop;
     if cardinality(v_add) > 0 then
@@ -105,8 +106,8 @@ comment on function public.wa284_w_participation(bigint, bigint, boolean) is 'wa
 do $wa294$
 declare
   v_def jsonb := '{"Rally Paper Participant": {"campaign": "Rally Paper 2026", "part": "participant"}, "Flag Football 2025": {"campaign": "Football Fundraiser 2025", "part": "participant"}, "2026 Gift Basket Volunteer": {"campaign": "Gift Basket Drive 2026", "part": "volunteer"}, "Toronto Contacts": {"chapter": "toronto"}, "Toronto Volunteers": {"chapter": "toronto"}, "Welcome Series Exit #1": {"skip": true}, "Donor": {"skip": true}, "Past Donor": {"skip": true}, "Reoccurring Donor": {"skip": true}}'::jsonb;
-  v_new jsonb := '{"Rally Paper Participant":{"campaign":"Rally Paper 2026","part":"participant"},"Flag Football 2025":{"campaign":"Football Fundraiser 2025","part":"participant"},"2026 Gift Basket Volunteer":{"campaign":"Gift Basket Drive 2026","part":"volunteer"},"Toronto Contacts":{"chapter":"toronto"},"Toronto Volunteers":{"chapter":"toronto"},"Welcome Series Exit #1":{"skip":true},"Donor":{"tag":"donor"},"Past Donor":{"tag":"past donor"},"Reoccurring Donor":{"tag":"recurring donor"},"Volunteer Server":{"tag":"server"},"Server":{"tag":"server"},"Volunteer Cook":{"tag":"cook"},"Monthly Newsletter Subscriber":{"tag":"newsletter"},"Volunteer Driver New":{"tag":"driver"},"Reoccuring Volunteers":{"tag":"recurring volunteer"},"Reoccurring Volunteers":{"tag":"recurring volunteer"},"WA Team Applicants":{"tag":"team applicant"},"Donated Essential Items":{"tag":"donated items"},"WA Admin":{"tag":"wa admin"},"WA Admin 2026":{"tag":"wa admin"},"Volunteer Applicant":{"tag":"volunteer applicant"},"Program Event Collaboration":{"tag":"program collaboration"},"Trajet Volunteers":{"tag":"trajet volunteer"},"Photographer":{"tag":"photographer"},"Workshop Opportunities":{"tag":"workshop opportunities"},"Partner":{"tag":"partner"},"Corporate Fundraising":{"tag":"corporate fundraising"},"Team Leader Volunteer":{"tag":"team leader"},"Drop-Off":{"tag":"drop-off"},"Pickup":{"tag":"pickup"},"Pending Location Check":{"tag":"pending location check"},"Location Approved":{"tag":"location approved"}}'::jsonb;
-  v_cur text; v_curj jsonb; v_out jsonb;
+  v_new jsonb := '{"Rally Paper Participant":{"campaign":"Rally Paper 2026","part":"participant"},"Flag Football 2025":{"campaign":"Football Fundraiser 2025","part":"participant"},"2026 Gift Basket Volunteer":{"campaign":"Gift Basket Drive 2026","part":"volunteer"},"Toronto Contacts":{"chapter":"toronto"},"Toronto Volunteers":{"chapter":"toronto","tag":"toronto volunteer"},"Welcome Series Exit #1":{"skip":true},"Donor":{"tag":"donor"},"Past Donor":{"tag":"past donor"},"Reoccurring Donor":{"tag":"recurring donor"},"Volunteer Server":{"tag":"server"},"Server":{"tag":"server"},"Volunteer Cook":{"tag":"cook"},"Monthly Newsletter Subscriber":{"tag":"newsletter"},"Volunteer Driver New":{"tag":"driver"},"Reoccuring Volunteers":{"tag":"recurring volunteer"},"Reoccurring Volunteers":{"tag":"recurring volunteer"},"WA Team Applicants":{"tag":"team applicant"},"Donated Essential Items":{"tag":"donated items"},"WA Admin":{"tag":"wa admin"},"WA Admin 2026":{"tag":"wa admin"},"Volunteer Applicant":{"tag":"volunteer applicant"},"Program Event Collaboration":{"tag":"program collaboration"},"Trajet Volunteers":{"tag":"trajet volunteer"},"Photographer":{"tag":"photographer"},"Workshop Opportunities":{"tag":"workshop opportunities"},"Partner":{"tag":"partner"},"Corporate Fundraising":{"tag":"corporate fundraising"},"Team Leader Volunteer":{"tag":"team leader"},"Drop-Off":{"tag":"drop-off"},"Pickup":{"tag":"pickup"},"Pending Location Check":{"tag":"pending location check"},"Location Approved":{"tag":"location approved"},"Toronto Organizations":{"chapter":"toronto"},"Welcome to WA #1 - Opened - Automation Trigger":{"skip":true}}'::jsonb;
+  v_cur text; v_curj jsonb; v_out jsonb; e record; ck text; dk text; v_kept text[] := '{}';
 begin
   select c.value into v_cur from public.app_config c where c.key = 'keela_tag_map';
   if not found then raise exception 'wave294 needs wave284 first (the keela_tag_map setting is missing)'; end if;
@@ -120,12 +121,24 @@ begin
     raise notice 'wave294: keela_tag_map is not a map; left as it is';
     return;
   end if;
-  if v_curj = v_def then
-    v_out := v_new;   -- still wave284's default: the whole map
-  else
-    -- an admin changed it: only the keys it does not have yet (case-insensitive); no entry is overwritten
-    v_out := v_curj || coalesce((select jsonb_object_agg(e.key, e.value) from jsonb_each(v_new) e
-                                  where not exists (select 1 from jsonb_object_keys(v_curj) c(key) where lower(c.key) = lower(e.key))), '{}'::jsonb);
+  -- per key: absent (compared without regard to case) -> add it; an entry still equal to wave284's default entry for that key -> replace it;
+  -- anything else is an admin's own entry -> keep it, and say so
+  v_out := v_curj;
+  for e in select x.key, x.value from jsonb_each(v_new) x loop
+    ck := (select c.key from jsonb_object_keys(v_curj) c(key) where lower(c.key) = lower(e.key) order by c.key limit 1);
+    if ck is null then
+      v_out := v_out || jsonb_build_object(e.key, e.value);
+    elsif v_curj -> ck is distinct from e.value then
+      dk := (select d.key from jsonb_each(v_def) d where lower(d.key) = lower(e.key) limit 1);
+      if dk is not null and v_curj -> ck = v_def -> dk then
+        v_out := (v_out - ck) || jsonb_build_object(e.key, e.value);
+      else
+        v_kept := v_kept || ck;
+      end if;
+    end if;
+  end loop;
+  if cardinality(v_kept) > 0 then
+    raise notice 'wave294: kept the entries an admin changed: %', array_to_string(v_kept, ', ');
   end if;
   if v_out <> v_curj then
     update public.app_config set value = v_out::text, updated_at = now() where key = 'keela_tag_map';
@@ -149,12 +162,12 @@ begin
     select distinct lower(btrim(e.key)), lower(btrim(e.value ->> 'tag'))
       from jsonb_each(v) e
      where jsonb_typeof(e.value) = 'object' and nullif(btrim(e.key), '') is not null and nullif(btrim(e.value ->> 'tag'), '') is not null
-       and not (e.value ? 'campaign' or e.value ? 'chapter') and (e.value ->> 'skip') is distinct from 'true'
+       and not (e.value ? 'campaign' or e.value ? 'skip')
      order by 1, 2;
 end $function$;
 revoke all on function public.crm_tag_aliases() from public, anon, authenticated;
 grant execute on function public.crm_tag_aliases() to authenticated;
-comment on function public.crm_tag_aliases() is 'wave294: the Keela names that find a Hub tag, as (alias, tag) pairs: every keela_tag_map entry that names a Hub tag ({"tag": "server"}), key and tag lower-cased, one row per pair, in alias order. Entries that go to a campaign, a chapter or skip give no row. Read-only; an unreadable map gives no rows. The Contacts filters and search (wave295) use it so "volunteer server" finds server. Signed-in users only.';
+comment on function public.crm_tag_aliases() is 'wave294: the Keela names that find a Hub tag, as (alias, tag) pairs: every keela_tag_map entry that names a Hub tag ({"tag": "server"}), key and tag lower-cased, one row per pair, in alias order. Entries that go to a campaign or skip give no row (a chapter entry that also names a tag does). Read-only; an unreadable map gives no rows. The Contacts filters and search (wave295) use it so "volunteer server" finds server. Signed-in users only.';
 
 -- ============================================================================================ 4. the release record (once)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
