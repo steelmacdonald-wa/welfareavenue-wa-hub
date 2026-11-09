@@ -93,7 +93,15 @@ begin
   assert pg_temp.one('{"f":"tag","op":"all","v":"server"}') = '9501,9504', 'tag: all with one value';
   assert pg_temp.one('{"f":"tag","op":"none","v":["donor","server"]}') = '9503', 'tag: none of';
   assert pg_temp.one('{"f":"tag","op":"all","v":[]}') = '-', 'tag: all of an empty list matches nobody';
-  assert pg_temp.one('{"f":"tag","op":"none","v":[]}') = '9501,9502,9503,9504', 'tag: none of an empty list is everyone';
+  assert pg_temp.one('{"f":"tag","op":"none","v":[]}') = '-', 'tag: none of an empty list matches no one (fail closed)';
+  assert pg_temp.one('{"f":"tag","op":"none","v":[" ",""]}') = '-', 'tag: none of a list of blanks matches no one';
+  assert pg_temp.one('{"f":"kind","op":"not","v":[]}') = '-', 'kind: not with an empty list matches no one';
+  assert pg_temp.one('{"f":"role","op":"none","v":[]}') = '-', 'role: none of an empty list matches no one';
+  assert pg_temp.one('{"f":"tag","op":"has","v":["server",""]}') = '9501,9504', 'a blank inside a list is left out, the rest counts';
+  -- M1: a Keela name means its Hub tag or itself, nothing more
+  assert pg_temp.one('{"f":"tag","op":"has","v":"volunteer server"}') = pg_temp.one('{"f":"tag","op":"has","v":["server","volunteer server"]}'), 'alias equivalence: a Keela name = its Hub tag or the name itself';
+  assert pg_temp.one('{"f":"tag","op":"not","v":"volunteer server"}') = pg_temp.one('{"f":"tag","op":"none","v":["server","volunteer server"]}'), 'alias equivalence with not';
+  assert pg_temp.one('{"f":"tag","op":"has","v":"photographer"}') = pg_temp.one('{"f":"tag","op":"has","v":["photographer"]}'), 'a tag that is not a Keela name: one value or a list of one, the same';
   assert pg_temp.one('{"f":"tag","op":"has","v":"Volunteer Server"}') = '9501,9504', 'tag: a Keela name finds its Hub tag (crm_tag_aliases)';
   assert pg_temp.one('{"f":"tag","op":"not","v":"volunteer server"}') = '9502,9503', 'tag: not with a Keela name';
   assert pg_temp.one('{"f":"tag","op":"has","v":["monthly newsletter subscriber"]}') = '9501', 'tag: a Keela name in a list';
@@ -114,10 +122,55 @@ begin
   assert pg_temp.one('{"f":"phone","op":"none"}') = '9502,9503,9504', 'has no phone';
   assert pg_temp.one('{"f":"org","op":"contains","v":"bakery"}') = '9502', 'organisation from Partners, any case';
   assert pg_temp.one('{"f":"org","op":"contains","v":"School"}') = '9504', 'organisation from the volunteer record';
-  assert pg_temp.one('{"f":"org","op":"contains","v":""}') = '9502,9504', 'organisation contains nothing: has an organisation';
+  assert pg_temp.one('{"f":"org","op":"contains","v":""}') = '-', 'organisation contains nothing: no one (fail closed)';
+  assert pg_temp.one('{"f":"org","op":"not","v":"  "}') = '-', 'organisation not blank: no one';
   assert pg_temp.one('{"f":"org","op":"not","v":"bakery"}') = '9501,9503,9504', 'organisation not';
   assert pg_temp.one('{"f":"job_title","op":"contains","v":"cook"}') = '9501', 'job title contains (an empty title never matches)';
   assert pg_temp.one('{"f":"job_title","op":"not","v":"cook"}') = '9502,9503,9504', 'job title does not contain';
+end $$;
+
+-- ---------------------------------------------------------------- fail closed: shapes that must never widen (B1, B2, B3, B4)
+do $$
+declare k text;
+begin
+  -- B1: unknown or missing fields
+  foreach k in array array['{"f":"birth","op":"is","v":"x"}', '{}', '{"op":"not"}', '{"f":"","op":"is","v":"x"}', '{"f":"Tag","op":"has","v":"server"}', '{"f":null}',
+                           '{"f":"future_field","op":"not","v":"x"}', '{"f":"KIND","op":"not","v":"volunteer"}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'an unknown or missing field matches no one: ' || k;
+  end loop;
+  -- B2: blank values on every condition that takes text
+  foreach k in array array['{"f":"kind","op":"is","v":""}', '{"f":"kind","op":"not","v":" "}', '{"f":"role","op":"not","v":""}', '{"f":"tag","op":"not","v":""}',
+                           '{"f":"tag","op":"has","v":"  "}', '{"f":"perm","op":"not","v":""}', '{"f":"city","op":"contains","v":""}', '{"f":"city","op":"not","v":" "}',
+                           '{"f":"language","op":"is","v":""}', '{"f":"source","op":"not","v":""}', '{"f":"search","op":"contains","v":"   "}',
+                           '{"f":"chapter","op":"not","v":""}', '{"f":"org","op":"contains"}', '{"f":"job_title","op":"not","v":""}',
+                           '{"f":"field","key":"w295_team","op":"is","v":""}', '{"f":"field","key":"w295_insta","op":"contains","v":" "}',
+                           '{"f":"field","key":"w295_team","op":"any","v":[]}', '{"f":"field","key":"w295_first_day","op":"after","v":""}',
+                           '{"f":"field","key":"w295_shifts","op":"before","v":""}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'a blank value matches no one: ' || k;
+  end loop;
+  -- yes/no: only a recognised yes or no; a stored answer that is neither never matches
+  assert pg_temp.one('{"f":"field","key":"w295_age16","op":"is","v":"banana"}') = '-', 'yes/no with junk matches no one';
+  assert pg_temp.one('{"f":"field","key":"w295_age16","op":"is","v":"non"}') = '9502,9504', 'yes/no: non is no';
+  -- B3: a list or object where one value is meant
+  foreach k in array array['{"f":"chapter","op":"not","v":["montreal","toronto"]}', '{"f":"chapter","op":"is","v":["toronto"]}', '{"f":"org","op":"not","v":["bakery"]}',
+                           '{"f":"job_title","op":"none","v":["cook","chef"]}', '{"f":"city","op":"not","v":["Montreal"]}', '{"f":"perm","op":"not","v":["unsub"]}',
+                           '{"f":"language","op":"not","v":["fr"]}', '{"f":"source","op":"not","v":["keela"]}', '{"f":"search","op":"contains","v":["test"]}',
+                           '{"f":"field","key":"w295_first_day","op":"before","v":["2026-01-01"]}', '{"f":"field","key":"w295_insta","op":"contains","v":["fa"]}',
+                           '{"f":"dnc","op":"not","v":["x"]}', '{"f":"served","op":"never","v":["x"]}', '{"f":"kind","op":"not","v":{"a":1}}', '{"f":"tag","op":"none","v":{}}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'a list or object where one value is meant matches no one: ' || k;
+  end loop;
+  -- the new fields take only their own operators
+  foreach k in array array['{"f":"chapter","op":"banana","v":"toronto"}', '{"f":"dnc","op":"has"}', '{"f":"org","op":"is","v":"bakery"}', '{"f":"field","key":"w295_team","op":"not","v":"Quest"}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'an operator a new field does not take matches no one: ' || k;
+  end loop;
+  -- N2: dates in one form only
+  assert pg_temp.one('{"f":"field","key":"w295_first_day","op":"before","v":"01/01/2026"}') = '-', 'a date not written YYYY-MM-DD matches no one';
+  -- B4: no group, or a group with no condition, matches no one (live matched everyone)
+  assert pg_temp.ids('{"groups":[]}') = '-', 'no group matches no one';
+  assert pg_temp.ids('{"groups":[{"all":[]}]}') = '-', 'a group with no condition matches no one';
+  assert pg_temp.ids('{"groups":[{"all":[]},{"all":[{"f":"dnc","op":"is"}]}]}') = '9502', 'an empty group next to a real one adds no one';
+  assert pg_temp.ids('{"groups":[{"x":1}]}') = '-', 'a group without all matches no one';
+  assert pg_temp.ids('{"kind":"volunteer"}') = '9501,9503', 'the flat filter (no groups) works as before';
 end $$;
 
 -- ---------------------------------------------------------------- groups: and inside one, or between them; merged people never
@@ -137,7 +190,15 @@ do $$
 begin
   assert (select string_agg(id::text, ',' order by id) from public.crm_filter_contacts('{"groups":[{"all":[{"f":"tag","op":"has","v":["server"]}]}]}') where id between 9501 and 9599) = '9501,9504',
     'a member with the CRM gets the ids';
-  assert (select count(*) from public.crm_filter_contacts('{"groups":[]}')) > 4, 'no condition: everyone';
+end $$;
+do $$
+declare m text; e text;
+begin
+  foreach m in array array['{"groups":[]}', '{"groups":[{"all":[]}]}', '{"groups":[{"x":1}]}', '{"kind":"volunteer"}'] loop
+    e := '';
+    begin perform public.crm_filter_contacts(m::jsonb); exception when others then e := sqlerrm; end;
+    assert e in ('A filter needs at least one condition.', 'The filter is not in the right shape: it needs {"groups": [...]}.'), 'a filter with no condition is refused (' || m || ': ' || e || ')';
+  end loop;
 end $$;
 do $$
 declare m text := '';
@@ -158,6 +219,14 @@ begin
   end loop;
 end $$;
 select set_config('request.jwt.claims', '', true);
+set local role anon;
+do $$
+declare e text := '';
+begin
+  begin perform public.crm_filter_contacts('{"groups":[{"all":[{"f":"dnc","op":"is"}]}]}'); exception when others then e := sqlerrm; end;
+  assert e like 'permission denied%', 'anon cannot call crm_filter_contacts at all (' || e || ')';
+end $$;
+reset role;
 
 -- ---------------------------------------------------------------- mail-send's way in: the service role evaluates a list with a tag condition
 do $$ begin assert has_function_privilege('service_role', 'public.crm_tag_aliases()', 'execute'), 'the service role may read the tag aliases (mail-send)'; end $$;

@@ -61,8 +61,13 @@ const MATCH = `select md5(pg_get_functiondef('public.crm_contact_match(public.cr
   md5(obj_description('public.crm_contact_match(public.crm_contacts_v,jsonb)'::regprocedure, 'pg_proc')) as cmt,
   (select proacl::text from pg_proc where oid = 'public.crm_contact_match(public.crm_contacts_v,jsonb)'::regprocedure) as acl`;
 
-// every older condition with one value, as saved lists hold them today (Keela tag names excluded: those now find their Hub tag, by design)
-function oldConditions() {
+// every older condition with one non-blank value, as saved lists hold them (Keela tag names excluded: those now find their Hub tag, by design; the
+// alias equivalence is asserted in test/w295sql.sql). Blank values and unknown fields are changedConditions(): they now match no one (fail closed).
+const isChanged = (k) => { const known = ['kind', 'role', 'tag', 'perm', 'email', 'served', 'gave', 'city', 'language', 'source', 'added', 'active', 'opened', 'clicked', 'review', 'search'];
+  return !k.f || !known.includes(k.f) || (['kind', 'role', 'tag', 'perm', 'city', 'language', 'source', 'search'].includes(k.f) && String(k.v == null ? '' : k.v).trim() === ''); };
+function oldConditions() { return allOld().filter((k) => !isChanged(k)); }
+function changedConditions() { return allOld().filter(isChanged); }
+function allOld() {
   const ks = [];
   const add = (f, ops, vals) => { for (const op of ops) for (const v of vals) ks.push(v === undefined ? { f, op } : { f, op, v }); };
   add('kind', ['is', 'not', 'none', ''], ['volunteer', 'donor', 'partner', 'supporter', 'staff', '', 'nobody']);
@@ -86,6 +91,7 @@ function oldConditions() {
 
 try {
   console.log('wave294: ' + wave294From);
+  if (wave294) { const h = (await import('node:crypto')).createHash('md5').update(wave294).digest('hex'); ok(h === 'fe7f6cec76930d97e8396be6a133b912', 'the wave294 file is the one at 3b1d7ca (md5 ' + h + ')'); }
   const db = await fresh();
   const before = await one(db, MATCH);
   ok(before.def === LIVE_MATCH_MD5, 'the fixture\'s crm_contact_match is the live text (md5 ' + before.def + ')');
@@ -126,6 +132,11 @@ try {
             is distinct from (select array_agg(c.id order by c.id) from public.crm_contacts_v c where c.merged_into is null and public.w295_old_match(c, k))`);
     ok(g.differ === 0, 'and crm_list_preview gives the same people for each (' + g.differ + ' differ)');
     console.log('older conditions: ' + conds.length + ' conditions x ' + r.people + ' contacts (' + r.pairs + ' pairs), none answers differently');
+    const ch = changedConditions();
+    const c2 = await one(db, `select count(*) filter (where public.crm_contact_match(c, k))::int as now, count(*) filter (where public.w295_old_match(c, k))::int as before, count(*)::int as pairs
+      from public.crm_contacts_v c, jsonb_array_elements('${JSON.stringify(ch).replace(/'/g, "''")}'::jsonb) k`);
+    ok(c2.now === 0 && c2.before > 0, 'blank values and unknown fields now match no one (they matched ' + c2.before + ' pairs before): ' + JSON.stringify(c2));
+    console.log('fail closed: ' + ch.length + ' blank or unknown conditions matched ' + c2.before + ' contact pairs before, and match none now');
   }
 
   await runAssertions(db, 'assertions');
@@ -139,8 +150,8 @@ try {
   const lp2 = await one(db, `select md5(pg_get_functiondef('public.crm_list_preview(jsonb)'::regprocedure)) as a, md5(obj_description('public.crm_list_preview(jsonb)'::regprocedure, 'pg_proc')) as c, (select proacl::text from pg_proc where oid = 'public.crm_list_preview(jsonb)'::regprocedure) as acl`);
   ok(lp2.a === '8088527269cf3f6b75105421ee453abf' && lp2.c === 'f51932b9bf2a0fc879a2f91ae2b9ce52' && lp2.acl === lpBefore.acl, 'crm_list_preview is back exactly (definition, comment, grants): ' + JSON.stringify(lp2));
   ok((await one(db, `select count(*)::int as n from public.change_log where entity_type = 'release' and entity_id = 'wave295' and field = 'wave295 undo'`)).n === 1, 'one undo line after two runs');
-  ok((await one(db, `select has_function_privilege('service_role', 'public.crm_tag_aliases()', 'execute') as x`)).x === false && (await one(db, `select has_function_privilege('authenticated', 'public.crm_tag_aliases()', 'execute') as x`)).x === true,
-    'the undo takes back the service role\'s execute on crm_tag_aliases, and leaves wave294\'s grant to authenticated');
+  ok((await one(db, `select has_function_privilege('service_role', 'public.crm_tag_aliases()', 'execute') and has_function_privilege('authenticated', 'public.crm_tag_aliases()', 'execute') as x`)).x === true,
+    'the undo leaves wave294\'s grants on crm_tag_aliases as they are (authenticated and the service role)');
   ok((await one(db, `select (select array_agg(x order by x) from public.crm_list_preview('{"groups":[{"all":[{"f":"tag","op":"has","v":"server"}]}]}') x)::text as a`)).a.includes('9501'), 'Lists still work after the undo');
   console.log('wa295 undo: applied twice, crm_contact_match back exactly');
 
@@ -150,8 +161,34 @@ try {
   await runAssertions(db, 're-applied assertions');
   await db.close();
 
-  // ---- the guards: without wave294, without wave283, on a moved anchor: the file stops and nothing is kept
+  // ---- the undo refuses while a saved list or an unsent Send uses a wave295 shape, and names them by id
+  {
+    const d3 = await fresh();
+    await d3.exec(migration);
+    await d3.exec(`insert into public.crm_lists (id, name, kind, filter) values (7701, 'Test list chapter', 'dynamic', '{"groups":[{"all":[{"f":"chapter","op":"is","v":"toronto"}]}]}'),
+      (7702, 'Test list tags', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"none","v":["a","b"]}]}]}'), (7703, 'Test list plain', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"has","v":"server"}]}]}'),
+      (7704, 'Test fixed list', 'static', '{"groups":[{"all":[{"f":"chapter","op":"is","v":"toronto"}]}]}');
+      insert into public.crm_campaigns (id, name, list_id, status) values (8801, 'Test draft', 7701, 'draft'), (8802, 'Test sent', 7701, 'sent'), (8803, 'Test plain draft', 7703, 'draft');`);
+    let msg = '';
+    try { await d3.exec('begin;\n' + undo + '\ncommit;'); } catch (e) { msg = String(e.message); }
+    await d3.exec('rollback').catch(() => {});
+    ok(msg.includes('wave295 undo refuses') && msg.includes('list 7701') && msg.includes('list 7702') && !msg.includes('list 7703') && !msg.includes('list 7704')
+       && msg.includes('Send 8801 (draft, list 7701)') && !msg.includes('8802') && !msg.includes('8803'), 'the undo refuses and names the lists and the unsent Send (' + msg + ')');
+    ok((await one(d3, MATCH)).def !== LIVE_MATCH_MD5 && (await one(d3, `select to_regprocedure('public.crm_filter_contacts(jsonb)') is not null as x`)).x === true, 'and changes nothing');
+    await d3.exec(`delete from public.crm_campaigns; delete from public.crm_lists where id in (7701, 7702);`);
+    await d3.exec(undo);
+    ok((await one(d3, MATCH)).def === LIVE_MATCH_MD5, 'once those lists are gone, the undo runs');
+    console.log('undo guard: refuses with lists 7701, 7702 and Send 8801 named; runs once they are gone');
+    await d3.close();
+  }
+
+  // ---- the guards: without wave294, without wave283, on a moved anchor, saved lists whose answer would change: the file stops and nothing is kept
   for (const [label, o, want, tweak] of [
+    ['wave294 without the service role grant', {}, 'wave295 needs wave294 at 3b1d7ca or later', `revoke execute on function public.crm_tag_aliases() from service_role;`],
+    ['a saved list whose answer would change', {}, 'wave295 stops: these saved lists would answer differently: list 7711: ', `insert into public.crm_lists (id, name, kind, filter) values
+       (7711, 'Test empty group', 'dynamic', '{"groups":[{"all":[]}]}'), (7712, 'Test keela name', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"has","v":"Volunteer Server"}]}]}'),
+       (7713, 'Test plain', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"has","v":"server"}]}]}'), (7714, 'Test unknown', 'dynamic', '{"groups":[{"all":[{"f":"birth","op":"is","v":"x"}]}]}');
+       insert into public.crm_campaigns (id, name, list_id, status) values (8811, 'Test queued', 7714, 'queued');`],
     ['without wave294', { w294: false }, 'wave295 needs wave294 first', null],
     ['without wave283', { w283: false }, 'wave295 needs wave283 first', null],
     ['a moved anchor', {}, 'wave295: a live function moved: crm_contact_match', `create or replace function public.crm_contact_match(c public.crm_contacts_v, k jsonb) returns boolean language plpgsql stable set search_path to '' as $f$ begin return true; end $f$;`],
@@ -163,6 +200,8 @@ try {
     try { await d2.exec('begin;\n' + migration + '\ncommit;'); } catch (e) { msg = String(e.message); }
     await d2.exec('rollback').catch(() => {});
     ok(msg.includes(want), label + ': the migration stops (' + msg + ')');
+    if (label.startsWith('a saved list')) ok(msg.includes('list 7712: tag "Volunteer Server"') && msg.includes('list 7714: the field "birth"') && !msg.includes('list 7713') && msg.includes('Send 8811 (queued, list 7714)'),
+      'it names each list and why, and the unsent Send (' + msg + ')');
     ok((await one(d2, `select to_regprocedure('public.crm_filter_contacts(jsonb)') is null as x`)).x === true && (await one(d2, MATCH)).def === m0
        && (await one(d2, `select count(*)::int as n from public.change_log where entity_id = 'wave295'`)).n === 0, label + ': nothing of wave295 is kept');
     console.log(label + ': the migration stops and nothing is kept');

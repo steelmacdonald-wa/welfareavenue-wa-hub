@@ -60,9 +60,14 @@
       var cf = cfieldByKey(k.key), t = FTYPE[(cf && cf.type) || 'text'] || FTYPE.text;
       return { id: 'field:' + (k.key || ''), f: 'field', key: k.key, label: cf ? cf.label : (k.key || 'A field'), type: t[0], ops: t[1], missing: !cf };
     }
-    var d = lf(k.f);
+    var d = LF.filter(function (x) { return x[0] === k.f; })[0];
+    /* wave295 fix round 1: a field the page does not know is never relabelled; it is not ready, so it is never sent or saved */
+    if (!d) return { id: String(k.f || ''), f: String(k.f || ''), label: 'A condition the Hub does not understand', type: 'none', ops: [], unknown: true };
     return { id: d[0], f: d[0], label: d[1], type: d[2], ops: d[3] };
   }
+  /* the fields a condition may name (the Lists engine's, and a custom field by its key) */
+  function knownField(f) { return f === 'field' || LF.some(function (x) { return x[0] === f; }); }
+  var FKEY = /^[a-z][a-z0-9_]{1,40}$/;
   function opLabel(d, op) {
     if (d.type === 'fnum' && (op === 'before' || op === 'after')) return op === 'before' ? 'is less than' : 'is more than';
     return (LOP_BY[d.f] || {})[op] || LOP[op] || op;
@@ -92,13 +97,33 @@
     return true;
   }
   /* wave295: a condition still waiting for its value (no option ticked, no date) is left out of the filter until it has one */
-  function condReady(k) {
-    if (!k || !k.f) return false;
-    if (!needsValue(k)) return true;
+  function condReady(k) { return !condWhy(k); }
+  /* why a condition cannot be used yet, in plain words, or '' when it can (fail closed: no value, no condition) */
+  function condWhy(k) {
+    if (!k || !k.f || !knownField(k.f)) return 'This condition is not one the Hub understands. Remove it.';
     var d = defOf(k);
-    if (isMultiDef(d) || Array.isArray(k.v)) return vals(k).length > 0;
-    if (d.type === 'date' || k.f === 'field') return String(k.v == null ? '' : k.v).trim() !== '';
-    return true;
+    if (k.f === 'field' && (!FKEY.test(String(k.key || '')) || d.missing)) return 'This field is not in the CRM. Choose another or remove the condition.';
+    if (d.ops.indexOf(k.op) < 0) return 'Choose a condition.';
+    if (!needsValue(k)) return '';
+    if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
+    if (Array.isArray(k.v) || (k.v !== null && typeof k.v === 'object')) return 'Choose one value.';
+    var t = String(k.v == null ? '' : k.v).trim();
+    if (!t) return d.type === 'date' ? 'Choose a date.' : 'Fill this in.';
+    if (d.type === 'fyes' && t !== 'yes' && t !== 'no') return 'Choose yes or no.';
+    if (d.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(t)) return 'Choose a date.';
+    if ((d.type === 'num' || d.type === 'fnum') && !isFinite(Number(t))) return 'Type a number.';
+    return '';
+  }
+  /* the first reason the groups cannot be applied or saved, or '' (fail closed: a group with no condition is refused, not "everyone") */
+  function groupsWhy(groups) {
+    var gs = groups || [], any = false;
+    for (var gi = 0; gi < gs.length; gi++) {
+      var all = gs[gi].all || [];
+      if (!all.length) { if (gs.length > 1) return (gs.length > 1 ? 'Group ' + (gi + 1) : 'The group') + ' has no condition: add one or remove the group.'; continue; }
+      for (var ci = 0; ci < all.length; ci++) { var w = condWhy(all[ci]); if (w) return (gs.length > 1 ? 'Group ' + (gi + 1) + ', condition ' : 'Condition ') + (ci + 1) + ': ' + w; }
+      any = true;
+    }
+    return any ? '' : 'Add a condition first.';
   }
   function defVal(f, op, k) {
     if (op === 'within' || op === 'lapsed') return f === 'added' ? '30' : f === 'opened' || f === 'clicked' || f === 'active' ? '90' : '365';
@@ -220,7 +245,7 @@
     }
     if (k.f === 'chapter' && String(k.v) === 'montreal') help = '<div class="w295help m">No chapter: counted as Montreal.</div>';
     if (d.missing) help += '<div class="w295help m">This field is no longer in the CRM, so this condition matches no one.</div>';
-    else if (!condReady(k)) help += '<div class="w295help m">' + (isMultiDef(d) ? 'Choose at least one.' : 'Fill this in.') + ' Until then this condition is left out.</div>';
+    else if (!condReady(k)) help += '<div class="w295help m" data-w295why>' + E(condWhy(k)) + '</div>';
     return '<div class="w155c' + (wide ? ' w295wide' : '') + '">' + fieldPicker(k, at, ns) + os + (wide ? '' : vs) + '<button class="w152mini" ' + A('cx') + ' aria-label="Remove this condition">' + I('x') + '</button>' +
       (wide ? '<div class="w295val">' + vs + '</div>' : '') + help + '</div>';
   }
@@ -230,7 +255,7 @@
     return groups.map(function (g, gi) {
       return (gi ? '<div class="w155or"><span>or</span></div>' : '') + '<div class="w155g"><div class="w155gh">' + (groups.length > 1 ? 'Group ' + (gi + 1) : 'People who match all of these') +
         (groups.length > 1 ? '<button class="w152mini" data-' + ns + 'gx="' + gi + '">' + I('x') + ' Remove the group</button>' : '') + '</div>' +
-        (g.all.length ? g.all.map(function (k, ci) { return condHtml(k, gi, ci, ns); }).join('<div class="w155and">and</div>') : '<div class="m">' + (lists ? 'No condition yet: everyone in the CRM.' : 'No condition yet. Add one below.') + '</div>') +
+        (g.all.length ? g.all.map(function (k, ci) { return condHtml(k, gi, ci, ns); }).join('<div class="w155and">and</div>') : '<div class="m">' + (lists ? 'No condition yet. A list needs at least one.' : 'No condition yet. Add one below.') + '</div>') +
         '<button class="w152btn sm ghost" data-' + ns + 'and="' + gi + '">' + I('plus') + (lists ? ' And' : ' Add a condition') + '</button></div>';
     }).join('') + '<button class="w152btn sm ghost" data-' + ns + 'or>' + I('plus') + (lists ? ' Or: another group' : ' Or another group') + '</button>';
   }
@@ -272,7 +297,7 @@
         var o = { f: k.f, op: k.op };
         if (k.f === 'field') o.key = k.key;
         if (needsValue(k)) {
-          if (Array.isArray(k.v) || isMultiDef(defOf(k))) { var a = vals(k); o.v = a.length === 1 && k.f !== 'field' ? a[0] : a; }
+          if (isMultiDef(defOf(k))) { var a = vals(k).filter(function (v) { return v.trim(); }); o.v = a.length === 1 && k.f !== 'field' ? a[0] : a; }
           else o.v = String(k.v == null ? '' : k.v);
         }
         return o;
@@ -280,7 +305,7 @@
     });
   }
   /* the Contacts tab's filters as one group; wave295: with the Filters builder on, each of its groups and the quick menus */
-  function groupsFromFilters() {
+  function groupsFromFilters(fbOverride) {
     var u = S.ui, all = [];
     if (u.kind) all.push({ f: 'kind', op: 'is', v: u.kind });
     if (u.role) all.push({ f: 'role', op: 'is', v: u.role });
@@ -292,7 +317,7 @@
     else if (u.act === 'new30') all.push({ f: 'added', op: 'within', v: '30' });
     if (u.perm) all.push({ f: 'perm', op: 'is', v: u.perm });
     if (u.q) all.push({ f: 'search', op: 'contains', v: u.q });
-    var fb = fbGroups();
+    var fb = fbOverride || fbGroups();
     if (fb.length) return fb.map(function (g) { return { all: JSON.parse(JSON.stringify(g.all)).concat(JSON.parse(JSON.stringify(all))) }; });
     return [{ all: all }];
   }
@@ -314,7 +339,7 @@
   }
   function describe(groups) {
     var gs = cleanGroups(groups);
-    if (!gs.length || gs.every(function (g) { return !g.all.length; })) return 'Everyone in the CRM';
+    if (!gs.length || gs.every(function (g) { return !g.all.length; })) return 'No condition: matches no one';
     return gs.map(function (g) { return g.all.map(condWords).join(' and ') || 'everyone'; }).join('; or ');
   }
 
@@ -324,6 +349,9 @@
     LC.pT = setTimeout(function () {
       var ed = LC.edit; if (!ed) return;
       var groups = cleanGroups(ed.groups), token = JSON.stringify(groups);
+      listSaveState();
+      var why = groupsWhy(ed.groups);   /* wave295 fix round 1: nothing is counted (or saved) until every condition has its value */
+      if (why) { LC.prev = { token: token, why: why }; paintPrev(); return; }
       LC.prev = { token: token, busy: true, ids: LC.prev && LC.prev.ids };
       paintPrev();
       Promise.resolve(db.rpc('crm_list_preview', { p_filter: { groups: groups } })).then(function (r) {
@@ -336,6 +364,7 @@
   }
   function prevHtml() {
     var p = LC.prev;
+    if (p && p.why) return '<div class="w155res m">' + E(p.why) + '</div>';
     if (!p || (!p.ids && p.busy)) return '<div class="w155res m">Counting…</div>';
     if (p.err) return '<div class="w155res w152err">The count did not come back: ' + E(p.err) + '</div>';
     var ids = p.ids || [], people = ids.map(contact).filter(Boolean);
@@ -346,12 +375,19 @@
       '<div class="w155mix"><span><b>' + news.toLocaleString('en-CA') + '</b> can get a newsletter</span><span><b>' + vol.toLocaleString('en-CA') + '</b> can get a volunteer call-out</span><span><b>' + noem.toLocaleString('en-CA') + '</b> have no email</span></div>' +
       (names ? '<div class="m">' + names + (ids.length > 8 ? ' and ' + plural(ids.length - 8, 'other', 'others') : '') + '</div>' : '') + '</div>';
   }
+  /* the Save buttons follow the conditions as they are typed, with the reason when they cannot be used */
+  function listSaveState() {
+    var ed = LC.edit; if (!ed) return;
+    var why = groupsWhy(ed.groups), w = document.querySelector('#crm [data-w155why]');
+    if (w) w.textContent = why;
+    [].forEach.call(document.querySelectorAll('#crm [data-w155save]'), function (b) { b.disabled = !!why; });
+  }
   function paintPrev() { var el = document.querySelector('#crm [data-w155res]'); if (el) el.innerHTML = prevHtml(); }
 
   /* ---------- the Lists tab ---------- */
   function listRow(l) {
     var n = LC.sizes && LC.sizes[String(l.id)] != null ? LC.sizes[String(l.id)] : (l.kind === 'static' ? (l.member_ids || []).length : null);
-    return '<div class="w155row" role="listitem"><div class="w155nm"><b>' + E(l.name) + '</b><span class="m">' + E(l.description || describe((l.filter || {}).groups || [])) + '</span></div>' +
+    return '<div class="w155row" role="listitem"><div class="w155nm"><b>' + E(l.name) + '</b><span class="m">' + E(l.description || (l.filter && Array.isArray(l.filter.groups) ? describe(l.filter.groups) : 'Saved from the older Contacts filters')) + '</span></div>' +
       '<div>' + lchip({ dynamic: ['Live', TEAL], static: ['Fixed', PURPLE] }, l.kind) + '</div><div class="w155n">' + (n == null ? '…' : plural(n, 'person', 'people')) + '</div>' +
       '<div class="w155ra"><button class="w152btn sm ghost" data-w155edit="' + E(l.id) + '">' + I('edit') + ' Open</button>' +
       /* wave295: a live list's conditions as the Contacts page's filter */
@@ -367,7 +403,8 @@
       '<div data-w155res>' + prevHtml() + '</div>' +
       (ed.del ? '<div class="w154msg">Delete “' + E(ed.name) + '”? Sends that used it keep their history. <button class="w152btn sm danger" data-w155delok>Delete it</button> <button class="w152btn sm ghost" data-w155delno>Keep it</button></div>' : '') +
       (LC.err ? '<div class="w152err">' + E(LC.err) + '</div>' : '') +
-      '<div class="w154acts"><button class="w152btn" data-w155save="dynamic">' + I('check') + ' Save as a live list</button><button class="w152btn ghost" data-w155save="static">Save as a fixed list</button>' +
+      '<div class="w295why" data-w155why role="status">' + E(groupsWhy(ed.groups)) + '</div>' +
+      '<div class="w154acts"><button class="w152btn" data-w155save="dynamic"' + (groupsWhy(ed.groups) ? ' disabled' : '') + '>' + I('check') + ' Save as a live list</button><button class="w152btn ghost" data-w155save="static"' + (groupsWhy(ed.groups) ? ' disabled' : '') + '>Save as a fixed list</button>' +
       (ed.id ? '<button class="w152btn ghost" data-w155del>' + I('trash') + ' Delete</button>' : '') + '<button class="w152btn ghost" data-w155cancel>Cancel</button></div></div>';
   }
   function paintLists(root) {
@@ -384,6 +421,8 @@
   function saveList(kind) {
     var ed = LC.edit; if (!ed) return;
     var name = String(ed.name || '').trim(); if (!name) { LC.err = 'A list needs a name.'; paint(); return; }
+    var why = groupsWhy(ed.groups);   /* wave295 fix round 1: never save a list that would mean something other than what it shows */
+    if (why) { LC.err = 'Not saved. ' + why; paint(); return; }
     var groups = cleanGroups(ed.groups);
     var go2 = function (ids) {
       var row = { name: name, description: String(ed.description || '').trim() || null, kind: kind, filter: { groups: groups }, member_ids: kind === 'static' ? ids : [], updated_by: actor(), updated_at: new Date().toISOString() };

@@ -3,9 +3,13 @@
 -- reads back is one of its own invented people (Test W295 ..., example.invalid), and the timing reads only a count.
 -- It checks: the new conditions on invented people (field of each type, kind/tag lists, a Keela tag name, chapter, dnc, phone, org, job title),
 -- crm_filter_contacts for a real staff member with the CRM (picked inside the database, never printed) and its refusal for nobody signed in,
--- and that a six-condition filter over every live contact answers in under one second (the design's bar).
+-- that no saved list or unsent Send holds a shape whose answer wave295 changes (the migration's own guard, again; it lists them by id), the
+-- fail-closed shapes on live data, and that six conditions over every live contact answer in under one second (the design's bar), timed as a real
+-- staff member through crm_filter_contacts (the page's way) and through crm_list_preview with row security (the Lists page's way), with tag,
+-- type, chapter, organisation, job title, a text field and a date field among them.
 
 drop table if exists pg_temp.w295_who;   -- the block may run this file twice
+drop table if exists pg_temp.w295_t;
 create temp table w295_who (label text primary key, id bigint) on commit drop;
 do $$
 declare i bigint; f_choice bigint; f_date bigint; f_yes bigint;
@@ -50,16 +54,14 @@ begin
   assert pg_temp.who('{"f":"dnc","op":"is"}') = 'fb', 'live: do not contact';
   assert pg_temp.who('{"f":"phone","op":"has"}') = 'fa', 'live: has a phone';
   assert pg_temp.who('{"f":"job_title","op":"contains","v":"w295 head"}') = 'fa', 'live: job title';
+  -- fail closed on live data
+  assert pg_temp.who('{"f":"birth","op":"is","v":"x"}') = '-' and pg_temp.who('{}') = '-', 'live: an unknown or missing field matches no one';
+  assert pg_temp.who('{"f":"org","op":"contains","v":""}') = '-' and pg_temp.who('{"f":"tag","op":"none","v":[]}') = '-', 'live: a blank value or an empty list matches no one';
+  assert pg_temp.who('{"f":"chapter","op":"not","v":["montreal","toronto"]}') = '-', 'live: a list where one value is meant matches no one';
+  assert (select count(*) from public.crm_list_preview('{"groups":[]}')) = 0 and (select count(*) from public.crm_list_preview('{"groups":[{"all":[]}]}')) = 0, 'live: no group, or an empty group, matches no one';
   if exists (select 1 from public.crm_tag_aliases() a where public.crm_fold(a.alias) = 'volunteer server' and public.crm_fold(a.tag) = 'server') then
     assert pg_temp.who('{"f":"tag","op":"has","v":"Volunteer Server"}') like '%fa%', 'live: the Keela name Volunteer Server finds server';
   end if;
-
-  -- six conditions over every live contact, timed (only the count is read)
-  t0 := clock_timestamp();
-  select count(*) into n from public.crm_list_preview('{"groups":[{"all":[{"f":"tag","op":"has","v":["server","newsletter"]},{"f":"kind","op":"is","v":["volunteer","supporter"]},{"f":"chapter","op":"is","v":"montreal"},{"f":"dnc","op":"not"},{"f":"field","key":"rally_paper_team","op":"empty"},{"f":"served","op":"ever"}]}]}');
-  ms := extract(epoch from clock_timestamp() - t0) * 1000;
-  raise notice 'w295live: six conditions over every live contact took % ms', round(ms);
-  assert ms < 1000, 'live: six conditions answer in under 1 second (' || round(ms) || ' ms)';
 
   -- crm_filter_contacts as a real staff member with the CRM (picked here, never printed), and refused for nobody signed in
   select r.email into staff from public.hub_roles r where r.role = 'admin' order by r.email limit 1;
@@ -73,4 +75,42 @@ begin
   exception when insufficient_privilege then null;
   end;
 end $$;
+-- the release guard again: no saved list or unsent Send may hold a shape whose answer this wave changes (names them by id)
+do $$
+declare m text;
+begin
+  if to_regclass('public.crm_lists') is not null and to_regprocedure('pg_temp.wa295_filter_change(jsonb)') is not null then
+    select string_agg('list ' || l.id || ': ' || pg_temp.wa295_filter_change(l.filter), ' | ' order by l.id) into m
+      from public.crm_lists l where coalesce(l.kind, 'dynamic') <> 'static' and pg_temp.wa295_filter_change(l.filter) is not null;
+    assert m is null, 'live: saved lists whose answer wave295 changes: ' || coalesce(m, '');
+  end if;
+end $$;
+
+-- speed: six conditions over every live contact, as a real staff member (picked here, never printed); only counts are read
+create temp table if not exists w295_t (way text, ms numeric, n bigint) on commit drop;
+grant all on w295_t to authenticated;
+select set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'email', (select r.email from public.hub_roles r where r.role = 'admin' order by r.email limit 1))::text, true);
+set local role authenticated;
+do $$
+declare t0 timestamptz; n bigint;
+  f jsonb := '{"groups":[{"all":[{"f":"tag","op":"has","v":["server","newsletter"]},{"f":"kind","op":"is","v":["volunteer","supporter"]},{"f":"chapter","op":"is","v":"montreal"},{"f":"dnc","op":"not"},{"f":"org","op":"not","v":"w295 nothing like it"},{"f":"field","key":"rally_paper_team","op":"empty"}]},{"all":[{"f":"job_title","op":"contains","v":"coordinator"},{"f":"field","key":"instagram","op":"contains","v":"wa"},{"f":"field","key":"w295live_day","op":"after","v":"2020-01-01"},{"f":"served","op":"ever"},{"f":"tag","op":"none","v":["w295 nothing"]},{"f":"city","op":"contains","v":"mon"}]}]}';
+begin
+  t0 := clock_timestamp(); select count(*) into n from public.crm_filter_contacts(f);
+  insert into w295_t values ('crm_filter_contacts', extract(epoch from clock_timestamp() - t0) * 1000, n);
+  t0 := clock_timestamp(); select count(*) into n from public.crm_list_preview(f);
+  insert into w295_t values ('crm_list_preview with row security', extract(epoch from clock_timestamp() - t0) * 1000, n);
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true);
+do $$
+declare r record;
+begin
+  for r in select * from w295_t loop
+    raise notice 'w295live: six conditions (two groups) over every live contact through % took % ms', r.way, round(r.ms);
+    assert r.ms < 1000, 'live: ' || r.way || ' answers in under 1 second (' || round(r.ms) || ' ms)';
+  end loop;
+  assert (select count(distinct n) from w295_t) = 1, 'live: the page and the Lists page give the same count';
+end $$;
+drop table if exists pg_temp.w295_t;
+
 select 'w295live: all checks passed' as result;

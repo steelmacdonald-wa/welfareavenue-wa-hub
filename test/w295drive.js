@@ -9,6 +9,13 @@
    usage: [CAND=<page>] [WA_CHROME=<chrome>] [WA_SHOTS=<folder>] node test/w295drive.js */
 const fs = require('fs'), path = require('path');
 const { launch, fresh, loadFixture } = require('./boot');
+/* N6: with no CAND, the drive builds its own page from the working tree (MANIFEST order, CRLF to LF, one final newline), so it never tests a stale
+   build/candidate.html */
+if (!process.env.CAND) {
+  const src = path.join(__dirname, '../build/src'), man = fs.readFileSync(path.join(src, 'MANIFEST.txt'), 'utf8').replace(/\r\n/g, '\n').split('\n').map(x => x.trim()).filter(x => x && !x.startsWith('#'));
+  const html = man.map(m => fs.readFileSync(path.join(src, m + '.seg'), 'utf8')).join('').replace(/\r\n/g, '\n').replace(/\n+$/, '') + '\n';
+  const out = path.join(require('os').tmpdir(), 'w295drive_candidate.html'); fs.writeFileSync(out, html); process.env.CAND = out;
+}
 const SHOTS = process.env.WA_SHOTS || '';
 let pass = 0, fail = 0; const out = [];
 function ok(name, cond, extra) { if (cond) { pass++; out.push('PASS ' + name); } else { fail++; out.push('FAIL ' + name + (extra !== undefined ? ' :: ' + JSON.stringify(extra).slice(0, 700) : '')); } }
@@ -144,7 +151,9 @@ async function main(browser) {
   ok('the field picker names every field in plain words, custom fields grouped as Keela and profile fields', ['Contact type', 'Tag', 'Chapter', 'City', 'Volunteer role', 'Served at an event', 'Gave a gift', 'Email permission', 'Opened a Hub email', 'Clicked a Hub email', 'Came from', 'Added to the CRM', 'Last activity', 'Organisation', 'Job title', 'Email address', 'Phone number', 'Do not contact', 'Volunteer record needs a review', LONG_FIELD, 'First day', '16 or older', 'Volunteer positions'].every(x => b.opts.includes(x)) && b.grp === 'Keela and profile fields' && !b.opts.includes('Name, email or organization'), b);
   await wait(f, 400);
   b = await f.ev(() => ({ tags: [...document.querySelectorAll('#w295fb [data-w295tl="0.0"] .w295opt')].map(x => x.innerText.replace(/\s+/g, ' ').trim()), help: (document.querySelector('#w295fb .w295help') || {}).textContent, prev: (document.querySelector('#w295fb [data-w295prev]') || {}).textContent }));
-  ok('the tag picker lists the Hub\'s tags with counts (Server and server as one), and says the empty condition is left out', b.tags.some(t => /^server 2$/.test(t)) && b.tags.some(t => t.startsWith(LONG_TAG)) && /Choose at least one/.test(b.help || '') && /everyone shows/.test(b.prev || ''), b);
+  ok('the tag picker lists the Hub\'s tags with counts (Server and server as one), and says a value is needed', b.tags.some(t => /^server 2$/.test(t)) && b.tags.some(t => t.startsWith(LONG_TAG)) && /Choose at least one/.test(b.help || '') && /Condition 1: Choose at least one/.test(b.prev || ''), b);
+  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, save: document.querySelector('#w295fb [data-w295save]').disabled, calls: window.__w295.calls.filter(x => x.fn === 'crm_filter_contacts').length }));
+  ok('with no tag ticked, Show and Save as a list stay off and nothing is asked of the database', b.apply && b.save && b.calls === 0, b);
   await setv(f, '#w295fb [data-w295tq="0.0"]', 'volunteer serv'); await wait(f, 200);
   b = await f.ev(() => ({ al: [...document.querySelectorAll('#w295fb .w295alias')].map(x => x.textContent.replace(/\s+/g, ' ').trim()), focus: document.activeElement && document.activeElement.getAttribute('data-w295tq') }));
   ok('typing a Keela name shows the Hub tag it maps to ("volunteer server → server"), and the focus stays in the box', b.al.length === 1 && /volunteer server → is the tag server/.test(b.al[0]) && b.focus === '0.0', b);
@@ -280,6 +289,95 @@ async function main(browser) {
   ok('an error on Show leaves the list and the filter as they were, and says why', /The filter did not run: you do not have the right to filter the contacts\. The list has not changed\./.test(b.err || '') && JSON.stringify(b.chips) === '["Job title contains astronaut"]' && b.empty, b);
   await f.ev(() => { window.__w295.fail = null; });
   ok('desktop: no page errors', f.errs.length === 0, f.errs);
+  /* B2: a condition with no value is never applied or saved; the reason shows */
+  await f.ev(() => { location.hash = '#crm'; }); await wait(f, 500);
+  await click(f, '#crm [data-w295clear]'); await wait(f, 300);
+  await f.page.click('#crm [data-w295open]'); await wait(f, 500);
+  await setv(f, '#w295fb [data-w295cf="0.0"]', 'org'); await wait(f, 400);
+  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, save: document.querySelector('#w295fb [data-w295save]').disabled, prev: document.querySelector('#w295fb [data-w295prev]').textContent, help: (document.querySelector('#w295fb [data-w295why]') || {}).textContent }));
+  ok('Organisation contains with nothing typed: Show and Save stay off, "Fill this in."', b.apply && b.save && /Fill this in/.test(b.prev) && /Fill this in/.test(b.help || ''), b);
+  await setv(f, '#w295fb [data-w295cv="0.0"]', '   '); await wait(f, 400);
+  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, calls: window.__w295.calls.filter(x => x.fn === 'crm_filter_contacts' && JSON.stringify(x.args).includes('"org"')).length }));
+  ok('spaces are not a value either, and nothing is sent', b.apply && b.calls === 0, b);
+  await setv(f, '#w295fb [data-w295cv="0.0"]', 'bakery'); await wait(f, 700);
+  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, save: document.querySelector('#w295fb [data-w295save]').disabled, label: document.querySelector('#w295fb [data-w295apply]').textContent }));
+  ok('typed: Show and Save come on as you type', !b.apply && !b.save && b.label === 'Show 1 person', b);
+  await click(f, '#w295fb [data-w295or]'); await wait(f, 400);
+  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, prev: document.querySelector('#w295fb [data-w295prev]').textContent }));
+  ok('an empty second group stops Show too (a group with no condition is never "everyone")', b.apply && /Group 2, condition 1: Choose at least one/.test(b.prev), b);
+  await click(f, '#w295fb [data-w295gx="1"]'); await wait(f, 300);
+  await f.page.keyboard.press('Escape'); await wait(f, 200);
+  /* M3: Clear while a run is on its way; its late failure never brings the old filter back */
+  await f.ev(() => { window.__w295.delay = 1200; window.__w295.fail = 'canceling statement due to statement timeout'; location.hash = '#crm/f/' + btoa(JSON.stringify([{ all: [{ f: 'dnc', op: 'is' }] }])).replace(/=+$/, ''); }); await wait(f, 300);
+  await click(f, '#crm [data-w295clear]'); await wait(f, 1600);
+  b = await f.ev(() => ({ chips: document.querySelectorAll('#crm .w295chip').length, err: !!document.querySelector('#crm .w295err'), hash: location.hash, rows: document.querySelectorAll('#crm .w152row').length }));
+  ok('Clear during a run: the late answer is ignored (no chips, no error, everyone, #crm)', b.chips === 0 && !b.err && b.hash === '#crm' && b.rows === 4, b);
+  await f.ev(() => { window.__w295.delay = 120; window.__w295.fail = null; });
+  /* B1: hostile and broken links */
+  const enc = g => Buffer.from(JSON.stringify(g), 'utf8').toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+  const n0 = await f.ev(() => window.__w295.calls.length);
+  await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'tag', op: 'has', v: 'server"><img src=x onerror="window.__pwned=1">' }, { f: 'chapter', op: 'not', v: ['montreal', 'toronto'] }, { f: 'field', key: { a: 1 }, op: 'is', v: 'x' }, { f: 'org', op: 'contains', v: '' }, { f: 'dnc', op: 'is' }] }])); await wait(f, 900);
+  b = await f.ev(n0 => ({ chips: [...document.querySelectorAll('#crm .w295chip .w295cw')].map(x => x.textContent), note: [...document.querySelectorAll('#crm .w295msg')].map(x => x.textContent).join(' '), pwned: !!window.__pwned, img: !!document.querySelector('#crm .w295chips img'),
+    sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').map(x => JSON.stringify(x.args.p_filter)) }), n0);
+  ok('a hostile link: the unknown field, the list on chapter, the object key and the blank value are left out and said; the tag text is shown as text', JSON.stringify(b.chips) === JSON.stringify(['Tag has server"><img src=x onerror="window.__pwned=1">', 'Do not contact is on']) && /4 conditions in this link were not understood and are left out/.test(b.note) && !b.pwned && !b.img, b);
+  ok('only the two good conditions reach the database', b.sent.length === 1 && !/birth|chapter|"org"|"key"/.test(b.sent[0]), b.sent);
+  await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'Kind', op: 'is', v: 'volunteer' }] }])); await wait(f, 700);
+  b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chip: [...document.querySelectorAll('#crm .w295chip .w295cw')].map(x => x.textContent).join('|') }));
+  ok('a link with nothing the Hub understands is not used, and is never shown as "Contact type"', /could not be read/.test(b.err || '') && !/Contact type/.test(b.chip), b);
+  await f.ev(h => { location.hash = h; }, '#crm/f/' + 'A'.repeat(9000)); await wait(f, 500);
+  b = await f.ev(() => (document.querySelector('#crm .w295err') || {}).textContent);
+  ok('a huge link is not read', /could not be read/.test(b || ''), b);
+  ok('hostile links: no page errors', f.errs.length === 0, f.errs);
+  await f.close();
+
+  /* B4: the Lists page never saves an incomplete list */
+  f = await boot(browser, { hash: '#crm/lists' });
+  await f.ev(() => { window.__ins = []; const from0 = db.from.bind(db); db.from = function (t) { const q = from0(t); const ins = q.insert, up = q.update; q.insert = function (p) { window.__ins.push({ t, p }); return ins.call(q, p); }; q.update = function (p) { window.__ins.push({ t, p, up: 1 }); return up.call(q, p); }; return q; }; });
+  await click(f, '[data-w155new]'); await wait(f, 500);
+  await setv(f, '[data-w155f="name"]', 'Test incomplete list');
+  await setv(f, '[data-w155cf="0.0"]', 'tag'); await wait(f, 500);
+  b = await f.ev(() => ({ dis: [...document.querySelectorAll('#crm [data-w155save]')].map(x => x.disabled), why: (document.querySelector('#crm [data-w155why]') || {}).textContent, res: (document.querySelector('#crm [data-w155res]') || {}).textContent }));
+  ok('Lists: a tag with nothing ticked: both Save buttons off, with the reason, and no count', b.dis.join() === 'true,true' && /Condition 1: Choose at least one/.test(b.why || '') && /Choose at least one/.test(b.res || ''), b);
+  await f.ev(() => { document.querySelectorAll('#crm [data-w155save]').forEach(x => { x.disabled = false; }); document.querySelector('#crm [data-w155save="dynamic"]').click(); }); await wait(f, 600);
+  b = await f.ev(() => ({ err: (document.querySelector('#crm .w155b .w152err') || {}).textContent, ins: window.__ins.filter(x => x.t === 'crm_lists').length }));
+  ok('Lists: even forced, Save refuses and saves nothing ("Not saved. Condition 1: Choose at least one.")', /^Not saved\. Condition 1: Choose at least one\./.test(b.err || '') && b.ins === 0, b);
+  await click(f, '[data-w155cx="0.0"]'); await wait(f, 400);
+  b = await f.ev(() => ({ dis: [...document.querySelectorAll('#crm [data-w155save]')].map(x => x.disabled), why: (document.querySelector('#crm [data-w155why]') || {}).textContent, m: (document.querySelector('#crm .w155g .m') || {}).textContent }));
+  ok('Lists: no condition at all cannot be saved either ("Add a condition first."), and the group says a list needs one', b.dis.join() === 'true,true' && b.why === 'Add a condition first.' && /A list needs at least one/.test(b.m || ''), b);
+  b = await f.ev(() => [...document.querySelectorAll('#crm .w155row .m')].map(x => x.textContent));
+  ok('Lists: an older list saved with the flat Contacts filters says so (it is not "no condition")', b.includes('Saved from the older Contacts filters'), b);
+  ok('Lists: no page errors', f.errs.length === 0, f.errs);
+  await f.close();
+
+  /* M2: the page through the real SQL (the offline database, test/w295db.mjs), not the stand-in */
+  let real = null;
+  try { real = await (await import('./w295db.mjs')).makeDb(); } catch (e) { ok('the offline database for the real-SQL page test starts', false, String(e && e.message || e)); }
+  if (real) {
+    const rc = await real.contacts(), rf = await real.fields();
+    const fx = fixture(); fx.crm_contacts_v = rc; fx.crm_contacts = rc.map(c => Object.assign({}, c)); fx.crm_fields = rf; fx.crm_lists = []; fx.crm_contact_fields = [];
+    f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx, rpcs: RPCS, wait: 3200,
+      beforeGoto: page => page.exposeFunction('__w295sql', (fn, args) => real.rpc(fn, args, 'w281.admin@example.invalid')) });
+    await f.ev(() => { window.__realCalls = []; const r0 = db.rpc.bind(db); db.rpc = function (fn, a) { if (fn === 'crm_filter_contacts' || fn === 'crm_tag_aliases' || fn === 'crm_list_preview') { window.__realCalls.push(fn); return window.__w295sql(fn, a || {}); } return r0(fn, a); }; });
+    await f.hash('#crm', 1800);
+    const idsOf = () => f.ev(() => [...document.querySelectorAll('#crm .w152row')].map(x => Number(x.getAttribute('data-w152open'))).filter(x => x >= 9501 && x <= 9599).sort());
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'has', v: 'Volunteer Server' }] }])); await wait(f, 2500);
+    b = { ids: await idsOf(), calls: await f.ev(() => window.__realCalls.slice()) };
+    ok('real SQL: a Keela name finds its Hub tag (Fa and Fd)', JSON.stringify(b.ids) === '[9501,9504]' && b.calls.includes('crm_filter_contacts'), b);
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'chapter', op: 'is', v: 'montreal' }, { f: 'field', key: 'w295_age16', op: 'is', v: 'no' }] }])); await wait(f, 2500);
+    ok('real SQL: Montreal (no chapter counts) and a yes/no field', JSON.stringify(await idsOf()) === '[9502,9504]', await idsOf());
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'none', v: ['donor', 'server'] }] }])); await wait(f, 2500);
+    ok('real SQL: none of a list', JSON.stringify(await idsOf()) === '[9503]', await idsOf());
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'none', v: [] }, { f: 'org', op: 'contains', v: '' }] }])); await wait(f, 1500);
+    b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, rows: document.querySelectorAll('#crm .w152row').length }));
+    ok('real SQL: a link of empty values is not used at all (the list stays)', /could not be read/.test(b.err || ''), b);
+    const direct = await real.rpc('crm_filter_contacts', { p_filter: { groups: [{ all: [{ f: 'tag', op: 'none', v: [] }] }, { all: [{ f: 'birth', op: 'is', v: 'x' }] }, { all: [] }] } }, 'w281.admin@example.invalid');
+    ok('real SQL: the same shapes sent straight to the database match no one', direct.error === null && direct.data.length === 0, direct);
+    const nocrm = await real.rpc('crm_filter_contacts', { p_filter: { groups: [{ all: [{ f: 'dnc', op: 'is' }] }] } }, 'w281.nocrm@example.invalid');
+    ok('real SQL: staff without the CRM are refused', nocrm.error && /Only the Welfare Avenue team/.test(nocrm.error.message), nocrm);
+    ok('real SQL: no page errors', f.errs.length === 0, f.errs);
+    await f.close();
+    await real.db.close();
+  }
   await f.close();
 
   /* ---------------- reload with the filter in the address: no flash of everyone ---------------- */

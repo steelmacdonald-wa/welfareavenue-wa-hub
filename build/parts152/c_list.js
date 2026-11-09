@@ -118,6 +118,7 @@
     root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) + (FB.open ? fbPanelHtml() : '') + fbChipsHtml() +
       (FB.err ? '<div class="w295err" role="alert">The filter did not run: ' + E(FB.err) + '. The list has not changed.</div>' : '') +
       (FB.msg && fbOn() ? '<p class="w295msg m">' + E(FB.msg) + '</p>' : '') +
+      (FB.note && fbOn() ? '<p class="w295msg m" role="status">' + E(FB.note) + '</p>' : '') +
       '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches…' : filtered ? (fbOn() ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' · <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
       (!waiting && shown.length < list.length ? ' · showing the first ' + shown.length : '') + (fbOn() && FB.busy && FB.ids ? ' · <span class="m">updating…</span>' : '') + '</div>' +
       (waiting ? '' : shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +

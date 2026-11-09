@@ -1,14 +1,58 @@
--- Welfare Avenue Hub: wave295 undo, 07/11/26. Reverses build/data/wa295_filters.sql.
+-- Welfare Avenue Hub: wave295 undo, 07/11/26 (fix round 1, 08/11/26). Reverses build/data/wa295_filters.sql.
 -- crm_contact_match comes back exactly as live had it on 07/11/26 (pg_get_functiondef read with the Supabase connector, md5
 -- d21db1e35fb6e0a8f65d766db3a1d618; its comment md5 3d41cf5110030a3322bb951dffea4217), and so does crm_list_preview (md5
 -- 8088527269cf3f6b75105421ee453abf; comment f51932b9bf2a0fc879a2f91ae2b9ce52), both with their live grants. crm_filter_contacts,
--- crm_filter_prepare and crm_filter_prepare_tag are dropped.
--- The service role's execute on crm_tag_aliases() (wave295 gave it) is taken back. The release line stays; an undo line is added. Put the page back
--- first (the Contacts page calls crm_filter_contacts): see docs/07-11-26 - wave295 Contacts filters.md, Undo. A saved list that uses a wave295
--- condition then answers as the older engine does: a field, chapter, dnc, phone, org or job_title condition matches everyone (an unknown condition
--- always did), and a list of several values for kind, role or tag matches no one. wave295 saves no list on its own; check the Lists page first.
+-- crm_filter_prepare and crm_filter_prepare_tag are dropped. The service role's execute on crm_tag_aliases() is wave294's and stays.
+-- The live text is "unknown condition: everyone", so after the undo a saved filter that uses a wave295 shape would WIDEN: a field, chapter, dnc,
+-- phone, org or job_title condition would match everyone; a list of values with op not or none would match everyone (the text of a list never
+-- matches, so "not" is true); a blank value, an unknown field, no group or an empty group would match everyone. So the undo REFUSES, before it
+-- changes anything, while any saved list (crm_lists, not static) or the list of an unsent Send (crm_campaigns draft, queued or sending) holds
+-- such a shape, and names the list and Send ids. Change or delete those lists first (see docs/07-11-26 - wave295 Contacts filters.md, Undo).
+-- Put the page back first (the Contacts page calls crm_filter_contacts). The release line stays; an undo line is added.
 -- Comment statements here are indented on purpose: build/gen_data_model.py reads every file in build/data, and must keep reading the migration's text.
 -- No transaction control. Safe to run twice. Proved offline: node test/w295sql.mjs.
+
+-- ============================================================================================ 0. the guard: nothing may widen (reads only)
+create or replace function pg_temp.wa295u_cond(k jsonb) returns text language plpgsql stable as $g$
+declare f text; v text; t text;
+begin
+  if jsonb_typeof(k) is distinct from 'object' then return 'a condition that is not an object'; end if;
+  f := k->>'f'; v := coalesce(k->>'v', ''); t := jsonb_typeof(k->'v');
+  if f is null or f = '' then return 'a condition with no field'; end if;
+  if f in ('field', 'chapter', 'dnc', 'phone', 'org', 'job_title') then return 'the wave295 field ' || f; end if;
+  if f not in ('kind', 'role', 'tag', 'perm', 'email', 'served', 'gave', 'city', 'language', 'source', 'added', 'active', 'opened', 'clicked', 'review', 'search') then
+    return 'the unknown field "' || left(f, 40) || '"'; end if;
+  if t in ('array', 'object') then return f || ' with a list or object as its value'; end if;
+  if coalesce(k->>'op', '') in ('any', 'all') then return f || ' with op ' || (k->>'op'); end if;
+  if f in ('kind', 'role', 'tag', 'perm', 'city', 'language', 'source', 'search') and btrim(v) = '' then return f || ' with an empty value'; end if;
+  return null;
+end $g$;
+create or replace function pg_temp.wa295u_filter(p jsonb) returns text language sql stable as $g$
+  select case when jsonb_typeof(p->'groups') is distinct from 'array' then null
+    when jsonb_array_length(p->'groups') = 0 then 'no group'
+    else (select string_agg(distinct r, '; ') from (
+      select case when jsonb_typeof(g->'all') is distinct from 'array' or jsonb_array_length(g->'all') = 0 then 'a group with no condition' end as r
+        from jsonb_array_elements(p->'groups') g
+      union all
+      select pg_temp.wa295u_cond(k) from jsonb_array_elements(p->'groups') g, jsonb_array_elements(case when jsonb_typeof(g->'all') = 'array' then g->'all' else '[]'::jsonb end) k) q
+      where r is not null) end
+$g$;
+do $wa295u$
+declare m text; s text;
+begin
+  if to_regclass('public.crm_lists') is not null then
+    select string_agg('list ' || l.id || ': ' || pg_temp.wa295u_filter(l.filter), ' | ' order by l.id) into m
+      from public.crm_lists l where coalesce(l.kind, 'dynamic') <> 'static' and pg_temp.wa295u_filter(l.filter) is not null;
+    if to_regclass('public.crm_campaigns') is not null then
+      select string_agg('Send ' || c.id || ' (' || c.status || ', list ' || c.list_id || ')', ' | ' order by c.id) into s
+        from public.crm_campaigns c join public.crm_lists l on l.id = c.list_id
+       where c.status in ('draft', 'queued', 'sending') and coalesce(l.kind, 'dynamic') <> 'static' and pg_temp.wa295u_filter(l.filter) is not null;
+    end if;
+  end if;
+  if m is not null then
+    raise exception 'wave295 undo refuses: these saved lists would match more people after the undo: %. Unsent Sends on them: %. Change or delete them first.', m, coalesce(s, 'none');
+  end if;
+end $wa295u$;
 
 -- ============================================================================================ 1. crm_contact_match back (live text, 07/11/26)
 CREATE OR REPLACE FUNCTION public.crm_contact_match(c public.crm_contacts_v, k jsonb)
@@ -91,11 +135,6 @@ grant execute on function public.crm_list_preview(jsonb) to authenticated, servi
 drop function if exists public.crm_filter_contacts(jsonb);
 drop function if exists public.crm_filter_prepare(jsonb);
 drop function if exists public.crm_filter_prepare_tag(jsonb);
--- and the service role's right to crm_tag_aliases() that wave295 gave (wave294 grants it to authenticated only); skipped when wave294 is gone
-do $wa295u$
-begin
-  if to_regprocedure('public.crm_tag_aliases()') is not null then execute 'revoke execute on function public.crm_tag_aliases() from service_role'; end if;
-end $wa295u$;
 
 -- ============================================================================================ 4. the undo record (once per release)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)

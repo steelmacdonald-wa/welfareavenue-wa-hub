@@ -12,7 +12,7 @@ begin
   assert md5(obj_description('public.crm_list_preview(jsonb)'::regprocedure, 'pg_proc')) = 'f51932b9bf2a0fc879a2f91ae2b9ce52', 'undo: its comment is back';
   assert to_regprocedure('public.crm_filter_contacts(jsonb)') is null and to_regprocedure('public.crm_filter_prepare(jsonb)') is null and to_regprocedure('public.crm_filter_prepare_tag(jsonb)') is null,
     'undo: crm_filter_contacts, crm_filter_prepare and crm_filter_prepare_tag are gone';
-  assert not has_function_privilege('service_role', 'public.crm_tag_aliases()', 'execute'), 'undo: the service role no longer reads crm_tag_aliases';
+  assert has_function_privilege('service_role', 'public.crm_tag_aliases()', 'execute'), 'undo: wave294''s service role grant on crm_tag_aliases stays';
   assert (select count(*) from public.change_log where entity_type = 'release' and entity_id = 'wave295' and field = 'wave295 undo') = 1, 'undo: one undo line';
 end $$;
 select 'w295live_undo: all checks passed' as result;

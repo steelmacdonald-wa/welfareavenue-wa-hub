@@ -4,7 +4,7 @@
      The database answers (crm_filter_contacts, wave295 SQL, the same engine as crm_list_preview), and the list narrows to those ids together
      with the quick menus and search, which stay as they were. Active conditions show as chips under the bar; the filter lives in the address
      (#crm/f/<filter>) so a reload or a shared link keeps it; Save as a list hands it to the Lists page; a saved live list opens as a view. */
-  var FB = { open: false, draft: null, applied: null, ids: null, busy: false, err: '', prev: null, pT: null, tok: 0, anim: false, msg: '' };
+  var FB = { open: false, draft: null, applied: null, ids: null, busy: false, err: '', prev: null, pT: null, tok: 0, anim: false, msg: '', note: '' };
   function fbClone(x) { return JSON.parse(JSON.stringify(x)); }
   function fbDraft() { return FB.draft; }
   /* the applied groups that hold at least one condition */
@@ -13,13 +13,42 @@
   function fbCount() { return fbGroups().reduce(function (n, g) { return n + g.all.length; }, 0); }
   /* the address: #crm/f/ and the filter as base64url of its JSON (UTF-8, so a tag with an accent survives) */
   function fbEncode(groups) { try { return btoa(unescape(encodeURIComponent(JSON.stringify(groups)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); } catch (e) { return ''; } }
+  /* wave295 fix round 1: a link is read fail closed. Only known fields, their own operators and plain values of the right shape come through;
+     anything else (an unknown field, a list where one value is meant, an object, a blank value, too much of anything) is left out and counted,
+     so the page can say so. Nothing from a link reaches the database unless it would also be accepted from the builder. */
   function fbDecode(s) {
     try {
-      var b = String(s || '').replace(/-/g, '+').replace(/_/g, '/'); while (b.length % 4) b += '=';
+      s = String(s || ''); if (s.length > 8000) return null;
+      var b = s.replace(/-/g, '+').replace(/_/g, '/'); while (b.length % 4) b += '=';
       var g = JSON.parse(decodeURIComponent(escape(atob(b))));
-      if (!Array.isArray(g) || !g.every(function (x) { return x && Array.isArray(x.all) && x.all.every(function (k) { return k && typeof k.f === 'string'; }); })) return null;
-      return g;
+      if (!Array.isArray(g)) return null;
+      var out = [], dropped = Math.max(0, g.length - 20);
+      g.slice(0, 20).forEach(function (x) {
+        if (!x || typeof x !== 'object' || !Array.isArray(x.all)) { dropped++; return; }
+        var all = [];
+        dropped += Math.max(0, x.all.length - 30);
+        x.all.slice(0, 30).forEach(function (k) { var c = fbCond(k); if (c) all.push(c); else dropped++; });
+        if (all.length) out.push({ all: all });
+      });
+      return { groups: out, dropped: dropped };
     } catch (e) { return null; }
+  }
+  var FIELD_OPS = ['set', 'empty', 'is', 'any', 'contains', 'before', 'after'];
+  function fbCond(k) {
+    if (!k || typeof k !== 'object' || Array.isArray(k) || typeof k.f !== 'string' || !knownField(k.f) || typeof k.op !== 'string') return null;
+    var c = { f: k.f, op: k.op };
+    if (k.f === 'field') { if (typeof k.key !== 'string' || !FKEY.test(k.key)) return null; c.key = k.key; }
+    var v = k.v;
+    if (Array.isArray(v)) {
+      var listOk = k.f === 'kind' || k.f === 'role' || k.f === 'tag' || (k.f === 'field' && (k.op === 'is' || k.op === 'any'));
+      if (!listOk || v.length > 100 || !v.every(function (x) { return typeof x === 'string' && x.length <= 200; })) return null;
+      c.v = v.filter(function (x) { return x.trim(); });
+    } else if (typeof v === 'string' || typeof v === 'number') { if (String(v).length > 200) return null; c.v = String(v); }
+    else if (v != null) return null;
+    if ((k.f === 'field' ? FIELD_OPS : defOf(c).ops).indexOf(c.op) < 0) return null;
+    if (k.f === 'field') { if (FIELD_OPS.indexOf(c.op) > 1 && !vals(c).filter(function (x) { return x.trim(); }).length) return null; }
+    else if (!condReady(c)) return null;
+    return c;
   }
   function fbHash() { return fbOn() ? '#crm/f/' + fbEncode(fbGroups()) : '#crm'; }
   function fbSyncHash() {
@@ -45,8 +74,9 @@
     var clean = cleanGroups(groups).filter(function (g) { return g.all.length; });
     var before = { applied: FB.applied, ids: FB.ids };
     FB.err = ''; FB.msg = '';
+    FB.note = o.note || '';
+    var tok = ++FB.tok;   /* every apply, Clear included, outdates the runs still on their way (a late answer or error never puts an old filter back) */
     if (!clean.length) { FB.applied = null; FB.ids = null; FB.busy = false; S.ui.show = 60; fbSyncHash(); paint(); return Promise.resolve(); }
-    var tok = ++FB.tok;
     FB.applied = clean; S.ui.show = 60;
     if (o.ids) { FB.ids = o.ids; FB.busy = false; fbSyncHash(); paint(); return Promise.resolve(); }
     FB.busy = true; fbSyncHash(); paint();
@@ -58,8 +88,12 @@
     }, function (e) { if (tok !== FB.tok) return; FB.busy = false; FB.applied = before.applied; FB.ids = before.ids; FB.err = fbPlain(e); fbSyncHash(); paint(); });
   }
   /* the builder's own count while it is being edited (debounced, the latest answer wins) */
+  /* why Show cannot be used yet ('' when it can; no condition at all is "Show everyone", which clears) and why Save as a list cannot */
+  function fbApplyWhy() { var d = FB.draft || []; return d.some(function (g) { return g.all && g.all.length; }) ? groupsWhy(d) : ''; }
+  function fbSaveWhy() { return groupsWhy(FB.draft || []); }
   function fbPreviewSoon() {
     var groups = cleanGroups(FB.draft || []).filter(function (g) { return g.all.length; }), token = JSON.stringify(groups);
+    if (fbApplyWhy()) { clearTimeout(FB.pT); FB.prev = { token: token, why: fbApplyWhy() }; fbPaintPrev(); return; }
     if (FB.prev && FB.prev.token === token && !FB.prev.err) return;   /* the same question is already asked or answered */
     clearTimeout(FB.pT);
     if (!groups.length) { FB.prev = { token: token, none: true }; fbPaintPrev(); return; }
@@ -76,6 +110,7 @@
   function fbQuickCount(ids) { return (S.contacts || []).filter(function (c) { return ids[String(c.id)] && quickOk(c); }).length; }
   function fbPrevHtml() {
     var p = FB.prev;
+    if (p && p.why) return '<span class="m">' + E(p.why) + '</span>';
     if (!p || p.none) return '<span class="m">No condition yet: everyone shows.</span>';
     if (p.err) return '<span class="w152err">The count did not come back: ' + E(p.err) + '.</span>';
     if (!p.ids) return '<span class="m">Counting…</span>';
@@ -84,13 +119,16 @@
   }
   function fbApplyLabel() {
     var p = FB.prev;
+    if (p && p.why) return 'Show the people';
     if (!p || p.none) return 'Show everyone';
     if (p.ids && !p.busy && !p.err) { var n = fbQuickCount(p.ids); return n === 1 ? 'Show 1 person' : 'Show ' + n.toLocaleString('en-CA') + ' people'; }
     return 'Show the people';
   }
   function fbPaintPrev() {
     var el = document.querySelector('#crm [data-w295prev]'); if (el) el.innerHTML = fbPrevHtml();
-    var b = document.querySelector('#crm [data-w295apply]'); if (b) b.textContent = fbApplyLabel();
+    var b = document.querySelector('#crm [data-w295apply]'); if (b) { b.textContent = fbApplyLabel(); b.disabled = !!fbApplyWhy(); }
+    var sv = document.querySelector('#crm [data-w295save]'); if (sv) sv.disabled = !!fbSaveWhy();
+    var w = document.querySelector('#crm [data-w295savewhy]'); if (w) w.textContent = !fbApplyWhy() && fbSaveWhy() ? 'Save as a list: ' + fbSaveWhy() : '';
   }
   function fbListsHtml() {
     var ls = (S.lists || []).filter(function (l) { return l.kind === 'dynamic' && l.filter && Array.isArray(l.filter.groups); });
@@ -104,7 +142,8 @@
       '<div class="w295fbt"><div><h3 id="w295fbh">Filters</h3><p class="m">A person shows when they match every condition in a group. With two groups or more, matching any one group is enough.</p></div>' + fbListsHtml() + '</div>' +
       groupsHtml(FB.draft, 'w295') +
       '<div class="w295fbf" aria-live="polite"><div class="w295cnt" data-w295prev>' + fbPrevHtml() + '</div>' +
-      '<div class="w295acts"><button class="w152btn" data-w295apply>' + E(fbApplyLabel()) + '</button><button class="w152btn ghost" data-w295save>' + I('list') + ' Save as a list</button><button class="w152btn ghost" data-w295close>Close</button></div></div>' +
+      '<div class="w295acts"><button class="w152btn" data-w295apply' + (fbApplyWhy() ? ' disabled' : '') + '>' + E(fbApplyLabel()) + '</button><button class="w152btn ghost" data-w295save' + (fbSaveWhy() ? ' disabled' : '') + '>' + I('list') + ' Save as a list</button><button class="w152btn ghost" data-w295close>Close</button></div></div>' +
+      '<div class="w295why" data-w295savewhy role="status">' + (!fbApplyWhy() && fbSaveWhy() ? E('Save as a list: ' + fbSaveWhy()) : '') + '</div>' +
       '<p class="m w295keys">Escape closes the filters.</p></section>';
   }
   function fbChipsHtml() {
@@ -158,11 +197,12 @@
   }
   /* the address on arrival: #crm/f/<filter> */
   function fbFromHash(token) {
-    var g = fbDecode(token);
-    if (!g) { FB.err = 'the filter in this link could not be read, so it is not used'; return; }
-    if (JSON.stringify(cleanGroups(g).filter(function (x) { return x.all.length; })) === JSON.stringify(fbGroups())) return;
+    var r = fbDecode(token);
+    if (!r || !r.groups.length) { FB.err = 'the filter in this link could not be read, so it is not used'; FB.note = ''; return; }
+    var g = r.groups, note = r.dropped ? (r.dropped === 1 ? 'A condition in this link was not understood and is left out.' : r.dropped + ' conditions in this link were not understood and are left out.') : '';
+    if (!note && JSON.stringify(cleanGroups(g).filter(function (x) { return x.all.length; })) === JSON.stringify(fbGroups())) return;
     if (!S.cfields) load('cfields').then(function () { if (S.ui.tab === 'contacts') paint(); });
-    fbApply(g);
+    fbApply(g, { note: note });
   }
   var FOCUS_NEXT = '';   /* a place for the focus the next time the page is drawn with it (Save as a list: the list's name) */
   /* move the focus once the page is drawn again (keyboard users keep their place) */
@@ -209,6 +249,7 @@
     if ((el = t.closest('[data-w295rm]'))) { e.preventDefault(); fbRemove(el.getAttribute('data-w295rm')); return; }
     if ((el = t.closest('[data-w295apply]')) && FB.open) {
       e.preventDefault();
+      if (fbApplyWhy()) { fbPaintPrev(); return; }
       var groups = cleanGroups(FB.draft).filter(function (g) { return g.all.length; }), p = FB.prev;
       FB.open = false;
       var ids = p && p.ids && !p.busy && !p.err && p.token === JSON.stringify(groups) ? p.ids : null;
@@ -217,9 +258,10 @@
     }
     if ((el = t.closest('[data-w295save]')) && FB.open) {
       e.preventDefault();
+      if (fbSaveWhy()) { fbPaintPrev(); return; }
+      /* what the builder shows is what the list gets; the Contacts list itself stays as it was (nothing runs while the Lists page opens) */
+      LC.edit = { id: null, name: '', description: 'From the Contacts filters', groups: groupsFromFilters(cleanGroups(FB.draft).filter(function (g) { return g.all.length; })) }; LC.prev = null; LC.msg = ''; LC.err = '';
       FB.open = false;
-      fbApply(FB.draft);   /* what the builder shows is what the list gets, and what Contacts shows on the way back */
-      LC.edit = { id: null, name: '', description: 'From the Contacts filters', groups: groupsFromFilters() }; LC.prev = null; LC.msg = ''; LC.err = '';
       FOCUS_NEXT = '[data-w155f="name"]';   /* once the Lists page is drawn */
       go('#crm/lists');
       return;
@@ -268,10 +310,11 @@
     + '.w295none{padding:8px;}.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}'
     + '.w295chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0 2px;}'
     + '.w295chip{display:inline-flex;align-items:center;gap:2px;max-width:100%;border-radius:14px;background:rgba(16,63,57,.08);color:' + GREEN + ';font-size:12.5px;font-weight:600;padding:3px 3px 3px 11px;line-height:1.35;}'
-    + '.w295cw{min-width:0;overflow-wrap:anywhere;}.w295cx{border:none;background:none;color:inherit;cursor:pointer;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:background-color 150ms ease;}'
-    + '.w295cx svg{width:13px;height:13px;}.w295cx:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}.w295cx:active{transform:scale(.92);}'
+    + '.w295cw{min-width:0;overflow-wrap:anywhere;}.w295cx{border:none;background:none;color:inherit;cursor:pointer;border-radius:999px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex:none;transition:transform 120ms cubic-bezier(.23,1,.32,1),background-color 150ms ease-out;}'
+    + '.w295cx svg{width:13px;height:13px;}.w295cx:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}.w295cx:active{transform:scale(.95);}'
     + '@media (hover:hover) and (pointer:fine){.w295cx:hover{background:rgba(16,63,57,.12);}.w295opt:hover{border-color:rgba(16,63,57,.3);}.w295alias:hover{background:rgba(220,165,39,.25);}}'
     + '.w295orc{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + PURPLE + ';}'
+    + '.w295why{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');min-height:0;margin-top:6px;}.w295why:empty{display:none;}'
     + '.w295msg{margin:8px 0 0;font-size:13px;}.w295err{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:rgba(179,64,47,.08);color:' + FLAG + ';font-size:13px;font-weight:600;}'
     + '@media (max-width:560px){.w155c{grid-template-columns:minmax(0,1fr) auto;}.w155c>select:first-child{grid-column:1;grid-row:1;}.w155c>.w152mini{grid-column:2;grid-row:1;}.w155c>*:not(:first-child):not(.w152mini){grid-column:1/-1;}'
     + '.w295fb{padding:12px;}.w295lp,.w295lp .w152sel{width:100%;}.w295acts{width:100%;}.w295acts .w152btn{flex:1 1 auto;justify-content:center;}}'
