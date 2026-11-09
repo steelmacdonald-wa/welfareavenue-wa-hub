@@ -53,6 +53,34 @@
     var add = O.canEdit && O.arrange ? '<div class="addrow"><button type="button" class="w133btn" data-w133addteam="' + E(d) + '">' + I('plus') + 'Add a position to lead ' + E(teamShort(d)) + '</button></div>' : '';
     return '<div class="w133team" data-team="' + E(d) + '" style="--tc:' + E(teamColor(d)) + '">' + head + body + add + '</div>';
   }
+  /* wave297b: the board row in governance order. The President of the Board leads, then the officers, then members and advisers. */
+  function w297rank(m) { var r = String(m.role || '').toLowerCase(); if (r.indexOf('president') >= 0) return 0; if (/chair|treasurer|secretary|vice/.test(r)) return 1; if (r.indexOf('advis') >= 0) return 3; return 2; }
+  /* wave297 (09/11/26): the tree. The board above; one column per co-executive director, their card on top and
+     the teams that report to them underneath, joined by lines; HR and any lead who reports to no one sits in a
+     last column, "Shared by the co-executive directors". A team chip still opens the team's own column. */
+  function treeHtml(X, ex, hs) {
+    var shown = function (p) { return O.showOpen || !isOpen(p); }, seen = {};
+    var order = teams();
+    function groups(list) {
+      var by = {}, keys = [];
+      list.forEach(function (p) { var t = seatTeam(p) || ''; if (!by[t]) { by[t] = []; keys.push(t); } by[t].push(p); });
+      keys.sort(function (a, b) { var ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+      return keys.map(function (t) {
+        var ppl = 0, open = 0;
+        by[t].forEach(function (p) { [p].concat(allUnder(X, p)).forEach(function (s) { if (isOpen(s)) open++; else ppl++; }); });
+        return '<div class="w297tm" data-team="' + E(t) + '" style="--tc:' + E(teamColor(t)) + '"><h4 data-w133drop="team:' + E(t) + '">' + E(teamLabel(t)) + ' <span>' + plural(ppl, 'person', 'people') + (open ? ', ' + plural(open, 'open position', 'open positions') : '') + '</span></h4>'
+          + by[t].map(function (p) { return nodeHtml(X, p, t, seen, 0); }).join('') + '</div>';
+      }).join('');
+    }
+    var cols = ex.map(function (e) {
+      var under = hs.filter(function (p) { return String(p.reports_to) === String(e.id) && shown(p); });
+      return '<div class="w297br"><div class="w297top">' + cardHtml(X, e, '') + '</div>'
+        + (under.length ? '<div class="w297teams">' + groups(under) + '</div>' : '<p class="w297none">No team leads report here yet.</p>') + '</div>';
+    });
+    var shared = hs.filter(function (p) { return (p.reports_to == null || !isExec(X.byId[p.reports_to])) && shown(p); });
+    if (shared.length) cols.push('<div class="w297br sh"><div class="w297top"><div class="w297shh"><b>Shared</b><span>by the co-executive directors</span></div></div><div class="w297teams">' + groups(shared) + '</div></div>');
+    return '<div class="w133lv w133exec w297tree"><h3 data-w133drop="team:">Executive directors <span>each co-executive director, with the teams that report to them</span></h3><div class="w297row">' + cols.join('') + '</div></div>';
+  }
   function allUnder(X, p) { var out = [], st = (X.kids[String(p.id)] || []).slice(), seen = {}; while (st.length) { var k = st.shift(); if (seen[k.id]) continue; seen[k.id] = 1; out.push(k); (X.kids[String(k.id)] || []).forEach(function (c) { st.push(c); }); } return out; }
   function barHtml(X) {
     var filled = (O.pos || []).filter(function (p) { return !isOpen(p); }).length, open = (O.pos || []).filter(isOpen).length, up = unplaced(X).length;
@@ -73,14 +101,13 @@
     var html = barHtml(X) + (O.err ? '<div class="w133err">' + E(O.err) + '</div>' : '');
     if (!O.team) {
       html += '<div class="w133lv w133board"><h3>Board of directors <span>governance, with the co-executive directors reporting to it</span>' + (tabOk('governance') ? '<a data-w133go="#governance">Board overview</a>' : '') + '</h3><div class="w133row">'
-        + (board.length ? board.map(function (m) { return '<button type="button" class="w133bchip" data-w133m="' + E(m.id) + '">' + avatar(m, 26) + '<b>' + E(m.name) + '</b><span class="r">' + E(clip(m.role || 'Board member', 40)) + '</span></button>'; }).join('') : '<p class="note">No directors on the roster.</p>') + '</div></div>'
+        + (board.length ? board.slice().sort(function (a, b) { return w297rank(a) - w297rank(b); }).map(function (m) { return '<button type="button" class="w133bchip' + (w297rank(m) === 0 ? ' lead' : '') + '" data-w133m="' + E(m.id) + '">' + avatar(m, 26) + '<b>' + E(m.name) + '</b><span class="r">' + E(clip(m.role || 'Board member', 40)) + '</span></button>'; }).join('') : '<p class="note">No directors on the roster.</p>') + '</div></div>'
         + '<div class="w133link"></div>'
-        + '<div class="w133lv w133exec"><h3 data-w133drop="team:">Executive directors <span>day-to-day leadership; the team leads report to them</span></h3><div class="w133row">' + ex.map(function (p) { return cardHtml(X, p, ''); }).join('') + '</div></div>'
-        + '<div class="w133link"></div>';
+        + treeHtml(X, ex, hs);   /* wave297: each co-executive director with the teams that report to them */
     }
-    var cols = O.team ? [O.team] : teams();
-    html += '<div class="w133grid">' + cols.map(function (d) { return teamCol(X, d, hs); }).join('') + '</div>';
-    var other = hs.filter(function (p) { var t = seatTeam(p); return cols.indexOf(t) < 0 && (!O.team) && (O.showOpen || !isOpen(p)); });
+    var cols = O.team ? [O.team] : [];
+    if (O.team) html += '<div class="w133grid">' + cols.map(function (d) { return teamCol(X, d, hs); }).join('') + '</div>';
+    var other = [];
     if (other.length) html += '<div class="w133team" style="--tc:' + GREEN + '"><h3>Other seats</h3>' + other.map(function (p) { return nodeHtml(X, p, '', {}, 0); }).join('') + '</div>';
     if (up.length && (!O.team || up.some(function (m) { return m.department === O.team; }))) {
       var list = O.team ? up.filter(function (m) { return m.department === O.team; }) : up;

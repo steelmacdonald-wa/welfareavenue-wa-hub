@@ -1,0 +1,202 @@
+/* =====================================================================
+   WA v297 Messages to volunteers: automatic emails and texts per city, and Send now (09/11/26)
+   =====================================================================
+   Steel (08/11/26): "we should have the ability to confirm people via email as well, and follow up via email as
+   well, and not always have texts ... both the optional ability to send out automatic texts and automatic emails,
+   and also have the button to send those out, both in Montreal and Toronto."
+
+   - One box, "Messages to volunteers", under the Texts strip of a Montreal serving (#volunteering/e/<id>) and in
+     the Confirm part of a Toronto event (#toronto/e/<id>).
+   - Automatic: two switches for the city, Emails and Texts (wa297_auto_get / wa297_auto_set). They decide how the
+     confirmation (10 days before), the Monday reminder, the Thursday check-in, the sign-up message and the
+     thank-you reach people: email, text, both, or nothing automatic. Montreal started on emails only (what it
+     already did); Toronto too.
+   - Send now: Confirmation, Reminder, Check-in or Thank-you for this event, by email, text or both, to everyone
+     on the list who has not had that message yet (wa297_send_now). Emails go within a minute; texts wait for
+     9 am to 7 pm. Each message reaches a person once.
+   - Who: Montreal, the people who can text volunteers (leaders, HR, admins, Ibrahim, Mary, Terry); Toronto, the
+     same plus the Toronto team. Everyone else sees the settings read-only and no buttons.
+   - The database checks every call; this page only draws. No timers: one MutationObserver puts the box back
+     when the serving or event page redraws.
+   ===================================================================== */
+(function () {
+  if (window.w297) return;
+  var S = { cfg: null, loading: false, pick: null, busy: false, msg: {} };
+  var KINDS = [['confirm', 'Confirmation'], ['reminder', 'Reminder'], ['checkin', 'Check-in'], ['thanks', 'Thank-you']];
+  var CH = [['email', 'By email'], ['text', 'By text'], ['both', 'Email and text']];
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function client() { try { if (typeof db !== 'undefined' && db && db.rpc) return db; } catch (e) { /* fine */ } return window.sb || null; }
+  function where() {
+    var h = String(location.hash || '');
+    var m = h.match(/^#toronto\/e\/(\d+)/);
+    if (m) return { city: 'toronto', id: Number(m[1]), host: document.getElementById('w274s-confirm') };
+    m = h.match(/^#volunteering\/e\/(\d+)/);
+    if (m) { var st = document.querySelector('#w119 .w258strip'); return { city: 'montreal', id: Number(m[1]), host: st, after: true }; }
+    return null;
+  }
+  async function load(force) {
+    if (S.loading || (S.cfg && !force)) return;
+    var c = client(); if (!c) return;
+    S.loading = true;
+    try { var r = await c.rpc('wa297_auto_get'); if (!r.error) S.cfg = r.data; } catch (e) { /* the box stays hidden */ }
+    S.loading = false; paint();
+  }
+  function sched(c) {
+    return 'Confirmation ' + (c.confirm_days || 10) + ' days before, a reminder the Monday, a check-in the Thursday, a thank-you after. Emails go within a minute; texts between 9 am and 7 pm.';
+  }
+  function boxHtml(w) {
+    var c = S.cfg, s = c && c[w.city]; if (!s) return '';
+    var can = !!s.can, city = w.city === 'toronto' ? 'Toronto' : 'Montreal';
+    var mode = s.emails && s.texts ? 'by email and text' : s.emails ? 'by email' : s.texts ? 'by text' : 'not sent automatically';
+    var h = '<div class="w297box" data-w297ev="' + w.id + '" data-w297city="' + w.city + '">'
+      + '<div class="hd"><b>Messages to volunteers</b><span>' + E(city) + ': automatic messages go ' + E(mode) + '.</span></div>'
+      + '<div class="auto"><span class="lb">Automatic</span>'
+      + '<label class="sw"><input type="checkbox" data-w297sw="emails"' + (s.emails ? ' checked' : '') + (can ? '' : ' disabled') + '> Emails</label>'
+      + '<label class="sw"><input type="checkbox" data-w297sw="texts"' + (s.texts ? ' checked' : '') + (can ? '' : ' disabled') + '> Texts</label>'
+      + '<span class="nt">For every ' + E(city) + (w.city === 'toronto' ? ' event' : ' serving') + '. ' + E(sched(c)) + '</span></div>';
+    if (can) {
+      h += '<div class="now"><span class="lb">Send now</span>' + KINDS.map(function (k) {
+        return '<button type="button" class="w297b' + (S.pick === k[0] ? ' on' : '') + '" data-w297k="' + k[0] + '">' + E(k[1]) + '</button>';
+      }).join('') + '</div>';
+      if (S.pick) {
+        var lab = KINDS.filter(function (k) { return k[0] === S.pick; })[0][1];
+        var def = s.emails && s.texts ? 'both' : s.texts ? 'text' : 'email';
+        h += '<div class="pick"><span>' + E(lab) + ' to everyone on this list who has not had it yet:</span>'
+          + CH.map(function (x) { return '<button type="button" class="w297b pri' + (x[0] === def ? ' def' : '') + '" data-w297go="' + x[0] + '"' + (S.busy ? ' disabled' : '') + '>' + E(x[1]) + '</button>'; }).join('')
+          + '<button type="button" class="w297b ghost" data-w297x="1">Cancel</button></div>';
+      }
+    } else {
+      h += '<p class="ro">Only the team that runs ' + E(city) + ' volunteers can change these or send messages.</p>';
+    }
+    var m = S.msg[w.id]; if (m) h += '<p class="res' + (m.err ? ' err' : '') + '">' + E(m.t) + '</p>';
+    return h + '</div>';
+  }
+  function paint() {
+    var w = where(); if (!w || !w.host) return;
+    if (!S.cfg) { load(); return; }
+    var html = boxHtml(w); if (!html) return;
+    var old = document.querySelector('.w297box');
+    if (old && old.__h === html && old.getAttribute('data-w297ev') === String(w.id) && (w.after ? old.previousElementSibling === w.host : old.parentNode === w.host)) return;
+    if (old) old.remove();
+    var t = document.createElement('div'); t.innerHTML = html; var el = t.firstChild; el.__h = html;
+    if (w.after) w.host.insertAdjacentElement('afterend', el);
+    else { var cn = w.host.querySelector('.w274cnts'); if (cn) cn.insertAdjacentElement('afterend', el); else w.host.appendChild(el); }
+  }
+  function words(r, ch) {
+    if (!r) return 'Done.';
+    var n = 0, k = r.kind;
+    if (k === 'confirm') n = (r.queued || 0) + (r.emailed || 0);
+    else if (k === 'reminder' || k === 'checkin') n = (r[k] && r[k].queued) || 0;
+    else n = r.queued || 0;
+    var how = ch === 'both' ? 'by email and text' : ch === 'text' ? 'by text' : 'by email';
+    if (!n) return 'Nobody new to send to: everyone on the list has had this message already, or is not on the list yet.';
+    return n + (n === 1 ? ' person gets it ' : ' people get it ') + how + '.' + (ch !== 'email' ? ' Texts go between 9 am and 7 pm.' : ' Emails go within a minute.');
+  }
+  async function send(ch) {
+    var w = where(); if (!w || !S.pick || S.busy) return;
+    var c = client(); if (!c) return;
+    S.busy = true; paint();
+    var kind = S.pick;
+    try {
+      var r = await c.rpc('wa297_send_now', { p_event: w.id, p_kind: kind, p_channel: ch });
+      if (r.error) S.msg[w.id] = { t: r.error.message || 'That did not go through.', err: true };
+      else { S.msg[w.id] = { t: words(r.data, ch) }; S.pick = null; }
+    } catch (e) { S.msg[w.id] = { t: 'That did not go through. Try again.', err: true }; }
+    S.busy = false; paint();
+  }
+  async function toggle(w, which, on) {
+    var c = client(); if (!c || !S.cfg) return;
+    var s = S.cfg[w.city], em = which === 'emails' ? on : !!s.emails, tx = which === 'texts' ? on : !!s.texts;
+    try {
+      var r = await c.rpc('wa297_auto_set', { p_city: w.city, p_texts: tx, p_emails: em });
+      if (r.error) S.msg[w.id] = { t: r.error.message, err: true };
+      else { S.cfg = r.data; S.msg[w.id] = { t: 'Saved. Automatic ' + (w.city === 'toronto' ? 'Toronto' : 'Montreal') + ' messages now go ' + (em && tx ? 'by email and text.' : em ? 'by email.' : tx ? 'by text.' : 'nowhere: use Send now.') }; }
+    } catch (e) { S.msg[w.id] = { t: 'Not saved. Try again.', err: true }; }
+    paint();
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('.w297box button'); if (!b) return;
+    if (b.hasAttribute('data-w297k')) { S.pick = S.pick === b.getAttribute('data-w297k') ? null : b.getAttribute('data-w297k'); var w0 = where(); if (w0) delete S.msg[w0.id]; paint(); return; }
+    if (b.hasAttribute('data-w297go')) { send(b.getAttribute('data-w297go')); return; }
+    if (b.hasAttribute('data-w297x')) { S.pick = null; paint(); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.matches || !t.matches('.w297box input[data-w297sw]')) return;
+    var w = where(); if (w) toggle(w, t.getAttribute('data-w297sw'), t.checked);
+  });
+  var css = document.createElement('style');
+  css.textContent = '.w297box{margin:10px 0 14px;padding:12px 14px;border-radius:14px;background:rgba(16,63,57,.05);border:1px solid rgba(16,63,57,.12);font-size:13px;color:#103F39;}'
+    + '.w297box .hd{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;margin-bottom:8px;}'
+    + '.w297box .hd b{font-size:12px;letter-spacing:.6px;text-transform:uppercase;}.w297box .hd span{color:#5f6b68;}'
+    + '.w297box .auto,.w297box .now,.w297box .pick{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:6px 0;}'
+    + '.w297box .lb{font-weight:700;min-width:84px;}.w297box .nt{flex-basis:100%;color:#5f6b68;font-size:12px;}'
+    + '.w297box .sw{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#fff;border:1px solid rgba(16,63,57,.18);cursor:pointer;}'
+    + '.w297box .sw input{accent-color:#103F39;}'
+    + '.w297b{font:inherit;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid rgba(16,63,57,.25);background:#fff;color:#103F39;cursor:pointer;}'
+    + '.w297b.on{background:#103F39;color:#fff;border-color:#103F39;}.w297b.pri{background:#103F39;color:#fff;border-color:#103F39;}'
+    + '.w297b.pri.def{box-shadow:0 0 0 3px rgba(226,170,60,.45);}.w297b.ghost{background:transparent;}.w297b[disabled]{opacity:.55;cursor:default;}'
+    + '.w297box .pick{padding:8px 10px;border-radius:10px;background:#fff;}.w297box .pick>span{flex-basis:100%;}'
+    + '.w297box .ro{margin:6px 0 0;color:#5f6b68;}.w297box .res{margin:8px 0 0;font-weight:600;}.w297box .res.err{color:#9b2c2c;}'
+    /* the org chart tree (parts133 treeHtml), in the brand: the co-EDs on Community green with Dignity cream type,
+       a short Action gold rule under the heading, connectors at 20% green, muted text as Ground at 65% */
+    + '#w133 .w297tree>h3{position:relative;padding-bottom:10px;}#w133 .w297tree>h3::after{content:"";position:absolute;left:0;bottom:0;width:40px;height:3px;border-radius:2px;background:#DCA527;}'
+    + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start;margin-top:4px;}'
+    + '#w133 .w297br{position:relative;min-width:0;}'
+    + '#w133 .w297top .w133c{padding:14px 16px;background:#103F39;color:#FFFAF2;border-radius:14px;box-shadow:0 2px 10px rgba(16,63,57,.18);}'
+    + '#w133 .w297top .w133c b{font-size:16px;color:#FFFAF2;}#w133 .w297top .w133c .tx>span{color:rgba(255,250,242,.78);}'
+    + '#w133 .w297top .w133c .cnt{background:#DCA527;color:#103F39;min-width:22px;height:22px;padding:0 7px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;font-size:12px;margin-top:0;}'
+    + '#w133 .w297teams{position:relative;margin:0 0 0 24px;padding:12px 0 0 14px;display:flex;flex-direction:column;gap:10px;}'
+    + '#w133 .w297teams::before{content:"";position:absolute;left:0;top:0;bottom:22px;width:2px;border-radius:2px;background:rgba(16,63,57,.2);transform-origin:top;}'
+    + '#w133 .w297tm{position:relative;background:#FFFAF2;border-radius:12px;border:1px solid rgba(16,63,57,.12);border-top:3px solid var(--tc,#103F39);padding:8px 8px 10px;min-width:0;}'
+    + '#w133 .w297tm::before{content:"";position:absolute;left:-15px;top:19px;width:13px;height:2px;border-radius:2px;background:rgba(16,63,57,.2);transform-origin:left;}'
+    + '#w133 .w297tm h4{margin:2px 4px 6px;font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-size:17px;font-weight:500;text-transform:uppercase;letter-spacing:.4px;color:#103F39;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}'
+    + '#w133 .w297tm h4::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--tc,#103F39);align-self:center;}'
+    + '#w133 .w297tm h4 span{font-family:"Space Grotesk",sans-serif;font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0;color:rgba(31,32,30,.65);}'
+    + '#w133 .w297shh{padding:13px 16px;border-radius:14px;border:1.5px dashed rgba(16,63,57,.35);background:#FFFAF2;display:flex;flex-direction:column;gap:2px;}'
+    + '#w133 .w297shh b{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:500;font-size:17px;text-transform:uppercase;letter-spacing:.4px;color:#103F39;}#w133 .w297shh span{color:rgba(31,32,30,.65);font-size:12.5px;}'
+    + '#w133 .w297none{margin:10px 0 0 24px;color:rgba(31,32,30,.65);font-size:13px;}'
+    + '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}'
+    /* the President of the Board leads the board row: Community green with a gold ring, cream type */
+    + '#w133 .w133bchip.lead{background:#103F39;border-color:#DCA527;box-shadow:0 0 0 2px rgba(220,165,39,.35);}#w133 .w133bchip.lead b{color:#FFFAF2;}#w133 .w133bchip.lead .r{color:#DCA527;}'
+    /* press feedback on every card (they open a sheet); hover lift only with a real pointer; none while rearranging */
+    + '#w133 .w133c{transition:transform 160ms cubic-bezier(.23,1,.32,1),box-shadow 200ms ease;}'
+    + '#w133:not(.arr) .w133c:active{transform:scale(.98);}'
+    + '@media (hover:hover) and (pointer:fine){#w133:not(.arr) .w297tm .w133c:hover{box-shadow:0 3px 12px rgba(16,63,57,.12);}}'
+    /* the first look at the chart: the columns rise in, then each line draws down to its teams; once per visit */
+    + '@keyframes w297up{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}'
+    + '@keyframes w297down{from{transform:scaleY(0);}to{transform:scaleY(1);}}'
+    + '@keyframes w297across{from{transform:scaleX(0);}to{transform:scaleX(1);}}'
+    + '#w133 .w297in .w297br{animation:w297up 320ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms);}'
+    + '#w133 .w297in .w297teams::before{animation:w297down 420ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms + 140ms);}'
+    + '#w133 .w297in .w297tm{animation:w297up 280ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms + 200ms + var(--j,0) * 45ms);}'
+    + '#w133 .w297in .w297tm::before{animation:w297across 220ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms + 200ms + var(--j,0) * 45ms);}'
+    + '@media (prefers-reduced-motion:reduce){#w133 .w297in .w297br,#w133 .w297in .w297tm{animation:w297fade 200ms ease both;animation-delay:0ms;}#w133 .w297in .w297teams::before,#w133 .w297in .w297tm::before{animation:none;}#w133 .w133c{transition:none;}}'
+    + '@keyframes w297fade{from{opacity:0;}to{opacity:1;}}';
+  document.head.appendChild(css);
+  var queued = false;
+  function soon() { if (queued) return; queued = true; requestAnimationFrame(function () { queued = false; try { paint(); } catch (e) { /* fine */ } }); }
+  new MutationObserver(function () { if (where()) soon(); }).observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener('hashchange', function () { S.pick = null; soon(); });
+  /* the org chart's entrance: once per visit to #orgchart. The chart redraws two or three times in the first few
+     milliseconds as data lands, so any tree drawn within 250ms of the first one gets the entrance too (invisible
+     restart); after that, redraws from search, filters and Show more stay still. */
+  var orgT0 = 0, orgLast = null;
+  function orgIn() {
+    if (String(location.hash || '').indexOf('#orgchart') !== 0) { orgT0 = 0; orgLast = null; return; }
+    var tree = document.querySelector('#w133 .w297tree'); if (!tree || tree === orgLast) return;
+    orgLast = tree;
+    var now = Date.now(); if (!orgT0) orgT0 = now;
+    if (now - orgT0 > 250) return;
+    tree.querySelectorAll('.w297br').forEach(function (b, i) {
+      b.style.setProperty('--i', String(i));
+      b.querySelectorAll('.w297tm').forEach(function (t, j) { t.style.setProperty('--j', String(Math.min(j, 6))); });
+    });
+    tree.classList.add('w297in');
+    setTimeout(function () { tree.classList.remove('w297in'); }, 1400);
+  }
+  new MutationObserver(orgIn).observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener('hashchange', orgIn);
+  window.w297 = { state: function () { return S; }, paint: paint, reload: function () { return load(true); } };
+})();
+
