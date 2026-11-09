@@ -467,7 +467,7 @@
     return (!u.kind || hasKind(c, u.kind)) && (!u.role || c._roles.indexOf(u.role) >= 0) && actOk(c, u.act) && permOk(c, u.perm) && qOk(c, u.q);
   }
   /* wave295: and the Filters builder's answer from the database, when one is in use */
-  function matches(c) { return quickOk(c) && (!fbOn() || !FB.ids || !!FB.ids[String(c.id)]); }
+  function matches(c) { return !FB.none && quickOk(c) && (!fbOn() || !FB.ids || !!FB.ids[String(c.id)]); }
   function sortRows(list) {
     var s = S.ui.sort;
     var byName = function (a, b) { return fold(a.full_name).localeCompare(fold(b.full_name)); };
@@ -545,19 +545,20 @@
     var caret = focus && document.activeElement.selectionStart;
     var list = sortRows(all.filter(matches));
     var shown = list.slice(0, u.show);
-    var filtered = u.kind || u.role || u.act || u.perm || u.q || fbOn();
+    var filtered = u.kind || u.role || u.act || u.perm || u.q || fbOn() || !!FB.none;
     /* wave295: the Filters builder, its chips, its message or error; while the first answer is on its way the list waits (no flash of everyone) */
     var waiting = fbOn() && FB.busy && !FB.ids;
     root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) + (FB.open ? fbPanelHtml() : '') + fbChipsHtml() +
       (FB.err ? '<div class="w295err" role="alert">The filter did not run: ' + E(FB.err) + '. The list has not changed.</div>' : '') +
       (FB.msg && fbOn() ? '<p class="w295msg m">' + E(FB.msg) + '</p>' : '') +
+      (FB.none ? '<p class="w295msg m" role="status">' + E('\u201c' + FB.none + '\u201d has no condition, so it matches no one, as it does in Lists and Sends.') + '</p>' : '') +
       (FB.note && fbOn() ? '<p class="w295msg m" role="status">' + E(FB.note) + '</p>' : '') +
-      '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches\u2026' : filtered ? (fbOn() ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' \u00b7 <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
+      '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches\u2026' : filtered ? (fbOn() || FB.none ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' \u00b7 <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
       (!waiting && shown.length < list.length ? ' \u00b7 showing the first ' + shown.length : '') + (fbOn() && FB.busy && FB.ids ? ' \u00b7 <span class="m">updating\u2026</span>' : '') + '</div>' +
       (waiting ? '' : shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +
         shown.map(rowHtml).join('') + '</div>' +
         (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152more="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
-        : fbOn() ? '<div class="w152empty">No one matches. Remove a condition, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>'
+        : fbOn() || FB.none ? '<div class="w152empty">No one matches. Remove a condition, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>'
         : '<div class="w152empty">Nobody matches. Try another word, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>');
     fbSyncHash();
     if (focus) { var inp = root.querySelector('[data-w152q="' + focus + '"]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
@@ -1926,7 +1927,7 @@
   function lopts(f) {
     if (f === 'kind') return KIND_ORDER.map(function (k) { return [k, (KINDS[k] || [k])[0]]; });
     if (f === 'role') return ROLE_ORDER.map(function (r) { return [r, ROLES[r]]; });
-    if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['unsub', 'Unsubscribed or bouncing']];
+    if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['none', 'No consent'], ['unsub', 'Unsubscribed or bouncing']];
     if (f === 'language') return [['en', 'English'], ['fr', 'French']];
     if (f === 'source') return Object.keys(SOURCES).map(function (k) { return [k, SOURCES[k][0]]; });
     if (f === 'chapter') return [['montreal', 'Montreal'], ['toronto', 'Toronto']];
@@ -1965,6 +1966,10 @@
     if (k.f === 'field' && d.missing) return 'This field is not in the CRM. Choose another or remove the condition.';
     if (d.ops.indexOf(k.op) < 0) return 'Choose a condition.';
     if (!needsValue(k)) return '';
+    /* fix round 2: a pick list's value must be one of its options (chapter, type, permission, language, source); tags and volunteer roles (the
+       Contacts menu lists every role in the data) stay free text */
+    var known = (d.type === 'sel' || d.type === 'multi') && k.f !== 'role' ? lopts(k.f).map(function (x) { return x[0]; }) : null;
+    if (known && known.length && vals(k).some(function (v) { return v.trim() && known.indexOf(v) < 0; })) return 'Choose one of the options.';
     if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
     if (Array.isArray(k.v) || (k.v !== null && typeof k.v === 'object')) return 'Choose one value.';
     var t = String(k.v == null ? '' : k.v).trim();
@@ -2585,7 +2590,8 @@
      The database answers (crm_filter_contacts, wave295 SQL, the same engine as crm_list_preview), and the list narrows to those ids together
      with the quick menus and search, which stay as they were. Active conditions show as chips under the bar; the filter lives in the address
      (#crm/f/<filter>) so a reload or a shared link keeps it; Save as a list hands it to the Lists page; a saved live list opens as a view. */
-  var FB = { open: false, draft: null, applied: null, ids: null, busy: false, err: '', prev: null, pT: null, tok: 0, anim: false, msg: '', note: '' };
+  var FB = { open: false, draft: null, applied: null, ids: null, busy: false, err: '', prev: null, pT: null, tok: 0, anim: false, msg: '', note: '',
+    none: '', dropped: 0, last: { applied: null, ids: null } };   /* fix round 2: none, a saved list with no condition shown as "matches no one"; dropped, conditions a link lost */
   function fbClone(x) { return JSON.parse(JSON.stringify(x)); }
   function fbDraft() { return FB.draft; }
   /* the applied groups that hold at least one condition */
@@ -2603,13 +2609,14 @@
       var b = s.replace(/-/g, '+').replace(/_/g, '/'); while (b.length % 4) b += '=';
       var g = JSON.parse(decodeURIComponent(escape(atob(b))));
       if (!Array.isArray(g)) return null;
+      /* fix round 2: a group that loses any condition is left out whole (a group with one condition fewer would be wider than the link meant) */
       var out = [], dropped = Math.max(0, g.length - 20);
       g.slice(0, 20).forEach(function (x) {
-        if (!x || typeof x !== 'object' || !Array.isArray(x.all)) { dropped++; return; }
-        var all = [];
-        dropped += Math.max(0, x.all.length - 30);
-        x.all.slice(0, 30).forEach(function (k) { var c = fbCond(k); if (c) all.push(c); else dropped++; });
-        if (all.length) out.push({ all: all });
+        if (!x || typeof x !== 'object' || !Array.isArray(x.all) || !x.all.length || x.all.length > 30) { dropped++; return; }
+        var all = [], lost = 0;
+        x.all.forEach(function (k) { var c = fbCond(k); if (c) all.push(c); else lost++; });
+        if (lost) { dropped += lost; return; }
+        out.push({ all: all });
       });
       return { groups: out, dropped: dropped };
     } catch (e) { return null; }
@@ -2652,30 +2659,37 @@
   /* narrow the list to what these groups select; on an error the list stays as it was */
   function fbApply(groups, o) {
     o = o || {};
+    /* every apply, Clear and a refusal included, outdates the runs still on their way (fix round 2: the bump comes first, so a late answer or error
+       never lands after a newer request, refused or not) */
+    var tok = ++FB.tok;
+    FB.none = ''; FB.dropped = o.dropped || 0;
     /* fail closed: conditions are never dropped on the way to the database (a saved list opened as a view, with a condition the page cannot use,
-       would otherwise show more people than the list holds); nothing changes and the reason shows */
+       would otherwise show more people than the list holds); the reason shows and the list goes back to the last answer it had */
     var given = (groups || []).filter(function (g) { return g && g.all && g.all.length; }), why = given.length ? groupsWhy(given) : '';
-    if (why) { FB.err = 'these conditions cannot be used (' + why.replace(/\.$/, '') + ')'; FB.msg = ''; paint(); return Promise.resolve(); }
+    if (why) {
+      if (FB.busy) { FB.busy = false; FB.applied = FB.last.applied; FB.ids = FB.last.ids; }
+      FB.err = 'these conditions cannot be used (' + why.replace(/\.$/, '') + ')'; FB.msg = ''; FB.note = ''; fbSyncHash(); paint(); return Promise.resolve();
+    }
     var clean = cleanGroups(groups).filter(function (g) { return g.all.length; });
     var before = { applied: FB.applied, ids: FB.ids };
     FB.err = ''; FB.msg = '';
     FB.note = o.note || '';
-    var tok = ++FB.tok;   /* every apply, Clear included, outdates the runs still on their way (a late answer or error never puts an old filter back) */
-    if (!clean.length) { FB.applied = null; FB.ids = null; FB.busy = false; S.ui.show = 60; fbSyncHash(); paint(); return Promise.resolve(); }
+    if (!clean.length) { FB.applied = null; FB.ids = null; FB.busy = false; FB.last = { applied: null, ids: null }; S.ui.show = 60; fbSyncHash(); paint(); return Promise.resolve(); }
     FB.applied = clean; S.ui.show = 60;
-    if (o.ids) { FB.ids = o.ids; FB.busy = false; fbSyncHash(); paint(); return Promise.resolve(); }
+    if (o.ids) { FB.ids = o.ids; FB.busy = false; FB.last = { applied: clean, ids: o.ids }; fbSyncHash(); paint(); return Promise.resolve(); }
     FB.busy = true; fbSyncHash(); paint();
     return fbRun(clean).then(function (r) {
       if (tok !== FB.tok) return;
       FB.busy = false;
       if (r && r.error) { FB.applied = before.applied; FB.ids = before.ids; FB.err = fbPlain(r.error); fbSyncHash(); paint(); return; }
-      FB.ids = fbIds(r); paint();
+      FB.ids = fbIds(r); FB.last = { applied: clean, ids: FB.ids }; paint();
     }, function (e) { if (tok !== FB.tok) return; FB.busy = false; FB.applied = before.applied; FB.ids = before.ids; FB.err = fbPlain(e); fbSyncHash(); paint(); });
   }
   /* the builder's own count while it is being edited (debounced, the latest answer wins) */
   /* why Show cannot be used yet ('' when it can; no condition at all is "Show everyone", which clears) and why Save as a list cannot */
   function fbApplyWhy() { var d = FB.draft || []; return d.some(function (g) { return g.all && g.all.length; }) ? groupsWhy(d) : ''; }
-  function fbSaveWhy() { return groupsWhy(FB.draft || []); }
+  /* fix round 2: while the filter is a link that lost a condition, it is not the filter the link meant, so it cannot become a list */
+  function fbSaveWhy() { return FB.dropped ? 'part of the link was left out; change the filter and press Show first.' : groupsWhy(FB.draft || []); }
   function fbPreviewSoon() {
     var groups = cleanGroups(FB.draft || []).filter(function (g) { return g.all.length; }), token = JSON.stringify(groups);
     if (fbApplyWhy()) { clearTimeout(FB.pT); FB.prev = { token: token, why: fbApplyWhy() }; fbPaintPrev(); return; }
@@ -2763,6 +2777,11 @@
     var l = listById(id); if (!l || !l.filter || !Array.isArray(l.filter.groups)) return;
     var g = fbClone(l.filter.groups).map(function (x) { return { all: Array.isArray(x.all) ? x.all : [] }; });
     if (!g.length) g = [{ all: [] }];
+    if (!g.some(function (x) { return x.all.length; })) {   /* fix round 2: a list with no condition matches no one in the database, so it shows no one here too */
+      ++FB.tok; FB.busy = false; FB.applied = null; FB.ids = null; FB.last = { applied: null, ids: null };
+      FB.err = ''; FB.msg = ''; FB.note = ''; FB.dropped = 0; FB.none = String(l.name || 'This list'); FB.draft = [{ all: [] }]; FB.prev = null;
+      fbSyncHash(); paint(); return;
+    }
     FB.draft = g; FB.prev = null;
     FB.msg = '\u201c' + l.name + '\u201d is open as a view. Changing the conditions here does not change the list.';
     fbApply(g).then(function () { if (!FB.err) FB.msg = '\u201c' + l.name + '\u201d is open as a view. Changing the conditions here does not change the list.'; paint(); });
@@ -2784,10 +2803,10 @@
   function fbFromHash(token) {
     var r = fbDecode(token);
     if (!r || !r.groups.length) { FB.err = 'the filter in this link could not be read, so it is not used'; FB.note = ''; return; }
-    var g = r.groups, note = r.dropped ? (r.dropped === 1 ? 'A condition in this link was not understood and is left out.' : r.dropped + ' conditions in this link were not understood and are left out.') : '';
+    var g = r.groups, note = r.dropped ? (r.dropped === 1 ? 'A condition in this link was not understood, so its group is left out.' : r.dropped + ' conditions in this link were not understood, so their groups are left out.') + ' Save as a list stays off until you change the filter and press Show.' : '';
     if (!note && JSON.stringify(cleanGroups(g).filter(function (x) { return x.all.length; })) === JSON.stringify(fbGroups())) return;
     if (!S.cfields) load('cfields').then(function () { if (S.ui.tab === 'contacts') paint(); });
-    fbApply(g, { note: note });
+    fbApply(g, { note: note, dropped: r.dropped });
   }
   var FOCUS_NEXT = '';   /* a place for the focus the next time the page is drawn with it (Save as a list: the list's name) */
   /* move the focus once the page is drawn again (keyboard users keep their place) */
@@ -5512,7 +5531,7 @@
       paint(); return;
     }
     if ((el = t.closest('[data-w152kind]'))) { S.ui.kind = el.getAttribute('data-w152kind'); S.ui.show = 60; paint(); return; }
-    if ((el = t.closest('[data-w152clear]'))) { e.preventDefault(); setFilter({ q: '' }); if (fbOn() || FB.err) { FB.err = ''; FB.msg = ''; fbApply([]); return; } paint(); return; }   /* wave295: the Filters builder's conditions too */
+    if ((el = t.closest('[data-w152clear]'))) { e.preventDefault(); setFilter({ q: '' }); if (fbOn() || FB.err || FB.none) { FB.err = ''; FB.msg = ''; fbApply([]); return; } paint(); return; }   /* wave295: the Filters builder's conditions too */
     if ((el = t.closest('[data-w152more]'))) { S.ui.show += 60; paint(); return; }
     if ((el = t.closest('[data-w152add]'))) { e.preventDefault(); S.confirm = null; editForm(null); return; }
     if ((el = t.closest('[data-w152edit]'))) { e.preventDefault(); editForm(el.getAttribute('data-w152edit')); return; }

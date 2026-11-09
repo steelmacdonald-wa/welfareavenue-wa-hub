@@ -75,7 +75,7 @@
   function lopts(f) {
     if (f === 'kind') return KIND_ORDER.map(function (k) { return [k, (KINDS[k] || [k])[0]]; });
     if (f === 'role') return ROLE_ORDER.map(function (r) { return [r, ROLES[r]]; });
-    if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['unsub', 'Unsubscribed or bouncing']];
+    if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['none', 'No consent'], ['unsub', 'Unsubscribed or bouncing']];
     if (f === 'language') return [['en', 'English'], ['fr', 'French']];
     if (f === 'source') return Object.keys(SOURCES).map(function (k) { return [k, SOURCES[k][0]]; });
     if (f === 'chapter') return [['montreal', 'Montreal'], ['toronto', 'Toronto']];
@@ -114,6 +114,10 @@
     if (k.f === 'field' && d.missing) return 'This field is not in the CRM. Choose another or remove the condition.';
     if (d.ops.indexOf(k.op) < 0) return 'Choose a condition.';
     if (!needsValue(k)) return '';
+    /* fix round 2: a pick list's value must be one of its options (chapter, type, permission, language, source); tags and volunteer roles (the
+       Contacts menu lists every role in the data) stay free text */
+    var known = (d.type === 'sel' || d.type === 'multi') && k.f !== 'role' ? lopts(k.f).map(function (x) { return x[0]; }) : null;
+    if (known && known.length && vals(k).some(function (v) { return v.trim() && known.indexOf(v) < 0; })) return 'Choose one of the options.';
     if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
     if (Array.isArray(k.v) || (k.v !== null && typeof k.v === 'object')) return 'Choose one value.';
     var t = String(k.v == null ? '' : k.v).trim();

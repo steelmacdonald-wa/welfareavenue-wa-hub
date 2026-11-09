@@ -317,11 +317,25 @@ async function main(browser) {
   /* B1: hostile and broken links */
   const enc = g => Buffer.from(JSON.stringify(g), 'utf8').toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
   const n0 = await f.ev(() => window.__w295.calls.length);
-  await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'tag', op: 'has', v: 'server"><img src=x onerror="window.__pwned=1">' }, { f: 'chapter', op: 'not', v: ['montreal', 'toronto'] }, { f: 'field', key: { a: 1 }, op: 'is', v: 'x' }, { f: 'org', op: 'contains', v: '' }, { f: 'dnc', op: 'is' }] }])); await wait(f, 900);
+  const XSS = 'server"><img src=x onerror="window.__pwned=1">';
+  await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'tag', op: 'has', v: XSS }, { f: 'chapter', op: 'not', v: ['montreal', 'toronto'] }, { f: 'field', key: { a: 1 }, op: 'is', v: 'x' }, { f: 'org', op: 'contains', v: '' }, { f: 'dnc', op: 'is' }] },
+    { all: [{ f: 'tag', op: 'has', v: XSS }, { f: 'dnc', op: 'is' }] }])); await wait(f, 900);
   b = await f.ev(n0 => ({ chips: [...document.querySelectorAll('#crm .w295chip .w295cw')].map(x => x.textContent), note: [...document.querySelectorAll('#crm .w295msg')].map(x => x.textContent).join(' '), pwned: !!window.__pwned, img: !!document.querySelector('#crm .w295chips img'),
     sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').map(x => JSON.stringify(x.args.p_filter)) }), n0);
-  ok('a hostile link: the unknown field, the list on chapter, the object key and the blank value are left out and said; the tag text is shown as text', JSON.stringify(b.chips) === JSON.stringify(['Tag has server"><img src=x onerror="window.__pwned=1">', 'Do not contact is on']) && /4 conditions in this link were not understood and are left out/.test(b.note) && !b.pwned && !b.img, b);
-  ok('only the two good conditions reach the database', b.sent.length === 1 && !/birth|chapter|"org"|"key"/.test(b.sent[0]), b.sent);
+  ok('a hostile link (X4): the group with the unknown field, the list on chapter, the object key and the blank value is left out WHOLE and said; the other group stays; the tag text is shown as text',
+    JSON.stringify(b.chips) === JSON.stringify(['Tag has ' + XSS, 'Do not contact is on']) && /4 conditions in this link were not understood, so their groups are left out/.test(b.note) && !b.pwned && !b.img, b);
+  ok('only the intact group reaches the database (never a wider copy of the broken one)', b.sent.length === 1 && JSON.parse(b.sent[0]).groups.length === 1 && !/birth|chapter|"org"|"key"/.test(b.sent[0]), b.sent);
+  await click(f, '#crm [data-w295open]'); await wait(f, 500);
+  b = await f.ev(() => ({ save: document.querySelector('#w295fb [data-w295save]').disabled, why: (document.querySelector('#w295fb [data-w295savewhy]') || {}).textContent }));
+  ok('X4: while part of the link was left out, Save as a list stays off and says why', b.save && /part of the link was left out/.test(b.why || ''), b);
+  await f.page.keyboard.press('Escape'); await wait(f, 200);
+  /* X5: a pick-list value the Hub does not have is never used; a tag stays free text */
+  for (const [label, cond] of [['chapter "tor"', { f: 'chapter', op: 'not', v: 'tor' }], ['type "banana"', { f: 'kind', op: 'not', v: 'banana' }], ['permission "maybe"', { f: 'perm', op: 'is', v: 'maybe' }], ['a list with a type it does not have', { f: 'kind', op: 'not', v: ['volunteer', 'banana'] }]]) {
+    const c0 = await f.ev(() => window.__w295.calls.length);
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [cond] }])); await wait(f, 600);
+    b = await f.ev(n0 => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').length }), c0);
+    ok('X5: a link with ' + label + ' is not used and asks nothing', /could not be read/.test(b.err || '') && b.sent === 0, b);
+  }
   await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'Kind', op: 'is', v: 'volunteer' }] }])); await wait(f, 700);
   b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chip: [...document.querySelectorAll('#crm .w295chip .w295cw')].map(x => x.textContent).join('|') }));
   ok('a link with nothing the Hub understands is not used, and is never shown as "Contact type"', /could not be read/.test(b.err || '') && !/Contact type/.test(b.chip), b);
@@ -353,7 +367,8 @@ async function main(browser) {
   /* B1: a saved list holding a condition the page cannot use never opens as a wider view (nothing is dropped on the way to the database) */
   {
     const fx = fixture(); fx.crm_lists = fx.crm_lists.concat([{ id: 33, name: 'Test list with an unknown condition', description: null, kind: 'dynamic', member_ids: [],
-      filter: { groups: [{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'dnc', op: 'is' }] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' }]);
+      filter: { groups: [{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'dnc', op: 'is' }] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' },
+      { id: 34, name: 'Test list with no condition', description: null, kind: 'dynamic', member_ids: [], filter: { groups: [{ all: [] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' }]);
     f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx, rpcs: RPCS, wait: 3200 });
     await f.ev(ENGINE); await f.hash('#crm/lists', 1800);
     const c0 = await f.ev(() => window.__w295.calls.length);
@@ -361,6 +376,23 @@ async function main(browser) {
     b = await f.ev(n0 => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chips: document.querySelectorAll('#crm .w295chip').length, rows: document.querySelectorAll('#crm .w152row').length,
       sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').length }), c0);
     ok('a saved list with an unknown condition is not opened as a view: it says why, shows no chips and asks nothing', /cannot be used \(Condition 1: This condition is not one the Hub understands/.test(b.err || '') && b.chips === 0 && b.sent === 0, b);
+    /* X3: a saved list with no condition opens as "matches no one", as the database answers */
+    await f.hash('#crm/lists', 1200);
+    const c1 = await f.ev(() => window.__w295.calls.length);
+    await click(f, '#crm [data-w295view="34"]'); await wait(f, 1000);
+    b = await f.ev(n0 => ({ msg: [...document.querySelectorAll('#crm .w295msg')].map(x => x.textContent).join(' '), rows: document.querySelectorAll('#crm .w152row').length, count: (document.querySelector('#crm .w152count') || {}).textContent,
+      empty: !!document.querySelector('#crm .w152empty'), sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').length }), c1);
+    ok('X3: a saved list with no condition shows no one, says why, and asks nothing', /has no condition, so it matches no one/.test(b.msg) && b.rows === 0 && b.empty && /^0 people match/.test(b.count || '') && b.sent === 0, b);
+    await click(f, '#crm [data-w152clear]'); await wait(f, 400);
+    b = await f.ev(() => ({ rows: document.querySelectorAll('#crm .w152row').length, msg: [...document.querySelectorAll('#crm .w295msg')].map(x => x.textContent).join(' ') }));
+    ok('X3: Clear the filters shows everyone again', b.rows === 4 && !/has no condition/.test(b.msg), b);
+    /* X6: a refused filter outdates a run still on its way; the list goes back to its last answer, not to the pending one */
+    await f.ev(() => { window.__w295.delay = 1500; location.hash = '#crm/f/' + btoa(JSON.stringify([{ all: [{ f: 'dnc', op: 'is' }] }])).replace(/=+$/, ''); }); await wait(f, 300);
+    await click(f, '#crm [data-w295open]'); await wait(f, 300);
+    await setv(f, '#w295fb [data-w295list]', '33'); await wait(f, 2200);
+    b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chips: document.querySelectorAll('#crm .w295chip').length, rows: document.querySelectorAll('#crm .w152row').length, count: (document.querySelector('#crm .w152count') || {}).textContent, hash: location.hash }));
+    ok('X6: the late answer of the run before the refusal is ignored (no chips, everyone, #crm, the reason shown)', /cannot be used/.test(b.err || '') && b.chips === 0 && b.rows === 4 && b.hash === '#crm' && !/Finding who matches/.test(b.count || ''), b);
+    await f.ev(() => { window.__w295.delay = 120; });
     ok('unknown-condition list: no page errors', f.errs.length === 0, f.errs);
     await f.close();
   }

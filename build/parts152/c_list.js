@@ -34,7 +34,7 @@
     return (!u.kind || hasKind(c, u.kind)) && (!u.role || c._roles.indexOf(u.role) >= 0) && actOk(c, u.act) && permOk(c, u.perm) && qOk(c, u.q);
   }
   /* wave295: and the Filters builder's answer from the database, when one is in use */
-  function matches(c) { return quickOk(c) && (!fbOn() || !FB.ids || !!FB.ids[String(c.id)]); }
+  function matches(c) { return !FB.none && quickOk(c) && (!fbOn() || !FB.ids || !!FB.ids[String(c.id)]); }
   function sortRows(list) {
     var s = S.ui.sort;
     var byName = function (a, b) { return fold(a.full_name).localeCompare(fold(b.full_name)); };
@@ -112,19 +112,20 @@
     var caret = focus && document.activeElement.selectionStart;
     var list = sortRows(all.filter(matches));
     var shown = list.slice(0, u.show);
-    var filtered = u.kind || u.role || u.act || u.perm || u.q || fbOn();
+    var filtered = u.kind || u.role || u.act || u.perm || u.q || fbOn() || !!FB.none;
     /* wave295: the Filters builder, its chips, its message or error; while the first answer is on its way the list waits (no flash of everyone) */
     var waiting = fbOn() && FB.busy && !FB.ids;
     root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) + (FB.open ? fbPanelHtml() : '') + fbChipsHtml() +
       (FB.err ? '<div class="w295err" role="alert">The filter did not run: ' + E(FB.err) + '. The list has not changed.</div>' : '') +
       (FB.msg && fbOn() ? '<p class="w295msg m">' + E(FB.msg) + '</p>' : '') +
+      (FB.none ? '<p class="w295msg m" role="status">' + E('“' + FB.none + '” has no condition, so it matches no one, as it does in Lists and Sends.') + '</p>' : '') +
       (FB.note && fbOn() ? '<p class="w295msg m" role="status">' + E(FB.note) + '</p>' : '') +
-      '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches…' : filtered ? (fbOn() ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' · <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
+      '<div class="w152count" aria-live="polite">' + (waiting ? 'Finding who matches…' : filtered ? (fbOn() || FB.none ? plural(list.length, 'person matches', 'people match') : plural(list.length, 'contact matches', 'contacts match')) + ' · <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
       (!waiting && shown.length < list.length ? ' · showing the first ' + shown.length : '') + (fbOn() && FB.busy && FB.ids ? ' · <span class="m">updating…</span>' : '') + '</div>' +
       (waiting ? '' : shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +
         shown.map(rowHtml).join('') + '</div>' +
         (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152more="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
-        : fbOn() ? '<div class="w152empty">No one matches. Remove a condition, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>'
+        : fbOn() || FB.none ? '<div class="w152empty">No one matches. Remove a condition, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>'
         : '<div class="w152empty">Nobody matches. Try another word, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>');
     fbSyncHash();
     if (focus) { var inp = root.querySelector('[data-w152q="' + focus + '"]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
