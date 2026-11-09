@@ -5,7 +5,8 @@
 -- crm_filter_prepare and crm_filter_prepare_tag are dropped. The service role's execute on crm_tag_aliases() is wave294's and stays.
 -- The live text is "unknown condition: everyone", so after the undo a saved filter that uses a wave295 shape would WIDEN: a field, chapter, dnc,
 -- phone, org or job_title condition would match everyone; a list of values with op not or none would match everyone (the text of a list never
--- matches, so "not" is true); a blank value, an unknown field, no group or an empty group would match everyone. So the undo REFUSES, before it
+-- matches, so "not" is true); a blank value, an unknown field, a contact type or email permission the CRM does not have (with not), no group, an
+-- empty or malformed group, and a filter with neither groups nor a flat key would match everyone. So the undo REFUSES, before it
 -- changes anything, while any saved list (crm_lists, not static) or the list of an unsent Send (crm_campaigns draft, queued or sending) holds
 -- such a shape, and names the list and Send ids. Change or delete those lists first (see docs/07-11-26 - wave295 Contacts filters.md, Undo).
 -- Put the page back first (the Contacts page calls crm_filter_contacts). The release line stays; an undo line is added.
@@ -22,16 +23,27 @@ begin
   if f in ('field', 'chapter', 'dnc', 'phone', 'org', 'job_title') then return 'the wave295 field ' || f; end if;
   if f not in ('kind', 'role', 'tag', 'perm', 'email', 'served', 'gave', 'city', 'language', 'source', 'added', 'active', 'opened', 'clicked', 'review', 'search') then
     return 'the unknown field "' || left(f, 40) || '"'; end if;
-  if t in ('array', 'object') then return f || ' with a list or object as its value'; end if;
+  if t in ('array', 'object') then return f || ' with a list or object as its value'; end if;   -- every list is named, whatever its items
   if coalesce(k->>'op', '') in ('any', 'all') then return f || ' with op ' || (k->>'op'); end if;
   if f in ('kind', 'role', 'tag', 'perm', 'city', 'language', 'source', 'search') and btrim(v) = '' then return f || ' with an empty value'; end if;
+  if f = 'kind' and v not in ('volunteer', 'donor', 'partner', 'supporter', 'staff', 'alumni', 'board') then return 'kind "' || left(v, 40) || '", not a contact type'; end if;
+  if f = 'perm' and v not in ('express', 'implied', 'unknown', 'none', 'unsub', 'bounced') then return 'perm "' || left(v, 40) || '", not an email permission'; end if;
   return null;
 end $g$;
+-- a flat filter (no groups list) holding at least one of its keys with a value; case, not and, so each jsonb function sees the type it needs
+create or replace function pg_temp.wa295u_flat_has(p jsonb) returns boolean language sql immutable as $g$
+  select case when jsonb_typeof(p) = 'object' then exists (select 1 from jsonb_each(p) e
+    where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
+               when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) x where jsonb_typeof(x) = 'string' and btrim(x #>> '{}') <> '')
+               else false end) else false end
+$g$;
 create or replace function pg_temp.wa295u_filter(p jsonb) returns text language sql stable as $g$
-  select case when jsonb_typeof(p->'groups') is distinct from 'array' then null
+  select case when jsonb_typeof(p->'groups') is distinct from 'array' then
+           case when pg_temp.wa295u_flat_has(p) then null else 'no groups list and no older Contacts filter' end
     when jsonb_array_length(p->'groups') = 0 then 'no group'
     else (select string_agg(distinct r, '; ') from (
-      select case when jsonb_typeof(g->'all') is distinct from 'array' or jsonb_array_length(g->'all') = 0 then 'a group with no condition' end as r
+      select case when jsonb_typeof(g->'all') is distinct from 'array' then 'a group whose conditions are not a list'
+                  when jsonb_array_length(g->'all') = 0 then 'a group with no condition' end as r
         from jsonb_array_elements(p->'groups') g
       union all
       select pg_temp.wa295u_cond(k) from jsonb_array_elements(p->'groups') g, jsonb_array_elements(case when jsonb_typeof(g->'all') = 'array' then g->'all' else '[]'::jsonb end) k) q

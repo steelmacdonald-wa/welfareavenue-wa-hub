@@ -173,6 +173,38 @@ begin
   assert pg_temp.ids('{"kind":"volunteer"}') = '9501,9503', 'the flat filter (no groups) works as before';
 end $$;
 
+-- ---------------------------------------------------------------- fix round 2 (X1, X2, X5, the flat filter)
+do $$
+declare k text; e text;
+begin
+  -- X1: a list whose items are not all text matches no one, whatever the operator
+  foreach k in array array['{"f":"kind","op":"not","v":[{}]}', '{"f":"tag","op":"not","v":[[]]}', '{"f":"kind","op":"not","v":[1]}', '{"f":"role","op":"none","v":[true]}',
+                           '{"f":"tag","op":"none","v":[null]}', '{"f":"kind","op":"any","v":["volunteer",1]}', '{"f":"tag","op":"has","v":["server",{}]}',
+                           '{"f":"field","key":"w295_team","op":"any","v":[["Quest"]]}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'a list with an item that is not text matches no one: ' || k;
+  end loop;
+  -- X2: conditions that are not a list: no one, and no error
+  foreach k in array array['{"groups":[{"all":{}}]}', '{"groups":[{"all":"x"}]}', '{"groups":[{"all":{}},{"all":7}]}', '{"groups":[1,"x",null]}'] loop
+    assert pg_temp.ids(k::jsonb) = '-', 'a group whose conditions are not a list matches no one: ' || k;
+  end loop;
+  assert pg_temp.ids('{"groups":[{"all":{}},{"all":[{"f":"dnc","op":"is"}]}]}') = '9502', 'a malformed group next to a real one adds no one';
+  -- X5: values outside the closed sets match no one, with not as well
+  foreach k in array array['{"f":"chapter","op":"not","v":"tor"}', '{"f":"chapter","op":"is","v":"ottawa"}', '{"f":"kind","op":"not","v":"banana"}', '{"f":"kind","op":"is","v":"Volunteer"}',
+                           '{"f":"kind","op":"none","v":["volunteer","banana"]}', '{"f":"perm","op":"not","v":"maybe"}', '{"f":"perm","op":"is","v":"Express"}'] loop
+    assert pg_temp.one(k::jsonb) = '-', 'a value outside its closed set matches no one: ' || k;
+  end loop;
+  assert pg_temp.one('{"f":"chapter","op":"is","v":"Toronto"}') = pg_temp.one('{"f":"chapter","op":"is","v":"toronto"}'), 'a chapter in any case still works';
+  assert pg_temp.one('{"f":"kind","op":"not","v":["donor"]}') = pg_temp.one('{"f":"kind","op":"not","v":"donor"}'), 'a known contact type with not still works';
+  -- the flat filter: an object with neither a groups list nor a flat key with a value matches no one; real flat filters work as before
+  foreach k in array array['{}', '{"groups":{}}', '{"groups":null}', '{"groups":"x"}', '{"kind":""}', '{"q":"   "}', '{"tags":[]}', '{"tags":[" ",1]}', '{"nothing":"x"}', '[]', '"x"', 'null', '7'] loop
+    assert pg_temp.ids(k::jsonb) = '-', 'no groups and no flat key matches no one: ' || k;
+  end loop;
+  assert pg_temp.ids(null) = '-', 'a null filter matches no one';
+  assert pg_temp.ids('{"tags":["server"]}') <> '-' and pg_temp.ids('{"act":"review"}') is not null and pg_temp.ids('{"groups":{},"kind":"volunteer"}') = '9501,9503',
+    'real flat filters still go to the flat engine';
+  assert (select count(*) from public.crm_list_preview_flat('{}')) = (select count(*) from public.crm_contacts_v where merged_into is null), 'crm_list_preview_flat itself is unchanged';
+end $$;
+
 -- ---------------------------------------------------------------- groups: and inside one, or between them; merged people never
 do $$
 begin
@@ -194,7 +226,7 @@ end $$;
 do $$
 declare m text; e text;
 begin
-  foreach m in array array['{"groups":[]}', '{"groups":[{"all":[]}]}', '{"groups":[{"x":1}]}', '{"kind":"volunteer"}'] loop
+  foreach m in array array['{"groups":[]}', '{"groups":[{"all":[]}]}', '{"groups":[{"x":1}]}', '{"kind":"volunteer"}', '{"groups":[{"all":{}}]}', '{"groups":[{"all":"x"}]}'] loop
     e := '';
     begin perform public.crm_filter_contacts(m::jsonb); exception when others then e := sqlerrm; end;
     assert e in ('A filter needs at least one condition.', 'The filter is not in the right shape: it needs {"groups": [...]}.'), 'a filter with no condition is refused (' || m || ': ' || e || ')';

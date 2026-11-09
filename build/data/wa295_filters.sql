@@ -15,12 +15,16 @@
 --   an unknown or missing field matches no one (the live engine matched everyone); an object value matches no one; a list of values is only for
 --   kind, role, tag and field is/any (anywhere else it matches no one); a list with no non-blank value matches no one, whatever the operator; a
 --   blank value on any condition that takes text (kind, role, tag, perm, city, language, source, search, chapter, org, job_title, field is, any,
---   contains, before, after) matches no one; the new fields accept only their own operators. And in crm_list_preview a filter with no group, or a
---   group with no condition, matches no one (the live engine matched everyone: jsonb_array_length(groups) = 0).
+--   contains, before, after) matches no one; the new fields accept only their own operators. Fix round 2: a list with an item that is not text
+--   (a number, a list, an object) matches no one; a chapter, contact type or email permission the CRM does not have matches no one. And in
+--   crm_list_preview a filter with no group, a group with no condition or whose conditions are not a list, and an object with neither a groups
+--   list nor any of the older flat keys with a value (kind, role, act, perm, q, city, tags), match no one (the live engine matched everyone).
+--   Real flat filters still go to crm_list_preview_flat as before.
 -- Every older condition with one non-blank value goes on to the live code unchanged (proved in test/w295sql.mjs against a kept copy).
 -- RELEASE GUARD: the file stops before it changes anything when a saved list (crm_lists, not static) or an unsent Send's list holds a shape whose
--- answer this wave changes (an unknown or empty field, a blank value, a list or object value, no group or an empty group, or a tag value that is a
--- Keela name of another Hub tag), and names the list and Send ids. On 08/11/26 crm_lists and crm_campaigns had 0 rows.
+-- answer this wave changes (an unknown or empty field, a blank value, a list or object value, an unknown contact type or email permission, no
+-- group, an empty or malformed group, no groups and no flat key, or a tag value that is a Keela name of another Hub tag), and names the list and
+-- Send ids. On 08/11/26 and again on 09/11/26 crm_lists and crm_campaigns had 0 rows.
 -- For speed, crm_list_preview hands each tag condition its Keela names once per query (crm_filter_prepare, crm_filter_prepare_tag).
 -- And crm_filter_contacts(p_filter): the contact ids a filter selects, for the Contacts page, staff with the CRM only; it refuses a filter with
 -- no condition. Lists keep calling crm_list_preview: one engine, so Contacts and Lists answer the same question the same way.
@@ -63,17 +67,29 @@ begin
   if f is null or f = '' then return 'a condition with no field'; end if;
   if f not in ('kind', 'role', 'tag', 'perm', 'email', 'served', 'gave', 'city', 'language', 'source', 'added', 'active', 'opened', 'clicked', 'review', 'search') then
     return 'the field "' || left(f, 40) || '", which the engine did not know before'; end if;
-  if t in ('array', 'object') then return f || ' with a list or object as its value'; end if;
+  if t in ('array', 'object') then return f || ' with a list or object as its value'; end if;   -- every list is named, whatever its items (X1)
   if f in ('kind', 'role', 'tag', 'perm', 'city', 'language', 'source', 'search') and btrim(v) = '' then return f || ' with an empty value'; end if;
+  if f = 'kind' and v not in ('volunteer', 'donor', 'partner', 'supporter', 'staff', 'alumni', 'board') then return 'kind "' || left(v, 40) || '", not a contact type'; end if;
+  if f = 'perm' and v not in ('express', 'implied', 'unknown', 'none', 'unsub', 'bounced') then return 'perm "' || left(v, 40) || '", not an email permission'; end if;
   if f = 'tag' and exists (select 1 from public.crm_tag_aliases() x where public.crm_fold(x.alias) = public.crm_fold(v) and public.crm_fold(x.tag) <> public.crm_fold(v)) then
     return 'tag "' || left(v, 60) || '", a Keela name that now also finds its Hub tag'; end if;
   return null;
 end $g$;
+-- a flat filter (no groups list: the older Contacts tab's shape) that holds at least one of its keys with a value; case, not and, keeps every
+-- jsonb function on the type it needs (Postgres does not promise the order of and)
+create or replace function pg_temp.wa295_flat_has(p jsonb) returns boolean language sql immutable as $g$
+  select case when jsonb_typeof(p) = 'object' then exists (select 1 from jsonb_each(p) e
+    where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
+               when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) x where jsonb_typeof(x) = 'string' and btrim(x #>> '{}') <> '')
+               else false end) else false end
+$g$;
 create or replace function pg_temp.wa295_filter_change(p jsonb) returns text language sql stable as $g$
-  select case when jsonb_typeof(p->'groups') is distinct from 'array' then null
+  select case when jsonb_typeof(p->'groups') is distinct from 'array' then
+           case when pg_temp.wa295_flat_has(p) then null else 'no groups list and no older Contacts filter (it matched everyone; now no one)' end
     when jsonb_array_length(p->'groups') = 0 then 'no group (it matched everyone; now no one)'
     else (select string_agg(distinct r, '; ') from (
-      select case when jsonb_typeof(g->'all') is distinct from 'array' or jsonb_array_length(g->'all') = 0 then 'a group with no condition (it matched everyone; now no one)' end as r
+      select case when jsonb_typeof(g->'all') is distinct from 'array' then 'a group whose conditions are not a list (now no one)'
+                  when jsonb_array_length(g->'all') = 0 then 'a group with no condition (it matched everyone; now no one)' end as r
         from jsonb_array_elements(p->'groups') g
       union all
       select pg_temp.wa295_cond_change(k) from jsonb_array_elements(p->'groups') g, jsonb_array_elements(case when jsonb_typeof(g->'all') = 'array' then g->'all' else '[]'::jsonb end) k) q
@@ -126,8 +142,8 @@ grant execute on function public.crm_filter_prepare(jsonb) to authenticated, ser
 comment on function public.crm_filter_prepare_tag(jsonb) is 'wave295: one tag condition with "w295sets" added: for each non-blank value, itself and the Hub tags crm_tag_aliases() maps it to (folded with crm_fold), so crm_contact_match needs no lookup per contact.';
 comment on function public.crm_filter_prepare(jsonb) is 'wave295: a list filter with every tag condition prepared (crm_filter_prepare_tag); crm_list_preview calls it once per query. Other conditions and a filter without groups come back as they were.';
 
--- crm_list_preview: the filter prepared once, and a filter with no group or a group with no condition matches no one (live text
--- 8088527269cf3f6b75105421ee453abf, where both matched everyone; a different text stops the file)
+-- crm_list_preview: the filter prepared once, and a filter with no group, a group with no condition, or neither groups nor a flat key matches no
+-- one (live text 8088527269cf3f6b75105421ee453abf, where all of them matched everyone; a different text stops the file)
 do $wa295$
 declare v text;
 begin
@@ -141,23 +157,29 @@ CREATE OR REPLACE FUNCTION public.crm_list_preview(p_filter jsonb)
  STABLE
  SET search_path TO ''
 AS $function$
-  -- wave295: tag conditions get their Keela names once (crm_filter_prepare); no group, or a group with no condition, matches no one
+  -- wave295: tag conditions get their Keela names once (crm_filter_prepare); no group, a group with no condition or whose conditions are not
+  -- a list, and a filter with neither a groups list nor any of the older flat keys with a value, all match no one
   with p as materialized (select public.crm_filter_prepare(p_filter) as f)
-  select x from public.crm_list_preview_flat(p_filter) x where jsonb_typeof(p_filter->'groups') is distinct from 'array'
+  select x from public.crm_list_preview_flat(p_filter) x
+  where jsonb_typeof(p_filter->'groups') is distinct from 'array'
+    and case when jsonb_typeof(p_filter) = 'object' then exists (select 1 from jsonb_each(p_filter) e
+          where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
+                     when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) t where jsonb_typeof(t) = 'string' and btrim(t #>> '{}') <> '')
+                     else false end) else false end
   union all
   select c.id from public.crm_contacts_v c, p
   where jsonb_typeof(p_filter->'groups') = 'array' and c.merged_into is null
     and exists (
       select 1 from jsonb_array_elements(p.f->'groups') g
-      where jsonb_typeof(g->'all') = 'array' and jsonb_array_length(g->'all') > 0
-        and not exists (select 1 from jsonb_array_elements(g->'all') k where not public.crm_contact_match(c, k)))
+      where case when jsonb_typeof(g->'all') = 'array' then jsonb_array_length(g->'all') > 0 else false end
+        and not exists (select 1 from jsonb_array_elements(case when jsonb_typeof(g->'all') = 'array' then g->'all' else '[]'::jsonb end) k where not public.crm_contact_match(c, k)))
 $function$
 $f$;
   end if;
 end $wa295$;
 revoke all on function public.crm_list_preview(jsonb) from public, anon;
 grant execute on function public.crm_list_preview(jsonb) to authenticated, service_role;
-comment on function public.crm_list_preview(jsonb) is 'The contact ids a list filter selects today (wave155, groups wave155b): {"groups":[{"all":[{f,op,v},...]},...]} is OR between groups and AND inside one; a filter without groups is the Contacts tab''s flat shape. Reader''s rights. Since wave295 tag conditions are prepared once per query (crm_filter_prepare), and no group, or a group with no condition, matches no one.';
+comment on function public.crm_list_preview(jsonb) is 'The contact ids a list filter selects today (wave155, groups wave155b): {"groups":[{"all":[{f,op,v},...]},...]} is OR between groups and AND inside one; a filter without groups is the Contacts tab''s flat shape. Reader''s rights. Since wave295 tag conditions are prepared once per query (crm_filter_prepare), and no group, a group with no condition or whose conditions are not a list, and a filter with neither a groups list nor any flat key with a value (kind, role, act, perm, q, city, tags) match no one.';
 
 -- ============================================================================================ 2. the new conditions in crm_contact_match
 -- One block inserted right after the function's begin, before the live code's first line ("if f is null or f = '' then return true"), so the
@@ -180,10 +202,18 @@ $x$;
   if jsonb_typeof(k->'v') = 'object' then return false; end if;
   if jsonb_typeof(k->'v') = 'array' then
     if not (f in ('kind', 'role', 'tag') or (f = 'field' and op in ('is', 'any'))) then return false; end if;   -- a list where one value is meant
+    if exists (select 1 from jsonb_array_elements(k->'v') e where jsonb_typeof(e) <> 'string') then return false; end if;   -- every item must be text
     if not exists (select 1 from jsonb_array_elements_text(k->'v') e where btrim(e) <> '') then return false; end if;   -- nothing in the list
   elsif btrim(v) = '' and (f in ('kind', 'role', 'tag', 'perm', 'city', 'language', 'source', 'search', 'chapter', 'org', 'job_title')
                            or (f = 'field' and op in ('is', 'any', 'contains', 'before', 'after'))) then
     return false;   -- a blank value
+  end if;
+  -- the closed sets: a chapter, a contact type or an email permission the CRM does not have matches no one (with not as well)
+  if f = 'chapter' and lower(btrim(v)) not in ('montreal', 'toronto') then return false; end if;
+  if f = 'perm' and v not in ('express', 'implied', 'unknown', 'none', 'unsub', 'bounced') then return false; end if;
+  if f = 'kind' and exists (select 1 from jsonb_array_elements_text(case when jsonb_typeof(k->'v') = 'array' then k->'v' else jsonb_build_array(v) end) e
+                            where btrim(e) <> '' and e not in ('volunteer', 'donor', 'partner', 'supporter', 'staff', 'alumni', 'board')) then
+    return false;
   end if;
   -- the new fields take only their own operators
   if (f = 'chapter' and op not in ('is', 'not', 'none')) or (f = 'dnc' and op not in ('is', 'not', 'none'))
@@ -292,7 +322,7 @@ $x$);
 end $wa295$;
 revoke all on function public.crm_contact_match(public.crm_contacts_v, jsonb) from public, anon;
 grant execute on function public.crm_contact_match(public.crm_contacts_v, jsonb) to authenticated, service_role;
-comment on function public.crm_contact_match(public.crm_contacts_v, jsonb) is 'One list condition {f, op, v} against one contact (wave155b; wave295). Fields: kind, role, tag, perm, email, served (ever, never, within days, count_gte), gave (ever, never, within days, lapsed days, total_gte, count_gte), city, language, source, added (days), active (days), opened and clicked (a Hub email within days), review, search; since wave295 also field (a custom field by key: set, empty, is, any, contains, before, after; dates YYYY-MM-DD), chapter (montreal counts no chapter too), dnc, phone, org and job_title. kind, role and tag take one value or a list (any; op all every one; op not or none none of them); tag also matches a Keela name through crm_tag_aliases() (a direct call without crm_filter_prepare reads it once per contact). Fails closed since wave295: an unknown or missing field, an object value, a list where one value is meant, an empty list or a blank value matches no one. op not/none negates.';
+comment on function public.crm_contact_match(public.crm_contacts_v, jsonb) is 'One list condition {f, op, v} against one contact (wave155b; wave295). Fields: kind, role, tag, perm, email, served (ever, never, within days, count_gte), gave (ever, never, within days, lapsed days, total_gte, count_gte), city, language, source, added (days), active (days), opened and clicked (a Hub email within days), review, search; since wave295 also field (a custom field by key: set, empty, is, any, contains, before, after; dates YYYY-MM-DD), chapter (montreal counts no chapter too), dnc, phone, org and job_title. kind, role and tag take one value or a list (any; op all every one; op not or none none of them); tag also matches a Keela name through crm_tag_aliases() (a direct call without crm_filter_prepare reads it once per contact). Fails closed since wave295: an unknown or missing field, an object value, a list where one value is meant, a list with an item that is not text, an empty list, a blank value, and a chapter, contact type or email permission the CRM does not have match no one. op not/none negates.';
 
 -- ============================================================================================ 3. the Contacts page's filter (staff with the CRM)
 create or replace function public.crm_filter_contacts(p_filter jsonb)
@@ -304,7 +334,7 @@ begin
   if p_filter is null or jsonb_typeof(p_filter) <> 'object' or jsonb_typeof(p_filter->'groups') is distinct from 'array' then
     raise exception 'The filter is not in the right shape: it needs {"groups": [...]}.' using errcode = '22023';
   end if;
-  if not exists (select 1 from jsonb_array_elements(p_filter->'groups') g where jsonb_typeof(g->'all') = 'array' and jsonb_array_length(g->'all') > 0) then
+  if not exists (select 1 from jsonb_array_elements(p_filter->'groups') g where case when jsonb_typeof(g->'all') = 'array' then jsonb_array_length(g->'all') > 0 else false end) then
     raise exception 'A filter needs at least one condition.' using errcode = '22023';
   end if;
   return query select x from public.crm_list_preview(p_filter) x;
