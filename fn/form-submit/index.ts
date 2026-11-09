@@ -2,6 +2,8 @@
 //   consent.sms {ask, label}; the page sends the text box as a top-level consent_sms (true or false) next to consent, and the stored
 //   consent gains sms {asked: the text box's words, given}, which crm_form_apply records as express text consent. The answers show
 //   Text permission. A one-choice question saved to volunteer.roles with the value both (Either) means cook and server.
+// v11, 08/11/26, wave297: a serving_dates question also offers Toronto events (kind meal) on a form whose
+//   serving_location is Toronto; Montreal forms see exactly what they saw (only Montreal has service events).
 // v9, 26/10/26, wave264: a choice question with source "organizations" lists the organizations
 //   volunteers come from (volunteer_orgs: listed and on_form, in the form's language) and "Other (not listed)" with a box for
 //   the name (answers[<qid>__other], 2 to 120 characters); the answer goes to mapped.org ({id} or {other}) and the database's
@@ -102,7 +104,7 @@ function opts(q: Json): Array<{ v: string; l: string; d?: string }> {
 }
 async function openDates(form: Json): Promise<Array<{ v: string; l: string }>> {
   const loc = String((form.settings || {}).serving_location || 'Montreal');
-  const { data } = await svc.from('volunteer_events').select('id,event_date,status,kind,location').eq('status', 'planned').eq('kind', 'service')
+  const { data } = await svc.from('volunteer_events').select('id,event_date,status,kind,location').eq('status', 'planned').in('kind', ['service', 'meal'])   // v11 (wave297): Toronto events are kind meal; the location keeps the cities apart
     .eq('location', loc).gte('event_date', torontoDay()).order('event_date', { ascending: true }).limit(12);
   return (data || []).map((e: Json) => ({ v: String(e.id), l: longDate(String(e.event_date), form.lang) }));
 }
