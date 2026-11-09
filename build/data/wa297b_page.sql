@@ -2,22 +2,18 @@
 -- entrance (reduced-motion safe), press feedback, and the board row in governance order with the President of the Board leading.
 -- Edits only the four places it changes, each of which must appear exactly once, so later releases (wave302) don't block it.
 do $do$
-declare whole text; k int;
+declare whole text; k int; pt int; s1 int; e1 int;
 begin
   select string_agg(content, '' order by part) into whole from public.site_files where path = 'index.html';
   if position('w297rank' in whole) > 0 then raise notice 'wave297b already on the page'; return; end if;
   if position('/* the org chart tree (parts133 treeHtml) */' in whole) = 0 then raise exception 'wave297 is not on the page. Nothing changed.'; end if;
-  update public.site_files set content = replace(content, $w297b$    /* the org chart tree (parts133 treeHtml) */
-    + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start;}'
-    + '#w133 .w297br{position:relative;min-width:0;}#w133 .w297top .w133c{padding:12px 14px;background:rgba(16,63,57,.06);}#w133 .w297top .w133c b{font-size:15.5px;}'
-    + '#w133 .w297teams{margin:0 0 0 22px;padding:10px 0 0 12px;border-left:2px solid rgba(16,63,57,.18);display:flex;flex-direction:column;gap:10px;}'
-    + '#w133 .w297tm{position:relative;background:#fff;border-radius:14px;border-top:3px solid var(--tc,#103F39);padding:8px 8px 10px;box-shadow:0 1px 2px rgba(16,63,57,.08);min-width:0;}'
-    + '#w133 .w297tm::before{content:"";position:absolute;left:-14px;top:18px;width:12px;height:2px;background:rgba(16,63,57,.18);}'
-    + '#w133 .w297tm h4{margin:2px 4px 6px;font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--tc,#103F39);display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}'
-    + '#w133 .w297tm h4 span{font-family:inherit;font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0;color:#797773;}'
-    + '#w133 .w297shh{padding:12px 14px;border-radius:14px;border:1px dashed rgba(16,63,57,.3);display:flex;flex-direction:column;gap:2px;}#w133 .w297shh span{color:#797773;font-size:12.5px;}'
-    + '#w133 .w297none{margin:8px 0 0 22px;color:#797773;font-size:13px;}'
-    + '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}';$w297b$, $w297b$    /* the org chart tree (parts133 treeHtml), in the brand: the co-EDs on Community green with Dignity cream type,
+  /* edit 1: the old tree CSS, found by its first and last lines (so line endings in a pasted copy don't matter) */
+  select count(*) into k from public.site_files where path = 'index.html' and position('/* the org chart tree (parts133 treeHtml) */' in content) > 0;
+  if k <> 1 then raise exception 'wave297b: edit 1 start found in % parts. Nothing changed.', k; end if;
+  select part, position('/* the org chart tree (parts133 treeHtml) */' in content), position($e$+ '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}';$e$ in content)
+    into pt, s1, e1 from public.site_files where path = 'index.html' and position('/* the org chart tree (parts133 treeHtml) */' in content) > 0;
+  if e1 <= s1 or e1 - s1 > 3000 then raise exception 'wave297b: edit 1 end not found after the start (% %). Nothing changed.', s1, e1; end if;
+  update public.site_files set content = substr(content, 1, s1 - 5) || $w297b$    /* the org chart tree (parts133 treeHtml), in the brand: the co-EDs on Community green with Dignity cream type,
        a short Action gold rule under the heading, connectors at 20% green, muted text as Ground at 65% */
     + '#w133 .w297tree>h3{position:relative;padding-bottom:10px;}#w133 .w297tree>h3::after{content:"";position:absolute;left:0;bottom:0;width:40px;height:3px;border-radius:2px;background:#DCA527;}'
     + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;align-items:start;margin-top:4px;}'
@@ -51,29 +47,8 @@ begin
     + '#w133 .w297in .w297tm{animation:w297up 280ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms + 200ms + var(--j,0) * 45ms);}'
     + '#w133 .w297in .w297tm::before{animation:w297across 220ms cubic-bezier(.23,1,.32,1) both;animation-delay:calc(var(--i,0) * 60ms + 200ms + var(--j,0) * 45ms);}'
     + '@media (prefers-reduced-motion:reduce){#w133 .w297in .w297br,#w133 .w297in .w297tm{animation:w297fade 200ms ease both;animation-delay:0ms;}#w133 .w297in .w297teams::before,#w133 .w297in .w297tm::before{animation:none;}#w133 .w133c{transition:none;}}'
-    + '@keyframes w297fade{from{opacity:0;}to{opacity:1;}}';$w297b$), updated_at = now()
-    where path = 'index.html' and (length(content) - length(replace(content, $w297b$    /* the org chart tree (parts133 treeHtml) */
-    + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start;}'
-    + '#w133 .w297br{position:relative;min-width:0;}#w133 .w297top .w133c{padding:12px 14px;background:rgba(16,63,57,.06);}#w133 .w297top .w133c b{font-size:15.5px;}'
-    + '#w133 .w297teams{margin:0 0 0 22px;padding:10px 0 0 12px;border-left:2px solid rgba(16,63,57,.18);display:flex;flex-direction:column;gap:10px;}'
-    + '#w133 .w297tm{position:relative;background:#fff;border-radius:14px;border-top:3px solid var(--tc,#103F39);padding:8px 8px 10px;box-shadow:0 1px 2px rgba(16,63,57,.08);min-width:0;}'
-    + '#w133 .w297tm::before{content:"";position:absolute;left:-14px;top:18px;width:12px;height:2px;background:rgba(16,63,57,.18);}'
-    + '#w133 .w297tm h4{margin:2px 4px 6px;font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--tc,#103F39);display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}'
-    + '#w133 .w297tm h4 span{font-family:inherit;font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0;color:#797773;}'
-    + '#w133 .w297shh{padding:12px 14px;border-radius:14px;border:1px dashed rgba(16,63,57,.3);display:flex;flex-direction:column;gap:2px;}#w133 .w297shh span{color:#797773;font-size:12.5px;}'
-    + '#w133 .w297none{margin:8px 0 0 22px;color:#797773;font-size:13px;}'
-    + '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}';$w297b$, ''))) / length($w297b$    /* the org chart tree (parts133 treeHtml) */
-    + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start;}'
-    + '#w133 .w297br{position:relative;min-width:0;}#w133 .w297top .w133c{padding:12px 14px;background:rgba(16,63,57,.06);}#w133 .w297top .w133c b{font-size:15.5px;}'
-    + '#w133 .w297teams{margin:0 0 0 22px;padding:10px 0 0 12px;border-left:2px solid rgba(16,63,57,.18);display:flex;flex-direction:column;gap:10px;}'
-    + '#w133 .w297tm{position:relative;background:#fff;border-radius:14px;border-top:3px solid var(--tc,#103F39);padding:8px 8px 10px;box-shadow:0 1px 2px rgba(16,63,57,.08);min-width:0;}'
-    + '#w133 .w297tm::before{content:"";position:absolute;left:-14px;top:18px;width:12px;height:2px;background:rgba(16,63,57,.18);}'
-    + '#w133 .w297tm h4{margin:2px 4px 6px;font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:var(--tc,#103F39);display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;}'
-    + '#w133 .w297tm h4 span{font-family:inherit;font-size:11.5px;font-weight:500;text-transform:none;letter-spacing:0;color:#797773;}'
-    + '#w133 .w297shh{padding:12px 14px;border-radius:14px;border:1px dashed rgba(16,63,57,.3);display:flex;flex-direction:column;gap:2px;}#w133 .w297shh span{color:#797773;font-size:12.5px;}'
-    + '#w133 .w297none{margin:8px 0 0 22px;color:#797773;font-size:13px;}'
-    + '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}';$w297b$) = 1;
-  get diagnostics k = row_count; if k <> 1 then raise exception 'wave297b: edit 1 matched % parts. Nothing changed.', k; end if;
+    + '@keyframes w297fade{from{opacity:0;}to{opacity:1;}}';$w297b$ || substr(content, e1 + length($e$+ '#w133 .w297tree .w297tm .w133tag:not(.tm){display:none;}';$e$)), updated_at = now()
+    where path = 'index.html' and part = pt;
   update public.site_files set content = replace(content, $w297b$  window.w297 = { state: function () { return S; }, paint: paint, reload: function () { return load(true); } };$w297b$, $w297b$  /* the org chart's entrance: once per visit to #orgchart. The chart redraws two or three times in the first few
      milliseconds as data lands, so any tree drawn within 250ms of the first one gets the entrance too (invisible
      restart); after that, redraws from search, filters and Show more stay still. */
