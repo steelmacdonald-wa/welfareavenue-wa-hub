@@ -293,11 +293,12 @@ async function main(browser) {
   await f.ev(() => { location.hash = '#crm'; }); await wait(f, 500);
   await click(f, '#crm [data-w295clear]'); await wait(f, 300);
   await f.page.click('#crm [data-w295open]'); await wait(f, 500);
+  const orgCalls0 = await f.ev(() => window.__w295.calls.length);   /* earlier tests asked about organisations; count from here */
   await setv(f, '#w295fb [data-w295cf="0.0"]', 'org'); await wait(f, 400);
   b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, save: document.querySelector('#w295fb [data-w295save]').disabled, prev: document.querySelector('#w295fb [data-w295prev]').textContent, help: (document.querySelector('#w295fb [data-w295why]') || {}).textContent }));
   ok('Organisation contains with nothing typed: Show and Save stay off, "Fill this in."', b.apply && b.save && /Fill this in/.test(b.prev) && /Fill this in/.test(b.help || ''), b);
   await setv(f, '#w295fb [data-w295cv="0.0"]', '   '); await wait(f, 400);
-  b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, calls: window.__w295.calls.filter(x => x.fn === 'crm_filter_contacts' && JSON.stringify(x.args).includes('"org"')).length }));
+  b = await f.ev(n0 => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, calls: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts' && JSON.stringify(x.args).includes('"org"')).length }), orgCalls0);
   ok('spaces are not a value either, and nothing is sent', b.apply && b.calls === 0, b);
   await setv(f, '#w295fb [data-w295cv="0.0"]', 'bakery'); await wait(f, 700);
   b = await f.ev(() => ({ apply: document.querySelector('#w295fb [data-w295apply]').disabled, save: document.querySelector('#w295fb [data-w295save]').disabled, label: document.querySelector('#w295fb [data-w295apply]').textContent }));
@@ -349,6 +350,21 @@ async function main(browser) {
   ok('Lists: no page errors', f.errs.length === 0, f.errs);
   await f.close();
 
+  /* B1: a saved list holding a condition the page cannot use never opens as a wider view (nothing is dropped on the way to the database) */
+  {
+    const fx = fixture(); fx.crm_lists = fx.crm_lists.concat([{ id: 33, name: 'Test list with an unknown condition', description: null, kind: 'dynamic', member_ids: [],
+      filter: { groups: [{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'dnc', op: 'is' }] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' }]);
+    f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx, rpcs: RPCS, wait: 3200 });
+    await f.ev(ENGINE); await f.hash('#crm/lists', 1800);
+    const c0 = await f.ev(() => window.__w295.calls.length);
+    await click(f, '#crm [data-w295view="33"]'); await wait(f, 1200);
+    b = await f.ev(n0 => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chips: document.querySelectorAll('#crm .w295chip').length, rows: document.querySelectorAll('#crm .w152row').length,
+      sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').length }), c0);
+    ok('a saved list with an unknown condition is not opened as a view: it says why, shows no chips and asks nothing', /cannot be used \(Condition 1: This condition is not one the Hub understands/.test(b.err || '') && b.chips === 0 && b.sent === 0, b);
+    ok('unknown-condition list: no page errors', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+
   /* M2: the page through the real SQL (the offline database, test/w295db.mjs), not the stand-in */
   let real = null;
   try { real = await (await import('./w295db.mjs')).makeDb(); } catch (e) { ok('the offline database for the real-SQL page test starts', false, String(e && e.message || e)); }
@@ -365,8 +381,8 @@ async function main(browser) {
     ok('real SQL: a Keela name finds its Hub tag (Fa and Fd)', JSON.stringify(b.ids) === '[9501,9504]' && b.calls.includes('crm_filter_contacts'), b);
     await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'chapter', op: 'is', v: 'montreal' }, { f: 'field', key: 'w295_age16', op: 'is', v: 'no' }] }])); await wait(f, 2500);
     ok('real SQL: Montreal (no chapter counts) and a yes/no field', JSON.stringify(await idsOf()) === '[9502,9504]', await idsOf());
-    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'none', v: ['donor', 'server'] }] }])); await wait(f, 2500);
-    ok('real SQL: none of a list', JSON.stringify(await idsOf()) === '[9503]', await idsOf());
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'not', v: ['donor', 'server'] }] }])); await wait(f, 2500);
+    ok('real SQL: none of a list (the builder writes not)', JSON.stringify(await idsOf()) === '[9503]', await idsOf());
     await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'tag', op: 'none', v: [] }, { f: 'org', op: 'contains', v: '' }] }])); await wait(f, 1500);
     b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, rows: document.querySelectorAll('#crm .w152row').length }));
     ok('real SQL: a link of empty values is not used at all (the list stays)', /could not be read/.test(b.err || ''), b);
@@ -378,7 +394,6 @@ async function main(browser) {
     await f.close();
     await real.db.close();
   }
-  await f.close();
 
   /* ---------------- reload with the filter in the address: no flash of everyone ---------------- */
   f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fixture(), rpcs: RPCS, wait: 3200 });

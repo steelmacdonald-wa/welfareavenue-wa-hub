@@ -102,7 +102,16 @@
   function condWhy(k) {
     if (!k || !k.f || !knownField(k.f)) return 'This condition is not one the Hub understands. Remove it.';
     var d = defOf(k);
-    if (k.f === 'field' && (!FKEY.test(String(k.key || '')) || d.missing)) return 'This field is not in the CRM. Choose another or remove the condition.';
+    if (k.f === 'field' && !FKEY.test(String(k.key || ''))) return 'This field is not in the CRM. Choose another or remove the condition.';
+    if (k.f === 'field' && !S.cfields) {   /* the fields are still loading (a link or a list opened at once): judge the shape only; the database matches no one for a key it does not have */
+      var fo = ['set', 'empty', 'is', 'any', 'contains', 'before', 'after'];
+      if (fo.indexOf(k.op) < 0) return 'Choose a condition.';
+      if (k.op === 'set' || k.op === 'empty') return '';
+      var fv = Array.isArray(k.v) ? k.v.filter(function (x) { return typeof x === 'string' && x.trim(); }) : [String(k.v == null ? '' : k.v).trim()].filter(Boolean);
+      if (Array.isArray(k.v) && k.op !== 'is' && k.op !== 'any') return 'Choose one value.';
+      return fv.length ? '' : 'Fill this in.';
+    }
+    if (k.f === 'field' && d.missing) return 'This field is not in the CRM. Choose another or remove the condition.';
     if (d.ops.indexOf(k.op) < 0) return 'Choose a condition.';
     if (!needsValue(k)) return '';
     if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
@@ -297,7 +306,7 @@
         var o = { f: k.f, op: k.op };
         if (k.f === 'field') o.key = k.key;
         if (needsValue(k)) {
-          if (isMultiDef(defOf(k))) { var a = vals(k).filter(function (v) { return v.trim(); }); o.v = a.length === 1 && k.f !== 'field' ? a[0] : a; }
+          if (isMultiDef(defOf(k)) || (k.f === 'field' && Array.isArray(k.v))) { var a = vals(k).filter(function (v) { return v.trim(); }); o.v = a.length === 1 && k.f !== 'field' ? a[0] : a; }
           else o.v = String(k.v == null ? '' : k.v);
         }
         return o;

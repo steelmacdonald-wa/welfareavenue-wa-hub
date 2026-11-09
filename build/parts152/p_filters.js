@@ -71,6 +71,10 @@
   /* narrow the list to what these groups select; on an error the list stays as it was */
   function fbApply(groups, o) {
     o = o || {};
+    /* fail closed: conditions are never dropped on the way to the database (a saved list opened as a view, with a condition the page cannot use,
+       would otherwise show more people than the list holds); nothing changes and the reason shows */
+    var given = (groups || []).filter(function (g) { return g && g.all && g.all.length; }), why = given.length ? groupsWhy(given) : '';
+    if (why) { FB.err = 'these conditions cannot be used (' + why.replace(/\.$/, '') + ')'; FB.msg = ''; paint(); return Promise.resolve(); }
     var clean = cleanGroups(groups).filter(function (g) { return g.all.length; });
     var before = { applied: FB.applied, ids: FB.ids };
     FB.err = ''; FB.msg = '';
