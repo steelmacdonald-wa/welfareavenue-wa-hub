@@ -1,4 +1,11 @@
-// Welfare Avenue: finance-import (v6, 07/08/26)
+// Welfare Avenue: finance-import (v7, 09/11/26)
+// Purpose: read one bank statement (the PDF, or pasted text), extract and allocate every transaction, save them in
+// finance_transactions with a fingerprint (duplicates flagged, never double counted), and keep a provenance row in
+// finance_statements. Trigger: the Finance page (Import bank statement) and finance-drive (new statements in the
+// Accounting drive). Auth: a welfareavenue.com user, or x-wa-secret (finance-drive). AI only through the llm router
+// (task finance_import). Tables: finance_statements, finance_transactions (write), finance_budgets, app_config (read).
+// v7 (wave302): also reads the statement's opening and closing balances into finance_statements.opening_balance and
+// closing_balance, so the Finance page's In the bank is read from the statement, never worked out.
 // v6: max_tokens raised 8000 -> 16000 for the historical bulk import (busy
 // months can exceed 8000 tokens of extracted transactions). Nothing else.
 // v5: (a) '4200 Grants' rule: grant deposits from governments, cities and
@@ -82,17 +89,20 @@ Extraction rules:
 7. Received Interac e-Transfers and cheque deposits are income: category "4100 Donation" for individuals, "4200 Grants" when the payer is clearly a government, city or foundation, or "Services" when clearly payment for services; department fundraising unless the text clearly says otherwise. Sent e-Transfers are usually volunteer reimbursements for event food or supplies: default "5020 Purchases - COS" and opsmtl with confidence low. A cancelled e-Transfer is a POSITIVE credit reversing an earlier send.
 8. confidence: "high" when the merchant clearly implies the allocation, "low" when guessing.
 9. period_start and period_end: the statement period in ISO dates.
-10. Never use em dashes in any text you produce.`;
+10. opening_balance and closing_balance: the account balances printed on the statement (the summary of account, or the first and last running balance), as plain numbers. A negative balance (overdrawn) is negative. Null only when the statement truly does not show one.
+11. Never use em dashes in any text you produce.`;
 
 function buildTool(cats: string[]) {
   return {
     name: 'import_bank_statement',
-    description: 'Return every transaction extracted from the statement with allocations.',
+    description: 'Return every transaction extracted from the statement with allocations, and the statement balances.',
     input_schema: {
       type: 'object',
       properties: {
         period_start: { type: 'string', description: 'ISO date the statement period starts' },
         period_end: { type: 'string', description: 'ISO date the statement period ends' },
+        opening_balance: { type: ['number', 'null'], description: 'The balance at the start of the period, as printed' },
+        closing_balance: { type: ['number', 'null'], description: 'The balance at the end of the period, as printed' },
         transactions: {
           type: 'array',
           items: {
@@ -156,6 +166,7 @@ function fingerprintOf(date: string, amount: number, desc: string): string {
   const norm = String(desc || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
   return date + '|' + amount.toFixed(2) + '|' + norm;
 }
+const bal = (v: unknown) => typeof v === 'number' && isFinite(v) && Math.abs(v) < 1e9 ? Math.round(v * 100) / 100 : null;
 
 type Txn = { date?: unknown; description?: unknown; amount?: unknown; department?: unknown; category?: unknown; confidence?: unknown };
 
@@ -227,11 +238,13 @@ Deno.serve(async (req: Request) => {
     const summaryBits = [(pdf ? 'PDF import: ' : 'Text import: ') + filename];
     if (allDup) summaryBits.push('ALL ' + dups + ' transactions were already in the ledger (re-import, excluded from totals)');
     else if (periodWarning) summaryBits.push(periodWarning);
+    const ob = bal(result.opening_balance), cb = bal(result.closing_balance);
     await svc.from('finance_statements').update({
       period_start: ps, period_end: pe, txn_count: imported + dups, dup_count: dups, status: 'done',
+      opening_balance: ob, closing_balance: cb,
       summary: summaryBits.join('. ').slice(0, 300),
     }).eq('id', stmtId);
-    return json({ statement_id: stmtId, imported, duplicates: dups, skipped, period_start: ps, period_end: pe, all_duplicates: allDup, period_warning: periodWarning });
+    return json({ statement_id: stmtId, imported, duplicates: dups, skipped, period_start: ps, period_end: pe, opening_balance: ob, closing_balance: cb, all_duplicates: allDup, period_warning: periodWarning });
   } catch (e) {
     const msg = String((e as Error).message || e).slice(0, 250);
     await svc.from('finance_statements').update({ status: 'failed', summary: 'Failed: ' + msg }).eq('id', stmtId);
