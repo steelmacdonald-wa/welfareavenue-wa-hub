@@ -1,12 +1,12 @@
 -- wave297b page: the org chart in the brand (Community green co-ED cards, cream team cards, gold count and rule), a once-per-visit
 -- entrance (reduced-motion safe), press feedback, and the board row in governance order with the President of the Board leading.
--- Built on the live page 61db5958 (wave297).
+-- Edits only the four places it changes, each of which must appear exactly once, so later releases (wave302) don't block it.
 do $do$
 declare whole text; k int;
 begin
   select string_agg(content, '' order by part) into whole from public.site_files where path = 'index.html';
-  if md5(whole) = '2986f8d04b4773d979a9fabcbd187ed5' then raise notice 'wave297b already on the page'; return; end if;
-  if md5(whole) <> '61db595873b6dc34201d385307b4a63f' then raise exception 'The Hub page changed (md5 %). Nothing changed.', md5(whole); end if;
+  if position('w297rank' in whole) > 0 then raise notice 'wave297b already on the page'; return; end if;
+  if position('/* the org chart tree (parts133 treeHtml) */' in whole) = 0 then raise exception 'wave297 is not on the page. Nothing changed.'; end if;
   update public.site_files set content = replace(content, $w297b$    /* the org chart tree (parts133 treeHtml) */
     + '#w133 .w297row{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;align-items:start;}'
     + '#w133 .w297br{position:relative;min-width:0;}#w133 .w297top .w133c{padding:12px 14px;background:rgba(16,63,57,.06);}#w133 .w297top .w133c b{font-size:15.5px;}'
@@ -105,7 +105,7 @@ begin
     where path = 'index.html' and (length(content) - length(replace(content, $w297b$  /* wave297 (09/11/26): the tree.$w297b$, ''))) / length($w297b$  /* wave297 (09/11/26): the tree.$w297b$) = 1;
   get diagnostics k = row_count; if k <> 1 then raise exception 'wave297b: edit 4 matched % parts. Nothing changed.', k; end if;
   select string_agg(content, '' order by part) into whole from public.site_files where path = 'index.html';
-  if md5(whole) <> '2986f8d04b4773d979a9fabcbd187ed5' then raise exception 'Unexpected result (md5 %). Rolled back.', md5(whole); end if;
-  insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by) values ('release', 'wave297b', 'index.html', '61db595873b6dc34201d385307b4a63f', '2986f8d04b4773d979a9fabcbd187ed5: the org chart in the WA brand with a once-per-visit entrance; board row led by the President of the Board.', 'wave297b');
+  if position('w297rank' in whole) = 0 or position('w297in' in whole) = 0 or position('/* the org chart tree (parts133 treeHtml) */' in whole) > 0 then raise exception 'wave297b: unexpected result. Rolled back.'; end if;
+  insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by) values ('release', 'wave297b', 'index.html', md5(whole), 'the org chart in the WA brand with a once-per-visit entrance; board row led by the President of the Board.', 'wave297b');
 end $do$;
 select public.call_edge('host-sync', '{}'::jsonb);
