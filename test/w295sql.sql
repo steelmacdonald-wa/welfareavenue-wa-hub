@@ -209,15 +209,28 @@ end $$;
 reset role;
 -- signed in without the CRM, blocked, or not signed in: refused in plain words
 do $$
-declare who text; m text;
+declare who text; m text; st text;
 begin
   foreach who in array array['w281.nocrm@example.invalid', 'w281.blocked@example.invalid', 'someone@example.invalid', ''] loop
     perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'email', who)::text, true);
-    m := '';
-    begin perform public.crm_filter_contacts('{"groups":[]}'); exception when others then m := sqlerrm; end;
-    assert m = 'Only the Welfare Avenue team, with the CRM in their apps, can filter the contacts.', 'refused for ' || coalesce(nullif(who, ''), 'nobody') || ' (' || m || ')';
+    m := ''; st := '';
+    begin perform public.crm_filter_contacts('{"groups":[{"all":[{"f":"dnc","op":"is"}]}]}'); exception when others then m := sqlerrm; st := sqlstate; end;
+    assert m = 'Only the Welfare Avenue team, with the CRM in their apps, can filter the contacts.' and st = '42501', 'refused with 42501 for ' || coalesce(nullif(who, ''), 'nobody') || ' (' || st || ' ' || m || ')';
   end loop;
 end $$;
+-- the same refusal as the authenticated role itself (the way PostgREST calls it): staff without the CRM and a non-staff person get 42501
+set local role authenticated;
+do $$
+declare who text; st text;
+begin
+  foreach who in array array['w281.nocrm@example.invalid', 'someone@example.invalid'] loop
+    perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'email', who)::text, true);
+    st := '';
+    begin perform public.crm_filter_contacts('{"groups":[{"all":[{"f":"dnc","op":"is"}]}]}'); exception when others then st := sqlstate; end;
+    assert st = '42501', 'as the authenticated role, refused with 42501 for ' || who || ' (' || st || ')';
+  end loop;
+end $$;
+reset role;
 select set_config('request.jwt.claims', '', true);
 set local role anon;
 do $$
