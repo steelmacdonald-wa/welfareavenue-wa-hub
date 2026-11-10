@@ -1,4 +1,4 @@
-// Welfare Avenue: qbo-connect (v1, 09/11/26, wave302)
+// Welfare Avenue: qbo-connect (v2, 10/11/26, wave302). v2: after connecting, straight back to Finance (supabase.co serves no HTML).
 // The Hub's door to Welfare Avenue's QuickBooks Online company, through WA's own Intuit app (Claude's QuickBooks
 // connector is not offered to Canadian companies). OAuth 2.0: a staff member who can open Finance asks for a sign-in
 // link (action 'start'), approves in Intuit, and Intuit sends them back here (GET with code, state and realmId).
