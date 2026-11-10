@@ -1,4 +1,8 @@
-// Welfare Avenue: qbo-connect (v2, 10/11/26, wave302). v2: after connecting, straight back to Finance (supabase.co serves no HTML).
+// Welfare Avenue: qbo-connect (v3, 10/11/26, wave302). v3: retries a failed token or API call once (network and 5xx only;
+// an expired access token is refreshed and the call tried again), and when Intuit refuses the refresh token
+// (invalid_grant: disconnected from QuickBooks, or 100 days unused) the connection is marked 'reconnect' so the Hub
+// asks an admin to connect again; a daily keep-alive (cron wa-qbo-keepalive) keeps the refresh token rolling.
+// v2: after connecting, straight back to Finance (supabase.co serves no HTML).
 // The Hub's door to Welfare Avenue's QuickBooks Online company, through WA's own Intuit app (Claude's QuickBooks
 // connector is not offered to Canadian companies). OAuth 2.0: a staff member who can open Finance asks for a sign-in
 // link (action 'start'), approves in Intuit, and Intuit sends them back here (GET with code, state and realmId).
@@ -65,12 +69,28 @@ async function readState(s: string): Promise<{ e: string } | null> {
   try { const o = JSON.parse(unb64u(p)); return Date.now() - Number(o.t) < 15 * 60 * 1000 ? o : null; } catch (_) { return null; }
 }
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+class Reconnect extends Error {}
 async function tokenCall(params: Record<string, string>) {
   const c = await creds();
-  const res = await fetch(TOKEN_URL, { method: 'POST', headers: { Authorization: 'Basic ' + btoa(c.id + ':' + c.sec), Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
-  const b = await res.json().catch(() => ({}));
-  if (!res.ok || !b.access_token) throw new Error('Intuit token: ' + String(b.error_description || b.error || res.status).slice(0, 200));
-  return { b, env: c.env };
+  let last = '';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(TOKEN_URL, { method: 'POST', headers: { Authorization: 'Basic ' + btoa(c.id + ':' + c.sec), Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
+    } catch (e) { last = 'network: ' + String((e as Error).message || e).slice(0, 120); await sleep(1500); continue; }
+    const b = await res.json().catch(() => ({}));
+    if (res.ok && b.access_token) return { b, env: c.env };
+    last = String(b.error_description || b.error || res.status).slice(0, 200);
+    if (b.error === 'invalid_grant' || res.status === 400 || res.status === 401) throw new Reconnect('Intuit token: ' + last);
+    if (res.status >= 500 || res.status === 429) { await sleep(1500 * (attempt + 1)); continue; }
+    break;
+  }
+  throw new Error('Intuit token: ' + last);
+}
+async function markReconnect(why: string) {
+  await svc.from('qbo_connection').update({ access_token: null, access_expires_at: null, last_error: 'reconnect: ' + why.slice(0, 200), updated_at: new Date().toISOString() }).eq('id', 1);
+  try { await svc.from('change_log').insert({ entity_type: 'qbo', entity_id: 'connection', field: 'needs reconnect', old_value: null, new_value: why.slice(0, 200), changed_by: 'qbo-connect' }); } catch (_) { /* audit */ }
 }
 function tokenRow(b: Record<string, unknown>) {
   const now = Date.now();
@@ -82,16 +102,32 @@ async function accessToken(): Promise<{ tok: string; realm: string; env: string 
   const { data: row } = await svc.from('qbo_connection').select('*').eq('id', 1).maybeSingle();
   if (!row?.refresh_token || !row.realm_id) throw new Error('QuickBooks is not connected yet.');
   if (row.access_token && new Date(row.access_expires_at).getTime() - Date.now() > 60000) return { tok: row.access_token, realm: row.realm_id, env: row.env };
-  const { b } = await tokenCall({ grant_type: 'refresh_token', refresh_token: row.refresh_token });
-  await svc.from('qbo_connection').update(tokenRow(b)).eq('id', 1);
-  return { tok: String(b.access_token), realm: row.realm_id, env: row.env };
+  try {
+    const { b } = await tokenCall({ grant_type: 'refresh_token', refresh_token: row.refresh_token });
+    await svc.from('qbo_connection').update(tokenRow(b)).eq('id', 1);
+    return { tok: String(b.access_token), realm: row.realm_id, env: row.env };
+  } catch (e) {
+    if (e instanceof Reconnect) await markReconnect((e as Error).message);
+    throw e;
+  }
 }
+async function forceRefresh() { await svc.from('qbo_connection').update({ access_expires_at: new Date(0).toISOString() }).eq('id', 1); }
 async function qbo(path: string) {
-  const a = await accessToken();
-  const res = await fetch(apiBase(a.env) + '/v3/company/' + a.realm + '/' + path + (path.includes('?') ? '&' : '?') + 'minorversion=75', { headers: { Authorization: 'Bearer ' + a.tok, Accept: 'application/json' } });
-  const b = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error('QuickBooks ' + res.status + ': ' + JSON.stringify(b.Fault || b).slice(0, 200));
-  return b;
+  let lastErr = '';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const a = await accessToken();
+    let res: Response;
+    try {
+      res = await fetch(apiBase(a.env) + '/v3/company/' + a.realm + '/' + path + (path.includes('?') ? '&' : '?') + 'minorversion=75', { headers: { Authorization: 'Bearer ' + a.tok, Accept: 'application/json' } });
+    } catch (e) { lastErr = 'network: ' + String((e as Error).message || e).slice(0, 120); await sleep(1500); continue; }
+    const b = await res.json().catch(() => ({}));
+    if (res.ok) return b;
+    lastErr = 'QuickBooks ' + res.status + ': ' + JSON.stringify(b.Fault || b).slice(0, 200);
+    if (res.status === 401 && attempt === 0) { await forceRefresh(); continue; }   // the access token was refused: refresh it and try once more
+    if ((res.status >= 500 || res.status === 429) && attempt === 0) { await sleep(2000); continue; }
+    break;
+  }
+  throw new Error(lastErr);
 }
 async function refreshStatus() {
   const { data: row } = await svc.from('qbo_connection').select('realm_id').eq('id', 1).maybeSingle();
@@ -146,9 +182,11 @@ Deno.serve(async (req: Request) => {
       return json({ url: AUTH_URL + '?' + q.toString(), env: c.env });
     }
     if (action === 'status') {
-      const { data: row } = await svc.from('qbo_connection').select('refresh_token').eq('id', 1).maybeSingle();
+      const { data: row } = await svc.from('qbo_connection').select('refresh_token, last_error').eq('id', 1).maybeSingle();
       if (!row?.refresh_token) return json({ connected: false, keys: !!(await secret('QBO_CLIENT_ID')) });
-      return json(await refreshStatus());
+      if (String(row.last_error || '').startsWith('reconnect:')) return json({ connected: false, reconnect: true, why: row.last_error });
+      try { return json(await refreshStatus()); }
+      catch (e) { if (e instanceof Reconnect) return json({ connected: false, reconnect: true, why: String((e as Error).message) }); throw e; }
     }
     if (action === 'disconnect') {
       const { data: row } = await svc.from('qbo_connection').select('refresh_token').eq('id', 1).maybeSingle();
