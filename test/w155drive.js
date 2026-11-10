@@ -86,10 +86,12 @@ const patch = f => f.ev(() => {
   db.rpc = function (fn, args) {
     window.__rpc.push({ fn: fn, args: JSON.parse(JSON.stringify(args || {})) });
     if (fn === 'crm_list_sizes') return Promise.resolve({ data: [{ list_id: 71, members: 3 }], error: null });
-    if (fn === 'crm_list_preview') {
+    /* wave295 round 4: the Lists page counts and previews through crm_filter_contacts (rows of {id}), as the Contacts page does */
+    if (fn === 'crm_list_preview' || fn === 'crm_filter_contacts') {
       const gs = (args && args.p_filter && args.p_filter.groups) || [];
       const vol = JSON.stringify(gs).indexOf('"volunteer"') >= 0;
-      return Promise.resolve({ data: vol ? [5001, 5004, 5006] : [5001, 5002, 5003, 5004, 5005, 5006], error: null });
+      const ids = vol ? [5001, 5004, 5006] : [5001, 5002, 5003, 5004, 5005, 5006];
+      return Promise.resolve({ data: fn === 'crm_filter_contacts' ? ids.map(id => ({ id })) : ids, error: null });
     }
     return rpc0(fn, args);
   };
@@ -109,12 +111,13 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   const tabs = await f.ev(() => [...document.querySelectorAll('#crm .w152tabs button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')));
   ok('the CRM has eleven tabs (Forms since wave156, Automations since wave157, Reports since wave160, Studio since wave202) and #crm/lists marks Lists', tabs.length === 11 && tabs[6] === 'Lists*' && tabs[7] === 'Sends', tabs);
   const rows = await f.ev(() => [...document.querySelectorAll('#crm .w155row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()));
-  ok('the saved list shows its name, Live, its size from crm_list_sizes and its conditions in words', rows.length === 1 && /Volunteers who served this year/.test(rows[0]) && /Live/.test(rows[0]) && /3 people/.test(rows[0]) && /Contact type is Volunteer and Served at an event in the last 365 days/.test(rows[0]), rows);
+  ok('the saved list shows its name, Live, its size (crm_filter_contacts since wave295) and its conditions in words', rows.length === 1 && /Volunteers who served this year/.test(rows[0]) && /Live/.test(rows[0]) && /3 people/.test(rows[0]) && /Contact type is Volunteer and Served at an event in the last 365 days/.test(rows[0]), rows);
   await shot(f, 'lists');
   /* a new list */
   await click(f, '[data-w155new]'); await f.page.waitForTimeout(700);
-  let b = await f.ev(() => ({ conds: document.querySelectorAll('#crm .w155c').length, res: (document.querySelector('#crm [data-w155res]') || {}).innerText, rpc: window.__rpc.filter(r => r.fn === 'crm_list_preview').pop() }));
-  ok('New list opens the builder with one condition (contact type is volunteer) and counts it live through crm_list_preview', b.conds === 1 && /3 people match/.test(b.res || '') && b.rpc && JSON.stringify(b.rpc.args.p_filter.groups) === JSON.stringify([{ all: [{ f: 'kind', op: 'is', v: 'volunteer' }] }]), b);
+  let b = await f.ev(() => ({ conds: document.querySelectorAll('#crm .w155c').length, res: (document.querySelector('#crm [data-w155res]') || {}).innerText, rpc: window.__rpc.filter(r => r.fn === 'crm_filter_contacts' && r.args.p_filter && Array.isArray(r.args.p_filter.groups) && r.args.p_filter.groups.length === 1 && r.args.p_filter.groups[0].all.length === 1).pop(),
+    old: window.__rpc.filter(r => r.fn === 'crm_list_preview' || r.fn === 'crm_list_sizes').length }));
+  ok('New list opens the builder with one condition (contact type is volunteer) and counts it live through crm_filter_contacts (never crm_list_preview or crm_list_sizes, since wave295)', b.conds === 1 && /3 people match/.test(b.res || '') && b.rpc && b.old === 0 && JSON.stringify(b.rpc.args.p_filter.groups) === JSON.stringify([{ all: [{ f: 'kind', op: 'is', v: 'volunteer' }] }]), b);
   ok('the count splits who can get a newsletter, a call-out, and who has no email', /1 can get a newsletter/.test(b.res || '') && /1 can get a volunteer call-out/.test(b.res || '') && /1 have no email/.test(b.res || ''), b.res);
   await click(f, '[data-w155and="0"]'); await f.page.waitForTimeout(200);
   await click(f, '[data-w155or]'); await f.page.waitForTimeout(200);

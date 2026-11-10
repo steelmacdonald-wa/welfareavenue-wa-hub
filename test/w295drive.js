@@ -362,6 +362,8 @@ async function main(browser) {
   b = await f.ev(() => [...document.querySelectorAll('#crm .w155row .m')].map(x => x.textContent));
   ok('Lists: an older list saved with the flat Contacts filters says so (it is not "no condition")', b.includes('Saved from the older Contacts filters'), b);
   ok('Lists: no page errors', f.errs.length === 0, f.errs);
+  b = await f.ev(() => ({ old: window.__w295.calls.filter(x => x.fn === 'crm_list_preview').length, ours: window.__w295.calls.filter(x => x.fn === 'crm_filter_contacts').length, sizes: [...document.querySelectorAll('#crm .w155row .w155n')].map(x => x.textContent) }));
+  ok('round 4: the Lists page counts and previews through crm_filter_contacts only, never crm_list_preview', b.old === 0 && b.ours > 0 && b.sizes.every(x => /person|people/.test(x)), b);
   await f.close();
 
   /* B1: a saved list holding a condition the page cannot use never opens as a wider view (nothing is dropped on the way to the database) */

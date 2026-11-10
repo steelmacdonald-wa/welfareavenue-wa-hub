@@ -1874,9 +1874,33 @@
     volunteer: ['Volunteer call-out', TEAL, RULE_TEXT] };
   var CSTAT = { draft: ['Draft', MUTED], queued: ['Queued', '#B9851B'], sending: ['Sending', TEAL], sent: ['Sent', GREEN], cancelled: ['Stopped', FLAG] };
   function lchip(map, k) { var d = map[k] || [k || '?', MUTED]; return '<span class="w154chip" style="background:' + d[1] + '17;color:' + d[1] + '"><i style="background:' + d[1] + '"></i>' + E(d[0]) + '</span>'; }
+  /* wave295 round 4: one engine and one path. Every count and preview on the Lists page asks crm_filter_contacts (security definer, staff with
+     the CRM), as the Contacts page does; crm_list_preview under row security took over 2 s on live. Server-side callers (crm_list_members,
+     a Send's audience, as the service role) are unchanged. */
+  function filterIds(filter) { return Promise.resolve(db.rpc('crm_filter_contacts', { p_filter: filter })); }
+  function idsOf(r) {
+    var out = [];
+    ((r && r.data) || []).forEach(function (x) { var id = typeof x === 'object' && x !== null ? (x.id != null ? x.id : x.crm_filter_contacts) : x; if (id != null && Number(id)) out.push(Number(id)); });
+    return out;
+  }
+  /* a dynamic list's filter holds something to ask: a groups list with a condition, or the older flat shape (the database judges it) */
+  function filterAsks(f) {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) return false;
+    if (Array.isArray(f.groups)) return f.groups.some(function (g) { return g && Array.isArray(g.all) && g.all.length; });
+    return f.groups == null || typeof f.groups !== 'object';
+  }
+  /* each list's size: a fixed list counts its picked people who are still live contacts; a live list asks crm_filter_contacts (no condition: 0) */
   function sizes() {
     if (typeof db === 'undefined' || !db || !db.rpc) return Promise.resolve();
-    return Promise.resolve(db.rpc('crm_list_sizes')).then(function (r) { var m = {}; ((r && r.data) || []).forEach(function (x) { m[String(x.list_id)] = Number(x.members) || 0; }); LC.sizes = m; }, function () { LC.sizes = LC.sizes || {}; });
+    return Promise.resolve(S.lists ? null : load('lists')).then(function () {
+      var m = {};
+      return Promise.all((S.lists || []).map(function (l) {
+        var id = String(l.id);
+        if (l.kind === 'static') { var ids = l.member_ids || []; m[id] = S.contacts ? ids.filter(function (x) { var c = contact(x); return c && !c.merged_into; }).length : ids.length; return null; }
+        if (!filterAsks(l.filter)) { m[id] = 0; return null; }
+        return filterIds(l.filter).then(function (r) { if (!(r && r.error)) m[id] = idsOf(r).length; }, function () { /* the row shows \u2026 */ });
+      })).then(function () { LC.sizes = m; });
+    }).then(null, function () { LC.sizes = LC.sizes || {}; });
   }
   function listById(id) { return (S.lists || []).filter(function (l) { return String(l.id) === String(id); })[0] || null; }
 
@@ -2223,10 +2247,10 @@
       if (why) { LC.prev = { token: token, why: why }; paintPrev(); return; }
       LC.prev = { token: token, busy: true, ids: LC.prev && LC.prev.ids };
       paintPrev();
-      Promise.resolve(db.rpc('crm_list_preview', { p_filter: { groups: groups } })).then(function (r) {
+      filterIds({ groups: groups }).then(function (r) {
         if (!LC.edit || JSON.stringify(cleanGroups(LC.edit.groups)) !== token) return;
         if (r && r.error) { LC.prev = { token: token, err: String(r.error.message || r.error) }; paintPrev(); return; }
-        var ids = ((r && r.data) || []).map(function (x) { return typeof x === 'object' && x !== null ? (x.crm_list_preview != null ? x.crm_list_preview : x.id) : x; });
+        var ids = idsOf(r);
         LC.prev = { token: token, ids: ids }; paintPrev();
       }, function (e) { LC.prev = { token: token, err: String((e && e.message) || e) }; paintPrev(); });
     }, 350);
@@ -2303,10 +2327,10 @@
       });
     };
     if (kind !== 'static') { go2([]); return; }
-    Promise.resolve(db.rpc('crm_list_preview', { p_filter: { groups: groups } })).then(function (r) {
-      var ids = ((r && r.data) || []).map(function (x) { return typeof x === 'object' && x !== null ? (x.crm_list_preview != null ? x.crm_list_preview : x.id) : x; }).map(Number).filter(function (x) { return x; });
-      go2(ids);
-    });
+    filterIds({ groups: groups }).then(function (r) {
+      if (r && r.error) { LC.err = 'Not saved: the people could not be counted (' + (r.error.message || r.error) + ')'; paint(); return; }
+      go2(idsOf(r));
+    }, function (e) { LC.err = 'Not saved: the people could not be counted (' + ((e && e.message) || e) + ')'; paint(); });
   }
   function delList() {
     var ed = LC.edit; if (!ed || !ed.id) return;
