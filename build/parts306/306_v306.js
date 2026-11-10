@@ -75,12 +75,13 @@
     + '#w306tabs a[aria-current="page"]{opacity:1;}'
     + '#w306tabs a:active{transform:scale(.97);}'
     + '#w306tabs a:focus-visible{outline:2px solid ' + ROSE + ';outline-offset:1px;}'
-    + '#w306tabs a b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:' + ROSE + ';color:#fff;font:700 11px/18px inherit;text-align:center;}'
-    + '#w306tabs .ind{position:absolute;z-index:0;top:4px;bottom:4px;left:0;width:0;border-radius:10px;background:#fff;box-shadow:0 1px 2px rgba(16,63,57,.10),0 2px 8px rgba(16,63,57,.08);transition:transform .2s ' + EASE + ',width .2s ' + EASE + ';}'
+    + '#w306tabs a b{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:' + ROSE + ';color:#FFFAF2;font:700 11px/18px inherit;text-align:center;}'
+    + '#w306tabs .ind{position:absolute;z-index:0;top:4px;bottom:4px;left:0;width:0;border-radius:10px;background:#FFFAF2;box-shadow:0 1px 2px rgba(16,63,57,.10),0 2px 8px rgba(16,63,57,.08);transition:transform .2s ' + EASE + ',width .2s ' + EASE + ';}'
     + '#w306tabs.noanim .ind{transition:none;}'
     + '@media (hover:hover) and (pointer:fine){#w306tabs a:not([aria-current="page"]):hover{opacity:1;}}'
     /* entering a section */
     + '@keyframes w306in{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}'
+    + '#studio.w306today>.w118mast{display:none;}'
     + '#w225host.w306enter>*{animation:w306in .26s ' + EASE + ' both;}'
     + '#w225host.w306enter>*:nth-child(2){animation-delay:.03s;}#w225host.w306enter>*:nth-child(3){animation-delay:.06s;}#w225host.w306enter>*:nth-child(4){animation-delay:.09s;}#w225host.w306enter>*:nth-child(n+5){animation-delay:.12s;}'
     /* skeletons */
@@ -94,9 +95,9 @@
     + '.w306 h3{display:flex;align-items:center;gap:8px;margin:0 0 12px;font:600 19px/1.15 ' + HEAD + ';letter-spacing:.2px;color:' + GREEN + ';}'
     + '.w306 h3 .sp{flex:1;}.w306 h3 small{font:500 12.5px/1 inherit;color:' + MUTED + ';letter-spacing:0;}'
     + '.w306 .muted{color:' + MUTED + ';}.w306 .sm{font-size:12.5px;}'
-    + '.w306 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 13px;border-radius:10px;border:1px solid rgba(16,63,57,.18);background:#fff;color:' + GREEN + ';font:600 13px/1 inherit;cursor:pointer;text-decoration:none;white-space:nowrap;transition:transform .16s ' + EASE + ',background .15s ease,border-color .15s ease;-webkit-tap-highlight-color:transparent;}'
+    + '.w306 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 13px;border-radius:10px;border:1px solid rgba(16,63,57,.18);background:#FFFAF2;color:' + GREEN + ';font:600 13px/1 inherit;cursor:pointer;text-decoration:none;white-space:nowrap;transition:transform .16s ' + EASE + ',background .15s ease,border-color .15s ease;-webkit-tap-highlight-color:transparent;}'
     + '.w306 .btn:active{transform:scale(.97);}.w306 .btn.pri{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}'
-    + '.w306 .btn.rose{background:' + ROSE + ';border-color:' + ROSE + ';color:#fff;}'
+    + '.w306 .btn.rose{background:' + ROSE + ';border-color:' + ROSE + ';color:#FFFAF2;}'
     + '@media (hover:hover) and (pointer:fine){.w306 .btn:hover{border-color:' + GREEN + ';}.w306 .btn.pri:hover{background:#0b2f2a;}.w306 .btn.rose:hover{background:#9d3a69;}}'
     + '.w306 .btn:focus-visible,.w306 [tabindex]:focus-visible{outline:2px solid ' + ROSE + ';outline-offset:2px;}'
     + '.w306 .grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start;}'
@@ -106,7 +107,7 @@
     + '.w306 .delta{display:inline-flex;align-items:center;gap:3px;font:600 12px/1 inherit;}'
     + '.w306 .seg{display:inline-flex;gap:2px;padding:3px;border-radius:11px;background:rgba(16,63,57,.06);}'
     + '.w306 .seg button{min-height:30px;padding:0 11px;border:0;border-radius:8px;background:transparent;color:' + GREEN + ';font:600 12.5px/1 inherit;cursor:pointer;opacity:.75;transition:opacity .15s ease,background .15s ease,transform .16s ' + EASE + ';}'
-    + '.w306 .seg button[aria-pressed="true"]{background:#fff;opacity:1;box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '.w306 .seg button[aria-pressed="true"]{background:#FFFAF2;opacity:1;box-shadow:0 1px 2px rgba(16,63,57,.12);}'
     + '.w306 .seg button:active{transform:scale(.97);}'
     /* Today */
     + '.w306 .hello{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px;margin:0 0 16px;}'
@@ -124,7 +125,7 @@
     + '.w306 details.older{margin-top:8px;}.w306 details.older summary{cursor:pointer;font-size:12.5px;color:' + MUTED + ';list-style:none;padding:6px 0;}'
     + '.w306 details.older summary::-webkit-details-marker{display:none;}'
     + '.w306 .week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}'
-    + '.w306 .wd{min-height:96px;border-radius:12px;background:#fff;border:1px solid rgba(16,63,57,.08);padding:8px;display:flex;flex-direction:column;gap:5px;}'
+    + '.w306 .wd{min-height:96px;border-radius:12px;background:#FFFAF2;border:1px solid rgba(16,63,57,.08);padding:8px;display:flex;flex-direction:column;gap:5px;}'
     + '.w306 .wd.today{border-color:' + ROSE + ';box-shadow:inset 0 0 0 1px ' + ROSE + ';}'
     + '.w306 .wd>span{font:600 11px/1 inherit;letter-spacing:.4px;text-transform:uppercase;color:' + MUTED + ';}.w306 .wd>span em{font-style:normal;color:' + INK + ';font-size:15px;letter-spacing:0;margin-left:3px;}'
     + '.w306 .wd .p{display:flex;gap:5px;align-items:center;padding:4px;border-radius:8px;background:rgba(16,63,57,.05);cursor:pointer;font-size:11.5px;line-height:1.2;overflow:hidden;}'
@@ -133,13 +134,13 @@
     + '.w306 .wd .p.dr{opacity:.65;}'
     + '.w306 .wd .add{margin-top:auto;align-self:flex-start;width:26px;height:26px;border-radius:8px;border:1px dashed rgba(16,63,57,.25);background:transparent;color:' + GREEN + ';font-size:16px;line-height:1;cursor:pointer;opacity:.55;transition:opacity .15s ease,transform .16s ' + EASE + ';}'
     + '.w306 .wd .add:active{transform:scale(.94);}@media (hover:hover) and (pointer:fine){.w306 .wd:hover .add{opacity:1;}}'
-    + '@media (max-width:700px){.w306 .week{grid-template-columns:1fr;}.w306 .wd{min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;}.w306 .wd>span{width:84px;}.w306 .wd .add{margin:0 0 0 auto;opacity:1;}}'
+    + '@media (max-width:700px){.w306 .week{grid-template-columns:1fr;}.w306 .wd.past{display:none;}.w306 .wd{min-height:0;flex-direction:row;flex-wrap:wrap;align-items:center;}.w306 .wd>span{width:84px;}.w306 .wd .add{margin:0 0 0 auto;opacity:1;}}'
     + '.w306 .goals{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}'
-    + '.w306 .gl{display:inline-flex;align-items:center;gap:6px;padding:5px 9px 5px 6px;border-radius:999px;background:#fff;border:1px solid rgba(16,63,57,.10);font:600 12px/1 inherit;}'
+    + '.w306 .gl{display:inline-flex;align-items:center;gap:6px;padding:5px 9px 5px 6px;border-radius:999px;background:#FFFAF2;border:1px solid rgba(16,63,57,.10);font:600 12px/1 inherit;}'
     + '.w306 .gl.ok{background:rgba(42,140,122,.10);border-color:rgba(42,140,122,.25);color:' + TEAL + ';}'
     + '.w306 .pulse{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}'
     + '@media (max-width:980px){.w306 .pulse{grid-template-columns:repeat(2,minmax(0,1fr));}}'
-    + '.w306 .tile{position:relative;background:#fff;border:1px solid rgba(16,63,57,.09);border-radius:14px;padding:12px 13px 10px;cursor:pointer;text-decoration:none;color:inherit;display:block;transition:border-color .15s ease,transform .16s ' + EASE + ';}'
+    + '.w306 .tile{position:relative;background:#FFFAF2;border:1px solid rgba(16,63,57,.09);border-radius:14px;padding:12px 13px 10px;cursor:pointer;text-decoration:none;color:inherit;display:block;transition:border-color .15s ease,transform .16s ' + EASE + ';}'
     + '.w306 .tile:active{transform:scale(.98);}@media (hover:hover) and (pointer:fine){.w306 .tile:hover{border-color:' + ROSE + ';}}'
     + '.w306 .tile span{display:block;font-size:12px;color:' + MUTED + ';}'
     + '.w306 .tile b{display:block;margin:4px 0 2px;font:600 28px/1 ' + HEAD + ';color:' + GREEN + ';}'
@@ -147,11 +148,11 @@
     + '.w306 .camp .bar{height:10px;border-radius:6px;background:rgba(16,63,57,.08);overflow:hidden;margin:8px 0 6px;}'
     + '.w306 .camp .bar i{display:block;height:100%;border-radius:6px;background:' + GOLD + ';transform-origin:left;}'
     + '.w306 .camp .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;}'
-    + '.w306 .camp .facts div{background:#fff;border-radius:12px;padding:9px 10px;border:1px solid rgba(16,63,57,.08);}'
+    + '.w306 .camp .facts div{background:#FFFAF2;border-radius:12px;padding:9px 10px;border:1px solid rgba(16,63,57,.08);}'
     + '.w306 .camp .facts b{display:block;font:600 22px/1 ' + HEAD + ';color:' + GREEN + ';}.w306 .camp .facts span{font-size:11.5px;color:' + MUTED + ';}'
     /* Website */
     + '.w306 .bar1{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 14px;}.w306 .bar1 .sp{flex:1;}'
-    + '.w306 .live{display:inline-flex;align-items:center;gap:7px;font:600 12.5px/1 inherit;color:' + GREEN + ';padding:7px 10px;border-radius:999px;background:#fff;border:1px solid rgba(16,63,57,.10);}'
+    + '.w306 .live{display:inline-flex;align-items:center;gap:7px;font:600 12.5px/1 inherit;color:' + GREEN + ';padding:7px 10px;border-radius:999px;background:#FFFAF2;border:1px solid rgba(16,63,57,.10);}'
     + '.w306 .live i{width:8px;height:8px;border-radius:50%;background:' + TEAL + ';box-shadow:0 0 0 0 rgba(42,140,122,.5);animation:w306pl 2s ease-out infinite;}'
     + '@keyframes w306pl{0%{box-shadow:0 0 0 0 rgba(42,140,122,.45);}70%{box-shadow:0 0 0 7px rgba(42,140,122,0);}100%{box-shadow:0 0 0 0 rgba(42,140,122,0);}}'
     + '.w306 .heroes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 14px;}'
@@ -204,6 +205,7 @@
   function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IC[n] || IC.check) + '</svg>'; }
   function delta(cur, prev, opt) {
     opt = opt || {};
+    if (prev === undefined) return '';
     if (prev == null || !isFinite(prev) || prev === 0) return cur ? '<span class="delta flat">new</span>' : '<span class="delta flat">–</span>';
     var d = (cur - prev) / prev; if (opt.lowerBetter) d = -d;
     var cls = Math.abs(d) < 0.03 ? 'flat' : d > 0 ? 'up' : 'dn';
@@ -250,6 +252,7 @@
   /* ---------- entering a section: cards rise once, never on a repaint ---------- */
   var lastSec = null;
   function entered(sec) {
+    try { var st = document.getElementById('studio'); if (st) st.classList.toggle('w306today', sec === 'overview'); } catch (e) { /* fine */ }
     var h = document.getElementById('w225host'); if (!h || reduce) { lastSec = sec; return; }
     if (lastSec === sec) return;
     lastSec = sec;
@@ -270,9 +273,9 @@
   /* ---------- Today ---------- */
   var T = { camp: null, campAt: 0, olderOpen: false };
   function loadCamp() {
-    if (T.campBusy || (T.camp && Date.now() - T.campAt < 300000)) return;
-    T.campBusy = true;
-    Promise.resolve(window.db && db.rpc('www_campaign_totals', { p_slug: 'gift-basket-drive' })).then(function (r) { T.camp = r && r.data ? r.data : null; T.campAt = Date.now(); }, function () { /* fine */ }).then(function () { T.campBusy = false; repaint('overview'); });
+    if (T.campBusy || Date.now() - T.campAt < 300000) return;   /* once every five minutes at most, answered or not */
+    T.campBusy = true; T.campAt = Date.now();
+    Promise.resolve((typeof db !== 'undefined' ? db : window.db) ? (typeof db !== 'undefined' ? db : window.db).rpc('www_campaign_totals', { p_slug: 'gift-basket-drive' }) : null).then(function (r) { T.camp = r && r.data ? r.data : null; }, function () { /* fine */ }).then(function () { T.campBusy = false; if (T.camp) repaint('overview'); });
   }
   function repaint(sec) { var w = W2(); if (!w) return; var s = w.state(); if (!sec || s.sec === sec) { try { w.paint(); } catch (e) { /* fine */ } } }
   function hello() { var h = new Date().getHours(); return h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
@@ -280,7 +283,7 @@
     var w = W2(), x = X(); if (!w || !x) return '';
     var S = w.state(), all = w.posts(), now = Date.now(), t = x.today(), me = x.myEmail();
     var first = String(x.myName() || '').split(' ')[0];
-    loadCamp(); if (!WEB.r28 && !WEB.busy28) loadWeb28();
+    loadCamp(); if (!WEB.r28) loadWeb(28);
     /* what needs me */
     var needs = [], older = [];
     var pend = all.filter(function (p) { return p.approval_status === 'pending' && ['draft', 'scheduled', 'failed'].indexOf(p.status) >= 0; });
@@ -307,7 +310,7 @@
     for (var i = 0; i < 7; i++) {
       var d = addD(mon, i), dd = new Date(d + 'T12:00:00');
       var list = all.filter(function (p) { return p.scheduled_at && x.dayOf(p.scheduled_at) === d && p.status !== 'cancelled'; }).sort(function (a, b) { return String(a.scheduled_at).localeCompare(String(b.scheduled_at)); });
-      cells += '<div class="wd' + (d === t ? ' today' : '') + '"><span>' + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] + '<em class="tnum">' + dd.getDate() + '</em></span>' +
+      cells += '<div class="wd' + (d === t ? ' today' : '') + (d < t && !list.length ? ' past' : '') + '"><span>' + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i] + '<em class="tnum">' + dd.getDate() + '</em></span>' +
         list.slice(0, 3).map(function (p) { return '<div class="p' + (p.status === 'draft' ? ' dr' : '') + '" data-w225open="' + p.id + '" title="' + E(x.titleOf(p)) + '">' + thumbs(p) + '<span>' + E(clip(x.titleOf(p), 34)) + '</span></div>'; }).join('') +
         (list.length > 3 ? '<span class="muted sm" style="text-transform:none;letter-spacing:0">+' + (list.length - 3) + ' more</span>' : '') +
         (d >= t ? '<button type="button" class="add" data-w225slotnew="' + d + '|18:00|" aria-label="Plan a post for ' + E(dd.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })) + '">+</button>' : '') + '</div>';
@@ -336,13 +339,14 @@
     var clicksC = S.clicks.filter(function (k) { return now - new Date(k.at).getTime() < d28; }).length, sClicks = new Array(28).fill(0);
     S.clicks.forEach(function (k) { var age = now - new Date(k.at).getTime(), ix = 27 - Math.floor(age / 86400000); if (ix >= 0 && ix < 28) sClicks[ix]++; });
     var r = WEB.r28, wt = r && r.totals, wc = wt && wt.cur, wp = wt && wt.prev;
+    if (r && r.prev && r.prev.from <= '2026-11-09' && r.to >= '2026-10-02') wp = undefined;   /* the tracking gap (October 2 to November 9): no comparison */
     var acts = function (list) { return (list || []).filter(function (e) { return ['donate_click', 'form_sent', 'newsletter_signup'].indexOf(e.eventName) >= 0; }).reduce(function (s, e) { return s + (e.eventCount || 0); }, 0); };
     var tile = function (go, label, val, dl, sp) { return '<a class="tile" data-w225go="' + go + '"><span>' + label + '</span><b class="tnum">' + val + '</b>' + dl + (sp || '') + '</a>'; };
     var webDaily = r && r.daily ? r.daily.slice(-28).map(function (dd2) { return dd2.engaged; }) : null;
     var pulse = '<div class="card"><h3>The last 28 days<span class="sp"></span><a class="btn" data-w225go="#studio/web">All results</a></h3><div class="pulse">' +
-      tile('#socialstats', 'Social reach', reachC ? num(reachC) : '–', reachP ? delta(reachC, reachP) : '', spark(sReach, ROSE)) +
-      tile('#studio/web', 'Engaged website visits', wc ? num(wc.engagedSessions) : (WEB.err28 ? '–' : '<span class="w306sk" style="display:inline-block;width:50px;height:24px;vertical-align:middle"></span>'), wc ? delta(wc.engagedSessions, wp && wp.engagedSessions) : '', webDaily ? spark(webDaily, TEAL) : '') +
-      tile('#studio/links', 'Short link clicks', num(clicksC), '', spark(sClicks, PURPLE)) +
+      tile('#socialstats', 'Social reach', reachC ? num(reachC) : '–', reachC && reachP ? delta(reachC, reachP) : (reachC ? '' : '<span class="muted sm">no posts out</span>'), reachC ? spark(sReach, ROSE) : '') +
+      tile('#studio/web', 'Engaged website visits', wc ? num(wc.engagedSessions) : (WEB.err28 ? '–' : '<span class="w306sk" style="display:inline-block;width:50px;height:24px;vertical-align:middle"></span>'), wc ? (wp === undefined ? '<span class="muted sm">tracking back since Nov 10</span>' : delta(wc.engagedSessions, wp && wp.engagedSessions)) : '', webDaily ? spark(webDaily, TEAL) : '') +
+      tile('#studio/links', 'Short link clicks', num(clicksC), '', clicksC ? spark(sClicks, PURPLE) : '') +
       tile('#studio/web', 'Website actions', r ? num(acts(r.events && r.events.cur)) : '–', r ? '<span class="muted sm">gives, forms, sign-ups</span>' : '', '') +
       '</div></div>';
     /* the best post */
@@ -352,30 +356,31 @@
     var line = needs.length ? needs.length + ' thing' + (needs.length > 1 ? 's' : '') + ' need' + (needs.length > 1 ? '' : 's') + ' you' : 'Nothing waits for you';
     var sched = all.filter(function (p) { return p.status === 'scheduled' && p.scheduled_at && new Date(p.scheduled_at).getTime() > now; }).length;
     line += ' · ' + (sched ? sched + ' post' + (sched > 1 ? 's' : '') + ' scheduled ahead' : 'nothing scheduled ahead yet');
-    return '<div class="w306"><div class="hello"><div><h2>' + E(hello() + (first ? ', ' + first : '')) + '</h2><p>' + E(new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })) + ' · ' + E(line) + '</p></div><span class="sp"></span><a class="btn pri" data-w225new="1">New post</a></div>' +
+    return '<div class="w306"><div class="hello"><div><h2>' + E(hello() + (first ? ', ' + first : '')) + '</h2><p>' + E(new Date().toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })) + ' · ' + E(line) + '</p></div></div>' +
       '<div class="grid"><div>' + needsCard + weekCard + '</div><div>' + campCard + pulse + topCard + '</div></div></div>';
   }
 
   /* ---------- Results > Website ---------- */
-  var WEB = { range: 28, data: {}, busy: {}, err: {}, r28: null, busy28: false, err28: null, live: null, liveAt: 0 };
+  var WEB = { range: 28, data: {}, busy: {}, err: {}, at: {}, r28: null, err28: null, live: null, liveAt: 0 };
   try { var sr = Number(localStorage.getItem('w306range')); if ([7, 28, 90, 365].indexOf(sr) >= 0) WEB.range = sr; } catch (e) { /* fine */ }
   function rangeDates(days) { var to = ymd(new Date()), from = addD(to, -(days - 1)); return [from, to]; }
   function call(body) { var w = W2(); if (w && w.x && w.x.fn) return w.x.fn('web-insights', body); return Promise.reject(new Error('The Studio is not ready')); }
   function loadWeb(days, fresh) {
     days = days || WEB.range; var k = String(days);
     if (WEB.busy[k]) return WEB.busy[k];
+    if (!fresh && WEB.at[k] && Date.now() - WEB.at[k] < 60000) return Promise.resolve();   /* one try a minute, answered or not */
+    WEB.at[k] = Date.now();
     var rd = rangeDates(days);
     WEB.busy[k] = call({ action: 'report', from: rd[0], to: rd[1], fresh: !!fresh }).then(function (j) {
-      if (j && j.error) throw new Error(j.error);
+      if (!j || j.error || !j.totals) throw new Error((j && j.error) || 'No answer from Google Analytics');
       WEB.data[k] = j; WEB.err[k] = null; if (days === 28) { WEB.r28 = j; WEB.err28 = null; }
-    }, function (e) { WEB.err[k] = (e && e.message) || String(e); if (days === 28) WEB.err28 = WEB.err[k]; }).then(function () { WEB.busy[k] = null; repaint('web'); repaint('overview'); });
+    }).catch(function (e) { WEB.err[k] = (e && e.message) || String(e); if (days === 28) WEB.err28 = WEB.err[k]; }).then(function () { WEB.busy[k] = null; repaint('web'); repaint('overview'); });
     return WEB.busy[k];
   }
-  function loadWeb28() { WEB.busy28 = true; loadWeb(28).then(function () { WEB.busy28 = false; }); }
   function loadLive() {
     if (WEB.liveBusy || Date.now() - WEB.liveAt < 60000) return;
-    WEB.liveBusy = true;
-    call({ action: 'realtime' }).then(function (j) { WEB.live = j && j.ok ? j : null; }, function () { WEB.live = null; }).then(function () { WEB.liveBusy = false; WEB.liveAt = Date.now(); repaint('web'); });
+    WEB.liveBusy = true; WEB.liveAt = Date.now();
+    call({ action: 'realtime' }).then(function (j) { WEB.live = j && j.ok ? j : null; }, function () { WEB.live = null; }).then(function () { WEB.liveBusy = false; if (WEB.live) repaint('web'); });
   }
   var CH = { 'Organic Search': ['Google and other searches', TEAL], 'Direct': ['Typed in or no source', '#8e9a96'], 'Organic Social': ['Social media posts', ROSE], 'Paid Social': ['Paid social', '#d06b9a'], 'Referral': ['Links on other sites', PURPLE], 'Paid Search': ['Paid search ads', GOLD], 'Email': ['Emails', '#3d7bb0'], 'Unassigned': ['Unknown', '#c4c9c6'], 'Organic Video': ['Video', '#e0574a'], 'Cross-network': ['Google campaigns', '#a07d2a'] };
   function chName(k) { return (CH[k] || [k])[0]; } function chColor(k) { return (CH[k] || [0, '#9aa6a2'])[1]; }
@@ -392,7 +397,7 @@
     var lab = ''; var every = Math.max(1, Math.round(daily.length / 6));
     daily.forEach(function (d, i) { if (i % every === 0 || i === daily.length - 1) { var dt = new Date(d.day + 'T12:00:00'); lab += '<text x="' + X(i).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle" font-size="10" fill="' + MUTED + '">' + dt.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + '</text>'; } });
     var dots = ''; var byDay = {}; (acts || []).forEach(function (a) { byDay[a.day] = (byDay[a.day] || 0) + (a.count || 0); });
-    daily.forEach(function (d, i) { if (byDay[d.day]) dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(d.sessions || 0).toFixed(1) + '" r="4" fill="' + GOLD + '" stroke="#fff" stroke-width="1.5"><title>' + byDay[d.day] + ' action' + (byDay[d.day] > 1 ? 's' : '') + ' on ' + d.day + '</title></circle>'; });
+    daily.forEach(function (d, i) { if (byDay[d.day]) dots += '<circle cx="' + X(i).toFixed(1) + '" cy="' + Y(d.sessions || 0).toFixed(1) + '" r="4" fill="' + GOLD + '" stroke="#FFFAF2" stroke-width="1.5"><title>' + byDay[d.day] + ' action' + (byDay[d.day] > 1 ? 's' : '') + ' on ' + d.day + '</title></circle>'; });
     var s = line('sessions'), e = line('engaged');
     return '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Visits and engaged visits per day">' + grid +
       '<path d="' + s + 'L' + X(daily.length - 1).toFixed(1) + ' ' + Y(0) + 'L' + pl + ' ' + Y(0) + 'Z" fill="' + GREEN + '" opacity=".07"/>' +
@@ -404,18 +409,22 @@
   function bot(r) { return (r.totalUsers || 0) >= 15 && (r.sessions || 0) >= 15 && (r.engaged == null || r.engaged === 0); }
   function web() {
     var k = String(WEB.range), r = WEB.data[k], err = WEB.err[k];
-    if (!r && !WEB.busy[k] && !err) loadWeb(WEB.range);
+    if (!r && !WEB.busy[k]) loadWeb(WEB.range);
     loadLive();
     var seg = '<div class="seg" role="group" aria-label="Range">' + [[7, '7 days'], [28, '28 days'], [90, '90 days'], [365, '12 months']].map(function (o) { return '<button type="button" data-w306range="' + o[0] + '" aria-pressed="' + (WEB.range === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>';
     var liveH = WEB.live ? '<span class="live" title="People on welfareavenue.com in the last 30 minutes who accepted cookies"><i></i><span class="tnum">' + num(WEB.live.active) + '</span> on the site now</span>' : '';
     var top = '<div class="bar1">' + seg + '<span class="sp"></span>' + liveH + '<button type="button" class="btn" data-w306fresh="1" aria-label="Read again from Google Analytics">' + ic('refresh').replace('<svg', '<svg width="15" height="15"') + 'Refresh</button></div>';
     if (err && !r) return '<div class="w306">' + top + '<div class="card"><div class="empty">The website numbers could not load: ' + E(clip(err, 200)) + '. <a data-w306fresh="1" style="cursor:pointer;color:' + ROSE + ';font-weight:700">Try again</a></div></div></div>';
     if (!r) return '<div class="w306">' + top + skeleton('web').replace('<div class="w306" aria-busy="true" aria-label="Loading">', '<div aria-busy="true" aria-label="Loading">') + '</div>';
-    var c = (r.totals && r.totals.cur) || {}, p = (r.totals && r.totals.prev) || {};
+    /* the new site went live on October 2 without the Google tag; it came back on November 10 (wave306 note) */
+    var GAP = ['2026-10-02', '2026-11-09'], hits = function (a, b) { return a <= GAP[1] && b >= GAP[0]; };
+    var gapCur = hits(r.from, r.to), gapPrev = r.prev && hits(r.prev.from, r.prev.to), noCompare = gapCur || gapPrev;
+    var c = (r.totals && r.totals.cur) || {}, p = noCompare ? {} : ((r.totals && r.totals.prev) || {});
     var users = c.totalUsers || 0, engaged = c.engagedSessions || 0, sessions = c.sessions || 0;
-    var perUser = users ? (c.userEngagementDuration || 0) / users : 0, perUserP = p.totalUsers ? (p.userEngagementDuration || 0) / p.totalUsers : null;
+    var perUser = users ? (c.userEngagementDuration || 0) / users : 0, perUserP = noCompare ? undefined : p.totalUsers ? (p.userEngagementDuration || 0) / p.totalUsers : null;
     var evC = {}, evP = {}; (r.events && r.events.cur || []).forEach(function (e) { evC[e.eventName] = e; }); (r.events && r.events.prev || []).forEach(function (e) { evP[e.eventName] = e; });
     var ev = function (n, m) { return (evC[n] && evC[n][m || 'eventCount']) || 0; };
+    if (noCompare) evP = {};
     var actions = ev('donate_click') + ev('form_sent') + ev('newsletter_signup'), actionsP = ((evP.donate_click || {}).eventCount || 0) + ((evP.form_sent || {}).eventCount || 0) + ((evP.newsletter_signup || {}).eventCount || 0);
     var since = r.events_since || '2026-11-10', before = r.from < since;
     var heroes = '<div class="heroes">' +
@@ -425,8 +434,8 @@
       '<div class="hero"><span>Actions taken</span><b class="tnum">' + num(actions) + '</b>' + (actionsP ? delta(actions, actionsP) : '<span class="muted sm" style="display:inline">gives, forms, sign-ups</span>') + '</div></div>';
     /* what it says */
     var says = [];
-    var chC = (r.channels && r.channels.cur || []).slice().sort(function (a, b) { return (b.sessions || 0) - (a.sessions || 0); }), chP = {}; (r.channels && r.channels.prev || []).forEach(function (x) { chP[x.sessionDefaultChannelGroup] = x; });
-    if (p.engagedSessions) { var dd = (engaged - p.engagedSessions) / p.engagedSessions; if (Math.abs(dd) >= 0.1) says.push([dd > 0 ? 'g' : 'r', dd > 0 ? '↑' : '↓', 'Engaged visits are ' + (dd > 0 ? 'up ' : 'down ') + Math.abs(Math.round(dd * 100)) + '% on the ' + (WEB.range === 365 ? 'year' : WEB.range + ' days') + ' before (' + num(p.engagedSessions) + ' then, ' + num(engaged) + ' now).']); }
+    var chC = (r.channels && r.channels.cur || []).filter(function (x) { return (x.sessions || 0) > 0; }).sort(function (a, b) { return (b.sessions || 0) - (a.sessions || 0); }), chP = {}; if (!noCompare) (r.channels && r.channels.prev || []).forEach(function (x) { chP[x.sessionDefaultChannelGroup] = x; });
+    if (!noCompare && p.engagedSessions) { var dd = (engaged - p.engagedSessions) / p.engagedSessions; if (Math.abs(dd) >= 0.1) says.push([dd > 0 ? 'g' : 'r', dd > 0 ? '↑' : '↓', 'Engaged visits are ' + (dd > 0 ? 'up ' : 'down ') + Math.abs(Math.round(dd * 100)) + '% on the ' + (WEB.range === 365 ? 'year' : WEB.range + ' days') + ' before (' + num(p.engagedSessions) + ' then, ' + num(engaged) + ' now).']); }
     var bestCh = chC.filter(function (x) { return (x.sessions || 0) >= 5; }).map(function (x) { return { k: x.sessionDefaultChannelGroup, rate: (x.engagedSessions || 0) / (x.sessions || 1), n: x.sessions }; }).sort(function (a, b) { return b.rate - a.rate; })[0];
     if (bestCh) says.push(['g', '★', chName(bestCh.k) + ' bring the most engaged visitors: ' + pct(bestCh.rate) + ' of those visits stay and look around.']);
     var soc = chC.filter(function (x) { return x.sessionDefaultChannelGroup === 'Organic Social' || x.sessionDefaultChannelGroup === 'Paid Social'; }).reduce(function (s, x) { return s + (x.sessions || 0); }, 0);
@@ -435,6 +444,8 @@
     if (bots.length) says.push(['n', '!', num(bots.reduce(function (s, x) { return s + x.totalUsers; }, 0)) + ' visitors from ' + bots.map(function (x) { return x.city; }).join(', ') + ' came once and left at once: most likely automated traffic, not people. Engaged visits leave it out.']);
     var weakLp = (r.landing || []).filter(function (x) { return (x.sessions || 0) >= 10 && (x.engagedSessions || 0) / (x.sessions || 1) < 0.15; })[0];
     if (weakLp) says.push(['r', '↓', pageName(weakLp.landingPage) + ' starts ' + num(weakLp.sessions) + ' visits but ' + pct((weakLp.engagedSessions || 0) / (weakLp.sessions || 1)) + ' stay. ' + (/cart|shop|activity/.test(weakLp.landingPage) ? 'It is an address from the old site: worth a redirect.' : 'Check what people see first there.')]);
+    var topClick = (r.clicks || []).filter(function (x) { return x.text; })[0];
+    if (topClick) says.push(['g', '\u2605', 'The most clicked: \u201c' + topClick.text + '\u201d (' + num(topClick.count) + ' clicks) on ' + pageName(topClick.page) + '.']);
     if (before) says.push(['n', 'i', 'Gives, sign-ups and forms are counted from ' + new Date(since + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long', day: 'numeric' }) + ', and since then only visitors who accept cookies are counted at all.']);
     var saysCard = '<div class="card"><h3>What the numbers say</h3><ul class="says">' + says.slice(0, 5).map(function (s) { return '<li><i class="' + s[0] + '">' + E(s[1]) + '</i><span>' + E(s[2]) + '</span></li>'; }).join('') + '</ul></div>';
     var trend = '<div class="card"><h3>Visits, day by day<span class="sp"></span><small class="tnum">' + E(new Date(r.from + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })) + ' to ' + E(new Date(r.to + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })) + '</small></h3>' + chartArea(r.daily, r.actions_daily) + '</div>';
@@ -470,9 +481,37 @@
     var whoCard = '<div class="card"><h3>Who visits</h3><div class="rows">' + devH + '</div>' + retH + (placeH ? '<h3 style="margin-top:18px;font-size:16px">Where they are</h3><div class="rows">' + placeH + '</div>' : '') + '</div>';
     var popH = (r.pages || []).slice(0, 8).map(function (x) { return '<tr><td>' + E(pageName(x.pagePath)) + '<small>' + E(clip(x.pageTitle, 60)) + '</small></td><td class="tnum">' + num(x.screenPageViews) + '</td><td class="tnum hm">' + dur((x.userEngagementDuration || 0) / (x.screenPageViews || 1)) + '</td></tr>'; }).join('');
     var popCard = popH ? '<div class="card"><h3>Most viewed pages</h3><table class="t"><thead><tr><th>Page</th><th>Views</th><th class="hm">Per view</th></tr></thead><tbody>' + popH + '</tbody></table></div>' : '';
-    var note = (r.errors && r.errors.length) ? '<p class="note">Some numbers are not available yet from Google Analytics (new event details can take a day to appear).</p>' : '';
+    /* what people click, how far they read, the parts they see, the paths they take (analytics.js since 10/11/26) */
+    var AREA = { menu: 'Menu', footer: 'Footer', popup: 'Pop-up form', page: 'Page' };
+    var areaName = function (a) { return AREA[a] || (a ? a.replace(/-/g, ' ') : 'Page'); };
+    var EVN = { donate_click: 'Give', signup_open: 'Sign-up', contact_click: 'Contact', language_switch: 'Language', link_click: 'Link', button_click: 'Button' };
+    var clicks = (r.clicks || []).slice(0, 12);
+    var clickH = clicks.map(function (x) { return '<tr><td>' + E(x.text || '(no words)') + '<span class="tag info">' + E(EVN[x.event] || x.event) + '</span><small>' + E(areaName(x.area)) + ' · ' + E(pageName(x.page)) + '</small></td><td class="tnum">' + num(x.count) + '</td><td class="tnum hm">' + num(x.people) + '</td></tr>'; }).join('');
+    var areaTot = {}; (r.clicks || []).forEach(function (x) { var a = x.area === 'menu' || x.area === 'footer' || x.area === 'popup' ? x.area : 'page'; areaTot[a] = (areaTot[a] || 0) + (x.count || 0); });
+    var areaSum = Object.keys(areaTot).reduce(function (s2, k2) { return s2 + areaTot[k2]; }, 0);
+    var areaBar = areaSum ? '<div class="rw" style="margin:0 0 12px"><span class="nm muted sm">Where clicks happen</span><span class="vl"></span><span class="tr">' + ['page', 'menu', 'popup', 'footer'].filter(function (k2) { return areaTot[k2]; }).map(function (k2, i2) { return '<i title="' + E(areaName(k2)) + ' ' + pct(areaTot[k2] / areaSum) + '" style="width:' + (areaTot[k2] / areaSum * 100).toFixed(1) + '%;background:' + [GREEN, ROSE, GOLD, PURPLE][i2] + '"></i>'; }).join('') + '</span></div><div class="legend" style="margin:-6px 0 12px">' + ['page', 'menu', 'popup', 'footer'].filter(function (k2) { return areaTot[k2]; }).map(function (k2, i2) { return '<span><i style="background:' + [GREEN, ROSE, GOLD, PURPLE][i2] + '"></i>' + E(areaName(k2)) + ' ' + pct(areaTot[k2] / areaSum) + '</span>'; }).join('') + '</div>' : '';
+    var clickCard = '<div class="card"><h3>What people click</h3>' + (clickH ? areaBar + '<table class="t"><thead><tr><th>Clicked</th><th>Clicks</th><th class="hm">People</th></tr></thead><tbody>' + clickH + '</tbody></table>' : '<div class="empty">Every link and button on the site is counted from November 10, with where it sits on the page. The first clicks show here within a day.</div>') + '</div>';
+    var pp = {}; (r.page_people || []).forEach(function (x) { pp[x.page] = x.people; });
+    var depthBy = {}; (r.scroll || []).forEach(function (x) { (depthBy[x.page] = depthBy[x.page] || {})[x.pct] = x.people; });
+    var depthRows = Object.keys(depthBy).map(function (pg) { var d0 = depthBy[pg], base = Math.max(pp[pg] || 0, d0[25] || 0, 1); return { pg: pg, base: base, d: [25, 50, 75, 100].map(function (m) { return Math.min(1, (d0[m] || 0) / base); }) }; }).filter(function (x) { return x.base >= 3; }).sort(function (a, b) { return b.base - a.base; }).slice(0, 8);
+    var secBy = {}; (r.sections || []).forEach(function (x) { (secBy[x.page] = secBy[x.page] || []).push(x); });
+    var depthH = depthRows.map(function (x) {
+      var half = x.d[1], end = x.d[3];
+      var secs = (secBy[x.pg] || []).sort(function (a, b) { return (b.people || 0) - (a.people || 0); });
+      var lost = secs.filter(function (s3) { return (s3.people || 0) / x.base < 0.25; }).slice(-2);
+      return '<div style="padding:10px 0;border-top:1px solid rgba(16,63,57,.08)"><div class="rw"><span class="nm"><b style="font-weight:600">' + E(pageName(x.pg)) + '</b> <span class="muted sm">' + num(x.base) + ' people</span>' + (half < 0.35 ? '<span class="tag bad">most stop early</span>' : end >= 0.5 ? '<span class="tag good">read to the end</span>' : '') + '</span><span class="vl"></span></div>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:6px">' + x.d.map(function (v, i3) { return '<div title="' + [25, 50, 75, 100][i3] + '% down the page: ' + pct(v) + '" style="height:26px;border-radius:6px;background:rgba(42,140,122,' + (0.08 + v * 0.8).toFixed(2) + ');display:grid;place-items:center;font:600 11px/1 inherit;color:' + (v > 0.55 ? '#FFFAF2' : GREEN) + '">' + pct(v) + '</div>'; }).join('') + '</div>' +
+        (lost.length ? '<small class="muted" style="display:block;margin-top:6px">Few people reach: ' + lost.map(function (s3) { return E(s3.section.replace(/-/g, ' ')); }).join(', ') + '</small>' : '') + '</div>';
+    }).join('');
+    var depthCard = '<div class="card"><h3>How far people read<span class="sp"></span><small>25 · 50 · 75 · 100% down the page</small></h3>' + (depthH || '<div class="empty">Scroll depth and the page sections people see are counted from November 10.</div>') + '</div>';
+    var paths = (r.paths || []).slice(0, 10), pMax = Math.max.apply(null, paths.map(function (x) { return x.views || 0; }).concat([1]));
+    var fromHome = (r.paths || []).filter(function (x) { return x.from === '/' || x.from === '/fr/'; }).slice(0, 5);
+    var pathH = paths.map(function (x) { return '<div class="rw"><span class="nm">' + E(pageName(x.from)) + ' <span class="muted">→</span> <b style="font-weight:600">' + E(pageName(x.to)) + '</b></span><span class="vl tnum">' + num(x.views) + '</span><span class="tr"><i style="width:' + ((x.views || 0) / pMax * 100).toFixed(1) + '%;background:' + PURPLE + '"></i></span></div>'; }).join('');
+    var pathCard = '<div class="card"><h3>Paths through the site</h3>' + (pathH ? '<div class="rows">' + pathH + '</div>' + (fromHome.length ? '<p class="sm" style="margin:12px 0 0"><b>From Home, people go to</b> ' + fromHome.map(function (x) { return E(pageName(x.to)) + ' <span class="muted tnum">(' + num(x.views) + ')</span>'; }).join(', ') + '.</p>' : '') : '<div class="empty">The moves from one page to the next show here as people use the new site (the old one was a single page app, so it never recorded them).</div>') + '</div>';
+    var gapNote = noCompare ? '<p class="note">The new site had no tracking from October 2 to November 9 (fixed November 10), so ' + (gapCur ? 'this range is missing those weeks' : 'the period before has almost no data') + ' and no comparison is shown. ' + (WEB.range < 365 ? 'Pick 12 months to see the old site\u2019s year, or come back as the new numbers build up.' : '') + '</p>' : '';
+    var note = gapNote + ((r.errors && r.errors.length) ? '<p class="note">Some numbers are not available yet from Google Analytics (new event details can take a day to appear).</p>' : '');
     var made = '<p class="muted sm" style="margin:4px 0 0">From Google Analytics, ' + (r.cached ? 'read ' : 'read just now') + (r.cached ? E(agoShort(r.made_at)) : '') + '. Visitors are counted only when they accept cookies on the site.</p>';
-    return '<div class="w306">' + top + note + heroes + '<div class="grid"><div>' + saysCard + trend + whereCard + lpCard + '</div><div>' + doCard + whoCard + popCard + '</div></div>' + made + '</div>';
+    return '<div class="w306">' + top + note + heroes + '<div class="grid"><div>' + saysCard + trend + whereCard + lpCard + pathCard + '</div><div>' + doCard + clickCard + depthCard + whoCard + popCard + '</div></div>' + made + '</div>';
   }
   function agoShort(iso) { var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : Math.round(m / 60) + ' h ago'; }
 
@@ -482,7 +521,7 @@
     var el = t.closest('[data-w306range],[data-w306fresh]'); if (!el) return;
     e.preventDefault();
     if (el.hasAttribute('data-w306range')) { var v = Number(el.getAttribute('data-w306range')); if (v && v !== WEB.range) { WEB.range = v; try { localStorage.setItem('w306range', String(v)); } catch (x) { /* fine */ } repaint('web'); } return; }
-    if (el.hasAttribute('data-w306fresh')) { WEB.err[String(WEB.range)] = null; delete WEB.data[String(WEB.range)]; WEB.liveAt = 0; repaint('web'); loadWeb(WEB.range, true); }
+    if (el.hasAttribute('data-w306fresh')) { if (WEB.busy[String(WEB.range)]) return; WEB.err[String(WEB.range)] = null; delete WEB.data[String(WEB.range)]; WEB.liveAt = 0; loadWeb(WEB.range, true); repaint('web'); }
   });
   document.addEventListener('toggle', function (e) { if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-w306older')) T.olderOpen = e.target.open; }, true);
 

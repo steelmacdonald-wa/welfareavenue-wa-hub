@@ -48,5 +48,5 @@ def patch_v153(s):
     s = rep(s, "  function isOn(app, it) {\n    var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);",
                "  function isOn(app, it) {\n    var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);\n"
                "    var hp = String(h || '').replace(/^#/, '').split('?')[0], inAlso = function (x) { return (x.also || []).some(function (a) { a = String(a).replace(/^#/, ''); return hp === a || hp.indexOf(a + '/') === 0; }); };   /* wave306 */\n"
-               "    var owner = null; items(app).forEach(function (g) { g.items.forEach(function (x) { if (!owner && inAlso(x)) owner = x; }); }); if (owner) return owner === it;", 'isOn')
+               "    var owner = null; items(app).forEach(function (g) { g.items.forEach(function (x) { if (!owner && inAlso(x)) owner = x; }); }); if (owner) return owner.h === it.h;", 'isOn')
     return s
