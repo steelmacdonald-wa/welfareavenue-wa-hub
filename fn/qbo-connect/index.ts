@@ -1,4 +1,8 @@
-// Welfare Avenue: qbo-connect (v3, 10/11/26, wave302). v3: retries a failed token or API call once (network and 5xx only;
+// Welfare Avenue: qbo-connect (v4, 10/11/26, wave302). v4 (Intuit's security requirements): the access and refresh
+// tokens are stored AES-256-GCM encrypted ('v1:' + iv + ciphertext); the key is QBO_TOKEN_KEY from the vault when it
+// exists, otherwise derived with HKDF-SHA-256 from the vault's WA_TRIGGER_SECRET (never stored with the data); tokens
+// stored before v4 are re-encrypted on first use; every response is Cache-Control: no-store.
+// v3: retries a failed token or API call once (network and 5xx only;
 // an expired access token is refreshed and the call tried again), and when Intuit refuses the refresh token
 // (invalid_grant: disconnected from QuickBooks, or 100 days unused) the connection is marked 'reconnect' so the Hub
 // asks an admin to connect again; a daily keep-alive (cron wa-qbo-keepalive) keeps the refresh token rolling.
@@ -28,7 +32,8 @@ const CORS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 };
-const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const NOSTORE = { 'Cache-Control': 'no-store, no-cache', Pragma: 'no-cache' };
+const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, ...NOSTORE, 'Content-Type': 'application/json' } });
 
 async function secret(name: string): Promise<string | null> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -52,6 +57,37 @@ async function caller(req: Request): Promise<string | null> {
   if (!email) return null;
   const [{ data: staff }, { data: page }] = await Promise.all([asUser.rpc('is_wa_staff'), asUser.rpc('wa_page_ok', { p_tab: 'finances' })]);
   return staff === true && page !== false ? email : null;
+}
+
+/* v4: the tokens at rest, AES-256-GCM */
+let aesKey: CryptoKey | null = null;
+async function tokenKey(): Promise<CryptoKey> {
+  if (aesKey) return aesKey;
+  const own = await secret('QBO_TOKEN_KEY');
+  if (own) {
+    const raw = Uint8Array.from(atob(own.trim()), c => c.charCodeAt(0));
+    aesKey = await crypto.subtle.importKey('raw', raw.slice(0, 32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  } else {
+    const master = await secret('WA_TRIGGER_SECRET');
+    if (!master) throw new Error('No key for the QuickBooks tokens.');
+    const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(master), 'HKDF', false, ['deriveKey']);
+    aesKey = await crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new TextEncoder().encode('wa-hub/qbo-connect'), info: new TextEncoder().encode('qbo-token-aes-v1') }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  return aesKey;
+}
+const b64 = (u: Uint8Array) => { let s = ''; for (const x of u) s += String.fromCharCode(x); return btoa(s); };
+const unb64 = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function seal(plain: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await tokenKey(), new TextEncoder().encode(plain)));
+  return 'v1:' + b64(iv) + ':' + b64(ct);
+}
+async function unseal(stored: string | null): Promise<string | null> {
+  if (!stored) return null;
+  if (!stored.startsWith('v1:')) return stored;   // stored before v4: still readable, re-sealed on first use
+  const [, iv, ct] = stored.split(':');
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv) }, await tokenKey(), unb64(ct));
+  return new TextDecoder().decode(pt);
 }
 
 /* state: who asked and when, signed with the Hub's trigger secret, good for 15 minutes */
@@ -92,19 +128,26 @@ async function markReconnect(why: string) {
   await svc.from('qbo_connection').update({ access_token: null, access_expires_at: null, last_error: 'reconnect: ' + why.slice(0, 200), updated_at: new Date().toISOString() }).eq('id', 1);
   try { await svc.from('change_log').insert({ entity_type: 'qbo', entity_id: 'connection', field: 'needs reconnect', old_value: null, new_value: why.slice(0, 200), changed_by: 'qbo-connect' }); } catch (_) { /* audit */ }
 }
-function tokenRow(b: Record<string, unknown>) {
+async function tokenRow(b: Record<string, unknown>) {
   const now = Date.now();
-  return { access_token: String(b.access_token), access_expires_at: new Date(now + Number(b.expires_in || 3600) * 1000).toISOString(),
-    refresh_token: String(b.refresh_token), refresh_expires_at: new Date(now + Number(b.x_refresh_token_expires_in || 8640000) * 1000).toISOString(),
+  return { access_token: await seal(String(b.access_token)), access_expires_at: new Date(now + Number(b.expires_in || 3600) * 1000).toISOString(),
+    refresh_token: await seal(String(b.refresh_token)), refresh_expires_at: new Date(now + Number(b.x_refresh_token_expires_in || 8640000) * 1000).toISOString(),
     last_error: null, updated_at: new Date().toISOString() };
 }
 async function accessToken(): Promise<{ tok: string; realm: string; env: string }> {
   const { data: row } = await svc.from('qbo_connection').select('*').eq('id', 1).maybeSingle();
   if (!row?.refresh_token || !row.realm_id) throw new Error('QuickBooks is not connected yet.');
-  if (row.access_token && new Date(row.access_expires_at).getTime() - Date.now() > 60000) return { tok: row.access_token, realm: row.realm_id, env: row.env };
+  const refresh = await unseal(row.refresh_token);
+  if (row.access_token && new Date(row.access_expires_at).getTime() - Date.now() > 60000) {
+    const tok = await unseal(row.access_token);
+    if (!String(row.refresh_token).startsWith('v1:') || !String(row.access_token).startsWith('v1:')) {
+      await svc.from('qbo_connection').update({ access_token: await seal(String(tok)), refresh_token: await seal(String(refresh)) }).eq('id', 1);
+    }
+    return { tok: String(tok), realm: row.realm_id, env: row.env };
+  }
   try {
-    const { b } = await tokenCall({ grant_type: 'refresh_token', refresh_token: row.refresh_token });
-    await svc.from('qbo_connection').update(tokenRow(b)).eq('id', 1);
+    const { b } = await tokenCall({ grant_type: 'refresh_token', refresh_token: String(refresh) });
+    await svc.from('qbo_connection').update(await tokenRow(b)).eq('id', 1);
     return { tok: String(b.access_token), realm: row.realm_id, env: row.env };
   } catch (e) {
     if (e instanceof Reconnect) await markReconnect((e as Error).message);
@@ -144,9 +187,9 @@ function page(title: string, body: string, ok: boolean) {
   /* v2: Supabase serves function responses on supabase.co as plain text, so no HTML page here: a successful
      connection goes straight back to Finance (the Today chip then shows the company); anything else is a short
      plain-text note with the way back. */
-  if (ok && title === 'QuickBooks is connected') return new Response(null, { status: 302, headers: { Location: HUB + '#finances' } });
+  if (ok && title === 'QuickBooks is connected') return new Response(null, { status: 302, headers: { ...NOSTORE, Location: HUB + '#finances' } });
   const text = title + '\n\n' + body.replace(/<[^>]+>/g, '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') + '\n\nBack to Finance: ' + HUB + '#finances\n';
-  return new Response(text, { status: ok ? 200 : 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  return new Response(text, { status: ok ? 200 : 400, headers: { ...NOSTORE, 'Content-Type': 'text/plain; charset=utf-8' } });
 }
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c]);
 
@@ -162,7 +205,7 @@ Deno.serve(async (req: Request) => {
     const realm = url.searchParams.get('realmId') || '';
     try {
       const { b, env } = await tokenCall({ grant_type: 'authorization_code', code, redirect_uri: SELF });
-      await svc.from('qbo_connection').upsert({ id: 1, env, realm_id: realm, ...tokenRow(b), connected_by: st.e, connected_at: new Date().toISOString() });
+      await svc.from('qbo_connection').upsert({ id: 1, env, realm_id: realm, ...(await tokenRow(b)), connected_by: st.e, connected_at: new Date().toISOString() });
       let name = '';
       try { const s = await refreshStatus(); name = s.company || ''; } catch (e) { await svc.from('qbo_connection').update({ last_error: String((e as Error).message).slice(0, 300) }).eq('id', 1); }
       try { await svc.from('change_log').insert({ entity_type: 'qbo', entity_id: realm, field: 'connected', old_value: null, new_value: name || realm, changed_by: st.e }); } catch (_) { /* audit */ }
@@ -192,7 +235,7 @@ Deno.serve(async (req: Request) => {
       const { data: row } = await svc.from('qbo_connection').select('refresh_token').eq('id', 1).maybeSingle();
       if (row?.refresh_token) {
         const c = await creds();
-        await fetch(REVOKE_URL, { method: 'POST', headers: { Authorization: 'Basic ' + btoa(c.id + ':' + c.sec), Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ token: row.refresh_token }) });
+        await fetch(REVOKE_URL, { method: 'POST', headers: { Authorization: 'Basic ' + btoa(c.id + ':' + c.sec), Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ token: await unseal(row.refresh_token) }) });
       }
       await svc.from('qbo_connection').update({ access_token: null, refresh_token: null, access_expires_at: null, refresh_expires_at: null, updated_at: new Date().toISOString() }).eq('id', 1);
       try { await svc.from('change_log').insert({ entity_type: 'qbo', entity_id: 'connection', field: 'disconnected', old_value: null, new_value: 'disconnected', changed_by: who }); } catch (_) { /* audit */ }
