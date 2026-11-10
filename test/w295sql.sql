@@ -243,11 +243,13 @@ do $$
 begin
   assert (select string_agg(id::text, ',' order by id) from public.crm_filter_contacts('{"groups":[{"all":[{"f":"tag","op":"has","v":["server"]}]}]}') where id between 9501 and 9599) = '9501,9504',
     'a member with the CRM gets the ids';
+  assert (select string_agg(id::text, ',' order by id) from public.crm_filter_contacts('{"kind":"volunteer"}') where id between 9501 and 9599) = '9501,9503', 'a flat filter (an older list) is answered too';
+  assert not exists (select 1 from public.crm_filter_contacts('{}')) and not exists (select 1 from public.crm_filter_contacts('{"act":"bogus"}')), 'a flat filter with nothing usable matches no one';
 end $$;
 do $$
 declare m text; e text;
 begin
-  foreach m in array array['{"groups":[]}', '{"groups":[{"all":[]}]}', '{"groups":[{"x":1}]}', '{"kind":"volunteer"}', '{"groups":[{"all":{}}]}', '{"groups":[{"all":"x"}]}'] loop
+  foreach m in array array['{"groups":[]}', '{"groups":[{"all":[]}]}', '{"groups":[{"x":1}]}', '{"groups":[{"all":{}}]}', '{"groups":[{"all":"x"}]}'] loop
     e := '';
     begin perform public.crm_filter_contacts(m::jsonb); exception when others then e := sqlerrm; end;
     assert e in ('A filter needs at least one condition.', 'The filter is not in the right shape: it needs {"groups": [...]}.'), 'a filter with no condition is refused (' || m || ': ' || e || ')';

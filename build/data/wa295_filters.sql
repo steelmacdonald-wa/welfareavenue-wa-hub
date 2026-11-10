@@ -335,8 +335,14 @@ begin
   if not (coalesce(public.is_wa_staff(), false) and coalesce(public.wa_page_ok('crm'), true)) then
     raise exception 'Only the Welfare Avenue team, with the CRM in their apps, can filter the contacts.' using errcode = '42501';
   end if;
-  if p_filter is null or jsonb_typeof(p_filter) <> 'object' or jsonb_typeof(p_filter->'groups') is distinct from 'array' then
+  if p_filter is null or jsonb_typeof(p_filter) <> 'object' then
     raise exception 'The filter is not in the right shape: it needs {"groups": [...]}.' using errcode = '22023';
+  end if;
+  -- round 4: the Lists page counts through here too, and a list saved by the older Contacts tab is flat (no groups list): crm_list_preview
+  -- answers it (the flat engine, or no one when it holds no flat key with a value or an act the CRM does not have)
+  if jsonb_typeof(p_filter->'groups') is distinct from 'array' then
+    return query select x from public.crm_list_preview(p_filter) x;
+    return;
   end if;
   if not exists (select 1 from jsonb_array_elements(p_filter->'groups') g where case when jsonb_typeof(g->'all') = 'array' then jsonb_array_length(g->'all') > 0 else false end) then
     raise exception 'A filter needs at least one condition.' using errcode = '22023';
@@ -345,7 +351,7 @@ begin
 end $$;
 revoke all on function public.crm_filter_contacts(jsonb) from public, anon, service_role;   -- Supabase's default privileges give all three; the page alone calls it
 grant execute on function public.crm_filter_contacts(jsonb) to authenticated;
-comment on function public.crm_filter_contacts(jsonb) is 'wave295: the contact ids a filter selects, for the Contacts page''s Filters builder: crm_list_preview(p_filter) ({"groups":[{"all":[{f,op,v},...]},...]}: OR between groups, AND inside one), so Contacts and Lists answer the same way. Staff with the CRM only (is_wa_staff and wa_page_ok crm); a filter with no condition is refused. Security definer, so it reads every live contact once the check has passed.';
+comment on function public.crm_filter_contacts(jsonb) is 'wave295: the contact ids a filter selects, for the Contacts page''s Filters builder and, since round 4, every count and preview on the Lists page: crm_list_preview(p_filter) ({"groups":[{"all":[{f,op,v},...]},...]}: OR between groups, AND inside one), so Contacts and Lists answer the same way. Staff with the CRM only (is_wa_staff and wa_page_ok crm); a groups filter with no condition is refused; a flat filter (no groups list) goes to crm_list_preview as it is. Security definer, so it reads every live contact once the check has passed.';
 
 -- ============================================================================================ 4. the release record (once)
 insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)

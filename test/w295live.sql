@@ -5,8 +5,9 @@
 -- crm_filter_contacts for a real staff member with the CRM (picked inside the database, never printed) and its refusal for nobody signed in,
 -- that no saved list or unsent Send holds a shape whose answer wave295 changes (the migration's own guard, again; it lists them by id), the
 -- fail-closed shapes on live data, and that six conditions over every live contact answer in under one second (the design's bar), timed as a real
--- staff member through crm_filter_contacts (the page's way) and through crm_list_preview with row security (the Lists page's way), with tag,
--- type, chapter, organisation, job title, a text field and a date field among them.
+-- staff member through crm_filter_contacts (since round 4 the only way the page, Contacts and Lists alike, asks), with tag, type, chapter,
+-- organisation, job title, a text field and a date field among them, and one condition the same way; crm_list_preview under row security is
+-- timed too, as a NOTICE only (no bar: the page no longer calls it).
 
 drop table if exists pg_temp.w295_who;   -- the block may run this file twice
 drop table if exists pg_temp.w295_t;
@@ -87,18 +88,23 @@ begin
 end $$;
 
 -- speed: six conditions over every live contact, as a real staff member (picked here, never printed); only counts are read
-create temp table if not exists w295_t (way text, ms numeric, n bigint) on commit drop;
+-- round 4 (09/11/26): the page (Contacts and Lists) asks crm_filter_contacts only, so that is the path with the 1 second bar, for six conditions
+-- and for one. crm_list_preview under row security (what the Lists page used before round 4) is timed for the record only, as a NOTICE.
+create temp table if not exists w295_t (way text, ms numeric, n bigint, gate boolean) on commit drop;
 grant all on w295_t to authenticated;
 select set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'email', (select r.email from public.hub_roles r where r.role = 'admin' order by r.email limit 1))::text, true);
 set local role authenticated;
 do $$
 declare t0 timestamptz; n bigint;
   f jsonb := '{"groups":[{"all":[{"f":"tag","op":"has","v":["server","newsletter"]},{"f":"kind","op":"is","v":["volunteer","supporter"]},{"f":"chapter","op":"is","v":"montreal"},{"f":"dnc","op":"not"},{"f":"org","op":"not","v":"w295 nothing like it"},{"f":"field","key":"rally_paper_team","op":"empty"}]},{"all":[{"f":"job_title","op":"contains","v":"coordinator"},{"f":"field","key":"instagram","op":"contains","v":"wa"},{"f":"field","key":"w295live_day","op":"after","v":"2020-01-01"},{"f":"served","op":"ever"},{"f":"tag","op":"none","v":["w295 nothing"]},{"f":"city","op":"contains","v":"mon"}]}]}';
+  f1 jsonb := '{"groups":[{"all":[{"f":"kind","op":"is","v":"volunteer"}]}]}';
 begin
   t0 := clock_timestamp(); select count(*) into n from public.crm_filter_contacts(f);
-  insert into w295_t values ('crm_filter_contacts', extract(epoch from clock_timestamp() - t0) * 1000, n);
+  insert into w295_t values ('crm_filter_contacts, six conditions (two groups)', extract(epoch from clock_timestamp() - t0) * 1000, n, true);
+  t0 := clock_timestamp(); select count(*) into n from public.crm_filter_contacts(f1);
+  insert into w295_t values ('crm_filter_contacts, one condition', extract(epoch from clock_timestamp() - t0) * 1000, n, true);
   t0 := clock_timestamp(); select count(*) into n from public.crm_list_preview(f);
-  insert into w295_t values ('crm_list_preview with row security', extract(epoch from clock_timestamp() - t0) * 1000, n);
+  insert into w295_t values ('crm_list_preview with row security, six conditions (not used by the page; no bar)', extract(epoch from clock_timestamp() - t0) * 1000, n, false);
 end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
@@ -106,10 +112,10 @@ do $$
 declare r record;
 begin
   for r in select * from w295_t loop
-    raise notice 'w295live: six conditions (two groups) over every live contact through % took % ms', r.way, round(r.ms);
-    assert r.ms < 1000, 'live: ' || r.way || ' answers in under 1 second (' || round(r.ms) || ' ms)';
+    raise notice 'w295live: % over every live contact took % ms', r.way, round(r.ms);
+    if r.gate then assert r.ms < 1000, 'live: ' || r.way || ' answers in under 1 second (' || round(r.ms) || ' ms)'; end if;
   end loop;
-  assert (select count(distinct n) from w295_t) = 1, 'live: the page and the Lists page give the same count';
+  assert (select count(distinct n) from w295_t where way like '%six%') = 1, 'live: crm_filter_contacts and crm_list_preview give the same count';
 end $$;
 drop table if exists pg_temp.w295_t;
 
