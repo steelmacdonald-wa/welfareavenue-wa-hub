@@ -1,3 +1,4 @@
+// v9 (wave305, 10/11/26): copies from crm_email_templates.cc and replies to crm_email_templates.reply_to (both chosen in the Hub).
 // v8 (10/11/26): a template's design.cc copies team addresses on our domain on its real sends (sendRow).
 // Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
 // v7 (wave282, 06/11/26, not deployed): Steel's email rule of 5 Nov 2026 lives in crm_email_permission (newsletters and fundraising go to anyone
@@ -329,10 +330,15 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   const tags = [{ name: 'template', value: String(tpl.key).replace(/[^a-zA-Z0-9_-]/g, '_') }, { name: 'kind', value: kind }, { name: 'send_id', value: String(o.sendId) }];
   if (o.content.campaignId) tags.push({ name: 'campaign_id', value: String(o.content.campaignId) });
   if (o.content.automationId) tags.push({ name: 'automation_id', value: String(o.content.automationId) });
-  /* v8 (10/11/26, Steel): a template can copy team addresses on every real send of it: design.cc, addresses on our domain only (the Holiday Gift
-     Basket Drive's confirmation copies fundraising@ and Amanda). Never on a test, and never the recipient themself. */
-  const ccRaw = (o.content.tpl && o.content.tpl.design && typeof o.content.tpl.design === 'object') ? o.content.tpl.design.cc : null;
-  const cc = o.isTest ? [] : [...new Set(listOf(Array.isArray(ccRaw) ? ccRaw.join(',') : String(ccRaw || '')))].filter(e => onDomain(e, o.cfg) && e !== String(o.to).toLowerCase());
+  /* v8 (10/11/26, Steel): a template can copy team addresses on every real send of it, addresses on our domain only (the Holiday Gift Basket
+     Drive's confirmation copies fundraising@ and Amanda). Never on a test, and never the recipient themself.
+     v9 (wave305): the copies live in crm_email_templates.cc (chosen in the Hub: CRM, Email, a template's Copies and replies); design.cc still counts. */
+  const t0 = o.content.tpl || {};
+  const ccRaw = ([] as string[]).concat(Array.isArray(t0.cc) ? t0.cc : [], (t0.design && typeof t0.design === 'object' && Array.isArray(t0.design.cc)) ? t0.design.cc : []);
+  const cc = o.isTest ? [] : [...new Set(listOf(ccRaw.join(',')))].filter(e => onDomain(e, o.cfg) && e !== String(o.to).toLowerCase()).slice(0, 10);
+  /* v9 (wave305): crm_email_templates.reply_to, on our domain, is where replies to the template go, unless the send itself names one */
+  const tplReply = String(t0.reply_to || '').trim().toLowerCase();
+  if (!o.content.reply && !(o.content.sender && o.content.sender.reply) && tplReply && onDomain(tplReply, o.cfg)) (sender as { reply?: string }).reply = tplReply;
   const payload: Record<string, unknown> = { from: sender.from, to: [o.to], ...(cc.length ? { cc } : {}), subject: r.subject, html: r.html, text: r.text, reply_to: sender.reply, ...(Object.keys(headers).length ? { headers } : {}), tags,
     ...(o.content.attachments && o.content.attachments.length ? { attachments: o.content.attachments } : {}) };
   const res = await rs(key, 'POST', '/emails', payload, { 'Idempotency-Key': 'wa-send-' + o.sendId });
