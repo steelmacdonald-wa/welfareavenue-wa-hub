@@ -1,4 +1,3 @@
-    var blk = blockHtml(ev, D, cn);
     return at > 0 ? h.slice(0, at) + blk + h.slice(at) : h + blk;
   };
   var __paintW174 = paintW174;

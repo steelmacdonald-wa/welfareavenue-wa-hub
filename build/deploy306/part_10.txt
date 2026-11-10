@@ -1,3 +1,6 @@
+  /* the flows Start has begun, and the ones that backed out: each kept KEEP_DAYS */
+  async function readStarted() {
+    var f = await db.from('hub_onboard_flows').select(FLOW_COLS).in('status', ['running', 'started', 'backed_out']);
     if (f.error) throw f.error;
     var cut = Date.now() - KEEP_DAYS * 86400000;
     var flows = (f.data || []).filter(function (x) {
