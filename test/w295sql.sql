@@ -205,6 +205,27 @@ begin
   assert (select count(*) from public.crm_list_preview_flat('{}')) = (select count(*) from public.crm_contacts_v where merged_into is null), 'crm_list_preview_flat itself is unchanged';
 end $$;
 
+-- ---------------------------------------------------------------- fix round 3 (Y1 flat act, Y3 chapters from crm_chapters)
+do $$
+declare k text;
+begin
+  foreach k in array array['{"act":"bogus"}', '{"kind":"volunteer","act":"bogus"}', '{"act":5}', '{"act":{}}', '{"tags":["server"],"act":"Served"}', '{"groups":null,"act":"x"}'] loop
+    assert pg_temp.ids(k::jsonb) = '-', 'a flat act the CRM does not have matches no one: ' || k;
+  end loop;
+  foreach k in array array['served12', 'served', 'never', 'review', 'noemail', 'new30'] loop
+    assert pg_temp.ids(jsonb_build_object('act', k)) = coalesce((select string_agg(x::text, ',' order by x) from public.crm_list_preview_flat(jsonb_build_object('act', k)) x where x between 9501 and 9599), '-'),
+      'a known flat act answers as the flat engine does: ' || k;
+  end loop;
+  assert pg_temp.ids('{"kind":"volunteer","act":""}') = '9501,9503', 'a blank act is ignored, as before';
+  -- chapters come from crm_chapters: a code an admin adds can be filtered on at once; one that is not there matches no one
+  assert pg_temp.one('{"f":"chapter","op":"not","v":"ottawa"}') = '-', 'a chapter not in crm_chapters matches no one';
+  insert into public.crm_chapters (code, name_en, name_fr, active, mail_route, ops_team, sort) values ('ottawa', 'Ottawa', 'Ottawa', true, 'volunteer', 'opsmtl', 9);
+  assert pg_temp.one('{"f":"chapter","op":"not","v":"ottawa"}') = '9501,9502,9503,9504' and pg_temp.one('{"f":"chapter","op":"is","v":"Ottawa"}') = '-',
+    'once ottawa is in crm_chapters it can be filtered on (nobody is in it yet)';
+  delete from public.crm_chapters where code = 'ottawa';
+  assert pg_temp.one('{"f":"chapter","op":"is","v":"toronto"}') <> '-' and pg_temp.one('{"f":"chapter","op":"is","v":"montreal"}') <> '-', 'montreal and toronto still work';
+end $$;
+
 -- ---------------------------------------------------------------- groups: and inside one, or between them; merged people never
 do $$
 begin

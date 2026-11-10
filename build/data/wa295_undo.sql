@@ -32,14 +32,16 @@ begin
 end $g$;
 -- a flat filter (no groups list) holding at least one of its keys with a value; case, not and, so each jsonb function sees the type it needs
 create or replace function pg_temp.wa295u_flat_has(p jsonb) returns boolean language sql immutable as $g$
-  select case when jsonb_typeof(p) = 'object' then exists (select 1 from jsonb_each(p) e
+  select case when jsonb_typeof(p) = 'object' then coalesce(p->>'act', '') in ('', 'served12', 'served', 'never', 'review', 'noemail', 'new30')
+    and exists (select 1 from jsonb_each(p) e
     where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
                when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) x where jsonb_typeof(x) = 'string' and btrim(x #>> '{}') <> '')
                else false end) else false end
 $g$;
 create or replace function pg_temp.wa295u_filter(p jsonb) returns text language sql stable as $g$
   select case when jsonb_typeof(p->'groups') is distinct from 'array' then
-           case when pg_temp.wa295u_flat_has(p) then null else 'no groups list and no older Contacts filter' end
+           case when jsonb_typeof(p) = 'object' and coalesce(p->>'act', '') not in ('', 'served12', 'served', 'never', 'review', 'noemail', 'new30') then 'flat act "' || left(p->>'act', 40) || '", not one the CRM has'
+                when pg_temp.wa295u_flat_has(p) then null else 'no groups list and no older Contacts filter' end
     when jsonb_array_length(p->'groups') = 0 then 'no group'
     else (select string_agg(distinct r, '; ') from (
       select case when jsonb_typeof(g->'all') is distinct from 'array' then 'a group whose conditions are not a list'

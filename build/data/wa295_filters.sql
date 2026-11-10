@@ -6,7 +6,7 @@
 --              yes word (true, yes, y, 1, oui) or a no word (false, no, n, 0, non). Unknown key: no match.
 --   kind, role and tag take v as one value or a list: any of them (op is, has or any), every one (op all), none of them (op not or none).
 --   tag        also matches through crm_tag_aliases() (wave294): a Keela name such as "Volunteer Server" finds the Hub tag server.
---   chapter    montreal or toronto (crm_contact_chapters, wave281). Montreal also counts a contact with no chapter row ("No chapter: counted as
+--   chapter    a code in crm_chapters (wave281: montreal, toronto, and any an admin adds; crm_contact_chapters). Montreal also counts a contact with no chapter row ("No chapter: counted as
 --              Montreal", as the page says).
 --   dnc        do not contact is on.            phone      has a phone number.
 --   org        belongs to an organisation whose name contains v (the Partners link, or the volunteer record's organisation).
@@ -16,7 +16,8 @@
 --   kind, role, tag and field is/any (anywhere else it matches no one); a list with no non-blank value matches no one, whatever the operator; a
 --   blank value on any condition that takes text (kind, role, tag, perm, city, language, source, search, chapter, org, job_title, field is, any,
 --   contains, before, after) matches no one; the new fields accept only their own operators. Fix round 2: a list with an item that is not text
---   (a number, a list, an object) matches no one; a chapter, contact type or email permission the CRM does not have matches no one. And in
+--   (a number, a list, an object) matches no one; a chapter not in crm_chapters, a contact type or an email permission the CRM does not have matches no one. Round 3: a flat
+--   filter whose act is not one of served12, served, never, review, noemail or new30 matches no one. And in
 --   crm_list_preview a filter with no group, a group with no condition or whose conditions are not a list, and an object with neither a groups
 --   list nor any of the older flat keys with a value (kind, role, act, perm, q, city, tags), match no one (the live engine matched everyone).
 --   Real flat filters still go to crm_list_preview_flat as before.
@@ -38,7 +39,7 @@
 
 do $wa295$
 begin
-  if to_regclass('public.crm_contact_chapters') is null or to_regprocedure('public.wa_can(text)') is null
+  if to_regclass('public.crm_contact_chapters') is null or to_regclass('public.crm_chapters') is null or to_regprocedure('public.wa_can(text)') is null
      or not exists (select 1 from pg_attribute where attrelid = 'public.crm_contacts_v'::regclass and attname = 'do_not_contact' and not attisdropped)
      or not exists (select 1 from pg_attribute where attrelid = 'public.crm_contacts_v'::regclass and attname = 'job_title' and not attisdropped) then
     raise exception 'wave295 needs wave281 first (crm_contact_chapters, wa_can, or crm_contacts_v.do_not_contact and job_title is missing)';
@@ -78,14 +79,16 @@ end $g$;
 -- a flat filter (no groups list: the older Contacts tab's shape) that holds at least one of its keys with a value; case, not and, keeps every
 -- jsonb function on the type it needs (Postgres does not promise the order of and)
 create or replace function pg_temp.wa295_flat_has(p jsonb) returns boolean language sql immutable as $g$
-  select case when jsonb_typeof(p) = 'object' then exists (select 1 from jsonb_each(p) e
+  select case when jsonb_typeof(p) = 'object' then coalesce(p->>'act', '') in ('', 'served12', 'served', 'never', 'review', 'noemail', 'new30')
+    and exists (select 1 from jsonb_each(p) e
     where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
                when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) x where jsonb_typeof(x) = 'string' and btrim(x #>> '{}') <> '')
                else false end) else false end
 $g$;
 create or replace function pg_temp.wa295_filter_change(p jsonb) returns text language sql stable as $g$
   select case when jsonb_typeof(p->'groups') is distinct from 'array' then
-           case when pg_temp.wa295_flat_has(p) then null else 'no groups list and no older Contacts filter (it matched everyone; now no one)' end
+           case when jsonb_typeof(p) = 'object' and coalesce(p->>'act', '') not in ('', 'served12', 'served', 'never', 'review', 'noemail', 'new30') then 'flat act "' || left(p->>'act', 40) || '", not one the CRM has (it matched everyone; now no one)'
+                when pg_temp.wa295_flat_has(p) then null else 'no groups list and no older Contacts filter (it matched everyone; now no one)' end
     when jsonb_array_length(p->'groups') = 0 then 'no group (it matched everyone; now no one)'
     else (select string_agg(distinct r, '; ') from (
       select case when jsonb_typeof(g->'all') is distinct from 'array' then 'a group whose conditions are not a list (now no one)'
@@ -162,7 +165,8 @@ AS $function$
   with p as materialized (select public.crm_filter_prepare(p_filter) as f)
   select x from public.crm_list_preview_flat(p_filter) x
   where jsonb_typeof(p_filter->'groups') is distinct from 'array'
-    and case when jsonb_typeof(p_filter) = 'object' then exists (select 1 from jsonb_each(p_filter) e
+    and case when jsonb_typeof(p_filter) = 'object' then coalesce(p_filter->>'act', '') in ('', 'served12', 'served', 'never', 'review', 'noemail', 'new30')
+          and exists (select 1 from jsonb_each(p_filter) e
           where case when e.key in ('kind', 'role', 'act', 'perm', 'q', 'city') then jsonb_typeof(e.value) = 'string' and btrim(e.value #>> '{}') <> ''
                      when e.key = 'tags' and jsonb_typeof(e.value) = 'array' then exists (select 1 from jsonb_array_elements(e.value) t where jsonb_typeof(t) = 'string' and btrim(t #>> '{}') <> '')
                      else false end) else false end
@@ -209,7 +213,7 @@ $x$;
     return false;   -- a blank value
   end if;
   -- the closed sets: a chapter, a contact type or an email permission the CRM does not have matches no one (with not as well)
-  if f = 'chapter' and lower(btrim(v)) not in ('montreal', 'toronto') then return false; end if;
+  if f = 'chapter' and not exists (select 1 from public.crm_chapters ch where ch.code = lower(btrim(v))) then return false; end if;   -- the chapters are data (wave281)
   if f = 'perm' and v not in ('express', 'implied', 'unknown', 'none', 'unsub', 'bounced') then return false; end if;
   if f = 'kind' and exists (select 1 from jsonb_array_elements_text(case when jsonb_typeof(k->'v') = 'array' then k->'v' else jsonb_build_array(v) end) e
                             where btrim(e) <> '' and e not in ('volunteer', 'donor', 'partner', 'supporter', 'staff', 'alumni', 'board')) then

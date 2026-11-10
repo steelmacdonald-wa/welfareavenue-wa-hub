@@ -172,7 +172,8 @@ try {
       (7704, 'Test fixed list', 'static', '{"groups":[{"all":[{"f":"chapter","op":"is","v":"toronto"}]}]}'),
       (7705, 'Test no groups', 'dynamic', '{"groups":null}'), (7706, 'Test malformed group', 'dynamic', '{"groups":[{"all":{}}]}'),
       (7707, 'Test unknown type', 'dynamic', '{"groups":[{"all":[{"f":"kind","op":"not","v":"banana"}]}]}'), (7708, 'Test real flat', 'dynamic', '{"kind":"volunteer"}'),
-      (7709, 'Test nested list', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"not","v":[[]]}]}]}');
+      (7709, 'Test nested list', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"not","v":[[]]}]}]}'),
+      (7710, 'Test flat act', 'dynamic', '{"act":"x"}');
       insert into public.crm_campaigns (id, name, list_id, status) values (8801, 'Test draft', 7701, 'draft'), (8802, 'Test sent', 7701, 'sent'), (8803, 'Test plain draft', 7703, 'draft');`);
     let msg = '';
     try { await d3.exec('begin;\n' + undo + '\ncommit;'); } catch (e) { msg = String(e.message); }
@@ -180,9 +181,9 @@ try {
     ok(msg.includes('wave295 undo refuses') && msg.includes('list 7701') && msg.includes('list 7702') && !msg.includes('list 7703') && !msg.includes('list 7704')
        && msg.includes('Send 8801 (draft, list 7701)') && !msg.includes('8802') && !msg.includes('8803')
        && msg.includes('list 7705: no groups list and no older Contacts filter') && msg.includes('list 7706: a group whose conditions are not a list')
-       && msg.includes('list 7707: kind "banana"') && !msg.includes('list 7708') && msg.includes('list 7709: tag with a list or object'), 'the undo refuses and names the lists and the unsent Send (' + msg + ')');
+       && msg.includes('list 7707: kind "banana"') && !msg.includes('list 7708') && msg.includes('list 7709: tag with a list or object') && msg.includes('list 7710: flat act "x"'), 'the undo refuses and names the lists and the unsent Send (' + msg + ')');
     ok((await one(d3, MATCH)).def !== LIVE_MATCH_MD5 && (await one(d3, `select to_regprocedure('public.crm_filter_contacts(jsonb)') is not null as x`)).x === true, 'and changes nothing');
-    await d3.exec(`delete from public.crm_campaigns; delete from public.crm_lists where id in (7701, 7702, 7705, 7706, 7707, 7709);`);
+    await d3.exec(`delete from public.crm_campaigns; delete from public.crm_lists where id in (7701, 7702, 7705, 7706, 7707, 7709, 7710);`);
     await d3.exec(undo);
     ok((await one(d3, MATCH)).def === LIVE_MATCH_MD5, 'once those lists are gone, the undo runs');
     console.log('undo guard: refuses with lists 7701, 7702 and Send 8801 named; runs once they are gone');
@@ -196,7 +197,8 @@ try {
        (7711, 'Test empty group', 'dynamic', '{"groups":[{"all":[]}]}'), (7712, 'Test keela name', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"has","v":"Volunteer Server"}]}]}'),
        (7713, 'Test plain', 'dynamic', '{"groups":[{"all":[{"f":"tag","op":"has","v":"server"}]}]}'), (7714, 'Test unknown', 'dynamic', '{"groups":[{"all":[{"f":"birth","op":"is","v":"x"}]}]}'),
        (7715, 'Test malformed group', 'dynamic', '{"groups":[{"all":{}}]}'), (7716, 'Test no groups', 'dynamic', '{}'),
-       (7717, 'Test unknown type', 'dynamic', '{"groups":[{"all":[{"f":"kind","op":"not","v":"banana"}]}]}'), (7718, 'Test real flat', 'dynamic', '{"kind":"volunteer"}');
+       (7717, 'Test unknown type', 'dynamic', '{"groups":[{"all":[{"f":"kind","op":"not","v":"banana"}]}]}'), (7718, 'Test real flat', 'dynamic', '{"kind":"volunteer"}'),
+       (7719, 'Test flat act', 'dynamic', '{"kind":"volunteer","act":"bogus"}');
        insert into public.crm_campaigns (id, name, list_id, status) values (8811, 'Test queued', 7714, 'queued');`],
     ['without wave294', { w294: false }, 'wave295 needs wave294 first', null],
     ['without wave283', { w283: false }, 'wave295 needs wave283 first', null],
@@ -211,7 +213,7 @@ try {
     ok(msg.includes(want), label + ': the migration stops (' + msg + ')');
     if (label.startsWith('a saved list')) ok(msg.includes('list 7712: tag "Volunteer Server"') && msg.includes('list 7714: the field "birth"') && !msg.includes('list 7713') && msg.includes('Send 8811 (queued, list 7714)')
       && msg.includes('list 7715: a group whose conditions are not a list') && msg.includes('list 7716: no groups list and no older Contacts filter')
-      && msg.includes('list 7717: kind "banana", not a contact type') && !msg.includes('list 7718'),
+      && msg.includes('list 7717: kind "banana", not a contact type') && !msg.includes('list 7718') && msg.includes('list 7719: flat act "bogus"'),
       'it names each list and why, and the unsent Send (' + msg + ')');
     ok((await one(d2, `select to_regprocedure('public.crm_filter_contacts(jsonb)') is null as x`)).x === true && (await one(d2, MATCH)).def === m0
        && (await one(d2, `select count(*)::int as n from public.change_log where entity_id = 'wave295'`)).n === 0, label + ': nothing of wave295 is kept');
