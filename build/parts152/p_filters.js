@@ -180,6 +180,7 @@
     var need = [];
     if (!S.cfields) need.push(load('cfields'));
     if (!S.lists) need.push(load('lists'));
+    if (!S.chapters) need.push(load('chapters'));
     paint();
     focusSoon('#w295fb [data-w295cf]');
     fbPreviewSoon();
@@ -219,6 +220,7 @@
     if (!r || !r.groups.length) { FB.err = 'the filter in this link could not be read, so it is not used'; FB.note = ''; return; }
     var g = r.groups, note = r.dropped ? (r.dropped === 1 ? 'A condition in this link was not understood, so its group is left out.' : r.dropped + ' conditions in this link were not understood, so their groups are left out.') + ' Save as a list stays off until you change the filter and press Show.' : '';
     if (!note && JSON.stringify(cleanGroups(g).filter(function (x) { return x.all.length; })) === JSON.stringify(fbGroups())) return;
+    if (!S.chapters) load('chapters');
     if (!S.cfields) load('cfields').then(function () { if (S.ui.tab === 'contacts') paint(); });
     fbApply(g, { note: note, dropped: r.dropped });
   }

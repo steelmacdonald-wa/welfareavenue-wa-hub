@@ -626,7 +626,7 @@
     if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : parts[2] === 'online' ? 'online' : ''; DG.confirm = false; DG.msg = ''; DG.err = ''; DG.draft = {}; if (GF.view === 'receipts') { GF.cfg = null; S.rcpts = null; RB.act = null; RB.confirmOn = false; } GF.msg = ''; GF.err = ''; RB.msg = ''; RB.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
     /* wave295: the custom fields and lists the Filters builder offers come with the contacts, so opening it draws once */
-    if (!sub || sub === 'f' || sub === 'c') { load('cfields'); load('lists'); }
+    if (!sub || sub === 'f' || sub === 'c') { load('cfields'); load('lists'); load('chapters'); }   /* fix round 3: chapters too (the Filters' chapter options) */
     Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'studio' ? [load('templates'), load('lists')] : sub === 'lists' ? [load('lists'), load('cfields')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
@@ -1930,7 +1930,8 @@
     if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['none', 'No consent'], ['unsub', 'Unsubscribed or bouncing']];
     if (f === 'language') return [['en', 'English'], ['fr', 'French']];
     if (f === 'source') return Object.keys(SOURCES).map(function (k) { return [k, SOURCES[k][0]]; });
-    if (f === 'chapter') return [['montreal', 'Montreal'], ['toronto', 'Toronto']];
+    /* fix round 3: the chapters are data (crm_chapters, LOADERS.chapters, active ones); Montreal and Toronto until they have loaded */
+    if (f === 'chapter') return S.chapters && S.chapters.length ? S.chapters.map(function (c) { return [String(c.code), c.name_en || String(c.code)]; }) : [['montreal', 'Montreal'], ['toronto', 'Toronto']];
     return [];
   }
   /* the values of a condition as a list (one value, a list, or none yet) */
@@ -1969,6 +1970,9 @@
     /* fix round 2: a pick list's value must be one of its options (chapter, type, permission, language, source); tags and volunteer roles (the
        Contacts menu lists every role in the data) stay free text */
     var known = (d.type === 'sel' || d.type === 'multi') && k.f !== 'role' ? lopts(k.f).map(function (x) { return x[0]; }) : null;
+    /* fix round 3: before the chapters have loaded, a chapter is judged by its shape only; the database matches no one for a code crm_chapters lacks */
+    if (k.f === 'chapter' && !S.chapters) known = /^[a-z][a-z0-9_-]{1,30}$/.test(String(k.v == null ? '' : k.v).trim().toLowerCase()) ? null : [];
+    if (known && !known.length) return 'Choose one of the options.';
     if (known && known.length && vals(k).some(function (v) { return v.trim() && known.indexOf(v) < 0; })) return 'Choose one of the options.';
     if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
     if (Array.isArray(k.v) || (k.v !== null && typeof k.v === 'object')) return 'Choose one value.';
@@ -2766,6 +2770,7 @@
     var need = [];
     if (!S.cfields) need.push(load('cfields'));
     if (!S.lists) need.push(load('lists'));
+    if (!S.chapters) need.push(load('chapters'));
     paint();
     focusSoon('#w295fb [data-w295cf]');
     fbPreviewSoon();
@@ -2805,6 +2810,7 @@
     if (!r || !r.groups.length) { FB.err = 'the filter in this link could not be read, so it is not used'; FB.note = ''; return; }
     var g = r.groups, note = r.dropped ? (r.dropped === 1 ? 'A condition in this link was not understood, so its group is left out.' : r.dropped + ' conditions in this link were not understood, so their groups are left out.') + ' Save as a list stays off until you change the filter and press Show.' : '';
     if (!note && JSON.stringify(cleanGroups(g).filter(function (x) { return x.all.length; })) === JSON.stringify(fbGroups())) return;
+    if (!S.chapters) load('chapters');
     if (!S.cfields) load('cfields').then(function () { if (S.ui.tab === 'contacts') paint(); });
     fbApply(g, { note: note, dropped: r.dropped });
   }

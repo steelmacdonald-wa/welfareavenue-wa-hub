@@ -78,7 +78,8 @@
     if (f === 'perm') return [['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['none', 'No consent'], ['unsub', 'Unsubscribed or bouncing']];
     if (f === 'language') return [['en', 'English'], ['fr', 'French']];
     if (f === 'source') return Object.keys(SOURCES).map(function (k) { return [k, SOURCES[k][0]]; });
-    if (f === 'chapter') return [['montreal', 'Montreal'], ['toronto', 'Toronto']];
+    /* fix round 3: the chapters are data (crm_chapters, LOADERS.chapters, active ones); Montreal and Toronto until they have loaded */
+    if (f === 'chapter') return S.chapters && S.chapters.length ? S.chapters.map(function (c) { return [String(c.code), c.name_en || String(c.code)]; }) : [['montreal', 'Montreal'], ['toronto', 'Toronto']];
     return [];
   }
   /* the values of a condition as a list (one value, a list, or none yet) */
@@ -117,6 +118,9 @@
     /* fix round 2: a pick list's value must be one of its options (chapter, type, permission, language, source); tags and volunteer roles (the
        Contacts menu lists every role in the data) stay free text */
     var known = (d.type === 'sel' || d.type === 'multi') && k.f !== 'role' ? lopts(k.f).map(function (x) { return x[0]; }) : null;
+    /* fix round 3: before the chapters have loaded, a chapter is judged by its shape only; the database matches no one for a code crm_chapters lacks */
+    if (k.f === 'chapter' && !S.chapters) known = /^[a-z][a-z0-9_-]{1,30}$/.test(String(k.v == null ? '' : k.v).trim().toLowerCase()) ? null : [];
+    if (known && !known.length) return 'Choose one of the options.';
     if (known && known.length && vals(k).some(function (v) { return v.trim() && known.indexOf(v) < 0; })) return 'Choose one of the options.';
     if (isMultiDef(d)) return vals(k).filter(function (v) { return v.trim(); }).length ? '' : 'Choose at least one.';
     if (Array.isArray(k.v) || (k.v !== null && typeof k.v === 'object')) return 'Choose one value.';

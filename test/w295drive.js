@@ -369,6 +369,7 @@ async function main(browser) {
     const fx = fixture(); fx.crm_lists = fx.crm_lists.concat([{ id: 33, name: 'Test list with an unknown condition', description: null, kind: 'dynamic', member_ids: [],
       filter: { groups: [{ all: [{ f: 'birth', op: 'is', v: 'x' }, { f: 'dnc', op: 'is' }] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' },
       { id: 34, name: 'Test list with no condition', description: null, kind: 'dynamic', member_ids: [], filter: { groups: [{ all: [] }] }, created_at: '2026-09-01T12:00:00Z', updated_at: '2026-09-01T12:00:00Z' }]);
+    fx.crm_chapters = fx.crm_chapters.concat([{ code: 'ottawa', name_en: 'Ottawa', active: true, sort: 3 }]);   /* Y3: a chapter an admin added */
     f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx, rpcs: RPCS, wait: 3200 });
     await f.ev(ENGINE); await f.hash('#crm/lists', 1800);
     const c0 = await f.ev(() => window.__w295.calls.length);
@@ -393,6 +394,15 @@ async function main(browser) {
     b = await f.ev(() => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chips: document.querySelectorAll('#crm .w295chip').length, rows: document.querySelectorAll('#crm .w152row').length, count: (document.querySelector('#crm .w152count') || {}).textContent, hash: location.hash }));
     ok('X6: the late answer of the run before the refusal is ignored (no chips, everyone, #crm, the reason shown)', /cannot be used/.test(b.err || '') && b.chips === 0 && b.rows === 4 && b.hash === '#crm' && !/Finding who matches/.test(b.count || ''), b);
     await f.ev(() => { window.__w295.delay = 120; });
+    /* Y3: the chapter options come from crm_chapters: a chapter an admin added is offered and used; one that is not there is not */
+    const c2 = await f.ev(() => window.__w295.calls.length);
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'chapter', op: 'is', v: 'ottawa' }] }])); await wait(f, 700);
+    b = await f.ev(n0 => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, chips: [...document.querySelectorAll('#crm .w295chip .w295cw')].map(x => x.textContent), sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').map(x => JSON.stringify(x.args.p_filter)) }), c2);
+    ok('Y3: a chapter added in crm_chapters (Ottawa) is understood from a link and sent', !b.err && b.chips.join() === 'Chapter is Ottawa' && b.sent.length === 1 && /ottawa/.test(b.sent[0]), b);
+    const c3 = await f.ev(() => window.__w295.calls.length);
+    await f.ev(h => { location.hash = h; }, '#crm/f/' + enc([{ all: [{ f: 'chapter', op: 'is', v: 'calgary' }] }])); await wait(f, 700);
+    b = await f.ev(n0 => ({ err: (document.querySelector('#crm .w295err') || {}).textContent, sent: window.__w295.calls.slice(n0).filter(x => x.fn === 'crm_filter_contacts').length }), c3);
+    ok('Y3: a chapter crm_chapters does not have is not used', /could not be read/.test(b.err || '') && b.sent === 0, b);
     ok('unknown-condition list: no page errors', f.errs.length === 0, f.errs);
     await f.close();
   }

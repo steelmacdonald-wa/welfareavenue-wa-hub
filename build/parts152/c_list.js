@@ -193,7 +193,7 @@
     if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : parts[2] === 'online' ? 'online' : ''; DG.confirm = false; DG.msg = ''; DG.err = ''; DG.draft = {}; if (GF.view === 'receipts') { GF.cfg = null; S.rcpts = null; RB.act = null; RB.confirmOn = false; } GF.msg = ''; GF.err = ''; RB.msg = ''; RB.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
     /* wave295: the custom fields and lists the Filters builder offers come with the contacts, so opening it draws once */
-    if (!sub || sub === 'f' || sub === 'c') { load('cfields'); load('lists'); }
+    if (!sub || sub === 'f' || sub === 'c') { load('cfields'); load('lists'); load('chapters'); }   /* fix round 3: chapters too (the Filters' chapter options) */
     Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'studio' ? [load('templates'), load('lists')] : sub === 'lists' ? [load('lists'), load('cfields')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
