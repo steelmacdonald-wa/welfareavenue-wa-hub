@@ -123,7 +123,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   await click(f, '[data-w155or]'); await f.page.waitForTimeout(200);
   await setv(f, '[data-w155cf="1.0"]', 'city'); await f.page.waitForTimeout(150);
   await setv(f, '[data-w155cv="1.0"]', 'Toronto'); await f.page.waitForTimeout(700);
-  b = await f.ev(() => ({ groups: document.querySelectorAll('#crm .w155g').length, conds: document.querySelectorAll('#crm .w155c').length, or: !!document.querySelector('#crm .w155or'), last: window.__rpc.filter(r => r.fn === 'crm_list_preview').pop() }));
+  b = await f.ev(() => ({ groups: document.querySelectorAll('#crm .w155g').length, conds: document.querySelectorAll('#crm .w155c').length, or: !!document.querySelector('#crm .w155or'), last: window.__rpc.filter(r => r.fn === 'crm_filter_contacts' && r.args.p_filter && Array.isArray(r.args.p_filter.groups) && r.args.p_filter.groups.length === 2).pop() }));   /* wave295 round 4 */
   ok('+ And adds a condition to the group, + Or adds a second group, and the count follows the conditions', b.groups === 2 && b.conds === 3 && b.or && b.last && b.last.args.p_filter.groups.length === 2 && b.last.args.p_filter.groups[1].all[0].f === 'city' && b.last.args.p_filter.groups[1].all[0].v === 'Toronto' && b.last.args.p_filter.groups[0].all[1].f === 'served', b);
   await shot(f, 'list_builder');
   await setv(f, '[data-w155f="name"]', 'Volunteers or Toronto');
