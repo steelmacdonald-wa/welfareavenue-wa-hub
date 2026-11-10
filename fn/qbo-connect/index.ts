@@ -105,12 +105,12 @@ async function refreshStatus() {
   return { connected: true, company, prefs: p };
 }
 function page(title: string, body: string, ok: boolean) {
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
-<style>body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#FFFAF2;color:#1F201E;font:16px/1.55 'Space Grotesk','Helvetica Neue',Arial,sans-serif}
-main{max-width:460px;padding:32px;text-align:center}h1{font:600 34px/1.1 'Barlow Condensed','Arial Narrow',sans-serif;text-transform:uppercase;color:#103F39;margin:0 0 12px}
-a{display:inline-block;margin-top:16px;padding:12px 22px;border-radius:8px;background:${ok ? '#DCA527' : '#103F39'};color:${ok ? '#103F39' : '#FFFAF2'};text-decoration:none;font-weight:600}</style></head>
-<body><main><h1>${title}</h1><p>${body}</p><a href="${HUB}#finances">Back to Finance</a></main></body></html>`;
-  return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  /* v2: Supabase serves function responses on supabase.co as plain text, so no HTML page here: a successful
+     connection goes straight back to Finance (the Today chip then shows the company); anything else is a short
+     plain-text note with the way back. */
+  if (ok && title === 'QuickBooks is connected') return new Response(null, { status: 302, headers: { Location: HUB + '#finances' } });
+  const text = title + '\n\n' + body.replace(/<[^>]+>/g, '').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"') + '\n\nBack to Finance: ' + HUB + '#finances\n';
+  return new Response(text, { status: ok ? 200 : 400, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
 }
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c]);
 
