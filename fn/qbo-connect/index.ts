@@ -1,4 +1,9 @@
-// Welfare Avenue: qbo-connect (v4, 10/11/26, wave302). v4 (Intuit's security requirements): the access and refresh
+// Welfare Avenue: qbo-connect (v5, 10/11/26, wave302). v5 (Intuit's error-handling checks): every failed Intuit call
+// (token or API) is written to qbo_log with its HTTP status, Intuit's intuit_tid and the Fault text (never a token,
+// a code or QuickBooks data); the tid is also in the error the Hub shows; a failed status check is kept in last_error;
+// action 'selftest' sends three read-only bad requests (a syntax error, a validation error, an unknown id) and reports
+// that each was caught and logged.
+// v4 (Intuit's security requirements): the access and refresh
 // tokens are stored AES-256-GCM encrypted ('v1:' + iv + ciphertext); the key is QBO_TOKEN_KEY from the vault when it
 // exists, otherwise derived with HKDF-SHA-256 from the vault's WA_TRIGGER_SECRET (never stored with the data); tokens
 // stored before v4 are re-encrypted on first use; every response is Cache-Control: no-store.
@@ -107,6 +112,19 @@ async function readState(s: string): Promise<{ e: string } | null> {
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 class Reconnect extends Error {}
+/* v5: the error log. Only what support needs: the call, the status, Intuit's tid and Intuit's error text. */
+const tidOf = (res: Response) => res.headers.get('intuit_tid') || res.headers.get('intuit-tid') || null;
+function faultText(b: Record<string, unknown>): string {
+  const f = (b?.Fault || b?.fault) as { Error?: { Message?: string; Detail?: string; code?: string }[]; type?: string } | undefined;
+  if (f?.Error?.length) return f.Error.map(e => [e.code, e.Message, e.Detail].filter(Boolean).join(' ')).join('; ') + (f.type ? ' [' + f.type + ']' : '');
+  return String(b?.error_description || b?.error || '').trim();
+}
+async function logErr(kind: string, call: string, status: number | null, tid: string | null, fault: string) {
+  try {
+    await svc.from('qbo_log').insert({ kind, call: call.slice(0, 120), http_status: status, intuit_tid: tid, fault: fault.slice(0, 500) });
+    if (Math.random() < 0.05) await svc.from('qbo_log').delete().lt('at', new Date(Date.now() - 180 * 864e5).toISOString());
+  } catch (_) { /* the log never breaks a call */ }
+}
 async function tokenCall(params: Record<string, string>) {
   const c = await creds();
   let last = '';
@@ -114,10 +132,12 @@ async function tokenCall(params: Record<string, string>) {
     let res: Response;
     try {
       res = await fetch(TOKEN_URL, { method: 'POST', headers: { Authorization: 'Basic ' + btoa(c.id + ':' + c.sec), Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
-    } catch (e) { last = 'network: ' + String((e as Error).message || e).slice(0, 120); await sleep(1500); continue; }
+    } catch (e) { last = 'network: ' + String((e as Error).message || e).slice(0, 120); await logErr('token', params.grant_type, null, null, last); await sleep(1500); continue; }
     const b = await res.json().catch(() => ({}));
     if (res.ok && b.access_token) return { b, env: c.env };
-    last = String(b.error_description || b.error || res.status).slice(0, 200);
+    const tid = tidOf(res);
+    last = String(faultText(b) || res.status).slice(0, 200) + (tid ? ' (intuit_tid ' + tid + ')' : '');
+    await logErr('token', params.grant_type, res.status, tid, faultText(b) || String(res.status));
     if (b.error === 'invalid_grant' || res.status === 400 || res.status === 401) throw new Reconnect('Intuit token: ' + last);
     if (res.status >= 500 || res.status === 429) { await sleep(1500 * (attempt + 1)); continue; }
     break;
@@ -162,10 +182,13 @@ async function qbo(path: string) {
     let res: Response;
     try {
       res = await fetch(apiBase(a.env) + '/v3/company/' + a.realm + '/' + path + (path.includes('?') ? '&' : '?') + 'minorversion=75', { headers: { Authorization: 'Bearer ' + a.tok, Accept: 'application/json' } });
-    } catch (e) { lastErr = 'network: ' + String((e as Error).message || e).slice(0, 120); await sleep(1500); continue; }
+    } catch (e) { lastErr = 'network: ' + String((e as Error).message || e).slice(0, 120); await logErr('api', path.split('?')[0], null, null, lastErr); await sleep(1500); continue; }
     const b = await res.json().catch(() => ({}));
     if (res.ok) return b;
-    lastErr = 'QuickBooks ' + res.status + ': ' + JSON.stringify(b.Fault || b).slice(0, 200);
+    const tid = tidOf(res);
+    const ft = faultText(b) || JSON.stringify(b).slice(0, 200);
+    lastErr = 'QuickBooks ' + res.status + (tid ? ' (intuit_tid ' + tid + ')' : '') + ': ' + ft.slice(0, 200);
+    await logErr('api', path.split('?')[0], res.status, tid, ft);
     if (res.status === 401 && attempt === 0) { await forceRefresh(); continue; }   // the access token was refused: refresh it and try once more
     if ((res.status >= 500 || res.status === 429) && attempt === 0) { await sleep(2000); continue; }
     break;
@@ -180,7 +203,7 @@ async function refreshStatus() {
   const p = { classes_per_txn: !!acc.ClassTrackingPerTxn, classes_per_line: !!acc.ClassTrackingPerTxnLine, locations: !!acc.TrackDepartments, location_label: acc.DepartmentTerminology || null,
     currency: prefs?.Preferences?.CurrencyPrefs?.HomeCurrency?.value || null, multi_currency: !!prefs?.Preferences?.CurrencyPrefs?.MultiCurrencyEnabled };
   const company = info?.CompanyInfo?.CompanyName || info?.CompanyInfo?.LegalName || null;
-  await svc.from('qbo_connection').update({ company_name: company, prefs: p, updated_at: new Date().toISOString() }).eq('id', 1);
+  await svc.from('qbo_connection').update({ company_name: company, prefs: p, last_error: null, updated_at: new Date().toISOString() }).eq('id', 1);
   return { connected: true, company, prefs: p };
 }
 function page(title: string, body: string, ok: boolean) {
@@ -229,7 +252,30 @@ Deno.serve(async (req: Request) => {
       if (!row?.refresh_token) return json({ connected: false, keys: !!(await secret('QBO_CLIENT_ID')) });
       if (String(row.last_error || '').startsWith('reconnect:')) return json({ connected: false, reconnect: true, why: row.last_error });
       try { return json(await refreshStatus()); }
-      catch (e) { if (e instanceof Reconnect) return json({ connected: false, reconnect: true, why: String((e as Error).message) }); throw e; }
+      catch (e) {
+        if (e instanceof Reconnect) return json({ connected: false, reconnect: true, why: String((e as Error).message) });
+        await svc.from('qbo_connection').update({ last_error: String((e as Error).message).slice(0, 300) }).eq('id', 1);
+        throw e;
+      }
+    }
+    if (action === 'selftest') {
+      /* v5: three read-only requests QuickBooks must refuse; each should come back as a caught error, logged with its tid */
+      const cases: [string, string][] = [
+        ['syntax error', 'query?query=' + encodeURIComponent('SELEKT * FROM Account')],
+        ['validation error', 'query?query=' + encodeURIComponent("select * from Account where NoSuchField = '1'")],
+        ['unknown id', 'account/0'],
+      ];
+      const out = [];
+      for (const [name, path] of cases) {
+        const since = new Date(Date.now() - 1000).toISOString();
+        try { await qbo(path); out.push({ name, caught: false }); }
+        catch (e) {
+          const msg = String((e as Error).message || e);
+          const { data: lg } = await svc.from('qbo_log').select('http_status, intuit_tid').gte('at', since).eq('kind', 'api').order('at', { ascending: false }).limit(1);
+          out.push({ name, caught: true, status: lg?.[0]?.http_status ?? null, intuit_tid: lg?.[0]?.intuit_tid ?? null, logged: !!lg?.length, message: msg.slice(0, 200) });
+        }
+      }
+      return json({ selftest: out, ok: out.every(r => r.caught && r.logged) });
     }
     if (action === 'disconnect') {
       const { data: row } = await svc.from('qbo_connection').select('refresh_token').eq('id', 1).maybeSingle();
