@@ -10,7 +10,7 @@ The UI pass ports the approved experimental interface into the maintained Hub so
 | Serving workflow, role disclosures and contact cards | Integrated |
 | Colored volunteer status picker | Integrated |
 | Organized SOP sections and owner picker | Integrated |
-| Compact applicant cards | Pending |
+| Compact applicant cards | Integrated |
 | Phone workspace layout | Pending |
 | Taller sign-offs workspace | Pending |
 | Compact Close the loop dialog | Pending |

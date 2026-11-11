@@ -81731,7 +81731,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishwashers'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];   /* wave239: videographer */
   var SOURCES = [['linkedin', 'LinkedIn'], ['cabm', 'CABM'], ['fcabq', 'Je B\u00e9n\u00e9vole'], ['email', 'Email'], ['referral', 'Referral'], ['website', 'Website'], ['event', 'An event'], ['manual', 'Other']];
   var STATUS = [['received', 'To handle'], ['contacted', 'Contacted'], ['welcomed', 'Welcomed'], ['not_fit', 'Not a fit'], ['withdrawn', 'Withdrawn']];
-  var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, busy: false, n: null };
+  var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, details: {}, notes: {}, busy: false, n: null };
 
   function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function lower(s) { return String(s || '').trim().toLowerCase(); }
@@ -81918,6 +81918,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!force && V.list && Date.now() - V.at < 60000) return V.list;
     V.loading = (async function () {
       try { var r = await db.from('volunteer_applications').select('*').order('applied_at', { ascending: false }).limit(2000); V.list = (r && !r.error && r.data) || []; } catch (e) { V.list = V.list || []; }
+      try { if (typeof waVolLoadPeople === 'function') await waVolLoadPeople(); } catch (e) { /* The review state stays Not checked when unavailable. */ }
       V.at = Date.now(); V.loading = null; V.n = V.list.filter(isOpen).length;
       return V.list;
     })();
@@ -81940,41 +81941,27 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return true;
     }).sort(function (x, y) { if (V.tab === 'open' && x.status !== y.status) return x.status === 'received' ? -1 : 1; return String(y.applied_at).localeCompare(String(x.applied_at)); });
   }
-  /* wave273: an email to someone who applied elsewhere, asking them to use the volunteer form (wa273_ask_signup) */
-  function askHtml(a) {
-    var q = (V.ask || {})[a.id]; if (!q) return '';
-    if (!q.subject) return '<div class="w273p">' + E(q.err || 'Preparing the email\u2026') + '</div>';
-    return '<div class="w273p"><p class="s">' + E(q.subject) + '</p><p class="b">' + E(q.text) + '</p><p class="m">To ' + E(q.to) + ', from ' + E(q.from) + '. Replies come to ' + E(q.reply) + '.</p>' + (q.err ? '<p class="e">' + E(q.err) + '</p>' : '') +
-      '<div class="w209acts">' + btn(q.busy ? 'Sending\u2026' : 'Send the email', 'data-w273send="' + a.id + '"', 'sm pri') + btn('Cancel', 'data-w273no="' + a.id + '"', 'sm link') + '</div></div>';
-  }
-  async function askSignup(id, send) {
-    V.ask = V.ask || {}; var q = V.ask[id] = V.ask[id] || {};
-    if (q.busy) return; q.busy = send; q.err = ''; paint();
-    try {
-      var r = await db.rpc('wa273_ask_signup', { p_id: Number(id), p_send: !!send }); if (r && r.error) throw r.error;
-      var d = (r && r.data) || {}; q.busy = false;
-      if (d.ok === false) { q.err = d.error || 'The email did not go.'; paint(); return; }
-      if (!send) { q.subject = d.subject; q.text = d.text; q.to = d.to; q.from = d.from; q.reply = d.reply; paint(); return; }
-      var a = (V.list || []).filter(function (x) { return String(x.id) === String(id); })[0];
-      if (a) { a.status = d.status || a.status; a.status_note = d.note || a.status_note; a.handled_by = d.by || a.handled_by; a.handled_at = new Date().toISOString(); }
-      delete V.ask[id]; V.n = (V.list || []).filter(isOpen).length; paint(); counts(true);
-      toastS('Email sent to ' + d.to);
-    } catch (e) { q.busy = false; q.err = 'Could not send: ' + msgOf(e); paint(); }
-  }
   function cardHtml(a) {
     var long = String(a.message || '').length > 260, open = !!V.open[a.id];
     var msg = a.message ? '<div class="w209msg">' + E(open || !long ? a.message : String(a.message).slice(0, 240) + '\u2026') + (long ? ' ' + btn(open ? 'Less' : 'More', 'data-w209more="' + a.id + '"', 'sm link') : '') + '</div>' : '';
     var cv = a.cv_url ? '<a class="w197b sm" href="' + E(a.cv_url) + '" target="_blank" rel="noopener">CV</a>' : (a.cv_path ? btn('CV', 'data-w209cv="' + E(a.cv_path) + '"', 'sm') : '');
+    var person = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []).filter(function (p) { return String(p.id) === String(a.person_id); })[0];
+    var review = person ? (person.needs_review ? 'Needs review' : 'No flags') : 'Not checked';
+    var reviewClass = person ? (person.needs_review ? 'flagged' : 'clear') : 'unknown';
     var stt = '<span class="w209st ' + E(a.status) + '">' + E(lbl(STATUS, a.status)) + '</span>';
-    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b>' + stt + '</div>' +
+    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b></div>' +
+      '<div class="wa-app-signals"><span><small>Application</small>' + stt + '</span><span><small>Record review</small><span class="wa-app-review ' + reviewClass + '">' + E(review) + '</span></span></div>' +
+      (msg || '<div class="w209msg wa-app-no-message">No message provided.</div>') +
+      '<details class="wa-app-details" data-wa-app-details="' + a.id + '"' + (V.details[a.id] ? ' open' : '') + '><summary>Details &amp; actions<span aria-hidden="true">\u2304</span></summary><div class="wa-app-body">' +
+      (person && person.needs_review ? '<p class="wa-app-review-note"><b>Review needed</b> \u00b7 ' + E(person.review_note || 'Check their volunteer record.') + '</p>' : '') +
       '<div class="w209roles2">' + (a.roles || []).map(function (k) { return '<span class="w209chip">' + E(roleLabel(k)) + '</span>'; }).join('') + (a.role_text && (a.roles || []).length <= 1 ? '<small>' + E(a.role_text) + '</small>' : '') + '</div>' +
       '<p class="w209meta">Applied ' + E(ago(a.applied_at)) + ' (' + E(day(a.applied_at)) + ') \u00b7 ' + E(lbl(SOURCES, a.source) || a.source) + (a.language ? ' \u00b7 ' + (a.language === 'fr' ? 'French' : a.language === 'en' ? 'English' : E(a.language)) : '') + '</p>' +
       '<p class="w209ct">' + (a.email ? '<a href="mailto:' + E(a.email) + '">' + E(a.email) + '</a>' : '') + (a.email && a.phone ? ' \u00b7 ' : '') + (a.phone ? '<a href="tel:' + E(String(a.phone).replace(/[^\d+]/g, '')) + '">' + E(a.phone) + '</a>' : '') + (!a.email && !a.phone ? 'No contact details' : '') + '</p>' +
-      msg + (a.handled_by ? '<p class="w209meta">' + E(lbl(STATUS, a.status)) + ' by ' + E(a.handled_by) + ' ' + E(ago(a.handled_at)) + (a.status_note ? ': ' + E(a.status_note) : '') + '</p>' : '') +
-      '<div class="w209acts">' + cv + (a.contact_id ? '<a class="w197b sm" href="#crm/c/' + E(a.contact_id) + '">In the CRM</a>' : '') + btn('In Volunteers', 'data-w209vol="' + a.id + '"', 'sm') + (a.email && a.source !== 'website' ? btn(/Asked to sign up/.test(a.status_note || '') ? 'Ask again to sign up' : 'Ask to sign up', 'data-w273ask="' + a.id + '"', 'sm') : '') + '</div>' + askHtml(a) +
-      '<div class="w209do"><input type="text" data-w209note="' + a.id + '" placeholder="A note (optional)" aria-label="A note for ' + E(a.name) + '">' +
+      (a.handled_by ? '<p class="w209meta">' + E(lbl(STATUS, a.status)) + ' by ' + E(a.handled_by) + ' ' + E(ago(a.handled_at)) + (a.status_note ? ': ' + E(a.status_note) : '') + '</p>' : '') +
+      '<div class="w209acts">' + cv + (a.contact_id ? '<a class="w197b sm" href="#crm/c/' + E(a.contact_id) + '">In the CRM</a>' : '') + btn('In Volunteers', 'data-w209vol="' + a.id + '"', 'sm') + '</div>' +
+      '<div class="w209do"><input type="text" data-w209note="' + a.id + '" placeholder="A note (optional)" aria-label="A note for ' + E(a.name) + '" value="' + E(V.notes[a.id] || '') + '">' +
       STATUS.filter(function (s) { return s[0] !== a.status && s[0] !== 'received'; }).map(function (s) { return btn(s[0] === 'welcomed' ? 'Welcome' : s[1], 'data-w209st="' + a.id + '" data-s="' + s[0] + '"', 'sm' + (s[0] === 'welcomed' ? ' pri' : '')); }).join('') +
-      (a.status !== 'received' ? btn('Back to To handle', 'data-w209st="' + a.id + '" data-s="received"', 'sm link') : '') + '</div></li>';
+      (a.status !== 'received' ? btn('Back to To handle', 'data-w209st="' + a.id + '" data-s="received"', 'sm link') : '') + '</div></div></details></li>';
   }
   /* wave258: My roles, when the signed-in person owns roles (window.w258v) */
   function mineOpt() {
@@ -82095,16 +82082,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- events ---------- */
   document.addEventListener('click', function (e) {
-    var t = e.target && e.target.closest ? e.target.closest('[data-w209a],[data-w209move],[data-w209tab],[data-w209st],[data-w209more],[data-w209cv],[data-w209vol],[data-w273ask],[data-w273send],[data-w273no]') : null; if (!t) return;
+    var t = e.target && e.target.closest ? e.target.closest('[data-w209a],[data-w209move],[data-w209tab],[data-w209st],[data-w209more],[data-w209cv],[data-w209vol]') : null; if (!t) return;
     var a = t.getAttribute('data-w209a');
     if (a === 'add') { e.preventDefault(); openForm(t.getAttribute('data-ctx')); return; }
     if (a === 'shut') { shutForm(); return; }
     if (a === 'save') { save(); return; }
     if (t.hasAttribute('data-w209move')) { moveCard(t.getAttribute('data-w209move')); return; }
     if (t.hasAttribute('data-w209tab')) { V.tab = t.getAttribute('data-w209tab'); paint(); return; }
-    if (t.hasAttribute('data-w273ask')) { askSignup(t.getAttribute('data-w273ask'), false); return; }
-    if (t.hasAttribute('data-w273send')) { askSignup(t.getAttribute('data-w273send'), true); return; }
-    if (t.hasAttribute('data-w273no')) { delete V.ask[t.getAttribute('data-w273no')]; paint(); return; }
     if (t.hasAttribute('data-w209st')) { setStatus(t.getAttribute('data-w209st'), t.getAttribute('data-s')); return; }
     if (t.hasAttribute('data-w209more')) { var id = t.getAttribute('data-w209more'); V.open[id] = !V.open[id]; paint(); return; }
     if (t.hasAttribute('data-w209cv')) { openCv(t.getAttribute('data-w209cv')); return; }
@@ -82112,10 +82096,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   });
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t) return;
+    if (t.hasAttribute('data-w209note')) V.notes[t.getAttribute('data-w209note')] = t.value;
     if (t.id === 'w209q') { V.q = t.value; paint(); }
     if (t.id === 'w209r') hint();
   });
-  document.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'w209cvhelp') F.helpOpen = e.target.open; }, true);   /* wave211: the guidance stays open across repaints */
+  document.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'w209cvhelp') F.helpOpen = e.target.open; if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-wa-app-details')) V.details[e.target.getAttribute('data-wa-app-details')] = e.target.open; }, true);   /* wave211: the guidance stays open across repaints */
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t) return;
     if (t.id === 'w209pos') { repaintForm(); var ps = document.getElementById('w209pos'); if (ps) try { ps.focus(); } catch (x) { /* fine */ } }   /* wave211: the Resumes folder follows the position */
@@ -82144,7 +82129,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w209st{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;}.w209st.received{background:rgba(220,165,39,.22);color:#7a5a0c;}.w209st.contacted{background:rgba(42,140,122,.14);color:#1d6b5d;}.w209st.welcomed{background:' + TEAL + ';color:#FFFAF2;}.w209st.not_fit,.w209st.withdrawn{background:rgba(16,63,57,.08);color:#4a5a56;}' +
     '.w209roles2{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:6px 0 2px;}.w209chip{font-size:12px;font-weight:600;background:rgba(16,63,57,.08);color:' + GREEN + ';border-radius:6px;padding:2px 7px;}.w209roles2 small{color:#5b6b67;font-size:12px;}' +
     '.w209meta{font-size:12.5px;color:#5b6b67;margin:4px 0;}.w209ct{font-size:13.5px;margin:4px 0;overflow-wrap:anywhere;}.w209msg{font-size:13.5px;white-space:pre-wrap;background:#FFFAF2;border-radius:8px;padding:8px;margin:6px 0;overflow-wrap:anywhere;}' +
-    '.w273p{margin-top:8px;padding:10px 12px;background:#f5f1e8;border-radius:10px;font-size:13.5px;}.w273p p{margin:0 0 6px;white-space:pre-wrap;}.w273p .s{font-weight:700;}.w273p .m{font-size:12px;color:#6d6a60;}.w273p .e{color:#a33a2a;}' +
     '.w209acts,.w209do{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center;}.w209do input{flex:1 1 160px;min-width:0;font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;background:#FFFAF2;}' +
     '.w197b.link{border:none;text-decoration:underline;padding:2px 4px;}';
   (document.head || document.documentElement).appendChild(css);
@@ -94416,6 +94400,43 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     new MutationObserver(function (records) { if (records.some(function (r) { return !r.target.closest || !r.target.closest('[data-wa-enhancement]'); })) schedule(); }).observe(section, { childList: true, subtree: true }); schedule();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-applicants";
+  style.textContent = "/* Quiet motion and compact, legible people workflows. */\n#w209v,#w256,#w195 { --people-line:#dce1d8; --people-muted:#6b756f; }\n.wa-people-enter { animation:wa-people-enter 180ms ease-out; }\n@keyframes wa-people-enter { from { opacity:.55; transform:translateY(5px); } to { opacity:1; transform:none; } }\n#volunteering :is(button,a,summary,input,select,textarea) { transition:background-color 140ms ease,border-color 140ms ease,box-shadow 140ms ease,color 140ms ease; }\n#volunteering :is(button,a,summary,input,select,textarea):focus-visible { outline:2px solid #b9851b; outline-offset:3px; }\n\n/* The applicant's message and two distinct states are the scanning surface. */\n#w209v .w209lead { max-width:64em; color:var(--people-muted); line-height:1.6; margin:0 0 18px; }\n#w209v .w209bar { margin-bottom:12px; gap:10px; }\n#w209v .w209filt { margin:0 0 18px; }\n#w209v .w209filt :is(input,select) { border-radius:10px; min-height:40px; font-size:13px; }\n#w209v .w209list { align-items:start; gap:14px; grid-template-columns:repeat(2,minmax(0,1fr)); }\n#w209v .w209app { background:#fffcf7; padding:18px 18px 0; border:1px solid var(--people-line); border-radius:16px; overflow:hidden; box-shadow:0 2px 5px #103f3904; }\n#w209v .w209hd { align-items:center; margin-bottom:13px; }\n#w209v .w209hd b { font-size:17px; letter-spacing:-.2px; line-height:1.3; overflow-wrap:anywhere; }\n.wa-app-signals { display:flex; flex-wrap:wrap; gap:12px 22px; margin-bottom:14px; }\n.wa-app-signals > span { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }\n.wa-app-signals small { font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.8px; color:var(--people-muted); }\n#w209v :is(.w209st,.wa-app-review) { font-size:11px; font-weight:650; line-height:1.5; padding:3px 9px; border-radius:6px; display:inline-flex; align-items:center; gap:5px; }\n.wa-app-review::before { content:'\u25cf'; font-size:7px; }\n.wa-app-review.clear { background:#e7efea; color:#286653; }\n.wa-app-review.flagged { background:#f9e9dd; color:#9b4626; }\n.wa-app-review.unknown { background:#eeefea; color:#64716b; }\n#w209v .w209msg { font-size:13px; line-height:1.65; padding:0; margin:0 0 16px; min-height:110px; background:transparent; }\n#w209v .w209msg .link { font-size:12px; padding:0 2px; font-weight:700; }\n#w209v .wa-app-no-message { color:var(--people-muted); font-style:italic; }\n.wa-app-details { border-top:1px solid var(--people-line); margin:0 -18px; }\n.wa-app-details > summary { list-style:none; display:flex; align-items:center; justify-content:space-between; min-height:45px; padding:10px 18px; box-sizing:border-box; color:#103f39; font-size:12px; font-weight:650; cursor:pointer; background:#f4f5ee; -webkit-user-select:none; user-select:none; }\n.wa-app-details > summary::-webkit-details-marker { display:none; }\n.wa-app-details > summary:hover { background:#eaf0e8; }\n.wa-app-details > summary span { font-size:18px; line-height:1; transition:transform 180ms ease; }\n.wa-app-details[open] > summary span { transform:rotate(180deg); }\n.wa-app-body { padding:14px 18px 18px; }\n#w209v .w209roles2 { margin:0 0 9px; }\n#w209v .w209roles2 small { display:none; }\n#w209v .w209meta { font-size:11.5px; line-height:1.6; }\n#w209v .w209ct { display:flex; flex-wrap:wrap; gap:4px; font-size:12px; line-height:1.6; margin:8px 0 12px; }\n#w209v .w209ct a { overflow-wrap:anywhere; }\n#w209v .w209do { border-top:1px solid var(--people-line); padding-top:12px; margin-top:12px; gap:7px; }\n#w209v .w209do input { flex-basis:100%; min-height:36px; }\n#w209v .w209acts { gap:7px; }\n#w209v .w209do .w197b,#w209v .w209acts .w197b { font-size:11.5px; min-height:29px; }\n.wa-app-review-note { background:#fbefdf; color:#864c20; padding:9px 10px; border-radius:8px; font-size:12px; line-height:1.5; margin:0 0 12px; }\n#w209v .w257up { border-top:1px solid var(--people-line); padding-top:10px; margin-top:10px; font-size:12px; }\n\n\n@media(max-width:760px){#w209v .w209list{grid-template-columns:1fr;}.wa-app-signals{gap:10px 16px;}}\n@media(prefers-reduced-motion:reduce){#volunteering :is(button,a,summary,input,select,textarea){transition:none;}}\n";
+  document.head.appendChild(style);
+})();
+/* Animate the existing applicant disclosure while preserving its original controls. */
+(function () {
+  const animations = new WeakMap();
+  document.addEventListener('click', event => {
+    const summary = event.target.closest?.('.wa-app-details > summary');
+    if (!summary || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const details = summary.parentElement;
+    if (typeof details.animate !== 'function') return;
+    event.preventDefault();
+    if (animations.has(details)) return;
+    const start = details.getBoundingClientRect().height;
+    const opening = !details.open;
+    if (opening) details.open = true;
+    const end = opening ? details.getBoundingClientRect().height : summary.getBoundingClientRect().height;
+    details.style.overflow = 'hidden';
+    const animation = details.animate([{ height: start + 'px' }, { height: end + 'px' }], {
+      duration: 180, easing: 'cubic-bezier(.2,.7,.2,1)'
+    });
+    animations.set(details, animation);
+    animation.onfinish = () => {
+      details.open = opening;
+      details.style.overflow = '';
+      animations.delete(details);
+    };
+    animation.oncancel = () => {
+      details.style.overflow = '';
+      animations.delete(details);
+    };
+  });
 })();
 
 /* =====================================================================

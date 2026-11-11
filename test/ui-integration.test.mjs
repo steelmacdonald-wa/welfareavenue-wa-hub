@@ -148,3 +148,23 @@ test('SOP owner and step menus retain the existing save and edit handlers', asyn
   assert.equal(edits, 1);
   assert.match(context.document.querySelector('.wa-sop-title').textContent, /Confirm venue/);
 });
+
+test('applicant cards expose name, message and two states with secondary controls in a disclosure', async t => {
+  const native = readFileSync(new URL('../build/parts209/a_intake.js', import.meta.url), 'utf8');
+  const start = native.indexOf('  function cardHtml(a)');
+  const end = native.indexOf('  /* wave258: My roles', start);
+  const context = await screen('', '#volunteering/applicants', [part('applicants.js')], window => {
+    window.eval("var V={open:{},details:{},notes:{}}; var WA_VOL_PEOPLE=[{id:1,needs_review:true,review_note:'Check references'}]; var STATUS=[['received','To handle'],['welcomed','Welcomed']]; var SOURCES=[['manual','Other']]; function E(v){return String(v??'').replace(/[&<>\"']/g,c=>'&#'+c.charCodeAt(0)+';');} function btn(label,attrs){return '<button '+attrs+'>'+label+'</button>';} function lbl(list,value){return (list.find(row=>row[0]===value)||['',value])[1];} function roleLabel(v){return v;} function ago(){return 'today';} function day(){return 'Nov 10';}");
+    window.eval(native.slice(start, end));
+    window.document.body.innerHTML = '<ul>' + window.cardHtml({id:2,person_id:1,name:'Alex Example',message:'Available on Sundays',status:'received',roles:['server'],email:'alex@example.invalid',phone:'5550101',source:'manual'}) + '</ul>';
+  });
+  t.after(() => context.dom.window.close());
+  assert.match(context.document.querySelector('.w209hd').textContent, /Alex Example/);
+  assert.equal(context.document.querySelector('.w209msg').textContent, 'Available on Sundays');
+  assert.match(context.document.querySelector('.wa-app-signals').textContent, /To handle.*Needs review/);
+  const details = context.document.querySelector('details');
+  assert.equal(details.open, false);
+  assert.equal(details.querySelector('a[href^="mailto:"]').textContent, 'alex@example.invalid');
+  assert.equal(details.querySelector('[data-w209st]').getAttribute('data-s'), 'welcomed');
+  assert.equal(context.document.querySelector('.w209ct').closest('details'), details);
+});

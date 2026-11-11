@@ -1,0 +1,49 @@
+/* Quiet motion and compact, legible people workflows. */
+#w209v,#w256,#w195 { --people-line:#dce1d8; --people-muted:#6b756f; }
+.wa-people-enter { animation:wa-people-enter 180ms ease-out; }
+@keyframes wa-people-enter { from { opacity:.55; transform:translateY(5px); } to { opacity:1; transform:none; } }
+#volunteering :is(button,a,summary,input,select,textarea) { transition:background-color 140ms ease,border-color 140ms ease,box-shadow 140ms ease,color 140ms ease; }
+#volunteering :is(button,a,summary,input,select,textarea):focus-visible { outline:2px solid #b9851b; outline-offset:3px; }
+
+/* The applicant's message and two distinct states are the scanning surface. */
+#w209v .w209lead { max-width:64em; color:var(--people-muted); line-height:1.6; margin:0 0 18px; }
+#w209v .w209bar { margin-bottom:12px; gap:10px; }
+#w209v .w209filt { margin:0 0 18px; }
+#w209v .w209filt :is(input,select) { border-radius:10px; min-height:40px; font-size:13px; }
+#w209v .w209list { align-items:start; gap:14px; grid-template-columns:repeat(2,minmax(0,1fr)); }
+#w209v .w209app { background:#fffcf7; padding:18px 18px 0; border:1px solid var(--people-line); border-radius:16px; overflow:hidden; box-shadow:0 2px 5px #103f3904; }
+#w209v .w209hd { align-items:center; margin-bottom:13px; }
+#w209v .w209hd b { font-size:17px; letter-spacing:-.2px; line-height:1.3; overflow-wrap:anywhere; }
+.wa-app-signals { display:flex; flex-wrap:wrap; gap:12px 22px; margin-bottom:14px; }
+.wa-app-signals > span { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
+.wa-app-signals small { font-size:10px; text-transform:uppercase; font-weight:700; letter-spacing:.8px; color:var(--people-muted); }
+#w209v :is(.w209st,.wa-app-review) { font-size:11px; font-weight:650; line-height:1.5; padding:3px 9px; border-radius:6px; display:inline-flex; align-items:center; gap:5px; }
+.wa-app-review::before { content:'●'; font-size:7px; }
+.wa-app-review.clear { background:#e7efea; color:#286653; }
+.wa-app-review.flagged { background:#f9e9dd; color:#9b4626; }
+.wa-app-review.unknown { background:#eeefea; color:#64716b; }
+#w209v .w209msg { font-size:13px; line-height:1.65; padding:0; margin:0 0 16px; min-height:110px; background:transparent; }
+#w209v .w209msg .link { font-size:12px; padding:0 2px; font-weight:700; }
+#w209v .wa-app-no-message { color:var(--people-muted); font-style:italic; }
+.wa-app-details { border-top:1px solid var(--people-line); margin:0 -18px; }
+.wa-app-details > summary { list-style:none; display:flex; align-items:center; justify-content:space-between; min-height:45px; padding:10px 18px; box-sizing:border-box; color:#103f39; font-size:12px; font-weight:650; cursor:pointer; background:#f4f5ee; -webkit-user-select:none; user-select:none; }
+.wa-app-details > summary::-webkit-details-marker { display:none; }
+.wa-app-details > summary:hover { background:#eaf0e8; }
+.wa-app-details > summary span { font-size:18px; line-height:1; transition:transform 180ms ease; }
+.wa-app-details[open] > summary span { transform:rotate(180deg); }
+.wa-app-body { padding:14px 18px 18px; }
+#w209v .w209roles2 { margin:0 0 9px; }
+#w209v .w209roles2 small { display:none; }
+#w209v .w209meta { font-size:11.5px; line-height:1.6; }
+#w209v .w209ct { display:flex; flex-wrap:wrap; gap:4px; font-size:12px; line-height:1.6; margin:8px 0 12px; }
+#w209v .w209ct a { overflow-wrap:anywhere; }
+#w209v .w209do { border-top:1px solid var(--people-line); padding-top:12px; margin-top:12px; gap:7px; }
+#w209v .w209do input { flex-basis:100%; min-height:36px; }
+#w209v .w209acts { gap:7px; }
+#w209v .w209do .w197b,#w209v .w209acts .w197b { font-size:11.5px; min-height:29px; }
+.wa-app-review-note { background:#fbefdf; color:#864c20; padding:9px 10px; border-radius:8px; font-size:12px; line-height:1.5; margin:0 0 12px; }
+#w209v .w257up { border-top:1px solid var(--people-line); padding-top:10px; margin-top:10px; font-size:12px; }
+
+
+@media(max-width:760px){#w209v .w209list{grid-template-columns:1fr;}.wa-app-signals{gap:10px 16px;}}
+@media(prefers-reduced-motion:reduce){#volunteering :is(button,a,summary,input,select,textarea){transition:none;}}
