@@ -10,7 +10,7 @@ Typing, text selection, focused app choices and list scroll survive an access-dr
 
 ## Verification
 
-- Eight DOM regression cases cover access-filtered choices, team ordering, current-app semantics, search, text selection during repaints, keyboard routing, empty results, changing permissions, phone focus recovery and the external Website link. Run `npm ci --ignore-scripts --no-audit --no-fund` in `test`, then `npm run test:launcher`. The development dependency is pinned to `jsdom@29.1.1`.
+- Nine DOM regression cases cover access-filtered choices, team ordering, current-app semantics, search, text selection during repaints, keyboard routing, empty results, changing permissions, phone focus recovery, the external Website link and direct Volunteer Manager destinations. Run `npm ci --ignore-scripts --no-audit --no-fund` in `test`, then `npm run test:launcher`. The development dependency is pinned to `jsdom@29.1.1`.
 - The assembled build passes the repository's brand and team-label guard and its inline JavaScript syntax checks.
 - The assembled application was checked in the in-app browser with the repository's offline Supabase stub. Checks included opening Apps, filtering to Volunteer Manager, opening its existing route, and using Menu to search and close the launcher in a 390 by 500 phone viewport.
 
