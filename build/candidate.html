@@ -61929,17 +61929,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
        The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
     volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
       groups: function () {
-        /* wave259 (Steel, 15/10/26: "the UI is just getting really messy ... some sort of refresh"): five places. Servings and
-           Calendar; People (Volunteers, New applicants and Sign-offs as tabs of one page); Messages (the ops line: every
-           conversation, Text a group, calls; wave256's Phone); Setup (the SOP, Recipes, Inventory, the usual spot counts, Role
-           owners, the text schedule). Every old address still opens. */
         return [{ label: 'Servings', items: [
           { h: '#volunteering', l: 'Servings', ic: 'list', page: 'volunteering' },
-          { h: '#volunteering/calendar', l: 'Calendar', ic: 'cal', page: 'volunteering' }
-        ] }, { label: 'People', solo: true, items: [
-          { h: '#volunteering/people', l: 'People', ic: 'people', page: 'volunteering', n: (function () { try { return (window.w259 && window.w259.peopleBadge && window.w259.peopleBadge()) || null; } catch (e) { return null; } })() },
-          { h: '#volunteering/phone', l: 'Messages', ic: 'chat', page: 'volunteering', n: (function () { try { return (window.w256 && window.w256.waiting && window.w256.waiting()) || null; } catch (e) { return null; } })() }
-        ] }, { label: 'Setup', solo: true, items: [
+          { h: '#volunteering/calendar', l: 'Calendar', ic: 'cal', page: 'volunteering' },
+          { h: '#volunteering/sop', l: 'The SOP', ic: 'clip', page: 'volunteering' },
+          { h: '#volunteering/recipes', l: 'Recipes', ic: 'pot', page: 'volunteering' },
+          { h: '#volunteering/inventory', l: 'Inventory', ic: 'box', page: 'volunteering' }
+        ] }, { label: 'People', items: [
+          { h: '#volunteering/people', l: 'Volunteers', ic: 'people', page: 'volunteering' },
+          { h: '#volunteering/applicants', l: 'Applicants received', ic: 'star', page: 'volunteering', n: (function () { try { return window.w209 && w209.state().n || null; } catch (e) { return null; } })() },
+          { h: '#volunteering/phone', l: 'Phone', ic: 'phone', page: 'volunteering', n: (function () { try { return window.w256 && w256.waiting() || null; } catch (e) { return null; } })() },
+          { h: '#volunteering/signoffs', l: 'Sign-offs', ic: 'clip', page: 'volunteering', n: (function () { try { return window.w195 && w195.state().waiting || null; } catch (e) { return null; } })() }
+        ] }, { label: 'Settings', items: [
           { h: '#volunteering/setup', l: 'Setup', ic: 'layers', page: 'volunteering' }
         ] }];
       },
@@ -90481,36 +90482,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     row.innerHTML = html; if (keep) row.appendChild(keep);
     row.setAttribute('data-w259', html);
   }
-  /* the rail: no separate Applicants and Sign-offs items (they are People's tabs); the right item lit for every address */
-  function railGroups() {
-    var A = window.WA_APP && window.WA_APP.apps; if (!A || !A.volunteer || typeof A.volunteer.groups !== 'function') return;
-    if (A.volunteer.groups.__w259) return;
-    var g0 = A.volunteer.groups;
-    var g = function () {
-      var gs = g0.apply(this, arguments);
-      try {
-        gs.forEach(function (grp) { grp.items = grp.items.filter(function (it) { return !/#volunteering\/(applicants|signoffs)$/.test(it.h); }); });
-        gs = gs.filter(function (grp) { return grp.items.length; });
-      } catch (e) { /* fine */ }
-      return gs;
-    };
-    g.__w259 = true; A.volunteer.groups = g;
-    try { if (window.WA_APP && typeof WA_APP.renderRail === 'function') WA_APP.renderRail(); } catch (e) { /* fine */ }
-  }
+  /* The lab rail exposes each existing page directly. */
   function fixRail() {
-    railGroups();
-    var r = document.getElementById('w153rail'); if (!r || !document.body.classList.contains('w153volunteer')) return;
-    var s = sub(); var want = placeOf(s); if (!want && s && s !== 'e') want = ''; if (/^#volunteering\/e\//.test(location.hash || '')) want = '';
-    var hash = want ? PLACES.filter(function (p) { return p[0] === want; })[0][2] : '#volunteering';
-    r.querySelectorAll('.w153it[data-w153go^="#volunteering"]').forEach(function (a) {
-      var on = a.getAttribute('data-w153go') === hash;
-      if (a.classList.contains('on') !== on) { a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+    var rail = document.getElementById('w153rail');
+    if (!rail || !document.body.classList.contains('w153volunteer')) return;
+    var current = sub();
+    var hash = !current || current === 'e' ? '#volunteering' : '#volunteering/' + current;
+    rail.querySelectorAll('.w153it[data-w153go^="#volunteering"]').forEach(function (item) {
+      var on = item.getAttribute('data-w153go') === hash;
+      item.classList.toggle('on', on);
+      if (on) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
     });
-    /* the People badge: new applicants plus sign-offs waiting (wave195 and 209 used to badge their own items) */
-    var pa = r.querySelector('.w153it[data-w153go="#volunteering/people"]');
-    if (pa) { var n = peopleBadge(), bd = pa.querySelector('.w153n'); if (n) { if (!bd) { bd = document.createElement('small'); bd.className = 'w153n'; pa.appendChild(bd); } if (bd.textContent !== n) bd.textContent = n; } else if (bd) bd.remove(); }
-    var where = document.querySelector('#w153bar .w153bc > span');
-    if (where) { var lbl = (PLACES.filter(function (p) { return p[0] === want; })[0] || PLACES[0])[1]; if (/^#volunteering\/e\//.test(location.hash || '')) lbl = 'Serving'; if (where.textContent !== lbl) where.textContent = lbl; }
   }
 
   /* ---------- Setup ---------- */
@@ -90614,7 +90596,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---------- the page title for the places wave191's map does not know ---------- */
-  var TITLES = { setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'], phone: ['Messages', 'The ops line: every conversation, group texts and calls'] };
+  var TITLES = { setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'], phone: ['Phone', 'The ops line: every conversation, group texts and calls'] };
   function masthead() {
     var v = view(); var t = TITLES[v]; if (!t) return;
     var sec = document.getElementById('volunteering'); if (!sec) return;
@@ -90678,7 +90660,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       };
       waVolRender.__w259 = true;
     }
-    railGroups();
   }
   if (typeof startApp === 'function') { var sa = startApp; startApp = async function () { var r = await sa.apply(this, arguments); try { arm(); alias(); soon(); } catch (e) { /* fine */ } return r; }; }
   else arm();
@@ -93471,7 +93452,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 (function () {
   var style = document.createElement("style");
   style.id = "wa-ui-sidebar";
-  style.textContent = "/* Only the three lower Hub sections change; the six primary destinations keep their styling. */\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section]{display:block!important;margin:4px 0 0;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section=\"departments\"]{border-top:1px solid rgba(16,63,57,.12);padding-top:15px;margin-top:15px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h{\n  display:flex!important;align-items:center;gap:9px;width:100%;min-height:46px;padding:8px 10px!important;\n  border:1px solid transparent!important;border-radius:11px;background:transparent!important;\n  color:var(--wa-green,#103f39)!important;text-align:left;cursor:pointer!important;\n  font-family:'Space Grotesk',sans-serif!important;font-size:13px!important;font-weight:700!important;\n  letter-spacing:0!important;text-transform:none!important;line-height:1.3;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:hover,\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[aria-expanded=\"true\"]{background:rgba(16,63,57,.065)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[data-current=\"true\"]{border-color:rgba(220,165,39,.6)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;flex:0 0 27px;border-radius:8px;background:rgba(16,63,57,.065);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-title{flex:1;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count{font-size:10px;font-weight:500;color:#59685f;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count::after{content:attr(data-count);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{width:13px;height:13px;flex:0 0 13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group-h[aria-expanded=\"true\"] .nav-section-chevron{transform:rotate(180deg);}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{\n  position:fixed!important;left:var(--nav-flyout-left,244px)!important;top:var(--nav-flyout-top,330px)!important;\n  width:var(--nav-flyout-width,292px)!important;min-width:0!important;max-height:calc(100dvh - 32px)!important;\n  margin:0!important;padding:65px 10px 12px!important;border:1px solid rgba(16,63,57,.16)!important;border-radius:16px!important;\n  background:var(--wa-card,#fffaf2)!important;box-shadow:10px 14px 40px rgba(16,63,57,.18)!important;\n  overflow:auto!important;z-index:250;animation:nav-flyout-in .18s ease-out;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p:not([hidden]){display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p .tab{padding:12px!important;font-size:13px!important;min-height:43px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head{\n  display:flex;align-items:center;justify-content:space-between;gap:16px;position:fixed;\n  left:calc(var(--nav-flyout-left,244px) + 1px);top:calc(var(--nav-flyout-top,330px) + 1px);\n  width:calc(var(--nav-flyout-width,292px) - 2px);height:54px;padding:11px 14px 11px 20px;\n  background:var(--wa-card,#fffaf2);border-bottom:1px solid rgba(16,63,57,.1);border-radius:15px 15px 0 0;z-index:251;\n  animation:nav-flyout-in .18s ease-out;color:#103f39;font-family:'Space Grotesk',sans-serif;font-size:14px;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 30px;background:rgba(16,63,57,.06);color:#103f39;border:0;border-radius:8px;cursor:pointer;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:hover{background:rgba(16,63,57,.13);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct{display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .w42sub,\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d > .w116chev{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .tab{width:100%!important;}\n@keyframes nav-flyout-in{from{opacity:0;transform:translateX(-14px);}to{opacity:1;transform:translateX(0);}}\n@media(prefers-reduced-motion:reduce){body nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{transition:none;}body nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head,body nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{animation:none!important;}}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] .w262tt{display:none!important;}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section][hidden]{display:none!important;}\n";
+  style.textContent = "/* Only the three lower Hub sections change; the six primary destinations keep their styling. */\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section]{display:block!important;margin:4px 0 0;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section=\"departments\"]{border-top:1px solid rgba(16,63,57,.12);padding-top:15px;margin-top:15px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h{\n  display:flex!important;align-items:center;gap:9px;width:100%;min-height:46px;padding:8px 10px!important;\n  border:1px solid transparent!important;border-radius:11px;background:transparent!important;\n  color:var(--wa-green,#103f39)!important;text-align:left;cursor:pointer!important;\n  font-family:'Space Grotesk',sans-serif!important;font-size:13px!important;font-weight:700!important;\n  letter-spacing:0!important;text-transform:none!important;line-height:1.3;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:hover,\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[aria-expanded=\"true\"]{background:rgba(16,63,57,.065)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[data-current=\"true\"]{border-color:rgba(220,165,39,.6)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;flex:0 0 27px;border-radius:8px;background:rgba(16,63,57,.065);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-title{flex:1;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count{font-size:10px;font-weight:500;color:#59685f;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count::after{content:attr(data-count);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{width:13px;height:13px;flex:0 0 13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group-h[aria-expanded=\"true\"] .nav-section-chevron{transform:rotate(180deg);}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{\n  position:fixed!important;left:var(--nav-flyout-left,244px)!important;top:var(--nav-flyout-top,330px)!important;\n  width:var(--nav-flyout-width,292px)!important;min-width:0!important;max-height:calc(100dvh - 32px)!important;\n  margin:0!important;padding:65px 10px 12px!important;border:1px solid rgba(16,63,57,.16)!important;border-radius:16px!important;\n  background:var(--wa-card,#fffaf2)!important;box-shadow:10px 14px 40px rgba(16,63,57,.18)!important;\n  overflow:auto!important;z-index:250;animation:nav-flyout-in .18s ease-out;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p:not([hidden]){display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p .tab{padding:12px!important;font-size:13px!important;min-height:43px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head{\n  display:flex;align-items:center;justify-content:space-between;gap:16px;position:fixed;\n  left:calc(var(--nav-flyout-left,244px) + 1px);top:calc(var(--nav-flyout-top,330px) + 1px);\n  width:calc(var(--nav-flyout-width,292px) - 2px);height:54px;padding:11px 14px 11px 20px;\n  background:var(--wa-card,#fffaf2);border-bottom:1px solid rgba(16,63,57,.1);border-radius:15px 15px 0 0;z-index:251;\n  animation:nav-flyout-in .18s ease-out;color:#103f39;font-family:'Space Grotesk',sans-serif;font-size:14px;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 30px;background:rgba(16,63,57,.06);color:#103f39;border:0;border-radius:8px;cursor:pointer;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:hover{background:rgba(16,63,57,.13);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct{display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .w42sub,\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d > .w116chev{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .tab{width:100%!important;}\n@keyframes nav-flyout-in{from{opacity:0;transform:translateX(-14px);}to{opacity:1;transform:translateX(0);}}\n@media(prefers-reduced-motion:reduce){body nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{transition:none;}body nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head,body nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{animation:none!important;}}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] .w262tt{display:none!important;}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section][hidden]{display:none!important;}\n\nbody.w153volunteer .w259tabs{display:none!important;}\n";
   document.head.appendChild(style);
 })();
 /* Right-opening navigation flyouts; original destination controls keep their handlers. */

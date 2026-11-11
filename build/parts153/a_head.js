@@ -179,17 +179,18 @@
        The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
     volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
       groups: function () {
-        /* wave259 (Steel, 15/10/26: "the UI is just getting really messy ... some sort of refresh"): five places. Servings and
-           Calendar; People (Volunteers, New applicants and Sign-offs as tabs of one page); Messages (the ops line: every
-           conversation, Text a group, calls; wave256's Phone); Setup (the SOP, Recipes, Inventory, the usual spot counts, Role
-           owners, the text schedule). Every old address still opens. */
         return [{ label: 'Servings', items: [
           { h: '#volunteering', l: 'Servings', ic: 'list', page: 'volunteering' },
-          { h: '#volunteering/calendar', l: 'Calendar', ic: 'cal', page: 'volunteering' }
-        ] }, { label: 'People', solo: true, items: [
-          { h: '#volunteering/people', l: 'People', ic: 'people', page: 'volunteering', n: (function () { try { return (window.w259 && window.w259.peopleBadge && window.w259.peopleBadge()) || null; } catch (e) { return null; } })() },
-          { h: '#volunteering/phone', l: 'Messages', ic: 'chat', page: 'volunteering', n: (function () { try { return (window.w256 && window.w256.waiting && window.w256.waiting()) || null; } catch (e) { return null; } })() }
-        ] }, { label: 'Setup', solo: true, items: [
+          { h: '#volunteering/calendar', l: 'Calendar', ic: 'cal', page: 'volunteering' },
+          { h: '#volunteering/sop', l: 'The SOP', ic: 'clip', page: 'volunteering' },
+          { h: '#volunteering/recipes', l: 'Recipes', ic: 'pot', page: 'volunteering' },
+          { h: '#volunteering/inventory', l: 'Inventory', ic: 'box', page: 'volunteering' }
+        ] }, { label: 'People', items: [
+          { h: '#volunteering/people', l: 'Volunteers', ic: 'people', page: 'volunteering' },
+          { h: '#volunteering/applicants', l: 'Applicants received', ic: 'star', page: 'volunteering', n: (function () { try { return window.w209 && w209.state().n || null; } catch (e) { return null; } })() },
+          { h: '#volunteering/phone', l: 'Phone', ic: 'phone', page: 'volunteering', n: (function () { try { return window.w256 && w256.waiting() || null; } catch (e) { return null; } })() },
+          { h: '#volunteering/signoffs', l: 'Sign-offs', ic: 'clip', page: 'volunteering', n: (function () { try { return window.w195 && w195.state().waiting || null; } catch (e) { return null; } })() }
+        ] }, { label: 'Settings', items: [
           { h: '#volunteering/setup', l: 'Setup', ic: 'layers', page: 'volunteering' }
         ] }];
       },

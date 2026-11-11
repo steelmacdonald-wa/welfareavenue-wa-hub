@@ -51,3 +51,5 @@ body nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section="departm
 body nav.wa-nav #tabBar[data-ui-navigation] .w262tt{display:none!important;}
 
 body nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section][hidden]{display:none!important;}
+
+body.w153volunteer .w259tabs{display:none!important;}

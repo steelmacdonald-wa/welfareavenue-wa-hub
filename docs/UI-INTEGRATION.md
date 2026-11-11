@@ -7,6 +7,7 @@ The UI pass ports the approved experimental interface into the maintained Hub so
 | Compact searchable Apps launcher | Integrated |
 | Page transitions and reduced motion | Integrated |
 | Six primary links and three navigation flyouts | Integrated |
+| Direct Volunteer Manager page navigation | Integrated |
 | Serving workflow, role disclosures and contact cards | Integrated |
 | Colored volunteer status picker | Integrated |
 | Organized SOP sections and owner picker | Integrated |

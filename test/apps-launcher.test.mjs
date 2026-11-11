@@ -160,3 +160,15 @@ test('the website remains an external link and board mode cannot open the app la
   board.window.w153.pop();
   assert.equal(board.window.w153.state().open, false);
 });
+
+test('Volunteer Manager exposes the approved direct page links through the existing access gate', t => {
+  const context = launcher({ member: true });
+  t.after(() => context.dom.window.close());
+  const refresh = readFileSync(new URL('../build/src/259_wave259.seg', import.meta.url), 'utf8');
+  context.window.eval(refresh);
+  const routes = [...context.window.WA_APP.items('volunteer')].flatMap(group => [...group.items].map(item => item.h));
+  for (const page of ['sop', 'recipes', 'people', 'applicants', 'phone', 'signoffs', 'setup']) {
+    assert.equal(routes.includes('#volunteering/' + page), true, page);
+  }
+  assert.equal(routes.some(route => /storage/.test(route)), false);
+});
