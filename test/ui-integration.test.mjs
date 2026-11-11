@@ -168,3 +168,21 @@ test('applicant cards expose name, message and two states with secondary control
   assert.equal(details.querySelector('[data-w209st]').getAttribute('data-s'), 'welcomed');
   assert.equal(context.document.querySelector('.w209ct').closest('details'), details);
 });
+
+test('Phone presentation retains the original composer and call controls', async t => {
+  let sends = 0, calls = 0;
+  const context = await screen('<section id="volunteering"><div class="card"><div id="w256"><div class="th"><div class="nm">Alex Example</div></div><div class="rp"><textarea data-w256ta>Existing draft</textarea><button data-w256send>Send</button><a href="tel:+15550101" data-w256call>Call</a></div></div></div></section>',
+    '#volunteering/phone', [part('phone.js')], window => {
+      window.w256 = { state: () => ({ ph: '5550101', inbox: [{ ph: '5550101', wait: true }] }) };
+      window.document.querySelector('[data-w256send]').addEventListener('click', () => { sends++; });
+      window.document.querySelector('[data-w256call]').addEventListener('click', event => { event.preventDefault(); calls++; });
+    });
+  t.after(() => context.dom.window.close());
+  assert.equal(context.document.querySelector('#w256').classList.contains('wa-phone-workspace'), true);
+  assert.equal(context.document.querySelector('textarea').value, 'Existing draft');
+  assert.equal(context.document.querySelector('.wa-phone-thread-status').textContent, 'Needs reply');
+  context.document.querySelector('[data-w256send]').click();
+  context.document.querySelector('[data-w256call]').click();
+  assert.equal(sends, 1);
+  assert.equal(calls, 1);
+});

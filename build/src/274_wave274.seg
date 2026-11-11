@@ -976,3 +976,40 @@
   });
 })();
 
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-phone";
+  style.textContent = "/* A focused inbox, with separate queue, conversation and draft surfaces. */\n#volunteering .wa-phone-card { padding:20px; }\n#w256 .hd { align-items:center; margin-bottom:16px; gap:12px; }\n#w256 .hd h2 { font-size:25px; margin:0; }\n#w256 .hd .acts { gap:6px; }\n#w256 .acts [data-w256go=\"new\"] { background:#f2dfac; color:#614608; border-color:#efdaa5; }\n#w256 .st { display:grid; grid-template-columns:1fr 1fr 1.2fr; gap:10px; margin-bottom:16px; }\n#w256 .sc { padding:13px 14px; border-radius:12px; background:#f3f4ec; border-color:#e3e5da; gap:10px; text-align:left; }\n#w256 .sc b { font-size:28px; }\n#w256 .sc.hot { background:#fcf0d4; border-color:#edcf85; }\n#w256 .sc.hot b { color:#85600b; }\n#w256 .sc span { font-size:11px; line-height:1.45; }\n#w256 .sc.q { flex-wrap:wrap; align-content:center; gap:4px 10px; }\n#w256 .sc.q .lnk { font-size:11px; color:#49605a; }\n#w256 .conv { grid-template-columns:minmax(235px,.8fr) minmax(0,1.2fr); height:clamp(500px,calc(100dvh - 415px),720px); min-height:500px; border-radius:14px; border-color:#d7dfd6; box-shadow:0 6px 24px #103f3907; }\n#w256 .cl { background:#f4f5ef; }\n.wa-phone-queue-label { display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px; padding:14px 13px 0; color:#103f39; font-size:12px; }\n.wa-phone-queue-label span { font-size:10px; color:#738076; }\n#w256 .lt { padding:12px 10px; gap:10px; }\n#w256 .lt .seg { gap:2px; padding:3px; border-radius:8px; }\n#w256 .lt .seg button { padding:6px; font-size:10px; border-radius:6px; }\n#w256 .lt input { min-height:36px; font-size:12px; }\n#w256 .cv { padding:14px 11px; gap:9px; border-left:3px solid transparent; grid-template-columns:32px minmax(0,1fr) auto; align-items:start; }\n#w256 .cv .av { width:32px; height:32px; font-size:10px; }\n#w256 .cv.on { background:#e3ece2; border-left-color:#2a8c7a; }\n#w256 .cv .who { gap:4px; }\n#w256 .cv .who b { font-size:13px; }\n#w256 .cv .who > span { font-size:12px; }\n#w256 .cv .who .wa-phone-row-state { font-size:10px; color:#77847b; font-weight:600; }\n#w256 .cv.wt .who .wa-phone-row-state { color:#86600a; }\n#w256 .cv .tm { font-size:9px; padding-top:2px; }\n#w256 .dot { background:#c69428; width:7px; height:7px; }\n#w256 .th { padding:15px; align-items:center; gap:9px; background:#fffcf7; }\n#w256 .th .nm b { font-size:15px; }\n#w256 .th .nm > span { font-size:11px; display:block; line-height:1.7; }\n#w256 .th .nm .wa-phone-thread-status { display:inline-flex; font-size:9px; font-weight:700; color:#416954; background:#e9f0e7; border-radius:5px; padding:2px 6px; margin-top:4px; }\n#w256 .th .nm .wa-phone-thread-status.waiting { background:#f6e8c4; color:#886315; }\n#w256 .th .call { font-size:11px; padding:7px 9px; background:#eaf0e6; border-color:#dbe4d8; color:#496053; }\n#w256 .srv { padding:9px 15px; background:#f4f7ef; }\n#w256 .srv summary { font-size:11px; }\n#w256 .msgs { background:#fffdf8; padding:20px 16px; gap:18px; }\n#w256 .bub { font-size:13px; line-height:1.65; max-width:92%; padding:11px 13px; }\n#w256 .bub.in { background:#ecefe8; border-radius:12px 12px 12px 3px; }\n#w256 .bub.out { border-radius:12px 12px 3px 12px; background:#25554b; }\n#w256 .m .mt { font-size:9px; margin-top:5px; }\n#w256 .wl { background:#fcf3df; color:#825d18; padding:10px 13px; font-size:10px; gap:7px; flex-wrap:wrap; }\n#w256 .wl .lnk { font-size:10px; color:#745d28; }\n#w256 .rp { align-items:flex-end; background:#f9faf4; border-top:0; padding:10px 13px 6px; gap:7px; }\n#w256 .rp textarea { font-size:12px; min-height:68px; border-radius:9px; padding:9px 10px; background:#fffef9; }\n#w256 .rp .w191btn { font-size:10px; padding:9px; border-radius:8px; margin-bottom:2px; white-space:nowrap; background:#e3e7dd; border-color:#dce1d5; color:#7c8576; cursor:not-allowed; opacity:1; }\n@media (min-width:761px) {\n  body:has(#w256.wa-phone-workspace) #review-copy-badge { right:94px!important; bottom:12px!important; }\n}\n\n@media(max-width:760px){#w256 .conv{grid-template-columns:1fr;height:650px;min-height:500px;}#w256 .st{grid-template-columns:1fr 1fr;}#w256 .sc.q{grid-column:1/-1;}#w256 .hd .acts{width:100%;}#w256 .cv{grid-template-columns:36px minmax(0,1fr) auto;}}\n";
+  document.head.appendChild(style);
+})();
+/* Present the existing conversation queue and composer in the lab's layout. */
+(function () {
+  let scheduled = false;
+  function update() {
+    scheduled = false;
+    if (!/^#volunteering\/phone/.test(location.hash)) return;
+    const root = document.getElementById('w256');
+    if (!root) return;
+    root.classList.add('wa-phone-workspace');
+    root.closest('.card')?.classList.add('wa-phone-card');
+    const state = window.w256?.state();
+    const name = root.querySelector('.th .nm');
+    if (!state || !name) return;
+    const selected = (state.inbox || []).find(row => row.ph === state.ph);
+    let status = name.querySelector('.wa-phone-thread-status');
+    if (!status) {
+      status = document.createElement('small');
+      status.className = 'wa-phone-thread-status';
+      name.append(status);
+    }
+    const text = selected?.wait ? 'Needs reply' : selected ? 'Up to date' : 'New conversation';
+    status.classList.toggle('waiting', !!selected?.wait);
+    if (status.textContent !== text) status.textContent = text;
+  }
+  function schedule() { if (!scheduled) { scheduled = true; requestAnimationFrame(update); } }
+  const section = document.getElementById('volunteering');
+  if (section) new MutationObserver(schedule).observe(section, { childList: true, subtree: true });
+  window.addEventListener('hashchange', schedule);
+  schedule();
+})();
+
