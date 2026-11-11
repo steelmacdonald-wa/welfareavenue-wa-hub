@@ -98,7 +98,10 @@
     + '#w122 .w122trk .it .ia .go{text-align:center;padding:9px 14px;}'
     + '}'
     /* 15. goal page footnotes inside their card */
-    + '.w116g > p.note{margin:12px 0 0 !important;padding:0 18px 16px !important;}';
+    + '.w116g > p.note{margin:12px 0 0 !important;padding:0 18px 16px !important;}'
+    + 'html.wa-smooth-pages .panel.active{animation:none !important;}'
+    + '@media(prefers-reduced-motion:reduce){html.wa-smooth-pages main{opacity:1 !important;transform:none !important;}}'
+    + '@media print{html.wa-smooth-pages main{opacity:1 !important;transform:none !important;}}';
 
   (function () {
     var st = document.getElementById('w130css');
