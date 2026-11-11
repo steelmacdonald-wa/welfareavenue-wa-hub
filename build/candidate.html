@@ -53367,7 +53367,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
     /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
-    top: ['mypage', 'training', 'overview', 'requests', 'calendar'],   /* 09/10/26 Steel: Team Requests sits above the Calendar */
+    top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'],
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
@@ -53376,10 +53376,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       /* wave262 (Steel, 20/10/26, after the 19/10 leadership meeting: "bringing the brain and a couple of other small tools under
          a drop down ... keeping the main important things on the main page"): one More fold holds Other Tools and Organization,
          The Brain first. Nothing leaves the menu: More opens with a click (and by itself on one of its pages). */
-      { key: 'w262more', label: 'More', fold: ['tools', 'org'] },
       /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
-      { key: 'tools', label: 'Other Tools', items: ['brain', 'importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
+      { key: 'tools', label: 'Other tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
          app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
          places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
@@ -53426,7 +53425,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var dot = btn.querySelector('.tabdot');
     btn.innerHTML = (dot ? dot.outerHTML : '') + E(text);
   }
-  function groupDef(key) { for (var i = 0; i < LAYOUT.groups.length; i++) if (LAYOUT.groups[i].key === key) return LAYOUT.groups[i]; return null; }
   function groupEl(b, g) {
     var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]');
     if (!el) {
@@ -53484,12 +53482,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     busy = true; if (OBS) OBS.disconnect();
     try {
       var seq = [];
-      LAYOUT.top.forEach(function (id) { var t = tabOf(b, id); if (t) seq.push(t); });
+      LAYOUT.top.forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       LAYOUT.afterCalendar.forEach(function (id) { var t = tabOf(b, id); if (t && !inOpenRow(t)) { t.classList.remove('w116tool'); seq.push(t); } });
       (LAYOUT.afterEvents || []).forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       var res = null;
       LAYOUT.groups.forEach(function (g) {
-        if (g.fold) { seq.push(foldEl(b, g)); return; }   /* wave262: the More fold's header */
         if (!g.items) { var d = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'); if (d) seq.push(d); return; }
         var el = groupEl(b, g), host = hostOf(el);
         wanted(b, g).forEach(function (t, i) {
@@ -53545,16 +53542,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (g.style.display !== want) g.style.display = want;
     });
   }
-  /* ---------- wave262: the folds (More, and the other teams) ----------
-     Steel (20/10/26): keep each person's menu simple, "just really keeping the main important things on the main page and
-     then a drop down of other tabs". Nothing is taken away: the buttons stay where the layout puts them and a fold only
-     hides them until it is opened (a click, remembered on this device), and it opens by itself when you are on one of its
-     pages. Computers only: the phone's Menu sheet (wave163b) already lists every page with its own Find a page. */
-  var FOLD_KEY = { more: 'wa262.more', teams: 'wa262.teams' };
-  function remembered(k) { try { return localStorage.getItem(FOLD_KEY[k]); } catch (e) { return null; } }
-  function remember(k, v) { try { localStorage.setItem(FOLD_KEY[k], v ? '1' : '0'); } catch (e) { /* private mode */ } }
-  function amAdmin() { try { return typeof WA40_MINE !== 'undefined' && !!WA40_MINE && WA40_MINE.role === 'admin'; } catch (e) { return false; } }
-  /* the person's own team: their roster department, when it has a team row they can open */
   function myTeam(b) {
     var d = '';
     try { d = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { d = ''; }
@@ -53562,70 +53549,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var t = tabOf(b, d), row = t && t.closest ? t.closest('.w42d') : null;
     return row && shown(t) ? d : '';
   }
-  function foldEl(b, g) {
-    var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]');
-    if (!el) {
-      el = document.createElement('span'); el.className = 'tab-group w262fold'; el.setAttribute('data-w42g', g.key);
-      el.innerHTML = '<button type="button" class="w262fh" aria-expanded="false" data-w262fold="more"><span class="w262lb">' + E(g.label) + '</span><span class="w262ch" aria-hidden="true">&#9662;</span></button>';
-      el.querySelector('button').addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        var open = !(bar() && bar().classList.contains('w262more'));
-        remember('more', open); folds(bar(), true);
-      });
-    }
-    return el;
-  }
-  function teamsToggle(host) {
-    var t = host.querySelector(':scope > .w262tt');
-    if (!t) {
-      t = document.createElement('button'); t.type = 'button'; t.className = 'w262tt'; t.setAttribute('data-w262fold', 'teams');
-      t.addEventListener('click', function (ev) {
-        ev.stopPropagation();
-        var open = !(bar() && bar().classList.contains('w262teams'));
-        remember('teams', open); folds(bar(), true);
-      });
-      host.appendChild(t);
-    }
-    return t;
-  }
-  function activeTab(b) { return b.querySelector('.tab.active'); }
-  function folds(b, byHand) {
+  /* Legacy menu callers still request a refresh through folds(). */
+  function folds(b) {
     if (!b) return;
-    try {
-      /* More: Other Tools and Organization */
-      var more = b.querySelector(':scope > .tab-group[data-w42g="w262more"]');
-      var inside = (groupDef('w262more') || {}).fold || [];
-      var any = inside.some(function (k) { var g = b.querySelector(':scope > .tab-group[data-w42g="' + k + '"]'); return !!g && g.style.display !== 'none' && Array.prototype.some.call(g.querySelectorAll('.tab'), shown); });
-      var act = activeTab(b), here = !!act && inside.some(function (k) { var g = b.querySelector(':scope > .tab-group[data-w42g="' + k + '"]'); return !!g && g.contains(act); });
-      var r = remembered('more'), open = here || r === '1';
-      if (more) {
-        var want = any ? '' : 'none'; if (more.style.display !== want) more.style.display = want;
-        var hb = more.querySelector('.w262fh'); if (hb && hb.getAttribute('aria-expanded') !== String(open)) hb.setAttribute('aria-expanded', String(open));
-      }
-      if (b.classList.contains('w262more') !== open) b.classList.toggle('w262more', open);
-      /* Teams: your team first; the others behind "Other teams" */
-      var dep = b.querySelector(':scope > .tab-group[data-w42g="departments"]'), host = dep ? hostOf(dep) : null;
-      var mine = myTeam(b);
-      if (!host) return;
-      var rows = Array.prototype.filter.call(host.children, function (c) { return c.classList && c.classList.contains('w42d'); });
-      var others = rows.filter(function (row) { var m = row.querySelector(':scope > .tab'); return !(m && m.getAttribute('data-tab') === mine); });
-      var visibleOthers = others.filter(function (row) { return row.style.display !== 'none' && Array.prototype.some.call(row.querySelectorAll('.tab'), shown); });
-      var useFold = !!mine && visibleOthers.length > 0;
-      if (dep.classList.contains('w262tf') !== useFold) dep.classList.toggle('w262tf', useFold);
-      rows.forEach(function (row) {
-        var isOther = others.indexOf(row) >= 0, isHere = isOther && ((!!act && row.contains(act)) || row.classList.contains('w116act'));
-        if (row.classList.contains('w262other') !== (useFold && isOther)) row.classList.toggle('w262other', useFold && isOther);
-        if (row.classList.contains('w262here') !== isHere) row.classList.toggle('w262here', isHere);
-        if (!isOther && useFold && !row.hasAttribute('data-w262mine')) row.setAttribute('data-w262mine', '1');
-      });
-      if (!useFold) { var old = host.querySelector(':scope > .w262tt'); if (old && old.style.display !== 'none') old.style.display = 'none'; if (b.classList.contains('w262teams')) b.classList.remove('w262teams'); return; }
-      var tr = remembered('teams'), topen = tr === null ? amAdmin() : tr === '1';
-      if (b.classList.contains('w262teams') !== topen) b.classList.toggle('w262teams', topen);
-      var tt = teamsToggle(host); if (tt.style.display) tt.style.display = '';
-      var label = (topen ? 'Hide other teams' : 'Other teams') + ' (' + visibleOthers.length + ')';
-      if (tt.getAttribute('data-l') !== label) { tt.setAttribute('data-l', label); tt.innerHTML = '<span>' + E(label) + '</span><span class="w262ch" aria-hidden="true">&#9662;</span>'; }
-      if (tt.getAttribute('aria-expanded') !== String(topen)) tt.setAttribute('aria-expanded', String(topen));
-    } catch (e) { console.warn('wave262 folds', e); }
+    b.classList.add('w262more', 'w262teams');
+    var teams = b.querySelector('.tab-group[data-w42g="departments"]');
+    if (teams) teams.classList.remove('w262tf');
+    b.querySelectorAll('.w262tt').forEach(function (toggle) { toggle.remove(); });
   }
 
   /* true when every page is where the layout wants it (the tests ask this) */
@@ -93547,6 +93477,117 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w163 = { state: function () { return G; }, ready: function () { return G.ready; }, settle: settle,
     phone: { state: function () { return PH; }, open: openSheet, close: closeSheet, bar: paintBar, key: barKey, team: myTeamId, items: hubItems } };
 })();
+/* WA v274 approved lab UI integration. */
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-sidebar";
+  style.textContent = "/* Only the three lower Hub sections change; the six primary destinations keep their styling. */\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section]{display:block!important;margin:4px 0 0;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section=\"departments\"]{border-top:1px solid rgba(16,63,57,.12);padding-top:15px;margin-top:15px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h{\n  display:flex!important;align-items:center;gap:9px;width:100%;min-height:46px;padding:8px 10px!important;\n  border:1px solid transparent!important;border-radius:11px;background:transparent!important;\n  color:var(--wa-green,#103f39)!important;text-align:left;cursor:pointer!important;\n  font-family:'Space Grotesk',sans-serif!important;font-size:13px!important;font-weight:700!important;\n  letter-spacing:0!important;text-transform:none!important;line-height:1.3;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:hover,\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[aria-expanded=\"true\"]{background:rgba(16,63,57,.065)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-h[data-current=\"true\"]{border-color:rgba(220,165,39,.6)!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;flex:0 0 27px;border-radius:8px;background:rgba(16,63,57,.065);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-icon svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-title{flex:1;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count{font-size:10px;font-weight:500;color:#59685f;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-count::after{content:attr(data-count);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{width:13px;height:13px;flex:0 0 13px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .15s ease;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group-h[aria-expanded=\"true\"] .nav-section-chevron{transform:rotate(180deg);}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{\n  position:fixed!important;left:var(--nav-flyout-left,244px)!important;top:var(--nav-flyout-top,330px)!important;\n  width:var(--nav-flyout-width,292px)!important;min-width:0!important;max-height:calc(100dvh - 32px)!important;\n  margin:0!important;padding:65px 10px 12px!important;border:1px solid rgba(16,63,57,.16)!important;border-radius:16px!important;\n  background:var(--wa-card,#fffaf2)!important;box-shadow:10px 14px 40px rgba(16,63,57,.18)!important;\n  overflow:auto!important;z-index:250;animation:nav-flyout-in .18s ease-out;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p:not([hidden]){display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p .tab{padding:12px!important;font-size:13px!important;min-height:43px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head{\n  display:flex;align-items:center;justify-content:space-between;gap:16px;position:fixed;\n  left:calc(var(--nav-flyout-left,244px) + 1px);top:calc(var(--nav-flyout-top,330px) + 1px);\n  width:calc(var(--nav-flyout-width,292px) - 2px);height:54px;padding:11px 14px 11px 20px;\n  background:var(--wa-card,#fffaf2);border-bottom:1px solid rgba(16,63,57,.1);border-radius:15px 15px 0 0;z-index:251;\n  animation:nav-flyout-in .18s ease-out;color:#103f39;font-family:'Space Grotesk',sans-serif;font-size:14px;\n}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head[hidden]{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex:0 0 30px;background:rgba(16,63,57,.06);color:#103f39;border:0;border-radius:8px;cursor:pointer;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:hover{background:rgba(16,63,57,.13);}\nbody nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head button:focus-visible{outline:2px solid #dca527;outline-offset:2px;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct{display:block!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .w42sub,\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d > .w116chev{display:none!important;}\nbody nav.wa-nav #tabBar[data-ui-navigation] .tab-group[data-nav-section=\"departments\"] .w42d.nav-team-direct > .tab{width:100%!important;}\n@keyframes nav-flyout-in{from{opacity:0;transform:translateX(-14px);}to{opacity:1;transform:translateX(0);}}\n@media(prefers-reduced-motion:reduce){body nav.wa-nav #tabBar[data-ui-navigation] .nav-section-chevron{transition:none;}body nav.wa-nav #tabBar[data-ui-navigation] .nav-flyout-head,body nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section] > .tab-group-p{animation:none!important;}}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] .w262tt{display:none!important;}\n\nbody nav.wa-nav #tabBar[data-ui-navigation] > .tab-group[data-nav-section][hidden]{display:none!important;}\n";
+  document.head.appendChild(style);
+})();
+/* Right-opening navigation flyouts; original destination controls keep their handlers. */
+(() => {
+  'use strict';
+  const sections=[['departments','Teams','<circle cx="8" cy="7" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0v2M16 4a3 3 0 0 1 0 6M22 20v-2a6 6 0 0 0-4-5.65"/>'],['org','Organization','<rect x="8" y="2" width="8" height="6" rx="1"/><rect x="2" y="16" width="7" height="6" rx="1"/><rect x="15" y="16" width="7" height="6" rx="1"/><path d="M12 8v4M5.5 16v-4h13v4"/>'],['tools','Other tools','<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>']];
+  let open=null,bar=null,observer=null,scheduled=false;
+  const groupOf=key=>bar.querySelector(`:scope > .tab-group[data-w42g="${key}"]`);
+  const setPosition=(group,key,value)=>{if(group.style.getPropertyValue(key)!==value)group.style.setProperty(key,value);};
+  function position(group){
+    const heading=group.querySelector(':scope > .tab-group-h');
+    const panel=group.querySelector(':scope > .tab-group-p');
+    const nav=bar.closest('nav');
+    if(!heading||!panel||panel.hidden||!nav)return;
+    const anchor=heading.getBoundingClientRect();
+    const left=innerWidth<=900?12:Math.round(nav.getBoundingClientRect().right+8);
+    const width=Math.min(292,innerWidth-left-16);
+    setPosition(group,'--nav-flyout-left',left+'px');
+    setPosition(group,'--nav-flyout-width',Math.max(200,width)+'px');
+    const height=panel.getBoundingClientRect().height;
+    const top=Math.max(16,Math.min(anchor.top,innerHeight-height-16));
+    setPosition(group,'--nav-flyout-top',Math.round(top)+'px');
+  }
+  function close(restoreFocus=false){
+    const previous=open;open=null;sync();
+    if(restoreFocus&&previous)groupOf(previous)?.querySelector(':scope > .tab-group-h')?.focus({preventScroll:true});
+  }
+  function sync(){
+    scheduled=false;
+    if(!bar)return;
+    bar.dataset.uiNavigation='true';
+    if(observer)observer.disconnect();
+    const active=bar.querySelector('.tab.active');
+    const currentGroup=active?.closest('.tab-group')?.getAttribute('data-w42g');
+    for(const[key,label,icon]of sections){
+      const group=groupOf(key);if(!group)continue;
+      const heading=group.querySelector(':scope > .tab-group-h');
+      const panel=group.querySelector(':scope > .tab-group-p');
+      if(!heading||!panel)continue;
+      group.dataset.navSection=key;
+      const count=[...panel.children].filter(item=>[...item.querySelectorAll('.tab'),...(item.matches('.tab')?[item]:[])].some(tab=>tab.style.display!=='none'&&getComputedStyle(tab).display!=='none')).length;
+      group.hidden=count===0;
+      const signature=label+':'+count;
+      if(heading.dataset.navSignature!==signature||!heading.querySelector('.nav-section-title')){
+        heading.innerHTML=`<span class="nav-section-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${icon}</svg></span><span class="nav-section-title">${label}</span><span class="nav-section-count" data-count="${count}" aria-hidden="true"></span><svg class="nav-section-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>`;
+        heading.dataset.navSignature=signature;
+      }
+      heading.type='button';heading.id='nav-section-'+key;panel.id='nav-panel-'+key;
+      let flyoutHead=group.querySelector(':scope > .nav-flyout-head');
+      if(!flyoutHead){
+        flyoutHead=document.createElement('div');flyoutHead.className='nav-flyout-head';
+        flyoutHead.innerHTML=`<strong id="nav-flyout-title-${key}">${label}</strong><button type="button" data-nav-flyout-close="${key}" aria-label="Close ${label} menu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8m0-8-8 8"/></svg></button>`;
+        group.appendChild(flyoutHead);
+      }
+      heading.setAttribute('aria-label',label);
+      heading.setAttribute('aria-controls',panel.id);
+      heading.setAttribute('aria-expanded',String(open===key));
+      heading.dataset.current=String(currentGroup===key);
+      panel.hidden=open!==key;
+      flyoutHead.hidden=open!==key;
+      panel.setAttribute('role','group');panel.setAttribute('aria-labelledby','nav-flyout-title-'+key);
+      for(const row of panel.querySelectorAll('.w42d')){
+        const main=row.querySelector(':scope > .tab');
+        const direct=!!main&&main.style.display!=='none';
+        row.classList.toggle('nav-team-direct',direct);
+        const sub=row.querySelector(':scope > .w42sub');
+        if(sub){sub.hidden=direct;sub.inert=direct;}
+      }
+      if(open===key)position(group);
+    }
+    observer.observe(bar,{childList:true,subtree:true,attributes:true,attributeFilter:['class','style']});
+  }
+  function queue(){if(!scheduled){scheduled=true;requestAnimationFrame(sync);}}
+  function bind(){
+    const next=document.getElementById('tabBar');if(!next)return;
+    if(bar!==next){bar=next;if(observer)observer.disconnect();observer=new MutationObserver(queue);bar.closest('nav')?.addEventListener('scroll',queue,{passive:true});}
+    sync();
+  }
+  document.addEventListener('click',event=>{
+    if(event.target.closest?.('[data-nav-flyout-close]')){event.preventDefault();event.stopImmediatePropagation();close(true);return;}
+    const heading=event.target.closest?.('#tabBar .tab-group[data-nav-section] > .tab-group-h');
+    if(!heading){
+      if(open&&event.target.closest?.('#tabBar .tab, #tabBar .tab-group-p a[href]'))setTimeout(()=>close(),0);
+      return;
+    }
+    event.preventDefault();event.stopImmediatePropagation();
+    const key=heading.parentElement.dataset.navSection;
+    open=open===key?null:key;sync();
+  },true);
+  document.addEventListener('pointerdown',event=>{if(open&&!groupOf(open)?.contains(event.target))close();},true);
+  document.addEventListener('keydown',event=>{
+    if(open&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close(true);return;}
+    const heading=event.target.closest?.('#tabBar .tab-group[data-nav-section] > .tab-group-h');
+    if(heading&&event.key==='ArrowRight'){
+      event.preventDefault();open=heading.parentElement.dataset.navSection;sync();
+      const panel=groupOf(open).querySelector(':scope > .tab-group-p');
+      [...panel.querySelectorAll('.tab')].find(t=>t.getClientRects().length&&getComputedStyle(t).display!=='none')?.focus();
+    }
+    if(open&&event.key==='ArrowLeft'&&groupOf(open)?.contains(event.target)){event.preventDefault();close(true);}
+  },true);
+  document.addEventListener('focusin',event=>{if(open&&!groupOf(open)?.contains(event.target))close();});
+  window.addEventListener('hashchange',()=>close());
+  window.addEventListener('resize',queue);
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind,{once:true});else bind();
+})();
+
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
