@@ -45,6 +45,14 @@
 // says whether an email is already known. Secrets (vault): WA_FORM_SECRET signs the tokens and keys the IP hash;
 // WA_TRIGGER_SECRET for tests and for calling mail-send. Tables: crm_forms, crm_form_submissions, volunteer_events,
 // app_config, volunteer_orgs (read), crm_form_apply() (write).
+// v12 (wave308, 11/11/26, Steel: "a spam alert would be good and Cloudflare Turnstile would be helpful too"): a bot check
+//        for waves of automated sign-ups. app_config forms_turnstile = off | on | auto (auto: on while
+//        forms_turnstile_until is in the future; form-guard sets it for 24 hours when it raises an alert) and
+//        turnstile_site_key (public). While it is on, GET answers turnstile: <site key> and a POST must carry ts, the
+//        Cloudflare Turnstile token, checked with TURNSTILE_SECRET (vault) against siteverify; a failed check is kept as
+//        spam ('bot check failed') and answered {error: 'bot_check'} so a person can try again. No secret in the vault
+//        means no check (a missing key never blocks real people). A connection over the limit is now kept as one spam row
+//        ('too many from one connection') the first time it crosses, so form-guard can see the wave.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -141,6 +149,34 @@ async function coverOf(form: Json): Promise<Json> {
   const own = Number(form.cover_photo_id || 0), def = Number(COVER_BY_KIND[String(form.kind)] || COVER_BY_KIND.general);
   return (own ? await photoOut(own) : null) || await photoOut(def);
 }
+/* wave308: the bot check's state, read at most once a minute per instance */
+let TS: { at: number; site: string | null } = { at: 0, site: null };
+async function turnstileSite(): Promise<string | null> {
+  if (Date.now() - TS.at < 60000) return TS.site;
+  let site: string | null = null;
+  try {
+    const { data } = await svc.from('app_config').select('key,value').in('key', ['forms_turnstile', 'forms_turnstile_until', 'turnstile_site_key']);
+    const m: Record<string, string> = {}; (data || []).forEach((r: Json) => { m[r.key] = String(r.value ?? '').replace(/^"|"$/g, ''); });
+    const key = (m.turnstile_site_key || '').trim(), mode = (m.forms_turnstile || 'off').trim();
+    const until = Date.parse(m.forms_turnstile_until || '') || 0;
+    if (key && (mode === 'on' || (mode === 'auto' && until > Date.now()))) site = key;
+  } catch (_) { site = null; }
+  TS = { at: Date.now(), site };
+  return site;
+}
+async function turnstileOk(tok: string, ip: string | null): Promise<boolean> {
+  let sec = '';
+  try { sec = await secret('TURNSTILE_SECRET'); } catch (_) { return true; }   /* no secret: never block people */
+  if (!sec) return true;
+  if (!tok) return false;
+  try {
+    const fd = new URLSearchParams({ secret: sec, response: tok.slice(0, 2048) }); if (ip) fd.set('remoteip', ip);
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: fd });
+    const j = await r.json();
+    return j && j.success === true;
+  } catch (_) { return true; }   /* Cloudflare unreachable: the other checks still stand */
+}
+
 async function publicForm(form: Json): Promise<Json> {
   const dates = (form.questions || []).some((q: Json) => q.type === 'serving_dates') ? await openDates(form) : [];
   const positions = (form.questions || []).some((q: Json) => q && q.source === 'positions') ? await positionOpts(form.lang) : [];
@@ -324,7 +360,8 @@ Deno.serve(async (req: Request) => {
       if (form.status === 'closed') return reply(req, { closed: true, title: form.title, lang: form.lang, kind: form.kind, cover: await coverOf(form), org: await org() });
       const ts = Math.floor(Date.now() / 1000);
       const token = ts + '.' + (await hmac(await secret('WA_FORM_SECRET'), 'form|' + form.slug + '|' + ts)).slice(0, 32);
-      return reply(req, { form: await publicForm(form), org: await org(), token });
+      const tsSite = await turnstileSite();
+      return reply(req, { form: await publicForm(form), org: await org(), token, ...(tsSite ? { turnstile: tsSite } : {}) });
     }
     if (req.method !== 'POST') return reply(req, { error: 'method' }, 405);
     const raw = await req.text();
@@ -363,7 +400,14 @@ Deno.serve(async (req: Request) => {
       if (ipHash) {
         const since = new Date(Date.now() - PER_IP_WINDOW * 60000).toISOString();
         const { count } = await svc.from('crm_form_submissions').select('id', { count: 'exact', head: true }).eq('ip_hash', ipHash).gte('created_at', since);
-        if ((count || 0) >= PER_IP) return reply(req, { error: 'rate' }, 429);
+        if ((count || 0) >= PER_IP) {
+          if ((count || 0) === PER_IP) await svc.from('crm_form_submissions').insert({ form_id: form.id, status: 'spam', answers: {}, display: [], mapped: {}, lang: form.lang, ip_hash: ipHash, user_agent: ua, error: 'too many from one connection', is_test: isTest });
+          return reply(req, { error: 'rate' }, 429);
+        }
+      }
+      if (await turnstileSite() && !(await turnstileOk(String(body.ts || ''), ip))) {
+        await svc.from('crm_form_submissions').insert({ form_id: form.id, status: 'spam', answers: {}, display: [], mapped: {}, lang: form.lang, ip_hash: ipHash, user_agent: ua, error: 'bot check failed', is_test: isTest });
+        return reply(req, { error: 'bot_check' }, 400);
       }
     }
 
