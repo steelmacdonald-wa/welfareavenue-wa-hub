@@ -199,3 +199,29 @@ test('Sign-offs expands the existing request workspace with its original request
   context.document.querySelector('button').click();
   assert.equal(opened, 1);
 });
+
+test('compact Close the loop keeps its real action IDs with expanded review and a split close menu', async t => {
+  const native = readFileSync(new URL('../build/src/192_wave192.seg', import.meta.url), 'utf8');
+  const start = native.indexOf('  function sheetHtml()');
+  const end = native.indexOf('  function paint()', start);
+  let skipped = 0;
+  const context = await screen('<div id="modalBack"><div id="modalBox"></div></div>', '#volunteering', [], window => {
+    window.eval("var Q={bullets:[],suggest:[],others:[],picked:{},loaded:true,hidden:0,minutes:25,preview:false,draftOpen:true,text:'Typed update'}; function E(v){return String(v??'').replace(/[&<>\"']/g,c=>'&#'+c.charCodeAt(0)+';');} function fmtMins(){return '25m';} function loopName(){return 'check-in-out-wa';} function SR(){return null;} function micIcon(){return '<svg></svg>';}");
+    window.eval(native.slice(start, end));
+    window.document.querySelector('#modalBox').innerHTML = window.sheetHtml();
+    window.document.querySelector('#w192skip').addEventListener('click', () => { skipped++; });
+    window.eval(part('loop.js'));
+  });
+  t.after(() => context.dom.window.close());
+  assert.equal(context.document.querySelector('#w192draftbox').open, true);
+  assert.match(context.document.querySelector('#w192tidy').textContent, /Rewrite with AI/);
+  assert.equal(context.document.querySelector('#w192say').value, 'Typed update');
+  context.document.querySelector('.wa-loop-info').click();
+  assert.equal(context.document.querySelector('#w192info').hidden, false);
+  assert.match(context.document.querySelector('#w192info').textContent, /Where it goes/);
+  context.document.querySelector('#w192closeoptions').click();
+  assert.equal(context.document.querySelector('#w192closemenu').hidden, false);
+  context.document.querySelector('#w192skip').click();
+  assert.equal(skipped, 1);
+  assert.match(context.document.querySelector('.wa-loop-duration').textContent, /25m/);
+});

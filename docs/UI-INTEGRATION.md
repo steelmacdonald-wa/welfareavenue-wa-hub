@@ -13,7 +13,7 @@ The UI pass ports the approved experimental interface into the maintained Hub so
 | Compact applicant cards | Integrated |
 | Phone workspace layout | Integrated |
 | Taller sign-offs workspace | Integrated |
-| Compact Close the loop dialog | Pending |
+| Compact Close the loop dialog | Integrated |
 
 The productivity workflows are a later phase. The requested QR inventory management system is outside this integration.
 

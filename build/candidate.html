@@ -71018,7 +71018,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      link are taken at the window, before wave116q's handlers, so its sheet never opens.
    - I'm in starts a session (wave212: a line in #check-in-out-wa says so). Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
      from the person's own records; private work never pre-filled), Anything the Hub could not see (say it or type it,
-     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Where it goes
+     Rewrite with AI folds it in through the model and names the tasks worth closing), the tasks to tick, Where it goes
      (#check-in-out-wa since wave214; until then Who sees it: My team, Everyone, Just the Hub), Close the loop or Close
      without a note. The minutes show to the person only.
    - Home: In the loop, the week's notes from everyone, read through loop_feed() (no times, no hours). The person page:
@@ -71039,7 +71039,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto';
   var Q = { row: null, busy: false, preview: false, rec: null, listening: false, finalText: '', text: '', bullets: [], suggest: [], others: [], picked: {},
-    share: 'everyone', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'check-in-out-wa', sig: '' };
+    share: 'everyone', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'check-in-out-wa', draftOpen: true, sig: '' };
   var F = { rows: null, at: 0, p: null };
 
   var css = document.createElement('style');
@@ -71215,7 +71215,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---------- Close the loop: the sheet ---------- */
-  function stopRec() { try { if (Q.rec) Q.rec.stop(); } catch (e) { /* fine */ } Q.listening = false; var b = document.getElementById('w192mic'); if (b) { b.classList.remove('on'); b.innerHTML = '<span class="ic"></span>Talk instead'; } }
+  function micIcon() { return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg>'; }
+  function stopRec() { try { if (Q.rec) Q.rec.stop(); } catch (e) { /* fine */ } Q.listening = false; var b = document.getElementById('w192mic'); if (b) { b.classList.remove('on'); b.innerHTML = micIcon(); b.setAttribute('aria-label', 'Talk instead'); b.setAttribute('aria-pressed', 'false'); } }
   function startRec() {
     var R = SR(); if (!R) return;
     try {
@@ -71229,7 +71230,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       rec.onerror = function (ev) { stopRec(); var h = document.getElementById('w192hint'); if (h) h.textContent = ev.error === 'not-allowed' ? 'The browser blocked the microphone. Allow it in the address bar, or type instead.' : 'Listening stopped (' + (ev.error || 'error') + '). Type or try again.'; };
       rec.onend = function () { if (Q.listening) { try { rec.start(); } catch (e) { stopRec(); } } };
       rec.start(); Q.rec = rec; Q.listening = true;
-      var b = document.getElementById('w192mic'); if (b) { b.classList.add('on'); b.innerHTML = '<span class="ic"></span>Listening&hellip; tap to stop'; }
+      var b = document.getElementById('w192mic'); if (b) { b.classList.add('on'); b.innerHTML = micIcon(); b.setAttribute('aria-label', 'Stop recording'); b.setAttribute('aria-pressed', 'true'); }
     } catch (e) { stopRec(); }
   }
   function readBullets() { var out = []; document.querySelectorAll('[data-w192b]').forEach(function (i) { var v = i.value.trim(); if (v) out.push(v.slice(0, 220)); }); return out; }
@@ -71240,33 +71241,37 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var raw = []; document.querySelectorAll('[data-w192b]').forEach(function (i) { raw.push(i.value); }); Q.bullets = raw;
     Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; });
     var ta = document.getElementById('w192say'); if (ta) Q.text = ta.value;
+    var draftBox = document.getElementById('w192draftbox'); if (draftBox) Q.draftOpen = draftBox.open;
   }
   function sheetHtml() {
     var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w192b="' + i + '" value="' + E(b) + '" aria-label="Line ' + (i + 1) + ' of your note"><button type="button" class="rm" data-w192rm="' + i + '" title="Take this line out" aria-label="Take this line out">&#10005;</button></div>'; }).join('');
     var draft = !Q.loaded ? '<p class="empty">Reading what moved…</p>'
-      : (Q.bullets.length ? '<div class="bul" id="w192bul">' + bul + '</div>' : '<p class="empty">Nothing on record for this session yet. Say or type what you got done below.</p>');
+      : (Q.bullets.length ? '<div class="bul" id="w192bul">' + bul + '</div>' : '<p class="empty">No activity recorded yet. Add a line or write an update below.</p>');
     var hidden = Q.hidden ? '<p class="quiet">' + Q.hidden + (Q.hidden === 1 ? ' private item is' : ' private items are') + ' left out (confidential, board or one-on-one work). Add a line yourself if it should be shared.</p>' : '';
     var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w192t="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
     var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w192t="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
-    return '<div class="w113modal w192m" id="w192sheet" role="dialog" aria-labelledby="w192h"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
-      '<p class="m-sub"><span class="hrs">' + E(fmtMins(Q.minutes)) + '</span> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
-      '<div id="w192draftbox"><h4>What moved <span class="k">From your records</span></h4>' + draft + hidden +
-      '<button type="button" class="addl" id="w192add">+ add a line</button></div>' +
-      '<div id="w192saybox"><h4>Anything the Hub could not see?</h4>' +
-      '<textarea id="w192say" aria-label="Anything the Hub could not see" placeholder="e.g. met Amanda about the flyers, she prints Friday; called the shelter back about Sunday">' + E(Q.text || '') + '</textarea>' +
-      '<div class="sayrow">' + (SR() ? '<button type="button" class="mic" id="w192mic"><span class="ic"></span>Talk instead</button>' : '') + '<button type="button" class="addb" id="w192tidy">Add to the note</button><span class="quiet" id="w192hint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</span></div></div>' +
+    var help = '<p><b>' + E(fmtMins(Q.minutes)) + '</b> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
+      '<b>Where it goes</b><p><strong>#' + E(loopName()) + '</strong> · in Slack, for the whole team. Every closed loop goes there, with no clock time and no hours. Every note also shows on Home, in the loop.</p>' + hidden;
+    return '<div class="w113modal w192m wa-loop-compact" id="w192sheet" role="dialog" aria-labelledby="w192h">' +
+      '<header class="wa-loop-head"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
+      '<div class="wa-loop-info-wrap"><button type="button" class="wa-loop-info" aria-label="About this note" aria-expanded="false" aria-controls="w192info" aria-describedby="w192info"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v7"/><circle cx="12" cy="7" r=".8" fill="currentColor" stroke="none"/></svg></button>' +
+      '<div class="wa-loop-info-panel" id="w192info" role="tooltip" hidden>' + help + '<p class="quiet" id="w192hint">' + (SR() ? 'Talk instead uses your browser’s microphone. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</p></div></div>' +
+      '<button type="button" id="w192dismiss" aria-label="Dismiss Close the loop" title="Dismiss" class="wa-loop-dismiss">×</button></header>' +
+      '<details id="w192draftbox" class="wa-loop-review"' + (Q.draftOpen ? ' open' : '') + '><summary role="button" tabindex="0" aria-controls="w192review"><span>What moved</span><b>' + Q.bullets.length + (Q.bullets.length === 1 ? ' line' : ' lines') + '</b><span aria-hidden="true">⌄</span></summary><div class="wa-loop-review-panel" id="w192review"><div class="wa-loop-note-lines">' + draft +
+      '<button type="button" class="addl" id="w192add">+ Add a line</button></div>' +
       (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk" id="w192sug">' + sug + '</div>' : '') +
-      (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
-      '<div id="w192sharebox"><h4>Where it goes</h4><p class="where">#' + E(loopName()) + ' <small>&middot; in Slack, for the whole team</small></p>' +
-      '<p class="quiet">Every closed loop goes there, with no clock time and no hours. Every note also shows on Home, in the loop.</p></div>' +
-      '<div class="w113acts"><span class="w113ok" id="w192ok"></span><span style="flex:1"></span><button type="button" class="skip" id="w192skip">Close without a note</button><button class="btn primary" id="w192close">Close the loop</button></div></div>';
+      (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') + '</div></details>' +
+      '<div id="w192saybox" class="wa-loop-compose"><textarea id="w192say" aria-label="Anything the Hub could not see" placeholder="What moved? Add a quick update…">' + E(Q.text || '') + '</textarea>' +
+      '<div class="wa-loop-compose-actions"><button type="button" class="mic" id="w192mic" aria-label="Talk instead" title="Talk instead" aria-pressed="false"' + (SR() ? '' : ' disabled') + '>' + micIcon() + '</button><button type="button" class="addb" id="w192tidy" title="Use AI to rewrite your update into editable note lines"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 3 2.2 6.8L18 12l-6.8 2.2L9 21l-2.2-6.8L0 12l6.8-2.2L9 3ZM19 2l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3Z"/></svg><span>Rewrite with AI</span></button></div></div>' +
+      '<div class="w113acts"><span class="w113ok" id="w192ok" role="status"></span><div class="wa-loop-duration" title="Your time is private"><strong>' + E(fmtMins(Q.minutes)) + '</strong><span>in the loop</span></div><div class="wa-loop-close-group" role="group" aria-label="Close session"><button type="button" class="btn primary" id="w192close">Close the loop</button><button type="button" id="w192closeoptions" aria-label="More closing options" aria-haspopup="menu" aria-expanded="false" aria-controls="w192closemenu"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button><div id="w192closemenu" role="menu" aria-label="Closing options" hidden><button type="button" id="w192skip" role="menuitem">Close without a note</button></div></div></div></div>';
   }
+
   function paint() {
     var sig = sheetHtml();
     if (!document.getElementById('w192sheet') || Q.sig !== sig) { openModal(sig); Q.sig = sig; }
   }
   function begin(row) {
-    Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false;
+    Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false; Q.draftOpen = true;
     Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';   /* wave214: one place for every note */
     var endMs = row.ended_at ? new Date(row.ended_at).getTime() : Date.now();
     Q.minutes = Math.max(1, Math.round((endMs - new Date(row.started_at).getTime()) / 60000));
@@ -71295,7 +71300,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     keep();
     var text = String(Q.text || '').trim();
     var ok = document.getElementById('w192ok');
-    if (text.length < 3) { if (ok) ok.textContent = 'Say or type a line first, then Add to the note.'; return; }
+    if (text.length < 3) { if (ok) ok.textContent = 'Say or type a line first, then Rewrite with AI.'; return; }
     stopRec();
     if (Q.busy) return; Q.busy = true; if (ok) ok.textContent = 'Folding that into your note…';
     var btn = document.getElementById('w192tidy'); if (btn) btn.disabled = true;
@@ -71365,11 +71370,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }, true);
   document.addEventListener('click', function (e) {
     var t = e.target; if (!t || !t.closest || !document.getElementById('w192sheet')) return;
+    if (t.closest('#w192dismiss')) { keep(); stopRec(); closeModal(); Q.sig = ''; var trigger = document.getElementById('w192go'); if (trigger) trigger.focus(); return; }
     if (t.closest('#w192mic')) { if (Q.preview) return; if (Q.listening) stopRec(); else startRec(); return; }
     if (t.closest('#w192tidy')) { tidy(); return; }
     if (t.closest('#w192skip')) { if (Q.preview) { endPreview(); return; } finish(true); return; }
     if (t.closest('#w192close')) { if (Q.preview) { endPreview(); return; } finish(false); return; }
-    if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
+    if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; Q.draftOpen = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
     var rm = t.closest('[data-w192rm]'); if (rm) { keep(); Q.bullets.splice(Number(rm.getAttribute('data-w192rm')), 1); paint(); return; }
     if (t.closest('#w192more')) { var o = document.getElementById('w192oth'); if (o) o.style.display = o.style.display === 'none' ? '' : 'none'; return; }
   });
@@ -71465,7 +71471,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         { c: 1, t: 'The Loop', p: 'Two buttons, one habit: I’m in when you start working for Welfare Avenue, Close the loop when you finish. This one-minute walkthrough shows both. It is not a timeclock: the note you share carries what moved, never your hours.' },
         { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. A short line in #check-in-out-wa says you are in, never the time. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
         { s: '#w192draftbox', t: 'What moved', p: 'When you close the loop, the Hub drafts your note from your own records: tasks closed or opened, requests, meetings joined, Academy modules finished. Keep what matters and change any line. Private work (confidential, board, one-on-ones) is never pre-filled.', go: function () { preview(); } },
-        { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Add to the note turns it into lines and spots the tasks you finished.' },
+        { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Rewrite with AI turns it into lines and spots the tasks you finished.' },
         { s: '#w192sug', t: 'Tick what is finished', p: 'The tasks your words show are done are suggested here. Ticked tasks close themselves when you close the loop.', opt: 1 },
         { s: '#w192sharebox', t: 'Where it goes', p: 'Every closed loop goes to #check-in-out-wa in Slack, for the whole team. Every note also shows on Home, so nothing is lost.' },
         { s: '#w192close', t: 'Close the loop', p: 'Your note goes to #check-in-out-wa, with no clock time and no hours. Close without a note ends your session and posts only that you closed the loop.' },
@@ -94498,6 +94504,118 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   if (section) new MutationObserver(schedule).observe(section, { childList: true, subtree: true });
   window.addEventListener('hashchange', schedule);
   schedule();
+})();
+
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-loop";
+  style.textContent = "/* Compact Loop composer: guidance and review controls open on demand. */\n#modalBox:has(> #w192sheet.wa-loop-compact) {\n  box-sizing:border-box; width:calc(100vw - 32px)!important; max-width:520px!important;\n  padding:13px 16px!important; max-height:none; overflow:visible;\n}\n#w192sheet.wa-loop-compact { position:relative; font-family:'Space Grotesk',sans-serif; }\n#w192sheet .wa-loop-head { display:flex; align-items:center; gap:7px; margin-bottom:7px; }\n#modalBox #w192sheet .wa-loop-head h3 { margin:0 auto 0 0; font-size:22px; line-height:26px; }\n#w192sheet .wa-loop-duration { display:flex; align-items:baseline; gap:6px; color:#103f39; white-space:nowrap; }\n#w192sheet .wa-loop-duration strong { font-size:25px; font-weight:600; line-height:30px; letter-spacing:-1px; }\n#w192sheet .wa-loop-duration span { font-size:10px; color:#6e7b6f; }\n#w192sheet :is(.wa-loop-info,.wa-loop-dismiss) { display:grid; place-items:center; width:25px; height:25px; padding:0; border:0; background:transparent; color:#6a796c; cursor:pointer; border-radius:6px; flex:none; }\n#w192sheet :is(.wa-loop-info,.wa-loop-dismiss):hover { color:#103f39; background:#eaf0e5; }\n#w192sheet .wa-loop-dismiss { font:21px/1 sans-serif; }\n#w192sheet :is(button,summary):focus-visible { outline:2px solid #b9851b; outline-offset:2px; }\n#w192sheet .wa-loop-info-wrap { position:relative; flex:none; }\n#w192sheet .wa-loop-info-panel { position:absolute; z-index:20; right:0; top:calc(100% + 8px); width:min(330px,calc(100vw - 64px)); max-height:calc(100dvh - 48px); overflow:auto; box-sizing:border-box; padding:14px 16px; border:1px solid #dbe4d7; border-radius:12px; background:#fffdf7; box-shadow:0 8px 28px #103f3929; font-size:12px; line-height:1.65; color:#496050; animation:wa-loop-pop 140ms ease-out; }\n#w192sheet .wa-loop-info-panel[hidden] { display:none!important; }\n#w192sheet .wa-loop-info-panel.above { top:auto; bottom:calc(100% + 8px); }\n#w192sheet .wa-loop-info-panel p { font-size:12px; line-height:1.65; margin:0 0 10px; }\n#w192sheet .wa-loop-info-panel p:last-child { margin-bottom:0; }\n#w192sheet .wa-loop-info-panel > b { display:block; color:#103f39; margin-bottom:3px; }\n#w192sheet .wa-loop-info-panel #w192hint { border-top:1px solid #e2e7dd; padding-top:9px; font-size:11px; }\n#w192sheet .wa-loop-review { position:relative; margin:0 0 8px; }\n#w192sheet .wa-loop-review > summary { display:flex; align-items:center; gap:7px; list-style:none; padding:0; width:100%; min-height:18px; cursor:pointer; color:#496050; font-size:12px; font-weight:600; -webkit-user-select:none; user-select:none; }\n#w192sheet .wa-loop-review > summary::-webkit-details-marker { display:none; }\n#w192sheet .wa-loop-review > summary b { font-size:10px; font-weight:600; border-radius:5px; padding:1px 5px; background:#eef1e8; color:#46644d; }\n#w192sheet .wa-loop-review > summary span:last-child { margin-left:auto; transition:transform 140ms ease; }\n#w192sheet .wa-loop-review[open] > summary span:last-child { transform:rotate(180deg); }\n#w192sheet .wa-loop-review-panel { position:relative; max-height:min(160px,25dvh); overflow:auto; margin-top:5px; padding:8px 10px; background:#f3f5ed; border:1px solid #e2e7dd; border-radius:9px; animation:wa-loop-pop 140ms ease-out; }\n#w192sheet .wa-loop-note-lines { display:flex; align-items:center; gap:10px; }\n#w192sheet .wa-loop-review-panel .empty { display:block; flex:1; font-size:11px; line-height:16px; margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; min-height:0; }\n#w192sheet .wa-loop-review-panel .empty::before { display:none; }\n#w192sheet .wa-loop-review-panel .bul { flex:1; min-width:0; gap:6px; margin:0; }\n#w192sheet .wa-loop-review-panel .bul .b { gap:5px; grid-template-columns:8px minmax(0,1fr) 20px; }\n#w192sheet .wa-loop-review-panel .bul .b .dot { width:5px; height:5px; }\n#w192sheet .wa-loop-review-panel .bul .b input { font-size:12px; padding:6px 8px; border-radius:7px; }\n#w192sheet .wa-loop-review-panel .addl { flex:none; font-size:10.5px; margin:0; padding:4px 6px; text-decoration:none; border:1px solid #cdd9cb; border-radius:6px; background:#fffdf7; white-space:nowrap; }\n#w192sheet .wa-loop-compose { display:grid; grid-template-columns:minmax(0,1fr) 126px; gap:9px; align-items:stretch; }\n#modalBox #w192sheet textarea { min-height:66px; height:66px; max-height:66px; resize:none; font-size:12.5px; line-height:1.5; padding:9px 11px; border-radius:9px; margin:0; background:#fffdf8; }\n#w192sheet .wa-loop-compose-actions { display:flex; flex-direction:column; align-items:stretch; justify-content:space-between; gap:5px; }\n#w192sheet .wa-loop-compose-actions .mic { display:grid; place-items:center; align-self:flex-end; height:29px; width:32px; padding:0; border-radius:8px; color:#45664e; background:#edf1e6; }\n#w192sheet .wa-loop-compose-actions .mic.on { background:#b3402f; color:#fffaf2; animation:none; box-shadow:0 0 0 2px #b3402f24; }\n#w192sheet .wa-loop-compose-actions .mic:disabled { opacity:.5; cursor:not-allowed; }\n#w192sheet .wa-loop-compose-actions .addb { display:flex; align-items:center; gap:5px; justify-content:center; padding:7px 6px; min-height:31px; font-size:10.5px; line-height:17px; border-radius:8px; white-space:nowrap; }\n#w192sheet .w113acts { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:9px 0 0; }\n#w192sheet .wa-loop-close-group { position:relative; display:flex; align-items:stretch; margin-left:auto; border-radius:8px; background:#DCA527; box-shadow:0 2px 4px #103f3921; }\n#w192sheet .w113acts #w192close { padding:6px 11px; min-height:32px; border:0; border-radius:8px 0 0 8px; box-shadow:none; font-size:12px; line-height:18px; }\n#w192sheet #w192closeoptions { display:grid; place-items:center; width:30px; padding:0; border:0; border-left:1px solid #103f3926; border-radius:0 8px 8px 0; background:transparent; color:#103f39; cursor:pointer; }\n#w192sheet #w192closeoptions:hover,#w192sheet #w192closeoptions[aria-expanded=\"true\"] { background:#103f3912; }\n#w192sheet #w192closeoptions:disabled { opacity:.5; cursor:default; }\n#w192sheet #w192closemenu { position:absolute; bottom:calc(100% + 7px); right:0; width:185px; padding:5px; border:1px solid #dbe4d7; border-radius:9px; background:#fffdf7; box-shadow:0 6px 20px #103f3926; z-index:25; animation:wa-loop-pop 140ms ease-out; }\n#w192sheet #w192closemenu[hidden] { display:none!important; }\n#w192sheet #w192skip { display:block; width:100%; border:0; border-radius:5px; background:transparent; color:#103f39; text-align:left; font:11px/18px 'Space Grotesk',sans-serif; padding:7px 9px; text-decoration:none; cursor:pointer; }\n#w192sheet #w192skip:hover,#w192sheet #w192skip:focus-visible { background:#edf1e6; }\n#w192sheet .w113acts #w192ok { font-size:10.5px; line-height:14px; flex-basis:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:0; }\n#w192sheet .w113acts #w192ok:empty,#w192sheet .w113acts #w192ok.wa-loop-sample-status { display:none; }\n@keyframes wa-loop-pop { from {opacity:0;transform:translateY(-3px)} to {opacity:1;transform:none} }\n@media (max-width:420px) {\n  #modalBox:has(> #w192sheet.wa-loop-compact) { padding:12px!important; }\n  #w192sheet .wa-loop-compose { grid-template-columns:minmax(0,1fr) 116px; gap:7px; }\n  #w192sheet .wa-loop-compose-actions .addb { font-size:9.5px; }\n  #w192sheet .wa-loop-duration { gap:4px; }\n  #w192sheet .wa-loop-duration strong { font-size:22px; }\n  #w192sheet .wa-loop-duration span { font-size:9px; }\n  #w192sheet .wa-loop-note-lines { align-items:flex-start; }\n}\n@media (prefers-reduced-motion:reduce) {\n  #w192sheet .wa-loop-info-panel,#w192sheet .wa-loop-review-panel,#w192sheet #w192closemenu { animation:none; }\n  #w192sheet .wa-loop-review > summary span:last-child { transition:none; }\n}\n\n#w192sheet .wa-loop-compose-actions .addb svg { flex:none; }\n";
+  document.head.appendChild(style);
+})();
+/* Compact Loop guidance and split closing menu; original actions stay connected. */
+(() => {
+  'use strict';
+  const sheet = () => document.getElementById('w192sheet');
+  const wrap = () => sheet()?.querySelector('.wa-loop-info-wrap');
+  function showInfo() {
+    const host = wrap(), popup = host?.querySelector('[role="tooltip"]');
+    if (!popup) return;
+    popup.hidden = false; popup.classList.remove('above');
+    host.querySelector('button').setAttribute('aria-expanded','true');
+    const box = popup.getBoundingClientRect(), button = host.getBoundingClientRect();
+    if (box.bottom > innerHeight - 12 && button.top > box.height + 12) popup.classList.add('above');
+  }
+  function hideInfo() {
+    const host = wrap(); if (!host) return;
+    host.querySelector('[role="tooltip"]').hidden = true;
+    host.querySelector('button').setAttribute('aria-expanded','false');
+    delete host.dataset.pinned;
+  }
+  function closeOptions(focusToggle = false) {
+    const root = sheet(), toggle = root?.querySelector('#w192closeoptions'), menu = root?.querySelector('#w192closemenu');
+    if (!toggle || !menu) return;
+    menu.hidden = true;
+    toggle.setAttribute('aria-expanded','false');
+    if (focusToggle) toggle.focus();
+  }
+  function openOptions(focusItem = false) {
+    const root = sheet(), toggle = root?.querySelector('#w192closeoptions'), menu = root?.querySelector('#w192closemenu');
+    if (!toggle || !menu || toggle.disabled) return;
+    hideInfo();
+    menu.hidden = false;
+    toggle.setAttribute('aria-expanded','true');
+    if (focusItem) menu.querySelector('[role="menuitem"]').focus();
+  }
+  document.addEventListener('pointerover', event => {
+    const host = event.target.closest?.('.wa-loop-info-wrap');
+    if (host && event.pointerType !== 'touch' && !host.contains(event.relatedTarget)) showInfo();
+  });
+  document.addEventListener('pointerout', event => {
+    const host = event.target.closest?.('.wa-loop-info-wrap');
+    if (host && !host.contains(event.relatedTarget) && !host.dataset.pinned && !host.contains(document.activeElement)) hideInfo();
+  });
+  document.addEventListener('focusin', event => { if (event.target.closest?.('.wa-loop-info-wrap')) showInfo(); });
+  document.addEventListener('focusout', event => {
+    const host = event.target.closest?.('.wa-loop-info-wrap');
+    if (host && !host.contains(event.relatedTarget) && !host.matches(':hover')) hideInfo();
+  });
+  document.addEventListener('click', event => {
+    if (event.target.closest?.('#w192closeoptions')) {
+      const menu = sheet()?.querySelector('#w192closemenu');
+      if (menu?.hidden) openOptions(true); else closeOptions(true);
+      return;
+    }
+    if (event.target.closest?.('#w192skip')) closeOptions();
+    const summary = event.target.closest?.('#w192draftbox > summary');
+    if (summary) {
+      event.preventDefault();
+      const review = summary.parentElement;
+      review.open = !review.open;
+      summary.setAttribute('aria-expanded',String(review.open));
+      return;
+    }
+    if (event.target.closest?.('.wa-loop-info')) {
+      const host = wrap();
+      if (host.dataset.pinned) hideInfo(); else { host.dataset.pinned = '1'; showInfo(); }
+    }
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!sheet()) return;
+    if (!event.target.closest?.('.wa-loop-info-wrap')) hideInfo();
+    if (!event.target.closest?.('.wa-loop-close-group')) closeOptions();
+  });
+  document.addEventListener('keydown', event => {
+    if ((event.key === 'Enter' || event.key === ' ') && event.target.matches?.('#w192draftbox > summary')) {
+      event.preventDefault(); event.target.click(); return;
+    }
+    const root = sheet(), menu = root?.querySelector('#w192closemenu');
+    if (event.target.matches?.('#w192closeoptions') && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault(); openOptions(true); return;
+    }
+    if (event.target.closest?.('#w192closemenu')) {
+      if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+        event.preventDefault(); menu.querySelector('[role="menuitem"]').focus(); return;
+      }
+      if (event.key === 'Tab') closeOptions(true);
+    }
+    if (event.key !== 'Escape' || !sheet() || document.getElementById('modalBack')?.style.display === 'none') return;
+    const popup = wrap()?.querySelector('[role="tooltip"]');
+    if (menu && !menu.hidden) closeOptions(true);
+    else if (popup && !popup.hidden) hideInfo();
+    else sheet().querySelector('#w192dismiss').click();
+    event.preventDefault(); event.stopImmediatePropagation();
+  }, true);
+  function update() {
+    const root = sheet(); if (!root) return;
+    const review = root.querySelector('.wa-loop-review');
+    review?.querySelector('summary').setAttribute('aria-expanded',String(review.open));
+    const toggle = root.querySelector('#w192closeoptions'), close = root.querySelector('#w192close');
+    if (toggle && close) toggle.disabled = close.disabled;
+
+  }
+  const modal = document.getElementById('modalBox');
+  if (modal) new MutationObserver(update).observe(modal,{childList:true,subtree:true,characterData:true});
+  update();
 })();
 
 /* =====================================================================
