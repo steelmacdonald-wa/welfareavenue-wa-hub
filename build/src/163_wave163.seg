@@ -345,7 +345,7 @@
       list.forEach(function (it) { if (!it.hint) it.hint = it.sec || ''; });
       html = list.length ? list.map(rowHtml).join('') : '<div class="none">No page is called that. Try another word.</div>';
     } else {
-      html += apps.length > 1 ? '<div class="sh">Apps</div><div class="apps" role="list">' + apps.map(function (a) {
+      html += apps.length > 1 ? '<div class="sh w153appsHeading">Apps<button type="button" data-w163appsfind>Find an app</button></div><div class="apps" role="list">' + apps.map(function (a) {
         var on = (app || 'hub') === a.id;
         return '<button type="button" class="app' + (on ? ' on' : '') + '" role="listitem" data-w163app="' + Esc(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="t" style="background:' + Esc(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + Esc(a.label) + '</button>';
       }).join('') + linkList().map(function (l) {
@@ -403,6 +403,7 @@
     var el;
     if ((el = t.closest('#w163bar [data-w163slot]'))) { ev.preventDefault(); slotGo(el.getAttribute('data-w163slot'), el); return; }
     if (!t.closest('#w163sheet')) return;
+    if ((el = t.closest('[data-w163appsfind]'))) { ev.preventDefault(); closeSheet(true); if (window.w153) window.w153.pop(); return; }
     if ((el = t.closest('[data-w163close]'))) { ev.preventDefault(); closeSheet(); return; }
     if ((el = t.closest('[data-w163back]'))) { ev.preventDefault(); closeSheet(true); try { window.WA_APP.close(); } catch (e) { location.hash = '#mypage'; } return; }
     if ((el = t.closest('[data-w163ext]'))) { closeSheet(true); return; }   /* 01/10/26: the website opens its own tab (no preventDefault) */

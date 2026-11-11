@@ -62097,20 +62097,34 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + 'body.w153app #w153dock .w153back{display:inline-flex;}'
     + '#w153dock .w153grid:focus-visible,#w153dock .w153back:focus-visible,#w153pop .w153tile:focus-visible,#w153rail .w153it:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
     /* the launcher */
-    + '#w153pop{display:none;position:fixed;left:12px;bottom:66px;width:250px;background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:18px;box-shadow:0 22px 60px -14px rgba(16,63,57,.35);padding:12px;z-index:240;font-family:' + BODY + ';}'
-    + '#w153pop.open{display:block;}'
-    + '#w153pop .w153ph{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';padding:2px 6px 10px;}'
-    + '#w153pop .w153tiles{display:flex;flex-direction:column;gap:6px;}'
-    + '#w153pop .w153tile{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;column-gap:12px;row-gap:1px;align-items:center;border:1px solid rgba(16,63,57,.08);background:' + CREAM + ';border-radius:14px;padding:8px 10px;cursor:pointer;text-align:left;font-family:' + BODY + ';color:' + INK + ';}'
+    + '#w153pop{display:none;position:fixed;left:12px;bottom:12px;width:380px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);box-sizing:border-box;background:var(--wa-card);border:1px solid rgba(16,63,57,.16);border-radius:18px;box-shadow:0 18px 50px rgba(16,63,57,.18);padding:0;overflow:hidden;z-index:280;font-family:' + BODY + ';}'
+    + '#w153pop.open{display:flex;flex-direction:column;}'
+    + '#w153pop [hidden]{display:none !important;}'
+    + '#w153pop .w153appHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 10px;flex:none;}'
+    + '#w153pop .w153appHead h2{margin:0;font:700 19px ' + BODY + ';color:' + GREEN + ';text-transform:none;letter-spacing:0;}'
+    + '#w153pop .w153appHead button{display:grid;place-items:center;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:' + GREEN + ';cursor:pointer;}'
+    + '#w153pop .w153appHead button:hover{background:rgba(16,63,57,.07);}'
+    + '#w153pop .w153appSearch{display:flex;align-items:center;gap:8px;margin:0 14px 10px;padding:0 10px;min-height:42px;border:1px solid rgba(16,63,57,.2);border-radius:10px;background:rgba(16,63,57,.03);flex:none;color:' + GREEN + ';}'
+    + '#w153pop .w153appSearch:focus-within{border-color:' + GOLD + ';box-shadow:0 0 0 2px rgba(220,165,39,.15);}'
+    + '#w153pop .w153appSearch input{width:100%;min-width:0;padding:10px 0;border:0;background:transparent;box-shadow:none;outline:none;font:400 13px ' + BODY + ';color:' + GREEN + ';}'
+    + '#w153pop .w153appSearch input::placeholder{color:' + MUTED + ';opacity:1;}'
+    + '#w153appResults{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 8px 8px;scroll-padding:8px;}'
+    + '#w153pop .w153ph{margin:0;font:600 12px ' + HEAD + ';letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';padding:8px 10px 4px;}'
+    + '#w153pop .w153tiles{display:flex;flex-direction:column;gap:2px;}'
+    + '#w153pop .w153tile{display:grid;grid-template-columns:34px minmax(0,1fr) auto;grid-template-rows:auto auto;column-gap:10px;row-gap:2px;align-items:center;width:100%;min-height:58px;border:1px solid transparent;background:transparent;border-radius:10px;padding:9px 10px;cursor:pointer;text-align:left;font-family:' + BODY + ';color:' + INK + ';}'
     + '#w153pop .w153tile .w153ai{grid-row:1 / span 2;}'
     + '#w153pop .w153tile:hover{border-color:rgba(16,63,57,.3);background:rgba(16,63,57,.05);}'
-    + '#w153pop .w153tile.on{border-color:' + GREEN + ';box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
-    + '#w153pop .w153tile b{font-size:13px;font-weight:700;line-height:1.2;}'
-    + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
+    + '#w153pop .w153tile.on{border-color:rgba(16,63,57,.14);background:rgba(16,63,57,.07);}'
+    + '#w153pop .w153tile b{grid-column:2;grid-row:1;font-size:13px;font-weight:700;line-height:1.3;color:' + GREEN + ';}'
+    + '#w153pop .w153tile small{grid-column:2;grid-row:2;font-size:11px;color:' + MUTED + ';line-height:1.4;}'
+    + '#w153pop .w153current{grid-column:3;grid-row:1 / span 2;font-size:10px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.07);border-radius:99px;padding:3px 6px;}'
+    + '#w153pop .w153appEmpty{text-align:center;padding:22px 12px;font-size:13px;color:' + MUTED + ';}'
+    + '#w153pop .w153appEmpty button{font:600 12px ' + BODY + ';color:' + GREEN + ';background:none;border:1px solid rgba(16,63,57,.2);border-radius:8px;padding:8px 12px;cursor:pointer;}'
+    + '#w153pop .w153appFoot{display:flex;justify-content:space-between;gap:8px;padding:10px 14px;border-top:1px solid rgba(16,63,57,.1);font-size:10px;line-height:1.4;color:' + MUTED + ';flex:none;}'
+    + '#w153pop button:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
     /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
-    + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
     + '#w153pop .w153ph.w262ph{padding-top:12px;}'
-    + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
+    + '#w153pop .w153external{border-top:1px solid rgba(16,63,57,.1);margin-top:6px;padding-top:6px;}'
     + '#w153pop a.w153tile{text-decoration:none;}'
     + '#w153pop .w153ext .w153ai{color:' + GREEN + ';}'
     + '#w153pop .w153ext b{display:inline-flex;align-items:center;gap:5px;}'
@@ -62181,17 +62195,22 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#crm .w153gtot b{color:' + INK + ';}'
     /* phones */
     + '@media (max-width:900px){'
-    + '#w153pop{left:12px;right:12px;width:auto;bottom:calc(82px + env(safe-area-inset-bottom));}'
+    + '#w153pop{bottom:calc(12px + env(safe-area-inset-bottom));max-height:calc(100dvh - 24px - env(safe-area-inset-bottom));}'
+    + '#w153pop .w153appSearch input{font-size:16px;}'
+    + '#w153pop .w153appKeys{display:none;}'
+    + '#w163sheet .w153appsHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;}'
+    + '#w163sheet [data-w163appsfind]{font:600 12px ' + BODY + ';color:' + GREEN + ';background:transparent;border:1px solid rgba(16,63,57,.2);border-radius:8px;padding:8px 10px;cursor:pointer;text-transform:none;letter-spacing:0;}'
     + '#w153bar{position:sticky;top:0;z-index:40;margin:0 0 10px;box-shadow:0 8px 24px -12px rgba(16,63,57,.25);}'
     + '#w153bar .w153menu{display:inline-flex;}'
     + '#w153bar .w153acts{margin-left:0;width:100%;justify-content:space-between;}'
     + '#crm .w153gifts .w152lh{display:none;}'
     + '#crm .w153gifts .w152row{grid-template-columns:1fr 1fr;}'
-    + '}';
+    + '}'
+    + '@media(prefers-reduced-motion:no-preference){#w153pop.open{animation:w153appEnter .14s ease-out;}@keyframes w153appEnter{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}}';
   if (!document.getElementById('wa153css')) { var st = document.createElement('style'); st.id = 'wa153css'; st.textContent = css; document.head.appendChild(st); }
 
   /* ---------- the dock, the launcher and the rail ---------- */
-  var S = { app: null, open: false, drawn: 0 };
+  var S = { app: null, open: false, drawn: 0, appQuery: '' };
   function nav() { return document.querySelector('nav.wa-nav'); }
   function ensure() {
     var n = nav(); if (!n) return false;
@@ -62202,12 +62221,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     if (!document.getElementById('w153dock')) {
       var d = document.createElement('div'); d.id = 'w153dock';
-      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="true" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
+      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="dialog" aria-controls="w153pop" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
         '<button type="button" class="w153back" data-w153back="1">' + I('back') + ' Back to the Hub</button>';
       n.appendChild(d);
     }
     if (!document.getElementById('w153pop')) {
-      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Apps');
+      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-labelledby', 'w153appTitle');
       document.body.appendChild(p);
     }
     if (!document.getElementById('w153bar')) {
@@ -62217,7 +62236,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return true;
   }
   function tileHtml(a, on) {
-    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
+    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small>' + (on ? '<span class="w153current">Current</span>' : '') + '</button>';
   }
   /* 01/10/26: a link tile (the website): a real link, so it opens in a new tab and the Hub stays put */
   function linkHtml(l) {
@@ -62225,15 +62244,76 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
+    var focused = document.activeElement;
+    var focusInPop = p.contains(focused);
+    var focusApp = focused && focused.getAttribute('data-w153app');
+    var focusLink = focused && focused.getAttribute('data-w153ext');
+    var searchFocused = focused && focused.id === 'w153appSearch';
+    var selection = searchFocused ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+    var oldResults = p.querySelector('#w153appResults');
+    var scrollTop = oldResults ? oldResults.scrollTop : 0;
     var cur = S.app || 'hub';
-    /* wave262: Your apps first, then More apps (the other apps this person can open) */
+    /* Keep wave262's team ordering and the existing permission checks. */
     var Y = yours(), tiles = function (ids) { return ids.map(function (id) { return tileHtml(APPS[id], id === cur); }).join(''); };
-    p.innerHTML = '<div class="w153ph">' + (Y.all ? 'Apps' : 'Your apps') + '</div><div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) +
-      (Y.more.length ? '</div><div class="w153ph w262ph">More apps</div><div class="w153tiles">' + tiles(Y.more) : '') +
-      (LINKS.length ? '<div class="w153sep" role="presentation"></div>' + LINKS.map(linkHtml).join('') : '') + '</div>';
+    var groups = '<section class="w153appGroup" aria-label="' + (Y.all ? 'Apps' : 'Your apps') + '">' +
+      (Y.all ? '' : '<h3 class="w153ph">Your apps</h3>') + '<div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) + '</div></section>';
+    if (Y.more.length) groups += '<section class="w153appGroup" aria-label="More apps"><h3 class="w153ph w262ph">More apps</h3><div class="w153tiles">' + tiles(Y.more) + '</div></section>';
+    if (LINKS.length) groups += '<section class="w153appGroup w153external" aria-label="Website"><div class="w153tiles">' + LINKS.map(linkHtml).join('') + '</div></section>';
+    p.innerHTML = '<div class="w153appHead"><h2 id="w153appTitle">Apps</h2><button type="button" data-w153popclose aria-label="Close Apps">' + I('x') + '</button></div>' +
+      '<label class="w153appSearch">' + I('search') + '<input id="w153appSearch" type="search" placeholder="Find an app" aria-label="Find an app" aria-controls="w153appResults" autocomplete="off" value="' + E(S.appQuery) + '"></label>' +
+      '<div id="w153appResults">' + groups + '<div class="w153appEmpty" hidden><p>No matching apps</p><button type="button" data-w153appclear>Clear search</button></div></div>' +
+      '<div class="w153appFoot"><span data-w153appstatus role="status" aria-live="polite"></span><span class="w153appKeys" aria-hidden="true">&#8593; &#8595; move &middot; Enter open &middot; Esc close</span></div>';
+    filterApps();
+    positionPop();
+    p.querySelector('#w153appResults').scrollTop = scrollTop;
+    if (focusInPop) {
+      var next = p.querySelector('#w153appSearch');
+      if (focusApp) next = p.querySelector('[data-w153app="' + focusApp + '"]:not([hidden])') || next;
+      if (focusLink) next = p.querySelector('[data-w153ext="' + focusLink + '"]:not([hidden])') || next;
+      if (focused && focused.matches('[data-w153popclose]')) next = p.querySelector('[data-w153popclose]');
+      next.focus({ preventScroll: true });
+      if (selection && selection.start != null) next.setSelectionRange(selection.start, selection.end, selection.direction);
+    }
   }
-  function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
-  function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }
+  function filterApps() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var words = fold(S.appQuery).split(/\s+/).filter(Boolean), count = 0;
+    p.querySelectorAll('.w153tile').forEach(function (row) {
+      var hay = fold(row.querySelector('b').textContent + ' ' + row.querySelector('small').textContent);
+      row.hidden = !words.every(function (word) { return hay.indexOf(word) >= 0; });
+      if (!row.hidden) count++;
+    });
+    p.querySelectorAll('.w153appGroup').forEach(function (group) { group.hidden = !group.querySelector('.w153tile:not([hidden])'); });
+    p.querySelector('.w153appEmpty').hidden = count > 0;
+    p.querySelector('[data-w153appstatus]').textContent = words.length ? count + (count === 1 ? ' result' : ' results') : 'Choose a workspace';
+  }
+  function positionPop() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var n = nav(), left = 12;
+    if (window.innerWidth > 900 && n) left = Math.max(12, Math.round(n.getBoundingClientRect().right + 10));
+    p.style.left = left + 'px';
+    p.style.width = Math.min(380, window.innerWidth - left - 12) + 'px';
+  }
+  function openPop() {
+    if (!ensure() || !appOk('hub')) return;
+    S.appQuery = '';
+    paintPop();
+    var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid');
+    p.classList.add('open'); S.open = true;
+    if (g) g.setAttribute('aria-expanded', 'true');
+    p.querySelector('#w153appSearch').focus({ preventScroll: true });
+  }
+  function closePop(restoreFocus) {
+    var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid');
+    if (p) p.classList.remove('open');
+    S.open = false;
+    if (g) g.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) {
+      if (window.innerWidth <= 900) document.body.classList.remove('w130typing');
+      var back = window.innerWidth <= 900 ? document.querySelector('#w163bar [data-w163slot="menu"]') : g;
+      if (back) back.focus({ preventScroll: true });
+    }
+  }
   function togglePop() { if (S.open) closePop(); else openPop(); }
 
   /* the rail: the app's pages and sections, the current one marked */
@@ -62427,6 +62507,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest ? ev.target : null; if (!t) return;
     var el;
+    if ((el = t.closest('[data-w153popclose]'))) { ev.preventDefault(); closePop(true); return; }
+    if ((el = t.closest('[data-w153appclear]'))) { ev.preventDefault(); S.appQuery = ''; var search = document.getElementById('w153appSearch'); search.value = ''; filterApps(); search.focus(); return; }
     if ((el = t.closest('[data-w153grid]'))) { ev.preventDefault(); togglePop(); return; }
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
     if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
@@ -62436,7 +62518,32 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w153act]'))) { ev.preventDefault(); act(el.getAttribute('data-w153act')); return; }
     if (S.open && !t.closest('#w153pop') && !t.closest('#w153dock')) closePop();
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && S.open) { closePop(); var g = document.querySelector('#w153dock .w153grid'); if (g) { try { g.focus(); } catch (e) { /* fine */ } } } });
+  document.addEventListener('input', function (ev) {
+    if (ev.target.id !== 'w153appSearch') return;
+    S.appQuery = ev.target.value;
+    filterApps();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!S.open) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); closePop(true); return; }
+    var p = document.getElementById('w153pop');
+    if (!p || !p.contains(ev.target)) return;
+    var rows = Array.from(p.querySelectorAll('.w153tile:not([hidden])'));
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!rows.length) return;
+      var index = rows.indexOf(ev.target.closest('.w153tile'));
+      var next = index + (ev.key === 'ArrowDown' ? 1 : -1);
+      if (index < 0) next = ev.key === 'ArrowDown' ? 0 : rows.length - 1;
+      rows[(next + rows.length) % rows.length].focus();
+    } else if (ev.key === 'Enter' && ev.target.id === 'w153appSearch') {
+      ev.preventDefault();
+      if (rows.length) rows[0].click();
+    } else if (ev.key === '/' && ev.target.id !== 'w153appSearch') {
+      ev.preventDefault(); p.querySelector('#w153appSearch').focus();
+    }
+  });
+  window.addEventListener('resize', function () { if (S.open) positionPop(); });
   window.addEventListener('hashchange', function () { setTimeout(paint, 0); });
   /* the Finances sections are switched inside the page: follow them in the rail */
   document.addEventListener('click', function (ev) { if (ev.target.closest && ev.target.closest('#finances .w94tab, #hrcentre .w47tab')) setTimeout(paint, 80); });
@@ -93296,7 +93403,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       list.forEach(function (it) { if (!it.hint) it.hint = it.sec || ''; });
       html = list.length ? list.map(rowHtml).join('') : '<div class="none">No page is called that. Try another word.</div>';
     } else {
-      html += apps.length > 1 ? '<div class="sh">Apps</div><div class="apps" role="list">' + apps.map(function (a) {
+      html += apps.length > 1 ? '<div class="sh w153appsHeading">Apps<button type="button" data-w163appsfind>Find an app</button></div><div class="apps" role="list">' + apps.map(function (a) {
         var on = (app || 'hub') === a.id;
         return '<button type="button" class="app' + (on ? ' on' : '') + '" role="listitem" data-w163app="' + Esc(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="t" style="background:' + Esc(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + Esc(a.label) + '</button>';
       }).join('') + linkList().map(function (l) {
@@ -93354,6 +93461,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var el;
     if ((el = t.closest('#w163bar [data-w163slot]'))) { ev.preventDefault(); slotGo(el.getAttribute('data-w163slot'), el); return; }
     if (!t.closest('#w163sheet')) return;
+    if ((el = t.closest('[data-w163appsfind]'))) { ev.preventDefault(); closeSheet(true); if (window.w153) window.w153.pop(); return; }
     if ((el = t.closest('[data-w163close]'))) { ev.preventDefault(); closeSheet(); return; }
     if ((el = t.closest('[data-w163back]'))) { ev.preventDefault(); closeSheet(true); try { window.WA_APP.close(); } catch (e) { location.hash = '#mypage'; } return; }
     if ((el = t.closest('[data-w163ext]'))) { closeSheet(true); return; }   /* 01/10/26: the website opens its own tab (no preventDefault) */
