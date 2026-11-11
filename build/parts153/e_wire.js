@@ -3,6 +3,8 @@
   document.addEventListener('click', function (ev) {
     var t = ev.target.closest ? ev.target : null; if (!t) return;
     var el;
+    if ((el = t.closest('[data-w153popclose]'))) { ev.preventDefault(); closePop(true); return; }
+    if ((el = t.closest('[data-w153appclear]'))) { ev.preventDefault(); S.appQuery = ''; var search = document.getElementById('w153appSearch'); search.value = ''; filterApps(); search.focus(); return; }
     if ((el = t.closest('[data-w153grid]'))) { ev.preventDefault(); togglePop(); return; }
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
     if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
@@ -12,7 +14,32 @@
     if ((el = t.closest('[data-w153act]'))) { ev.preventDefault(); act(el.getAttribute('data-w153act')); return; }
     if (S.open && !t.closest('#w153pop') && !t.closest('#w153dock')) closePop();
   });
-  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && S.open) { closePop(); var g = document.querySelector('#w153dock .w153grid'); if (g) { try { g.focus(); } catch (e) { /* fine */ } } } });
+  document.addEventListener('input', function (ev) {
+    if (ev.target.id !== 'w153appSearch') return;
+    S.appQuery = ev.target.value;
+    filterApps();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!S.open) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); closePop(true); return; }
+    var p = document.getElementById('w153pop');
+    if (!p || !p.contains(ev.target)) return;
+    var rows = Array.from(p.querySelectorAll('.w153tile:not([hidden])'));
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      if (!rows.length) return;
+      var index = rows.indexOf(ev.target.closest('.w153tile'));
+      var next = index + (ev.key === 'ArrowDown' ? 1 : -1);
+      if (index < 0) next = ev.key === 'ArrowDown' ? 0 : rows.length - 1;
+      rows[(next + rows.length) % rows.length].focus();
+    } else if (ev.key === 'Enter' && ev.target.id === 'w153appSearch') {
+      ev.preventDefault();
+      if (rows.length) rows[0].click();
+    } else if (ev.key === '/' && ev.target.id !== 'w153appSearch') {
+      ev.preventDefault(); p.querySelector('#w153appSearch').focus();
+    }
+  });
+  window.addEventListener('resize', function () { if (S.open) positionPop(); });
   window.addEventListener('hashchange', function () { setTimeout(paint, 0); });
   /* the Finances sections are switched inside the page: follow them in the rail */
   document.addEventListener('click', function (ev) { if (ev.target.closest && ev.target.closest('#finances .w94tab, #hrcentre .w47tab')) setTimeout(paint, 80); });

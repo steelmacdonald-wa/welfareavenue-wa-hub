@@ -21,7 +21,7 @@
   var ROLES = [['cook', 'Cook'], ['driver', 'Driver'], ['server', 'Server'], ['dishwasher', 'Dishwashers'], ['photographer', 'Photographer'], ['videographer', 'Videographer'], ['community_debrief', 'Community lead'], ['team_leader', 'Team leader']];   /* wave239: videographer */
   var SOURCES = [['linkedin', 'LinkedIn'], ['cabm', 'CABM'], ['fcabq', 'Je Bénévole'], ['email', 'Email'], ['referral', 'Referral'], ['website', 'Website'], ['event', 'An event'], ['manual', 'Other']];
   var STATUS = [['received', 'To handle'], ['contacted', 'Contacted'], ['welcomed', 'Welcomed'], ['not_fit', 'Not a fit'], ['withdrawn', 'Withdrawn']];
-  var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, busy: false, n: null };
+  var V = { list: null, at: 0, loading: null, tab: 'open', role: '', src: '', q: '', open: {}, details: {}, notes: {}, busy: false, n: null };
 
   function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function lower(s) { return String(s || '').trim().toLowerCase(); }
@@ -208,6 +208,7 @@
     if (!force && V.list && Date.now() - V.at < 60000) return V.list;
     V.loading = (async function () {
       try { var r = await db.from('volunteer_applications').select('*').order('applied_at', { ascending: false }).limit(2000); V.list = (r && !r.error && r.data) || []; } catch (e) { V.list = V.list || []; }
+      try { if (typeof waVolLoadPeople === 'function') await waVolLoadPeople(); } catch (e) { /* The review state stays Not checked when unavailable. */ }
       V.at = Date.now(); V.loading = null; V.n = V.list.filter(isOpen).length;
       return V.list;
     })();
@@ -232,18 +233,25 @@
   }
   function cardHtml(a) {
     var long = String(a.message || '').length > 260, open = !!V.open[a.id];
-    var msg = a.message ? '<div class="w209msg">' + E(open || !long ? a.message : String(a.message).slice(0, 240) + '…') + (long ? ' ' + btn(open ? 'Less' : 'More', 'data-w209more="' + a.id + '"', 'sm link') : '') + '</div>' : '';
+    var msg = a.message ? '<div class="w209msg">' + E(open || !long ? a.message : String(a.message).slice(0, 240) + '\u2026') + (long ? ' ' + btn(open ? 'Less' : 'More', 'data-w209more="' + a.id + '"', 'sm link') : '') + '</div>' : '';
     var cv = a.cv_url ? '<a class="w197b sm" href="' + E(a.cv_url) + '" target="_blank" rel="noopener">CV</a>' : (a.cv_path ? btn('CV', 'data-w209cv="' + E(a.cv_path) + '"', 'sm') : '');
+    var person = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []).filter(function (p) { return String(p.id) === String(a.person_id); })[0];
+    var review = person ? (person.needs_review ? 'Needs review' : 'No flags') : 'Not checked';
+    var reviewClass = person ? (person.needs_review ? 'flagged' : 'clear') : 'unknown';
     var stt = '<span class="w209st ' + E(a.status) + '">' + E(lbl(STATUS, a.status)) + '</span>';
-    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b>' + stt + '</div>' +
+    return '<li class="w209app" data-w209id="' + a.id + '"><div class="w209hd"><b>' + E(a.name) + '</b></div>' +
+      '<div class="wa-app-signals"><span><small>Application</small>' + stt + '</span><span><small>Record review</small><span class="wa-app-review ' + reviewClass + '">' + E(review) + '</span></span></div>' +
+      (msg || '<div class="w209msg wa-app-no-message">No message provided.</div>') +
+      '<details class="wa-app-details" data-wa-app-details="' + a.id + '"' + (V.details[a.id] ? ' open' : '') + '><summary>Details &amp; actions<span aria-hidden="true">⌄</span></summary><div class="wa-app-body">' +
+      (person && person.needs_review ? '<p class="wa-app-review-note"><b>Review needed</b> · ' + E(person.review_note || 'Check their volunteer record.') + '</p>' : '') +
       '<div class="w209roles2">' + (a.roles || []).map(function (k) { return '<span class="w209chip">' + E(roleLabel(k)) + '</span>'; }).join('') + (a.role_text && (a.roles || []).length <= 1 ? '<small>' + E(a.role_text) + '</small>' : '') + '</div>' +
-      '<p class="w209meta">Applied ' + E(ago(a.applied_at)) + ' (' + E(day(a.applied_at)) + ') · ' + E(lbl(SOURCES, a.source) || a.source) + (a.language ? ' · ' + (a.language === 'fr' ? 'French' : a.language === 'en' ? 'English' : E(a.language)) : '') + '</p>' +
-      '<p class="w209ct">' + (a.email ? '<a href="mailto:' + E(a.email) + '">' + E(a.email) + '</a>' : '') + (a.email && a.phone ? ' · ' : '') + (a.phone ? '<a href="tel:' + E(String(a.phone).replace(/[^\d+]/g, '')) + '">' + E(a.phone) + '</a>' : '') + (!a.email && !a.phone ? 'No contact details' : '') + '</p>' +
-      msg + (a.handled_by ? '<p class="w209meta">' + E(lbl(STATUS, a.status)) + ' by ' + E(a.handled_by) + ' ' + E(ago(a.handled_at)) + (a.status_note ? ': ' + E(a.status_note) : '') + '</p>' : '') +
+      '<p class="w209meta">Applied ' + E(ago(a.applied_at)) + ' (' + E(day(a.applied_at)) + ') \u00b7 ' + E(lbl(SOURCES, a.source) || a.source) + (a.language ? ' \u00b7 ' + (a.language === 'fr' ? 'French' : a.language === 'en' ? 'English' : E(a.language)) : '') + '</p>' +
+      '<p class="w209ct">' + (a.email ? '<a href="mailto:' + E(a.email) + '">' + E(a.email) + '</a>' : '') + (a.email && a.phone ? ' \u00b7 ' : '') + (a.phone ? '<a href="tel:' + E(String(a.phone).replace(/[^\d+]/g, '')) + '">' + E(a.phone) + '</a>' : '') + (!a.email && !a.phone ? 'No contact details' : '') + '</p>' +
+      (a.handled_by ? '<p class="w209meta">' + E(lbl(STATUS, a.status)) + ' by ' + E(a.handled_by) + ' ' + E(ago(a.handled_at)) + (a.status_note ? ': ' + E(a.status_note) : '') + '</p>' : '') +
       '<div class="w209acts">' + cv + (a.contact_id ? '<a class="w197b sm" href="#crm/c/' + E(a.contact_id) + '">In the CRM</a>' : '') + btn('In Volunteers', 'data-w209vol="' + a.id + '"', 'sm') + '</div>' +
-      '<div class="w209do"><input type="text" data-w209note="' + a.id + '" placeholder="A note (optional)" aria-label="A note for ' + E(a.name) + '">' +
+      '<div class="w209do"><input type="text" data-w209note="' + a.id + '" placeholder="A note (optional)" aria-label="A note for ' + E(a.name) + '" value="' + E(V.notes[a.id] || '') + '">' +
       STATUS.filter(function (s) { return s[0] !== a.status && s[0] !== 'received'; }).map(function (s) { return btn(s[0] === 'welcomed' ? 'Welcome' : s[1], 'data-w209st="' + a.id + '" data-s="' + s[0] + '"', 'sm' + (s[0] === 'welcomed' ? ' pri' : '')); }).join('') +
-      (a.status !== 'received' ? btn('Back to To handle', 'data-w209st="' + a.id + '" data-s="received"', 'sm link') : '') + '</div></li>';
+      (a.status !== 'received' ? btn('Back to To handle', 'data-w209st="' + a.id + '" data-s="received"', 'sm link') : '') + '</div></div></details></li>';
   }
   /* wave258: My roles, when the signed-in person owns roles (window.w258v) */
   function mineOpt() {
@@ -378,10 +386,11 @@
   });
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t) return;
+    if (t.hasAttribute('data-w209note')) V.notes[t.getAttribute('data-w209note')] = t.value;
     if (t.id === 'w209q') { V.q = t.value; paint(); }
     if (t.id === 'w209r') hint();
   });
-  document.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'w209cvhelp') F.helpOpen = e.target.open; }, true);   /* wave211: the guidance stays open across repaints */
+  document.addEventListener('toggle', function (e) { if (e.target && e.target.id === 'w209cvhelp') F.helpOpen = e.target.open; if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-wa-app-details')) V.details[e.target.getAttribute('data-wa-app-details')] = e.target.open; }, true);   /* wave211: the guidance stays open across repaints */
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t) return;
     if (t.id === 'w209pos') { repaintForm(); var ps = document.getElementById('w209pos'); if (ps) try { ps.focus(); } catch (x) { /* fine */ } }   /* wave211: the Resumes folder follows the position */

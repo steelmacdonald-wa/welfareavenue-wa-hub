@@ -98,13 +98,57 @@
     + '#w122 .w122trk .it .ia .go{text-align:center;padding:9px 14px;}'
     + '}'
     /* 15. goal page footnotes inside their card */
-    + '.w116g > p.note{margin:12px 0 0 !important;padding:0 18px 16px !important;}';
+    + '.w116g > p.note{margin:12px 0 0 !important;padding:0 18px 16px !important;}'
+    + 'html.wa-smooth-pages .panel.active{animation:none !important;}'
+    + '@media(prefers-reduced-motion:reduce){html.wa-smooth-pages main{opacity:1 !important;transform:none !important;}}'
+    + '@media print{html.wa-smooth-pages main{opacity:1 !important;transform:none !important;}}';
 
   (function () {
     var st = document.getElementById('w130css');
     if (!st) { st = document.createElement('style'); st.id = 'w130css'; (document.head || document.documentElement).appendChild(st); }
     st.textContent = css;
   })();
+/* Shared route entrance, including app pages that reuse one panel. */
+(function () {
+  var main = document.querySelector('main');
+  if (!main || typeof main.animate !== 'function' || typeof window.matchMedia !== 'function') return;
+  var motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var route = location.hash;
+  var current = null;
+  document.documentElement.classList.add('wa-smooth-pages');
+
+  function stop() {
+    var previous = current;
+    current = null;
+    if (previous) previous.cancel();
+  }
+
+  function transition() {
+    var next = location.hash;
+    if (next === route) return;
+    route = next;
+    if (motion.matches || document.hidden || !document.documentElement.classList.contains('wa-ready')) {
+      stop();
+      return;
+    }
+    var running = current && current.playState === 'running';
+    var style = running ? getComputedStyle(main) : null;
+    var from = style ? { opacity: style.opacity, transform: style.transform } : { opacity: 0.12, transform: 'translateY(7px)' };
+    stop();
+    var animation = main.animate([from, { opacity: 1, transform: 'translateY(0)' }], {
+      duration: 300,
+      easing: 'cubic-bezier(.2,.7,.2,1)'
+    });
+    current = animation;
+    function release() { if (current === animation) current = null; }
+    animation.onfinish = release;
+    animation.oncancel = release;
+  }
+
+  window.addEventListener('hashchange', transition, true);
+  window.addEventListener('pagehide', stop);
+  motion.addEventListener('change', function () { if (motion.matches) stop(); });
+})();
 
   /* ---------- helpers ---------- */
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }

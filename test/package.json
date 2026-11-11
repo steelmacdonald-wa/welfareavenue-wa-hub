@@ -4,12 +4,17 @@
   "description": "",
   "main": "harness.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:launcher": "node --test apps-launcher.test.mjs",
+    "test:motion": "node --test page-transitions.test.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "playwright": "^1.62.1"
+  },
+  "devDependencies": {
+    "jsdom": "29.1.1"
   }
 }

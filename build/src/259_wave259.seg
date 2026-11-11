@@ -83,36 +83,17 @@
     row.innerHTML = html; if (keep) row.appendChild(keep);
     row.setAttribute('data-w259', html);
   }
-  /* the rail: no separate Applicants and Sign-offs items (they are People's tabs); the right item lit for every address */
-  function railGroups() {
-    var A = window.WA_APP && window.WA_APP.apps; if (!A || !A.volunteer || typeof A.volunteer.groups !== 'function') return;
-    if (A.volunteer.groups.__w259) return;
-    var g0 = A.volunteer.groups;
-    var g = function () {
-      var gs = g0.apply(this, arguments);
-      try {
-        gs.forEach(function (grp) { grp.items = grp.items.filter(function (it) { return !/#volunteering\/(applicants|signoffs)$/.test(it.h); }); });
-        gs = gs.filter(function (grp) { return grp.items.length; });
-      } catch (e) { /* fine */ }
-      return gs;
-    };
-    g.__w259 = true; A.volunteer.groups = g;
-    try { if (window.WA_APP && typeof WA_APP.renderRail === 'function') WA_APP.renderRail(); } catch (e) { /* fine */ }
-  }
+  /* The lab rail exposes each existing page directly. */
   function fixRail() {
-    railGroups();
-    var r = document.getElementById('w153rail'); if (!r || !document.body.classList.contains('w153volunteer')) return;
-    var s = sub(); var want = placeOf(s); if (!want && s && s !== 'e') want = ''; if (/^#volunteering\/e\//.test(location.hash || '')) want = '';
-    var hash = want ? PLACES.filter(function (p) { return p[0] === want; })[0][2] : '#volunteering';
-    r.querySelectorAll('.w153it[data-w153go^="#volunteering"]').forEach(function (a) {
-      var on = a.getAttribute('data-w153go') === hash;
-      if (a.classList.contains('on') !== on) { a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
+    var rail = document.getElementById('w153rail');
+    if (!rail || !document.body.classList.contains('w153volunteer')) return;
+    var current = sub();
+    var hash = !current || current === 'e' ? '#volunteering' : '#volunteering/' + current;
+    rail.querySelectorAll('.w153it[data-w153go^="#volunteering"]').forEach(function (item) {
+      var on = item.getAttribute('data-w153go') === hash;
+      item.classList.toggle('on', on);
+      if (on) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
     });
-    /* the People badge: new applicants plus sign-offs waiting (wave195 and 209 used to badge their own items) */
-    var pa = r.querySelector('.w153it[data-w153go="#volunteering/people"]');
-    if (pa) { var n = peopleBadge(), bd = pa.querySelector('.w153n'); if (n) { if (!bd) { bd = document.createElement('small'); bd.className = 'w153n'; pa.appendChild(bd); } if (bd.textContent !== n) bd.textContent = n; } else if (bd) bd.remove(); }
-    var where = document.querySelector('#w153bar .w153bc > span');
-    if (where) { var lbl = (PLACES.filter(function (p) { return p[0] === want; })[0] || PLACES[0])[1]; if (/^#volunteering\/e\//.test(location.hash || '')) lbl = 'Serving'; if (where.textContent !== lbl) where.textContent = lbl; }
   }
 
   /* ---------- Setup ---------- */
@@ -216,7 +197,7 @@
   }
 
   /* ---------- the page title for the places wave191's map does not know ---------- */
-  var TITLES = { setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'], phone: ['Messages', 'The ops line: every conversation, group texts and calls'] };
+  var TITLES = { setup: ['Setup', 'The SOP, recipes, inventory, the usual spot counts, role owners and the text schedule'], phone: ['Phone', 'The ops line: every conversation, group texts and calls'] };
   function masthead() {
     var v = view(); var t = TITLES[v]; if (!t) return;
     var sec = document.getElementById('volunteering'); if (!sec) return;
@@ -280,7 +261,6 @@
       };
       waVolRender.__w259 = true;
     }
-    railGroups();
   }
   if (typeof startApp === 'function') { var sa = startApp; startApp = async function () { var r = await sa.apply(this, arguments); try { arm(); alias(); soon(); } catch (e) { /* fine */ } return r; }; }
   else arm();

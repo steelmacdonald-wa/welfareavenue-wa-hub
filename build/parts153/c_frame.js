@@ -1,6 +1,6 @@
 
   /* ---------- the dock, the launcher and the rail ---------- */
-  var S = { app: null, open: false, drawn: 0 };
+  var S = { app: null, open: false, drawn: 0, appQuery: '' };
   function nav() { return document.querySelector('nav.wa-nav'); }
   function ensure() {
     var n = nav(); if (!n) return false;
@@ -11,12 +11,12 @@
     }
     if (!document.getElementById('w153dock')) {
       var d = document.createElement('div'); d.id = 'w153dock';
-      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="true" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
+      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="dialog" aria-controls="w153pop" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
         '<button type="button" class="w153back" data-w153back="1">' + I('back') + ' Back to the Hub</button>';
       n.appendChild(d);
     }
     if (!document.getElementById('w153pop')) {
-      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Apps');
+      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-labelledby', 'w153appTitle');
       document.body.appendChild(p);
     }
     if (!document.getElementById('w153bar')) {
@@ -26,7 +26,7 @@
     return true;
   }
   function tileHtml(a, on) {
-    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
+    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small>' + (on ? '<span class="w153current">Current</span>' : '') + '</button>';
   }
   /* 01/10/26: a link tile (the website): a real link, so it opens in a new tab and the Hub stays put */
   function linkHtml(l) {
@@ -34,15 +34,76 @@
   }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
+    var focused = document.activeElement;
+    var focusInPop = p.contains(focused);
+    var focusApp = focused && focused.getAttribute('data-w153app');
+    var focusLink = focused && focused.getAttribute('data-w153ext');
+    var searchFocused = focused && focused.id === 'w153appSearch';
+    var selection = searchFocused ? { start: focused.selectionStart, end: focused.selectionEnd, direction: focused.selectionDirection } : null;
+    var oldResults = p.querySelector('#w153appResults');
+    var scrollTop = oldResults ? oldResults.scrollTop : 0;
     var cur = S.app || 'hub';
-    /* wave262: Your apps first, then More apps (the other apps this person can open) */
+    /* Keep wave262's team ordering and the existing permission checks. */
     var Y = yours(), tiles = function (ids) { return ids.map(function (id) { return tileHtml(APPS[id], id === cur); }).join(''); };
-    p.innerHTML = '<div class="w153ph">' + (Y.all ? 'Apps' : 'Your apps') + '</div><div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) +
-      (Y.more.length ? '</div><div class="w153ph w262ph">More apps</div><div class="w153tiles">' + tiles(Y.more) : '') +
-      (LINKS.length ? '<div class="w153sep" role="presentation"></div>' + LINKS.map(linkHtml).join('') : '') + '</div>';
+    var groups = '<section class="w153appGroup" aria-label="' + (Y.all ? 'Apps' : 'Your apps') + '">' +
+      (Y.all ? '' : '<h3 class="w153ph">Your apps</h3>') + '<div class="w153tiles">' + tileHtml(APPS.hub, cur === 'hub') + tiles(Y.yours) + '</div></section>';
+    if (Y.more.length) groups += '<section class="w153appGroup" aria-label="More apps"><h3 class="w153ph w262ph">More apps</h3><div class="w153tiles">' + tiles(Y.more) + '</div></section>';
+    if (LINKS.length) groups += '<section class="w153appGroup w153external" aria-label="Website"><div class="w153tiles">' + LINKS.map(linkHtml).join('') + '</div></section>';
+    p.innerHTML = '<div class="w153appHead"><h2 id="w153appTitle">Apps</h2><button type="button" data-w153popclose aria-label="Close Apps">' + I('x') + '</button></div>' +
+      '<label class="w153appSearch">' + I('search') + '<input id="w153appSearch" type="search" placeholder="Find an app" aria-label="Find an app" aria-controls="w153appResults" autocomplete="off" value="' + E(S.appQuery) + '"></label>' +
+      '<div id="w153appResults">' + groups + '<div class="w153appEmpty" hidden><p>No matching apps</p><button type="button" data-w153appclear>Clear search</button></div></div>' +
+      '<div class="w153appFoot"><span data-w153appstatus role="status" aria-live="polite"></span><span class="w153appKeys" aria-hidden="true">&#8593; &#8595; move &middot; Enter open &middot; Esc close</span></div>';
+    filterApps();
+    positionPop();
+    p.querySelector('#w153appResults').scrollTop = scrollTop;
+    if (focusInPop) {
+      var next = p.querySelector('#w153appSearch');
+      if (focusApp) next = p.querySelector('[data-w153app="' + focusApp + '"]:not([hidden])') || next;
+      if (focusLink) next = p.querySelector('[data-w153ext="' + focusLink + '"]:not([hidden])') || next;
+      if (focused && focused.matches('[data-w153popclose]')) next = p.querySelector('[data-w153popclose]');
+      next.focus({ preventScroll: true });
+      if (selection && selection.start != null) next.setSelectionRange(selection.start, selection.end, selection.direction);
+    }
   }
-  function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
-  function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }
+  function filterApps() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var words = fold(S.appQuery).split(/\s+/).filter(Boolean), count = 0;
+    p.querySelectorAll('.w153tile').forEach(function (row) {
+      var hay = fold(row.querySelector('b').textContent + ' ' + row.querySelector('small').textContent);
+      row.hidden = !words.every(function (word) { return hay.indexOf(word) >= 0; });
+      if (!row.hidden) count++;
+    });
+    p.querySelectorAll('.w153appGroup').forEach(function (group) { group.hidden = !group.querySelector('.w153tile:not([hidden])'); });
+    p.querySelector('.w153appEmpty').hidden = count > 0;
+    p.querySelector('[data-w153appstatus]').textContent = words.length ? count + (count === 1 ? ' result' : ' results') : 'Choose a workspace';
+  }
+  function positionPop() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var n = nav(), left = 12;
+    if (window.innerWidth > 900 && n) left = Math.max(12, Math.round(n.getBoundingClientRect().right + 10));
+    p.style.left = left + 'px';
+    p.style.width = Math.min(380, window.innerWidth - left - 12) + 'px';
+  }
+  function openPop() {
+    if (!ensure() || !appOk('hub')) return;
+    S.appQuery = '';
+    paintPop();
+    var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid');
+    p.classList.add('open'); S.open = true;
+    if (g) g.setAttribute('aria-expanded', 'true');
+    p.querySelector('#w153appSearch').focus({ preventScroll: true });
+  }
+  function closePop(restoreFocus) {
+    var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid');
+    if (p) p.classList.remove('open');
+    S.open = false;
+    if (g) g.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) {
+      if (window.innerWidth <= 900) document.body.classList.remove('w130typing');
+      var back = window.innerWidth <= 900 ? document.querySelector('#w163bar [data-w163slot="menu"]') : g;
+      if (back) back.focus({ preventScroll: true });
+    }
+  }
   function togglePop() { if (S.open) closePop(); else openPop(); }
 
   /* the rail: the app's pages and sections, the current one marked */

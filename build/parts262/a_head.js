@@ -8,15 +8,14 @@
    to take a tour of how things have changed for each person ... allow them to look through the apps that are available to
    them".
 
-   - The menu (parts134): your team sits open under Teams; the other teams fold under "Other teams (n)" (open by default for
-     admins); The Brain, Other Tools and Organization fold under More. Folds open by themselves on one of their pages and
-     remember a click on this device. Computers only: the phone's Menu sheet lists every page.
+   - The integrated menu (parts134 and parts274): six primary links, then Teams, Organization and Other tools flyouts.
+     Team pages provide their own Overview, Agenda and Tasks. The phone's Menu sheet lists every permitted page.
    - The apps (parts153): Your apps (your team's) first, then More apps.
    - Home (this segment): what matters first (your counts, what needs you, your tasks and your team's requests, your
      meetings, announcements); the rest (who is online, In the loop, Ask the Hub ideas, Updates for you, time commitments,
      Slack notifications, time off) waits behind "Show everything on Home". Nothing is removed; the choice is remembered.
    - What changed (this segment): once per person, a pop-up on Home that says what moved for them (their team, their apps,
-     what sits under More) with a one-minute tour (trainings tour:whatsnew). It waits for the must-answer pop-ups.
+     the three menu groups) with a one-minute tour (trainings tour:whatsnew). It waits for the must-answer pop-ups.
    - The due-date check (parts213, data wa262a and wa262b): batched saves, "All in this section", and tasks due today.
    ===================================================================== */
 (function () {

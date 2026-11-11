@@ -88,8 +88,8 @@
     if (row && main && main !== t) return 'Teams, ' + (main.textContent || '').trim();
     if (row) return 'Teams';
     var g = t.closest('.tab-group'), k = g ? g.getAttribute('data-w42g') : '';
-    if (k === 'tools') return 'More, Other Tools';
-    if (k === 'org') return 'More, Organization';
+    if (k === 'tools') return 'Other tools';
+    if (k === 'org') return 'Organization';
     if (k === 'admin') return 'Admin';
     if (k === 'board') return 'Board';
     return 'the top of the menu';

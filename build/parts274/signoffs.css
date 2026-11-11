@@ -1,0 +1,18 @@
+/* Give the sign-off queue the vertical workspace requested for desktop. */
+#volunteering .wa-signoffs-card { min-height:max(650px,calc(100dvh - 260px)); box-sizing:border-box; display:flex; padding:24px; }
+#w195.wa-signoffs-workspace { display:flex; flex-direction:column; flex:1; min-width:0; }
+#w195 .w195lead { line-height:1.7; font-size:13px; margin-bottom:22px; }
+#w195 .w195top { flex:1; align-items:start; grid-template-columns:minmax(0,1.6fr) minmax(220px,1fr); gap:20px; }
+#w195 .w195f { gap:6px; margin-bottom:16px; }
+#w195 .w195f button { font-size:12px; padding:7px 12px; }
+#w195 .w195list { gap:13px; }
+#w195 .w195row { padding:22px 18px; min-height:135px; gap:7px 12px; background:#fffdf7; border-radius:14px; }
+#w195 .w195row .k { font-size:10px; line-height:1.6; letter-spacing:.9px; }
+#w195 .w195row b { font-size:17px; }
+#w195 .w195row .m { font-size:12px; line-height:1.7; }
+#w195 .w195card { background:#f1f4eb; border-color:#e2e6db; padding:18px; border-radius:14px; }
+#w195 .w195card p { font-size:12px; line-height:1.7; }
+#w195 .w195signers li { font-size:12px; flex-wrap:wrap; }
+#w195 .w195signers .why { font-size:10px; }
+
+@media(max-width:760px){#w195 .w195top{grid-template-columns:1fr;}#volunteering .wa-signoffs-card{min-height:700px;padding:18px;}#w195side{margin-top:12px;}}

@@ -27,7 +27,7 @@
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
     /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
-    top: ['mypage', 'training', 'overview', 'requests', 'calendar'],   /* 09/10/26 Steel: Team Requests sits above the Calendar */
+    top: ['mypage', 'training', 'overview', 'requests', 'calendar', 'brain'],
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
@@ -36,10 +36,9 @@
       /* wave262 (Steel, 20/10/26, after the 19/10 leadership meeting: "bringing the brain and a couple of other small tools under
          a drop down ... keeping the main important things on the main page"): one More fold holds Other Tools and Organization,
          The Brain first. Nothing leaves the menu: More opens with a click (and by itself on one of its pages). */
-      { key: 'w262more', label: 'More', fold: ['tools', 'org'] },
       /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
-      { key: 'tools', label: 'Other Tools', items: ['brain', 'importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
+      { key: 'tools', label: 'Other tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos'] },
       /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
          app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
          places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
