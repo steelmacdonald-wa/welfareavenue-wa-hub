@@ -4,7 +4,7 @@ from pathlib import Path
 import json
 
 HERE = Path(__file__).resolve().parent
-PARTS = ['sidebar', 'serving']
+PARTS = ['sidebar', 'serving', 'status']
 
 blocks = ['/* WA v274 approved lab UI integration. */\n']
 for name in PARTS:

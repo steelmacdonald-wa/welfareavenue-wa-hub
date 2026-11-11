@@ -102,3 +102,28 @@ test('serving UI uses role disclosures and reveals contact details without repla
   assert.equal(panel.querySelector('[data-w119rm]').textContent, 'Remove from this serving');
   assert.doesNotMatch(panel.textContent, /Sample workspace/);
 });
+
+test('colored status choices dispatch one change through the original roster control', async t => {
+  let original, changes = 0;
+  const context = await screen('<section id="volunteering"><section id="w191team"><div class="pc"><div class="sel2"><select data-vlrstat="42" aria-label="Status for Alex">' +
+    '<option value="TBD">To ask</option><option value="Confirmed">Confirmed</option><option value="Waiting For Response">Waiting</option><option value="Unavailable">Can’t make it</option>' +
+    '</select></div></div></section></section>', '#volunteering/e/123', [part('status.js')], window => {
+      original = window.document.querySelector('select');
+      original.addEventListener('change', () => { changes++; });
+    });
+  t.after(() => context.dom.window.close());
+  const trigger = context.document.querySelector('.wa-status-trigger');
+  assert.equal(trigger.dataset.status, 'to-ask');
+  trigger.click();
+  context.document.querySelector('.wa-status-option[data-value="Confirmed"]').click();
+  assert.equal(context.document.querySelector('select'), original);
+  assert.equal(original.value, 'Confirmed');
+  assert.equal(trigger.dataset.status, 'confirmed');
+  assert.equal(changes, 1);
+  trigger.click();
+  context.document.querySelector('.wa-status-option[data-value="Confirmed"]').click();
+  assert.equal(changes, 1);
+  original.disabled = true;
+  original.dispatchEvent(new context.window.Event('change', { bubbles: true }));
+  assert.equal(trigger.disabled, true);
+});

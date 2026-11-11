@@ -93919,6 +93919,170 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-status";
+  style.textContent = "/* Each state owns its colors; menus do not inherit the currently selected state's paint. */\n.wa-status-trigger,.wa-status-option {--status-ink:#686d65;--status-paper:#f0f1ec;--status-line:#d9ddd3}\n.wa-status-trigger[data-status=confirmed],.wa-status-option[data-status=confirmed] {--status-ink:#246b4c;--status-paper:#e5f2e9;--status-line:#bad8c5}\n.wa-status-trigger[data-status=waiting],.wa-status-option[data-status=waiting] {--status-ink:#8a6016;--status-paper:#fbf1d9;--status-line:#e9d39c}\n.wa-status-trigger[data-status=to-ask],.wa-status-option[data-status=to-ask] {--status-ink:#3c669c;--status-paper:#eaf1fb;--status-line:#c6d7ef}\n.wa-status-trigger[data-status=unavailable],.wa-status-option[data-status=unavailable] {--status-ink:#b34e43;--status-paper:#fbeae7;--status-line:#eac5be}\n.wa-status-trigger[data-status=cancelled],.wa-status-option[data-status=cancelled] {--status-ink:#626773;--status-paper:#eef0f3;--status-line:#d5d9e0}\n#w119.wa-serving-workspace #w191team .pc .sel2 > select[data-vlrstat][data-wa-status-ready] {display:none!important}\n#w119.wa-serving-workspace #w191team .wa-status-trigger {grid-column:2;grid-row:1;display:inline-flex;align-items:center;gap:7px;width:148px;min-height:32px;margin:0;border:1px solid var(--status-line);border-radius:8px;padding:7px 10px;background:var(--status-paper);color:var(--status-ink);font:600 11px/1.3 'Space Grotesk',sans-serif;text-align:left;cursor:pointer;box-shadow:none;transition:border-color .12s}\n#w119.wa-serving-workspace #w191team .pc.gone {opacity:1}\n#w119.wa-serving-workspace #w191team .pc.gone > b {color:#6a7067}\n#w119.wa-serving-workspace #w191team .wa-status-trigger:hover {border-color:var(--status-ink)}\n#w119.wa-serving-workspace #w191team .wa-status-trigger:focus-visible {outline:2px solid var(--status-ink);outline-offset:3px}\n#w119.wa-serving-workspace #w191team .wa-status-trigger[aria-expanded=true] {border-color:var(--status-ink);box-shadow:0 0 0 2px var(--status-paper)}\n#w119.wa-serving-workspace #w191team .wa-status-trigger:disabled {cursor:default;opacity:.65}\n.wa-status-dot {width:6px;height:6px;border-radius:50%;background:var(--status-ink);flex:none}\n.wa-status-label {flex:1;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}\n.wa-status-chevron {width:6px;height:6px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg);margin-left:auto;flex:none}\n.wa-status-trigger[aria-expanded=true] .wa-status-chevron {transform:translateY(1px) rotate(225deg)}\n.wa-status-menu {position:fixed;z-index:1900;isolation:isolate;width:210px;max-width:calc(100vw - 20px);max-height:calc(100dvh - 20px);overflow:auto;padding:6px;background:#fffdf8;border:1px solid #dce1d7;border-radius:12px;box-shadow:0 10px 30px #103f391c,0 2px 6px #103f390a;font-family:'Space Grotesk',sans-serif;line-height:1.4;text-align:left;color:#103f39}\n.wa-status-menu-heading {padding:6px 8px 8px;font-size:9px;letter-spacing:1.1px;font-weight:600;text-transform:uppercase;color:#7b8177}\n.wa-status-list {display:flex;flex-direction:column;gap:2px}\n.wa-status-option {display:flex;align-items:center;gap:10px;min-height:35px;padding:8px 9px;border-radius:7px;color:var(--status-ink);font-size:12px;font-weight:500;cursor:pointer;user-select:none;outline:0}\n.wa-status-option[data-active=true] {background:var(--status-paper)}\n.wa-status-option[aria-selected=true] {font-weight:600}\n.wa-status-option .wa-status-option-label {flex:1;min-width:0}\n.wa-status-option .wa-status-check {font-size:12px;visibility:hidden}\n.wa-status-option[aria-selected=true] .wa-status-check {visibility:visible}\n@media(max-width:700px) {\n  #w119.wa-serving-workspace #w191team .wa-status-trigger {grid-column:1;grid-row:2;width:100%;max-width:180px}\n  .wa-status-option {min-height:40px}\n}\n@media(prefers-reduced-motion:reduce) {\n  #w119.wa-serving-workspace #w191team .wa-status-trigger {transition:none}\n}\n";
+  document.head.appendChild(style);
+})();
+/* Audit prototype: a consistent, keyboard-accessible replacement for native roster status menus. */
+(function () {
+  'use strict';
+  var opened = null, scheduled = false, search = '', searchedAt = 0;
+  var tones = { Confirmed: 'confirmed', 'Waiting For Response': 'waiting', TBD: 'to-ask', Unavailable: 'unavailable', Cancelled: 'cancelled' };
+  function make(tag, className, text) {
+    var el = document.createElement(tag); el.className = className; el.dataset.waEnhancement = '1';
+    if (text != null) el.textContent = text;
+    return el;
+  }
+  function setAttribute(el, key, value) { if (el.getAttribute(key) !== String(value)) el.setAttribute(key, value); }
+  function tone(value) { return tones[value] || 'none'; }
+  function sync(select) {
+    var hadFocus = document.activeElement === select;
+    var button = select.previousElementSibling;
+    if (!button || !button.classList.contains('wa-status-trigger')) {
+      button = make('button', 'wa-status-trigger'); button.type = 'button';
+      button.id = 'wa-status-' + select.getAttribute('data-vlrstat');
+      button.setAttribute('role', 'combobox'); button.setAttribute('aria-haspopup', 'listbox'); button.setAttribute('aria-expanded', 'false');
+      var dot = make('span', 'wa-status-dot'); dot.setAttribute('aria-hidden', 'true');
+      var chevron = make('span', 'wa-status-chevron'); chevron.setAttribute('aria-hidden', 'true');
+      button.append(dot, make('span', 'wa-status-label'), chevron); select.before(button);
+    }
+    setAttribute(select, 'aria-hidden', 'true'); setAttribute(select, 'tabindex', '-1'); setAttribute(select, 'data-wa-status-ready', 'true');
+    var option = select.selectedOptions[0], label = option ? option.textContent : 'No status';
+    var text = button.querySelector('.wa-status-label'); if (text.textContent !== label) text.textContent = label;
+    setAttribute(button, 'data-status', tone(select.value));
+    setAttribute(button, 'aria-label', select.getAttribute('aria-label') || 'Volunteer status');
+    setAttribute(button, 'title', label + ' \xb7 Change status');
+    if (button.disabled !== select.disabled) button.disabled = select.disabled;
+    if (hadFocus) button.focus({ preventScroll: true });
+    return button;
+  }
+  function close(focus) {
+    if (!opened) return;
+    var current = opened; opened = null; search = '';
+    current.menu.remove(); current.button.setAttribute('aria-expanded', 'false');
+    current.button.removeAttribute('aria-controls'); current.button.removeAttribute('aria-activedescendant');
+    if (focus && current.button.isConnected) current.button.focus({ preventScroll: true });
+  }
+  function position() {
+    if (!opened) return;
+    var button = opened.button, menu = opened.menu;
+    if (!button.isConnected || !button.getClientRects().length) { close(false); return; }
+    var anchor = button.getBoundingClientRect();
+    if (anchor.bottom < 8 || anchor.top > innerHeight - 8) { close(false); return; }
+    var box = menu.getBoundingClientRect(), top = anchor.bottom + 7;
+    if (top + box.height > innerHeight - 10 && anchor.top - box.height - 7 >= 10) top = anchor.top - box.height - 7;
+    menu.style.left = Math.max(10, Math.min(anchor.left, innerWidth - box.width - 10)) + 'px';
+    menu.style.top = Math.max(10, Math.min(top, innerHeight - box.height - 10)) + 'px';
+  }
+  function activate(index, scroll) {
+    if (!opened || !opened.rows.length) return;
+    opened.index = Math.max(0, Math.min(index, opened.rows.length - 1));
+    opened.rows.forEach(function (row, i) { setAttribute(row, 'data-active', i === opened.index); });
+    opened.button.setAttribute('aria-activedescendant', opened.rows[opened.index].id);
+    if (scroll) opened.rows[opened.index].scrollIntoView({ block: 'nearest' });
+  }
+  function open(button) {
+    if (opened && opened.button === button) { close(true); return; }
+    close(false);
+    var select = button.nextElementSibling;
+    if (!select || select.disabled) return;
+    var menu = make('div', 'wa-status-menu'); menu.id = button.id + '-options';
+    var heading = make('div', 'wa-status-menu-heading', 'Change status'); heading.id = menu.id + '-heading';
+    var list = make('div', 'wa-status-list'); list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', button.getAttribute('aria-label')); list.id = menu.id + '-list';
+    menu.append(heading, list);
+    var rows = [], options = Array.from(select.options).filter(function (option) { return !option.disabled; });
+    options.forEach(function (option, i) {
+      var row = make('div', 'wa-status-option'); row.id = menu.id + '-' + i;
+      row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(option.value === select.value));
+      row.dataset.status = tone(option.value); row.dataset.value = option.value;
+      var dot = make('span', 'wa-status-dot'); dot.setAttribute('aria-hidden', 'true');
+      var check = make('span', 'wa-status-check', '\u2713'); check.setAttribute('aria-hidden', 'true');
+      row.append(dot, make('span', 'wa-status-option-label', option.textContent), check); list.append(row); rows.push(row);
+    });
+    document.body.append(menu);
+    opened = { button: button, select: select, menu: menu, rows: rows, index: 0 };
+    button.setAttribute('aria-expanded', 'true'); button.setAttribute('aria-controls', list.id);
+    activate(Math.max(0, options.findIndex(function (option) { return option.value === select.value; })), false);
+    position(); button.focus({ preventScroll: true });
+  }
+  function choose(row) {
+    if (!opened) return;
+    var select = opened.select, value = row.dataset.value, changed = select.value !== value;
+    select.value = value; sync(select); close(true);
+    // The existing save, attribution and team-count handlers remain the single write path.
+    if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function enhance() {
+    scheduled = false;
+    if (opened && !opened.select.isConnected) close(false);
+    document.querySelectorAll('#w191team .pc .sel2 > select[data-vlrstat]').forEach(sync);
+  }
+  function schedule() { if (!scheduled) { scheduled = true; requestAnimationFrame(enhance); } }
+  document.addEventListener('click', function (e) {
+    var target = e.target.closest ? e.target : e.target.parentElement;
+    var button = target.closest('.wa-status-trigger');
+    if (button) { e.preventDefault(); open(button); return; }
+    var row = target.closest('.wa-status-option');
+    if (row && opened && opened.menu.contains(row)) { e.preventDefault(); choose(row); return; }
+    if (opened && !opened.menu.contains(target)) close(false);
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (opened && opened.menu.contains(e.target)) e.preventDefault();
+  });
+  document.addEventListener('pointermove', function (e) {
+    var row = e.target.closest && e.target.closest('.wa-status-option');
+    if (opened && row && opened.menu.contains(row)) activate(opened.rows.indexOf(row), false);
+  });
+  document.addEventListener('keydown', function (e) {
+    var button = e.target.closest && e.target.closest('.wa-status-trigger'); if (!button || button.disabled) return;
+    var keys = ['Enter', ' ', 'ArrowDown', 'ArrowUp', 'Home', 'End'];
+    if (!opened || opened.button !== button) {
+      if (keys.includes(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation(); open(button);
+        if (e.key === 'Home') activate(0, true);
+        if (e.key === 'End') activate(opened.rows.length - 1, true);
+      }
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(true); return; }
+    if (e.key === 'Tab') { close(false); return; }
+    if (keys.includes(e.key)) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (e.key === 'Enter' || e.key === ' ') choose(opened.rows[opened.index]);
+      else activate(e.key === 'Home' ? 0 : e.key === 'End' ? opened.rows.length - 1 : opened.index + (e.key === 'ArrowDown' ? 1 : -1), true);
+      return;
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault(); e.stopImmediatePropagation(); var now = Date.now(); search = now - searchedAt > 650 ? e.key.toLowerCase() : search + e.key.toLowerCase(); searchedAt = now;
+      var start = search.length === 1 ? opened.index + 1 : opened.index;
+      for (var i = 0; i < opened.rows.length; i++) {
+        var at = (start + i) % opened.rows.length;
+        if (opened.rows[at].querySelector('.wa-status-option-label').textContent.toLowerCase().startsWith(search)) { activate(at, true); break; }
+      }
+    }
+  }, true);
+  document.addEventListener('focusin', function (e) {
+    if (opened && e.target !== opened.button && !opened.menu.contains(e.target)) close(false);
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.matches('#w191team [data-vlrstat]')) sync(e.target);
+  }, true);
+  document.addEventListener('scroll', position, true);
+  window.addEventListener('resize', position);
+  window.addEventListener('hashchange', function () { close(false); });
+  function boot() {
+    var section = document.getElementById('volunteering'); if (!section) return;
+    new MutationObserver(function (records) {
+      if (records.some(function (record) { return !record.target.closest || !record.target.closest('[data-wa-enhancement]'); })) schedule();
+    }).observe(section, { childList: true, subtree: true });
+    schedule();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
