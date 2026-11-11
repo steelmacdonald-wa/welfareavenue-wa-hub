@@ -127,3 +127,24 @@ test('colored status choices dispatch one change through the original roster con
   original.dispatchEvent(new context.window.Event('change', { bubbles: true }));
   assert.equal(trigger.disabled, true);
 });
+
+test('SOP owner and step menus retain the existing save and edit handlers', async t => {
+  let changes = 0, edits = 0;
+  const context = await screen('<section id="volunteering"><div class="card"><div id="w191legend"></div>' +
+    '<details class="vl-phase" open><summary>Plan the serving</summary><div class="vl-body">' +
+    '<div class="vl-step" data-vlstep="tmpl-1"><span class="w191stg">Plan</span><div class="vl-t"><div class="vl-name">Confirm venue <button data-vlmore="1">Details</button></div><div class="vl-det" id="instructions">Instructions</div></div>' +
+    '<select data-vlowner="tmpl-1"><option value="">Unassigned</option><option>Alex Example</option></select></div>' +
+    '<div class="wa24-sx"><a class="ed" data-w24e="1">Edit</a></div></div></details></div></section>', '#volunteering/sop', [part('sop.js')], window => {
+      window.document.querySelector('select').addEventListener('change', () => { changes++; });
+      window.document.querySelector('[data-w24e]').addEventListener('click', () => { edits++; });
+    });
+  t.after(() => context.dom.window.close());
+  assert.equal(context.document.querySelectorAll('.wa-sop-stage').length, 6);
+  context.document.querySelector('.wa-sop-owner').click();
+  context.document.querySelector('.wa-sop-person[data-value="Alex Example"]').click();
+  assert.equal(context.document.querySelector('select').value, 'Alex Example');
+  assert.equal(changes, 1);
+  context.document.querySelector('.wa-sop-edit').click();
+  assert.equal(edits, 1);
+  assert.match(context.document.querySelector('.wa-sop-title').textContent, /Confirm venue/);
+});
