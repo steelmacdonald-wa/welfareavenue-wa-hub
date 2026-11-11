@@ -1013,3 +1013,27 @@
   schedule();
 })();
 
+(function () {
+  var style = document.createElement("style");
+  style.id = "wa-ui-signoffs";
+  style.textContent = "/* Give the sign-off queue the vertical workspace requested for desktop. */\n#volunteering .wa-signoffs-card { min-height:max(650px,calc(100dvh - 260px)); box-sizing:border-box; display:flex; padding:24px; }\n#w195.wa-signoffs-workspace { display:flex; flex-direction:column; flex:1; min-width:0; }\n#w195 .w195lead { line-height:1.7; font-size:13px; margin-bottom:22px; }\n#w195 .w195top { flex:1; align-items:start; grid-template-columns:minmax(0,1.6fr) minmax(220px,1fr); gap:20px; }\n#w195 .w195f { gap:6px; margin-bottom:16px; }\n#w195 .w195f button { font-size:12px; padding:7px 12px; }\n#w195 .w195list { gap:13px; }\n#w195 .w195row { padding:22px 18px; min-height:135px; gap:7px 12px; background:#fffdf7; border-radius:14px; }\n#w195 .w195row .k { font-size:10px; line-height:1.6; letter-spacing:.9px; }\n#w195 .w195row b { font-size:17px; }\n#w195 .w195row .m { font-size:12px; line-height:1.7; }\n#w195 .w195card { background:#f1f4eb; border-color:#e2e6db; padding:18px; border-radius:14px; }\n#w195 .w195card p { font-size:12px; line-height:1.7; }\n#w195 .w195signers li { font-size:12px; flex-wrap:wrap; }\n#w195 .w195signers .why { font-size:10px; }\n\n@media(max-width:760px){#w195 .w195top{grid-template-columns:1fr;}#volunteering .wa-signoffs-card{min-height:700px;padding:18px;}#w195side{margin-top:12px;}}\n";
+  document.head.appendChild(style);
+})();
+/* Give the existing sign-off requests a full-height review area. */
+(function () {
+  let scheduled = false;
+  function update() {
+    scheduled = false;
+    if (!/^#volunteering\/signoffs/.test(location.hash)) return;
+    const root = document.getElementById('w195');
+    if (!root) return;
+    root.classList.add('wa-signoffs-workspace');
+    root.closest('.card')?.classList.add('wa-signoffs-card');
+  }
+  function schedule() { if (!scheduled) { scheduled = true; requestAnimationFrame(update); } }
+  const section = document.getElementById('volunteering');
+  if (section) new MutationObserver(schedule).observe(section, { childList: true, subtree: true });
+  window.addEventListener('hashchange', schedule);
+  schedule();
+})();
+

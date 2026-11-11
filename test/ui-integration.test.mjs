@@ -186,3 +186,16 @@ test('Phone presentation retains the original composer and call controls', async
   assert.equal(sends, 1);
   assert.equal(calls, 1);
 });
+
+test('Sign-offs expands the existing request workspace with its original request actions', async t => {
+  let opened = 0;
+  const context = await screen('<section id="volunteering"><div class="card"><div id="w195"><button class="w195row" data-request="42">Review letter</button></div></div></section>',
+    '#volunteering/signoffs', [part('signoffs.js')], window => {
+      window.document.querySelector('button').addEventListener('click', () => { opened++; });
+    });
+  t.after(() => context.dom.window.close());
+  assert.equal(context.document.querySelector('#w195').classList.contains('wa-signoffs-workspace'), true);
+  assert.equal(context.document.querySelector('.card').classList.contains('wa-signoffs-card'), true);
+  context.document.querySelector('button').click();
+  assert.equal(opened, 1);
+});
