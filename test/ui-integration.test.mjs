@@ -72,3 +72,33 @@ test('sidebar keeps permitted subpages accessible and Escape returns focus to it
   assert.equal(heading.getAttribute('aria-expanded'), 'false');
   assert.equal(context.document.activeElement, heading);
 });
+
+test('serving UI uses role disclosures and reveals contact details without replacing native actions', async t => {
+  let originalMove;
+  const context = await screen('<section id="volunteering"><div id="w119" class="w191">' +
+    '<div class="w191bar"><button data-w191stage="plan" class="done"><b>Plan</b><span>Done</span></button></div>' +
+    '<section id="w191team" class="open"><div data-w191team>The team</div><div class="b">' +
+    '<div class="w191own"><div class="w191line"><button class="pill" data-w119bench="cook">Cooks 1/1</button><button class="pill short" data-w119bench="driver">Drivers 0/1</button></div></div>' +
+    '<div class="board"><div class="rc" data-w119role="cook"><div class="h"><b>Cooks</b><span class="n">1/1</span></div><div class="sub">One confirmed</div>' +
+    '<div data-w119card="42"><b>Alex Example</b><div class="st"><select data-vlrstat="42"><option>Confirmed</option></select><select data-w119mv="42"><option>Move</option><option value="driver">Driver</option></select></div>' +
+    '<div class="c">alex@example.invalid</div><span class="w171tag">Confirmed by Sam</span><span class="w171tag">Cooking: vegetable curry</span><button data-w119rm="42">Remove</button></div>' +
+    '</div></div></div></section></div></section>', '#volunteering/e/123', [part('serving.js')], window => {
+      originalMove = window.document.querySelector('[data-w119mv]');
+    });
+  t.after(() => context.dom.window.close());
+  assert.equal(context.document.querySelector('#w119').classList.contains('wa-serving-workspace'), true);
+  assert.equal(context.document.querySelector('[data-w119bench="cook"]').hidden, true);
+  assert.equal(context.document.querySelector('[data-w119bench="driver"]').hidden, false);
+  assert.match(context.document.querySelector('.wa-confirmation').textContent, /Confirmed by Sam/);
+  assert.match(context.document.querySelector('.wa-recipe').textContent, /vegetable curry/);
+  const toggle = context.document.querySelector('.wa-role-toggle');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  context.document.querySelector('.wa-contact-trigger').click();
+  const panel = context.document.querySelector('.wa-contact-panel');
+  assert.equal(panel.hidden, false);
+  assert.match(panel.textContent, /alex@example.invalid/);
+  assert.equal(panel.querySelector('[data-w119mv]'), originalMove);
+  assert.equal(panel.querySelector('[data-w119rm]').textContent, 'Remove from this serving');
+  assert.doesNotMatch(panel.textContent, /Sample workspace/);
+});
