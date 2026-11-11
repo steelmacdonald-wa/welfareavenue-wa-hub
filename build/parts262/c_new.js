@@ -79,11 +79,8 @@
   }
   function html() {
     var s = summary(), n = first(), items = [];
-    var menu = 'Home, Team Requests, the Calendar and the Avenue Academy stay at the top. '
-      + (s.mine ? 'Your team, ' + s.mine + ', sits open under Teams with its own pages. ' : '')
-      + (s.others ? 'The other ' + (s.others === 1 ? 'team is' : s.others + ' teams are') + ' folded under Other teams, one click away. ' : '')
-      + (s.more.length ? listWords(s.more) + ' are under More.' : '');
-    if (phone()) menu = 'On a phone, the bar at the bottom has Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open, with Find a page at the top.';
+    var menu = 'Home, Avenue Academy, Executive dashboard, Team Requests, Calendar and The Brain stay at the top when your access includes them. Teams, Organization and Other tools open to the right. Choose a team to open its page; Overview, Agenda and Tasks are inside that page.';
+    if (phone()) menu = 'On a phone, the bar at the bottom has Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open. Use Find an app to search the apps available to you.';
     items.push(['Your menu is shorter', menu]);
     items.push(['Home shows what matters first', 'Your counts, what needs you, your tasks and your team’s requests come first, then your meetings and the announcements. In the loop, updates, time off and the rest wait behind Show everything on Home, at the bottom.']);
     var ap = s.apps, appsHtml = '';
@@ -152,17 +149,17 @@
     var all = [
       { c: 1, t: 'What changed', p: 'A one-minute look at what moved for you. Nothing was taken away: a few things are one click further. Use the arrow keys or the buttons, and Esc to stop.' },
       { s: '#tabBar > .tab[data-tab="mypage"]', t: 'Home', p: 'Home leads with what matters to you: your counts, what needs you, your tasks and your team’s requests, then your meetings and the announcements.', opt: 1 },
-      { s: '#w163bar', t: 'Your menu on a phone', p: 'Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open, with your apps and Find a page at the top.', opt: 1 },
-      { s: '#tabBar .w42d[data-w262mine]', t: 'Your team', p: (s.mine || 'Your team') + ' sits open under Teams with its own pages: Overview, Agenda, Tasks and the tools your team uses.', opt: 1 },
-      { s: '#tabBar .w262tt', t: 'Other teams', p: 'Every other team is folded here. Open it when you need another team’s page; the Hub remembers your choice on this computer.', opt: 1 },
-      { s: '#tabBar .w262fold', t: 'More', p: (s.more.length ? listWords(s.more) : 'The Brain and the other tools') + ' live under More. It opens with a click, and by itself when you are on one of those pages.', opt: 1 },
+      { s: '#w163bar', t: 'Your menu on a phone', p: 'Home, the Calendar, Ask, My team and Menu. Menu lists every page you can open. Find an app searches the apps available to you.', opt: 1 },
+      { s: '#nav-section-departments', t: 'Teams', p: 'Open Teams to reveal the team list to the right. Choose a team to open its page, where Overview, Agenda and Tasks are available.', opt: 1 },
+      { s: '#nav-section-org', t: 'Organization', p: 'The org chart, Our story and Hub inbox sit together here. The menu shows the pages included in your access.', opt: 1 },
+      { s: '#nav-section-tools', t: 'Other tools', p: 'Find Important info, The Task Bank, Agendas, Document finder, Transcript archive and Photo library in this group.', opt: 1 },
       { s: '#w153dock .w153grid', t: 'Your apps', p: appLine, opt: 1 },
       { s: '#searchWrap', t: 'Search everything', p: 'Looking for something you cannot see in the menu? Type a page, a task, a person or a meeting here and jump straight to it.', opt: 1 },
       { s: '#w262homebar', t: 'Show everything on Home', p: 'In the loop, Updates for you, time commitments, Slack notifications and time off wait here. One click shows them, another hides them again.', opt: 1 },
       { c: 1, t: 'You are set', p: 'Every page still has its own tour in the Avenue Academy, and Ask the Hub (bottom right) can find anything for you.' }
     ];
     /* on a phone the side menu is closed: the bar at the bottom and its Menu sheet do that job */
-    var deskOnly = ['#tabBar > .tab[data-tab="mypage"]', '#tabBar .w42d[data-w262mine]', '#tabBar .w262tt', '#tabBar .w262fold', '#w153dock .w153grid'];
+    var deskOnly = ['#tabBar > .tab[data-tab="mypage"]', '#nav-section-departments', '#nav-section-org', '#nav-section-tools', '#w153dock .w153grid'];
     return phone() ? all.filter(function (st) { return deskOnly.indexOf(st.s) < 0; }) : all.filter(function (st) { return st.s !== '#w163bar'; });
   }
   function registerTour() {
