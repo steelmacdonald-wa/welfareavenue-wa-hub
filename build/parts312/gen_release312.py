@@ -45,7 +45,7 @@ def applier(path, parts, items, before, after, label):
       "  if (select md5(string_agg(content, '' order by part)) from public.site_files where path = '%s') <> md5(v_new) then raise exception '%s: post-check failed'; end if;\n" % (path, path) +
       "  insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by) values ('release', '%s', 'wave312', md5(v), md5(v_new) || ': %s', 'Claude for Steel (12/11/26)');\nend $pg$;\n" % (path, label))
 
-head = """-- 12/11/26 - wave312 release: Campaigns in the CRM, Email insights, buttons to a form or the donation page, a form's donate
+head = """-- 12/11/26 - wave312 release (built as wave310; renumbered after the Clarity release took wave310): Campaigns in the CRM, Email insights, buttons to a form or the donation page, a form's donate
 -- button, the photo albums, and the Content Studio's "it went out" notice for Ian, KK and the sender.
 --
 -- STEP 1 FIRST (Supabase dashboard, Edge Functions): replace each function's index.ts with its one line, then Deploy.
@@ -56,7 +56,7 @@ head = """-- 12/11/26 - wave312 release: Campaigns in the CRM, Email insights, b
 --   social-publish must be v7 before this file runs: the new trigger asks it for the "went out" notice, which v6 does not know.
 --
 -- STEP 2: run this whole file once in the SQL editor (project zwnmulmnvopclzcvytce). One transaction: if any check fails,
--- nothing changes. Made against the live Hub page %(live)s (after wave309) and f/index.html %(flive)s.
+-- nothing changes. Made against the live Hub page %(live)s (after wave310, Clarity) and f/index.html %(flive)s.
 -- What it does:
 --   1. keeps a copy of today's pages (table site_files_bak_wa312, for the undo)
 --   2. the database: wa_campaigns' folder columns, wa312_campaigns, wa312_campaign_save, wa312_mail_insights, wa_photo_albums,
