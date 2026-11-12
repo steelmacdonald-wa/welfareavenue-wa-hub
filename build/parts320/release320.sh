@@ -11,7 +11,7 @@
 #   build/parts320/release320.sh stage
 #       Posts the candidate into the stage table in 10 parts (public key, insert only) and writes:
 #         /tmp/w320/step2.sql   the gated release: checks every part, swaps the page, logs the release,
-#                               drops the stage table and calls host-sync. One transaction.
+#                               closes the stage table and calls host-sync. One transaction.
 #         build/parts320/wave320_undo.sql   the undo for exactly this release
 #       Run step2.sql, then:
 #
@@ -68,7 +68,7 @@ drop policy if exists stage_ins on public.wa_stage_320;
 create policy stage_ins on public.wa_stage_320 for insert to anon with check (true);
 grant insert on public.wa_stage_320 to anon;
 notify pgrst, 'reload schema';
-comment on table public.wa_stage_320 is 'wave320 (12/11/26): the candidate Hub page, staged for the gated release. Insert only, for a few minutes. Step 2 drops it.';
+comment on table public.wa_stage_320 is 'wave320 (12/11/26): the candidate Hub page, staged for the gated release. Insert only, for a few minutes. Step 2 closes it; the hourly sweep drops it.';
 select (select count(*) from public.site_files_bak_wa320) as bak_parts, (select md5(string_agg(content, '' order by part)) from public.site_files_bak_wa320) as bak_md5;
 SQL
   echo "live $LIVE -> candidate $CAND ($(wc -c < "$W/candidate.html") bytes). Next: run $W/step1.sql, then '$0 stage'."
@@ -103,7 +103,7 @@ SAY = {'320': "Ask the Hub reaches out (The Hub suggests, the daily note, Help m
        '322': "One box: pages, actions and Ask the Hub in Search everything, Ctrl K, the keyboard in the list, I want to in an empty box"}
 log = "".join("insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)\n"
               "values ('release', 'index.html', 'wave%s', '%s', '%s: %s', 'Claude for Steel (12/11/26)');\n" % (w, live, cand, SAY[w]) for w in waves)
-drop = "drop table public.wa_stage_320;\n"
+drop = "revoke all on public.wa_stage_320 from anon, authenticated;\n"   # not a drop: a destructive statement asks for a confirmation the app may cancel; the hourly sweep drops stage tables
 open(out, 'w').write("-- 12/11/26 - wave320 release, step 2: the gated swap. One transaction: if any check fails, nothing changes.\n" + do_block + log + drop + last)
 PY
   cat > build/parts320/wave320_undo.sql <<SQL
