@@ -30,7 +30,7 @@
      whole word, as wa237_due_check already asks; "Ian" used to match "Brianna" too (4 open tasks on 12/11/26).
    Reads: DB_TASKS and DB_ASSIGN, mentions (own, not seen), dept_requests (open, assigned to the person),
    w260.lockedFor. Writes nothing to the database. Storage on this device: wa320.off, wa320.peek, wa320.seen,
-   wa320.visits. window.w320 = { suggest, paint, peek, coach, state } for test/w320drive.js. ASCII only.
+   wa320.visits. window.w320 = { suggest, paint, peek, coach, mine, blocked, state }. ASCII only.
    ===================================================================== */
 (function () {
   if (window.__wa320) return; window.__wa320 = true;
