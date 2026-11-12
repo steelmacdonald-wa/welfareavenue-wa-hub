@@ -1,4 +1,4 @@
-// Welfare Avenue: social-publish (v6, 02/11/26, wave277 adapters and the registry; v5 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-publish (v7, 12/11/26, wave310: the approvers hear each decision and everyone involved hears when a post goes out; v6, 02/11/26, wave277 adapters and the registry; v5 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
 // v6: each platform's publishing lives in adapters/<key>.ts (same requests as v5, now through one ctx); PUBLISHERS is a lookup.
 // v6: the platform names, the platform list and each platform's caps come from the studio_platforms registry (platforms.ts),
 //     active and inactive, so an old post naming an inactive platform still resolves; without the registry, v5's literals.
@@ -44,7 +44,7 @@
 //   {action:'confirm', days?}               match calendar entries to social_posts                 (staff or automation)
 //   {action:'preview', post_id}             what each platform would receive, sending nothing      (staff)
 //   {action:'settings', value?}             read or save the calendar settings (Slack confirmations) (staff)
-//   {action:'approval_notify', post_id, state}  from the trigger trg_wa225_approval_notify          (x-wa-secret)
+//   {action:'approval_notify', post_id, state, by?}  from the triggers trg_wa225_approval_notify and (state published) trg_wa310_post_out   (x-wa-secret)
 //   {action:'mark_posted', post_id, platform, url?}  a person posted it by hand                    (staff)
 //   {action:'remind_test', post_id}         what the reminder would say, sending nothing          (staff)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -127,7 +127,7 @@ async function slackChannel(tok: string, name: string): Promise<string | null> {
   }
   return null;
 }
-function label(p: Post): string { const t = String(p.title || '').trim() || String(p.caption || '').replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 67) + '\u2026' : (t || 'Post #' + p.id); }
+function label(p: Post): string { const t = String(p.title || '').trim() || String(p.caption || '').replace(/\s+/g, ' ').trim(); return t.length > 70 ? t.slice(0, 67) + '…' : (t || 'Post #' + p.id); }
 async function announce(p: Post, lines: string[]): Promise<void> {
   try {
     if (!lines.length) return;
@@ -191,6 +191,12 @@ async function tell(emails: string[], title: string, body: string, url: string, 
   if (hubTo.length) await hubPush(hubTo, title, body, url, tag);
   return out;
 }
+/* v7 (wave310): a person's first name for a notice, from the team list; the address's first part otherwise */
+async function nameOf(email: string): Promise<string> {
+  const e = String(email || '').toLowerCase();
+  try { const { data } = await svc.from('team_members').select('name').eq('email', e).maybeSingle(); if (data && data.name) return String(data.name); } catch (_) { /* below */ }
+  return e.split('@')[0] || 'someone';
+}
 async function emailOfName(name: string | null): Promise<string | null> {
   const n = String(name || '').trim(); if (!n) return null;
   if (/@/.test(n)) return n.toLowerCase();
@@ -244,7 +250,7 @@ function capHashtags(s: string, max: number): string {
   return s.replace(/(^|\s)#[\p{L}\p{N}_]+/gu, (m) => { n++; return n > max ? '' : m; }).replace(/[ \t]+\n/g, '\n').trim();
 }
 function rid(n = 6): string { const a = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; const b = crypto.getRandomValues(new Uint8Array(n)); for (let i = 0; i < n; i++) s += a[b[i] % a.length]; return s; }
-function slug(s: string): string { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
+function slug(s: string): string { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40); }
 function withUtm(url: string, p: Post, platform: string): string {
   try {
     const u = new URL(url);
@@ -287,7 +293,7 @@ async function capFor(p: Post, platform: string): Promise<string> {
   if (platform === 'facebook' && p.link_url && images(p).length && c.indexOf(p.link_url) < 0) c += (c ? '\n\n' : '') + p.link_url;
   if ((platform === 'linkedin' || platform === 'threads') && p.link_url && c.indexOf(p.link_url) < 0) c += (c ? '\n\n' : '') + p.link_url;
   if (platform === 'instagram') { const cap = Number((await studio()).hashtag_cap || 5); c = capHashtags(c, cap); }
-  if (platform === 'threads' && c.length > 500) c = c.slice(0, 497) + '\u2026';
+  if (platform === 'threads' && c.length > 500) c = c.slice(0, 497) + '…';
   return await trackLinks(c, p, platform);
 }
 /* v6: what the adapters get (they never touch the vault, the database or the network except through this) */
@@ -317,7 +323,7 @@ async function remindManual(p: Post, platform: string, why: string, dry = false)
   const when = p.scheduled_at ? new Date(p.scheduled_at).toLocaleString('en-CA', { timeZone: 'America/Toronto', weekday: 'short', hour: 'numeric', minute: '2-digit' }) : 'now';
   const link = SITE + '/#contentcal/' + p.id;
   const slack = ':calendar: *Time to post on ' + (PNAME[platform] || platform) + ':* ' + label(p) + ' (' + when + ')\n' + why + '. Copy the caption and the media from the Hub, post it in the ' + (PNAME[platform] || platform) + ' app, then press Mark posted.\n' +
-    (cap ? '>' + cap.slice(0, 600).replace(/\n/g, '\n>') + (cap.length > 600 ? '\u2026' : '') + '\n' : '') + (media.length ? media.slice(0, 4).map((u, i) => '<' + u + '|Media ' + (i + 1) + '>').join('  ') + '\n' : '') + '<' + link + '|Open it in the Content Studio>';
+    (cap ? '>' + cap.slice(0, 600).replace(/\n/g, '\n>') + (cap.length > 600 ? '…' : '') + '\n' : '') + (media.length ? media.slice(0, 4).map((u, i) => '<' + u + '|Media ' + (i + 1) + '>').join('  ') + '\n' : '') + '<' + link + '|Open it in the Content Studio>';
   if (dry) return { to, slack };
   if (!to) return { to: null, outcome: 'nobody to remind (no owner)' };
   const out = await tell([to], 'Time to post on ' + (PNAME[platform] || platform), label(p) + ': copy the caption and media, post it, then Mark posted.', '/#contentcal/' + p.id, 'studio-due-' + p.id + '-' + platform, slack);
@@ -351,7 +357,7 @@ async function publishPost(id: number, by: string, caller: Me | null): Promise<A
       if ((platform === 'facebook' || platform === 'instagram') && !t) throw new Error(metaErr.indexOf('META_SYSTEM_TOKEN') >= 0 ? 'Publishing to Meta is off: the Meta token is not in the vault' : (metaErr || 'Meta is not connected'));
       const r: Any = await ad.publish(p, (REGBY[platform] && REGBY[platform].caps) || FALLBACK_CAPS, { ...ctx, targets: t });
       results[platform] = { ...r, at: new Date().toISOString() };
-      lines.push('\u2022 ' + (r.draft ? 'Sent to the ' + PNAME[platform] + ' drafts (post it in the app)' : 'Published to ' + (PNAME[platform] || platform)) + ': <' + r.url + '|open>');
+      lines.push('• ' + (r.draft ? 'Sent to the ' + PNAME[platform] + ' drafts (post it in the app)' : 'Published to ' + (PNAME[platform] || platform)) + ': <' + r.url + '|open>');
     } catch (e) {
       if (e instanceof Pending) { results[platform] = { pending: true, container: e.container, since: new Date().toISOString() }; }
       else if (e instanceof Manual) {
@@ -415,15 +421,15 @@ async function finishPending(): Promise<Any[]> {
         if (pl === 'instagram' && t && t.ig) {
           const tok = t.page ? t.page.token : t.token;
           const s = await containerStatus(ctx, String(r.container), tok);
-          if (s === 'FINISHED') { const fin = await igFinish(ctx, t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Instagram: <' + fin.url + '|open>'); }
+          if (s === 'FINISHED') { const fin = await igFinish(ctx, t.ig.id, String(r.container), tok, t.ig.username, p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('• Published to Instagram: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Instagram: the video was still processing after 30 minutes'); }
         } else if (pl === 'threads' && th) {
           const s = await containerStatus(ctx, String(r.container), th.token, THREADS);
-          if (s === 'FINISHED') { const fin = await threadsFinish(ctx, th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to Threads: <' + fin.url + '|open>'); }
+          if (s === 'FINISHED') { const fin = await threadsFinish(ctx, th, String(r.container), p); results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('• Published to Threads: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('Threads: the video was still processing after 30 minutes'); }
         } else if (pl === 'linkedin') {
           const fin = await linkedinFinish(ctx, p, String(r.container));
-          if (fin) { results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('\u2022 Published to LinkedIn: <' + fin.url + '|open>'); }
+          if (fin) { results[pl] = { ...fin, at: new Date().toISOString() }; lines.push('• Published to LinkedIn: <' + fin.url + '|open>'); }
           else if (Date.now() - new Date(r.since || p.updated_at).getTime() > 30 * 60000) { results[pl] = { failed: true }; errors.push('LinkedIn did not finish processing the video'); }
         } else { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': cannot finish without its connection'); }
       } catch (e) { results[pl] = { failed: true }; errors.push((PNAME[pl] || pl) + ': ' + String((e as Error).message || e).slice(0, 300)); }
@@ -441,7 +447,7 @@ async function finishPending(): Promise<Any[]> {
 }
 
 /* ---------- confirmations (unchanged from v2, all platforms the analytics hold) ---------- */
-function norm(s: string): string { return String(s || '').toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/[#@]/g, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function norm(s: string): string { return String(s || '').toLowerCase().replace(/https?:\/\/\S+/g, '').replace(/[#@]/g, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function words(s: string): Set<string> { return new Set(norm(s).split(' ').filter(w => w.length > 3)); }
 function similar(a: string, b: string): number {
   const A = words(a), B = words(b); if (A.size < 3 || !B.size) return 0;
@@ -472,7 +478,7 @@ async function confirm(days: number): Promise<Any> {
         const row = liveRow(hit, hit._by || 'id');
         const old = live[platform];
         if (!old || old.external_id !== row.external_id || JSON.stringify([old.reach, old.views, old.likes, old.comments, old.shares, old.saves]) !== JSON.stringify([row.reach, row.views, row.likes, row.comments, row.shares, row.saves])) { live[platform] = { ...row, announced: old ? old.announced : false }; changed = true; }
-        if (!old && !(p.results && p.results[platform] && p.results[platform].id)) { lines.push('\u2022 Live on ' + (PNAME[platform] || platform) + (row.url ? ': <' + row.url + '|open>' : '') + ' (seen in the analytics)'); live[platform].announced = true; }
+        if (!old && !(p.results && p.results[platform] && p.results[platform].id)) { lines.push('• Live on ' + (PNAME[platform] || platform) + (row.url ? ': <' + row.url + '|open>' : '') + ' (seen in the analytics)'); live[platform].announced = true; }
       }
     }
     if (changed) { await save(p.id, { live }); updated++; out.push({ id: p.id, live: Object.keys(live) }); }
@@ -485,7 +491,7 @@ async function confirm(days: number): Promise<Any> {
     const live: Record<string, Any> = { ...(p.live || {}) }; let first: string | null = null; const lines: string[] = [];
     for (const platform of (p.platforms || [])) {
       const b = byCaption(S, platform, rawCaption(p, platform), new Date(String(p.scheduled_at)).getTime());
-      if (b) { live[platform] = { ...liveRow(b, 'caption'), announced: true }; if (!first || String(b.published_at) < first) first = String(b.published_at); lines.push('\u2022 Live on ' + (PNAME[platform] || platform) + (b.url ? ': <' + b.url + '|open>' : '') + ' (posted by hand, seen in the analytics)'); }
+      if (b) { live[platform] = { ...liveRow(b, 'caption'), announced: true }; if (!first || String(b.published_at) < first) first = String(b.published_at); lines.push('• Live on ' + (PNAME[platform] || platform) + (b.url ? ': <' + b.url + '|open>' : '') + ' (posted by hand, seen in the analytics)'); }
     }
     if (first) {
       await save(p.id, { status: 'posted', live, published_at: first, error: null, updated_by: 'confirmed from the analytics' });
@@ -561,6 +567,20 @@ Deno.serve(async (req: Request) => {
       const when = post.scheduled_at ? new Date(post.scheduled_at).toLocaleString('en-CA', { timeZone: 'America/Toronto', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'no date yet';
       const plats = (post.platforms || []).map(k => PNAME[k] || k).join(', ');
       const link = SITE + '/#studio/approvals';
+      /* v7 (wave310, Steel 11/11/26: "they should also get a notification once it's approved and sent out"): when a post goes out
+         (status published or posted, from the trigger trg_wa310_post_out), the person who sent it for approval, its owner and the
+         approvers (Ian and KK) hear that it is live, with the links; never the person who pressed Publish themselves. */
+      if (state === 'published') {
+        const actor = String((await emailOfName(String(body.by || ''))) || '').toLowerCase();   /* updated_by is a name or an address */
+        const sub = String(post.submitted_by || '').toLowerCase();
+        const own = (await emailOfName(post.owner)) || (await emailOfName(String((post as Any).created_by || ''))) || '';
+        const to = Array.from(new Set([sub, own, ...(await approvers())].filter(e => /@/.test(e) && e !== actor)));
+        const res = (post as Any).results || {};
+        const links = (post.platforms || []).map(k => { const r = res[k] || {}; return r.url ? '<' + String(r.url) + '|' + (PNAME[k] || k) + '>' : (r.manual_done || ((post as Any).manual || {})[k]?.posted_at) ? (PNAME[k] || k) + ' (posted by hand)' : (PNAME[k] || k); }).join('   \u00b7   ');
+        const out = await tell(to, 'Your post is out', label(post) + ' is live (' + plats + ')', '/#contentcal/' + post.id, 'studio-out-' + post.id,
+          ':rocket: *' + label(post) + '* went out' + (post.approved_by ? ' (approved by ' + (await nameOf(String(post.approved_by))) + ')' : '') + '\n' + links + '\n<' + SITE + '/#contentcal/' + post.id + '|Open it in the Content Studio>');
+        return json({ ok: true, told: out });
+      }
       if (state === 'pending') {
         const who0 = await svc.from('team_members').select('name').eq('email', post.submitted_by || '').maybeSingle();
         const from = (who0.data && who0.data.name) || String(post.submitted_by || 'Someone').split('@')[0];
@@ -569,14 +589,18 @@ Deno.serve(async (req: Request) => {
         const kind = (post as Any).format === 'article' ? 'a LinkedIn article' : 'a post';
         const out = await tell(to, kind === 'a post' ? 'A post waits for your approval' : 'A LinkedIn article waits for your approval', from + ': ' + label(post) + ' (' + plats + ', ' + when + ')', '/#studio/approvals?post=' + post.id, 'studio-approval-' + post.id,
           ':raised_hand: *' + from + '* sent ' + kind + ' for approval: *' + label(post) + '* (' + plats + ', ' + when + ')' + (post.approval_note ? '\n>' + String(post.approval_note).slice(0, 300) : '') + extra
-          + '\n<' + SITE + '/#studio/approvals?post=' + post.id + '&do=approve|Approve>   \u00b7   <' + SITE + '/#studio/approvals?post=' + post.id + '&do=back|Send it back>   \u00b7   <' + link + '|Open the Studio>');
+          + '\n<' + SITE + '/#studio/approvals?post=' + post.id + '&do=approve|Approve>   ·   <' + SITE + '/#studio/approvals?post=' + post.id + '&do=back|Send it back>   ·   <' + link + '|Open the Studio>');
         return json({ ok: true, told: out });
       }
       const to = String(post.submitted_by || '').toLowerCase();
       if (!to) return json({ ok: true, told: [] });
       const by = await svc.from('team_members').select('name').eq('email', post.approved_by || '').maybeSingle();
+      /* v7 (wave310): the other approvers hear the decision too, so Ian and KK never both review the same post */
+      const others = (await approvers()).filter(e => e !== to && e !== String(post.approved_by || '').toLowerCase());
       const byName = (by.data && by.data.name) || String(post.approved_by || '').split('@')[0];
       const ok = state === 'approved';
+      if (others.length) await tell(others, ok ? 'A post was approved' : 'Changes asked on a post', label(post) + (ok ? ' (approved by ' + ((by.data && by.data.name) || 'an approver') + ')' : ''), '/#contentcal/' + post.id, 'studio-decided-o-' + post.id,
+        (ok ? ':white_check_mark: *' + ((by.data && by.data.name) || 'An approver') + '* approved *' + label(post) + '*' + (post.scheduled_at ? ', it goes out ' + when : '') : ':pencil2: *' + ((by.data && by.data.name) || 'An approver') + '* asked for changes on *' + label(post) + '*') + ' (sent by ' + (await nameOf(to)) + ')\n<' + SITE + '/#contentcal/' + post.id + '|Open it>');
       const out = await tell([to], ok ? 'Your post is approved' : 'Changes asked on your post', label(post) + (ok ? (post.scheduled_at ? ': it goes out ' + when : ': give it a date to schedule it') : ': ' + (post.approval_note || 'see the note')), '/#contentcal/' + post.id, 'studio-decided-' + post.id,
         (ok ? ':white_check_mark: *' + byName + '* approved *' + label(post) + '*' + (post.scheduled_at ? ', it goes out ' + when : '') : ':pencil2: *' + byName + '* asked for changes on *' + label(post) + '*' + (post.approval_note ? ':\n>' + String(post.approval_note).slice(0, 300) : '')) + '\n<' + SITE + '/#contentcal/' + post.id + '|Open it>');
       return json({ ok: true, told: out });
