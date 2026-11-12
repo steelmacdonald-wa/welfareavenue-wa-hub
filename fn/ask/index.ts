@@ -1,3 +1,11 @@
+// v17 (12/11/26, wave324): Ask the Hub looks things up and does more. Steel: "read event data like confirmations of volunteers,
+// interactions with companies/supporters/donors, get details on requests, get better at helping individuals to complete tasks,
+// navigate the hub very well and know all its abilities and actions, even maybe send slack messages, get project progress
+// reports". Six look-up tools the model calls as it needs them (look_up_request, look_up_task, project_report,
+// volunteer_events, crm_lookup, hub_guide), each limited by what the asker may open in the Hub (wa_ask_access: the same
+// functions the database's row rules use), each result passed through the confidentiality filter; up to four rounds, six
+// look-ups a question. Four more confirm-first actions: send_slack_message (from WA HUB, naming who asked, team list only,
+// ten a day), update_task, add_subtasks and request_access. Nothing new is kept: the words of a Slack message are not stored.
 // v16 (12/11/26, wave323): Ask the Hub knows who is asking, and can be asked from Slack. (1) The context opens with WHO IS
 // ASKING (the roster name and team), today's date in Toronto, THEIR OPEN TASKS (assigned to them or carrying their name as a
 // whole word; overdue first; the same visibility rules as every other task block) and the requests waiting on them. Before
@@ -344,9 +352,480 @@ EMOJIS: at most two per answer, only from Welfare Avenue's own set, written exac
 
 WHO IS ASKING. The context opens with who is asking, today's date and THEIR OPEN TASKS. "I", "me" and "my" mean that person. For questions about their own work (what is overdue, what to focus on, what is due this week, help finishing a task) answer from THEIR OPEN TASKS and REQUESTS WAITING ON THEM: what is past its date first, then what is due soonest, and say plainly when nothing is late. Work out "overdue", "today" and "this week" from TODAY IS, never from memory. If the context says they are not on the team list, say you cannot tell which tasks are theirs from here and point them to [Home](#mypage).
 
-ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, or change a request status. Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. A new task goes on the board of the team the user names; when they name none, use the asker's own team from WHO IS ASKING; when WHO IS ASKING shows no team, ask which team's board it belongs on before proposing it, and never choose the Board team unless they name it. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
+ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, change a request status, change a task (update_task), add steps under a task (add_subtasks), ask for access to a page (request_access), or send someone on the team a Slack message from WA HUB (send_slack_message: only when they ask to message, tell, ping or remind a person; the words are theirs, short, and the card shows them exactly). Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. A new task goes on the board of the team the user names; when they name none, use the asker's own team from WHO IS ASKING; when WHO IS ASKING shows no team, ask which team's board it belongs on before proposing it, and never choose the Board team unless they name it. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
 
-Always finish by calling answer_question.`;
+LOOKING THINGS UP. Besides the context you have look-up tools: look_up_request (a request in full), look_up_task (a task in full, with its steps and comments), project_report (how a project is going), volunteer_events (servings and events: who is confirmed, waiting or cannot make it, against the spots), crm_lookup (a person, donor, supporter or organization and their history with us) and hub_guide (where things are in the Hub and whether this person can open them). Use them whenever the answer needs more than the context holds; never guess what they would return. They only show what this person may open in the Hub: when a result says NOT ALLOWED, say plainly that it is outside their access and offer to ask an admin for it (request_access). Treat what they return like the context: grounded, no phone numbers or emails in answers, link the item with its link.
+
+HELPING SOMEONE FINISH. When someone wants help with a task, look it up first, then give the next one or two concrete steps, who to talk to and where in the Hub to do it; offer to break it into steps (add_subtasks), move its date or hand it over (update_task), or ping someone (send_slack_message). For "how do I" and "where is", use hub_guide and link the page.
+
+WHAT YOU CAN DO, when asked: answer about meetings, tasks, requests, projects, goals, our story, servings and volunteers, the CRM and partners (for those with access), and where things are in the Hub; and, after the person confirms a card, file a request, add a task, close a task, move one to the bank (in the Hub only), change a request's status or mark it done, change a task's date, owner or notes, break a task into steps, ask an admin for access to a page, and send a teammate a Slack message from WA HUB with their name on it.
+
+Always finish by calling answer_question.`
+/* ---------- v17 (wave324): Ask the Hub looks things up ----------
+   Steel (12/11/26): read event data and volunteer confirmations, the CRM's history with companies, supporters and donors,
+   the details of a request, help people finish their tasks, know the Hub's pages and abilities, report on a project. His
+   choices: the CRM for the people who can open the CRM page, in the Hub and in Slack. What one person may see comes from
+   wa_ask_access(email): the same functions the database's row rules use, so Slack (where there is no sign-in of theirs) and
+   the Hub answer by the same rules. Every look-up result passes the confidentiality filter before the model reads it. */
+const NO_FACTS = { staff: false, pages: {} };
+async function accessFacts(email) {
+  if (!email) return NO_FACTS;
+  try {
+    const { data, error } = await svc.rpc('wa_ask_access', { p_email: email });
+    if (error || !data || typeof data !== 'object') return NO_FACTS;
+    if (data.role === 'blocked') return NO_FACTS;
+    return Object.assign({ pages: {} }, data);
+  } catch (_) { return NO_FACTS; }
+}
+function canPage(f, key) { return !!(f && f.staff === true && f.pages && f.pages[key] === true); }
+const PAGE_LABEL = { mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers', create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder', orggoals: 'Goals and the Strategy Library', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank', opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', toronto: 'Toronto Volunteers', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing', contentcal: 'Content calendar', socialstats: 'Analytics', studio: 'Content Studio', fundraising: 'Fundraising', fundevents: 'Events calendar', grants: 'Grants', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre', governance: 'Board overview', committees: 'Committees', transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM', activity: 'Activity', adminpanel: 'Admin', programs: 'Program Builder' };
+const LOOKUP_DONE = (s)=>String(s || '').split('\n').map(confScrub).filter(Boolean).join('\n').slice(0, 7000);
+function words(q) { return storyTerms(q || '').filter((w)=>w.length >= 3).slice(0, 6); }
+function likeAny(col, ws) { return ws.map((w)=>col + '.ilike.%' + w.replace(/[%,()]/g, '') + '%').join(','); }
+function taskOpenOk(t) {
+  if (!t || t.banked_at || t.board_only === true || t.confidential === true || t.department === 'board') return false;
+  if (t.visibility && t.visibility !== 'department') return false;
+  return !confHit(t.title);
+}
+const REQ_HIDDEN_TYPES = ['time-off', 'hiring-request', 'onboarding-request', 'access-request'];
+const REQ_HIDDEN_DEPTS = ['hr', 'board'];
+const PRIVATE_FIELD = /e-?mail|phone|t[e\u00e9]l[e\u00e9]phone|postal|address|adresse|code postal|birth|date of birth|age\b|16 ou plus|16 or older|sin\b|password/i;
+function reqOk(r) { return r && REQ_HIDDEN_TYPES.indexOf(r.type_key) < 0 && REQ_HIDDEN_DEPTS.indexOf(r.department) < 0 && !confHit(r.title); }
+
+async function lookRequest(input, f) {
+  if (!canPage(f, 'requests')) return 'NOT ALLOWED: this person cannot open Requests. Say so and offer to ask for access.';
+  const id = Number(input.request_id);
+  let rows = [];
+  if (Number.isInteger(id) && id > 0) {
+    const { data } = await svc.from('dept_requests').select('*').eq('id', id).limit(1);
+    rows = data || [];
+  } else {
+    const ws = words(input.search);
+    if (!ws.length) return 'Give a request number or a few words from its title.';
+    const { data } = await svc.from('dept_requests').select('*').or(likeAny('title', ws)).order('created_at', { ascending: false }).limit(12);
+    rows = data || [];
+  }
+  rows = rows.filter(reqOk).slice(0, 4);
+  if (!rows.length) return 'No request matches that (some kinds, like time off, hiring and HR requests, are never shown here).';
+  const types = {};
+  try { const { data: ts } = await svc.from('request_types').select('key,label,fields,statuses'); (ts || []).forEach((t)=>{ types[t.key] = t; }); } catch (_) {}
+  const out = [];
+  for (const r of rows) {
+    const t = types[r.type_key] || {};
+    const labels = {};
+    (Array.isArray(t.fields) ? t.fields : []).forEach((x)=>{ if (x && x.name) labels[x.name] = x.label || x.name; });
+    const lines = ['REQUEST ' + r.id + ': ' + (r.title || 'Untitled') + ' (link: #requests/r/' + r.id + ')',
+      'Type: ' + (t.label || r.type_key || 'other') + '. Team: ' + (DEPT_LABELS[r.department] || r.department) + '. Status: ' + (r.done ? 'done' + (r.done_at ? ' on ' + String(r.done_at).slice(0, 10) : '') : (r.status || 'new')) + (Array.isArray(t.statuses) && t.statuses.length ? ' (the steps: ' + t.statuses.join(' > ') + ')' : '') + '.',
+      'Filed ' + String(r.created_at || '').slice(0, 10) + ' by ' + String(r.requested_by || 'someone').replace(/\s*<[^>]*>/g, '') + '. Handled by: ' + (r.assignee || 'nobody yet') + '.' + (r.needed_by ? ' Needed by ' + r.needed_by + '.' : '') + (r.priority ? ' Priority: ' + r.priority + '.' : '')];
+    const d = r.details;
+    if (d && typeof d === 'object' && !Array.isArray(d)) {
+      const kv = Object.keys(d).filter((k)=>!PRIVATE_FIELD.test(k) && !PRIVATE_FIELD.test(labels[k] || '')).map((k)=>{
+        const v = d[k]; const s = typeof v === 'string' ? v : JSON.stringify(v);
+        return '- ' + (labels[k] || k) + ': ' + String(s || '').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]').slice(0, 300);
+      });
+      if (kv.length) lines.push('What the form says:\n' + kv.slice(0, 14).join('\n'));
+    } else if (typeof d === 'string' && d.trim()) lines.push('Details: ' + d.replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]').slice(0, 900));
+    try {
+      const { data: ns } = await svc.from('request_notes').select('author,body,created_at').eq('request_id', r.id).order('created_at', { ascending: true }).limit(8);
+      if ((ns || []).length) lines.push('Notes:\n' + ns.map((n)=>'- ' + String(n.created_at || '').slice(0, 10) + ' ' + (n.author || 'someone') + ': ' + String(n.body || '').slice(0, 300)).join('\n'));
+    } catch (_) {}
+    out.push(lines.join('\n'));
+  }
+  return out.join('\n\n');
+}
+
+async function lookTask(input, f) {
+  if (!f || f.staff !== true) return 'NOT ALLOWED.';
+  const id = Number(input.task_id);
+  let rows = [];
+  if (Number.isInteger(id) && id > 0) {
+    const { data } = await svc.from('dept_tasks').select('*').eq('id', id).limit(1); rows = data || [];
+  } else {
+    const ws = words(input.search);
+    if (!ws.length) return 'Give a task number or a few words from its title.';
+    const { data } = await svc.from('dept_tasks').select('*').is('banked_at', null).eq('done', false).or(likeAny('title', ws)).order('id', { ascending: false }).limit(12); rows = data || [];
+  }
+  rows = rows.filter(taskOpenOk).slice(0, 3);
+  if (!rows.length) return 'No open task the Hub can show matches that.';
+  const out = [];
+  for (const t of rows) {
+    const lines = ['TASK ' + t.id + ': ' + t.title + ' (link: #task/' + t.id + ')',
+      'Team: ' + (DEPT_LABELS[t.department] || t.department) + '. Owner: ' + (t.owner || 'nobody') + '. Status: ' + (t.done ? 'done' : (t.status || 'Open')) + (t.due_date ? '. Due ' + t.due_date : '. No due date') + (t.flag ? '. Flagged' : '') + (t.priority ? '. Priority' : '') + '.'];
+    if (t.description) lines.push('Description: ' + String(t.description).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 900));
+    if (t.project_id) { try { const { data: p } = await svc.from('projects').select('id,name,department').eq('id', t.project_id).maybeSingle(); if (p && p.department !== 'board' && !confHit(p.name)) lines.push('Project: ' + p.name + ' (link: #project/' + p.id + ')'); } catch (_) {} }
+    try {
+      const { data: subs } = await svc.from('dept_tasks').select('id,title,done,owner,due_date,board_only,confidential,visibility,banked_at,department').eq('parent_task_id', t.id).limit(20);
+      const ok = (subs || []).filter(taskOpenOk);
+      if (ok.length) lines.push('Subtasks:\n' + ok.map((s)=>'- ' + (s.done ? '[done] ' : '[open] ') + s.title + (s.owner ? ' (' + s.owner + ')' : '') + (s.due_date ? ', due ' + s.due_date : '')).join('\n'));
+    } catch (_) {}
+    try {
+      const { data: cs } = await svc.from('task_comments').select('body,author,created_at,visibility,source').eq('task_id', t.id).order('created_at', { ascending: false }).limit(8);
+      const ok = (cs || []).filter((c)=>!c.visibility && !confHit(c.body));
+      if (ok.length) lines.push('Latest comments:\n' + ok.reverse().map((c)=>'- ' + String(c.created_at || '').slice(0, 10) + ' ' + (c.author || 'someone') + ': ' + String(c.body || '').replace(/\s+/g, ' ').slice(0, 280)).join('\n'));
+    } catch (_) {}
+    out.push(lines.join('\n'));
+  }
+  return out.join('\n\n');
+}
+
+async function lookProject(input, f, today) {
+  if (!canPage(f, 'projects')) return 'NOT ALLOWED: this person cannot open Projects.';
+  const { data: ps0 } = await svc.from('projects').select('id,name,department,status,description,parent_id,leads,goal_id,banked_at').is('banked_at', null).neq('department', 'board').limit(200);
+  const ps = (ps0 || []).filter((p)=>!confHit(p.name));
+  const q = fold(input.project || '').replace(/[^a-z0-9 ]/g, ' ').trim();
+  if (!q) {
+    return 'PROJECTS (' + ps.length + '; ask about one by name for its report):\n' + ps.filter((p)=>!p.parent_id).map((p)=>'- ' + p.name + ' (' + (DEPT_LABELS[p.department] || p.department) + ', link: #project/' + p.id + ')').join('\n');
+  }
+  const qw = q.split(/\s+/).filter((w)=>w.length >= 3);
+  const score = (p)=>{ const n = fold(p.name); if (n === q) return 100; if (n.indexOf(q) >= 0) return 50; return qw.filter((w)=>n.indexOf(w) >= 0).length; };
+  const hits = ps.map((p)=>({ p, s: score(p) })).filter((x)=>x.s > 0).sort((a, b)=>b.s - a.s);
+  if (!hits.length) return 'No project matches "' + input.project + '". Projects: ' + ps.slice(0, 25).map((p)=>p.name).join(', ');
+  if (hits.length > 1 && hits[0].s === hits[1].s && hits[0].s < 50) return 'Several projects match: ' + hits.slice(0, 6).map((x)=>x.p.name).join(', ') + '. Ask which one.';
+  const p = hits[0].p;
+  const kids = ps.filter((c)=>c.parent_id === p.id);
+  const ids = [p.id].concat(kids.map((c)=>c.id));
+  const { data: ts0 } = await svc.from('dept_tasks').select('id,title,owner,due_date,done,closed_at,flag,priority,department,board_only,confidential,visibility,banked_at,project_id,parent_task_id').in('project_id', ids).is('banked_at', null).limit(1000);
+  const ts = (ts0 || []).filter(taskOpenOk);
+  const open = ts.filter((t)=>!t.done), done = ts.filter((t)=>t.done);
+  const late = open.filter((t)=>t.due_date && t.due_date < today);
+  const pct = ts.length ? Math.round(100 * done.length / ts.length) : 0;
+  const owners = {};
+  open.forEach((t)=>{ const o = (t.owner || 'nobody').trim(); owners[o] = (owners[o] || 0) + 1; });
+  const since = new Date(Date.now() - 14 * 86400000).toISOString();
+  const recent = done.filter((t)=>t.closed_at && t.closed_at >= since).sort((a, b)=>String(b.closed_at).localeCompare(String(a.closed_at)));
+  const next = open.filter((t)=>t.due_date && t.due_date >= today).sort((a, b)=>a.due_date.localeCompare(b.due_date));
+  const leads = Array.isArray(p.leads) ? p.leads.filter(Boolean) : [];
+  const lines = ['PROJECT REPORT: ' + p.name + ' (' + (DEPT_LABELS[p.department] || p.department) + ', link: #project/' + p.id + ')' + (leads.length ? '. Lead: ' + leads.join(', ') : '') + '.',
+    p.description ? 'About: ' + String(p.description).slice(0, 400) : '',
+    'Tasks: ' + ts.length + ' in all, ' + done.length + ' done (' + pct + '%), ' + open.length + ' open, ' + late.length + ' past their date, ' + open.filter((t)=>t.flag).length + ' flagged.' + (kids.length ? ' Sub-projects: ' + kids.map((k)=>k.name).join(', ') + '.' : ''),
+    Object.keys(owners).length ? 'Open work by person: ' + Object.entries(owners).sort((a, b)=>b[1] - a[1]).map((x)=>x[0] + ' ' + x[1]).join(', ') + '.' : '',
+    late.length ? 'Past their date:\n' + late.slice(0, 8).map((t)=>'- ' + t.title + ' (' + (t.owner || 'nobody') + ', was due ' + t.due_date + ')').join('\n') : 'Nothing is past its date.',
+    next.length ? 'Coming up:\n' + next.slice(0, 6).map((t)=>'- ' + t.title + ' (' + (t.owner || 'nobody') + ', due ' + t.due_date + ')').join('\n') : '',
+    recent.length ? 'Closed in the last two weeks:\n' + recent.slice(0, 6).map((t)=>'- ' + t.title + (t.owner ? ' (' + t.owner + ')' : '')).join('\n') : 'Nothing closed in the last two weeks.',
+    open.filter((t)=>!t.due_date).length ? open.filter((t)=>!t.due_date).length + ' open tasks have no due date.' : ''];
+  return lines.filter(Boolean).join('\n');
+}
+
+function rosterState(r) {
+  const st = String(r.status || '').toLowerCase();
+  if (st === 'cancelled') return 'off';
+  if (st === 'confirmed' || r.confirm_status === 'confirmed') return 'yes';
+  if (st === 'unavailable' || r.confirm_status === 'declined') return 'no';
+  return 'waiting';
+}
+const ROLE_LABEL = { server: 'server', cook: 'cook', driver: 'driver', photographer: 'photographer', videographer: 'videographer', dishwasher: 'dishwasher', team_leader: 'team leader', community_debrief: 'community lead', community_talker: 'community lead', volunteer: 'volunteer' };
+async function lookEvents(input, f, today) {
+  const mtl = canPage(f, 'volunteering'), to = canPage(f, 'toronto') || mtl;
+  if (!mtl && !to) return 'NOT ALLOWED: this person cannot open the Volunteer Manager. Say so and offer to ask for access.';
+  let q = svc.from('volunteer_events').select('id,code,event_date,location,status,kind,title,planned_meals,start_time,spot_counts');
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(input.date || '')) ? String(input.date) : '';
+  if (date) q = q.eq('event_date', date); else q = q.gte('event_date', input.past === true ? new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10) : today);
+  const { data: evs0 } = await q.order('event_date', { ascending: input.past !== true }).limit(30);
+  const city = fold(input.city || '');
+  let evs = (evs0 || []).filter((e)=>{
+    const tor = /toronto/i.test(String(e.location || ''));
+    if (tor ? !to : !mtl) return false;
+    if (city && fold(e.location).indexOf(city) < 0 && !(city === 'montreal' && !tor)) return false;
+    return true;
+  });
+  if (!evs.length) return 'No serving or event matches that' + (date ? ' on ' + date : '') + '.';
+  const detail = date || evs.length === 1 || input.detail === true;
+  evs = evs.slice(0, detail ? 2 : 6);
+  const { data: ros } = await svc.from('event_roster').select('event_id,person_name,role,status,confirm_status').in('event_id', evs.map((e)=>e.id)).limit(600);
+  const who = fold(input.person || '');
+  const out = [];
+  for (const e of evs) {
+    const rs = (ros || []).filter((r)=>r.event_id === e.id && rosterState(r) !== 'off');
+    const yes = rs.filter((r)=>rosterState(r) === 'yes'), no = rs.filter((r)=>rosterState(r) === 'no'), wait = rs.filter((r)=>rosterState(r) === 'waiting');
+    const head = e.event_date + ' ' + (e.title || e.kind || 'serving') + ' in ' + (e.location || '?') + (e.start_time ? ' at ' + String(e.start_time).slice(0, 5) : '') + (e.status && e.status !== 'planned' ? ' [' + e.status + ']' : '') + ' (link: #volunteering/e/' + e.id + ')';
+    const lines = ['EVENT ' + head, 'On the list: ' + rs.length + '. Confirmed: ' + yes.length + '. Waiting for an answer: ' + wait.length + '. Cannot make it: ' + no.length + '.' + (e.planned_meals ? ' Planned meals: ' + e.planned_meals + '.' : '')];
+    const sc = e.spot_counts && typeof e.spot_counts === 'object' ? e.spot_counts : null;
+    const roles = {};
+    rs.forEach((r)=>{ const k = r.role || 'volunteer'; roles[k] = roles[k] || { yes: 0, all: 0 }; roles[k].all++; if (rosterState(r) === 'yes') roles[k].yes++; });
+    const roleLine = Object.keys(Object.assign({}, roles, sc || {})).map((k)=>{
+      const need = sc && Number(sc[k]) ? Number(sc[k]) : 0; const x = roles[k] || { yes: 0, all: 0 };
+      if (!need && !x.all) return '';
+      return (ROLE_LABEL[k] || k) + 's ' + x.yes + ' confirmed of ' + x.all + (need ? ' (spots: ' + need + (x.yes < need ? ', ' + (need - x.yes) + ' still to fill' : '') + ')' : '');
+    }).filter(Boolean);
+    if (roleLine.length) lines.push('By role: ' + roleLine.join('; ') + '.');
+    if (detail || who) {
+      const nm = (r)=>String(r.person_name || 'someone').trim() + ' (' + (ROLE_LABEL[r.role] || r.role || 'volunteer') + ')';
+      const pick = (arr)=>who ? arr.filter((r)=>fold(r.person_name).indexOf(who) >= 0) : arr;
+      if (pick(yes).length) lines.push('Confirmed: ' + pick(yes).slice(0, 45).map(nm).join(', '));
+      if (pick(wait).length) lines.push('Waiting for an answer: ' + pick(wait).slice(0, 45).map(nm).join(', '));
+      if (pick(no).length) lines.push('Cannot make it: ' + pick(no).slice(0, 30).map(nm).join(', '));
+      if (who && !pick(rs).length) lines.push('Nobody named "' + input.person + '" is on this list.');
+    }
+    out.push(lines.join('\n'));
+  }
+  out.push('(Names and roles only: phone numbers and emails stay in the Volunteer Manager.)');
+  return out.join('\n\n');
+}
+
+async function lookCrm(input, f) {
+  const crm = canPage(f, 'crm');
+  const partnersOk = canPage(f, 'partners');
+  if (!crm && !partnersOk) return 'NOT ALLOWED: this person cannot open the CRM. Say so and offer to ask for access.';
+  const name = String(input.name || '').trim();
+  const ws = words(name);
+  if (!ws.length) return 'Give a name, an organization or a company.';
+  const out = [];
+  if (partnersOk) {
+    try {
+      const { data: ps0 } = await svc.from('wa_partners').select('id,name,aka,kind,city,relationship,status,category,summary,visibility,first_year,last_year,notes').or(likeAny('name', ws)).limit(6);
+      const ps = (ps0 || []).filter((p)=>(f.leader === true || f.board_viewer === true || p.visibility === 'everyone') && !confHit(p.name)).slice(0, 3);
+      for (const p of ps) {
+        const lines = ['ORGANIZATION: ' + p.name + ' (link: #partners/' + p.id + '): ' + [p.category, p.status, p.kind, p.city, p.first_year ? (p.first_year + (p.last_year && p.last_year !== p.first_year ? ' to ' + p.last_year : '')) : ''].filter(Boolean).join(', ') + '.'];
+        if (p.relationship) lines.push('Relationship: ' + String(p.relationship).slice(0, 200));
+        if (p.summary) lines.push('Summary: ' + String(p.summary).slice(0, 500));
+        if (crm) {
+          try {
+            const { data: links } = await svc.from('crm_contact_orgs').select('contact_id,role_title').eq('partner_id', p.id).limit(12);
+            if ((links || []).length) {
+              const { data: cs } = await svc.from('crm_contacts').select('id,full_name').in('id', links.map((l)=>l.contact_id));
+              lines.push('People there in the CRM: ' + (cs || []).map((c)=>{ const l = links.find((x)=>x.contact_id === c.id); return c.full_name + (l && l.role_title ? ' (' + l.role_title + ')' : ''); }).join(', '));
+            }
+          } catch (_) {}
+        }
+        out.push(lines.join('\n'));
+      }
+    } catch (_) {}
+  }
+  if (crm) {
+    const { data: cs0 } = await svc.from('crm_contacts').select('id,full_name,kinds,tags,organization,job_title,city,language,do_not_contact,email_consent,last_activity_at,merged_into,notes').is('merged_into', null).or(likeAny('full_name', ws) + ',' + likeAny('organization', ws)).limit(20);
+    let cs = (cs0 || []).filter((c)=>!confHit(c.full_name));
+    const full = fold(name);
+    cs.sort((a, b)=>(fold(b.full_name) === full ? 1 : 0) - (fold(a.full_name) === full ? 1 : 0) || String(b.last_activity_at || '').localeCompare(String(a.last_activity_at || '')));
+    if (cs.length > 3 && fold(cs[0].full_name) !== full) {
+      out.push('PEOPLE MATCHING (' + cs.length + '; ask which one): ' + cs.slice(0, 10).map((c)=>c.full_name + (c.organization ? ' (' + c.organization + ')' : '') + ' [' + (c.kinds || []).join(', ') + ']').join('; '));
+    } else {
+      for (const c of cs.slice(0, 2)) {
+        const lines = ['CONTACT: ' + c.full_name + ' (link: #crm/c/' + c.id + '): ' + [(c.kinds || []).join(', '), c.job_title, c.organization, c.city].filter(Boolean).join(', ') + '.' + (c.do_not_contact ? ' DO NOT CONTACT: say so first.' : '') + (c.last_activity_at ? ' Last activity: ' + String(c.last_activity_at).slice(0, 10) + '.' : '')];
+        if ((c.tags || []).length) lines.push('Tags: ' + c.tags.slice(0, 10).join(', '));
+        if (c.notes) lines.push('Notes: ' + String(c.notes).slice(0, 400));
+        try {
+          const { data: gs } = await svc.from('crm_donations').select('amount,currency,donated_at,campaign,recurring,refunded_amount').eq('contact_id', c.id).order('donated_at', { ascending: false }).limit(50);
+          if ((gs || []).length) {
+            const tot = gs.reduce((a, g)=>a + Number(g.amount || 0) - Number(g.refunded_amount || 0), 0);
+            lines.push('Gifts: ' + gs.length + ', $' + tot.toFixed(2) + ' in all. Latest: ' + gs.slice(0, 4).map((g)=>'$' + Number(g.amount || 0).toFixed(2) + ' on ' + String(g.donated_at || '').slice(0, 10) + (g.campaign ? ' (' + g.campaign + ')' : '') + (g.recurring ? ' monthly' : '')).join('; '));
+          }
+        } catch (_) {}
+        try {
+          const { data: is } = await svc.from('crm_interactions').select('kind,direction,channel,subject,body,occurred_at,source').eq('contact_id', c.id).order('occurred_at', { ascending: false }).limit(10);
+          if ((is || []).length) lines.push('History, newest first:\n' + is.map((i)=>'- ' + String(i.occurred_at || '').slice(0, 10) + ' ' + [i.kind, i.direction === 'out' ? 'we sent' : i.direction === 'in' ? 'they sent' : ''].filter(Boolean).join(', ') + (i.subject ? ': ' + String(i.subject).slice(0, 120) : '') + (i.body ? ' | ' + String(i.body).replace(/<[^>]+>/g, ' ').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '[email]').replace(/\s+/g, ' ').slice(0, 220) : '')).join('\n'));
+        } catch (_) {}
+        out.push(lines.join('\n'));
+      }
+    }
+  }
+  if (!out.length) return 'Nobody and no organization in the CRM matches "' + name + '".' + (crm ? '' : ' (This person can see Partners but not the CRM\'s contacts.)');
+  out.push('(Phone numbers, emails and addresses stay in the CRM; link the contact instead.)');
+  return out.join('\n\n');
+}
+
+let TOURS_CACHE = null;
+async function lookGuide(input, f) {
+  if (!TOURS_CACHE) {
+    try { const { data } = await svc.from('trainings').select('key,title,description,body').eq('kind', 'tour').eq('active', true).limit(120); TOURS_CACHE = data || []; } catch (_) { TOURS_CACHE = []; }
+  }
+  const ws = words(input.topic);
+  const open = Object.keys(PAGE_LABEL).filter((k)=>canPage(f, k));
+  const shut = Object.keys(PAGE_LABEL).filter((k)=>f && f.staff === true && f.pages && f.pages[k] === false);
+  const fit = (s)=>{ const l = fold(s); return ws.filter((w)=>l.indexOf(w) >= 0).length; };
+  const tours = (TOURS_CACHE || []).map((t)=>({ t, s: fit(t.title + ' ' + t.description) })).filter((x)=>!ws.length || x.s > 0).sort((a, b)=>b.s - a.s).slice(0, ws.length ? 5 : 0);
+  const pages = Object.keys(PAGE_LABEL).map((k)=>({ k, s: fit(PAGE_LABEL[k] + ' ' + k) })).filter((x)=>x.s > 0).slice(0, 5);
+  const lines = [];
+  const seen = {};
+  const line = (k, extra)=>{ if (seen[k]) return; seen[k] = 1; lines.push('- ' + (PAGE_LABEL[k] || k) + ' (link: #' + k + '): ' + (canPage(f, k) ? 'they can open it' : 'NOT in their access: they can ask for it (propose request_access)') + (extra ? '. ' + extra : '')); };
+  pages.forEach((x)=>line(x.k));
+  tours.forEach((x)=>{ const tab = x.t.body && x.t.body.tab; if (tab && PAGE_LABEL[tab]) line(tab, x.t.description); else lines.push('- ' + x.t.title.replace(/^Page tour: /, '') + ': ' + x.t.description); });
+  if (!lines.length) lines.push('Nothing named that. The pages they can open: ' + open.map((k)=>PAGE_LABEL[k]).join(', ') + '.');
+  else if (!ws.length) lines.push('Pages they can open: ' + open.map((k)=>PAGE_LABEL[k]).join(', ') + '.');
+  if (shut.length && !ws.length) lines.push('Pages outside their access: ' + shut.map((k)=>PAGE_LABEL[k]).join(', ') + '.');
+  lines.push('Every page has a page tour in the [Avenue Academy](#training); pages stay locked until their tour is done (admins excepted).');
+  return 'THE HUB, FOR THIS PERSON:\n' + lines.join('\n');
+}
+
+const LOOKUP_TOOLS = [
+  { name: 'look_up_request', description: 'Read one request in full: its type, team, status and the steps it moves through, who filed it and who handles it, what the form says and its notes. Use for "what is request 19 about", "where is my poster request", "what did they ask for".', input_schema: { type: 'object', properties: { request_id: { type: 'integer' }, search: { type: 'string', description: 'A few words from its title when there is no number.' } } } },
+  { name: 'look_up_task', description: 'Read one open task in full: description, owner, due date, project, subtasks and the latest comments. Use before helping someone finish or plan a task.', input_schema: { type: 'object', properties: { task_id: { type: 'integer' }, search: { type: 'string' } } } },
+  { name: 'project_report', description: 'A progress report on one project: tasks done and open, percent done, what is past its date, what is coming, who holds the open work, what closed lately. Leave project empty for the list of projects.', input_schema: { type: 'object', properties: { project: { type: 'string', description: 'The project name as the person said it.' } } } },
+  { name: 'volunteer_events', description: 'The servings and volunteer events, with who is confirmed, who has not answered and who cannot make it, by role and against the spots needed. Upcoming by default; give a date (YYYY-MM-DD) for one event, a city, a person\'s name, or past: true for the last two months.', input_schema: { type: 'object', properties: { date: { type: 'string' }, city: { type: 'string' }, person: { type: 'string' }, past: { type: 'boolean' }, detail: { type: 'boolean', description: 'true to list the names for every event shown.' } } } },
+  { name: 'crm_lookup', description: 'Look up a person, donor, supporter, company or organization in the CRM: who they are to us, their history with us (emails, forms, messages), their gifts, and the people at an organization.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'hub_guide', description: 'Where something is in the Hub and how it works: the page, its link, what it is for, and whether this person can open it. Use for "where do I...", "how do I...", "what can the Hub do".', input_schema: { type: 'object', properties: { topic: { type: 'string' } } } }
+];
+async function runLookup(name, input, f, today) {
+  try {
+    if (name === 'look_up_request') return LOOKUP_DONE(await lookRequest(input || {}, f));
+    if (name === 'look_up_task') return LOOKUP_DONE(await lookTask(input || {}, f));
+    if (name === 'project_report') return LOOKUP_DONE(await lookProject(input || {}, f, today));
+    if (name === 'volunteer_events') return LOOKUP_DONE(await lookEvents(input || {}, f, today));
+    if (name === 'crm_lookup') return LOOKUP_DONE(await lookCrm(input || {}, f));
+    if (name === 'hub_guide') return LOOKUP_DONE(await lookGuide(input || {}, f));
+  } catch (e) { return 'The look-up failed: ' + String(e).slice(0, 120); }
+  return 'Unknown look-up.';
+}
+
+/* ---------- v17 (wave324): more actions, each behind a Confirm card ----------
+   send_slack_message: Steel (12/11/26) chose "From WA HUB, after Confirm": a direct message from the WA HUB app that names who
+   asked, to people on the team list only, sent only after the card shows the exact words and they press Confirm. Ten a day per
+   person. The words are never stored by the Hub (change_log keeps who to whom). update_task and add_subtasks help people move
+   their own work along; request_access files the same access request the Hub's own Request access button files. */
+const SEND_SLACK_TOOL = { name: 'send_slack_message', description: 'PROPOSE a Slack direct message from the WA HUB app to one person on the team list, ONLY when the latest user message asks to message, tell, ping or remind someone. The message says who asked. Write the words the user wants sent, in their voice, short and plain; never add facts they did not give. The user sees the exact words and confirms before it goes.', input_schema: { type: 'object', properties: { to: { type: 'string', description: 'The person\'s name from TEAM MEMBERS.' }, message: { type: 'string', description: 'The exact words to send, at most 600 characters.' } }, required: ['to', 'message'] } };
+const UPDATE_TASK_TOOL = { name: 'update_task', description: 'PROPOSE changing one open task: a new due date, a new owner, or a note added to its comments. ONLY when the latest user message asks. task_id from a task list or look_up_task.', input_schema: { type: 'object', properties: { task_id: { type: 'integer' }, title: { type: 'string', description: 'The task title, copied.' }, due_date: { type: 'string', description: 'YYYY-MM-DD' }, owner: { type: 'string', description: 'A name from TEAM MEMBERS.' }, note: { type: 'string', description: 'A comment to add, in the user\'s words.' } }, required: ['task_id'] } };
+const ADD_SUBTASKS_TOOL = { name: 'add_subtasks', description: 'PROPOSE breaking one open task into smaller steps (subtasks), when the user asks for help getting a task done and agrees to the steps, or asks to add steps. At most 8 short, startable steps.', input_schema: { type: 'object', properties: { task_id: { type: 'integer' }, title: { type: 'string', description: 'The parent task title, copied.' }, steps: { type: 'array', items: { type: 'string' } } }, required: ['task_id', 'steps'] } };
+const REQUEST_ACCESS_TOOL = { name: 'request_access', description: 'PROPOSE asking the admins for access to one Hub page this person cannot open yet (hub_guide says which). ONLY when they ask for it or agree to it.', input_schema: { type: 'object', properties: { page: { type: 'string', description: 'The page key, for example crm or volunteering.' }, reason: { type: 'string', description: 'One line, from what they said.' } }, required: ['page'] } };
+const MORE_ACTION_TOOLS = [SEND_SLACK_TOOL, UPDATE_TASK_TOOL, ADD_SUBTASKS_TOOL, REQUEST_ACCESS_TOOL];
+const SLACK_DAILY = 10;
+
+async function rosterPeople() {
+  const { data } = await svc.from('team_members').select('id,name,email,department,active').eq('active', true);
+  return (data || []).filter((m)=>m.active === true && m.name && /@welfareavenue\.com$/i.test(String(m.email || '').trim()));
+}
+/* one person on the team list from a name as typed: the full name, else a unique first name */
+async function personNamed(name) {
+  const n = fold(name).replace(/[^a-z\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!n) return { error: 'say who it is for' };
+  const ppl = await rosterPeople();
+  let hit = ppl.filter((m)=>fold(m.name).replace(/\s+/g, ' ').trim() === n);
+  if (!hit.length) hit = ppl.filter((m)=>fold(m.name).split(/\s+/)[0] === n.split(' ')[0] && (n.split(' ').length === 1 || fold(m.name).indexOf(n.split(' ').slice(-1)[0]) >= 0));
+  if (hit.length === 1) return { person: hit[0] };
+  if (hit.length > 1) return { error: 'more than one person is called ' + name + ': ' + hit.map((m)=>m.name).join(', ') };
+  return { error: name + ' is not on the team list with a Welfare Avenue account' };
+}
+async function openTask(id) {
+  const tid = Number(id);
+  if (!Number.isInteger(tid) || tid <= 0) return { error: 'invalid task_id' };
+  const { data: t } = await svc.from('dept_tasks').select('*').eq('id', tid).maybeSingle();
+  if (!t || !taskOpenOk(t)) return { error: 'task not found' };
+  if (t.done === true) return { error: 'that task is already closed' };
+  return { task: t };
+}
+/* checked when the model proposes, so the card names real people and real tasks; checked again when it runs */
+async function checkProposal(name, input, f) {
+  const i = Object.assign({}, input || {});
+  if (name === 'send_slack_message') {
+    const msg = String(i.message || '').trim();
+    if (!msg) return { error: 'the message is empty' };
+    if (msg.length > 600) return { error: 'keep the message under 600 characters' };
+    if (confHit(msg)) return { error: 'that message touches a topic the Hub does not carry; they can send it themselves' };
+    const p = await personNamed(i.to);
+    if (p.error) return { error: p.error };
+    i.to = p.person.name; i.message = msg;
+    return { input: i };
+  }
+  if (name === 'update_task' || name === 'add_subtasks') {
+    const o = await openTask(i.task_id);
+    if (o.error) return { error: o.error };
+    i.title = o.task.title;
+    if (name === 'update_task') {
+      if (i.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(String(i.due_date))) return { error: 'the due date must be YYYY-MM-DD' };
+      if (i.owner) { const p = await personNamed(i.owner); if (p.error) return { error: p.error }; i.owner = p.person.name; }
+      if (i.note && confHit(i.note)) return { error: 'that note touches a topic the Hub does not carry' };
+      if (!i.due_date && !i.owner && !String(i.note || '').trim()) return { error: 'nothing to change' };
+    } else {
+      const steps = (Array.isArray(i.steps) ? i.steps : []).map((s)=>String(s || '').trim().slice(0, 200)).filter((s)=>s && !confHit(s)).slice(0, 8);
+      if (!steps.length) return { error: 'no steps given' };
+      i.steps = steps;
+    }
+    return { input: i };
+  }
+  if (name === 'request_access') {
+    const k = String(i.page || '').toLowerCase().replace(/^#/, '').trim();
+    if (!PAGE_LABEL[k]) return { error: 'unknown page ' + i.page };
+    if (canPage(f, k)) return { error: 'they can already open ' + PAGE_LABEL[k] };
+    i.page = k;
+    return { input: i };
+  }
+  return { input: i };
+}
+async function doSendSlack(input, rq) {
+  const email = String((rq && rq.email) || '');
+  const me = await askerOf(email);
+  if (!me) return { error: 'only someone on the team list can send a message through the Hub' };
+  const chk = await checkProposal('send_slack_message', input, null);
+  if (chk.error) return { error: chk.error };
+  const p = await personNamed(chk.input.to);
+  if (p.error) return { error: p.error };
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count } = await svc.from('change_log').select('id', { count: 'exact', head: true }).eq('entity_type', 'ask_slack_message').eq('field', 'sent').ilike('changed_by', '%' + email + '%').gte('changed_at', since);
+  if ((count || 0) >= SLACK_DAILY) return { error: 'that is ' + SLACK_DAILY + ' messages through the Hub today; send this one yourself' };
+  const token = await getSecret('SLACK_BOT_TOKEN');
+  if (!token) return { error: 'the Hub is not connected to Slack' };
+  const toEmail = String(p.person.email).trim().toLowerCase();
+  let sid = '';
+  try { const { data } = await svc.from('wa_slack_ids').select('slack_id').eq('email', toEmail).maybeSingle(); sid = (data && data.slack_id) || ''; } catch (_) {}
+  const api = (Deno.env.get('SLACK_API_BASE') || 'https://slack.com/api');
+  const call = async (method, body)=>{ const r = await fetch(api + '/' + method, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(body) }); return await r.json().catch(()=>({ ok: false })); };
+  if (!sid) {
+    try { const r = await fetch(api + '/users.lookupByEmail?email=' + encodeURIComponent(toEmail), { headers: { Authorization: 'Bearer ' + token } }); const b = await r.json(); if (b && b.ok && b.user && b.user.id) sid = b.user.id; } catch (_) {}
+  }
+  if (!sid) return { error: 'I could not find ' + p.person.name + ' on Slack' };
+  const first = me.name.split(/\s+/)[0];
+  const quoted = chk.input.message.replace(/[<>]/g, '').split('\n').map((l)=>'>' + (l ? ' ' + l : '')).join('\n');
+  const text = '*' + me.name + '* asked me to pass this on:\n' + quoted + '\n_Sent by the Hub for ' + first + '. Reply to ' + first + ' directly._';
+  const open = await call('conversations.open', { users: sid });
+  if (!open || !open.ok || !open.channel) return { error: 'Slack would not open a conversation with ' + p.person.name };
+  const post = await call('chat.postMessage', { channel: open.channel.id, text, unfurl_links: false, unfurl_media: false });
+  if (!post || !post.ok) return { error: 'Slack did not take the message (' + String((post && post.error) || 'unknown') + ')' };
+  await svc.from('change_log').insert({ entity_type: 'ask_slack_message', entity_id: toEmail, field: 'sent', old_value: null, new_value: 'to ' + p.person.name, changed_by: 'Chat (' + email + (rq && rq.via ? ' via ' + rq.via : '') + ')' });
+  return { ok: true, detail: 'Sent to ' + p.person.name + ' on Slack, from WA HUB with your name on it.' };
+}
+async function doUpdateTask(input, rq) {
+  const me = await askerOf(String((rq && rq.email) || ''));
+  const chk = await checkProposal('update_task', input, null);
+  if (chk.error) return { error: chk.error };
+  const i = chk.input, o = await openTask(i.task_id), t = o.task;
+  const by = 'Chat (' + ((rq && rq.who) || 'someone') + ((rq && rq.via) ? ' via ' + rq.via : '') + ')';
+  const patch = {}, done = [];
+  if (i.due_date && i.due_date !== t.due_date) { patch.due_date = i.due_date; done.push('due ' + i.due_date); }
+  if (i.owner && i.owner !== t.owner) { patch.owner = i.owner; done.push('owner ' + i.owner); }
+  if (Object.keys(patch).length) {
+    patch.updated_at = new Date().toISOString(); patch.updated_by = by;
+    const { error } = await svc.from('dept_tasks').update(patch).eq('id', t.id).eq('done', false);
+    if (error) return { error: 'update failed: ' + error.message };
+    for (const k of Object.keys(patch)) { if (k === 'updated_at' || k === 'updated_by') continue; await svc.from('change_log').insert({ entity_type: 'task', entity_id: String(t.id), field: k, old_value: t[k] == null ? null : String(t[k]), new_value: String(patch[k]), changed_by: by }); }
+  }
+  const note = String(i.note || '').trim().slice(0, 800);
+  if (note) {
+    const { error } = await svc.from('task_comments').insert({ task_id: t.id, body: note, author: (me && me.name) || by, source: 'ask' });
+    if (error) return { error: 'the note could not be saved: ' + error.message };
+    done.push('a note added');
+  }
+  return { ok: true, detail: 'Updated "' + t.title + '": ' + (done.join(', ') || 'nothing needed changing') + '.' };
+}
+async function doAddSubtasks(input, rq) {
+  const chk = await checkProposal('add_subtasks', input, null);
+  if (chk.error) return { error: chk.error };
+  const t = (await openTask(chk.input.task_id)).task;
+  const by = 'Chat (' + ((rq && rq.who) || 'someone') + ((rq && rq.via) ? ' via ' + rq.via : '') + ')';
+  const now = new Date().toISOString();
+  const rows = chk.input.steps.map((s)=>({ department: t.department, subsection: t.subsection || null, title: s, owner: t.owner || null, status: 'Open', flag: false, priority: false, done: false, sort: 999, due_date: null, project_id: t.project_id || null, parent_task_id: t.id, updated_by: by, opened_at: now, updated_at: now, visibility: t.visibility || null }));
+  const { error } = await svc.from('dept_tasks').insert(rows);
+  if (error) return { error: 'could not add the steps: ' + error.message };
+  await svc.from('change_log').insert({ entity_type: 'task', entity_id: String(t.id), field: 'subtasks', old_value: null, new_value: rows.length + ' added from the chat', changed_by: by });
+  return { ok: true, detail: 'Added ' + rows.length + ' step' + (rows.length === 1 ? '' : 's') + ' under "' + t.title + '".' };
+}
+async function doRequestAccess(input, rq) {
+  const email = String((rq && rq.email) || '');
+  const me = await askerOf(email);
+  if (!me) return { error: 'only someone on the team list can ask for access here' };
+  const f = await accessFacts(email);
+  const chk = await checkProposal('request_access', input, f);
+  if (chk.error) return { error: chk.error };
+  const k = chk.input.page;
+  const { data: open } = await svc.from('wa_access_requests').select('id').eq('email', email).eq('wanted', 'tab:' + k).eq('status', 'new').limit(1);
+  if ((open || []).length) return { ok: true, detail: 'Already asked: ' + PAGE_LABEL[k] + ' is waiting for an admin.' };
+  const reason = String(chk.input.reason || '').trim().slice(0, 240);
+  const { error } = await svc.from('wa_access_requests').insert({ email, name: me.name, role_now: f.role || 'member', wanted: 'tab:' + k, reason: reason ? 'Asked Ask the Hub: ' + reason : 'From Ask the Hub', status: 'new' });
+  if (error) return { error: 'could not file it: ' + error.message };
+  try {
+    const secret = await getSecret('WA_TRIGGER_SECRET');
+    if (secret) await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(secret) }, body: JSON.stringify({ event: 'change_request_text', text: ':key: Access request from ' + me.name + ': tab:' + k + ' (' + PAGE_LABEL[k] + '), from Ask the Hub. Review in Admin > Access requests.' }) });
+  } catch (_) {}
+  return { ok: true, detail: 'Asked the admins for ' + PAGE_LABEL[k] + '. You will see it the next time you open the Hub once it is granted.' };
+}
+
 /* v16: what belongs to one request travels with it as rq = { auth, who, via }, never in a shared variable. Two people asking at
    the same moment used to share ASK_AUTH and ASK_WHO, so one person's sign-in could have been used for the other's meeting
    search. auth: the asker's own Authorization header ('' on the trusted path), for what runs as them (wa_ask_meetings,
@@ -530,6 +1009,10 @@ function summarize(name, input) {
   if (name === 'bank_task') return 'Move to the bank: ' + (input.title || 'task #' + input.task_id) + (input.bank_until ? ' (back ' + input.bank_until + ')' : '');
   if (name === 'complete_request') return 'Mark request #' + input.request_id + ' as done';
   if (name === 'set_request_status') return 'Set request #' + input.request_id + ' to "' + input.status + '"';
+  if (name === 'send_slack_message') return 'Send ' + input.to + ' a Slack message from WA HUB, with your name on it: "' + String(input.message || '') + '"';
+  if (name === 'update_task') return 'Update "' + (input.title || 'task #' + input.task_id) + '"' + [input.due_date ? ' due ' + input.due_date : '', input.owner ? ' owner ' + input.owner : '', input.note ? ' add the note: "' + input.note + '"' : ''].filter(Boolean).join(',');
+  if (name === 'add_subtasks') return 'Add ' + (input.steps || []).length + ' steps under "' + (input.title || 'task #' + input.task_id) + '": ' + (input.steps || []).map((x, n)=>(n + 1) + '. ' + x).join(' ');
+  if (name === 'request_access') return 'Ask the admins for access to ' + (PAGE_LABEL[input.page] || input.page) + (input.reason ? ' (' + input.reason + ')' : '');
   return name;
 }
 // ---- executors (run ONLY on the confirmed execute path) ----
@@ -798,6 +1281,10 @@ async function execAction(name, input, caller, isBoard, rq) {
     if (name === 'set_request_status') return await doSetRequestStatus(input, caller);
     if (name === 'create_request') return await doCreateRequest(input, caller);
     if (name === 'create_task') return await doCreateTask(input, caller);
+    if (name === 'send_slack_message') return await doSendSlack(input, rq);
+    if (name === 'update_task') return await doUpdateTask(input, rq);
+    if (name === 'add_subtasks') return await doAddSubtasks(input, rq);
+    if (name === 'request_access') return await doRequestAccess(input, rq);
     return {
       error: 'unknown action ' + name
     };
@@ -816,7 +1303,7 @@ function pickAnswer(content) {
     sources: Array.isArray(inp.sources) ? inp.sources.filter((s)=>typeof s === 'string').slice(0, 10) : []
   };
 }
-async function runAgent(history, context, question, rq) {
+async function runAgent(history, context, question, rq, facts) {
   const key = 'hub-router';
   const orKey = await getSecret('OPENROUTER_API_KEY');
   if (!key && !orKey) throw new Error('no model API key configured');
@@ -828,17 +1315,25 @@ async function runAgent(history, context, question, rq) {
       content: finalUser
     }
   ];
-  /* v16: banking runs as the signed-in person, so it is not offered where there is no sign-in of theirs (Slack) */
+  /* v16: banking runs as the signed-in person, so it is not offered where there is no sign-in of theirs (Slack).
+     v17: the look-ups only for someone the Hub counts as staff; Slack messages and access requests only for a named person */
+  const staff = !!(facts && facts.staff === true);
+  const named = !!(rq && rq.email);
   const allTools = [
     ANSWER_TOOL,
-    ...ACTION_TOOLS.filter((t)=>!(rq && rq.via && t.name === 'bank_task'))
+    ...(staff ? LOOKUP_TOOLS : []),
+    ...ACTION_TOOLS.filter((t)=>!(rq && rq.via && t.name === 'bank_task')),
+    ...MORE_ACTION_TOOLS.filter((t)=>named && (staff || t.name === 'request_access'))
   ];
+  const lookupNames = LOOKUP_TOOLS.map((t)=>t.name);
+  const today = torontoToday().iso;
   const proposals = [];
-  for(let round = 0; round < 2; round++){
+  let lookups = 0;
+  for(let round = 0; round < 4; round++){
     const body = await callModel(key, orKey, messages, allTools, { type: 'auto' }, rq);
     const content = body.content || [];
-    const actions = content.filter((c)=>c.type === 'tool_use' && c.name !== 'answer_question');
-    if (!actions.length) {
+    const others = content.filter((c)=>c.type === 'tool_use' && c.name !== 'answer_question');
+    if (!others.length) {
       const ans = pickAnswer(content);
       if (ans) return {
         ...ans,
@@ -850,25 +1345,31 @@ async function runAgent(history, context, question, rq) {
     for (const block of content){
       if (block.type !== 'tool_use') continue;
       if (block.name === 'answer_question') {
-        results.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: 'Noted. Give the final answer again after the proposals are captured.'
-        });
+        results.push({ type: 'tool_result', tool_use_id: block.id, content: 'Noted. Give the final answer again once you have what you need.' });
+        continue;
+      }
+      if (lookupNames.indexOf(block.name) >= 0) {
+        if (!staff || lookups >= 6) {
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: staff ? 'Look-up limit reached for this question: answer with what you have.' : 'NOT ALLOWED.', is_error: true });
+          continue;
+        }
+        lookups++;
+        results.push({ type: 'tool_result', tool_use_id: block.id, content: await runLookup(String(block.name), block.input || {}, facts, today) || 'Nothing found.' });
         continue;
       }
       if (proposals.length >= 4) {
-        results.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify({
-            error: 'proposal limit reached for this message'
-          }),
-          is_error: true
-        });
+        results.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ error: 'proposal limit reached for this message' }), is_error: true });
         continue;
       }
-      const input = block.input || {};
+      let input = block.input || {};
+      if (MORE_ACTION_TOOLS.some((t)=>t.name === block.name)) {
+        const chk = await checkProposal(String(block.name), input, facts);
+        if (chk.error) {
+          results.push({ type: 'tool_result', tool_use_id: block.id, content: 'Not proposed: ' + chk.error + '. Tell the user plainly.', is_error: true });
+          continue;
+        }
+        input = chk.input;
+      }
       proposals.push({
         name: String(block.name),
         input,
@@ -877,7 +1378,7 @@ async function runAgent(history, context, question, rq) {
       results.push({
         type: 'tool_result',
         tool_use_id: block.id,
-        content: 'Captured as a pending action. The user will see a confirmation card in the dashboard and it only runs if they confirm. Do not describe it as done; tell them it is ready to confirm below.'
+        content: 'Captured as a pending action. The user will see a confirmation card and it only runs if they confirm. Do not describe it as done; tell them it is ready to confirm below.'
       });
     }
     messages.push({
@@ -1354,7 +1855,8 @@ Deno.serve(async (req)=>{
   const rq = {
     auth: (auth && auth.via) ? '' : (req.headers.get('Authorization') || ''),
     who: (auth && auth.ok && auth.who) ? String(auth.who).toLowerCase().slice(0, 80) : '',
-    via: (auth && auth.ok && auth.via) ? String(auth.via) : ''
+    via: (auth && auth.ok && auth.via) ? String(auth.via) : '',
+    email: (auth && auth.ok && auth.email) ? String(auth.email).toLowerCase() : ''
   };
   if (!auth.ok) return json({
     error: 'unauthorized'
@@ -1390,7 +1892,8 @@ Deno.serve(async (req)=>{
     const acc = await storyAccess(auth.email, isBoard);
     const asker = await askerOf(auth.email);
     const context = await buildContext(question, isBoard, acc, asker, rq);
-    const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question, rq);
+    const facts = await accessFacts(rq.email);
+    const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question, rq, facts);
     const answer = finishAnswer(out.answer, out.proposals);
     const conf = answer === CONF_ANSWER;
     return json({

@@ -13,6 +13,8 @@
 //   Confirm, do it / Cancel          -> the buttons under a card (interactivity)
 //   A new chat in Slack's side panel -> four ways to start, when the app has that panel (assistant_thread_started)
 //
+// wave324 (v2c): the new actions (a Slack message from WA HUB, task changes, subtasks, access) arrive as cards like the others; a
+// Slack message's card keeps only who it is for once decided.
 // WHO: the Slack account is matched to an active roster person by email (wa_slack_ids, else the email on their Slack profile),
 // and that email must be a Welfare Avenue account, the rule Ask the Hub has in the Hub. Nobody else gets an answer from any
 // command here, /hub project included, and names are never guessed from a display name. The question then goes to the ask
@@ -374,7 +376,9 @@ async function deliver(out, member, slackUser, send) {
   const props = Array.isArray(out.proposals) ? out.proposals.slice(0, 4) : [];
   for (const p of props) {
     if (!p || !p.name || p.name === 'bank_task') continue;
-    const { data, error } = await svc.from('slack_ask_pending').insert({ slack_user: slackUser, email: member.email, name: String(p.name), input: p.input || {}, summary: String(p.summary || p.name).slice(0, 400) }).select('id').maybeSingle();
+    /* wave324: a Slack message's words wait only in input, which is wiped once the card is decided; the kept summary names the person only */
+    const keep = p.name === 'send_slack_message' ? 'Send ' + String((p.input && p.input.to) || 'someone') + ' a Slack message' : String(p.summary || p.name);
+    const { data, error } = await svc.from('slack_ask_pending').insert({ slack_user: slackUser, email: member.email, name: String(p.name), input: p.input || {}, summary: keep.slice(0, 400) }).select('id').maybeSingle();
     if (error || !data) { await send({ text: 'I could not set up the card for "' + esc(String(p.summary || p.name).slice(0, 200)) + '". Ask me again, or do it in <' + SITE + '|the Hub>.' }); continue; }
     await send({ text: 'To confirm: ' + String(p.summary || p.name).slice(0, 300), blocks: cardBlocks(p, data.id) });
   }

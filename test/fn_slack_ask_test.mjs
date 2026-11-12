@@ -101,6 +101,8 @@ async function stage(over) {
     [(u) => u.indexOf(SLACK + '/users.info') === 0, async (u) => { const id = new URL(u).searchParams.get('user'); return slackState.info[id] ? { ok: true, user: slackState.info[id] } : { ok: false, error: 'user_not_found' }; }],
     [(u) => u === SLACK + '/auth.test', async () => ({ ok: true, team_id: TEAM, user_id: 'UBOTSELF' })],
     [(u) => u.indexOf(SLACK + '/assistant.') === 0, async () => ({ ok: true })],
+    [(u) => u.indexOf(SLACK + '/conversations.open') === 0, async (_u, init) => ({ ok: true, channel: { id: 'DTO' + (JSON.parse(init.body || '{}').users || '') } })],
+    [(u) => u.indexOf(SLACK + '/users.lookupByEmail') === 0, async () => ({ ok: false, error: 'users_not_found' })],
     [(u) => u.indexOf(SLACK + '/chat.') === 0, async () => ({ ok: true, ts: '17000000' + (slackState.ts++) + '.000100', channel: 'D1' })],
     [(u) => u.indexOf(HOOK) === 0, async () => new Response('ok', { status: 200 })]
   ], calls);
@@ -498,6 +500,113 @@ const allText = (db) => JSON.stringify(db.tables);
   const s2 = await stage({ secrets: { SLACK_SIGNING_SECRET: ' sign-secret\n' } });
   r = await s2.post('{"type":"url_verification","challenge":"xyz789"}', 'application/json');
   ok('secret: a pasted secret with a stray space or line break still verifies', r.status === 200 && r.text === 'xyz789');
+}
+
+
+/* =================== I. wave324: looking things up, and the new actions =================== */
+{
+  const s = await stage();
+  const T = s.db.tables;
+  const FACTS = {
+    'ann@welfareavenue.com': { email: 'ann@welfareavenue.com', staff: true, role: 'member', leader: false, board_viewer: false, pages: { requests: true, projects: true, volunteering: true, toronto: true, crm: true, partners: true, training: true, hr: false } },
+    'joanna@welfareavenue.com': { email: 'joanna@welfareavenue.com', staff: true, role: 'member', leader: false, board_viewer: false, pages: { requests: true, projects: true, volunteering: false, toronto: false, crm: false, partners: false, training: true } }
+  };
+  s.db.rpc.wa_ask_access = (a) => FACTS[a.p_email] || { email: a.p_email, staff: false, pages: {} };
+  Object.assign(T, {
+    volunteer_events: [{ id: 70, code: 'WA-1', event_date: day(3), location: 'Montreal', status: 'planned', kind: 'service', title: 'Sunday serving', start_time: '12:00:00', spot_counts: { cook: 2, server: 3 } }],
+    event_roster: [
+      { id: 1, event_id: 70, person_name: 'Mia Cook', role: 'cook', status: 'Confirmed', confirm_status: 'confirmed', detail: { phone: '5145550000' } },
+      { id: 2, event_id: 70, person_name: 'Leo Serve', role: 'server', status: 'TBD', confirm_status: null },
+      { id: 3, event_id: 70, person_name: 'Ivy Away', role: 'server', status: 'Unavailable', confirm_status: 'declined' },
+      { id: 4, event_id: 70, person_name: 'Gus Gone', role: 'server', status: 'Cancelled', confirm_status: null }
+    ],
+    crm_contacts: [{ id: 400, full_name: 'Rita Donor', kinds: ['donor'], tags: [], organization: 'Maple Co', city: 'Montreal', do_not_contact: false, last_activity_at: '2026-11-01T00:00:00Z', merged_into: null, emails: ['rita@maple.example'] }],
+    crm_interactions: [{ id: 1, contact_id: 400, kind: 'email', direction: 'out', subject: 'Thank you', body: 'Thanks Rita, write to rita@maple.example', occurred_at: '2026-10-30T00:00:00Z' }],
+    crm_donations: [{ id: 1, contact_id: 400, amount: 50, donated_at: '2026-10-29T00:00:00Z', campaign: 'Gift drive', recurring: false }],
+    crm_contact_orgs: [], wa_partners: [{ id: 9, name: 'Maple Co', category: 'sponsor', status: 'active', kind: 'business', visibility: 'everyone' }],
+    request_notes: [{ id: 1, request_id: 30, author: 'Joanna', body: 'Draft by Thursday', created_at: '2026-11-05T00:00:00Z' }],
+    task_comments: [{ id: 1, task_id: 2, body: 'Use the October photos', author: 'Joanna', created_at: '2026-11-04T00:00:00Z', visibility: null }, { id: 2, task_id: 2, body: 'Steel is stepping down soon', author: 'X', created_at: '2026-11-04T00:00:00Z', visibility: null }],
+    trainings: [{ id: 1, key: 'tour:requests', kind: 'tour', active: true, title: 'Page tour: Requests', description: 'Ask another team for something and follow it.', body: { tab: 'requests' } }],
+    wa_access_requests: []
+  });
+  T.dept_requests[0].details = { item: 'A3 poster', 'Email': 'someone@example.org', context: 'For Sunday' };
+  T.request_types.push({ key: 'design', label: 'Design request', fields: [{ name: 'item', label: 'Item to design' }, { name: 'context', label: 'Context and details' }], statuses: ['requested', 'done'] });
+  T.request_types.splice(0, 1);
+  T.request_types[0].enabled = true; T.request_types[0].department = 'marketing'; T.request_types[0].sort = 1;
+  T.dept_tasks.find((x) => x.id === 2).project_id = 50; T.dept_tasks.find((x) => x.id === 1).project_id = 50;
+  T.dept_tasks.push({ id: 15, department: 'marketing', title: 'Old banner', owner: 'Ann', done: true, closed_at: new Date().toISOString(), project_id: 50, board_only: false, confidential: false, visibility: null, banked_at: null });
+
+  /* a model that looks things up, then answers */
+  const script = (calls) => { let n = 0; s.llm.fn = (body) => { if (body.tool_choice && body.tool_choice.type === 'tool') return answerCall('Done looking.', []); const c = calls[n++]; return c ? { content: c } : answerCall('Here is what I found.', []); }; };
+  const toolResults = () => s.llm.seen.map((x) => JSON.stringify(x.json.messages[x.json.messages.length - 1].content)).join('\n');
+  script([[{ type: 'tool_use', id: 'l1', name: 'volunteer_events', input: { date: day(3) } }, { type: 'tool_use', id: 'l2', name: 'crm_lookup', input: { name: 'Rita Donor' } }]]);
+  let r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { question: 'Who is confirmed for Sunday, and what is our history with Rita Donor?' });
+  let tr = toolResults();
+  const tools0 = s.llm.seen[0].json.tools.map((x) => x.name);
+  ok('look-ups: offered to staff, with the new actions', ['look_up_request', 'project_report', 'volunteer_events', 'crm_lookup', 'hub_guide', 'send_slack_message', 'update_task', 'add_subtasks', 'request_access'].every((n) => tools0.indexOf(n) >= 0), tools0);
+  ok('look-ups: the event, by state and role, against the spots', r.status === 200 && /Confirmed: 1\. Waiting for an answer: 1\. Cannot make it: 1/.test(tr) && /Mia Cook \(cook\)/.test(tr) && /Leo Serve \(server\)/.test(tr) && /servers 0 confirmed of 2 \(spots: 3, 3 still to fill\)/.test(tr), tr.slice(0, 1500));
+  ok('look-ups: a cancelled spot is left out, and no phone number', tr.indexOf('Gus Gone') < 0 && tr.indexOf('5145550000') < 0);
+  ok('look-ups: the CRM card, gifts and history, with emails taken out', /CONTACT: Rita Donor/.test(tr) && /Gifts: 1, \$50\.00/.test(tr) && /Thank you/.test(tr) && tr.indexOf('rita@maple.example') < 0 && /ORGANIZATION: Maple Co/.test(tr), tr.slice(0, 2500));
+  ok('look-ups: the answer still comes back', r.json.answer === 'Here is what I found.');
+
+  s.reset();
+  script([[{ type: 'tool_use', id: 'l1', name: 'volunteer_events', input: {} }, { type: 'tool_use', id: 'l2', name: 'crm_lookup', input: { name: 'Rita' } }]]);
+  await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'joanna@welfareavenue.com' }), { question: 'Who is coming Sunday and who is Rita?' });
+  tr = toolResults();
+  ok('look-ups: without the Volunteer Manager or the CRM, NOT ALLOWED and nothing else', (tr.match(/NOT ALLOWED/g) || []).length === 2 && tr.indexOf('Mia Cook') < 0 && tr.indexOf('Rita Donor') < 0, tr.slice(0, 800));
+
+  s.reset();
+  script([[{ type: 'tool_use', id: 'l1', name: 'look_up_request', input: { request_id: 30 } }, { type: 'tool_use', id: 'l2', name: 'look_up_request', input: { request_id: 32 } }, { type: 'tool_use', id: 'l3', name: 'look_up_task', input: { task_id: 2 } }, { type: 'tool_use', id: 'l4', name: 'project_report', input: { project: 'community kitchen' } }, { type: 'tool_use', id: 'l5', name: 'hub_guide', input: { topic: 'requests' } }]]);
+  await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { question: 'Tell me about the poster request' });
+  tr = toolResults();
+  ok('look-ups: a request in full, its form labelled, its notes, no email field', /REQUEST 30: Poster for Sunday/.test(tr) && /Item to design: A3 poster/.test(tr) && /Draft by Thursday/.test(tr) && tr.indexOf('someone@example.org') < 0, tr.slice(0, 1200));
+  ok('look-ups: time off is never shown', tr.indexOf('Time away') < 0 && /never shown here/.test(tr));
+  ok('look-ups: a task with its comments, an off-limits comment dropped', /TASK 2: Draft the newsletter/.test(tr) && /Use the October photos/.test(tr) && tr.indexOf('stepping down') < 0);
+  ok('look-ups: a project report counts done, open and late', /PROJECT REPORT: Community Kitchen/.test(tr) && /Tasks: 4 in all, 1 done \(25%\), 3 open, 1 past their date/.test(tr), (tr.match(/PROJECT REPORT[^"]{0,400}/) || [''])[0]);
+  ok('look-ups: the guide names the page, its link and the access', /Requests \(link: #requests\): they can open it/.test(tr));
+  ok('look-ups: the prompt explains the look-ups and the abilities', /LOOKING THINGS UP/.test(s.llm.seen[0].json.system) && /WHAT YOU CAN DO/.test(s.llm.seen[0].json.system));
+
+  s.reset();
+  script([[1, 2, 3, 4, 5, 6, 7].map((i) => ({ type: 'tool_use', id: 'k' + i, name: 'hub_guide', input: { topic: 'crm' } }))]);
+  await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { question: 'where is everything' });
+  ok('look-ups: at most six a question', /Look-up limit reached/.test(toolResults()));
+
+  s.reset();
+  r = await s.askDirect({ 'x-wa-secret': 'trigger-secret', Authorization: 'Bearer service-key' }, { question: 'hello' });
+  ok('look-ups: never offered without a person', !s.llm.seen[0].json.tools.some((x) => x.name === 'crm_lookup' || x.name === 'send_slack_message'));
+
+  /* a Slack message: proposed with the exact words, sent only on Confirm, from WA HUB, naming who asked */
+  s.reset();
+  script([[{ type: 'tool_use', id: 'm1', name: 'send_slack_message', input: { to: 'joanna', message: 'Can you send me the reel draft by Friday?' } }, { type: 'tool_use', id: 'm2', name: 'send_slack_message', input: { to: 'Nobody Here', message: 'hi' } }, { type: 'tool_use', id: 'm3', name: 'send_slack_message', input: { to: 'Joanna', message: 'Steel is stepping down, keep it quiet' } }]]);
+  await s.dm('UANN', 'Ping Joanna for the reel draft by Friday');
+  const cards = s.slackCalls('chat.postMessage').filter((p) => (p.json.blocks || []).some((b) => b.type === 'actions'));
+  tr = toolResults();
+  ok('slack message: one card, with the real name and the exact words', cards.length === 1 && /Send Joanna Park a Slack message from WA HUB, with your name on it: "Can you send me the reel draft by Friday\?"/.test(cards[0].json.blocks[0].text.text), cards.map((c) => c.json.blocks[0].text.text));
+  ok('slack message: someone not on the team list, or off-limits words, are not proposed', /Not proposed: Nobody Here is not on the team list/.test(tr) && /Not proposed: that message touches a topic/.test(tr));
+  ok('slack message: nothing sent before Confirm', s.slackCalls('conversations.open').length === 0);
+  const pend = T.slack_ask_pending.find((p) => p.name === 'send_slack_message');
+  s.reset();
+  await s.click('UANN', 'hub_confirm', String(pend.id), 51);
+  const sent = s.slackCalls('chat.postMessage');
+  ok('slack message: on Confirm, a direct message to Joanna from WA HUB that names Ann', s.slackCalls('conversations.open').length === 1 && s.slackCalls('conversations.open')[0].json.users === 'UJO' && sent.length === 1 && sent[0].json.channel === 'DTOUJO' && /^\*Ann Lee\* asked me to pass this on:\n> Can you send me the reel draft by Friday\?\n_Sent by the Hub for Ann\. Reply to Ann directly\._$/.test(sent[0].json.text), sent.map((x) => x.json));
+  ok('slack message: the card says it went', /:white_check_mark: Sent to Joanna Park on Slack/.test(s.hooks()[0].json.text));
+  ok('slack message: the log says who to whom, never the words', T.change_log.some((c) => c.entity_type === 'ask_slack_message' && c.new_value === 'to Joanna Park') && allText(s.db).indexOf('reel draft by Friday') < 0);
+  for (let i = 0; i < 10; i++) T.change_log.push({ entity_type: 'ask_slack_message', field: 'sent', entity_id: 'x', changed_by: 'Chat (ann@welfareavenue.com via slack)', changed_at: new Date().toISOString() });
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { execute: { name: 'send_slack_message', input: { to: 'Joanna Park', message: 'one more' } } });
+  ok('slack message: ten a day, then a plain no', /10 messages through the Hub today/.test(r.json.executed.error || ''), r.json);
+
+  /* task help */
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { execute: { name: 'update_task', input: { task_id: 2, due_date: '2026-12-01', note: 'Waiting on photos' } } });
+  const t2 = T.dept_tasks.find((x) => x.id === 2);
+  ok('update_task: the date moves and the note lands as a comment by Ann', r.json.executed.ok && t2.due_date === '2026-12-01' && T.task_comments.some((c) => c.task_id === 2 && c.body === 'Waiting on photos' && c.author === 'Ann Lee'), r.json);
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { execute: { name: 'update_task', input: { task_id: 5, due_date: '2026-12-01' } } });
+  ok('update_task: never a Board team or hidden task', /task not found/.test(r.json.executed.error || ''));
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { execute: { name: 'add_subtasks', input: { task_id: 2, steps: ['Pick photos', 'Write the intro'] } } });
+  ok('add_subtasks: steps under the task, same team and project', r.json.executed.ok && T.dept_tasks.filter((x) => x.parent_task_id === 2 && x.department === 'marketing' && x.project_id === 50).length === 2);
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'joanna@welfareavenue.com' }), { execute: { name: 'request_access', input: { page: 'crm', reason: 'I follow up with donors' } } });
+  ok('request_access: filed for the page they lack, and the admins are told', r.json.executed.ok && T.wa_access_requests.length === 1 && T.wa_access_requests[0].wanted === 'tab:crm' && s.calls.some((c) => c.url === SB + '/functions/v1/notify'));
+  r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'ann@welfareavenue.com' }), { execute: { name: 'request_access', input: { page: 'crm' } } });
+  ok('request_access: not for a page they can already open', /already open/.test(r.json.executed.error || ''));
 }
 
 /* =================== G. the words =================== */
