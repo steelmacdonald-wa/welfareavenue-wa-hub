@@ -545,7 +545,7 @@ async function lookEvents(input, f, today) {
     const roleLine = Object.keys(Object.assign({}, roles, sc || {})).map((k)=>{
       const need = sc && Number(sc[k]) ? Number(sc[k]) : 0; const x = roles[k] || { yes: 0, all: 0 };
       if (!need && !x.all) return '';
-      return (ROLE_LABEL[k] || k) + 's ' + x.yes + ' confirmed of ' + x.all + (need ? ' (spots: ' + need + (x.yes < need ? ', ' + (need - x.yes) + ' still to fill' : '') + ')' : '');
+      return (ROLE_LABEL[k] || k) + 's: ' + x.yes + ' confirmed, ' + x.all + ' on the list' + (need ? ', ' + need + ' spots' + (x.yes < need ? ' (' + (need - x.yes) + ' still to fill)' : ' (full)') : ', no spot count set');
     }).filter(Boolean);
     if (roleLine.length) lines.push('By role: ' + roleLine.join('; ') + '.');
     if (detail || who) {

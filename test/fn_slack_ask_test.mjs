@@ -544,7 +544,7 @@ const allText = (db) => JSON.stringify(db.tables);
   let tr = toolResults();
   const tools0 = s.llm.seen[0].json.tools.map((x) => x.name);
   ok('look-ups: offered to staff, with the new actions', ['look_up_request', 'project_report', 'volunteer_events', 'crm_lookup', 'hub_guide', 'send_slack_message', 'update_task', 'add_subtasks', 'request_access'].every((n) => tools0.indexOf(n) >= 0), tools0);
-  ok('look-ups: the event, by state and role, against the spots', r.status === 200 && /Confirmed: 1\. Waiting for an answer: 1\. Cannot make it: 1/.test(tr) && /Mia Cook \(cook\)/.test(tr) && /Leo Serve \(server\)/.test(tr) && /servers 0 confirmed of 2 \(spots: 3, 3 still to fill\)/.test(tr), tr.slice(0, 1500));
+  ok('look-ups: the event, by state and role, against the spots', r.status === 200 && /Confirmed: 1\. Waiting for an answer: 1\. Cannot make it: 1/.test(tr) && /Mia Cook \(cook\)/.test(tr) && /Leo Serve \(server\)/.test(tr) && /servers: 0 confirmed, 2 on the list, 3 spots \(3 still to fill\)/.test(tr), tr.slice(0, 1500));
   ok('look-ups: a cancelled spot is left out, and no phone number', tr.indexOf('Gus Gone') < 0 && tr.indexOf('5145550000') < 0);
   ok('look-ups: the CRM card, gifts and history, with emails taken out', /CONTACT: Rita Donor/.test(tr) && /Gifts: 1, \$50\.00/.test(tr) && /Thank you/.test(tr) && tr.indexOf('rita@maple.example') < 0 && /ORGANIZATION: Maple Co/.test(tr), tr.slice(0, 2500));
   ok('look-ups: the answer still comes back', r.json.answer === 'Here is what I found.');
