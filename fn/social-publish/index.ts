@@ -1,4 +1,4 @@
-// Welfare Avenue: social-publish (v7, 12/11/26, wave310: the approvers hear each decision and everyone involved hears when a post goes out; v6, 02/11/26, wave277 adapters and the registry; v5 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
+// Welfare Avenue: social-publish (v7, 12/11/26, wave312: the approvers hear each decision and everyone involved hears when a post goes out; v6, 02/11/26, wave277 adapters and the registry; v5 15/10/26, wave242 the notification centre; v4 15/10/26, wave241 approvals; v3 09/10/26, wave225 the Content Studio)
 // v6: each platform's publishing lives in adapters/<key>.ts (same requests as v5, now through one ctx); PUBLISHERS is a lookup.
 // v6: the platform names, the platform list and each platform's caps come from the studio_platforms registry (platforms.ts),
 //     active and inactive, so an old post naming an inactive platform still resolves; without the registry, v5's literals.
@@ -44,7 +44,7 @@
 //   {action:'confirm', days?}               match calendar entries to social_posts                 (staff or automation)
 //   {action:'preview', post_id}             what each platform would receive, sending nothing      (staff)
 //   {action:'settings', value?}             read or save the calendar settings (Slack confirmations) (staff)
-//   {action:'approval_notify', post_id, state, by?}  from the triggers trg_wa225_approval_notify and (state published) trg_wa310_post_out   (x-wa-secret)
+//   {action:'approval_notify', post_id, state, by?}  from the triggers trg_wa225_approval_notify and (state published) trg_wa312_post_out   (x-wa-secret)
 //   {action:'mark_posted', post_id, platform, url?}  a person posted it by hand                    (staff)
 //   {action:'remind_test', post_id}         what the reminder would say, sending nothing          (staff)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -191,7 +191,7 @@ async function tell(emails: string[], title: string, body: string, url: string, 
   if (hubTo.length) await hubPush(hubTo, title, body, url, tag);
   return out;
 }
-/* v7 (wave310): a person's first name for a notice, from the team list; the address's first part otherwise */
+/* v7 (wave312): a person's first name for a notice, from the team list; the address's first part otherwise */
 async function nameOf(email: string): Promise<string> {
   const e = String(email || '').toLowerCase();
   try { const { data } = await svc.from('team_members').select('name').eq('email', e).maybeSingle(); if (data && data.name) return String(data.name); } catch (_) { /* below */ }
@@ -567,8 +567,8 @@ Deno.serve(async (req: Request) => {
       const when = post.scheduled_at ? new Date(post.scheduled_at).toLocaleString('en-CA', { timeZone: 'America/Toronto', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'no date yet';
       const plats = (post.platforms || []).map(k => PNAME[k] || k).join(', ');
       const link = SITE + '/#studio/approvals';
-      /* v7 (wave310, Steel 11/11/26: "they should also get a notification once it's approved and sent out"): when a post goes out
-         (status published or posted, from the trigger trg_wa310_post_out), the person who sent it for approval, its owner and the
+      /* v7 (wave312, Steel 11/11/26: "they should also get a notification once it's approved and sent out"): when a post goes out
+         (status published or posted, from the trigger trg_wa312_post_out), the person who sent it for approval, its owner and the
          approvers (Ian and KK) hear that it is live, with the links; never the person who pressed Publish themselves. */
       if (state === 'published') {
         const actor = String((await emailOfName(String(body.by || ''))) || '').toLowerCase();   /* updated_by is a name or an address */
@@ -595,7 +595,7 @@ Deno.serve(async (req: Request) => {
       const to = String(post.submitted_by || '').toLowerCase();
       if (!to) return json({ ok: true, told: [] });
       const by = await svc.from('team_members').select('name').eq('email', post.approved_by || '').maybeSingle();
-      /* v7 (wave310): the other approvers hear the decision too, so Ian and KK never both review the same post */
+      /* v7 (wave312): the other approvers hear the decision too, so Ian and KK never both review the same post */
       const others = (await approvers()).filter(e => e !== to && e !== String(post.approved_by || '').toLowerCase());
       const byName = (by.data && by.data.name) || String(post.approved_by || '').split('@')[0];
       const ok = state === 'approved';

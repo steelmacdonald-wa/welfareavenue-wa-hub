@@ -1,4 +1,4 @@
-// Welfare Avenue: form-submit (v13, 12/11/26, wave310: a donate button on the thank-you, settings.donate; see donateOf)
+// Welfare Avenue: form-submit (v13, 12/11/26, wave312: a donate button on the thank-you, settings.donate; see donateOf)
 // Welfare Avenue: form-submit (v10, 06/11/26, wave288: the second consent box. A form whose consent.sms.ask is true sends the page
 //   consent.sms {ask, label}; the page sends the text box as a top-level consent_sms (true or false) next to consent, and the stored
 //   consent gains sms {asked: the text box's words, given}, which crm_form_apply records as express text consent. The answers show
@@ -178,7 +178,7 @@ async function turnstileOk(tok: string, ip: string | null): Promise<boolean> {
   } catch (_) { return true; }   /* Cloudflare unreachable: the other checks still stand */
 }
 
-// v13 (wave310, Soraya's review 11/11/26): a donate button on the thank-you, when the form's settings say so
+// v13 (wave312, Soraya's review 11/11/26): a donate button on the thank-you, when the form's settings say so
 //   (crm_forms.settings.donate = {on, label?, campaign?}): the Hub's donation page (hub.welfareavenue.com/give), in the form's
 //   language, with ?c=<campaign> when a donation campaign is named (app_config donate_campaigns keys, e.g. gift-basket-drive).
 function donateOf(form: Json): Json | null {
@@ -200,7 +200,7 @@ async function publicForm(form: Json): Promise<Json> {
   const TL = T[form.lang === 'fr' ? 'fr' : 'en'];
   return {
     slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '', cover: await coverOf(form),
-    ...(donateOf(form) ? { donate: donateOf(form) } : {}),   // v13 (wave310)
+    ...(donateOf(form) ? { donate: donateOf(form) } : {}),   // v13 (wave312)
     questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => {
       const to = String(q.to || ''), fill = to.startsWith('contact.') && FILLS.includes(to.slice(8)) ? to.slice(8) : '';
       return {

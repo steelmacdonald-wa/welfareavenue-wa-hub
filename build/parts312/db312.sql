@@ -1,4 +1,4 @@
--- wave310 (12/11/26): Campaigns in the CRM (a folder per campaign), Email insights, the photo albums, and the Content Studio's
+-- wave312 (12/11/26): Campaigns in the CRM (a folder per campaign), Email insights, the photo albums, and the Content Studio's
 -- "it went out" notice. Soraya Tyree's CRM review at the 11 November marketing meeting; Steel: "make this all capable for
 -- Soraya and others using the crm", and "those approvals for post going to KK and Ian should be sent by notification on slack
 -- to Ian's active account and KK. They should also get a notification once it's approved and sent out."
@@ -13,17 +13,17 @@ alter table public.wa_campaigns add column if not exists fund_event_id bigint re
 alter table public.wa_campaigns add column if not exists updated_at timestamptz;
 alter table public.wa_campaigns add column if not exists updated_by text;
 create index if not exists wa_campaigns_fund_event_idx on public.wa_campaigns(fund_event_id) where fund_event_id is not null;
-comment on column public.wa_campaigns.brief is 'wave310: what the campaign is, the why and the how, for someone new (the folder on #crm/folders). Written by wa310_campaign_save.';
-comment on column public.wa_campaigns.facts is 'wave310: the key facts, [{label, value}] (dates, the rules in short, what a gift does, who leads it). Written by wa310_campaign_save.';
-comment on column public.wa_campaigns.links is 'wave310: the folder''s links, [{label, url (https), note?}] (the Drive folder, the rules, the one-pager, Canva). Written by wa310_campaign_save.';
-comment on column public.wa_campaigns.hashtags is 'wave310: the campaign''s hashtags, without the #.';
-comment on column public.wa_campaigns.post_names is 'wave310: the values of content_posts.campaign that belong to this campaign (matched without case), besides its name.';
-comment on column public.wa_campaigns.fund_event_id is 'wave310: the Fundraising event (fund_events) this campaign belongs to, if any: its dates and its volunteers.';
+comment on column public.wa_campaigns.brief is 'wave312: what the campaign is, the why and the how, for someone new (the folder on #crm/folders). Written by wa312_campaign_save.';
+comment on column public.wa_campaigns.facts is 'wave312: the key facts, [{label, value}] (dates, the rules in short, what a gift does, who leads it). Written by wa312_campaign_save.';
+comment on column public.wa_campaigns.links is 'wave312: the folder''s links, [{label, url (https), note?}] (the Drive folder, the rules, the one-pager, Canva). Written by wa312_campaign_save.';
+comment on column public.wa_campaigns.hashtags is 'wave312: the campaign''s hashtags, without the #.';
+comment on column public.wa_campaigns.post_names is 'wave312: the values of content_posts.campaign that belong to this campaign (matched without case), besides its name.';
+comment on column public.wa_campaigns.fund_event_id is 'wave312: the Fundraising event (fund_events) this campaign belongs to, if any: its dates and its volunteers.';
 alter table public.wa_campaigns drop constraint if exists wa_campaigns_type_check;
 alter table public.wa_campaigns add constraint wa_campaigns_type_check check (type = any (array['fundraising_event', 'drive', 'appeal', 'program', 'challenge', 'other']));
 
 -- everything the Campaigns page shows: the list (p_id null) or one campaign's folder
-create or replace function public.wa310_campaigns(p_id bigint default null)
+create or replace function public.wa312_campaigns(p_id bigint default null)
 returns jsonb language plpgsql stable security definer set search_path to '' as $f$
 declare r jsonb; c public.wa_campaigns%rowtype; v_names text[];
 begin
@@ -57,12 +57,12 @@ begin
   ) into r;
   return r;
 end $f$;
-comment on function public.wa310_campaigns(bigint) is 'wave310: the CRM''s Campaigns page. With no id, every campaign that is not archived with its gifts total, forms, posts and folder links; with an id, the campaign and its folder, its forms (settings.campaign_id), its posts (content_posts.campaign matching its name or post_names), its gifts, its people and its Fundraising event. Staff with the CRM.';
-revoke all on function public.wa310_campaigns(bigint) from public, anon;
-grant execute on function public.wa310_campaigns(bigint) to authenticated;
+comment on function public.wa312_campaigns(bigint) is 'wave312: the CRM''s Campaigns page. With no id, every campaign that is not archived with its gifts total, forms, posts and folder links; with an id, the campaign and its folder, its forms (settings.campaign_id), its posts (content_posts.campaign matching its name or post_names), its gifts, its people and its Fundraising event. Staff with the CRM.';
+revoke all on function public.wa312_campaigns(bigint) from public, anon;
+grant execute on function public.wa312_campaigns(bigint) to authenticated;
 
 -- add a campaign or change its folder (p: id?, name, type, year, status, goal_amount, brief, facts, links, hashtags, post_names, fund_event_id)
-create or replace function public.wa310_campaign_save(p jsonb)
+create or replace function public.wa312_campaign_save(p jsonb)
 returns jsonb language plpgsql security definer set search_path to '' as $f$
 declare v_id bigint := nullif(p ->> 'id', '')::bigint; v_name text := btrim(coalesce(p ->> 'name', '')); v_by text; v_facts jsonb := '[]'; v_links jsonb := '[]'; x jsonb;
   v_type text := coalesce(nullif(p ->> 'type', ''), 'drive'); v_status text := coalesce(nullif(p ->> 'status', ''), 'planned'); v_fe bigint := nullif(p ->> 'fund_event_id', '')::bigint;
@@ -103,12 +103,12 @@ begin
   end if;
   return jsonb_build_object('ok', true, 'id', v_id);
 end $f$;
-comment on function public.wa310_campaign_save(jsonb) is 'wave310: adds a campaign or changes its folder (name, type, year, status, goal, brief, facts, https links, hashtags, post names, Fundraising event). Anyone on staff with the CRM (Steel, 12/11/26: Soraya and others). The donation key stays with the admins. Logged in change_log.';
-revoke all on function public.wa310_campaign_save(jsonb) from public, anon;
-grant execute on function public.wa310_campaign_save(jsonb) to authenticated;
+comment on function public.wa312_campaign_save(jsonb) is 'wave312: adds a campaign or changes its folder (name, type, year, status, goal, brief, facts, https links, hashtags, post names, Fundraising event). Anyone on staff with the CRM (Steel, 12/11/26: Soraya and others). The donation key stays with the admins. Logged in change_log.';
+revoke all on function public.wa312_campaign_save(jsonb) from public, anon;
+grant execute on function public.wa312_campaign_save(jsonb) to authenticated;
 
 -- 2. Email insights ------------------------------------------------------------------------------------------------------
-create or replace function public.wa310_mail_insights(p_days integer default 180)
+create or replace function public.wa312_mail_insights(p_days integer default 180)
 returns jsonb language plpgsql stable security definer set search_path to '' as $f$
 declare v_from timestamptz := now() - make_interval(days => greatest(30, least(coalesce(p_days, 180), 730)));
 begin
@@ -135,9 +135,9 @@ begin
         ) z group by dow, slot) h), '[]')
   );
 end $f$;
-comment on function public.wa310_mail_insights(integer) is 'wave310: the CRM''s Email insights: each month''s emails the Hub sent (not tests): sent, delivered, opened, clicked, unsubscribed, bounced; emails sent and opened by weekday and three-hour slot (Toronto; 21 is 9 pm to 6 am); tracking says whether any open or click arrived in the last 120 days. Staff with the CRM.';
-revoke all on function public.wa310_mail_insights(integer) from public, anon;
-grant execute on function public.wa310_mail_insights(integer) to authenticated;
+comment on function public.wa312_mail_insights(integer) is 'wave312: the CRM''s Email insights: each month''s emails the Hub sent (not tests): sent, delivered, opened, clicked, unsubscribed, bounced; emails sent and opened by weekday and three-hour slot (Toronto; 21 is 9 pm to 6 am); tracking says whether any open or click arrived in the last 120 days. Staff with the CRM.';
+revoke all on function public.wa312_mail_insights(integer) from public, anon;
+grant execute on function public.wa312_mail_insights(integer) to authenticated;
 
 -- 3. The albums in Google Photos, listed with the Photo library ------------------------------------------------------------
 create table if not exists public.wa_photo_albums (
@@ -149,7 +149,7 @@ create table if not exists public.wa_photo_albums (
   added_by text,
   created_at timestamptz not null default now()
 );
-comment on table public.wa_photo_albums is 'wave310: the team''s Google Photos albums (share links), listed above the Photo library: Google Photos lets no other app read an album since March 2025, so the team picks the best photos by hand (Add photos). Staff read and add; board viewers read; admins delete.';
+comment on table public.wa_photo_albums is 'wave312: the team''s Google Photos albums (share links), listed above the Photo library: Google Photos lets no other app read an album since March 2025, so the team picks the best photos by hand (Add photos). Staff read and add; board viewers read; admins delete.';
 alter table public.wa_photo_albums enable row level security;
 drop policy if exists wa_photo_albums_read on public.wa_photo_albums;
 create policy wa_photo_albums_read on public.wa_photo_albums for select to authenticated using ((select public.is_wa_staff()) or (select public.is_board_viewer()));
@@ -162,7 +162,7 @@ grant select, insert, delete on public.wa_photo_albums to authenticated;
 grant usage, select on sequence public.wa_photo_albums_id_seq to authenticated;
 
 -- 4. The Content Studio: when a post goes out, everyone involved hears it (social-publish v7) -------------------------------
-create or replace function public.wa310_post_out()
+create or replace function public.wa312_post_out()
 returns trigger language plpgsql security definer set search_path to '' as $f$
 begin
   if new.status in ('published', 'posted') and coalesce(old.status, '') not in ('published', 'posted')
@@ -171,9 +171,9 @@ begin
   end if;
   return new;
 end $f$;
-comment on function public.wa310_post_out() is 'wave310: after a Content Studio post goes out (status published or posted), social-publish tells the person who sent it for approval, its owner and the approvers (hub_settings content_studio.approvers: Ian and KK), never the person who pressed Publish. Off with app_config studio_notify off.';
-drop trigger if exists trg_wa310_post_out on public.content_posts;
-create trigger trg_wa310_post_out after update of status on public.content_posts for each row execute function public.wa310_post_out();
+comment on function public.wa312_post_out() is 'wave312: after a Content Studio post goes out (status published or posted), social-publish tells the person who sent it for approval, its owner and the approvers (hub_settings content_studio.approvers: Ian and KK), never the person who pressed Publish. Off with app_config studio_notify off.';
+drop trigger if exists trg_wa312_post_out on public.content_posts;
+create trigger trg_wa312_post_out after update of status on public.content_posts for each row execute function public.wa312_post_out();
 
 -- 5. Page tours -------------------------------------------------------------------------------------------------------------
 insert into public.trainings (key, kind, title, description, category, path_group, sort, minutes, xp, active, source, body)
@@ -195,7 +195,7 @@ insert into public.wa_campaigns (name, type, year, status, goal_amount, brief, f
 select 'One Bag Challenge 2026', 'challenge', 2026, 'planned', null,
   'The fundraiser that feeds the Gift Basket Drive, held in November to avoid December overload: every dollar fills the gaps for the drive at the end of the year. The leaders'' videos go up first, then the JMCC delegates''.',
   '[{"label": "Target", "value": "$3,000 to $4,000, November to December"}, {"label": "What $20 to $25 does", "value": "Fills one bag: hygiene products, clothing, hand warmers for the winter, a couple of books"}, {"label": "Launch", "value": "The week of 16 November 2026, with the two static posts (what $25 does, the rules)"}, {"label": "The rules", "value": "In the volunteer document (Slack) and Steel''s one-pager: add their links to the folder"}]'::jsonb,
-  '[]'::jsonb, array['onebagchallenge'], array['One Bag Challenge', 'One Bag Challenge launch campaign'], 3, 'wave310', now(), 'the Hub'
+  '[]'::jsonb, array['onebagchallenge'], array['One Bag Challenge', 'One Bag Challenge launch campaign'], 3, 'wave312', now(), 'the Hub'
 where not exists (select 1 from public.wa_campaigns where lower(name) like 'one bag challenge%');
 update public.wa_campaigns set fund_event_id = 2, post_names = array['Rally Paper', 'Rally Paper 2026'], updated_at = now(), updated_by = 'the Hub' where id = 1 and fund_event_id is null;
 update public.wa_campaigns set fund_event_id = 1, updated_at = now(), updated_by = 'the Hub' where id = 3 and fund_event_id is null;

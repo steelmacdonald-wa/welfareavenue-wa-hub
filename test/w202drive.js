@@ -158,7 +158,7 @@ if (require.main === module) (async () => {
     cards: document.querySelectorAll('#crm .w202card').length, ready: [...document.querySelectorAll('#crm .w202card')].filter(c => /Ready as is/.test(c.textContent)).map(c => c.querySelector('.w202cb b').textContent),
     recent: [...document.querySelectorAll('#crm .w202rrow')].map(r => r.innerText.replace(/\s+/g, ' ')), mic: window.w201 ? window.w201.targets : null
   }));
-  ok('the CRM rail lists Studio under Email and marks it (Imports for admins since wave284)', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Imports|Lists|Forms|Campaigns|Gifts|Email|Studio*|Sends|Automations|Email insights|Reports'   /* wave310 */, b.rail);
+  ok('the CRM rail lists Studio under Email and marks it (Imports for admins since wave284)', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Imports|Lists|Forms|Campaigns|Gifts|Email|Studio*|Sends|Automations|Email insights|Reports'   /* wave312 */, b.rail);
   ok('the CRM marks its Studio tab and draws the studio in #w202root', /Studio/.test(b.tab || '') && b.root, b);
   ok('the front page offers three ways to start', b.ways.join('|') === 'Tell the Hub|Start from a template|Build it yourself', b.ways);
   ok('the ten starters sit on Steel’s four shelves', b.cards === 10 && b.shelves.length === 4 && /^Volunteers: welcome and serving 3/.test(b.shelves[0]) && /^Volunteers: call-outs and events 2/.test(b.shelves[1]) && /^Donors: thanks and impact 3/.test(b.shelves[2]) && /^Donors: appeals and events 2/.test(b.shelves[3]), b);
