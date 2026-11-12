@@ -232,6 +232,8 @@
     try {
       var g = document.getElementById('gate'); if (g && g.style.display !== 'none') return true;
       if (panelOpen() || document.body.classList.contains('wa-mob-open')) return true;
+      var ae = document.activeElement;   /* the person is typing somewhere: the note waits */
+      if (ae && ae !== document.body && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || ''))) return true;
       var tip = document.getElementById('w272tip'); if (tip && tip.classList.contains('on')) return true;
       try { var st = window.w122 && w122.state && w122.state(); if (st && st.T) return true; } catch (e0) { /* fine */ }
       var sels = ['#w213pop', '#w177pop', '#w84back', '#w262new', '#w227pop', '#w272sheet', '#w163sheet', '#w260lock', '#w116dr.open', '[role="dialog"]', '[aria-modal="true"]'];

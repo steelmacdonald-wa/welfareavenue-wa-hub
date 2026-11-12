@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# wave320 release helper (12/11/26). Run from the repo root.
+# wave320 and wave322 release helper (12/11/26): both blocks go live in one swap. Run from the repo root.
+# (WITH322=0 leaves wave322 out.)
 #
 #   build/parts320/release320.sh prepare
 #       Fetches the live Hub page, builds the candidate on top of it, checks that every inline script parses,
@@ -30,13 +31,21 @@ prepare)
   curl -sS --max-time 90 https://hub.welfareavenue.com/ -o /tmp/live/index.html
   LIVE=$(md5sum /tmp/live/index.html | cut -d' ' -f1)
   if grep -q 'WA v320 ' /tmp/live/index.html; then echo "wave320 is already live ($LIVE)"; exit 1; fi
-  python3 build/parts320/patch320.py /tmp/live/index.html "$W/candidate.html"
+  if [ "${WITH322:-1}" = 1 ]; then
+    python3 build/parts320/patch320.py /tmp/live/index.html "$W/c320.html"
+    python3 build/parts322/patch322.py "$W/c320.html" "$W/candidate.html"
+    echo "320 322" > "$W/waves"
+  else
+    python3 build/parts320/patch320.py /tmp/live/index.html "$W/candidate.html"
+    echo "320" > "$W/waves"
+  fi
   CAND=$(md5sum "$W/candidate.html" | cut -d' ' -f1)
   node -e '
     const h = require("fs").readFileSync(process.argv[1], "utf8"); const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g; let m, n = 0;
     while ((m = re.exec(h))) { n++; if (/type="(application\/json|application\/ld\+json|text\/template)"/.test(m[0].slice(0, 90))) continue; new Function(m[1]); }
     console.log("inline scripts parse:", n);' "$W/candidate.html"
-  CAND="$W/candidate.html" node test/w320drive.js "$W/shots" | tail -1
+  printf 'w320drive: '; CAND="$W/candidate.html" node test/w320drive.js "$W/shots" | tail -1
+  if [ "${WITH322:-1}" = 1 ]; then printf 'w322drive: '; CAND="$W/candidate.html" node test/w322drive.js "$W/shots322" | tail -1; fi
   for t in w272drive w306drive w310drive; do printf '%s: ' "$t"; CAND="$W/candidate.html" node "test/$t.js" "$W/shots_$t" | tail -1; done
   echo "$LIVE" > "$W/live.md5"; echo "$CAND" > "$W/cand.md5"
   cat > "$W/step1.sql" <<SQL
@@ -81,30 +90,34 @@ d = json.load(open(sys.argv[1])); bad = [p for p in d['posts'] if not (p[1] in (
 print('parts posted:', len(d['posts']), 'failed:', bad)
 sys.exit(1 if bad else 0)
 PY
-  python3 build/deploy_gate.py wa_stage_320 "$LIVE" "WA v320 ,window.__wa320" > "$W/gate.sql"
-  python3 - "$W/gate.sql" "$W/step2.sql" "$LIVE" "$CAND" <<'PY'
+  WAVES=$(cat "$W/waves")
+  MARKS="WA v320 ,window.__wa320"; case "$WAVES" in *322*) MARKS="$MARKS,WA v322 ,window.__wa322" ;; esac
+  python3 build/deploy_gate.py wa_stage_320 "$LIVE" "$MARKS" > "$W/gate.sql"
+  python3 - "$W/gate.sql" "$W/step2.sql" "$LIVE" "$CAND" "$WAVES" <<'PY'
 import sys
-gate, out, live, cand = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4]
+gate, out, live, cand, waves = open(sys.argv[1]).read(), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5].split()
 tail = "select public.call_edge('host-sync'"
 i = gate.rindex(tail); do_block, last = gate[:i], gate[i:]
-log = ("insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)\n"
-       "values ('release', 'index.html', 'wave320', '%s', '%s: Ask the Hub reaches out (The Hub suggests, the daily note, Help me finish this, "
-       "one-tap starter prompts), muted text darkened to pass AA, 44 px touch areas on a phone, tasks counted for a whole-word owner only', "
-       "'Claude for Steel (12/11/26)');\n" % (live, cand))
+SAY = {'320': "Ask the Hub reaches out (The Hub suggests, the daily note, Help me finish this, one-tap starter prompts), "
+              "muted text darkened to pass AA, 44 px touch areas on a phone, tasks counted for a whole-word owner only",
+       '322': "One box: pages, actions and Ask the Hub in Search everything, Ctrl K, the keyboard in the list, I want to in an empty box"}
+log = "".join("insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)\n"
+              "values ('release', 'index.html', 'wave%s', '%s', '%s: %s', 'Claude for Steel (12/11/26)');\n" % (w, live, cand, SAY[w]) for w in waves)
 drop = "drop table public.wa_stage_320;\n"
 open(out, 'w').write("-- 12/11/26 - wave320 release, step 2: the gated swap. One transaction: if any check fails, nothing changes.\n" + do_block + log + drop + last)
 PY
   cat > build/parts320/wave320_undo.sql <<SQL
--- 12/11/26 - wave320 undo (only if needed): puts back the Hub page from before wave320 ($LIVE).
--- It refuses when a later release sits on top of wave320, so that release is not undone by accident:
--- undo the later one first, or take the WA v320 block out with a new release.
+-- 12/11/26 - wave320 undo (only if needed): puts back the Hub page from before this release ($LIVE).
+-- The release carried: wave $(cat "$W/waves" | sed 's/ / and wave /'). The undo takes all of it back.
+-- It refuses when a later release sits on top, so that release is not undone by accident:
+-- undo the later one first, or take the blocks out with a new release.
 do \$u\$ declare v text; begin
   if not exists (select 1 from public.site_files_bak_wa320) then raise exception 'no backup'; end if;
   select md5(string_agg(content, '' order by part)) into v from public.site_files where path = 'index.html';
-  if v <> '$CAND' then raise exception 'the live page is not the wave320 page (%): a later release is on top', v; end if;
+  if v <> '$CAND' then raise exception 'the live page is not the page this release made (%): a later release is on top', v; end if;
   update public.site_files f set content = b.content, updated_at = now() from public.site_files_bak_wa320 b where f.path = b.path and f.part = b.part and f.path = 'index.html';
   insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
-  values ('release', 'index.html', 'wave320-undo', '$CAND', '$LIVE: wave320 undone, the page as it was before', 'Claude for Steel (12/11/26)');
+  values ('release', 'index.html', 'wave320-undo', '$CAND', '$LIVE: the wave320 release undone, the page as it was before', 'Claude for Steel (12/11/26)');
 end \$u\$;
 select public.call_edge('host-sync', '{}'::jsonb) as rid, md5(string_agg(content, '' order by part)) as live_md5 from public.site_files where path = 'index.html';
 SQL
@@ -114,7 +127,7 @@ verify)
   CAND=$(cat "$W/cand.md5")
   for i in 1 2 3 4 5 6; do
     NOW=$(curl -sS --max-time 90 https://hub.welfareavenue.com/ | md5sum | cut -d' ' -f1)
-    if [ "$NOW" = "$CAND" ]; then echo "live is wave320: $NOW"; exit 0; fi
+    if [ "$NOW" = "$CAND" ]; then echo "live is the new page: $NOW"; exit 0; fi
     echo "not yet ($NOW), waiting"; sleep 20
   done
   echo "the live site does not match the candidate $CAND"; exit 1

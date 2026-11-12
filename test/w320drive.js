@@ -118,6 +118,10 @@ function fixtureFor(email) {
     check('the chat open blocks the note', await f.ev(() => w320.blocked() === true));
     await f.page.click('#w81close'); await f.page.waitForTimeout(400);
     check('with the chat closed, nothing blocks it', await f.ev(() => w320.blocked() === false));
+    await f.page.focus('#globalSearch');
+    check('typing in a field blocks the note', await f.ev(() => w320.blocked() === true));
+    await f.ev(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); });
+    check('and nothing blocks it once the field is left', await f.ev(() => w320.blocked() === false));
     /* the due-date check (wave213) is a window nobody can skip: the note waits behind it, and does not show over it */
     const gate = await f.ev(async () => {
       const el = document.createElement('div'); el.id = 'w213pop';

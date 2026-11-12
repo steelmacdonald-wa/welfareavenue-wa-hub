@@ -14,10 +14,11 @@ This wave is the part inside the Hub. One block in the page (`build/parts320/320
   tasks with no date. Each card has one main button. When nothing waits: "You are all caught up" and one question to ask.
 - **I can also.** Four tiles under the cards: File a request, Add a task, Find a page, Find a document. A tile writes
   the start of the sentence in the box and waits for the person to finish it.
-- **A note beside the Ask button**, once a day at most, eight seconds after the Hub opens: "Hi Joy, 2 tasks past their
+- **A note beside the Ask button**, once a day at most, eight seconds after the Hub opens: "Hi {first name}, 2 tasks past their
   date and 1 mention to read." Show me, Not today, Stop these notes. It never shows over a window (the due-date check,
-  the meeting pop-up, a tour, the install note, any dialog) and it leaves by itself after 14 seconds.
-- **A gold dot** on the Ask button (and on Ask in the phone bar) until the suggestions have been seen that day.
+  the meeting pop-up, a tour, the install note, any dialog) or while the person is typing, and it leaves by itself
+  after 14 seconds.
+- **A small red dot** on the Ask button (and on Ask in the phone bar) until the suggestions have been seen that day.
 - **Help me finish this**, on the cards and in every task drawer: Ask the Hub is asked for the next three steps, the
   page, document or person that can help, and any follow-up task or request to confirm. Never offered on a confidential,
   board-only, restricted or banked task, and a confidential title is never shown on a card.
@@ -27,7 +28,10 @@ This wave is the part inside the Hub. One block in the page (`build/parts320/320
 
 ## Fixes in the same release
 - **Muted text.** `#797773` (4.3, 4.0 and 3.7 to 1 on the Hub's three backgrounds) becomes `#585B57`, the website's own
-  muted grey (6.6, 6.1 and 5.6 to 1). 389 places. New waves should use `#585B57`.
+  muted grey (6.6, 6.1 and 5.6 to 1). 389 places. New waves should use `#585B57`. On the eight views scanned with axe
+  (Home on a computer and a phone, Requests, the Academy, a team page, the Calendar, MTL volunteering, the CRM) contrast
+  errors go from 376 to 103. The 103 left are other greys (done rows, placeholders, purple on tinted cards) and are
+  not touched here.
 - **Touch areas on a phone.** Hide for now, Don't show again, How this page works and the small links on the setup card
   get 44 px of touch area; the Get started ticks grow to 28 px.
 - **Whose task it is.** `waTasksOf`, wave109's My tasks and wave54's task stats matched the owner by a piece of a word,
@@ -54,7 +58,7 @@ This wave is the part inside the Hub. One block in the page (`build/parts320/320
 - It never says "AI".
 
 ## Tests
-`test/w320drive.js` (44 checks): an admin on a computer, the cards following the tasks, a starter prompt, the note
+`test/w320drive.js` (46 checks): an admin on a computer, the cards following the tasks, a starter prompt, the note
 behind the due-date check, a team member on a phone, a director, reduced motion. Regression: `w272drive` (152),
 `w306drive` (44), `w310drive` (25).
 
