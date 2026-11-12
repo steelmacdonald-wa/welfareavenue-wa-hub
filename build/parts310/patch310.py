@@ -21,7 +21,7 @@ CL_BLOCK = r"""  /* ---------- wave310 (12/11/26): Microsoft Clarity, heat maps 
   }
   function clLinks(path) {
     return '<span class="cl-links"><a href="' + E(clUrl('heatmaps', path)) + '" target="_blank" rel="noopener" title="Open the heat map for ' + E(pageName(path)) + ' in Clarity">' + ic('heat') + 'Heat map</a>'
-      + '<a href="' + E(clUrl('recordings', path)) + '" target="_blank" rel="noopener" title="Watch visits to ' + E(pageName(path)) + ' in Clarity">' + ic('play') + 'Recordings</a></span>';
+      + '<a href="' + E(clUrl('impressions', path)) + '" target="_blank" rel="noopener" title="Watch visits to ' + E(pageName(path)) + ' in Clarity">' + ic('play') + 'Recordings</a></span>';
   }
   function loadClarity(days) {
     var k = String(days);
