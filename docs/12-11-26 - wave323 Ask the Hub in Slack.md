@@ -76,6 +76,25 @@ The bot already holds every permission this needs. What has to be set in the app
 4. **Slash command** `/hub`, the same Request URL.
 5. **App Home**: the Messages tab on, with "Allow users to send Slash commands and messages from the messages tab".
 
+## Switched on, 12/11/26 13:48 Toronto
+Steel asked for it to be done on his computer, and watched. In the Claude desktop app's browser:
+- **The signing secret** went from Slack's Basic Information page straight into the vault through a one-time ticket
+  (`build/data/wa323_slack_key_drop.sql`, the pattern wave302 used for the QuickBooks keys). A short script on that page
+  read the Signing Secret field, checked it was not the Client Secret, and sent it with the ticket. It returned only
+  "saved". The page was never read or captured, and anon's right to call the function was taken away straight after.
+- **Event Subscriptions**: on, the Request URL verified by Slack, bot events `message.im`, `app_mention`,
+  `assistant_thread_started`, saved. **Interactivity**: on, the same address, saved.
+- **`/hub`** was already there from August with the right address, and **App Home** already let people send messages:
+  neither was changed. Slack asked for no reinstall.
+- The app has Slack's side panel for apps turned on (suggested prompts set to Dynamic, which is what the starters use).
+  Slack shows a notice that this experience is changing, with an Update button. It was left alone: Ask the Hub has not
+  been checked in the new layout.
+
+Live checks after the switch, with requests signed inside the database (the secret never left it): `/hub tasks` and
+`/hub` answered at once for a roster person; an unknown Slack account got the how-to-link note and no project; another
+workspace got 403; a tampered body got 401; `/hub` and a question was acknowledged in under a tenth of a second and
+answered by `ask` in the background (7 seconds), which shows the runtime keeps the function alive for that work.
+
 ## Tests
 `node test/fn_slack_ask_test.mjs` (116 checks). Both functions run together under Node with `test/fn_harness.mjs`: signed
 Slack requests in, the real `ask` over the trusted path, a mock model, a mock Slack. It covers who may ask, what the model
