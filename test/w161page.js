@@ -58,9 +58,9 @@ async function open(browser, url, handler, opts, how) {
   return { ctx, page, calls, errors, t0, csp, stripeJs };
 }
 const text = p => p.evaluate(() => document.body.innerText);
-/* v7 (12/11/26): the line under the amount that offers an Interac e-Transfer, always shown; what sits under the amount box, in order */
-const ETR_EN = 'You can also send an Interac e-Transfer to info@welfareavenue.com to avoid payment processing fees.';
-const ETR_FR = 'Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue.com pour éviter les frais de traitement des paiements.';
+/* v7 (12/11/26): the line under the amount that offers an Interac e-Transfer and asks for a mailing address for a tax receipt, always shown; what sits under the amount box, in order */
+const ETR_EN = 'You can also send an Interac e-Transfer to info@welfareavenue.com to avoid payment processing fees. Include your mailing address in the message for a tax receipt.';
+const ETR_FR = 'Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue.com pour éviter les frais de traitement des paiements. Indiquez votre adresse postale dans le message pour obtenir un reçu fiscal.';
 const amountNotes = p => p.evaluate(() => [...document.querySelectorAll('fieldset:has(#other) > p')].map(e => e.className + ':' + e.innerText));
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png'), fullPage: true }); };
 
