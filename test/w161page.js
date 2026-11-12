@@ -97,6 +97,13 @@ const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(S
     await f.page.click('#go'); await f.page.waitForTimeout(250);
     t = await text(f.page);
     ok('an amount below the minimum is caught, nothing sent', /The smallest gift online is \$5\./.test(t) && f.calls.filter(c => c.method === 'POST').length === 0, t.slice(0, 600));
+    /* v7 (12/11/26): above the maximum, write to us or send an Interac e-Transfer */
+    await f.page.fill('#other', '10001'); await f.page.waitForTimeout(80);
+    await f.page.click('#go'); await f.page.waitForTimeout(250);
+    t = await text(f.page);
+    ok('an amount above the maximum says write to us or send an Interac e-Transfer, nothing sent',
+      /For a gift above \$10,000, please write to info@welfareavenue\.com\. You can also send an Interac e-Transfer to info@welfareavenue\.com to avoid payment processing fees\./.test(t) &&
+      f.calls.filter(c => c.method === 'POST').length === 0, t.slice(0, 600));
     await f.page.fill('#other', '42.50'); await f.page.check('#trib'); await f.page.waitForTimeout(100);
     await f.page.click('#go'); await f.page.waitForTimeout(250);
     t = await text(f.page);
@@ -236,6 +243,10 @@ const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(S
     ok('French: an English link back and the lockup to the French website', st.link === 'English' && /\/give\/$/.test(new URL(st.linkHref).pathname) && !/lang=/.test(st.linkHref) && st.home === 'https://welfareavenue.com/fr/', st);
     await f.page.fill('#other', '3'); await f.page.click('#go'); await f.page.waitForTimeout(250);
     ok('French: the minimum in French, nothing sent', /Le don minimum en ligne est de 5\s\$\./.test(await text(f.page)) && f.calls.filter(c => c.method === 'POST').length === 0);
+    await f.page.fill('#other', '10001'); await f.page.click('#go'); await f.page.waitForTimeout(250);
+    ok('French: above the maximum, write to us or send a Virement Interac (v7), nothing sent',
+      /Pour un don de plus de 10\s000\s\$, veuillez écrire à info@welfareavenue\.com\. Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue\.com pour éviter les frais de traitement des paiements\./.test(await text(f.page)) &&
+      f.calls.filter(c => c.method === 'POST').length === 0);
     await f.page.fill('#other', '42,50'); await f.page.waitForTimeout(80);
     ok('French: 42,50 typed the French way is $42.50', (await f.page.textContent('#tot')).replace(/\s+/g, ' ') === '42,50 $');
     await f.page.check('#trib'); await f.page.click('#go'); await f.page.waitForTimeout(250);

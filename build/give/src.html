@@ -22,7 +22,12 @@
      v5 (15/10/26, the Holiday Gift Basket Drive page): ?c=<slug> asks the donate function for a campaign (app_config
      donate_campaigns); when it is open, the page shows the campaign's title and words, locks where the gift goes (no choice
      to make), keeps to one-time gifts when the campaign says so, and sends the campaign with the checkout, so the gift lands
-     under the campaign in the CRM. give/embed.js passes it from a button's data-wa-campaign. Without ?c= nothing changed. -->
+     under the campaign in the CRM. give/embed.js passes it from a button's data-wa-campaign. Without ?c= nothing changed.
+     v6 (17/10/26, the drive page's "what your gift provides" tiers): ?a=<whole dollars> chooses that amount when the page
+     opens (one of the amount buttons when it is one, else typed into Other amount), only between the function's min and max;
+     give/embed.js passes it from a button's data-wa-amount. Without ?a= nothing changed.
+     v7 (12/11/26): above the maximum, the message also offers an Interac e-Transfer to info@welfareavenue.com (no
+     payment processing fees). That address is written out, not the reply-to setting the first sentence uses. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
 *{box-sizing:border-box}
@@ -128,12 +133,14 @@ a{color:var(--green)}
   var L = q.get('lang') === 'fr' ? 'fr' : 'en', FR = L === 'fr';
   /* v5 (15/10/26): a campaign link (?c=<slug>, e.g. the Holiday Gift Basket Drive page's buttons) */
   var CAMP = (function (c) { c = String(c || '').toLowerCase(); return /^[a-z0-9][a-z0-9-]{0,39}$/.test(c) ? c : ''; })(q.get('c'));
+  /* v6 (17/10/26): an amount asked for by the link (?a=<whole dollars>, e.g. the drive page's tiers) */
+  var ASK = (function (a) { a = String(a || ''); return /^[1-9][0-9]{0,5}$/.test(a) ? Number(a) : 0; })(q.get('a'));
   waLogoLang(FR);
   var W = {
     en: { cancelled: 'No payment was made. You can change anything below and try again.', charity: ' · Registered charity ',
       privacy: 'We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them.', stripe_note: ' Payments are handled by Stripe.',
       err_choose: 'Choose an amount, or enter your own.', err_cents: 'Enter an amount in dollars and cents.',
-      err_min: function (x) { return 'The smallest gift online is ' + x + '.'; }, err_max: function (x, m) { return 'For a gift above ' + x + ', please write to ' + m + '.'; },
+      err_min: function (x) { return 'The smallest gift online is ' + x + '.'; }, err_max: function (x, m) { return 'For a gift above ' + x + ', please write to ' + m + '. You can also send an Interac e-Transfer to info@welfareavenue.com to avoid payment processing fees.'; },
       preview: '<b>Preview.</b> This page is off, so it cannot take a gift yet. An admin puts it live in the Hub.', how_often: 'How often', give_once: 'Give once', give_monthly: 'Give monthly',
       legend: function (mon) { return 'Your gift' + (mon ? ' each month' : ''); }, a_month: 'a month', other: 'Other amount', other_aria: 'Other amount, in dollars', where: 'Where your gift goes',
       extras: 'Extras', tribute: 'Give in honour or in memory of someone', tribute_aria: 'In honour or in memory', honour: 'In honour of', memory: 'In memory of', their_name: 'Their name',
@@ -159,7 +166,7 @@ a{color:var(--green)}
     fr: { cancelled: 'Aucun paiement n’a été effectué. Vous pouvez modifier vos choix ci-dessous et réessayer.', charity: ' · Organisme de bienfaisance enregistré ',
       privacy: 'Nous utilisons vos renseignements pour traiter votre don et vous remercier et, seulement si vous le souhaitez, pour vous donner des nouvelles. Nous ne les vendons ni ne les partageons jamais.', stripe_note: ' Les paiements sont traités par Stripe.',
       err_choose: 'Choisissez un montant ou entrez le vôtre.', err_cents: 'Entrez un montant en dollars et en cents.',
-      err_min: function (x) { return 'Le don minimum en ligne est de ' + x + '.'; }, err_max: function (x, m) { return 'Pour un don de plus de ' + x + ', veuillez écrire à ' + m + '.'; },
+      err_min: function (x) { return 'Le don minimum en ligne est de ' + x + '.'; }, err_max: function (x, m) { return 'Pour un don de plus de ' + x + ', veuillez écrire à ' + m + '. Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue.com pour éviter les frais de traitement des paiements.'; },
       preview: '<b>Aperçu.</b> Cette page est fermée : elle ne peut pas encore recevoir de don. Un administrateur la met en ligne dans le Hub.', how_often: 'Fréquence', give_once: 'Donner une fois', give_monthly: 'Donner chaque mois',
       legend: function (mon) { return mon ? 'Votre don mensuel' : 'Votre don'; }, a_month: 'par mois', other: 'Autre montant', other_aria: 'Autre montant, en dollars', where: 'Où va votre don',
       extras: 'Options', tribute: 'Donner en l’honneur ou à la mémoire de quelqu’un', tribute_aria: 'En l’honneur ou à la mémoire', honour: 'En l’honneur de', memory: 'À la mémoire de', their_name: 'Son nom',
@@ -425,7 +432,8 @@ a{color:var(--green)}
       var first = !S.cfg;
       S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
       if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String((camp() && camp().photo) || S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
-      if (first) { if (camp() && !camp().monthly) S.freq = 'once'; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+      if (first) { if (camp() && !camp().monthly) S.freq = 'once'; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0];
+        if (ASK && ASK >= S.cfg.min && ASK <= S.cfg.max) { if (a.indexOf(ASK) >= 0) S.amount = ASK; else S.other = String(ASK); } } /* v6 */
       if (first && camp()) document.title = cf('title');
       if (S.cfg.mode !== 'live' && !q.get('preview')) {
         var mail = S.cfg.org.email || 'info@welfareavenue.com';
