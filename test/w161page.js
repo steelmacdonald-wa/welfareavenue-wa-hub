@@ -58,6 +58,10 @@ async function open(browser, url, handler, opts, how) {
   return { ctx, page, calls, errors, t0, csp, stripeJs };
 }
 const text = p => p.evaluate(() => document.body.innerText);
+/* v7 (12/11/26): the line under the amount that offers an Interac e-Transfer, always shown; what sits under the amount box, in order */
+const ETR_EN = 'You can also send an Interac e-Transfer to info@welfareavenue.com to avoid payment processing fees.';
+const ETR_FR = 'Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue.com pour éviter les frais de traitement des paiements.';
+const amountNotes = p => p.evaluate(() => [...document.querySelectorAll('fieldset:has(#other) > p')].map(e => e.className + ':' + e.innerText));
 const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(SHOTS, n + '.png'), fullPage: true }); };
 
 (async () => {
@@ -88,22 +92,23 @@ const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(S
     ok('live: once by default, four amounts with $50 chosen, where it goes, the total', st.freq.join(',') === 'Give once:true,Give monthly:false' && st.amts.join(',') === '$25,$50*,$100,$250' &&
       st.des.join('|') === 'Where it is needed most|Toronto' && st.total === '$50.00', st);
     ok('the card fee offer is worked out as the function does it ($1.81 on $50)', /Add \$1\.81 to help cover the card fee/.test(st.cover), st.cover);
+    ok('the e-Transfer line shows under the amount before anything is typed', (await f.page.inputValue('#other')) === '' && (await amountNotes(f.page)).join('|') === 'small:' + ETR_EN, await amountNotes(f.page));
     await f.page.click('#cover'); await f.page.waitForTimeout(100);
     ok('covering the fee makes it $51.81', (await f.page.textContent('#tot')) === '$51.81');
     await f.page.click('[data-freq="monthly"]'); await f.page.waitForTimeout(150);
     st = await f.page.evaluate(() => ({ amts: [...document.querySelectorAll('.amt')].map(b => b.innerText.replace(/\s+/g, ' ') + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')), total: document.getElementById('tot').innerText.replace(/\s+/g, ' ') }));
     ok('monthly: its own amounts ($20 chosen), a month, the fee still covered', st.amts.join(',') === '$10 a month,$20 a month*,$35 a month,$50 a month' && st.total === '$20.91 a month', st);
+    ok('monthly: the e-Transfer line is still there', (await amountNotes(f.page)).join('|') === 'small:' + ETR_EN);
     await f.page.fill('#other', '3'); await f.page.waitForTimeout(80);
     await f.page.click('#go'); await f.page.waitForTimeout(250);
     t = await text(f.page);
     ok('an amount below the minimum is caught, nothing sent', /The smallest gift online is \$5\./.test(t) && f.calls.filter(c => c.method === 'POST').length === 0, t.slice(0, 600));
-    /* v7 (12/11/26): above the maximum, write to us or send an Interac e-Transfer */
+    ok('the e-Transfer line stays under the amount, after the error', (await amountNotes(f.page)).join('|') === 'err:The smallest gift online is $5.|small:' + ETR_EN, await amountNotes(f.page));
     await f.page.fill('#other', '10001'); await f.page.waitForTimeout(80);
     await f.page.click('#go'); await f.page.waitForTimeout(250);
-    t = await text(f.page);
-    ok('an amount above the maximum says write to us or send an Interac e-Transfer, nothing sent',
-      /For a gift above \$10,000, please write to info@welfareavenue\.com\. You can also send an Interac e-Transfer to info@welfareavenue\.com to avoid payment processing fees\./.test(t) &&
-      f.calls.filter(c => c.method === 'POST').length === 0, t.slice(0, 600));
+    ok('an amount above the maximum says to write to us, with the e-Transfer line once under it, nothing sent',
+      (await amountNotes(f.page)).join('|') === 'err:For a gift above $10,000, please write to info@welfareavenue.com.|small:' + ETR_EN &&
+      f.calls.filter(c => c.method === 'POST').length === 0, await amountNotes(f.page));
     await f.page.fill('#other', '42.50'); await f.page.check('#trib'); await f.page.waitForTimeout(100);
     await f.page.click('#go'); await f.page.waitForTimeout(250);
     t = await text(f.page);
@@ -240,13 +245,15 @@ const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(S
     ok('French: where the gift goes shows French labels but keeps the English values', st.des.join('|') === 'Where it is needed most=Là où les besoins sont les plus grands|Toronto=Toronto (FR)', st.des);
     ok('French: the fee offer, the news box in the French words, the receipt note, the footer', /Ajouter 1,81 \$ pour aider à couvrir les frais de carte/.test(st.cover) && st.consent === FRC.consent_label && /Organisme de bienfaisance enregistré \(713048502RR0001\)/.test(t) &&
       /Organisme de bienfaisance enregistré 713048502RR0001/.test(t) && /Nous utilisons vos renseignements/.test(t), { cover: st.cover, t: t.slice(-500) });
+    ok('French: the Virement Interac line shows under the amount before anything is typed', (await f.page.inputValue('#other')) === '' && (await amountNotes(f.page)).join('|') === 'small:' + ETR_FR, await amountNotes(f.page));
     ok('French: an English link back and the lockup to the French website', st.link === 'English' && /\/give\/$/.test(new URL(st.linkHref).pathname) && !/lang=/.test(st.linkHref) && st.home === 'https://welfareavenue.com/fr/', st);
     await f.page.fill('#other', '3'); await f.page.click('#go'); await f.page.waitForTimeout(250);
     ok('French: the minimum in French, nothing sent', /Le don minimum en ligne est de 5\s\$\./.test(await text(f.page)) && f.calls.filter(c => c.method === 'POST').length === 0);
     await f.page.fill('#other', '10001'); await f.page.click('#go'); await f.page.waitForTimeout(250);
-    ok('French: above the maximum, write to us or send a Virement Interac (v7), nothing sent',
-      /Pour un don de plus de 10\s000\s\$, veuillez écrire à info@welfareavenue\.com\. Vous pouvez aussi envoyer un Virement Interac à info@welfareavenue\.com pour éviter les frais de traitement des paiements\./.test(await text(f.page)) &&
-      f.calls.filter(c => c.method === 'POST').length === 0);
+    const frNotes = await amountNotes(f.page);
+    ok('French: above the maximum, write to us, with the Virement Interac line once under it, nothing sent',
+      frNotes.length === 2 && /^err:Pour un don de plus de 10\s000\s\$, veuillez écrire à info@welfareavenue\.com\.$/.test(frNotes[0]) && frNotes[1] === 'small:' + ETR_FR &&
+      f.calls.filter(c => c.method === 'POST').length === 0, frNotes);
     await f.page.fill('#other', '42,50'); await f.page.waitForTimeout(80);
     ok('French: 42,50 typed the French way is $42.50', (await f.page.textContent('#tot')).replace(/\s+/g, ' ') === '42,50 $');
     await f.page.check('#trib'); await f.page.click('#go'); await f.page.waitForTimeout(250);
