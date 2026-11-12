@@ -5,6 +5,8 @@
 // (2) A trusted Hub function (slack-command) may ask for one active roster person: x-wa-secret (the vault's WA_TRIGGER_SECRET,
 // which never reaches a browser) plus x-wa-as: their email. That path carries no sign-in of theirs, so the meetings come from
 // the open-visibility search (never wa_ask_meetings as someone else) and a task cannot be banked from there.
+// v16b (12/11/26): that path takes a Welfare Avenue account only, as the sign-in path always has. A roster person with any
+// other email cannot use Ask the Hub in the Hub, so they cannot from Slack either.
 // v15c (09/10/26): the answer check keeps what is fine (a line or a sentence at a time) instead of replacing a whole answer
 // over one sentence, and takes out internal ids.
 // v15b (09/10/26): the scrub works a clause at a time (a summary line that lists several things keeps the fine ones); answers
@@ -126,9 +128,11 @@ async function authorize(req) {
   try {
     const given = req.headers.get('x-wa-secret');
     if (given && given === await getSecret('WA_TRIGGER_SECRET')) {
-      /* v16: a trusted Hub function asking for one roster person (Ask the Hub in Slack). Only an active roster email passes. */
+      /* v16: a trusted Hub function asking for one roster person (Ask the Hub in Slack). Only an active roster email passes,
+         and (v16b) only a Welfare Avenue account: the same rule as the sign-in path below, so Slack opens nothing the Hub does not. */
       const as = (req.headers.get('x-wa-as') || '').trim().toLowerCase();
       if (as) {
+        if (!as.endsWith('@welfareavenue.com')) return { ok: false, who: '', email: '' };
         const { data: roster } = await svc.from('team_members').select('email, active').eq('active', true);
         const hit = (roster || []).find((m)=>m.active === true && String(m.email || '').trim().toLowerCase() === as);
         if (!hit) return { ok: false, who: '', email: '' };
@@ -340,7 +344,7 @@ EMOJIS: at most two per answer, only from Welfare Avenue's own set, written exac
 
 WHO IS ASKING. The context opens with who is asking, today's date and THEIR OPEN TASKS. "I", "me" and "my" mean that person. For questions about their own work (what is overdue, what to focus on, what is due this week, help finishing a task) answer from THEIR OPEN TASKS and REQUESTS WAITING ON THEM: what is past its date first, then what is due soonest, and say plainly when nothing is late. Work out "overdue", "today" and "this week" from TODAY IS, never from memory. If the context says they are not on the team list, say you cannot tell which tasks are theirs from here and point them to [Home](#mypage).
 
-ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, or change a request status. Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
+ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, or change a request status. Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. A new task goes on the board of the team the user names; when they name none, use the asker's own team from WHO IS ASKING; when WHO IS ASKING shows no team, ask which team's board it belongs on before proposing it, and never choose the Board team unless they name it. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
 
 Always finish by calling answer_question.`;
 /* v16: what belongs to one request travels with it as rq = { auth, who, via }, never in a shared variable. Two people asking at

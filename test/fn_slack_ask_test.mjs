@@ -35,12 +35,14 @@ function world(over) {
         { id: 2, name: 'Joanna Park', email: 'Joanna@WelfareAvenue.com', department: 'marketing', role: 'Designer', active: true },
         { id: 3, name: 'Gone Person', email: 'gone@welfareavenue.com', department: 'opsmtl', role: 'Operations', active: false },
         { id: 4, name: 'New Bie', email: 'newbie@welfareavenue.com', department: 'opsmtl', role: 'Operations', active: true },
-        { id: 5, name: 'No Email', email: '', department: 'opsmtl', role: 'Operations', active: true }
+        { id: 5, name: 'No Email', email: '', department: 'opsmtl', role: 'Operations', active: true },
+        { id: 6, name: 'Board Friend', email: 'friend@example.org', department: 'board', role: 'Board member', active: true }
       ],
       wa_slack_ids: [
         { email: 'ann@welfareavenue.com', slack_id: 'UANN' },
         { email: 'joanna@welfareavenue.com', slack_id: 'UJO' },
-        { email: 'gone@welfareavenue.com', slack_id: 'UGONE' }
+        { email: 'gone@welfareavenue.com', slack_id: 'UGONE' },
+        { email: 'friend@example.org', slack_id: 'UFRIEND' }
       ],
       dept_tasks: [
         { id: 1, department: 'marketing', title: 'Send the partner thank-you notes', owner: 'Ann', due_date: day(-3), done: false, flag: false },
@@ -54,7 +56,9 @@ function world(over) {
         { id: 9, department: 'marketing', title: 'Done thing', owner: 'Ann', done: true },
         { id: 10, department: 'marketing', title: 'Plan for Steel stepping down', owner: 'Ann', due_date: day(-5), done: false },
         { id: 11, department: 'marketing', title: 'Board only thing', owner: 'Ann', done: false, board_only: true },
-        { id: 12, department: 'marketing', title: 'Unsure whose', owner: 'Someone', done: false, owner_unsure: true }
+        { id: 12, department: 'marketing', title: 'Unsure whose', owner: 'Someone', done: false, owner_unsure: true },
+        { id: 13, department: 'marketing', title: 'Friend task', owner: 'Board Friend', done: false },
+        { id: 14, department: 'opsmtl', title: 'Order the pots', owner: 'Team', due_date: day(5), done: false, project_id: 50 }
       ],
       task_assignees: [{ task_id: 8, member_id: 1 }, { task_id: 12, member_id: 1 }],
       dept_requests: [
@@ -63,7 +67,7 @@ function world(over) {
         { id: 32, title: 'Time away', department: 'hr', status: 'requested', type_key: 'time-off', assignee: 'Ann Lee', done: false, created_at: '2026-11-03T00:00:00Z' }
       ],
       request_types: [{ key: 'design', label: 'Design', department: 'marketing', enabled: true, sort: 1 }, { key: 'other', label: 'Other', department: 'marketing', enabled: true, sort: 9 }],
-      board_circle: [], hub_roles: [], slack_ask_log: [], slack_ask_pending: [], wa_change_requests: [], change_log: [], projects: []
+      board_circle: [], hub_roles: [], slack_ask_log: [], slack_ask_pending: [], wa_change_requests: [], change_log: [], projects: [{ id: 50, name: 'Community Kitchen', department: 'opsmtl', status: 'active', banked_at: null }]
     },
     rpc: {
       get_secret: (a) => secrets[a.secret_name] || null,
@@ -96,6 +100,7 @@ async function stage(over) {
     [(u) => u.indexOf(SLACK + '/conversations.history') === 0 || u.indexOf(SLACK + '/conversations.replies') === 0, async () => ({ ok: true, messages: slackState.history })],
     [(u) => u.indexOf(SLACK + '/users.info') === 0, async (u) => { const id = new URL(u).searchParams.get('user'); return slackState.info[id] ? { ok: true, user: slackState.info[id] } : { ok: false, error: 'user_not_found' }; }],
     [(u) => u === SLACK + '/auth.test', async () => ({ ok: true, team_id: TEAM, user_id: 'UBOTSELF' })],
+    [(u) => u.indexOf(SLACK + '/assistant.') === 0, async () => ({ ok: true })],
     [(u) => u.indexOf(SLACK + '/chat.') === 0, async () => ({ ok: true, ts: '17000000' + (slackState.ts++) + '.000100', channel: 'D1' })],
     [(u) => u.indexOf(HOOK) === 0, async () => new Response('ok', { status: 200 })]
   ], calls);
@@ -164,6 +169,7 @@ const allText = (db) => JSON.stringify(db.tables);
   ok('ask (Slack path): banking is not offered', tools1.indexOf('bank_task') < 0 && tools1.indexOf('create_task') >= 0 && tools1.indexOf('answer_question') >= 0, tools1);
   ok('ask (Slack path): the usage log names the asker', s.llm.seen[0].headers['x-wa-caller'] === 'ask:ann', s.llm.seen[0].headers);
   ok('ask (Slack path): the prompt explains who "my" is', /WHO IS ASKING\. The context opens with who is asking/.test(s.llm.seen[0].json.system));
+  ok('ask: the prompt says whose board a new task goes on, and never guesses the Board team', /use the asker's own team from WHO IS ASKING/.test(s.llm.seen[0].json.system) && /never choose the Board team unless they name it/.test(s.llm.seen[0].json.system));
 
   s.reset();
   r = await s.askDirect({ Authorization: 'Bearer jwt-ann' }, { question: 'What should I focus on this week?' });
@@ -423,11 +429,82 @@ const allText = (db) => JSON.stringify(db.tables);
   ok('runtime: without a background hook the answer is still sent', s3.slackCalls('chat.update').length === 1);
 }
 
+/* =================== H. Slack opens nothing the Hub does not =================== */
+{
+  const s = await stage();
+  /* a roster person whose email is not a Welfare Avenue account cannot use Ask the Hub in the Hub, so not from Slack either */
+  let r = await s.askDirect(Object.assign({}, TRUST, { 'x-wa-as': 'friend@example.org' }), { question: 'hello' });
+  ok('rule: the trusted path refuses a roster email that is not a Welfare Avenue account', r.status === 401 && s.llm.seen.length === 0);
+  s.reset();
+  await s.dm('UFRIEND', 'What is my week?');
+  ok('rule: in a direct message they get a plain note and no answer', s.askCalls().length === 0 && s.slackCalls('chat.postMessage').length === 1 && /works with a Welfare Avenue account/.test(s.slackCalls('chat.postMessage')[0].json.text), s.slackCalls('chat.postMessage').map((c) => c.json.text));
+  s.reset();
+  await s.dm('UFRIEND', 'tasks');
+  ok('rule: not their task list either', s.slackCalls('chat.postMessage').length === 1 && /works with a Welfare Avenue account/.test(s.slackCalls('chat.postMessage')[0].json.text) && s.slackCalls('chat.postMessage')[0].json.text.indexOf('Friend task') < 0);
+  r = await s.slash('UFRIEND', 'tasks');
+  ok('rule: /hub tasks, the same note', /works with a Welfare Avenue account/.test(r.json.text) && r.json.text.indexOf('Friend task') < 0);
+  r = await s.slash('UFRIEND', 'project community');
+  ok('rule: /hub project, the same note, and no project', /works with a Welfare Avenue account/.test(r.json.text) && r.json.text.indexOf('Community Kitchen') < 0);
+  r = await s.slash('UNOBODY', 'project community');
+  ok('rule: /hub project is not for an account the Hub does not know', /could not match your Slack account/.test(r.json.text) && r.json.text.indexOf('Community Kitchen') < 0);
+  r = await s.slash('UANN', 'project community');
+  ok('rule: /hub project still answers the team', /Community Kitchen/.test(r.json.text) && /1 open task/.test(r.json.text) && /Order the pots/.test(r.json.text), r.json.text);
+  const before = s.db.tables.wa_change_requests.length;
+  r = await s.slash('UNOBODY', 'idea add a thing to the home page');
+  ok('rule: /hub idea files nothing for an account the Hub does not know', /could not match your Slack account/.test(r.json.text) && s.db.tables.wa_change_requests.length === before);
+  s.reset();
+  r = await s.slash('UFRIEND', 'what is due this week?', 41);
+  ok('rule: /hub and a question, the note arrives in place of an answer', r.json.text === 'Looking into it...' && s.askCalls().length === 0 && s.hooks().length === 1 && /works with a Welfare Avenue account/.test(s.hooks()[0].json.text));
+  s.reset();
+  s.db.tables.slack_ask_pending.push({ id: '33333333-3333-4333-8333-333333333333', slack_user: 'UFRIEND', email: 'friend@example.org', name: 'create_task', input: { department: 'marketing', title: 'Not for saving' }, summary: 'Add a task', created_at: new Date().toISOString(), decided_at: null, outcome: null });
+  await s.click('UFRIEND', 'hub_confirm', '33333333-3333-4333-8333-333333333333', 42);
+  ok('rule: a card cannot be confirmed without a Welfare Avenue account', s.askCalls().length === 0 && !s.db.tables.dept_tasks.some((t) => t.title === 'Not for saving') && /nothing was saved/.test(s.hooks()[0].json.text));
+
+  /* the idea command answers Slack first, and the team's ping follows */
+  s.reset();
+  r = await s.slash('UANN', 'idea add a print button to the finance page');
+  ok('/hub idea: filed, and the team is told once', /Filed/.test(r.json.text) && s.calls.filter((c) => c.url === SB + '/functions/v1/notify').length === 1);
+
+  /* Slack's side panel: a new chat opens with four ways to start, for people the Hub knows */
+  s.reset();
+  await s.event({ type: 'assistant_thread_started', assistant_thread: { user_id: 'UANN', channel_id: 'D1', thread_ts: '1700000000.000002', context: {} } });
+  const sp = s.slackCalls('assistant.threads.setSuggestedPrompts');
+  ok('side panel: a new chat gets its starters, in that thread', sp.length === 1 && sp[0].json.channel_id === 'D1' && sp[0].json.thread_ts === '1700000000.000002' && Array.isArray(sp[0].json.prompts) && sp[0].json.prompts.length >= 2 && sp[0].json.prompts.length <= 4 && sp[0].json.prompts.every((x) => x.title && x.message) && /Ann/.test(sp[0].json.title), sp.map((c) => c.json));
+  ok('side panel: nothing is posted and nothing is asked', s.slackCalls('chat.').length === 0 && s.askCalls().length === 0);
+  s.reset();
+  await s.event({ type: 'assistant_thread_started', assistant_thread: { user_id: 'UNOBODY', channel_id: 'D2', thread_ts: '1700000000.000003', context: {} } });
+  await s.event({ type: 'assistant_thread_started', assistant_thread: { user_id: 'UFRIEND', channel_id: 'D3', thread_ts: '1700000000.000004', context: {} } });
+  ok('side panel: no starters for an account the Hub does not answer', s.slackCalls('assistant.').length === 0 && s.slackCalls('chat.').length === 0);
+  /* a starter, when pressed, arrives as an ordinary message in that thread */
+  s.reset();
+  await s.dm('UANN', 'Which requests are waiting on me?', { thread_ts: '1700000000.000002' });
+  ok('side panel: a pressed starter is answered in its thread', s.askCalls().length === 1 && s.slackCalls('chat.postMessage')[0].json.thread_ts === '1700000000.000002');
+
+  /* a file with no words gets a plain note; a file with words is answered on its words */
+  s.reset();
+  await s.dm('UANN', '', { subtype: 'file_share', files: [{ id: 'F1' }] });
+  ok('files: a file with no words gets a kind note, and no model call', s.askCalls().length === 0 && s.slackCalls('chat.postMessage').length === 1 && /words only for now/.test(s.slackCalls('chat.postMessage')[0].json.text));
+  s.reset();
+  await s.dm('UANN', 'What is this week about?', { subtype: 'file_share', files: [{ id: 'F2' }] });
+  ok('files: a file with words is answered on its words', s.askCalls().length === 1 && s.askCalls()[0].json.question === 'What is this week about?');
+  /* the conversation so far: the last half hour, asked of Slack as a window */
+  s.reset();
+  await s.dm('UANN', 'And then?', { thread_ts: '1700000000.000009' });
+  const rp = s.calls.find((c) => c.url.indexOf(SLACK + '/conversations.replies') === 0);
+  const rq = rp ? new URL(rp.url).searchParams : new URLSearchParams();
+  ok('history: in a thread, Slack is asked for the last half hour only', !!rp && rq.get('ts') === '1700000000.000009' && Number(rq.get('latest')) - Number(rq.get('oldest')) > 1790 && Number(rq.get('latest')) - Number(rq.get('oldest')) < 1810 && rq.get('inclusive') === 'false', rp && rp.url);
+
+  /* a signing secret pasted with a space or a line break still checks out */
+  const s2 = await stage({ secrets: { SLACK_SIGNING_SECRET: ' sign-secret\n' } });
+  r = await s2.post('{"type":"url_verification","challenge":"xyz789"}', 'application/json');
+  ok('secret: a pasted secret with a stray space or line break still verifies', r.status === 200 && r.text === 'xyz789');
+}
+
 /* =================== G. the words =================== */
 {
   const src = fs.readFileSync(SLACKFN, 'utf8');
   const strings = (src.match(/'(?:[^'\\\n]|\\.)*'/g) || []).join('\n');
-  ok('words: Slack never reads "AI"', !/\bAI\b/.test(strings) && !/\bassistant\b/i.test(strings.replace(/'assistant'/g, '')));
+  ok('words: Slack never reads "AI"', !/\bAI\b/.test(strings) && !/\bassistant\b/i.test(strings.replace(/'assistant(\.[A-Za-z.]*)?'/g, '')));
   ok('words: no em or en dashes', !/[\u2014\u2013]/.test(src));
   ok('words: the file is ASCII', !/[^\x00-\x7f]/.test(src));
   ok('words: the Hub\'s address is the real one', src.indexOf('https://hub.welfareavenue.com/') > 0 && src.indexOf('netlify.app') < 0);

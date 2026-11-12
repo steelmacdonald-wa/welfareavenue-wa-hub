@@ -1,4 +1,4 @@
-// Welfare Avenue: slack-command (v2, 12/11/26, wave323): Ask the Hub, in Slack.
+// Welfare Avenue: slack-command (v2b, 12/11/26, wave323): Ask the Hub, in Slack.
 // Steel (12/11/26): "Ask the Hub in Slack: DM @wa_hub or /hub, answers and confirm buttons in Slack. Goes where people already
 // are. I really want this ready to use."
 //
@@ -11,11 +11,13 @@
 //   /hub tasks | project <name> | idea <a change to the Hub> | help   -> at once, no model call
 //   (v1's "/hub request" filed a change to the Hub; "request ..." now goes to Ask the Hub, which drafts a team request)
 //   Confirm, do it / Cancel          -> the buttons under a card (interactivity)
+//   A new chat in Slack's side panel -> four ways to start, when the app has that panel (assistant_thread_started)
 //
-// WHO: the Slack account is matched to an active roster person by email (wa_slack_ids, else the email on their Slack profile).
-// Nobody else gets an answer, and names are never guessed from a display name. The question then goes to the ask function as
-// that person, over the trusted path (x-wa-secret + x-wa-as): the same context, the same four confidentiality layers and the
-// same voice as Ask the Hub in the Hub.
+// WHO: the Slack account is matched to an active roster person by email (wa_slack_ids, else the email on their Slack profile),
+// and that email must be a Welfare Avenue account, the rule Ask the Hub has in the Hub. Nobody else gets an answer from any
+// command here, /hub project included, and names are never guessed from a display name. The question then goes to the ask
+// function as that person, over the trusted path (x-wa-secret + x-wa-as): the same context, the same four confidentiality
+// layers and the same voice as Ask the Hub in the Hub.
 // PRIVATE: an answer goes to a direct message or is ephemeral, never into a channel. A mention in a channel gets a private
 // note that says to ask in a direct message.
 // CONFIRM FIRST: an action (a task, a request) arrives as a card with two buttons and is saved only when the person who asked
@@ -44,7 +46,9 @@ const DEPT_LABEL = {
 };
 const LOOKING = 'Looking into it...';
 const NOT_LINKED = 'I could not match your Slack account to the Hub\'s team list yet. Open <' + SITE + '|the Hub> once with your Welfare Avenue account, or ask an admin to link your Slack account, then try me again.';
+const NO_ACCOUNT = 'Ask the Hub in Slack works with a Welfare Avenue account, and I could not find one linked to this Slack account. <' + SITE + '|The Hub> is the place for now, and an admin can help with the rest.';
 const CAP_TEXT = 'That is ' + DAILY_CAP + ' questions from Slack in a day, which is the limit for now. <' + SITE + '|The Hub> is always open, and I will be back here tomorrow.';
+const WORDS_ONLY = 'I can read words only for now. Type your question and I will take it from there.';
 const TROUBLE = 'I could not get to that just now. Try again in a minute, or ask in <' + SITE + '|the Hub>.';
 
 const ok200 = (body, type)=>new Response(body == null ? '' : body, { status: 200, headers: type ? { 'Content-Type': type } : {} });
@@ -64,13 +68,13 @@ async function getSecret(name) {
 
 /* ---------- is this really Slack? ---------- */
 async function verifySlack(req, raw) {
-  const secret = await getSecret('SLACK_SIGNING_SECRET');
+  const secret = String(await getSecret('SLACK_SIGNING_SECRET') || '').trim();
   if (!secret) return false;
   const ts = req.headers.get('x-slack-request-timestamp') || '';
   const sig = req.headers.get('x-slack-signature') || '';
   if (!/^\d{9,12}$/.test(ts) || !sig) return false;
   if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secret)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('v0:' + ts + ':' + raw));
   const hex = 'v0=' + [...new Uint8Array(mac)].map((b)=>b.toString(16).padStart(2, '0')).join('');
   if (hex.length !== sig.length) return false;
@@ -85,7 +89,7 @@ async function slack(method, payload) {
   if (!token) return { ok: false, error: 'no_bot_token' };
   try {
     let res;
-    if (method.indexOf('chat.') === 0 || method === 'auth.test') {
+    if (method.indexOf('chat.') === 0 || method.indexOf('assistant.') === 0 || method === 'auth.test') {
       res = await fetch(SLACK_API + '/' + method, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json; charset=utf-8' }, body: JSON.stringify(payload) });
     } else {
       const qs = new URLSearchParams();
@@ -133,8 +137,11 @@ async function memberFor(slackUserId) {
   }
   if (!emails.length) return null;
   const m = (await roster()).find((r)=>emails.indexOf(low(r.email)) >= 0);
-  return m ? { id: m.id, name: String(m.name).trim(), email: low(m.email), department: m.department || '' } : null;
+  /* ok: a Welfare Avenue account, the rule Ask the Hub has in the Hub. Without it nothing here answers. */
+  return m ? { id: m.id, name: String(m.name).trim(), email: low(m.email), department: m.department || '', ok: /@welfareavenue\.com$/.test(low(m.email)) } : null;
 }
+/* why this person gets no answer ('' when they do) */
+function refusal(m) { return !m ? NOT_LINKED : m.ok !== true ? NO_ACCOUNT : ''; }
 function firstName(m) { return String(m.name || '').trim().split(/\s+/)[0] || 'there'; }
 
 /* ---------- text in and out ---------- */
@@ -292,12 +299,12 @@ async function cmdIdea(m, userName, text) {
   const who = (m && m.name) || userName || 'someone via Slack';
   const { data, error } = await svc.from('wa_change_requests').insert({ request: text.slice(0, 1500), requested_by: who + ' (via /hub)', status: 'new' }).select('id').maybeSingle();
   if (error) return 'Could not file that: ' + esc(error.message);
-  try {
+  /* the ping to the team goes out after Slack has its answer (three seconds is all Slack waits) */
+  const ping = later(async ()=>{
     const secret = await getSecret('WA_TRIGGER_SECRET');
-    if (secret) {
-      await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(secret) }, body: JSON.stringify({ event: 'change_request', request_id: data && data.id }) });
-    }
-  } catch (_) { /* the request is filed either way */ }
+    if (secret) await fetch(SUPABASE_URL + '/functions/v1/notify', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(secret) }, body: JSON.stringify({ event: 'change_request', request_id: data && data.id }) });
+  });
+  if (ping) await ping;
   return ':memo: Filed. Your idea is tracked in the Hub\'s admin panel (Change the Hub), and the team got a ping. Reference #' + ((data && data.id) || '?') + '.';
 }
 
@@ -342,7 +349,8 @@ async function hub(member, body) {
 /* the last few turns of this conversation, read from Slack itself (nothing is kept by the Hub) */
 async function dmHistory(channel, thread, beforeTs) {
   try {
-    const r = thread ? await slack('conversations.replies', { channel, ts: thread, limit: 14 }) : await slack('conversations.history', { channel, limit: 9, latest: beforeTs, inclusive: false });
+    const from = (Number(beforeTs) - 30 * 60).toFixed(6);
+    const r = thread ? await slack('conversations.replies', { channel, ts: thread, oldest: from, latest: beforeTs, inclusive: false, limit: 40 }) : await slack('conversations.history', { channel, oldest: from, latest: beforeTs, inclusive: false, limit: 16 });
     if (!r || !r.ok || !Array.isArray(r.messages)) return [];
     let msgs = r.messages.slice();
     if (!thread) msgs.reverse();
@@ -379,8 +387,10 @@ async function handleDm(ev) {
   try {
     const text = cleanText(ev.text);
     const m = await memberFor(ev.user);
-    if (!m) { await post(NOT_LINKED); return; }
+    const no = refusal(m);
+    if (no) { await post(no); return; }
     const plain = text.toLowerCase().replace(/[?.!\s]+$/, '');
+    if (!plain && ev.subtype === 'file_share') { await post(WORDS_ONLY); return; }
     if (!plain || ['help', 'hi', 'hello', 'hey', 'bonjour', 'salut', 'allo'].indexOf(plain) >= 0) { await post(helpText(m)); return; }
     if (plain === 'tasks' || plain === 'my tasks' || plain === 'mine') { await post(await cmdTasks(m)); return; }
     if (await overCap(m)) { await post(CAP_TEXT); return; }
@@ -398,12 +408,27 @@ async function handleDm(ev) {
     try { await post(TROUBLE); } catch (_e) { /* nothing more to do */ }
   }
 }
+/* ---------- a new chat in Slack's side panel: four ways to start ---------- */
+const STARTERS = [
+  { title: 'What should I focus on this week?', message: 'What should I focus on this week?' },
+  { title: 'Which of my tasks are overdue?', message: 'Which of my tasks are overdue?' },
+  { title: 'What is waiting on me?', message: 'Which requests are waiting on me?' },
+  { title: 'Add a task for me', message: 'Help me add a task for myself. Ask me what it is and when it is due.' }
+];
+async function handleThreadStart(t) {
+  try {
+    const m = await memberFor(t.user_id);
+    if (refusal(m)) return;
+    await slack('assistant.threads.setSuggestedPrompts', { channel_id: t.channel_id, thread_ts: t.thread_ts, title: 'A few ways to start, ' + firstName(m), prompts: STARTERS });
+  } catch (_) { /* the chat works without them */ }
+}
 /* ---------- /hub with a question ---------- */
 async function handleSlashAsk(userId, text, responseUrl) {
   const send = (payload)=>respond(responseUrl, Object.assign({ response_type: 'ephemeral' }, payload));
   try {
     const m = await memberFor(userId);
-    if (!m) { await send({ replace_original: true, text: NOT_LINKED }); return; }
+    const no = refusal(m);
+    if (no) { await send({ replace_original: true, text: no }); return; }
     if (await overCap(m)) { await send({ replace_original: true, text: CAP_TEXT }); return; }
     await logUse(m, userId, 'slash');
     const out = await hub(m, { question: cleanText(text), history: [] });
@@ -435,7 +460,7 @@ async function handleAction(payload) {
     if (!claimed || !claimed.length) { await say(title + 'This one was already handled.'); return; }
     if (!confirm) { await say(title + 'Cancelled. Nothing was saved.'); return; }
     const m = await memberFor(userId);
-    if (!m || m.email !== low(row.email)) {
+    if (!m || m.ok !== true || m.email !== low(row.email)) {
       await svc.from('slack_ask_pending').update({ outcome: 'failed', input: null }).eq('id', row.id);
       await say(title + 'I could not match your Slack account to the Hub\'s team list any more, so nothing was saved.');
       return;
@@ -476,7 +501,7 @@ Deno.serve(async (req)=>{
     if (!await ourTeam(body.team_id)) return new Response('wrong workspace', { status: 403 });
     if (body.type !== 'event_callback' || !body.event) return ok200('');
     const ev = body.event;
-    if (ev.type === 'message' && ev.channel_type === 'im' && !ev.bot_id && !ev.subtype && ev.user && typeof ev.text === 'string') {
+    if (ev.type === 'message' && ev.channel_type === 'im' && !ev.bot_id && (!ev.subtype || ev.subtype === 'file_share') && ev.user && typeof ev.text === 'string') {
       if (await seenBefore(body.event_id, ev.user)) return ok200('');
       const wait = later(()=>handleDm(ev));
       if (wait) await wait;
@@ -488,6 +513,14 @@ Deno.serve(async (req)=>{
       if (wait) await wait;
       return ok200('');
     }
+    /* Slack's side panel for apps: a new chat there opens with four ways to start */
+    if (ev.type === 'assistant_thread_started' && ev.assistant_thread && ev.assistant_thread.channel_id && ev.assistant_thread.thread_ts) {
+      if (await seenBefore(body.event_id, ev.assistant_thread.user_id)) return ok200('');
+      const wait = later(()=>handleThreadStart(ev.assistant_thread));
+      if (wait) await wait;
+      return ok200('');
+    }
+    if (!(ev.type === 'message' && (ev.bot_id || ev.subtype))) console.log('slack-command: event not handled: ' + String(ev.type).slice(0, 40) + ' ' + String(ev.subtype || '-').slice(0, 40) + ' ' + String(ev.channel_type || '-').slice(0, 20));
     return ok200('');
   }
 
@@ -510,10 +543,17 @@ Deno.serve(async (req)=>{
   const arg = rest.join(' ').trim();
   const one = (sub || '').toLowerCase();
   try {
-    if (!text || (one === 'help' && !arg)) { const m0 = await memberFor(userId); return eph(m0 ? helpText(m0) : NOT_LINKED); }
-    if ((one === 'tasks' || one === 'mine' || one === 'my') && (!arg || arg.toLowerCase() === 'tasks')) { const m1 = await memberFor(userId); return eph(m1 ? await cmdTasks(m1) : NOT_LINKED); }
-    if (one === 'project' || one === 'p') return eph(await cmdProject(arg));
-    if (one === 'idea' || one === 'feedback') return eph(await cmdIdea(await memberFor(userId), userName, arg));
+    const instant = !text || (one === 'help' && !arg) ? 'help' : (one === 'tasks' || one === 'mine' || one === 'my') && (!arg || arg.toLowerCase() === 'tasks') ? 'tasks' : (one === 'project' || one === 'p') ? 'project' : (one === 'idea' || one === 'feedback') ? 'idea' : '';
+    if (instant) {
+      /* every command needs a person the Hub knows: a project snapshot is not for a guest in the workspace */
+      const m0 = await memberFor(userId);
+      const no = refusal(m0);
+      if (no) return eph(no);
+      if (instant === 'help') return eph(helpText(m0));
+      if (instant === 'tasks') return eph(await cmdTasks(m0));
+      if (instant === 'project') return eph(await cmdProject(arg));
+      return eph(await cmdIdea(m0, userName, arg));
+    }
     /* anything else is a question for Ask the Hub: answer Slack at once, then send the real answer to the reply address */
     const wait = later(()=>handleSlashAsk(userId, text, p.get('response_url') || ''));
     if (wait) await wait;
