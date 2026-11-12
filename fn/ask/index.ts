@@ -1,3 +1,10 @@
+// v16 (12/11/26, wave323): Ask the Hub knows who is asking, and can be asked from Slack. (1) The context opens with WHO IS
+// ASKING (the roster name and team), today's date in Toronto, THEIR OPEN TASKS (assigned to them or carrying their name as a
+// whole word; overdue first; the same visibility rules as every other task block) and the requests waiting on them. Before
+// this the model was never told who "my" was or what day it was, so "which of my tasks are overdue?" could not be answered.
+// (2) A trusted Hub function (slack-command) may ask for one active roster person: x-wa-secret (the vault's WA_TRIGGER_SECRET,
+// which never reaches a browser) plus x-wa-as: their email. That path carries no sign-in of theirs, so the meetings come from
+// the open-visibility search (never wa_ask_meetings as someone else) and a task cannot be banked from there.
 // v15c (09/10/26): the answer check keeps what is fine (a line or a sentence at a time) instead of replacing a whole answer
 // over one sentence, and takes out internal ids.
 // v15b (09/10/26): the scrub works a clause at a time (a summary line that lists several things keeps the fine ones); answers
@@ -118,11 +125,21 @@ async function getSecret(name) {
 async function authorize(req) {
   try {
     const given = req.headers.get('x-wa-secret');
-    if (given && given === await getSecret('WA_TRIGGER_SECRET')) return {
-      ok: true,
-      who: 'system',
-      email: ''
-    };
+    if (given && given === await getSecret('WA_TRIGGER_SECRET')) {
+      /* v16: a trusted Hub function asking for one roster person (Ask the Hub in Slack). Only an active roster email passes. */
+      const as = (req.headers.get('x-wa-as') || '').trim().toLowerCase();
+      if (as) {
+        const { data: roster } = await svc.from('team_members').select('email, active').eq('active', true);
+        const hit = (roster || []).find((m)=>m.active === true && String(m.email || '').trim().toLowerCase() === as);
+        if (!hit) return { ok: false, who: '', email: '' };
+        return { ok: true, who: as.split('@')[0], email: as, via: (req.headers.get('x-wa-via') || 'server').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12) || 'server' };
+      }
+      return {
+        ok: true,
+        who: 'system',
+        email: ''
+      };
+    }
   } catch (_) {}
   const authHeader = req.headers.get('Authorization') || '';
   if (authHeader.startsWith('Bearer ')) {
@@ -266,7 +283,7 @@ const CREATE_TASK_TOOL = {
       },
       owner: {
         type: 'string',
-        description: 'Optional: a team member name from TEAM MEMBERS, only if the user named one.'
+        description: 'Optional: a team member name from TEAM MEMBERS, only if the user named one. "me", "my" or "I" means the person in WHO IS ASKING: use their name.'
       },
       due_date: {
         type: 'string',
@@ -321,12 +338,16 @@ FORMAT (the Hub renders this, so use it): open with a plain sentence that answer
 
 EMOJIS: at most two per answer, only from Welfare Avenue's own set, written exactly like this: :wa-heart-gold: (thanks, warmth), :wa-heart-purple: (care), :wa-heart-beat: (big love, a win), :wa-star-gold: (a highlight), :wa-star-pop: (a win, a milestone), :wa-e-moves: (momentum, moving forward), :wa-arrow-go: (a next step), :wa-flowers-gold: (welcome, a celebration), :wa-asterisk-gold: (a heads-up, a note). Put an emoji at the end of a sentence, never in the middle of a link or a list label. Skip emojis on bad news or a short factual answer.
 
+WHO IS ASKING. The context opens with who is asking, today's date and THEIR OPEN TASKS. "I", "me" and "my" mean that person. For questions about their own work (what is overdue, what to focus on, what is due this week, help finishing a task) answer from THEIR OPEN TASKS and REQUESTS WAITING ON THEM: what is past its date first, then what is due soonest, and say plainly when nothing is late. Work out "overdue", "today" and "this week" from TODAY IS, never from memory. If the context says they are not on the team list, say you cannot tell which tasks are theirs from here and point them to [Home](#mypage).
+
 ACTIONS. You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: work the user wants to park for three months or more), complete a request, or change a request status. Nothing you propose happens immediately: the Hub shows a confirmation card and it only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts or dates. Use only ids present in the context lists. In your answer, say what is ready to confirm below; never say it is already filed, added, closed or done.
 
 Always finish by calling answer_question.`;
-let ASK_AUTH = ''; // the caller's Authorization header, for actions that run as them (bank_task)
-let ASK_WHO = ''; // who is asking (email), for the AI usage log (Admin > Adoption)
-async function anthropicCall(key, messages, tools, toolChoice) {
+/* v16: what belongs to one request travels with it as rq = { auth, who, via }, never in a shared variable. Two people asking at
+   the same moment used to share ASK_AUTH and ASK_WHO, so one person's sign-in could have been used for the other's meeting
+   search. auth: the asker's own Authorization header ('' on the trusted path), for what runs as them (wa_ask_meetings,
+   bank_task). who: the email's first part, for the usage log. via: 'slack' on the trusted path, '' for the Hub's own chat. */
+async function anthropicCall(key, messages, tools, toolChoice, rq) {
   let lastErr = '';
   for (const model of MODELS){
     const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
@@ -334,7 +355,7 @@ async function anthropicCall(key, messages, tools, toolChoice) {
       headers: {
         'Authorization': 'Bearer ' + SERVICE_KEY,
         'x-wa-task': 'brain',
-        'x-wa-caller': 'ask' + (ASK_WHO ? ':' + ASK_WHO : ''),
+        'x-wa-caller': 'ask' + (rq && rq.who ? ':' + rq.who : ''),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -486,10 +507,10 @@ async function openrouterCall(orKey, messages, tools, toolChoice) {
   }
   throw new Error('fallback model call failed: ' + lastErr);
 }
-async function callModel(key, orKey, messages, tools, toolChoice) {
+async function callModel(key, orKey, messages, tools, toolChoice, rq) {
   if (key) {
     try {
-      return await anthropicCall(key, messages, tools, toolChoice);
+      return await anthropicCall(key, messages, tools, toolChoice, rq);
     } catch (e) {
       if (!orKey) throw e;
     }
@@ -728,7 +749,8 @@ async function doCreateTask(input, caller) {
     detail: 'Added task #' + ins.id + ' to ' + (DEPT_LABELS[department] || department) + ': ' + title + (owner ? ' (owner: ' + owner + ')' : '')
   };
 }
-async function doBankTask(input) {
+async function doBankTask(input, rq) {
+  const ASK_AUTH = String((rq && rq.auth) || '');
   const taskId = Number(input?.task_id);
   if (!Number.isInteger(taskId) || taskId <= 0) return {
     error: 'invalid task_id'
@@ -764,10 +786,10 @@ async function doBankTask(input) {
     detail: 'In the bank until ' + until + ': ' + (t?.title || 'task #' + taskId) + (n > 1 ? ' (with ' + (n - 1) + ' subtask' + (n === 2 ? '' : 's') + ')' : '') + '. It comes back on its date; find it under Strategy, The bank.'
   };
 }
-async function execAction(name, input, caller, isBoard) {
+async function execAction(name, input, caller, isBoard, rq) {
   try {
     if (name === 'close_task') return await doCloseTask(input, caller, isBoard);
-    if (name === 'bank_task') return await doBankTask(input);
+    if (name === 'bank_task') return await doBankTask(input, rq);
     if (name === 'complete_request') return await doCompleteRequest(input, caller);
     if (name === 'set_request_status') return await doSetRequestStatus(input, caller);
     if (name === 'create_request') return await doCreateRequest(input, caller);
@@ -790,7 +812,7 @@ function pickAnswer(content) {
     sources: Array.isArray(inp.sources) ? inp.sources.filter((s)=>typeof s === 'string').slice(0, 10) : []
   };
 }
-async function runAgent(history, context, question) {
+async function runAgent(history, context, question, rq) {
   const key = 'hub-router';
   const orKey = await getSecret('OPENROUTER_API_KEY');
   if (!key && !orKey) throw new Error('no model API key configured');
@@ -802,13 +824,14 @@ async function runAgent(history, context, question) {
       content: finalUser
     }
   ];
+  /* v16: banking runs as the signed-in person, so it is not offered where there is no sign-in of theirs (Slack) */
   const allTools = [
     ANSWER_TOOL,
-    ...ACTION_TOOLS
+    ...ACTION_TOOLS.filter((t)=>!(rq && rq.via && t.name === 'bank_task'))
   ];
   const proposals = [];
   for(let round = 0; round < 2; round++){
-    const body = await callModel(key, orKey, messages, allTools, { type: 'auto' });
+    const body = await callModel(key, orKey, messages, allTools, { type: 'auto' }, rq);
     const content = body.content || [];
     const actions = content.filter((c)=>c.type === 'tool_use' && c.name !== 'answer_question');
     if (!actions.length) {
@@ -866,7 +889,7 @@ async function runAgent(history, context, question) {
   ], {
     type: 'tool',
     name: 'answer_question'
-  });
+  }, rq);
   const content = body.content || [];
   const ans = pickAnswer(content);
   if (ans) return {
@@ -1070,9 +1093,85 @@ function meetingsText(ms) {
     return '- ' + (m.title || 'Untitled') + ' (' + (DEPT_LABELS[m.department] || m.department || '') + ', ' + (m.meeting_date || '') + ')' + kind(m) + ': ' + sum + passage;
   }).join('\n');
 }
-async function buildContext(question, isBoard, acc) {
+/* v16: who is asking, what day it is, and what is on their plate. Everything here follows the rules of the other task blocks:
+   nothing banked, board-only, confidential, restricted or from the Board team, and no title that touches an off-limits topic. */
+function torontoToday() {
+  const now = new Date();
+  let iso = '', long = '';
+  try { iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now); } catch (_) { iso = now.toISOString().slice(0, 10); }
+  try { long = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Toronto', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now); } catch (_) { long = iso; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) iso = now.toISOString().slice(0, 10);
+  return { iso, long };
+}
+function firstWord(name) { return String(name || '').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z\u00c0-\u024f-]/g, ''); }
+function ownerHas(owner, first) {
+  if (!first) return false;
+  return (' ' + String(owner || '').toLowerCase().replace(/[^a-z0-9\u00c0-\u024f-]+/g, ' ') + ' ').indexOf(' ' + first + ' ') >= 0;
+}
+function dayGap(a, b) { return Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400000); }
+async function askerOf(email) {
+  if (!email) return null;
+  try {
+    const { data } = await svc.from('team_members').select('id, name, email, department, active').eq('active', true);
+    const m = (data || []).find((r)=>r.active === true && String(r.email || '').trim().toLowerCase() === email);
+    return m && m.name ? { id: m.id, name: String(m.name).trim(), department: m.department || '' } : null;
+  } catch (_) { return null; }
+}
+async function askerBlock(asker, via) {
+  const today = torontoToday();
+  const lines = [];
+  if (via === 'slack') lines.push('ASKED FROM SLACK: the answer is read in Slack. Moving a task to the bank is not available from Slack; if they ask for that, say it takes one tap in the Hub: [The bank](#bank).');
+  if (!asker) return lines.concat(['TODAY IS ' + today.long + ' (' + today.iso + ').', 'WHO IS ASKING: not on the team list, so nothing here says which tasks are theirs.']).join('\n');
+  const team = DEPT_LABELS[asker.department] || '';
+  lines.push('WHO IS ASKING: ' + asker.name + (team && asker.department !== 'board' ? ' (' + team + ')' : '') + '. "I", "me" and "my" in the question mean ' + asker.name.split(/\s+/)[0] + '.');
+  lines.push('TODAY IS ' + today.long + ' (' + today.iso + ').');
+  try {
+    const first = firstWord(asker.name);
+    const [{ data: rows }, { data: links }] = await Promise.all([
+      svc.from('dept_tasks').select('id,department,title,owner,due_date,flag,done,banked_at,board_only,confidential,visibility,owner_unsure').is('banked_at', null).eq('done', false).or(OPEN_VIS).eq('board_only', false).not('confidential', 'is', true).neq('department', 'board').limit(1000),
+      svc.from('task_assignees').select('task_id').eq('member_id', asker.id)
+    ]);
+    const assigned = new Set((links || []).map((l)=>Number(l.task_id)));
+    const mine = (rows || []).filter((t)=>{
+      /* the same rules again here, so a wider query can never widen what is shown */
+      if (t.done === true || t.banked_at || t.board_only === true || t.confidential === true || t.department === 'board') return false;
+      if (t.visibility && t.visibility !== 'department') return false;
+      if (confHit(t.title)) return false;
+      return (assigned.has(Number(t.id)) && t.owner_unsure !== true) || ownerHas(t.owner, first);
+    });
+    const rank = (t)=>t.due_date ? (t.due_date < today.iso ? 0 : 1) : 2;
+    mine.sort((a, b)=>rank(a) - rank(b) || String(a.due_date || '').localeCompare(String(b.due_date || '')) || a.id - b.id);
+    const late = mine.filter((t)=>t.due_date && t.due_date < today.iso).length;
+    if (!mine.length) lines.push('THEIR OPEN TASKS: none under their name.');
+    else {
+      lines.push('THEIR OPEN TASKS (' + mine.length + ' open, ' + late + ' past the due date; numeric ids usable with close_task and bank_task):');
+      mine.slice(0, 20).forEach((t)=>{
+        let when = 'no due date';
+        if (t.due_date) {
+          const gap = dayGap(t.due_date, today.iso);
+          when = gap < 0 ? 'due ' + t.due_date + ', OVERDUE by ' + (-gap) + (gap === -1 ? ' day' : ' days') : gap === 0 ? 'due TODAY' : 'due ' + t.due_date + ' (in ' + gap + (gap === 1 ? ' day' : ' days') + ')';
+        }
+        lines.push(t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', ' + when + (t.flag ? ', flagged' : '') + ')');
+      });
+      if (mine.length > 20) lines.push('... and ' + (mine.length - 20) + ' more on their Home page.');
+    }
+  } catch (_) {}
+  try {
+    const first = firstWord(asker.name);
+    const { data: reqs0 } = await svc.from('dept_requests').select('id,title,department,status,type_key,assignee,created_at').eq('done', false).neq('type_key', 'time-off').neq('department', 'board').order('created_at', { ascending: true }).limit(200);
+    const waiting = (reqs0 || []).filter((r)=>r.type_key !== 'time-off' && r.department !== 'board' && !confHit(r.title) && r.assignee && (String(r.assignee).trim().toLowerCase() === asker.name.toLowerCase() || ownerHas(r.assignee, first)));
+    if (waiting.length) {
+      lines.push('REQUESTS WAITING ON THEM (' + waiting.length + '; ids usable with complete_request and set_request_status):');
+      waiting.slice(0, 10).forEach((r)=>lines.push(r.id + '. ' + (r.title || 'Untitled') + ' (' + (DEPT_LABELS[r.department] || r.department) + ', status: ' + (r.status || 'new') + ')'));
+    }
+  } catch (_) {}
+  return lines.join('\n');
+}
+async function buildContext(question, isBoard, acc, asker, rq) {
+  const ASK_AUTH = String((rq && rq.auth) || ''), ASK_WHO = String((rq && rq.who) || '');
   const kws = keywords(question);
   const parts = [];
+  try { parts.push(await askerBlock(asker, (rq && rq.via) || '')); } catch (_) {}
   try {
     /* wave226: the leaders-only moments and documents never reach Ask the Hub, whoever asks */
     const story = await storyBlock(question, { lead: false, docsLead: false });
@@ -1141,7 +1240,7 @@ async function buildContext(question, isBoard, acc) {
       }).limit(12);
       const matched = (matched0 || []).filter((t)=>!confHit(t.title)).slice(0, 8);
       if (matched.length) {
-        parts.push('OPEN TASKS MATCHING THE QUESTION (numeric ids usable with close_task and bank_task):\n' + matched.map((t)=>t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', owner: ' + (t.owner || 'unowned') + ', status: ' + (t.status || 'open') + ')').join('\n'));
+        parts.push('OPEN TASKS MATCHING THE QUESTION (numeric ids usable with close_task and bank_task):\n' + matched.map((t)=>t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', owner: ' + (t.owner || 'unowned') + ', status: ' + (t.status || 'open') + (t.due_date ? ', due ' + t.due_date : '') + ')').join('\n'));
       }
     }
   } catch (_) {}
@@ -1247,8 +1346,12 @@ Deno.serve(async (req)=>{
     headers: CORS
   });
   const auth = await authorize(req);
-  ASK_AUTH = req.headers.get('Authorization') || '';
-  ASK_WHO = (auth && auth.ok && auth.who) ? String(auth.who).toLowerCase().slice(0, 80) : '';
+  /* v16: the trusted path carries the function's own key, not the person's sign-in: nothing may run "as them" with it */
+  const rq = {
+    auth: (auth && auth.via) ? '' : (req.headers.get('Authorization') || ''),
+    who: (auth && auth.ok && auth.who) ? String(auth.who).toLowerCase().slice(0, 80) : '',
+    via: (auth && auth.ok && auth.via) ? String(auth.via) : ''
+  };
   if (!auth.ok) return json({
     error: 'unauthorized'
   }, 401);
@@ -1265,7 +1368,7 @@ Deno.serve(async (req)=>{
   if (body.execute && typeof body.execute === 'object') {
     const name = String(body.execute.name || '');
     const input = body.execute.input || {};
-    const out = await execAction(name, input, auth.who, isBoard);
+    const out = await execAction(name, input, auth.who + (auth.via ? ' via ' + auth.via : ''), isBoard, rq);
     return json({
       executed: out
     });
@@ -1281,8 +1384,9 @@ Deno.serve(async (req)=>{
   const history = cleanHistory(body.history);
   try {
     const acc = await storyAccess(auth.email, isBoard);
-    const context = await buildContext(question, isBoard, acc);
-    const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question);
+    const asker = await askerOf(auth.email);
+    const context = await buildContext(question, isBoard, acc, asker, rq);
+    const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question, rq);
     const answer = finishAnswer(out.answer, out.proposals);
     const conf = answer === CONF_ANSWER;
     return json({
