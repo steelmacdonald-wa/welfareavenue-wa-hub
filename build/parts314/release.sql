@@ -2,6 +2,7 @@
 -- One transaction: if any check fails, nothing changes. Made against the live Hub page 095f882d0576184dd23f4b0381247ca9; result 04a6163f23704c9a2c7ec0b845219ff2.
 -- Already live before this file: the edge function social-ads-manage (v1), the function wa314_ads_lead / wa314_ads_leads,
 -- the table social_ad_actions and hub_settings studio_ads_limits (migration wave314_ads_manage).
+-- Safe to paste from Windows: line endings are normalised (v2, 13/11/26).
 -- Nobody is messaged by this release. Undo: "13-11-26 - wave314 undo (only if needed).sql".
 create table if not exists public.site_files_bak_wa314 (path text, part int, content text, updated_at timestamptz);
 alter table public.site_files_bak_wa314 enable row level security;
@@ -15,11 +16,11 @@ do $bk$ begin
 end $bk$;
 do $pg$
 declare v text; v_new text; n int; i int; sz int; o text; nw text;
-  olds text[] := array[$o1$Open Ads Manager</a></p>';
+  olds text[] := array[replace($o1$Open Ads Manager</a></p>';
   }
 
-  /* ---------- Connections: Meta live, and WhatsApp ---------- */$o1$, $o2$ clicks. Read-only from Meta\u2019s ad accounts; the Hub never changes an ad.</p></div>';$o2$];
-  news text[] := array[$n1$Open Ads Manager</a></p>' + manage314();
+  /* ---------- Connections: Meta live, and WhatsApp ---------- */$o1$, chr(13), ''), replace($o2$ clicks. Read-only from Meta\u2019s ad accounts; the Hub never changes an ad.</p></div>';$o2$, chr(13), '')];
+  news text[] := array[replace($n1$Open Ads Manager</a></p>' + manage314();
   }
 
   /* =====================================================================
@@ -228,7 +229,7 @@ declare v text; v_new text; n int; i int; sz int; o text; nw text;
   });
   window.w314 = { state: function () { return M314; }, reload: load314 };
 
-  /* ---------- Connections: Meta live, and WhatsApp ---------- */$n1$, $n2$ clicks. ' + (M314.lead ? 'From Meta\u2019s ad accounts; marketing leads manage them below.' : 'Read-only from Meta\u2019s ad accounts.') + '</p></div>';$n2$];
+  /* ---------- Connections: Meta live, and WhatsApp ---------- */$n1$, chr(13), ''), replace($n2$ clicks. ' + (M314.lead ? 'From Meta\u2019s ad accounts; marketing leads manage them below.' : 'Read-only from Meta\u2019s ad accounts.') + '</p></div>';$n2$, chr(13), '')];
 begin
   select string_agg(content, '' order by part) into v from public.site_files where path = 'index.html';
   if v is null then raise exception 'index.html not found'; end if;

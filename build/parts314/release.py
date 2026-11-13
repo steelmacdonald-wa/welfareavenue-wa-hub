@@ -14,6 +14,7 @@ sql = f"""-- 13/11/26 - wave314 release: Manage ads in the Content Studio (Paid)
 -- One transaction: if any check fails, nothing changes. Made against the live Hub page {m0}; result {m1}.
 -- Already live before this file: the edge function social-ads-manage (v1), the function wa314_ads_lead / wa314_ads_leads,
 -- the table social_ad_actions and hub_settings studio_ads_limits (migration wave314_ads_manage).
+-- Safe to paste from Windows: line endings are normalised (v2, 13/11/26).
 -- Nobody is messaged by this release. Undo: "13-11-26 - wave314 undo (only if needed).sql".
 create table if not exists public.site_files_bak_wa314 (path text, part int, content text, updated_at timestamptz);
 alter table public.site_files_bak_wa314 enable row level security;
@@ -27,8 +28,8 @@ do $bk$ begin
 end $bk$;
 do $pg$
 declare v text; v_new text; n int; i int; sz int; o text; nw text;
-  olds text[] := array[{q('o1', O1)}, {q('o2', O2)}];
-  news text[] := array[{q('n1', N1)}, {q('n2', N2)}];
+  olds text[] := array[replace({q('o1', O1)}, chr(13), ''), replace({q('o2', O2)}, chr(13), '')];
+  news text[] := array[replace({q('n1', N1)}, chr(13), ''), replace({q('n2', N2)}, chr(13), '')];
 begin
   select string_agg(content, '' order by part) into v from public.site_files where path = 'index.html';
   if v is null then raise exception 'index.html not found'; end if;
