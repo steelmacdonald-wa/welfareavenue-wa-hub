@@ -1,4 +1,11 @@
-// Welfare Avenue: whatsapp-send (v1, 15/10/26, wave254)
+// Welfare Avenue: whatsapp-send (v3, 14/11/26, WhatsApp for volunteers)
+// v3: the real number. Steel connected +1 438-808-7754 (phone id 1345901671947183) on WABA 1454280426154031 (14/11/26).
+// The WABA now comes from app_config sms_whatsapp_waba_id like the phone id, so templates are listed and submitted on the
+// account the number belongs to. Defaults are the real number and account; the test number is no longer assumed.
+// Whatsapp-send (v2, 06/11/26, wave281)
+// v2 (wave281): STOP sticks to the phone number. The drain also leaves out every phone in wa_stopped_phones_v, on either
+// channel (its latest WhatsApp or SMS STOP/START keyword message was a STOP), even when no contact holds it ('they said STOP'):
+// nobody who said STOP on WhatsApp or SMS (final review M3, 06/11/26: the SMS channel too).
 // Steel, 14/10/26 (the Meta additions): "WhatsApp — reminders and re-confirm texts as a second channel next to Quo SMS ...
 // Build it against the test number; production waits on Steel's three items" (a dedicated number, business verification,
 // a payment method). WhatsApp Cloud API through the HUB-Analytics app (WABA 984036304713487; the test number
@@ -16,7 +23,7 @@
 // templates_create and test.
 // Actions (POST): status, templates_create, drain, inbound {value} (Meta's change value: statuses and messages),
 //   test {to?, template?} (admins: one template to the test phones only, whatever the mode; never run by a build).
-// Tables: whatsapp_messages (write), crm_contacts (read: opt-outs), app_config (read), change_log (template submissions and
+// Tables: whatsapp_messages (write), crm_contacts and wa_stopped_phones_v (read: opt-outs), app_config (read), change_log (template submissions and
 // tests). RPC: wa254_inbound. Vault: META_SYSTEM_TOKEN (whatsapp_business_messaging, whatsapp_business_management).
 // Side effects: WhatsApp messages to people, only as the switches allow; template submissions to Meta for review.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -26,7 +33,9 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const GRAPH = 'https://graph.facebook.com/v23.0';
-const WABA_ID = '984036304713487';
+const WABA_DEFAULT = '1454280426154031';
+const PHONE_DEFAULT = '1345901671947183';
+let WABA_ID = WABA_DEFAULT;
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -99,12 +108,15 @@ async function sendOne(token: string, phoneId: string, row: Any): Promise<{ ok: 
 async function optedOut(): Promise<Set<string>> {
   const { data } = await svc.from('crm_contacts').select('phones').or('whatsapp_opt_out.eq.true,sms_opt_out.eq.true').is('merged_into', null);
   const s = new Set<string>(); for (const c of ((data || []) as Any[])) for (const p of (c.phones || [])) { const d = digits(p); if (d) s.add(d); }
+  // wave281: a phone whose latest keyword message was STOP, on WhatsApp or by SMS, stays out, held by a contact or not (empty if the view cannot be read)
+  const { data: stopped } = await svc.from('wa_stopped_phones_v').select('phone_digits').in('channel', ['whatsapp', 'sms']);
+  for (const r of ((stopped || []) as Any[])) { const d = digits(r.phone_digits); if (d) s.add(d); }
   return s;
 }
 async function drain(): Promise<Any> {
   const mode = (await cfg('sms_whatsapp_mode')) || 'off';
   const tests = (await cfg('sms_whatsapp_test_phones')).split(',').map(digits).filter(Boolean);
-  const phoneId = (await cfg('sms_whatsapp_phone_id')) || '1442123962307619';
+  const phoneId = (await cfg('sms_whatsapp_phone_id')) || PHONE_DEFAULT;
   const { data: rows } = await svc.from('whatsapp_messages').select('*').eq('direction', 'out').eq('status', 'queued').order('id', { ascending: true }).limit(60);
   const list = (rows || []) as Any[];
   if (!list.length) return { mode, sent: 0, skipped: 0, failed: 0, waiting: 0 };
@@ -176,6 +188,7 @@ async function templatesCreate(token: string): Promise<Any> {
 }
 
 Deno.serve(async (req: Request) => {
+  try { WABA_ID = (await cfg('sms_whatsapp_waba_id')) || WABA_DEFAULT; } catch (_) { WABA_ID = WABA_DEFAULT; }
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   const me = await caller(req);
   if (!me) return json({ error: 'unauthorized' }, 401);
@@ -186,7 +199,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'inbound') { if (!me.auto) return json({ error: 'the pipeline only' }, 403); return json({ ok: true, ...(await inbound(body.value || {})) }); }
     if (action === 'status') {
       const token = await getSecret('META_SYSTEM_TOKEN');
-      const phoneId = (await cfg('sms_whatsapp_phone_id')) || '1442123962307619';
+      const phoneId = (await cfg('sms_whatsapp_phone_id')) || PHONE_DEFAULT;
       const out: Any = { mode: (await cfg('sms_whatsapp_mode')) || 'off', channel: (await cfg('sms_whatsapp_channel')) || 'off', test_phones: (await cfg('sms_whatsapp_test_phones')).split(',').map(digits).filter(Boolean).length, phone_id: phoneId, is_admin: me.admin };
       try { out.number = await graph('GET', '/' + phoneId, token, undefined, { fields: 'display_phone_number,verified_name,quality_rating,code_verification_status,name_status,platform_type' }); } catch (e) { out.number = { error: String((e as Error).message) }; }
       try { out.account = await graph('GET', '/' + WABA_ID, token, undefined, { fields: 'name,account_review_status,business_verification_status' }); } catch (e) { out.account = { error: String((e as Error).message) }; }
@@ -215,7 +228,7 @@ Deno.serve(async (req: Request) => {
       const ins = await svc.from('whatsapp_messages').insert({ phone: '+1' + to, kind: 'test', template: tpl, lang, params, body: tpl === 'hello_world' ? 'hello_world (Meta sample)' : fill(tpl, lang, params), status: 'sent', sent_at: new Date().toISOString(), sent_by: me.who }).select('*').single();
       if (ins.error) throw new Error(ins.error.message);
       const token = await getSecret('META_SYSTEM_TOKEN');
-      const r = await sendOne(token, (await cfg('sms_whatsapp_phone_id')) || '1442123962307619', ins.data);
+      const r = await sendOne(token, (await cfg('sms_whatsapp_phone_id')) || PHONE_DEFAULT, ins.data);
       await svc.from('whatsapp_messages').update(r.ok ? { wamid: r.wamid || null } : { status: 'failed', error: r.error }).eq('id', ins.data.id);
       try { await svc.from('change_log').insert({ entity_type: 'whatsapp', entity_id: String(ins.data.id), field: 'test', old_value: null, new_value: tpl + ' to a test phone: ' + (r.ok ? 'sent' : 'failed'), changed_by: me.who }); } catch (_) { /* audit */ }
       return json({ ok: r.ok, error: r.error || null });
