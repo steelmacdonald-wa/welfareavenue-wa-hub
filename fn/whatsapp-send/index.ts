@@ -60,6 +60,15 @@ const TEMPLATES: Tpl[] = [
   { name: 'wa_still_in', lang: 'fr', category: 'UTILITY',
     body: "Bonjour {{1}}, ici Welfare Avenue! Il y a quelque temps, vous vous êtes inscrit·e pour faire du bénévolat avec nous comme {{2}}. Êtes-vous toujours partant·e? Touchez un bouton ou répondez OUI ou NON.",
     example: ['Sam', 'photographe'], buttons: ['Oui, comptez sur moi', 'Plus maintenant'], footer: 'Répondez STOP pour ne plus recevoir ces messages' },
+  /* v3 (14/11/26): the serving's WhatsApp group. Operations creates the group in the WhatsApp app and pastes its invite link on
+     the event in the Volunteer Manager; a confirmed volunteer gets the link (Meta's API cannot add people to a group, and its
+     own groups hold at most 8, so the group itself lives in WhatsApp). */
+  { name: 'wa_group_invite', lang: 'en', category: 'UTILITY',
+    body: "Hi {{1}}, it's Welfare Avenue! You're confirmed as {{2}} on {{3}}. Join your team's WhatsApp group to meet the crew and get updates: {{4}} See you there!",
+    example: ['Sam', 'a server', 'Sunday, November 23 at 12:00 pm', 'https://chat.whatsapp.com/AbCdEfGhIjK'], buttons: [], footer: 'Reply STOP to stop these messages' },
+  { name: 'wa_group_invite', lang: 'fr', category: 'UTILITY',
+    body: "Bonjour {{1}}, ici Welfare Avenue! Vous êtes confirmé·e comme {{2}} le {{3}}. Rejoignez le groupe WhatsApp de votre équipe pour rencontrer l'équipe et recevoir les nouvelles : {{4}} À bientôt!",
+    example: ['Sam', 'serveur·se', 'dimanche 23 novembre à 12h00', 'https://chat.whatsapp.com/AbCdEfGhIjK'], buttons: [], footer: 'Répondez STOP pour ne plus recevoir ces messages' },
 ];
 function fill(name: string, lang: string, params: string[]): string {
   const t = TEMPLATES.find(x => x.name === name && x.lang === lang) || TEMPLATES.find(x => x.name === name);
@@ -179,7 +188,7 @@ async function templatesCreate(token: string): Promise<Any> {
     const body = { name: t.name, language: t.lang, category: t.category, components: [
       { type: 'BODY', text: t.body, example: { body_text: [t.example] } },
       { type: 'FOOTER', text: t.footer },
-      { type: 'BUTTONS', buttons: t.buttons.map(b => ({ type: 'QUICK_REPLY', text: b })) },
+      ...(t.buttons.length ? [{ type: 'BUTTONS', buttons: t.buttons.map(b => ({ type: 'QUICK_REPLY', text: b })) }] : []),
     ] };
     try { const r = await graph('POST', '/' + WABA_ID + '/message_templates', token, body); out.push({ name: t.name, lang: t.lang, id: r.id, status: r.status, category: r.category }); }
     catch (e) { out.push({ name: t.name, lang: t.lang, error: String((e as Error).message || e).slice(0, 200) }); }
@@ -224,7 +233,7 @@ Deno.serve(async (req: Request) => {
       if (!to || tests.indexOf(to) < 0) return json({ error: 'Tests go only to a number in sms_whatsapp_test_phones' }, 400);
       const tpl = String(body.template || 'hello_world');
       const lang = body.lang === 'fr' ? 'fr' : 'en';
-      const params = tpl === 'wa_serving_reminder' ? ['Steel', lang === 'fr' ? 'serveur·se' : 'a server', lang === 'fr' ? 'dimanche à 12h00' : 'Sunday at 12:00 pm'] : (tpl === 'wa_still_in' ? ['Steel', lang === 'fr' ? 'photographe' : 'a photographer'] : []);
+      const params = tpl === 'wa_serving_reminder' ? ['Steel', lang === 'fr' ? 'serveur·se' : 'a server', lang === 'fr' ? 'dimanche à 12h00' : 'Sunday at 12:00 pm'] : (tpl === 'wa_still_in' ? ['Steel', lang === 'fr' ? 'photographe' : 'a photographer'] : (tpl === 'wa_group_invite' ? ['Steel', lang === 'fr' ? 'serveur·se' : 'a server', lang === 'fr' ? 'dimanche à 12h00' : 'Sunday at 12:00 pm', String(body.link || 'https://chat.whatsapp.com/')] : []));
       const ins = await svc.from('whatsapp_messages').insert({ phone: '+1' + to, kind: 'test', template: tpl, lang, params, body: tpl === 'hello_world' ? 'hello_world (Meta sample)' : fill(tpl, lang, params), status: 'sent', sent_at: new Date().toISOString(), sent_by: me.who }).select('*').single();
       if (ins.error) throw new Error(ins.error.message);
       const token = await getSecret('META_SYSTEM_TOKEN');
