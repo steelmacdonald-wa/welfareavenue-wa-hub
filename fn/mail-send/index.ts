@@ -1,3 +1,9 @@
+// v9 (wave344, 14/11/26): Steel: "volunteer emails should go from volunteer@ or the role owner (preferably role owner). It should
+//   also be replied to the role owner." When app_config mail_role_owner_from is 'on', an email routed to volunteer@ whose replies go to
+//   a team member (the role's owner, wa258_role_owner / wa297_reply_to) is sent FROM that person ("Mary, Welfare Avenue" <mary@...>) with
+//   replies to them. Off (the default), nothing changes. An automation's send step may name a route ("route": "volunteer"), so a welcome
+//   series written in the automation goes from volunteer@ and not from the main inbox. Toronto's replies go to a group address, which is
+//   no team member, so Toronto is unchanged.
 // v8 (10/11/26): a template's design.cc copies team addresses on our domain on its real sends (sendRow).
 // Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
 // v7 (wave282, 06/11/26, not deployed): Steel's email rule of 5 Nov 2026 lives in crm_email_permission (newsletters and fundraising go to anyone
@@ -312,6 +318,23 @@ function routed(cfg: Record<string, string>, key: string, route?: string | null,
   const to = String(reply || '').trim().toLowerCase();
   return { email, reply: to && onDomain(to, cfg) ? to : null };
 }
+/* v9: the role's owner as the sender (see the header). s is what routed() answered; anything else passes through untouched */
+async function ownerSender(cfg: Record<string, string>, s: Sender | null): Promise<Sender | null> {
+  try {
+    if (!s || !s.email || !s.reply || String(cfg.mail_role_owner_from || '').toLowerCase() !== 'on') return s;
+    let m: { routes?: Record<string, string> } = {};
+    try { m = JSON.parse(cfg.mail_senders || '{}'); } catch (_) { return s; }
+    const vol = String((m.routes || {}).volunteer || '').toLowerCase();
+    const owner = String(s.reply).trim().toLowerCase();
+    if (!vol || String(s.email).toLowerCase() !== vol || owner === vol || !onDomain(owner, cfg)) return s;
+    const t = await svc.from('team_members').select('name,active').eq('email', owner).limit(1);
+    const row = ((t as any).data || [])[0];
+    if (!row || row.active === false) return s;   /* a group address, or someone who has left: volunteer@ keeps sending */
+    const first = String(row.name || '').trim().split(/\s+/)[0] || '';
+    const org = String(cfg.mail_from_name || 'Welfare Avenue');
+    return { name: first ? first + ', ' + org : org, email: owner, reply: owner };
+  } catch (_) { return s; }
+}
 function onDomain(e: string, cfg: Record<string, string>) { return isEmail(e) && e.toLowerCase().endsWith('@' + (cfg.mail_domain || 'welfareavenue.com')); }
 /* sends one row already in crm_email_sends (queued, or claimed by the pump) */
 async function sendRow(o: { sendId: number; c: any; to: string; content: Content; cfg: Record<string, string>; isTest: boolean; who: Caller }): Promise<Sent> {
@@ -319,7 +342,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   if (!key) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }; }
   const kind = o.content.kind;
   const tpl = { ...o.content.tpl, kind, subject: o.content.subject || o.content.tpl.subject, preheader: o.content.preheader != null && o.content.preheader !== '' ? o.content.preheader : o.content.tpl.preheader };
-  const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : (routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply) || o.content.sender));
+  const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : ((await ownerSender(o.cfg, routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply))) || o.content.sender));
   if (!onDomain(sender.email, o.cfg)) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }; }
   const unsub = await unsubUrl(o.c ? o.c.id : null, o.sendId);
   const r = await render(tpl, o.c, o.content.vars, o.cfg, unsub, o.content.basis);
@@ -484,7 +507,7 @@ async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Call
   /* wave273: replies reach whoever handles this role */
   const ro = await svc.from('event_roster').select('role').eq('id', Number(m.roster_id)).maybeSingle();
   const ow = ro.data ? await svc.rpc('wa258_role_owner', { p_role: ro.data.role }) : null;
-  const sender = senderLine(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data));
+  const sender = senderLine(cfg, await ownerSender(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data)));
   const res = await rs(key, 'POST', '/emails', { from: sender.from, to: [row.to_email], subject: e.subject, html: e.html, text: e.text, reply_to: sender.reply,
     tags: [{ name: 'template', value: 'volunteer_itinerary' }, { name: 'kind', value: 'transactional' }, { name: 'send_id', value: String(row.id) }] }, { 'Idempotency-Key': 'wa-send-' + row.id });
   await svc.from('crm_email_sends').update({ subject: e.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
@@ -585,7 +608,12 @@ async function pumpAutomations(cfg: Record<string, string>, who: Caller, max: nu
       basis = p.basis;
     }
     const s = m.sender && m.sender.email ? { name: m.sender.name || null, email: String(m.sender.email), reply: m.sender.reply || null } : null;
-    const r = await sendRow({ sendId: row.id, c, to, content: { tpl, vars: cleanVars(m.vars || {}), kind, subject: m.subject || null, preheader: m.preheader || null, sender: s, automationId: row.automation_id || null, basis },
+    /* v9: an automation's send step may name the address it goes from ("route": "volunteer") */
+    let stepRoute: string | null = null;
+    if (!s && row.automation_id && row.step_id) {
+      try { const a = await svc.from('crm_automations').select('steps').eq('id', row.automation_id).maybeSingle(); const st = (((a as any).data && (a as any).data.steps) || []).find((x: any) => x && String(x.id) === String(row.step_id)); if (st && st.route) stepRoute = String(st.route); } catch (_) { /* the default address */ }
+    }
+    const r = await sendRow({ sendId: row.id, c, to, content: { tpl, vars: cleanVars(m.vars || {}), kind, subject: m.subject || null, preheader: m.preheader || null, sender: s, automationId: row.automation_id || null, basis, route: stepRoute },
       cfg, isTest: !!row.is_test, who: { ...who, email: 'automation:' + (row.automation_id || '?') } });
     if (r.status === 'sent') out.sent++; else out.failed++;
     await sleep(550);
