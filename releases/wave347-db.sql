@@ -180,6 +180,9 @@ begin
     'counters', (select coalesce(jsonb_agg(jsonb_build_object('name', r.person_name, 'role', r.role, 'given', coalesce(r.detail->>'cl_job', '') = 'count') order by (coalesce(r.detail->>'cl_job', '') = 'count') desc, r.role, r.person_name), '[]'::jsonb)
                    from public.event_roster r where r.event_id = e.id and lower(coalesce(r.status, '')) not in ('cancelled', 'unavailable') and coalesce(r.confirm_status, '') <> 'declined' and coalesce(public.pb_may_count(r.id), false)),
     'total', (select count(*) from public.pb_tally t where t.event_id = e.id),
+    'preview', (select '/c/?t=' || r.confirm_token || '&test=1' from public.event_roster r where r.event_id = e.id and r.confirm_token is not null
+                  and lower(coalesce(r.status, '')) not in ('cancelled', 'unavailable') and coalesce(r.confirm_status, '') <> 'declined' and coalesce(public.pb_may_count(r.id), false)
+                order by (coalesce(r.detail->>'cl_job', '') = 'count') desc, r.id limit 1),
     'last_at', (select max(recorded_at) from public.pb_tally t where t.event_id = e.id),
     'by', jsonb_build_object(
       'age', (select coalesce(jsonb_object_agg(k, n), '{}'::jsonb) from (select age_group k, count(*) n from public.pb_tally where event_id = e.id group by 1) a),
