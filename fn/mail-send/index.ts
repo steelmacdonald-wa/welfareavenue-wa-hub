@@ -1,7 +1,9 @@
 // v9 (wave344, 14/11/26): Steel: "volunteer emails should go from volunteer@ or the role owner (preferably role owner). It should
-//   also be replied to the role owner." When app_config mail_role_owner_from is 'on', an email routed to volunteer@ whose replies go to
-//   a team member (the role's owner, wa258_role_owner / wa297_reply_to) is sent FROM that person ("Mary, Welfare Avenue" <mary@...>) with
-//   replies to them. Off (the default), nothing changes. An automation's send step may name a route ("route": "volunteer"), so a welcome
+//   also be replied to the role owner." Then: "Can we choose who it's replied to on the team as an option, default is the user [who]
+//   click[s] these buttons". So From and Reply-To are two things. When app_config mail_role_owner_from is 'on', an email routed to
+//   volunteer@ that names the role's owner (send takes owner; the itinerary looks it up) is sent FROM that person ("Mary, Welfare Avenue"
+//   <mary@...>). Replies go where reply_to says (the person who pressed Send, or their choice), and to the owner when it says nothing.
+//   Off (the default), nothing changes. An automation's send step may name a route ("route": "volunteer"), so a welcome
 //   series written in the automation goes from volunteer@ and not from the main inbox. Toronto's replies go to a group address, which is
 //   no team member, so Toronto is unchanged.
 // v8 (10/11/26): a template's design.cc copies team addresses on our domain on its real sends (sendRow).
@@ -300,7 +302,7 @@ async function contactByEmail(email: string) {
 type Sent = { send_id?: number; resend_id?: string; status?: string; to?: string; subject?: string; error?: string };
 type Sender = { name?: string | null; email?: string | null; reply?: string | null };
 type Attachment = { filename: string; content: string };
-type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null; route?: string | null; reply?: string | null; basis?: string | null };   /* basis (v7): the permission basis, for the footer's reason */
+type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null; route?: string | null; reply?: string | null; basis?: string | null; owner?: string | null };   /* basis (v7): the permission basis, for the footer's reason */
 function senderLine(cfg: Record<string, string>, s?: Sender | null) {
   const name = String((s && s.name) || cfg.mail_from_name || 'Welfare Avenue').replace(/[<>"\r\n]/g, '').trim() || 'Welfare Avenue';
   const email = String((s && s.email) || cfg.mail_from_email || 'info@welfareavenue.com').trim().toLowerCase();
@@ -319,20 +321,20 @@ function routed(cfg: Record<string, string>, key: string, route?: string | null,
   return { email, reply: to && onDomain(to, cfg) ? to : null };
 }
 /* v9: the role's owner as the sender (see the header). s is what routed() answered; anything else passes through untouched */
-async function ownerSender(cfg: Record<string, string>, s: Sender | null): Promise<Sender | null> {
+async function ownerSender(cfg: Record<string, string>, s: Sender | null, ownerEmail?: unknown): Promise<Sender | null> {
   try {
-    if (!s || !s.email || !s.reply || String(cfg.mail_role_owner_from || '').toLowerCase() !== 'on') return s;
+    if (!s || !s.email || !ownerEmail || String(cfg.mail_role_owner_from || '').toLowerCase() !== 'on') return s;
     let m: { routes?: Record<string, string> } = {};
     try { m = JSON.parse(cfg.mail_senders || '{}'); } catch (_) { return s; }
     const vol = String((m.routes || {}).volunteer || '').toLowerCase();
-    const owner = String(s.reply).trim().toLowerCase();
+    const owner = String(ownerEmail).trim().toLowerCase();
     if (!vol || String(s.email).toLowerCase() !== vol || owner === vol || !onDomain(owner, cfg)) return s;
     const t = await svc.from('team_members').select('name,active').eq('email', owner).limit(1);
     const row = ((t as any).data || [])[0];
     if (!row || row.active === false) return s;   /* a group address, or someone who has left: volunteer@ keeps sending */
     const first = String(row.name || '').trim().split(/\s+/)[0] || '';
     const org = String(cfg.mail_from_name || 'Welfare Avenue');
-    return { name: first ? first + ', ' + org : org, email: owner, reply: owner };
+    return { name: first ? first + ', ' + org : org, email: owner, reply: s.reply || owner };
   } catch (_) { return s; }
 }
 function onDomain(e: string, cfg: Record<string, string>) { return isEmail(e) && e.toLowerCase().endsWith('@' + (cfg.mail_domain || 'welfareavenue.com')); }
@@ -342,7 +344,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   if (!key) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'The Resend key is not set (RESEND_API_KEY).' }; }
   const kind = o.content.kind;
   const tpl = { ...o.content.tpl, kind, subject: o.content.subject || o.content.tpl.subject, preheader: o.content.preheader != null && o.content.preheader !== '' ? o.content.preheader : o.content.tpl.preheader };
-  const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : ((await ownerSender(o.cfg, routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply))) || o.content.sender));
+  const sender = senderLine(o.cfg, o.content.sender && o.content.sender.email ? o.content.sender : ((await ownerSender(o.cfg, routed(o.cfg, String(o.content.tpl.key || ''), o.content.route, o.content.reply), o.content.owner)) || o.content.sender));
   if (!onDomain(sender.email, o.cfg)) { await svc.from('crm_email_sends').update({ status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }).eq('id', o.sendId); return { send_id: o.sendId, status: 'failed', error: 'the sending address must be on ' + (o.cfg.mail_domain || 'welfareavenue.com') }; }
   const unsub = await unsubUrl(o.c ? o.c.id : null, o.sendId);
   const r = await render(tpl, o.c, o.content.vars, o.cfg, unsub, o.content.basis);
@@ -507,7 +509,7 @@ async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Call
   /* wave273: replies reach whoever handles this role */
   const ro = await svc.from('event_roster').select('role').eq('id', Number(m.roster_id)).maybeSingle();
   const ow = ro.data ? await svc.rpc('wa258_role_owner', { p_role: ro.data.role }) : null;
-  const sender = senderLine(cfg, await ownerSender(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data)));
+  const sender = senderLine(cfg, await ownerSender(cfg, routed(cfg, 'volunteer_itinerary', null, ow && ow.data), ow && ow.data));
   const res = await rs(key, 'POST', '/emails', { from: sender.from, to: [row.to_email], subject: e.subject, html: e.html, text: e.text, reply_to: sender.reply,
     tags: [{ name: 'template', value: 'volunteer_itinerary' }, { name: 'kind', value: 'transactional' }, { name: 'send_id', value: String(row.id) }] }, { 'Idempotency-Key': 'wa-send-' + row.id });
   await svc.from('crm_email_sends').update({ subject: e.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
@@ -793,7 +795,7 @@ Deno.serve(async (req: Request) => {
       if ((cfg.mail_mode || 'test') !== 'live' && !listOf(cfg.mail_test_recipients).includes(to)) {
         return json({ error: 'The Hub is in test mode: email goes only to the test recipients until an admin switches it to live in the Email tab.', status: 'blocked' }, 403);
       }
-      const out = await deliver({ c, to, tpl, vars: cleanVars(body.vars), cfg, kind, isTest: false, basis: p.basis, who, content: { route: body.route ? String(body.route) : null, reply: body.reply_to ? String(body.reply_to) : null } });
+      const out = await deliver({ c, to, tpl, vars: cleanVars(body.vars), cfg, kind, isTest: false, basis: p.basis, who, content: { route: body.route ? String(body.route) : null, reply: body.reply_to ? String(body.reply_to) : null, owner: body.owner ? String(body.owner) : null } });
       return json({ ...out, basis: p.basis }, out.error && !out.send_id ? 400 : 200);
     }
     if (action === 'campaign_check' || action === 'campaign_queue' || action === 'campaign_test' || action === 'campaign_cancel') {
