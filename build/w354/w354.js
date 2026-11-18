@@ -49,7 +49,7 @@
     + '@media (hover:hover) and (pointer:fine){#w354apps .w354seg button:hover:not([aria-selected=true]){background:rgba(255,255,255,.55);}}'
     + '#w354apps .w354seg button.dim b{color:rgba(16,63,57,.35);}'
     + '#w354apps .w354tip{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:10px 2px 0;font-size:13.5px;color:' + SOFT + ';line-height:1.45;}'
-    + '#w354apps .w354tip b{color:' + GREEN + ';}'
+    + '#w354apps .w354tip b{color:' + GREEN + ';}#w354apps .w354tip > span:first-child{flex:1 1 320px;min-width:0;}#w354apps .w354tip i{font-style:normal;color:' + FLAG + ';font-weight:600;}'
     + '#w354apps .w354view{display:inline-flex;padding:3px;background:rgba(16,63,57,.06);border-radius:10px;}'
     + '#w354apps .w354view button{border:0;background:transparent;border-radius:8px;padding:5px 12px;font:600 12.5px ' + BODY + ';color:' + SOFT + ';cursor:pointer;}'
     + '#w354apps .w354view button[aria-pressed=true]{background:#fff;color:' + GREEN + ';box-shadow:0 1px 2px rgba(16,63,57,.10);}'
@@ -156,16 +156,21 @@
       var p = document.getElementById('hrcentre'), apps = document.getElementById('w197apps');
       if (!onApps()) { if (p) { p.removeAttribute('data-w354v'); p.removeAttribute('data-w354s'); } var old = document.getElementById('w354apps'); if (old) old.remove(); return; }
       var n = counts(), s = stageNow(n), st = STAGES.filter(function (x) { return x[0] === s; })[0];
+      /* how many in this stage have waited a month or more (the card's "N days here") */
+      var waited = 0;
+      [].forEach.call(document.querySelectorAll('#w197apps .w197col[data-w197col="' + s + '"] .w197cand .age'), function (a) { var d = parseInt(a.textContent, 10); if (d >= 30) waited++; });
       if (p.getAttribute('data-w354v') !== AP.v) p.setAttribute('data-w354v', AP.v);
       if (p.getAttribute('data-w354s') !== s) p.setAttribute('data-w354s', s);
       var nav = document.getElementById('w354apps');
       if (!nav) { nav = document.createElement('div'); nav.id = 'w354apps'; apps.parentNode.insertBefore(nav, apps); }
+      if (nav.getAttribute('data-w197s') !== 'applications') nav.setAttribute('data-w197s', 'applications');   /* wave197 shows a block of this sub-page only with w197on */
+      if (!nav.classList.contains('w197on')) nav.classList.add('w197on');
       else if (nav.nextElementSibling !== apps) apps.parentNode.insertBefore(nav, apps);
       var html = '<div class="w354seg" role="tablist" aria-label="Stages">' + STAGES.map(function (x) {
           var on = AP.v === 'list' && x[0] === s;
           return '<button type="button" role="tab" aria-selected="' + on + '" data-w354st="' + x[0] + '" class="' + (n[x[0]] ? '' : 'dim') + '"><b>' + n[x[0]] + '</b><span>' + x[1] + '</span></button>';
         }).join('') + '</div>'
-        + '<div class="w354tip"><span>' + (AP.v === 'list' ? '<b>' + E(st[1]) + ':</b> ' + E(st[2]) + ' Drag a row onto a stage above to move it, or open it.' : 'Every stage side by side. Drag a card to move it.') + '</span>'
+        + '<div class="w354tip"><span>' + (AP.v === 'list' ? '<b>' + E(st[1]) + ':</b> ' + E(st[2]) + (waited && (s === 'new' || s === 'reviewing') ? ' <i>' + waited + ' ' + (waited === 1 ? 'has' : 'have') + ' waited a month or more.</i>' : '') + ' Open someone to decide, or drag them onto a stage above.' : 'Every stage side by side. Drag a card to move it.') + '</span>'
         + '<span class="w354view" role="group" aria-label="View"><button type="button" data-w354v="list" aria-pressed="' + (AP.v === 'list') + '">List</button><button type="button" data-w354v="board" aria-pressed="' + (AP.v === 'board') + '">Board</button></span></div>';
       if (nav.__h !== html) { nav.innerHTML = html; nav.__h = html; }
       /* the chosen stage: 15 rows, then Show all; an empty stage says so */
