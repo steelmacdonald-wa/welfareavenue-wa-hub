@@ -4488,7 +4488,8 @@ test('w353 Accept: the access runs, then the manager and the card\'s owner hear 
   assert.match(r[0].body.url, /^\/o\/21\.[A-Za-z0-9_-]{20}\?send$/, 'the mgr token with ?send');
   assert.match(r[0].body.text, /accepted their offer/);
   assert.match(r[0].body.text, /\|Send their onboarding>/);
-  assert.match(r[0].body.body, /Sam Lee and Ruth Owen both have this message/);
+  assert.match(r[0].body.body, /\(Sam and Ruth both got this; whoever sends first, the other sees it\.\)/);
+  assert.match(r[0].body.text, /accepted their offer\. Their accounts are mostly ready; still to do by hand: Google Groups, Shared drives\. </);
   assert.ok(noDash(r[0].body.text) && noDash(r[0].body.body));
   assert.ok(s.flow().setup_ticks.ready_told_at, 'remembered');
   assert.equal(s.gmail().length, 0, 'nothing to the hire yet');
@@ -4498,6 +4499,9 @@ test('w353 Accept: the access runs, then the manager and the card\'s owner hear 
   assert.equal(s.readies().length, 1, 'the hourly job does not tell them twice');
   const ask = await s.post({ action: 'ask_manager', flow_id: 21 }, SECRET);
   assert.equal(ask.body.skipped, 'simple', 'the offer asks nobody for times');
+  const fromCard = await s.post({ action: 'ask_manager', flow_id: 21 });   /* wave354: HR changed the manager on the card: the new one is told, with the link */
+  assert.deepEqual([fromCard.body.skipped, fromCard.body.told], ['simple', true], JSON.stringify(fromCard.body));
+  assert.equal(s.readies().length, 2);
   assert.equal(s.notifies().filter((e) => e.body.event === 'onboard_propose').length, 0);
   s.noPw();
 });

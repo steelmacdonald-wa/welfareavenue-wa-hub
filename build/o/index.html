@@ -151,6 +151,13 @@
   .times p { margin: 0 0 8px; }
   .times p:last-child { margin: 0; }
   a.btn { text-decoration: none; }
+  /* wave354: buttons answer the press; the Sent box arrives instead of appearing */
+  .btn, .quiet { transition: transform 160ms cubic-bezier(.23,1,.32,1), opacity 160ms ease; }
+  .btn:active:not(:disabled), .quiet:active:not(:disabled) { transform: scale(.97); }
+  .btn:disabled { opacity: .6; cursor: default; }
+  #sent { transition: opacity 220ms ease-out, transform 220ms cubic-bezier(.23,1,.32,1); }
+  @starting-style { #sent { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { .btn:active:not(:disabled), .quiet:active:not(:disabled) { transform: none; } @starting-style { #sent { transform: none; } } }
   .rundown { list-style: none; counter-reset: step; padding: 0; margin: 14px 0 18px; }
   .rstep { counter-increment: step; display: flex; gap: 14px; align-items: flex-start; border-top: 1px solid var(--line); padding: 14px 0; }
   .rstep:last-child { border-bottom: 1px solid var(--line); }

@@ -1,5 +1,5 @@
-// onboard-run v11 (wave353, 18/11/26): simple onboarding (app_config onboard_simple): no call or 1-on-1, the manager and the HR owner told at Accept with a send link, send_onboarding and send_view, the welcome in the Fall Cohort look. See docs/18-11-26 - wave353 simple onboarding.md
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
+// onboard-run v11 (wave353, 18/11/26): simple onboarding (app_config onboard_simple): no call or 1-on-1, the manager and the HR owner told at Accept with a send link, send_onboarding and send_view, the welcome in the Fall Cohort look. See docs/18-11-26 - wave353 simple onboarding.md
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
 // v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on;
 // v8, 04/11/26, wave278 Task 3: the access steps, the leader decision, Re-check and the welcome copies; v9, 04/11/26, wave278 Task 4: the welcome email
@@ -2472,7 +2472,15 @@ async function askManagerFor(f: Row, c: Row, m: Row, again: boolean, by: string)
   return { ok: true, sent: true, to: email, manager: m.name, warnings };
 }
 async function askManagerNow(b: Row, by: string, system: boolean): Promise<Response> {
-  if (await simpleOn()) return json({ ok: true, skipped: 'simple', reason: 'The Hub no longer asks for onboarding times: the manager and HR are told when the offer is accepted, and send the onboarding from there.' });   // wave353
+  if (await simpleOn()) {   // wave353: no times to ask for. wave354: a new manager on an accepted hire not sent yet is told, with the send link
+    const reason = 'The Hub no longer asks for onboarding times: the manager and HR are told when the offer is accepted, and send the onboarding from there.';
+    if (system) return json({ ok: true, skipped: 'simple', reason });
+    const fl = await svc.from('hub_onboard_flows').select('id, status, call_at, setup_ticks, candidate_id').eq('id', Number(b.flow_id)).maybeSingle().then((r) => r.data as Row | null);
+    if (!fl || !BEFORE_START.includes(fl.status) || fl.call_at || !fl.setup_ticks?.accept_setup_at) return json({ ok: true, skipped: 'simple', reason });
+    await svc.rpc('wa275_tick_set', { p_flow: fl.id, p_key: READY_TOLD, p_value: null });
+    const why = await tellReady(Number(fl.id));
+    return json({ ok: true, skipped: 'simple', told: !why, warnings: why ? [why] : [] });
+  }
   const n = Number(b.flow_id);
   const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(ASK_COLS).eq('id', n).maybeSingle() : { data: null };
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
@@ -2568,13 +2576,14 @@ async function tellReady(flowId: number): Promise<string | null> {
   const path = '/o/' + await signedToken('mgr', f.id) + '?send', link = HUB + path;
   const role = String(c.role || 'new hire'), names = [manager?.name, owner?.name].filter((n, i, a): n is string => !!n && a.indexOf(n) === i);
   const access = needsHr.length
-    ? 'Most of their access is set up; still to do by hand: ' + needsHr.join(', ') + ' (see their card in Onboarding).'
-    : 'Their Welfare Avenue account, Hub access, Google Groups and drives are set up.';
-  const whoElse = names.length > 1 ? ' ' + andNames(names) + ' both have this message: whoever sends it first, the other will see it went.' : '';
-  const body = c.name + ' (' + role + ') accepted their offer. ' + access + ' Send them their onboarding email when you are ready; their first meeting and 1-on-1 are yours to set up with them.' + whoElse;
+    ? 'Their accounts are mostly ready; still to do by hand: ' + needsHr.join(', ') + '.'
+    : 'Their accounts are ready.';
+  const firsts = names.map((n) => firstName(n) || n);
+  const whoElse = firsts.length > 1 ? ' (' + andNames(firsts) + ' both got this; whoever sends first, the other sees it.)' : '';
+  const body = c.name + ' (' + role + ') accepted their offer. ' + access + ' Send their onboarding, then set up their first meeting with them.' + whoElse;
   const told = await tell({
     event: 'onboard_ready', to, url: path, tag: 'onboard-ready-' + f.id, title: c.name + ' accepted their offer', body,
-    text: ':tada: *' + slackEsc(c.name) + '* (' + slackEsc(role) + ') accepted their offer! ' + slackEsc(access) + ' <' + link + '|Send their onboarding> when you are ready. Their first meeting and 1-on-1 are yours to set up with them.' + slackEsc(whoElse),
+    text: ':tada: *' + slackEsc(c.name) + '* (' + slackEsc(role) + ') accepted their offer. ' + slackEsc(access) + ' <' + link + '|Send their onboarding>, then set up their first meeting with them.' + slackEsc(whoElse),
   });
   if (!told.handled) { await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: READY_TOLD, p_value: null }); return 'Nobody was told that ' + c.name + ' accepted: ' + (told.note || 'notify gave no answer') + '. The hourly job tries again.'; }
   await log('onboard_flow', f.id, 'ready_told', null, 'told ' + to.join(', '), AT_ACCEPT_BY);

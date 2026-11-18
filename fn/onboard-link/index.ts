@@ -1,5 +1,5 @@
-// onboard-link v6 (wave353, 18/11/26): GET ?send and POST send on the manager link relay to onboard-run send_view and send_onboarding; the offer view says simple and welcomeSent
 // Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability;
+// onboard-link v6 (wave353, 18/11/26): GET ?send and POST send on the manager link relay to onboard-run send_view and send_onboarding; the offer view says simple and welcomeSent
 // v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown; v4, 03/11/26, wave275b: the hours box and the manager's
 // week are rules only while their settings are on; v5, 04/11/26, wave278 Task 5: the twelve setup steps and the phone install page)
 // wave275b (v4, Steel 03/11/26: "Can we make the availability check for onboarding optional"), two app_config settings (wa275b, off by default; anything
