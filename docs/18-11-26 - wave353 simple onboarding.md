@@ -1,4 +1,4 @@
-# wave353: simple onboarding (built 18/11/26, not yet live)
+# wave353: simple onboarding (live 18/11/26, 05:30 UTC, on Steel's yes)
 
 Steel (17/11/26): "Simplify the onboarding process once they accept their offer. They should be automatically given all the accesses needed. Leave the onboarding meeting and one-on-one up to the HR representative and the manager. Just take it out [...] I just want people to be onboarded and given the onboarding email once [...] they accepted their offer. Their manager [and] the HR representative taking care of it should both get a notification on Slack [...] and then they have the ability to send them their onboarding, which would give them that onboarding email [the Fall Cohort one]."
 
@@ -24,3 +24,6 @@ Off (`onboard_simple` absent or not "on"), everything is wave275's as before.
 
 ## Tests
 node: w271run 251 (6 new w353), w271link 67 (1 new), notify/offer/rig/w279notify unchanged: 416 in all, green. Pages: w271page 158, w275page 135 (its "greys" check is flaky before and after), new `test/w353page.js` 18 (the send page at 390 and 900 px, one POST under a double click, no AI, no em dash).
+
+## Released 18/11/26 (Steel: "Release now")
+onboard-run platform v6 and onboard-link platform v5, stubs pinned to f9ba9c0; /o/index.html by pinned fetch (md5 69573115, was e6cdd6af), host-sync rid 9002, served by hub.welfareavenue.com; `onboard_simple` on (change_log). The hourly job run by hand (rid 9003) told Tanise's manager and owner (Ian, Steel) and Caline's (Valex, Samson); Samuel (has a plan) and Amullya (at offer) untouched.
