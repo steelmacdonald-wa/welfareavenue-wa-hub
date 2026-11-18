@@ -48,6 +48,36 @@
     + '#w354apps .w354seg button.drop{background:rgba(220,165,39,.22);}'
     + '@media (hover:hover) and (pointer:fine){#w354apps .w354seg button:hover:not([aria-selected=true]){background:rgba(255,255,255,.55);}}'
     + '#w354apps .w354seg button.dim b{color:rgba(16,63,57,.35);}'
+    /* wave356: Closed is its own category, set apart from the flow */
+    + '#w354apps .w354seg .w354sep{flex:0 0 1px;align-self:stretch;margin:6px 4px;background:rgba(16,63,57,.16);}'
+    + '#w354apps .w354seg button.cl{flex:0 1 auto;}#w354apps .w354seg button.cl b{color:' + SOFT + ';}'
+    + '#hrcentre[data-w354v=list] #w197apps .w197closed > button[data-w197a=closed]{display:none!important;}'
+    + '#hrcentre[data-w354v=list]:not([data-w354s=closed]) #w197apps .w197closed > div{display:none!important;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197board{display:none!important;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed{margin-top:0;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed > div{background:#fff;border:1px solid ' + LINE + ';border-radius:18px;padding:4px 0;box-shadow:0 1px 2px rgba(16,63,57,.04);}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed .w197cand{display:grid!important;grid-template-columns:minmax(180px,1fr) minmax(0,2fr);column-gap:18px;row-gap:2px;width:100%!important;margin:0!important;border:0!important;border-top:1px solid ' + LINE + '!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;padding:13px 18px!important;text-align:left;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed .w197cand:first-of-type{border-top:0!important;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed .w197cand > b,#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed .w197cand > .r{grid-column:1;}'
+    + '#hrcentre[data-w354v=list][data-w354s=closed] #w197apps .w197closed .w197cand > :not(b):not(.r){grid-column:2;grid-row:1 / span 3;align-self:center;}'
+    + '#hrcentre[data-w354v=list] #w197apps .w354cap > .w197cand:nth-of-type(n+16){display:none!important;}'
+    /* wave356: the sheet's stage, as the flow from New to Hired, with closing set apart */
+    + '#w197sheet .w356flow{display:flex;gap:0;margin:6px 0 4px;padding:0;background:none;}'
+    + '#w197sheet .w356flow button{all:unset;box-sizing:border-box;flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;position:relative;padding:2px 2px 4px;font:600 12.5px ' + BODY + ';color:' + SOFT + ';text-align:center;-webkit-tap-highlight-color:transparent;}'
+    + '#w197sheet .w356flow button:before{content:"";position:absolute;top:15px;right:50%;width:100%;height:2px;background:rgba(16,63,57,.14);z-index:0;}'
+    + '#w197sheet .w356flow button:first-child:before{display:none;}'
+    + '#w197sheet .w356flow button.done:before,#w197sheet .w356flow button.on:before{background:' + GREEN + ';}'
+    + '#w197sheet .w356flow i{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:600 15px/1 ' + HEAD + ';font-style:normal;background:#fff;border:2px solid rgba(16,63,57,.22);color:' + SOFT + ';transition:transform 160ms ' + EASE + ',background-color 160ms ease;}'
+    + '#w197sheet .w356flow button.done i{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w197sheet .w356flow button.on i{background:' + GOLD + ';border-color:' + GOLD + ';color:' + GREEN + ';box-shadow:0 0 0 4px rgba(220,165,39,.22);}'
+    + '#w197sheet .w356flow button.on span{color:' + GREEN + ';}#w197sheet .w356flow button.done span{color:' + GREEN + ';}'
+    + '#w197sheet .w356flow button:active i{transform:scale(.92);}'
+    + '#w197sheet .w356flow button:focus-visible i{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '#w197sheet .w356flow.shut button i{background:#fff;border-color:rgba(16,63,57,.18);color:rgba(16,63,57,.4);box-shadow:none;}#w197sheet .w356flow.shut button:before{background:rgba(16,63,57,.12);}#w197sheet .w356flow.shut button span{color:rgba(16,63,57,.5);}'
+    + '#w197sheet .w356cl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:12px 0 2px;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.04);font:13px ' + BODY + ';color:' + SOFT + ';}'
+    + '#w197sheet .w356cl > span{margin-right:4px;}#w197sheet .w356cl > span b{color:' + FLAG + ';}'
+    + '#w197sheet .w356cl button{font-size:12.5px!important;padding:5px 11px!important;}'
+    + '@media (prefers-reduced-motion:reduce){#w197sheet .w356flow button:active i{transform:none;}}'
     + '#w354apps .w354tip{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:10px 2px 0;font-size:13.5px;color:' + SOFT + ';line-height:1.45;}'
     + '#w354apps .w354tip b{color:' + GREEN + ';}#w354apps .w354tip > span:first-child{flex:1 1 320px;min-width:0;}#w354apps .w354tip i{font-style:normal;color:' + FLAG + ';font-weight:600;}'
     + '#w354apps .w354view{display:inline-flex;padding:3px;background:rgba(16,63,57,.06);border-radius:10px;}'
@@ -139,12 +169,14 @@
     ['hired', 'Hired', 'They are on the team. Onboarding takes it from here.']];
   var AP = { v: store('w354v') === 'board' ? 'board' : 'list', s: store('w354s') || '', all: {} };
   function onApps() { var p = document.getElementById('hrcentre'); return !!p && p.getAttribute('data-w197') === 'applications' && !!document.getElementById('w197apps'); }
+  function closedCount() { var b = document.querySelector('#w197apps .w197closed > button[data-w197a="closed"]'); var m = b && /(\d+)/.exec(b.textContent || ''); return m ? Number(m[1]) : 0; }
   function counts() {
-    var out = {};
+    var out = { closed: closedCount() };
     STAGES.forEach(function (s) { var c = document.querySelector('#w197apps .w197col[data-w197col="' + s[0] + '"]'); out[s[0]] = c ? c.querySelectorAll('.w197cand').length : 0; });
     return out;
   }
   function stageNow(n) {
+    if (AP.s === 'closed' && n.closed) return 'closed';
     if (AP.s && STAGES.some(function (s) { return s[0] === AP.s; })) return AP.s;
     var firstWith = STAGES.filter(function (s) { return n[s[0]] > 0; })[0];
     return firstWith ? firstWith[0] : 'new';
@@ -155,7 +187,9 @@
     try {
       var p = document.getElementById('hrcentre'), apps = document.getElementById('w197apps');
       if (!onApps()) { if (p) { p.removeAttribute('data-w354v'); p.removeAttribute('data-w354s'); } var old = document.getElementById('w354apps'); if (old) old.remove(); return; }
-      var n = counts(), s = stageNow(n), st = STAGES.filter(function (x) { return x[0] === s; })[0];
+      var n = counts(), s = stageNow(n), st = s === 'closed' ? ['closed', 'Closed', 'Declined, withdrawn or sent to volunteering. Open someone to read their file, or move them back into the flow.'] : STAGES.filter(function (x) { return x[0] === s; })[0];
+      /* Closed: the board's own closed list, opened */
+      if (s === 'closed' && AP.v === 'list') { try { var W = w197.state(); if (!W.showClosed) { W.showClosed = true; painting = false; w197.paintBoard(); return; } } catch (x) { /* fine */ } }
       /* how many in this stage have waited a month or more (the card's "N days here") */
       var waited = 0;
       [].forEach.call(document.querySelectorAll('#w197apps .w197col[data-w197col="' + s + '"] .w197cand .age'), function (a) { var d = parseInt(a.textContent, 10); if (d >= 30) waited++; });
@@ -169,19 +203,19 @@
       var html = '<div class="w354seg" role="tablist" aria-label="Stages">' + STAGES.map(function (x) {
           var on = AP.v === 'list' && x[0] === s;
           return '<button type="button" role="tab" aria-selected="' + on + '" data-w354st="' + x[0] + '" class="' + (n[x[0]] ? '' : 'dim') + '"><b>' + n[x[0]] + '</b><span>' + x[1] + '</span></button>';
-        }).join('') + '</div>'
-        + '<div class="w354tip"><span>' + (AP.v === 'list' ? '<b>' + E(st[1]) + ':</b> ' + E(st[2]) + (waited && (s === 'new' || s === 'reviewing') ? ' <i>' + waited + ' ' + (waited === 1 ? 'has' : 'have') + ' waited a month or more.</i>' : '') + ' Open someone to decide, or drag them onto a stage above.' : 'Every stage side by side. Drag a card to move it.') + '</span>'
+        }).join('') + '<span class="w354sep" aria-hidden="true"></span><button type="button" role="tab" aria-selected="' + (AP.v === 'list' && s === 'closed') + '" data-w354st="closed" class="cl' + (n.closed ? '' : ' dim') + '"><b>' + n.closed + '</b><span>Closed</span></button></div>'
+        + '<div class="w354tip"><span>' + (AP.v === 'list' ? '<b>' + E(st[1]) + ':</b> ' + E(st[2]) + (waited && (s === 'new' || s === 'reviewing') ? ' <i>' + waited + ' ' + (waited === 1 ? 'has' : 'have') + ' waited a month or more.</i>' : '') + (s === 'closed' ? '' : ' Open someone to decide, or drag them onto a stage above.') : 'Every stage side by side. Drag a card to move it.') + '</span>'
         + '<span class="w354view" role="group" aria-label="View"><button type="button" data-w354v="list" aria-pressed="' + (AP.v === 'list') + '">List</button><button type="button" data-w354v="board" aria-pressed="' + (AP.v === 'board') + '">Board</button></span></div>';
       if (nav.__h !== html) { nav.innerHTML = html; nav.__h = html; }
       /* the chosen stage: 15 rows, then Show all; an empty stage says so */
-      var col = document.querySelector('#w197apps .w197col[data-w197col="' + s + '"]');
+      var col = s === 'closed' ? document.querySelector('#w197apps .w197closed > div') : document.querySelector('#w197apps .w197col[data-w197col="' + s + '"]');
       if (col) {
         var k = col.querySelectorAll('.w197cand').length, cap = k > 15 && !AP.all[s];
         col.classList.toggle('w354cap', cap);
         var more = col.querySelector('.w354more'), empty = col.querySelector('.w354empty');
         if (cap && !more) { more = document.createElement('div'); more.className = 'w354more'; more.setAttribute('role', 'button'); more.tabIndex = 0; col.appendChild(more); }
         if (more) { if (cap) more.textContent = 'Show all ' + k + ' (' + (k - 15) + ' more)'; else more.remove(); }
-        if (!k && !empty) { empty = document.createElement('div'); empty.className = 'w354empty'; empty.textContent = 'No one at this stage' + (document.getElementById('w197q') && document.getElementById('w197q').value ? ' for this search.' : '.'); col.appendChild(empty); }
+        if (!k && !empty && s !== 'closed') { empty = document.createElement('div'); empty.className = 'w354empty'; empty.textContent = 'No one at this stage' + (document.getElementById('w197q') && document.getElementById('w197q').value ? ' for this search.' : '.'); col.appendChild(empty); }
         else if (k && empty) empty.remove();
       }
     } finally { painting = false; }
@@ -202,7 +236,7 @@
   });
   document.addEventListener('keydown', function (e) { var t = e.target; if ((e.key === 'Enter' || e.key === ' ') && t && t.classList && t.classList.contains('w354more')) { e.preventDefault(); t.click(); } });
   /* a row dropped onto a stage moves it, through the board's own move (its gates ask what each stage needs) */
-  document.addEventListener('dragover', function (e) { var b = e.target && e.target.closest && e.target.closest('[data-w354st]'); if (!b || !window.w197) return; e.preventDefault(); b.classList.add('drop'); });
+  document.addEventListener('dragover', function (e) { var b = e.target && e.target.closest && e.target.closest('[data-w354st]'); if (!b || !window.w197 || b.getAttribute('data-w354st') === 'closed') return; e.preventDefault(); b.classList.add('drop'); });
   document.addEventListener('dragleave', function (e) { var b = e.target && e.target.closest && e.target.closest('[data-w354st]'); if (b) b.classList.remove('drop'); });
   document.addEventListener('drop', function (e) {
     var b = e.target && e.target.closest && e.target.closest('[data-w354st]'); if (!b || !window.w197) return;
@@ -211,6 +245,19 @@
     if (id == null) { try { id = e.dataTransfer.getData('text/plain'); } catch (x) { /* fine */ } }
     if (id != null && id !== '') { try { w197.moveTo(id, b.getAttribute('data-w354st')); } catch (x) { /* fine */ } }
   });
-  window.w354 = { lines: lines, buttons: buttons, defaultDay: defaultDay, state: function () { return { ON: ON, AP: AP }; }, paintApps: paintApps };
+  /* wave356: the sheet's stage. New to Hired as one flow (done, here, ahead); Declined, Withdrawn and Volunteering set apart as closing it.
+     The buttons keep data-w197st inside .stg, so wave197's handler (and its gates) and the walkthroughs work as before. */
+  function flow(c, ST, CL) {
+    var st = c && c.status || 'new', at = ST.map(function (p) { return p[0]; }).indexOf(st), shut = at < 0;
+    var h = '<div class="stg w356flow' + (shut ? ' shut' : '') + '" role="list" aria-label="Where they are">' + ST.map(function (p, i) {
+      var cls = shut ? '' : i < at ? 'done' : i === at ? 'on' : '';
+      return '<button type="button" role="listitem" data-w197st="' + p[0] + '" class="' + cls + '"' + (i === at ? ' aria-current="step"' : '') + ' title="' + (i === at ? 'Here now' : 'Move to ' + E(p[1])) + '"><i>' + (cls === 'done' ? '\u2713' : (i + 1)) + '</i><span>' + E(p[1]) + '</span></button>';
+    }).join('') + '</div>';
+    var name = shut ? (CL.filter(function (p) { return p[0] === st; })[0] || [st, st])[1] : '';
+    h += '<div class="stg w356cl">' + (shut ? '<span>Closed: <b>' + E(name) + '</b>. Pick a step above to bring them back.</span>' : '<span>Not moving forward?</span>')
+      + CL.filter(function (p) { return p[0] !== st; }).map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="cl">' + E(p[0] === 'volunteering' ? 'Send to volunteering' : p[1]) + '</button>'; }).join('') + '</div>';
+    return h;
+  }
+  window.w354 = { flow: flow, lines: lines, buttons: buttons, defaultDay: defaultDay, state: function () { return { ON: ON, AP: AP }; }, paintApps: paintApps };
   setTimeout(soon, 400);
 })();
