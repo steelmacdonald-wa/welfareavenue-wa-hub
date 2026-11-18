@@ -2,8 +2,10 @@ import hashlib, sys
 src = open('/home/claude/live/index.html', encoding='utf-8').read()
 assert hashlib.md5(src.encode()).hexdigest() == '6413f287ae714cce37ece84115a93820'
 s = src
+PAIRS=[]
 def rep(a, b, n=1):
     global s
+    PAIRS.append([a,b])
     c = s.count(a)
     assert c == n, (a[:90], c)
     s = s.replace(a, b)
@@ -64,5 +66,5 @@ seg = open('/home/claude/live/w354.js', encoding='utf-8').read()
 i = s.rfind('</body>')
 assert i > 0
 s = s[:i] + '<script>\n' + seg + '</script>\n' + s[i:]
-open('/home/claude/live/candidate.html', 'w', encoding='utf-8', newline='').write(s)
+import json; json.dump({'pairs': PAIRS, 'seg': '<script>\n' + seg + '</script>\n'}, open('/home/claude/live/patch354.json','w')); open('/home/claude/live/candidate.html', 'w', encoding='utf-8', newline='').write(s)
 print(hashlib.md5(s.encode()).hexdigest(), len(s.encode()))
