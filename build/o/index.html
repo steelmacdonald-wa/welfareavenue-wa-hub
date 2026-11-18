@@ -952,6 +952,7 @@
       callLine: 'Your onboarding call:', oneLine: 'Your 1-on-1 with {manager}:', tz: 'Toronto time (Eastern).', span: '{day}, {a} to {b}',
       ask: 'Do both times work for you?', yes: 'Yes, both work', no: 'No, suggest other times', note: 'Nothing is saved until you press a button.',
       waiting: 'We are choosing your times now; you will get an email within two days.',
+      simpleWaiting: 'Your Welfare Avenue account is being set up now. {Manager} or HR will send you your welcome email with everything you need to get started. Keep an eye on your inbox.', simpleSent: 'Your welcome email is in your inbox. Start with your setup checklist:',
       closeH: 'Thank you, {first}.', booked: 'Your invites are on their way; {manager} will see you on {date}.',
       picked: '{Manager} will pick from your times, and you will get calendar invites.', touch: '{Manager} will be in touch with other times.',
       yourManager: 'your manager', regrid: 'Change my times',
@@ -984,6 +985,7 @@
       callLine: 'Votre appel d’accueil:', oneLine: 'Votre rencontre individuelle avec {manager}:', tz: 'Heure de Toronto (Est).', span: '{day}, {a} à {b}',
       ask: 'Les deux heures vous conviennent-elles?', yes: 'Oui, les deux me conviennent', no: 'Non, proposer d’autres heures', note: 'Rien n’est enregistré tant que vous n’appuyez pas sur un bouton.',
       waiting: 'Nous choisissons vos heures en ce moment; vous recevrez un courriel d’ici deux jours.',
+      simpleWaiting: 'Votre compte Welfare Avenue est en cours de création. {Manager} ou les RH vous enverront votre courriel de bienvenue avec tout ce qu’il faut pour commencer. Surveillez votre boîte de réception.', simpleSent: 'Votre courriel de bienvenue est dans votre boîte de réception. Commencez par votre liste de préparation:',
       closeH: 'Merci, {first}.', booked: 'Vos invitations sont en route; {manager} vous verra le {date}.',
       picked: '{Manager} choisira parmi vos plages, et vous recevrez des invitations.', touch: '{Manager} communiquera avec vous pour d’autres heures.',
       yourManager: 'votre gestionnaire', regrid: 'Modifier mes plages',
@@ -1056,8 +1058,9 @@
   function viewWaiting() {
     titled('titleTimes');
     var j = S.j, x = hx();
-    card.innerHTML = '<h1 tabindex="-1">' + fill(t().thanksYes, j) + '</h1><p>' + say(x.accepted, { role: j.role }) + '</p><div class="ok" id="waiting"><p>' + x.waiting + '</p></div>' +
-      (j.late ? '<p class="hint">' + t().late + '</p>' : '');
+    var wait = j.simple ? (j.welcomeSent ? x.simpleSent : say(x.simpleWaiting, mgrWords())) : x.waiting;   // wave353: no times to choose
+    card.innerHTML = '<h1 tabindex="-1">' + fill(t().thanksYes, j) + '</h1><p>' + say(x.accepted, { role: j.role }) + '</p><div class="ok" id="waiting"><p>' + wait + '</p></div>' +
+      (j.simple && j.welcomeSent && j.setup ? setupLinkHtml() : '') + (j.late ? '<p class="hint">' + t().late + '</p>' : '');
   }
   function viewClosing() {
     titled('titleTimes');
@@ -1236,6 +1239,59 @@
       .then(function () { render('initial'); });
   }
 
+  /* ---------- wave353: the send page (/o/<mgr token>?send), for the manager and the card's HR owner. English, as the Hub's staff pages are. ---------- */
+  function todayToronto() { return parts(new Date().toISOString()).date; }
+  function dayOnly(day) { return fmt({ weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(day + 'T12:00:00Z')); }
+  function viewSend() {
+    lang = 'en'; document.title = 'Welfare Avenue: send the onboarding'; document.documentElement.lang = 'en'; card.className = 'card';
+    langBox.innerHTML = '';
+    var j = S.j || {}, first = String(j.name || j.hire || 'them').split(/\s+/)[0], h;
+    if (!j || j.error) {
+      h = '<h1 tabindex="-1">This page did not load</h1><p>' + esc((j && typeof j.message === 'string' && j.message) || 'Please try again in a minute.') + '</p><button class="btn" id="again" type="button">Try again</button>';
+      card.innerHTML = h; document.getElementById('again').addEventListener('click', function () { loadSend(true); }); return;
+    }
+    if (j.closed) { card.innerHTML = '<h1 tabindex="-1">This onboarding is closed</h1><p>' + esc(j.name) + '’s card is closed, so there is nothing to send.</p>'; return; }
+    if (!j.simple) { card.innerHTML = '<h1 tabindex="-1">Use their card in the Hub</h1><p>Sending from this page is switched off. Open ' + esc(j.name) + '’s card in the HR centre, under Onboarding.</p>'; return; }
+    if (!j.accepted) { card.innerHTML = '<h1 tabindex="-1">Not accepted yet</h1><p>' + esc(j.name) + ' has not accepted the offer yet. You will hear on Slack when they do.</p>'; return; }
+    if (j.sent_at || j.repeated) {
+      h = '<h1 tabindex="-1">Sent ✔</h1><div class="ok" id="sent"><p><strong>' + esc(j.name) + '</strong> has their onboarding email' + (j.first_day ? ', with a first day of <strong>' + esc(dayOnly(j.first_day)) + '</strong>' : '') + '.</p>' +
+        (j.sent_at ? '<p class="small">Sent ' + esc(fmt({ weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(j.sent_at))) + (j.sent_by && /@/.test(j.sent_by) ? ' by ' + esc(j.sent_by) : '') + '.</p>' : '') + '</div>' +
+        '<p>Their setup checklist is open in the Hub, and you can follow it from their card. Their first meeting and 1-on-1 are yours to set up with them.</p>' +
+        '<a class="btn" href="https://hub.welfareavenue.com/#hrcentre/onboarding">Open Onboarding in the Hub</a>';
+      card.innerHTML = h; return;
+    }
+    var today = todayToronto(), day = j.first_day && j.first_day >= today ? j.first_day : today;
+    var who = [j.manager, j.owner].filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+    var access = (j.access || []).map(function (a) { var ok = a.status === 'done' || a.status === 'skipped'; return '<li>' + (ok ? '✔ ' : '• ') + esc(a.step) + (ok ? '' : ' <span class="small">(' + esc(a.status === 'hr_task' ? 'to do by hand' : a.status) + ')</span>') + '</li>'; }).join('');
+    h = '<h1 tabindex="-1">Send ' + esc(first) + '’s onboarding</h1>' +
+      '<p><strong>' + esc(j.name) + '</strong>' + (j.role ? ' (' + esc(j.role) + ')' : '') + ' accepted their offer.</p>' +
+      (access ? '<div class="ok"><p><strong>Their access</strong></p><ul style="margin:6px 0 0;padding-left:0;list-style:none;">' + access + '</ul></div>' : '') +
+      '<p><label for="day"><strong>First day</strong></label><br><input type="date" id="day" min="' + esc(today) + '" value="' + esc(day) + '" style="font-size:17px;padding:8px 10px;margin-top:6px;"></p>' +
+      '<p class="small">The welcome email goes to ' + esc((j.to || []).join(' and ') || 'their personal email') + (j.from ? ', from ' + esc(j.from) : '') + '. It has their login, their setup checklist in the Hub, their weekly meeting and their documents.</p>' +
+      '<button class="btn" id="send" type="button">Send their onboarding</button><p id="err" class="err hide" role="alert"></p>' +
+      '<p class="note">The Hub books no onboarding call or 1-on-1: ' + (who.length ? esc(who.join(' and ')) : 'the manager and HR') + ' set up their first meeting with them.' + (who.length > 1 ? ' Whoever sends first, the other sees it here.' : '') + '</p>';
+    card.innerHTML = h;
+    document.getElementById('send').addEventListener('click', function () {
+      if (S.busy) return;
+      var b = document.getElementById('send'), d = document.getElementById('day').value;
+      if (!d || d < today) { showErr('Pick a first day from today on.'); return; }
+      S.busy = true; b.disabled = true; b.textContent = 'Sending…';
+      post({ t: token, a: 'send', first_day: d }).then(function (r) {
+        S.busy = false;
+        if (r.j && r.j.ok) { loadSend(true); return; }
+        b.disabled = false; b.textContent = 'Send their onboarding';
+        showErr((r.j && typeof r.j.message === 'string' && r.j.message) || 'It did not go. Please try again in a minute.');
+      }).catch(function () { S.busy = false; b.disabled = false; b.textContent = 'Send their onboarding'; showErr('We could not reach the server. Please try again in a minute.'); });
+    });
+  }
+  function loadSend(focus) {
+    return fetch(FN + '?t=' + encodeURIComponent(token) + '&send=1')
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { status: r.status, j: j }; }); })
+      .then(function (x) { S.j = x.j && (x.status < 500 || x.j.error) ? x.j : { error: 'unavailable' }; S.view = x.status === 404 && x.j && x.j.error === 'bad_link' ? 'bad' : 'send'; },
+        function () { S.j = { error: 'unavailable' }; S.view = 'send'; })
+      .then(function () { render(focus); });
+  }
+
   /* ---------- load and route ---------- */
   function setupGrid(j) {
     S.model = buildModel(j.grid || { slots: [], days: [] }, isHire275(j) && Array.isArray(j.managerFree) ? j.managerFree : null);   // wave275: greyed where the manager is not free
@@ -1270,6 +1326,7 @@
     else if (v === 'closing') viewClosing();
     else if (v === 'setup') viewSetup();
     else if (v === 'install') viewInstall();   // wave278: the phone page
+    else if (v === 'send') viewSend();         // wave353: the send page
     else if (v === 'propose') viewPropose();
     else if (v === 'declined') viewDeclined();
     else if (v === 'closed') viewClosed();
@@ -1292,6 +1349,7 @@
   paintLang();
   if (!token) { S.view = 'bad'; render(false); return; }
   if (q.has('install')) { loadInstall(); return; }   // wave278: the page the setup's QR opens on the phone
+  if (q.has('send')) { loadSend('initial'); return; }   // wave353: the manager's and HR's send page
   load('initial');
 })();
 </script>

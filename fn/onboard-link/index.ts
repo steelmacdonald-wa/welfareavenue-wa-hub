@@ -1,3 +1,4 @@
+// onboard-link v6 (wave353, 18/11/26): GET ?send and POST send on the manager link relay to onboard-run send_view and send_onboarding; the offer view says simple and welcomeSent
 // Welfare Avenue: onboard-link (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: the mgr link proposes times and edits availability;
 // v3, 02/11/26, wave275 Task 3: the hire's side: Accept with hours, Yes or No, the setup rundown; v4, 03/11/26, wave275b: the hours box and the manager's
 // week are rules only while their settings are on; v5, 04/11/26, wave278 Task 5: the twelve setup steps and the phone install page)
@@ -246,10 +247,10 @@ type Flow = {
   pw_nonce: string | null; pw_expires_at: string | null; pw_used_at: string | null;
   created_at?: string | null; proposed_call_at?: string | null; proposed_one_on_one_at?: string | null; proposed_by?: string | null; proposed_at?: string | null; hire_answer?: string | null;
   hire_answered_at?: string | null; setup_ticks?: Record<string, unknown> | null; ask_availability?: boolean | null; practice?: boolean | null;
-  wa_email?: string | null; canva_link?: string | null;   // wave278: the rundown shows the new address and HR's Canva link
+  wa_email?: string | null; canva_link?: string | null; welcome_sent_at?: string | null;   // wave278: the rundown shows the new address and HR's Canva link
 };
 const CAND_COLS = 'id, name, role, status, summary, notes, owner, accepted_on, offer_respond_by, close_reason, offer_hours, hours_confirmed_at, practice, position_id';
-const FLOW_COLS = 'id, candidate_id, status, practice, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, hire_answered_at, setup_ticks, ask_availability, wa_email, canva_link';
+const FLOW_COLS = 'id, candidate_id, status, practice, manager_member_id, manager_link_member_id, call_at, one_on_one_at, pw_nonce, pw_expires_at, pw_used_at, created_at, proposed_call_at, proposed_one_on_one_at, proposed_by, proposed_at, hire_answer, hire_answered_at, setup_ticks, ask_availability, wa_email, canva_link, welcome_sent_at';   // wave353: welcome_sent_at
 type Link = { kind: 'offer' | 'manager' | 'password'; cand: Cand; flow: Flow | null; mode?: 'propose' | 'grid' };
 
 /* a read that fails is not a link that fails: it throws, and the handler answers 503 */
@@ -337,6 +338,8 @@ async function view(l: Link, token: string) {
       setup: l.cand.accepted_on && f ? await setupOf(l, token) : null,
       /* wave275b: whether Accept needs the hours box (onboard_require_hours on); an offer with no hours never does */
       hoursRequired: Number(l.cand.offer_hours) > 0 && await settingOn('onboard_require_hours'),
+      simple: await settingOn('onboard_simple'),
+      welcomeSent: !!f?.welcome_sent_at,   // wave353: no times to choose; the page says the welcome email comes from their manager and HR
     };
     if (l.mode === 'propose') {   // the page shows each meeting as a span ("10 to 11 am")
       const cfg = await settings(['onboard_call_min', 'onboard_one_on_one_min']);
@@ -646,6 +649,15 @@ async function runAsk(body: Record<string, unknown>, ms: number): Promise<Respon
     body: JSON.stringify(body),
   });
 }
+/* wave353 (18/11/26): simple onboarding. The manager's link with ?send is the page the manager and the card's HR owner get on Slack when the hire accepts:
+   GET shows who, the first day and whether it went (onboard-run send_view); POST {a: 'send', first_day?} presses Send (onboard-run send_onboarding, by
+   'hub (send onboarding link)'). The token is the flow's own, as for the propose page; a GET never sends anything (Slack unfurls links). */
+async function sendRelay(l: Link, body: Record<string, unknown>): Promise<Response> {
+  const res = await runAsk({ ...body, flow_id: l.flow!.id }, body.action === 'send_onboarding' ? 25000 : 15000);
+  if (!res) return fail('unavailable', 503);
+  const j = await res.json().catch(() => ({}));
+  return json({ ...(j && typeof j === 'object' ? j : {}), kind: 'send', hire: l.cand.name }, res.status);
+}
 async function startSetup(c: Cand): Promise<void> {
   try {
     const flow = await flowWhere('candidate_id', c.id);   // the trigger has just moved it to waiting (or made it)
@@ -907,8 +919,10 @@ Deno.serve(async (req: Request) => {
     const link = await openLink(token);
     if (!link) return fail('bad_link', 404);
     if (req.method === 'GET' && url.searchParams.has('install')) return installView(link);   // wave278: the phone page, scanner-safe
+    if (req.method === 'GET' && url.searchParams.has('send')) return link.kind === 'manager' ? await sendRelay(link, { action: 'send_view' }) : fail('wrong_link', 400);   // wave353
     if (req.method === 'GET') return json(await view(link, String(token).trim()));
 
+    if (a === 'send') return link.kind === 'manager' ? await sendRelay(link, { action: 'send_onboarding', first_day: typeof body.first_day === 'string' ? body.first_day : undefined }) : fail('wrong_link', 400);   // wave353
     if (!['accept', 'decline', 'grid', 'password', 'availability', 'propose', 'yes', 'no', 'setup_tick'].includes(a)) return fail('answer', 400);
     if (a === 'password') return json({ ok: false, error: 'not_yet', message: MSG.not_yet }, 501);   // Task 10
     if (a === 'grid') return link.kind === 'password' ? fail('wrong_link', 400) : await saveGrid(link, body.slots);

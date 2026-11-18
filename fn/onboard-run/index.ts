@@ -1,3 +1,4 @@
+// onboard-run v11 (wave353, 18/11/26): simple onboarding (app_config onboard_simple): no call or 1-on-1, the manager and the HR owner told at Accept with a send link, send_onboarding and send_view, the welcome in the Fall Cohort look. See docs/18-11-26 - wave353 simple onboarding.md
 // Welfare Avenue: onboard-run (v1, 01/11/26, wave271; v2, 02/11/26, wave275 Task 2: propose and hire_times; v3, 02/11/26, wave275 Task 3: accept_setup, book, the Google account and Hub access steps;
 // v4, 02/11/26, wave275 Task 4: the welcome email is sent, and the first password is set from the card; v5, 02/11/26, wave275 Task 5: ask_manager, and remind on the propose path;
 // v6, 02/11/26, wave275 Task 6: the card for HR and the manager, below; v7, 03/11/26, wave275b: the manager's week is a rule only with onboard_manager_hours on;
@@ -521,7 +522,7 @@ async function runPlan(ctx: Ctx): Promise<string> {
     if (f.onboarding_id) return 'The onboarding plan was already made.';
     throw new Error('The card has no roster profile yet. Retry step 1 first.');
   }
-  const start = torontoDate(f.call_at);
+  const start = f.call_at ? torontoDate(f.call_at) : await firstDayOf(f.id, c);   // wave353: no call booked (simple onboarding)
   await dayOne(ctx, c, start);
   if (f.onboarding_id) return 'The onboarding plan was already made.';
   const save = async (id: unknown) => {
@@ -1057,6 +1058,8 @@ export type WelcomeFacts = {
   noInvites?: boolean;                                // the invites step was skipped: no invite comes from the Hub, so the email names no Meet link
   setupLink?: string | null;                          // the hire's rundown page (/o/<offer token>?setup), for a wave275 hire only; none: the short step 3
   loginWhy?: string;                                  // for HR, when login is false: why the email says HR sends the login details
+  simple?: boolean;                                   // wave353: simple onboarding, no call or 1-on-1 booked (simpleWelcomeTemplate)
+  firstDay?: string | null;                           // wave353: the first day (setup_ticks.first_day, YYYY-MM-DD) when there is no call to take it from
 };
 /* a date in words; French says 1er for the first of the month, which Intl does not */
 function dayWords(at: string, lang: 'en' | 'fr'): string {
@@ -1078,7 +1081,7 @@ function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string 
   const address = f.wa_email || (fr ? 'nous vous la confirmerons bientôt' : 'we\'ll confirm it soon');
   const meet = (link: string | null | undefined, booked: boolean) => link || (fr ? (booked ? 'le lien est dans votre invitation' : 'le lien viendra avec l\'invitation') : (booked ? 'the link is in your calendar invite' : 'the link will come with the invite'));
   const values: Record<string, string | null> = {
-    day: f.call_at ? dayWords(f.call_at, lang) : null,
+    day: f.call_at ? dayWords(f.call_at, lang) : facts.firstDay ? dayWords(facts.firstDay + 'T12:00:00Z', lang) : null,   // wave353: noon UTC is the same date in Toronto
     call: f.call_at ? atWords(f.call_at, lang) : null,
     one: f.one_on_one_at ? atWords(f.one_on_one_at, lang) : (fr ? 'nous vous confirmerons l\'heure bientôt' : 'we\'ll confirm the time soon'),
     manager: facts.manager || yours,
@@ -1112,7 +1115,8 @@ function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string 
     }
     if (!facts.manager) line = line.split(yours + ', ' + slots.manager).join(yours);   // never "your manager, your manager"
     const filled = Object.keys(slots).reduce((l, k) => (values[k] == null || !l.includes(slots[k]) ? l : l.split(slots[k]).join(values[k]!)), line);
-    lines.push(filled === line ? line : filled.replace(/([ap]\.m\.)\./g, '$1'));   // a time ending in "p.m." before the template's full stop: one stop, not two
+    const capped = filled.replace(/^(your manager|votre gestionnaire)/, (w) => w[0].toUpperCase() + w.slice(1));   // wave353: "Your manager will be in touch"
+    lines.push(capped === line ? line : capped.replace(/([ap]\.m\.)\./g, '$1'));   // a time ending in "p.m." before the template's full stop: one stop, not two
   }
   if (!removed) return lines.join('\n');
   let n = 0;
@@ -1122,7 +1126,72 @@ function fillWelcome(text: string, f: Row, c: Row, facts: WelcomeFacts): string 
 /* the Hub's own text, with its marked places. wave278 Task 4: the companion note's text (claude/04-11-26, section 1), line for line in French; the
    opening, the closing, the sign-off and the subject are kept word for word. A hire with no setup page (facts.setupLink null: wave271's path) gets the
    short step 3 instead (wave278 ruling): Slack, and Canva when the card has a link; no weekly line. */
+/* simple onboarding (wave353, 18/11/26, Steel: "just take [the onboarding meeting and the 1-on-1] out"): the Fall Cohort welcome without the meetings.
+   The Hub books no onboarding call and no 1-on-1; the manager and HR arrange the first meeting themselves, so the email only says the manager will be in
+   touch. Step 1 keeps LOGIN_HEADS' place in the order (loginLater rewrites it when the account is not the Hub's to describe). */
+function simpleWelcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: string } {
+  const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name);
+  const slack = facts.slack || 'https://welfareavenue.slack.com';
+  const role = String(c.role || '').trim(), roleFr = ROLE_FR[role] || role;
+  const text = (fr ? [
+    'Bonjour ' + first + ',', '',
+    'Félicitations et bienvenue dans l\'équipe de Welfare Avenue!', '',
+    roleFr ? 'Nous sommes ravis que vous ayez accepté le poste de ' + roleFr + ' au sein de notre organisme.' : 'Nous sommes ravis que vous ayez accepté notre offre.', '',
+    'Votre premier jour est le ' + s.day + ', et nous avons hâte de vous accueillir. Pour bien commencer, voici les prochaines étapes :', '',
+    'Prochaines étapes :', '',
+    '1. ' + LOGIN_HEADS[1],
+    '   Commencez ici, avant toute autre chose. Cette vidéo vous montre comment configurer votre profil Chrome : ' + s.video,
+    '   Adresse courriel : ' + s.newaddr,
+    '   Premier mot de passe : ' + s.password,
+    '   Google vous demandera de le changer lors de votre première connexion.', '',
+    ...(facts.setupLink === null ? [
+      '2. Joignez-vous au Slack de Welfare Avenue avec votre nouvelle adresse : ' + slack,
+      '   Joignez-vous à notre équipe Canva : ' + s.canva,
+    ] : [
+      '2. Ouvrez votre liste de préparation dans le Hub, dans la fenêtre de votre nouveau profil Chrome : ' + s.setup,
+      '   Le Hub vous guide pour la suite, une étape à la fois : Slack, Canva, vos Drives et vos groupes Google, l\'Avenue Academy, votre rencontre hebdomadaire et le Hub sur votre téléphone. Cochez chaque étape au fur et à mesure, pour que ' + s.manager + ' sache où vous en êtes.',
+      '   La rencontre hebdomadaire de votre équipe : ' + s.weekly + '. Trouvez-la dans votre calendrier Welfare Avenue et acceptez-la.',
+    ]), '',
+    '3. Vos documents :',
+    '   - Votre description de poste : ' + s.jd + '. Prenez-en connaissance avant votre première rencontre.',
+    '   - Votre lettre d\'offre, signée quand vous avez accepté : ' + s.letter,
+    '   - Vos Drives : ' + s.drives, '',
+    s.manager + ' communiquera avec vous pour fixer votre première rencontre.', '',
+    'Si vous éprouvez un problème technique ou si vous avez des questions, n\'hésitez pas à nous écrire. Nous sommes là pour que votre intégration se déroule en douceur, dans un climat accueillant.', '',
+    'Au plaisir de voir tout le beau travail que vous accomplirez avec nous!', '',
+    facts.hrName,
+  ] : [
+    'Dear ' + first + ',', '',
+    'Congratulations and welcome to the team at Welfare Avenue!', '',
+    role ? 'We\'re excited you\'ve accepted the ' + role + ' role within our organization.' : 'We\'re excited you\'ve accepted our offer.', '',
+    'Your first day is ' + s.day + ', and we can\'t wait to have you on board. To get started, please take the following steps:', '',
+    'Next Steps:', '',
+    '1. ' + LOGIN_HEADS[0],
+    '   Start here, before anything else. This video shows you how to set up your Chrome profile: ' + s.video,
+    '   Email: ' + s.newaddr,
+    '   First password: ' + s.password,
+    '   Google will ask you to change it the first time you sign in.', '',
+    ...(facts.setupLink === null ? [
+      '2. Join the Welfare Avenue Slack with your new address: ' + slack,
+      '   Join our Canva team: ' + s.canva,
+    ] : [
+      '2. Open your setup checklist in the Hub, in your new Chrome profile window: ' + s.setup,
+      '   The Hub walks you through the rest, one step at a time: Slack, Canva, your Drives and Google Groups, the Avenue Academy, your weekly meeting, and the Hub on your phone. Tick each step as you go, so ' + s.manager + ' can see where you are.',
+      '   Your team\'s weekly meeting: ' + s.weekly + '. Find it in your Welfare Avenue calendar and accept it.',
+    ]), '',
+    '3. Your documents:',
+    '   - Your job description: ' + s.jd + '. Have a look before your first meeting.',
+    '   - Your offer letter, signed when you accepted: ' + s.letter,
+    '   - Your Drives: ' + s.drives, '',
+    s.manager + ' will be in touch to set up your first meeting.', '',
+    'If you run into any technical issues or have any questions, don\'t hesitate to reach out. We\'re here to help make your onboarding experience smooth and welcoming.', '',
+    'Looking forward to seeing all the great work you\'ll do with us!', '',
+    facts.hrName,
+  ]).join('\n');
+  return { subject: fr ? 'Bienvenue chez Welfare Avenue! Vos prochaines étapes' : 'Welcome to Welfare Avenue! Your Next Steps', text };
+}
 function welcomeTemplate(c: Row, facts: WelcomeFacts): { subject: string; text: string } {
+  if (facts.simple) return simpleWelcomeTemplate(c, facts);
   const lang = langOf(c), fr = lang === 'fr', s = WELCOME_SLOTS[lang], first = firstName(c.name);
   const slack = facts.slack || 'https://welfareavenue.slack.com';
   const role = String(c.role || '').trim(), roleFr = ROLE_FR[role] || role;
@@ -1273,6 +1342,8 @@ async function welcomeFacts(f: Row, c: Row, who: string, draft: boolean, live = 
     draft, manager: m?.name || null, jdUrl: jd?.jd_url || null, video: (await cfg('onboard_google_video')).trim() || null, letter: httpsOr(x.offer_doc_url), sender,
     slack: (await cfg('onboard_slack_join_link')).trim() || 'https://welfareavenue.slack.com', setupLink: await setupPage((more || {}) as Row, c),
     hrName: hr?.name || (langOf(c) === 'fr' ? 'L\'équipe de Welfare Avenue' : 'The Welfare Avenue team'),
+    simple: !f.call_at && await simpleOn(),
+    firstDay: dayOf(((more as Row | null)?.setup_ticks || {})[FIRST_DAY]),
   };
   if (draft) return facts;
   const steps = await readSteps(f.id);
@@ -1352,10 +1423,94 @@ async function firstPassword(): Promise<string> {   // '' when it cannot be read
   return !error && typeof data === 'string' && data.length >= 8 ? data : '';
 }
 /* the email's HTML part: the same text, its links clickable */
-function welcomeHtml(text: string): string {
-  const line = (l: string) => esc(l).replace(/^ +/, (sp) => '&nbsp;'.repeat(sp.length)).replace(/https?:\/\/[^\s<]*[^\s<.,;:!?)]/g, (u) => '<a href="' + u + '" style="color:#103F39;">' + u + '</a>');
-  return '<!doctype html><html><body style="margin:0;padding:32px 16px;background:#FFFAF2;font-family:Helvetica,Arial,sans-serif;color:#1F201E;"><div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:16px;border:1px solid rgba(16,63,57,.10);padding:28px 32px;font-size:15px;line-height:1.55;">'
-    + text.split('\n').map(line).join('<br>') + '</div></body></html>';
+function welcomeHtml(text: string, opts: { first?: string; day?: string | null; lang?: 'en' | 'fr' } = {}): string {
+  return brandedWelcome(text, opts);
+}
+/* wave353: the welcome in the Fall Cohort email's look (04/11/26, the brand kit's green #103F39, gold #DCA527, paper #FFFAF2): the header with the cohort and
+   "Welcome to the team, <first>", "Next steps" with numbered gold badges, the documents as gold-ruled lines, the setup link and the video as buttons, the
+   footer. It reads the text as written (HR may have edited it): "N. Title" opens a step, an indented line belongs to it, "- " lines are list items, any
+   other line is a paragraph; nothing in the text is ever dropped. */
+const B = { green: '#103F39', gold: '#DCA527', paper: '#FFFAF2', ink: '#1F201E', purple: '#6F64AB' };
+const FONT_HEAD = "'Barlow Condensed','Arial Narrow',Arial,sans-serif", FONT_BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+export function cohortOf(day: string | null | undefined, lang: 'en' | 'fr'): string {
+  const d = /^(\d{4})-(\d{2})/.exec(String(day || '')) || /^(\d{4})-(\d{2})/.exec(torontoDate(Date.now()))!;
+  let y = Number(d[1]); const m = Number(d[2]);
+  const season = m >= 9 && m <= 11 ? 0 : m === 12 || m <= 2 ? 1 : m <= 5 ? 2 : 3;
+  if (m === 12) y += 1;   // December joins the winter cohort of the new year
+  return lang === 'fr' ? ['Cohorte d’automne ', 'Cohorte d’hiver ', 'Cohorte du printemps ', 'Cohorte d’été '][season] + y : ['Fall Cohort ', 'Winter Cohort ', 'Spring Cohort ', 'Summer Cohort '][season] + y;
+}
+function brandedWelcome(text: string, opts: { first?: string; day?: string | null; lang?: 'en' | 'fr' }): string {
+  const lang = opts.lang || 'en', fr = lang === 'fr';
+  const link = (u: string, label?: string) => '<a href="' + esc(u) + '" style="color:' + B.green + ';font-weight:600;text-decoration:underline;">' + esc(label || u) + '</a>';
+  const button = (u: string, label: string) => '<table cellpadding="0" cellspacing="0" border="0" style="margin:10px 0 4px;"><tr><td bgcolor="' + B.gold + '" style="background-color:' + B.gold + ';border-radius:6px;"><a href="' + esc(u) + '" style="display:inline-block;padding:11px 22px;font-family:' + FONT_HEAD + ';font-weight:600;font-size:17px;letter-spacing:1px;text-transform:uppercase;color:' + B.green + ';text-decoration:none;">' + esc(label) + '</a></td></tr></table>';
+  const URL_RE = /https?:\/\/[^\s<]*[^\s<.,;:!?)]/g;
+  /* a line: its links inline; a setup link or a video link also gets its button under the line */
+  const line = (raw: string) => {
+    const l = raw.trim();
+    let html = '', at = 0, buttons = '';
+    for (const m of l.matchAll(URL_RE)) {
+      const u = m[0];
+      html += esc(l.slice(at, m.index)) + link(u);
+      at = m.index! + u.length;
+      if (/\/o\/[^?\s]+\?setup/.test(u)) buttons += button(u, fr ? 'Ouvrir ma liste de préparation' : 'Open my setup checklist');
+      else if (/vid[ée]o/i.test(l) && !/\/o\//.test(u)) buttons += button(u, fr ? 'Regarder la vidéo' : 'Watch the video');
+    }
+    return html + esc(l.slice(at)) + buttons;
+  };
+  const P = (h: string, mb = 14) => '<p style="margin:0 0 ' + mb + 'px 0;">' + h + '</p>';
+  const lines = text.replace(/\r/g, '').split('\n');
+  /* the signature: the last non-blank line, when it is short (a name or "The Welfare Avenue team") */
+  let last = lines.length - 1;
+  while (last >= 0 && !lines[last].trim()) last--;
+  const sign = last >= 0 && lines[last].trim().length <= 60 && !/https?:/.test(lines[last]) ? lines[last].trim() : null;
+  const body: string[] = [];
+  let step: { n: string; title: string; rows: string[] } | null = null;
+  const flush = () => {
+    if (!step) return;
+    /* a link in a step's title goes under it (with its button), so the title stays a title; a trailing colon goes */
+    const urls = step.title.match(URL_RE) || [];
+    if (urls.length) { step.rows.unshift('<div style="margin:0 0 6px;">' + line(urls.join(' ')) + '</div>'); step.title = step.title.replace(URL_RE, '').trim(); }
+    step.title = step.title.replace(/\s*:\s*$/, '');
+    body.push('<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;"><tr><td width="46" valign="top"><table cellpadding="0" cellspacing="0" border="0"><tr><td width="34" height="34" align="center" bgcolor="' + B.gold + '" style="background-color:' + B.gold + ';border-radius:17px;font-family:' + FONT_HEAD + ';font-weight:600;font-size:20px;color:' + B.green + ';">' + esc(step.n) + '</td></tr></table></td>'
+      + '<td valign="top"><div style="font-family:' + FONT_HEAD + ';font-weight:600;font-size:21px;line-height:1.2;letter-spacing:.5px;text-transform:uppercase;color:' + B.green + ';padding-top:5px;">' + line(step.title) + '</div>'
+      + '<div style="font-family:' + FONT_BODY + ';font-size:16px;line-height:1.6;color:' + B.ink + ';padding-top:6px;">' + step.rows.join('') + '</div></td></tr></table>');
+    step = null;
+  };
+  for (let i = 0; i <= (sign ? last - 1 : lines.length - 1); i++) {
+    const raw = lines[i], t = raw.trim();
+    const num = /^(\d+)\.\s+(.*)$/.exec(t);
+    if (num && !/^\s/.test(raw)) { flush(); step = { n: num[1], title: num[2], rows: [] }; continue; }
+    if (step && /^\s+\S/.test(raw)) {
+      step.rows.push(/^-\s+/.test(t) ? '<div style="border-left:3px solid ' + B.gold + ';padding:2px 0 2px 12px;margin:6px 0;">' + line(t.replace(/^-\s+/, '')) + '</div>' : '<div style="margin:0 0 6px;">' + line(t) + '</div>');
+      continue;
+    }
+    if (!t) continue;
+    flush();
+    if (/^(Next Steps|Prochaines étapes)\s*:?\s*$/i.test(t)) {
+      body.push('<div style="font-family:' + FONT_HEAD + ';font-weight:600;font-size:30px;line-height:1.1;text-transform:uppercase;color:' + B.green + ';">' + (fr ? 'Prochaines étapes' : 'Next steps') + '</div>'
+        + '<table cellpadding="0" cellspacing="0" border="0"><tr><td width="40" height="3" bgcolor="' + B.gold + '" style="background-color:' + B.gold + ';font-size:0;line-height:0;">&nbsp;</td></tr></table><div style="height:20px;line-height:20px;">&nbsp;</div>');
+      continue;
+    }
+    body.push(P(line(t)));
+  }
+  flush();
+  if (sign) body.push(P(esc(sign) + '<br><span style="color:' + B.purple + ';">Welfare Avenue</span>', 24));
+  const first = String(opts.first || '').trim();
+  const hello = fr ? 'Bienvenue dans l’équipe,' : 'Welcome to the team,';
+  return '<!doctype html><html><body style="margin:0;padding:0;background:' + B.paper + ';">'
+    + '<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' + B.paper + '" style="background-color:' + B.paper + ';"><tr><td align="center" style="padding:20px 10px;">'
+    + '<table width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">'
+    + '<tr><td bgcolor="' + B.green + '" style="background-color:' + B.green + ';padding:28px 32px 30px;border-radius:12px 12px 0 0;">'
+    + '<div style="font-family:' + FONT_HEAD + ';font-weight:600;font-size:26px;line-height:1.05;letter-spacing:1px;color:' + B.paper + ';text-transform:uppercase;">WELFARE<br>AV≡NUE</div>'
+    + '<div style="font-family:' + FONT_BODY + ';font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:' + B.gold + ';padding-top:24px;">' + esc(cohortOf(opts.day, lang)) + '</div>'
+    + '<div style="font-family:' + FONT_HEAD + ';font-weight:600;font-size:38px;line-height:1.08;text-transform:uppercase;color:' + B.paper + ';padding-top:6px;">' + esc(hello) + (first ? '<br><span style="color:' + B.gold + ';">' + esc(first) + '</span>' : '') + '</div>'
+    + '</td></tr>'
+    + '<tr><td bgcolor="#ffffff" style="background-color:#ffffff;padding:30px 32px 10px;font-family:' + FONT_BODY + ';font-size:16px;line-height:1.6;color:' + B.ink + ';">' + body.join('') + '</td></tr>'
+    + '<tr><td bgcolor="' + B.green + '" style="background-color:' + B.green + ';padding:22px 32px;border-radius:0 0 12px 12px;font-family:' + FONT_BODY + ';color:' + B.paper + ';">'
+    + '<div style="font-family:' + FONT_HEAD + ';font-weight:600;font-size:18px;line-height:1.05;letter-spacing:1px;color:' + B.paper + ';text-transform:uppercase;">WELFARE<br>AV≡NUE</div>'
+    + '<div style="font-weight:700;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:' + B.paper + ';padding-top:10px;">' + (fr ? 'Bâtir des chemins <span style="color:' + B.gold + ';">dans notre communauté</span>' : 'Building pathways <span style="color:' + B.gold + ';">in our community</span>') + '</div>'
+    + '<div style="font-size:13px;line-height:1.5;color:' + B.paper + ';padding-top:10px;">' + (fr ? 'Un mouvement porté par les jeunes qui lutte contre l’insécurité alimentaire et la pauvreté par l’action directe dans la communauté. ' : 'A youth-powered movement fighting food insecurity and poverty through direct community action. ') + '<a href="' + HUB + '" style="color:' + B.gold + ';">hub.welfareavenue.com</a></div>'
+    + '</td></tr></table></td></tr></table></body></html>';
 }
 async function sendWelcome(ctx: Ctx): Promise<string> {
   const f = ctx.flow, c = await getCand(f.candidate_id);
@@ -1397,7 +1552,8 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
     const starter = lc(f.started_by);
     const replyTo = !sender.fallback ? sender.email : isWa(starter) ? starter : '';   // from hub@ with no sender: the person who started it, as before
     let from: { email: string; name: string } | null = sender.fallback ? null : { email: sender.email, name: facts.hrName };
-    const hireMail = { practice: false, to: hire, subject: w.subject, text, html: welcomeHtml(text), ...(replyTo ? { replyTo } : {}) };
+    const look = { first, lang, day: facts.firstDay || (f.call_at ? torontoDate(f.call_at) : null) };   // wave353: the branded look
+    const hireMail = { practice: false, to: hire, subject: w.subject, text, html: welcomeHtml(text, look), ...(replyTo ? { replyTo } : {}) };
     let sent: { mode: string; to: string[] } | null = null, refused = false;
     if (from) {
       try { sent = await deliver({ ...hireMail, from }); } catch (e) {
@@ -1412,7 +1568,7 @@ async function sendWelcome(ctx: Ctx): Promise<string> {
     let copied = 'no staff copy';
     if (staff.length) {
       try {
-        await deliver({ practice: false, to: staff, subject: COPY_PREFIX[lang] + w.subject, text: staffText, html: welcomeHtml(staffText), ...(replyTo ? { replyTo } : {}), from });
+        await deliver({ practice: false, to: staff, subject: COPY_PREFIX[lang] + w.subject, text: staffText, html: welcomeHtml(staffText, look), ...(replyTo ? { replyTo } : {}), from });
         copied = 'copied to ' + staff.length + ' staff';
       } catch (e) {
         copied = 'the staff copy to ' + staff.join(', ') + ' did not go: ' + errText(e).replace(/[.\s]+$/, '');
@@ -2316,6 +2472,7 @@ async function askManagerFor(f: Row, c: Row, m: Row, again: boolean, by: string)
   return { ok: true, sent: true, to: email, manager: m.name, warnings };
 }
 async function askManagerNow(b: Row, by: string, system: boolean): Promise<Response> {
+  if (await simpleOn()) return json({ ok: true, skipped: 'simple', reason: 'The Hub no longer asks for onboarding times: the manager and HR are told when the offer is accepted, and send the onboarding from there.' });   // wave353
   const n = Number(b.flow_id);
   const { data: f } = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select(ASK_COLS).eq('id', n).maybeSingle() : { data: null };
   if (!f) return no('not_found', 'That onboarding flow is gone. Reload the page.', 404);
@@ -2352,6 +2509,155 @@ async function seedMissing(f: Row, keys: string[], by: string, practice: boolean
   return error ? error.message : null;
 }
 
+/* ---------- wave353 (18/11/26): simple onboarding ----------
+   Steel: "I just want people to be onboarded and given the onboarding email once [...] they accepted their offer. [The] manager [and] the HR representative
+   taking care of it should both get a notification on Slack [...] and then they have the ability to send them their onboarding." So, with app_config
+   onboard_simple on:
+   - the offer asks nobody for times (ask_manager and the hourly job skip the propose links, reminders and grids);
+   - at Accept the access steps run as before (accept_setup), then the manager and the card's HR owner hear it once (setup_ticks.ready_told_at), on Slack
+     and in the Hub, with one link: Send their onboarding (/o/<mgr token>?send, a page with a button: a link Slack unfurls must never send anything);
+   - send_onboarding (that page, or signed in from the card by HR or the manager) starts the flow with no call and no 1-on-1: the invites and manager
+     steps are skipped, the plan starts on the first day (the offer's start date when it is still ahead, else today; setup_ticks.first_day), the hire is
+     added to their team's weekly meeting, and the welcome (simpleWelcomeTemplate) goes. The first meeting is the manager's and HR's to arrange.
+   Off, everything is wave275's as before. */
+const SIMPLE = 'onboard_simple';
+const READY_TOLD = 'ready_told_at';   // setup_ticks: the manager and HR were told the hire accepted (once)
+const FIRST_DAY = 'first_day';        // setup_ticks: YYYY-MM-DD, chosen when the onboarding is sent
+const SENT_BY_LINK = 'hub (send onboarding link)';
+const simpleOn = () => cfgOn(SIMPLE);
+const dayOf = (v: unknown): string | null => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v + 'T12:00:00Z')) ? v : null);
+const SIMPLE_SKIPS: Record<string, string> = {
+  invites: 'No onboarding call or 1-on-1 is booked by the Hub: the manager and HR set up the first meeting with them.',
+  manager: 'The manager was told when the offer was accepted, and again when the onboarding went out.',
+};
+/* the first day: the one already chosen, else the offer's start date while it is still ahead, else today (Toronto) */
+async function firstDayOf(flowId: number, c: Row): Promise<string> {
+  const { data } = await svc.from('hub_onboard_flows').select('setup_ticks').eq('id', flowId).maybeSingle();
+  const set = dayOf(((data as Row | null)?.setup_ticks || {})[FIRST_DAY]);
+  if (set) return set;
+  const today = torontoDate(Date.now());
+  const { data: k } = await svc.from('hub_candidates').select('offer_start, start_date').eq('id', c.id).maybeSingle();
+  const want = dayOf(String((k as Row | null)?.offer_start || (k as Row | null)?.start_date || '').slice(0, 10));
+  return want && want >= today ? want : today;
+}
+/* who hears that the hire accepted, and who may send: the flow's manager (or the position's default) and the card's owner (the HR person handling them).
+   Neither known: HR's list. Active roster members with an email only, once each. */
+async function readyPeople(f: Row, c: Row): Promise<{ to: string[]; manager: Row | null; owner: Row | null }> {
+  const manager = await managerFor(f, c).catch(() => null);
+  const x = await candExtra(c).catch(() => ({} as Row));
+  const owner = await ownerMember(x?.owner).catch(() => null);
+  const ok = (m: Row | null) => (m && m.active !== false && /@/.test(String(m.email || '')) ? lc(m.email) : null);
+  let to = [...new Set([ok(manager), ok(owner)].filter((e): e is string => !!e))];
+  if (!to.length) to = await hrList();
+  return { to, manager, owner };
+}
+const andNames = (names: string[]) => names.length <= 1 ? (names[0] || '') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+/* once, after the access steps at Accept: "<name> accepted their offer. Send their onboarding." */
+async function tellReady(flowId: number): Promise<string | null> {
+  if (!(await simpleOn())) return null;
+  const f = await svc.from('hub_onboard_flows').select('*').eq('id', flowId).maybeSingle().then((r) => r.data as Row | null);
+  if (!f) return null;
+  const c = await getCand(f.candidate_id);
+  if (!c || f.practice || c.practice || f.status === 'backed_out' || !BEFORE_START.includes(f.status)) return null;
+  const { data: won, error } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: READY_TOLD, p_value: new Date().toISOString(), p_if_unset: true });
+  if (error || won !== true) return null;
+  const { to, manager, owner } = await readyPeople(f, c);
+  if (!to.length) { await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: READY_TOLD, p_value: null }); return 'Nobody could be told that ' + c.name + ' accepted: the card has no manager or owner, and hr_notify_emails is empty.'; }
+  const rows = await readSteps(f.id);
+  const needsHr = rows.filter((r) => ACCEPT_KEYS.includes(r.step) && ['hr_task', 'failed'].includes(r.status)).map((r) => stepOf(r.step)?.label || r.step);
+  const path = '/o/' + await signedToken('mgr', f.id) + '?send', link = HUB + path;
+  const role = String(c.role || 'new hire'), names = [manager?.name, owner?.name].filter((n, i, a): n is string => !!n && a.indexOf(n) === i);
+  const access = needsHr.length
+    ? 'Most of their access is set up; still to do by hand: ' + needsHr.join(', ') + ' (see their card in Onboarding).'
+    : 'Their Welfare Avenue account, Hub access, Google Groups and drives are set up.';
+  const whoElse = names.length > 1 ? ' ' + andNames(names) + ' both have this message: whoever sends it first, the other will see it went.' : '';
+  const body = c.name + ' (' + role + ') accepted their offer. ' + access + ' Send them their onboarding email when you are ready; their first meeting and 1-on-1 are yours to set up with them.' + whoElse;
+  const told = await tell({
+    event: 'onboard_ready', to, url: path, tag: 'onboard-ready-' + f.id, title: c.name + ' accepted their offer', body,
+    text: ':tada: *' + slackEsc(c.name) + '* (' + slackEsc(role) + ') accepted their offer! ' + slackEsc(access) + ' <' + link + '|Send their onboarding> when you are ready. Their first meeting and 1-on-1 are yours to set up with them.' + slackEsc(whoElse),
+  });
+  if (!told.handled) { await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: READY_TOLD, p_value: null }); return 'Nobody was told that ' + c.name + ' accepted: ' + (told.note || 'notify gave no answer') + '. The hourly job tries again.'; }
+  await log('onboard_flow', f.id, 'ready_told', null, 'told ' + to.join(', '), AT_ACCEPT_BY);
+  return told.note ? 'Not everyone was reached: ' + told.note : null;
+}
+/* the send page (/o/<mgr token>?send) and the card read this: who it goes to, from whom, the first day, and whether it went. Reads only. */
+async function sendView(b: Row): Promise<Response> {
+  const f = await svc.from('hub_onboard_flows').select('*').eq('id', Number(b.flow_id)).maybeSingle().then((r) => r.data as Row | null);
+  if (!f) return no('not_found', 'That onboarding is gone.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone.', 404);
+  const { manager, owner } = await readyPeople(f, c);
+  const x = await candExtra(c).catch(() => ({} as Row));
+  const sender = senderOf(x, await activeByEmail(x?.offer_sent_by).catch(() => null), owner);
+  const steps = await readSteps(f.id);
+  return json({
+    simple: await simpleOn(), name: c.name, role: c.role || null, accepted: !!c.accepted_on, status: f.status, closed: f.status === 'backed_out' || CLOSED_CARD.includes(c.status),
+    sent_at: f.welcome_sent_at || (AFTER_START.includes(f.status) ? f.started_at || f.updated_at : null), sent_by: AFTER_START.includes(f.status) ? f.started_by || null : null,
+    first_day: AFTER_START.includes(f.status) ? dayOf((f.setup_ticks || {})[FIRST_DAY]) : await firstDayOf(f.id, c),
+    manager: manager?.name || null, owner: owner?.name || null, from: sender.fallback ? CAL : sender.email,
+    to: [lc(c.email), lc(f.wa_email)].filter(Boolean), access: steps.filter((r) => ACCEPT_KEYS.includes(r.step)).map((r) => ({ step: stepOf(r.step)?.label || r.step, status: r.status })),
+  });
+}
+/* send_onboarding {flow_id, first_day?}: the button. by is the signed-in person, or SENT_BY_LINK from the page. Two presses send once (the claim). */
+async function sendOnboarding(b: Row, by: string): Promise<Response> {
+  if (!(await simpleOn())) return no('not_simple', 'Sending the onboarding from here is switched off: book the times from the card in Onboarding instead.');
+  const n = Number(b.flow_id);
+  const f = Number.isInteger(n) ? await svc.from('hub_onboard_flows').select('*').eq('id', n).maybeSingle().then((r) => r.data as Row | null) : null;
+  if (!f) return no('not_found', 'That onboarding is gone. Reload the page.', 404);
+  const c = await getCand(f.candidate_id);
+  if (!c) return no('not_found', 'The candidate card is gone. Reload the page.', 404);
+  if (f.status === 'backed_out' || CLOSED_CARD.includes(c.status)) return no('closed', c.name + '\'s card is closed, so nothing was sent.');
+  if (!c.accepted_on) return no('not_accepted', c.name + ' has not accepted the offer yet, so there is nothing to send.');
+  if (AFTER_START.includes(f.status) || f.call_at) return json({ ok: true, repeated: true, sent_at: f.welcome_sent_at || null, sent_by: f.started_by || null });
+  if (!proposeMode(f, await v2Since())) return no('earlier_path', EARLIER_PATH);
+  if (!lc(c.email)) return no('no_email', c.name + '\'s card has no personal email, so the welcome email cannot reach them. Add it on the card first.');
+  const today = torontoDate(Date.now()), asked = dayOf(b.first_day);
+  if (b.first_day != null && b.first_day !== '' && (!asked || asked < today)) return no('bad_day', 'Pick a first day from today on.', 400);
+  const first = asked || await firstDayOf(f.id, c);
+  const { manager, owner } = await readyPeople(f, c);
+  const starter = /@/.test(by) ? lc(by) : lc(owner?.email) || lc(manager?.email) || null;
+  /* the claim: of two presses, one finds the flow not started and nothing booked */
+  const now = new Date().toISOString();
+  const patch: Row = { status: 'running', started_by: starter, updated_at: now };
+  if (f.manager_member_id == null && manager?.id != null) patch.manager_member_id = manager.id;
+  const { data: won, error } = await svc.from('hub_onboard_flows').update(patch).eq('id', f.id).in('status', BEFORE_START).is('call_at', null).select(FLOW_COLS);
+  if (error) return no('save', 'The onboarding could not be started: ' + error.message + '. Try again.', 500);
+  const flow = (won as Row[] | null)?.[0];
+  if (!flow) {
+    const again = await getFlow(f.id);
+    if (again && AFTER_START.includes(again.status)) return json({ ok: true, repeated: true, sent_at: again.welcome_sent_at || null, sent_by: again.started_by || null });
+    return no('changed', 'Someone else just changed this onboarding. Reload the page.');
+  }
+  const practice = !!(f.practice || c.practice);
+  const giveBack = async (why: string) => {
+    await svc.from('hub_onboard_flows').update({ status: f.status, started_by: f.started_by ?? null, manager_member_id: f.manager_member_id ?? null, updated_at: new Date().toISOString() }).eq('id', f.id).eq('status', 'running');
+    return no('save', 'The onboarding could not be started: ' + why + '. Try again.', 500);
+  };
+  const { error: dayErr } = await svc.rpc('wa275_tick_set', { p_flow: f.id, p_key: FIRST_DAY, p_value: first });
+  if (dayErr) return await giveBack(dayErr.message);
+  const seedErr = await seedMissing(flow, STEPS.map((s) => s.key), by, practice);   // the booking group, and the at-Accept rows if accept_setup never ran
+  if (seedErr) return await giveBack(seedErr);
+  for (const [key, detail] of Object.entries(SIMPLE_SKIPS)) {
+    await svc.from('hub_onboard_steps').update({ status: 'skipped', detail, at: now, by }).eq('flow_id', f.id).eq('step', key).eq('status', 'pending');
+  }
+  await log('onboard_flow', f.id, 'status', f.status, 'running (onboarding sent; first day ' + first + ')', by);
+  const steps = (async () => {
+    try {
+      await advance(await makeCtx(flow, by, null));
+      if (practice) return;
+      const who = /@/.test(by) ? await nameFor(by) : 'Someone with the link';
+      const others = [lc(manager?.email), lc(owner?.email)].filter((e): e is string => !!e && e !== lc(by));
+      const list = others.length ? [...new Set(others)] : await hrList();
+      if (!list.length) return;
+      const said = who + ' sent ' + c.name + ' their onboarding (first day ' + dayWords(first + 'T12:00:00Z', 'en') + '). Their checklist is open in the Hub; their first meeting is yours to set up.';
+      const told = await tell({ event: 'onboard_answer', to: list, url: '#hrcentre/onboarding', tag: 'onboard-sent-' + f.id, title: c.name + '\'s onboarding went out', body: said, text: ':white_check_mark: ' + slackEsc(said) + ' <' + HUB + '/#hrcentre/onboarding|Open Onboarding>' });
+      if (!told.handled) console.error('onboard-run send_onboarding: nobody was told for flow ' + f.id + ': ' + (told.note || 'notify gave no answer'));
+    } catch (e) { console.error('onboard-run send_onboarding: the steps stopped for flow ' + f.id + ': ' + errText(e)); }
+  })();
+  await inBackground(steps);
+  return json({ ok: true, sent: true, first_day: first, status: 'running' });
+}
+
 /* accept_setup {flow_id}: onboard-link asks once the hire's Accept is saved, and does not wait for the answer */
 async function acceptSetup(b: Row): Promise<Response> {
   const n = Number(b.flow_id);
@@ -2379,6 +2685,7 @@ async function acceptSetup(b: Row): Promise<Response> {
   /* wave278: member or leader is decided here, at Accept, whatever the groups and drives switches say (the card shows it, and a practice flow gets it too) */
   try { await decideLeader(flowNow, AT_ACCEPT_BY); } catch (e) { warnings.push(errText(e)); }
   await advance(await makeCtx(flowNow, AT_ACCEPT_BY, null));
+  try { const r = await tellReady(f.id); if (r) warnings.push(r); } catch (e) { warnings.push('The manager and HR were not told: ' + errText(e)); }   // wave353
   return json({ ok: true, steps: await readSteps(f.id), warnings });
 }
 
@@ -2500,7 +2807,8 @@ async function earlierPath(flowId: unknown): Promise<boolean> {
   return !!data && !proposeMode(data as Row, await v2Since());
 }
 const CARD_BY_MANAGER = ['times', 'book', 'set_ask_availability', 'grid_for', 'set_welcome', 'welcome', 'retry', 'task_done', 'set_canva_link', 'book_one_on_one', 'change_time', 'change_manager', 'backed_out',
-  'set_leader', 'recheck_access', 'set_welcome_cc'];   // wave278
+  'set_leader', 'recheck_access', 'set_welcome_cc',   // wave278
+  'send_onboarding', 'send_view'];   // wave353
 const nameFor = async (email: string) => (await membersByEmail(email).catch(() => []))[0]?.name || email;
 
 /* times {flow_id}: what the card's picker draws. The manager's availability (wa275_availability_of), the hub@ meetings they are invited to over the grid's
@@ -2737,6 +3045,8 @@ async function remind(): Promise<Response> {
   const waited = (since: unknown) => !!since && Date.now() - Date.parse(String(since)) >= hours * 3600000;
   const hr = (await cfg('hr_notify_emails')).split(/[,\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x));
   const since = await v2Since();   // wave275: which flows are on the propose path
+  const simple = await simpleOn();   // wave353: no times to ask for; an accepted hire whose manager and HR were not told yet is told now
+  if (simple) Object.assign(out, { ready_told: 0 });
   const { data, error: listErr } = await svc.from('hub_onboard_flows').select(REMIND_COLS).in('status', [...LIVE_FLOW, 'offered']).eq('practice', false);
   if (listErr) return json({ ok: false, error: 'remind_failed', message: 'The flows could not be read, so nothing was reminded: ' + listErr.message + '. If wa271b_remind.sql is not applied yet, apply it first.' }, 500);   // a broken deploy order must show in cron, not pass as an empty hour
   for (const f of (data || []) as Row[]) {
@@ -2744,6 +3054,13 @@ async function remind(): Promise<Response> {
       const c = await getCand(f.candidate_id);
       if (!c || c.practice || !OPEN_CARD.includes(c.status)) continue;
       if (await otherOpenPlan(f, c)) continue;
+      if (simple) {
+        if (c.accepted_on && BEFORE_START.includes(f.status) && !f.call_at && !f.setup_ticks?.[READY_TOLD] && f.setup_ticks?.accept_setup_at && proposeMode(f, since)) {
+          const r = await tellReady(f.id);
+          if (r) out.skipped.push('flow ' + f.id + ': ' + r); else (out as Row).ready_told++;
+        }
+        continue;
+      }
 
       /* wave275, the propose path: the manager's propose link once, then after onboard_remind_hours with nothing proposed one reminder to them and one word to HR.
          No grid message of wave271's goes to such a flow. */
@@ -3279,6 +3596,8 @@ Deno.serve(async (req: Request) => {
         if (sb.action === 'accept_setup') return await acceptSetup(sb);   // wave275 Task 3: onboard-link, after the hire's Accept
         if (sb.action === 'book') return await book(sb);                  // wave275 Task 3: onboard-link, the hire's Yes
         if (sb.action === 'ask_manager') return await askManagerNow(sb, 'hub (offer sent)', true);   // wave275 Task 5: recruit-actions, once the offer is out
+        if (sb.action === 'send_view') return await sendView(sb);                                  // wave353: the send page (onboard-link, mgr token)
+        if (sb.action === 'send_onboarding') return await sendOnboarding(sb, SENT_BY_LINK);        // wave353: its button
       }
     }
     const authHeader = req.headers.get('Authorization') || '';
@@ -3304,6 +3623,8 @@ Deno.serve(async (req: Request) => {
     }
     if (b.action === 'times') return await timesView(b);
     if (b.action === 'book') return await bookFromCard(b, by);
+    if (b.action === 'send_onboarding') return await sendOnboarding(b, by);   // wave353: HR, an admin, or this hire's manager
+    if (b.action === 'send_view') return await sendView(b);
     if (b.action === 'set_ask_availability') return await setAskAvailability(b, by);
     if (b.action === 'grid_for') return await gridFor(b, by);
     if (b.action === 'set_welcome') return await setWelcome(b, by);

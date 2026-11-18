@@ -58,7 +58,7 @@ test('a GET saves nothing and gives the page what it needs', async () => {
   assert.equal(a.status, 200);
   assert.deepEqual({ ...a.body, grid: undefined }, {
     ok: true, kind: 'offer', first: 'Alex', role: 'Program Coordinator', lang: 'en', answered: '', closed: false, late: false, booked: false, callBooked: false, grid: undefined, slotsSaved: [],
-    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', secondNo: null, setup: null, hoursRequired: false,   // wave275: an offer from before it has no hours and keeps the grid (wave275b: so no box is required)
+    offerHours: null, hoursConfirmed: false, mode: 'grid', proposal: null, bookedTimes: null, answer: null, askAvailability: true, manager: 'Sam Lee', secondNo: null, setup: null, hoursRequired: false, simple: false, welcomeSent: false,   // wave275: an offer from before it has no hours and keeps the grid (wave275b: so no box is required)
   });
   assert.equal(m.body.kind, 'manager');
   assert.equal(m.body.first, 'Sam');
@@ -1548,4 +1548,24 @@ test('w275b onboard_manager_hours off: the hire\'s No grid greys only the hub@ m
   const og = (await on.get(on.offer)).body;
   assert.equal(new Set(og.managerFree).has('2026-11-02T13:00:00Z'), false, 'on: Monday 8 am is greyed');
   assert.equal(og.managerHours, true);
+});
+
+/* ---------- wave353: simple onboarding. The mgr link with ?send relays to onboard-run (send_view, send_onboarding); a GET never sends. ---------- */
+test('w353 ?send: a GET asks send_view only; POST send relays send_onboarding with the first day; the offer link cannot; the hire\'s view says simple', async () => {
+  const s = await hire({ config: { onboard_simple: 'on' }, run: (e) => ({ json: e.body.action === 'send_view' ? { simple: true, name: 'Alex Tremblay', accepted: true } : { ok: true, sent: true } }) });
+  const g = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.mgr) + '&send=1'));
+  const gb = await g.json();
+  assert.equal(g.status, 200);
+  assert.deepEqual([gb.kind, gb.simple, gb.name], ['send', true, 'Alex Tremblay']);
+  assert.deepEqual(s.relays.map((e) => e.body), [{ action: 'send_view', flow_id: 11 }], 'the GET only reads');
+  const p = await s.post({ t: s.mgr, a: 'send', first_day: '2026-11-09' });
+  assert.equal(p.status, 200);
+  assert.equal(p.body.sent, true);
+  assert.deepEqual(s.relays.at(-1).body, { action: 'send_onboarding', flow_id: 11, first_day: '2026-11-09' });
+  assert.equal(s.relays.at(-1).headers['x-wa-secret'], 'trigger-secret-for-tests');
+  assert.equal((await s.post({ t: s.offer, a: 'send' })).body.error, 'wrong_link', 'the hire\'s link cannot send');
+  const off = await s.rig.call(new Request(URL_ + '?t=' + encodeURIComponent(s.offer) + '&send=1'));
+  assert.equal((await off.json()).error, 'wrong_link');
+  const v = (await s.get(s.offer)).body;
+  assert.deepEqual([v.simple, v.welcomeSent], [true, false]);
 });

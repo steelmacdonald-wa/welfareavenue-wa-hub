@@ -4468,3 +4468,142 @@ test('wave278 ruling: a hire with no setup page (wave271\'s path) gets the short
   assert.ok(u.includes('\n\n3. Joignez-vous au Slack de Welfare Avenue avec votre nouvelle adresse : https://welfareavenue.slack.com\n\n4. Vos documents :\n'), u);
   assert.doesNotMatch(u, /Canva|rencontre hebdomadaire de votre équipe|\[/, 'no Canva link: its line goes');
 });
+
+/* ---------- wave353 (18/11/26): simple onboarding. No call and no 1-on-1: at Accept the manager and the card's owner are told once, with the send link;
+   send_onboarding starts the flow, skips the invites and the manager step, starts the plan on the first day and sends the Fall Cohort-style welcome. ---------- */
+const NO_PROPOSAL = { proposed_call_at: null, proposed_one_on_one_at: null, proposed_by: null, proposed_at: null };
+async function t353({ cand = {}, fl = {}, config = {}, ...o } = {}) {
+  const s = await t9({ cand, fl: { ...NO_PROPOSAL, ...fl }, config: { onboard_simple: 'on', ...config }, ...o });
+  s.readies = () => s.notifies().filter((e) => e.body.event === 'onboard_ready');
+  s.send = (body = {}, headers = SECRET) => s.post({ action: 'send_onboarding', flow_id: 21, ...body }, headers);
+  return s;
+}
+
+test('w353 Accept: the access runs, then the manager and the card\'s owner hear it once (Slack and the Hub), with the send link; nobody is asked for times', async () => {
+  const s = await t353();
+  assert.equal((await s.acceptSetup()).status, 200);
+  const r = s.readies();
+  assert.equal(r.length, 1, 'one notice');
+  assert.deepEqual(r[0].body.to.sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com'], 'the default manager and the owner (Ruth Owen, by name)');
+  assert.match(r[0].body.url, /^\/o\/21\.[A-Za-z0-9_-]{20}\?send$/, 'the mgr token with ?send');
+  assert.match(r[0].body.text, /accepted their offer/);
+  assert.match(r[0].body.text, /\|Send their onboarding>/);
+  assert.match(r[0].body.body, /Sam Lee and Ruth Owen both have this message/);
+  assert.ok(noDash(r[0].body.text) && noDash(r[0].body.body));
+  assert.ok(s.flow().setup_ticks.ready_told_at, 'remembered');
+  assert.equal(s.gmail().length, 0, 'nothing to the hire yet');
+  assert.equal(s.calWrites().length, 0);
+  const again = await s.post({ action: 'remind' }, SECRET);
+  assert.equal(again.status, 200, JSON.stringify(again.body));
+  assert.equal(s.readies().length, 1, 'the hourly job does not tell them twice');
+  const ask = await s.post({ action: 'ask_manager', flow_id: 21 }, SECRET);
+  assert.equal(ask.body.skipped, 'simple', 'the offer asks nobody for times');
+  assert.equal(s.notifies().filter((e) => e.body.event === 'onboard_propose').length, 0);
+  s.noPw();
+});
+
+test('w353 the hourly job tells them when the notice at Accept did not get through, and only once', async () => {
+  let down = true;
+  const s = await t353({ notifyReply: (e) => (down && e.body.event === 'onboard_ready' ? { status: 502, json: { error: 'slack down' } } : { json: { outcome: Object.fromEntries([].concat(e.body.to || e.body.to_email).map((x) => [x, 'sent'])), hub: 'off' } }) });
+  const a = await s.acceptSetup();
+  assert.equal(a.status, 200);
+  assert.ok(a.body.warnings.some((w) => /Nobody was told/.test(w)), JSON.stringify(a.body.warnings));
+  assert.equal(s.flow().setup_ticks.ready_told_at ?? null, null, 'given back');
+  down = false;
+  const r = await s.post({ action: 'remind' }, SECRET);
+  assert.equal(r.body.ready_told, 1, JSON.stringify(r.body));
+  await s.post({ action: 'remind' }, SECRET);
+  assert.equal(s.readies().length, 2, 'one failed try at Accept, one delivered by the hourly job, none after');
+});
+
+test('w353 send_onboarding from the link: plan on today (no start date ahead), invites and manager skipped, the simple welcome in the brand look, the others told; a second press sends nothing', async () => {
+  const s = await t353();
+  await s.acceptSetup();
+  s.pwReads = 0;
+  let r;
+  const said = await quietly(async () => { r = await s.send(); });
+  assert.equal(r.status, 200, JSON.stringify(r.body) + said);
+  assert.deepEqual([r.body.sent, r.body.first_day], [true, '2026-10-20']);
+  assert.equal(s.step('invites').status, 'skipped');
+  assert.equal(s.step('manager').status, 'skipped');
+  assert.equal(s.step('plan').status, 'done', s.step('plan').detail);
+  assert.equal(s.planned[0].p_start, '2026-10-20');
+  assert.equal(s.cand().status, 'hired');
+  assert.equal(s.flow().setup_ticks.first_day, '2026-10-20');
+  assert.equal(s.flow().call_at ?? null, null, 'no call booked');
+  assert.equal(s.step('welcome').status, 'done', s.step('welcome').detail);
+  assert.equal(s.calWrites().filter((e) => e.method === 'POST').length, 0, 'no onboarding call or 1-on-1 invite');
+  const [hire, staff] = s.sends();
+  const text = hire.bodies[0];
+  assert.match(text, /Your first day is Tuesday, October 20, 2026/);
+  assert.ok(!/onboarding call|1-on-1|Google Meet/i.test(text), text);
+  assert.match(text, /Sam Lee will be in touch to set up your first meeting\./);
+  assert.match(text, /^1\. Sign in to your Welfare Avenue Google account/m);
+  assert.match(text, /^2\. Open your setup checklist in the Hub/m);
+  assert.match(text, /Have a look before your first meeting\./);
+  assert.equal(count(text, FIRST_PW), 1);
+  const html = hire.bodies[1];
+  if (process.env.W353_DUMP) (await import('node:fs')).writeFileSync(process.env.W353_DUMP, html.replace(FIRST_PW, '••••••••'));
+  assert.match(html, /Fall Cohort 2026/);
+  assert.match(html, /Welcome to the team,<br><span style="color:#DCA527;">Nia<\/span>/);
+  assert.match(html, /Open my setup checklist/);
+  assert.match(html, /Watch the video/);
+  assert.equal(count(html, FIRST_PW), 1);
+  assert.ok(!staff.bodies.join('').includes(FIRST_PW), 'the staff copy has no password');
+  const sent = s.notifies().filter((e) => e.body.tag === 'onboard-sent-21');
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].body.to.sort(), ['ruth.owen@welfareavenue.com', 'sam.lee@welfareavenue.com'], 'from the link: both are told');
+  const again = await s.send();
+  assert.equal(again.body.repeated, true);
+  assert.equal(s.sends().length, 2, 'still one welcome and its staff copy');
+  s.noPw();
+});
+
+test('w353 send_onboarding: the offer\'s start date when still ahead; a first day given by the card; refusals (off, not accepted, past day, closed)', async () => {
+  const ahead = await t353({ cand: { offer_start: '2026-11-02' } });
+  await ahead.acceptSetup();
+  await quietly(() => ahead.send());
+  assert.equal(ahead.planned[0].p_start, '2026-11-02');
+  assert.match(ahead.sends()[0].bodies[0], /Your first day is Monday, November 2, 2026/);
+  assert.match(ahead.sends()[0].bodies[1], /Fall Cohort 2026/);
+  const past = await t353({ cand: { offer_start: '2026-10-01' } });
+  await past.acceptSetup();
+  await quietly(() => past.send());
+  assert.equal(past.planned[0].p_start, '2026-10-20', 'a start date gone by: today');
+  const chosen = await t353();
+  await chosen.acceptSetup();
+  assert.equal((await chosen.send({ first_day: '2026-10-10' })).status, 400, 'not a day gone by');
+  await quietly(() => chosen.send({ first_day: '2026-12-07' }));
+  assert.match(chosen.sends()[0].bodies[1], /Winter Cohort 2027/);
+  const off = await t353({ config: { onboard_simple: 'off' } });
+  await off.acceptSetup();
+  assert.equal((await off.send()).body.error, 'not_simple');
+  assert.equal(off.readies().length, 0, 'off: nobody is told at Accept');
+  const early = await t353({ cand: { accepted_on: null } });
+  assert.equal((await early.send()).body.error, 'not_accepted');
+  const gone = await t353({ fl: { status: 'backed_out' } });
+  assert.equal((await gone.send()).body.error, 'closed');
+});
+
+test('w353 send_view: what the send page shows, before and after', async () => {
+  const s = await t353({ cand: { offer_start: '2026-11-02' } });
+  await s.acceptSetup();
+  const v = await s.post({ action: 'send_view', flow_id: 21 }, SECRET);
+  assert.equal(v.status, 200);
+  assert.deepEqual([v.body.simple, v.body.name, v.body.first_day, v.body.manager, v.body.owner, v.body.sent_at, v.body.from], [true, 'Nia Okafor', '2026-11-02', 'Sam Lee', 'Ruth Owen', null, 'shima.butera@welfareavenue.com']);
+  assert.deepEqual(v.body.access.map((a) => a.step), ['Roster profile', 'Google account', 'Hub access', 'Google Groups', 'Shared drives']);
+  await quietly(() => s.send());
+  const after = await s.post({ action: 'send_view', flow_id: 21 }, SECRET);
+  assert.ok(after.body.sent_at);
+  assert.equal(after.body.first_day, '2026-11-02');
+});
+
+test('w353 cohortOf: the season of the first day', async () => {
+  const s = await t353();
+  const f = s.rig.mod.cohortOf;
+  assert.equal(f('2026-11-18', 'en'), 'Fall Cohort 2026');
+  assert.equal(f('2026-12-01', 'en'), 'Winter Cohort 2027');
+  assert.equal(f('2027-02-10', 'fr'), 'Cohorte d’hiver 2027');
+  assert.equal(f('2027-04-01', 'en'), 'Spring Cohort 2027');
+  assert.equal(f('2027-07-01', 'en'), 'Summer Cohort 2027');
+});
