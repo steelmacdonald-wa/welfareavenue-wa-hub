@@ -186,8 +186,9 @@
     if (painting) return; painting = true;
     try {
       var p = document.getElementById('hrcentre'), apps = document.getElementById('w197apps');
+      if (onApps()) loadDone();
       if (!onApps()) { if (p) { p.removeAttribute('data-w354v'); p.removeAttribute('data-w354s'); } var old = document.getElementById('w354apps'); if (old) old.remove(); return; }
-      var n = counts(), s = stageNow(n), st = s === 'closed' ? ['closed', 'Closed', 'Declined, withdrawn or sent to volunteering. Open someone to read their file, or move them back into the flow.'] : STAGES.filter(function (x) { return x[0] === s; })[0];
+      var n = counts(), s = stageNow(n), st = s === 'closed' ? ['closed', 'Closed', 'Declined, withdrawn, sent to volunteering, or onboarded (hires 30 days on with their onboarding complete). Open someone to read their file, or move them back into the flow.'] : STAGES.filter(function (x) { return x[0] === s; })[0];
       /* Closed: the board's own closed list, opened */
       if (s === 'closed' && AP.v === 'list') { try { var W = w197.state(); if (!W.showClosed) { W.showClosed = true; painting = false; w197.paintBoard(); return; } } catch (x) { /* fine */ } }
       /* how many in this stage have waited a month or more (the card's "N days here") */
@@ -258,6 +259,28 @@
       + CL.filter(function (p) { return p[0] !== st; }).map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="cl">' + E(p[0] === 'volunteering' ? 'Send to volunteering' : p[1]) + '</button>'; }).join('') + '</div>';
     return h;
   }
-  window.w354 = { flow: flow, lines: lines, buttons: buttons, defaultDay: defaultDay, state: function () { return { ON: ON, AP: AP }; }, paintApps: paintApps };
+  /* wave357 (18/11/26, Steel: "Those that have been in hired for over 30 days should be put into closed as long as they have their onboarding complete"):
+     a hire 30 days past Hired (stage_at, else the day they accepted) whose onboarding is complete shows under Closed as Onboarded. Their stage stays
+     Hired: nothing is written, no Slack goes out. */
+  var DONE = null, doneLoading = false;
+  function loadDone() {
+    if (doneLoading || DONE || typeof db === 'undefined') return; doneLoading = true;
+    db.from('onboardings').select('member_id,status').eq('status', 'completed').limit(1000).then(function (r) {
+      DONE = {}; ((r && r.data) || []).forEach(function (o) { if (o.member_id != null) DONE[o.member_id] = true; });
+      doneLoading = false; try { if (window.w197 && onApps()) w197.paintBoard(); } catch (e) { /* fine */ }
+    }, function () { doneLoading = false; });
+  }
+  function doneHire(c) {
+    if (!c || c.status !== 'hired' || !DONE || c.member_id == null || !DONE[c.member_id]) return false;
+    var t = c.stage_at || c.accepted_on; if (!t) return false;
+    return (Date.now() - new Date(/T/.test(t) ? t : t + 'T12:00:00Z').getTime()) / 86400000 > 30;
+  }
+  var REASON = { declined: 'Declined', withdrawn: 'Withdrawn', volunteering: 'Sent to volunteering' };
+  function closedCard(c, html) {
+    var role = ''; try { role = window.w199 ? w199.roleOf(c) : (c.role || ''); } catch (e) { role = c.role || ''; }
+    var why = doneHire(c) ? 'Onboarded' : (REASON[c.status] || c.status || 'Closed');
+    return String(html).replace('</b>', '</b><span class="r">' + E(role) + '</span><span class="m"><span class="' + (doneHire(c) ? 'ok' : 'cl') + '">' + E(why) + '</span>' + (c.close_reason ? '<span>' + E(String(c.close_reason).slice(0, 60)) + '</span>' : '') + '</span>');
+  }
+  window.w354 = { doneHire: doneHire, closedCard: closedCard, flow: flow, lines: lines, buttons: buttons, defaultDay: defaultDay, state: function () { return { ON: ON, AP: AP }; }, paintApps: paintApps };
   setTimeout(soon, 400);
 })();
