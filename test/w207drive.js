@@ -1,4 +1,4 @@
-/* w207drive.js (wave207): project tasks are department tasks; the charitable activities; this year's goals (FY27).
+/* w207drive.js (wave207; wave353: the checkpoints moved into this year's quarter columns, [data-w205years]): project tasks are department tasks; the charitable activities; this year's goals (FY27).
    CAND=build/<file>.html node test/w207drive.js   (SHOTS=<dir> also saves the two screenshots)
    Fixture: test/w207fixture.js. The strategy_* calls are caught in the page (as in w205drive), Realtime is a fake channel,
    and dept_tasks and change_log writes land in the fixture (as in w206drive). Nothing reaches the database. */
@@ -75,8 +75,8 @@ async function goals(b) {
       chips1: Array.from(document.querySelectorAll('[data-w207acts="101"] .w207chip')).map(c => c.querySelector('b').textContent + '|' + c.title),
       note4: (document.querySelector('[data-w205k="goal:104:activities_note"]') || {}).value,
       tgt1: (document.querySelector('[data-w205k^="target:"][data-w205k$=":body"]') || {}).value,
-      cps1: Array.from(document.querySelectorAll('[data-w207yb="101"] .w207cp')).map(c => c.className + '|' + c.querySelector('textarea').value + '|' + c.querySelector('input.w207due').value),
-      sel1: Array.from(document.querySelectorAll('[data-w207yb="101"] select.w207st')).map(s => s.disabled ? 'ro' : 'rw'),
+      cps1: Array.from(document.querySelectorAll('[data-w205years="101"] .w207cp')).map(c => c.className + '|' + c.querySelector('textarea').value + '|' + c.querySelector('input.w207due').value),
+      sel1: Array.from(document.querySelectorAll('[data-w205years="101"] select.w207st')).map(s => s.disabled ? 'ro' : 'rw'),
       emdash: document.getElementById('w205').innerText.indexOf('—') >= 0
     };
   });
@@ -108,14 +108,14 @@ async function goals(b) {
   ok(!r, 'chip: a second tap closes it');
 
   /* autosave on a checkpoint: status, words, due date; the target's owners */
-  await f.ev(() => { const s = document.querySelector('[data-w207yb="101"] select.w207st'); s.value = 'on track'; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); });
+  await f.ev(() => { const s = document.querySelector('[data-w205years="101"] select.w207st'); s.value = 'on track'; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); });
   await f.page.waitForTimeout(500);
   let cs = await calls(f, 'strategy_save');
   ok(cs.length === 1 && cs[0].args.p_entity === 'checkpoint' && cs[0].args.p_field === 'status' && cs[0].args.p_value === 'on track' && cs[0].args.p_old === 'not started', 'checkpoint: the status saves at once with the value the page started from');
-  r = await f.ev(() => ({ cls: document.querySelector('[data-w207yb="101"] select.w207st').className, pill: (document.querySelector('#w205 .w207grid tbody tr:first-child td.now .w207pill') || {}).textContent }));
+  r = await f.ev(() => ({ cls: document.querySelector('[data-w205years="101"] select.w207st').className, pill: (document.querySelector('#w205 .w207grid tbody tr:first-child td.now .w207pill') || {}).textContent }));
   ok(/s-onTrack/.test(r.cls) && r.pill === 'On track', 'checkpoint: the card and the This year table show On track');
-  const k1 = await f.ev(() => document.querySelector('[data-w207yb="101"] .w207cp textarea').getAttribute('data-w205k'));
-  await f.page.click('[data-w205k="' + k1 + '"]'); await f.page.keyboard.press('End'); await f.page.keyboard.type(', Montreal and Toronto', { delay: 10 });
+  const k1 = await f.ev(() => document.querySelector('[data-w205years="101"] .w207cp textarea').getAttribute('data-w205k'));
+  await f.page.click('[data-w205k="' + k1 + '"]'); await f.page.keyboard.press('Control+End'); await f.page.keyboard.type(', Montreal and Toronto', { delay: 10 });
   await f.page.waitForTimeout(1300);
   cs = await calls(f, 'strategy_save');
   ok(cs.length === 2 && cs[1].args.p_field === 'body' && cs[1].args.p_old === TARGETS[0][3][0] && cs[1].args.p_value === TARGETS[0][3][0] + ', Montreal and Toronto', 'checkpoint: its words autosave after the pause');
@@ -135,7 +135,7 @@ async function goals(b) {
   /* someone else's save arrives live */
   await f.ev(() => { const c = window.w205.state().checkpoints.filter(x => x.goal_id === 103 && x.quarter === 1)[0]; window.__w205ch.fire('postgres_changes', 'goal_checkpoints', { eventType: 'UPDATE', new: Object.assign({}, c, { status: 'at risk', updated_by: 'ian.odhiambo@welfareavenue.com' }) }); });
   await f.page.waitForTimeout(300);
-  r = await f.ev(() => ({ sel: document.querySelector('[data-w207yb="103"] select.w207st').value, pill: (document.querySelectorAll('#w205 .w207grid tbody tr')[2].querySelector('td.now .w207pill') || {}).textContent }));
+  r = await f.ev(() => ({ sel: document.querySelector('[data-w205years="103"] select.w207st').value, pill: (document.querySelectorAll('#w205 .w207grid tbody tr')[2].querySelector('td.now .w207pill') || {}).textContent }));
   ok(r.sel === 'at risk' && r.pill === 'At risk', 'live: Ian\'s At risk on goal 3 lands in the card and the table');
 
   /* the activities: anchor goal 1 on activity 2, then take it off; the reason edits in place */
@@ -161,7 +161,7 @@ async function goals(b) {
 
   /* comments on a checkpoint */
   await f.ev(() => { window.__w205rpc.strategy_checkpoint_comment_add = a => ({ id: 9800, goal_id: 101, checkpoint_id: a.p_checkpoint, parent_id: a.p_parent, body: a.p_body, author: 'Steel', author_email: 'steel.macdonald@welfareavenue.com', created_at: new Date().toISOString() }); });
-  const cp1 = await f.ev(() => document.querySelector('[data-w207yb="101"] [data-w207cpcmts]').getAttribute('data-w207cpcmts'));
+  const cp1 = await f.ev(() => document.querySelector('[data-w205years="101"] [data-w207cpcmts]').getAttribute('data-w207cpcmts'));
   await f.page.click('[data-w207cpcmts="' + cp1 + '"]'); await f.page.waitForTimeout(400);
   r = await f.ev(() => ({ sub: (document.querySelector('#w205drawer .acts small') || {}).textContent || '', ph: (document.querySelector('#w205drawer textarea[data-w205cmt="new"]') || {}).placeholder || '' }));
   ok(/^On FY27 Q1: Meal counts/.test(r.sub) && /checkpoint/.test(r.ph), 'comments: a checkpoint opens its own thread (' + r.sub.slice(0, 40) + ')');
@@ -173,7 +173,7 @@ async function goals(b) {
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(300);
 
   /* link a project to a checkpoint */
-  const cp2 = await f.ev(() => document.querySelectorAll('[data-w207yb="102"] [data-w207cplink]')[2].getAttribute('data-w207cplink'));
+  const cp2 = await f.ev(() => document.querySelectorAll('[data-w205years="102"] [data-w207cplink]')[2].getAttribute('data-w207cplink'));
   await f.ev(c => document.querySelector('[data-w207cplink="' + c + '"]').scrollIntoView({ block: 'center' }), cp2);
   await f.page.click('[data-w207cplink="' + cp2 + '"]'); await f.page.waitForTimeout(400);
   await f.page.click('#w205drawer [data-w205pickp="4"]'); await f.page.waitForTimeout(300);
@@ -182,6 +182,7 @@ async function goals(b) {
   await f.page.click('#w205drawer [data-w205dolink]'); await f.page.waitForTimeout(600);
   cs = await f.ev(() => window.__w205calls.filter(c => /strategy_link_/.test(c.fn)).map(c => c.fn + ':' + JSON.stringify(c.args)));
   r = await f.ev(c => Array.from(document.querySelectorAll('[data-w207cpft="' + c + '"] .w205pj')).map(x => x.textContent), cp2);
+  cs = cs.filter(c => !/^strategy_link_milestones:/.test(c));   /* wave353 also saves the milestones it moves */
   ok(cs.length === 2 && /^strategy_link_project:.*"p_goal":102/.test(cs[0]) && cs[1] === 'strategy_link_checkpoint:{"p_project":4,"p_checkpoint":' + cp2 + '}' && r.indexOf('Beneficiary Feedback Project') >= 0, 'link: the project serves goal 2 and its Q3 checkpoint (strategy_link_checkpoint); its chip sits on the checkpoint');
 
   /* the history reads the new rows */
@@ -200,7 +201,7 @@ async function goals(b) {
     late: Array.from(document.querySelectorAll('#w205 [data-w207overdue] .w207it')).length, lateCls: (document.querySelector('#w205 [data-w207overdue]') || {}).className,
     nextWhen: (document.querySelector('#w205 [data-w207next] .when') || {}).textContent || '',
     lateCells: document.querySelectorAll('#w205 .w207grid td.late').length,
-    card: (document.querySelector('[data-w207yb="101"] .w207cp') || {}).className || '', cardTxt: (document.querySelector('[data-w207yb="101"] .w207cp .w207late') || {}).textContent || '',
+    card: (document.querySelector('[data-w205years="101"] .w207cp') || {}).className || '', cardTxt: (document.querySelector('[data-w205years="101"] .w207cp .w207late') || {}).textContent || '',
     pill: (document.querySelector('#w205 .w207grid td.late .w207pill') || {}).textContent
   }));
   ok(JSON.stringify(r.now) === '["Q2Now"]' && /Mar 31, 2027/.test(r.nextWhen), 'overdue: on Jan 15, 2027 Q2 is current and Mar 31 is due next');
@@ -208,13 +209,13 @@ async function goals(b) {
   ok(/late/.test(r.card) && r.cardTxt === 'Overdue', 'overdue: the goal card flags its Q1 checkpoint');
   await f.ev(() => { const c = window.w205.state().checkpoints.filter(x => x.goal_id === 101 && x.quarter === 1)[0]; window.__w205ch.fire('postgres_changes', 'goal_checkpoints', { eventType: 'UPDATE', new: Object.assign({}, c, { status: 'done', updated_by: 'shima.butera@welfareavenue.com' }) }); });
   await f.page.waitForTimeout(300);
-  r = await f.ev(() => ({ late: document.querySelectorAll('#w205 [data-w207overdue] .w207it').length, card: document.querySelector('[data-w207yb="101"] .w207cp').className }));
+  r = await f.ev(() => ({ late: document.querySelectorAll('#w205 [data-w207overdue] .w207it').length, card: document.querySelector('[data-w205years="101"] .w207cp').className }));
   ok(r.late === 4 && !/late/.test(r.card) && /done/.test(r.card), 'overdue: once done it leaves the overdue list');
   await f.close();
 
   /* ================= leader (Shima: owner of 1, 2, 5) ================= */
   f = await boot(b, 'leader');
-  r = await f.ev(() => ({ me: (window.USER || {}).email, g1: Array.from(document.querySelectorAll('[data-w207yb="101"] select.w207st')).every(s => !s.disabled), g3: Array.from(document.querySelectorAll('[data-w207yb="103"] select.w207st')).every(s => s.disabled), m1: !!document.querySelector('[data-w207manage="101"]'), m3: !!document.querySelector('[data-w207manage="103"]'), due3: document.querySelector('[data-w207yb="103"] input.w207due').readOnly, link: document.querySelectorAll('[data-w207cplink]').length }));
+  r = await f.ev(() => ({ me: (window.USER || {}).email, g1: Array.from(document.querySelectorAll('[data-w205years="101"] select.w207st')).every(s => !s.disabled), g3: Array.from(document.querySelectorAll('[data-w205years="103"] select.w207st')).every(s => s.disabled), m1: !!document.querySelector('[data-w207manage="101"]'), m3: !!document.querySelector('[data-w207manage="103"]'), due3: document.querySelector('[data-w205years="103"] input.w207due').readOnly, link: document.querySelectorAll('[data-w207cplink]').length }));
   ok(r.g1 && r.g3 && r.m1 && !r.m3 && r.due3, 'leader (' + r.me + '): edits the checkpoints and activities of the goals she owns, reads the others');
   ok(r.link === 20, 'leader: may link projects to any checkpoint (staff who comment)');
   ok(f.errs.length === 0, 'leader: no page errors' + (f.errs.length ? ' (' + f.errs.join(' | ') + ')' : ''));
@@ -238,7 +239,7 @@ async function goals(b) {
 
   /* ================= phone 390 ================= */
   f = await boot(b, 'admin', 390);
-  r = await f.ev(() => ({ sw: document.scrollingElement.scrollWidth, vw: window.innerWidth, thead: getComputedStyle(document.querySelector('#w205 .w207grid thead')).display, yr: document.querySelector('#w205 [data-w207year]').getBoundingClientRect().width, cov: getComputedStyle(document.querySelector('.w207cov')).gridTemplateColumns.split(' ').length, cps: getComputedStyle(document.querySelector('.w207cps')).gridTemplateColumns.split(' ').length }));
+  r = await f.ev(() => ({ sw: document.scrollingElement.scrollWidth, vw: window.innerWidth, thead: getComputedStyle(document.querySelector('#w205 .w207grid thead')).display, yr: document.querySelector('#w205 [data-w207year]').getBoundingClientRect().width, cov: getComputedStyle(document.querySelector('.w207cov')).gridTemplateColumns.split(' ').length, cps: getComputedStyle(document.querySelector('.w353qs')).gridTemplateColumns.split(' ').length }));
   ok(r.sw <= r.vw + 1 && r.yr <= r.vw, 'phone: no sideways scroll on Goals (' + r.sw + '/' + r.vw + ')');
   ok(r.thead === 'none' && r.cov === 1 && r.cps === 1, 'phone: the FY27 table, the activities and the checkpoints stack');
   await f.ev(() => document.querySelector('[data-w207acts="101"] .w207chip').scrollIntoView({ block: 'center' }));
