@@ -65,8 +65,8 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
     cards: Array.from(document.querySelectorAll('#w205 .w205goal')).map(c => c.querySelector('textarea[data-w205k$=":title"]').value),
     glance: document.querySelectorAll('#w205 [data-w205glance] tbody tr').length,
     glance29: Array.from(document.querySelectorAll('#w205 [data-w205glance] td.t29')).map(x => x.textContent),
-    ms: document.querySelectorAll('#w205 .w205ms').length, paths: document.querySelectorAll('#w205 .w205paths li').length,
-    years: Array.from(document.querySelectorAll('#w205g-101 .w205yr .yh b')).map(b => b.textContent),
+    ms: window.w205.state().milestones.length, msShown: document.querySelectorAll('#w205 .w205ms').length, paths: document.querySelectorAll('#w205 .w205paths li').length,
+    years: Array.from(document.querySelectorAll('#w205g-101 .w353yb .t b')).map(b => b.textContent),   /* wave353: the years are bubbles; FY31 on request */
     rw: document.querySelectorAll('#w205 textarea.w205ed:not([readonly])').length,
     approve: !!document.querySelector('#w205 [data-w205approve="approved"]'),
     road: Array.from(document.querySelectorAll('#w205 .w205ph .k')).map(x => x.textContent),
@@ -88,8 +88,8 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   ok(JSON.stringify(r.cards) === JSON.stringify(SEED.goals.map(g => g.title)), 'admin: the five goals as cards, in order: ' + r.cards.join(' | '));
   ok(r.glance === 5 && JSON.stringify(r.glance29) === JSON.stringify(SEED.goals.map(g => g.target_fy29)), 'admin: at a glance has the five FY29 targets from the draft');
   ok(r.ms === 53 && r.paths === 20, 'admin: 53 milestones and 20 paths, as the draft has them (' + r.ms + ', ' + r.paths + ')');
-  ok(JSON.stringify(r.years) === JSON.stringify(['FY27', 'FY28', 'FY29', 'FY31']), 'admin: milestones by year FY27, FY28, FY29, FY31');
-  ok(r.rw > 100, 'admin: every field is editable (' + r.rw + ' fields)');
+  ok(JSON.stringify(r.years) === JSON.stringify(['FY27', 'FY28', 'FY29']) && r.msShown > 0 && r.msShown < r.ms, 'admin: milestones by year FY27, FY28, FY29 as bubbles, one year open (' + r.msShown + ' shown), FY31 on request');
+  ok(r.rw > 60, 'admin: every field is editable (' + r.rw + ' fields in view)');
   ok(r.approve, 'admin: Mark approved by the board is offered to an admin');
   ok(r.road.length === 4 && r.road[0] === 'FY27 Stabilize' && r.checkpoint.length === 3 && r.gate.length === 4 && r.gateVisible, 'admin: the roadmap has 4 phases, the checkpoint (3) and the FY29 gate (4), visible');
   ok(r.lib === 6, 'admin: the pinned Strategy Library on the Goals page (6 shown)');
@@ -218,9 +218,9 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   await f.page.click('[data-w205projs="102"] [data-w205link]'); await f.page.waitForTimeout(300);
   await f.page.fill('#w205drawer [data-w205linkq]', 'General Ops Toronto'); await f.page.waitForTimeout(400);
   await f.page.click('#w205drawer [data-w205pickp]'); await f.page.waitForTimeout(250);
-  r = await f.ev(() => ({ goals: document.querySelectorAll('#w205drawer [data-w205pickg]').length, chosen: (document.querySelector('#w205drawer [data-w205pickg]:checked') || {}).getAttribute && document.querySelector('#w205drawer [data-w205pickg]:checked').getAttribute('data-w205pickg'), ms: document.querySelectorAll('#w205drawer [data-w205pickm]').length }));
-  ok(r.goals === 5 && r.chosen === '102' && r.ms === 8, 'link: pick the project, then the goal (goal 2 chosen) and one of its milestones (7 and the goal as a whole)');
-  await f.ev(() => document.querySelectorAll('#w205drawer [data-w205pickm]')[2].click()); await f.page.waitForTimeout(200);
+  r = await f.ev(() => ({ goals: document.querySelectorAll('#w205drawer [data-w205pickg]').length, chosen: (document.querySelector('#w205drawer [data-w205pickg]:checked') || {}).getAttribute && document.querySelector('#w205drawer [data-w205pickg]:checked').getAttribute('data-w205pickg'), ms: document.querySelectorAll('#w205drawer input[type=checkbox][data-w353pickm]').length }));
+  ok(r.goals === 5 && r.chosen === '102' && r.ms >= 6, 'link: pick the project, then the goal (goal 2 chosen) and any of its milestones (' + r.ms + ' to tick)');
+  await f.ev(() => { const l = Array.from(document.querySelectorAll('#w205drawer label')).filter(x => x.querySelector('[data-w353pickm]') && /^FY27/.test((x.querySelector('small') || {}).textContent || ''))[0]; l.querySelector('input').click(); }); await f.page.waitForTimeout(200);
   await f.page.click('#w205drawer [data-w205dolink]'); await f.page.waitForTimeout(400);
   cs = (await calls(f)).filter(c => c.fn === 'strategy_link_project');
   ok(cs.length === 1 && cs[0].args.p_project === 16 && cs[0].args.p_goal === 102 && cs[0].args.p_milestone > 1000, 'link: strategy_link_project with the project, goal 2 and the milestone');
@@ -235,6 +235,7 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   ok(cs.length === 1 && cs[0].args.p_goal === 102 && cs[0].args.p_member === 17 && cs[0].args.p_on === true, 'owners: add Ian to goal 2 from the roster');
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(300);
   await f.ev(() => { window.__w205rpc.strategy_add = function (a) { return { id: 5555, goal_id: a.p_goal, fy: a.p_fy, sort: 9, body: '', status: 'not started', archived_at: null }; }; });
+  await f.page.click('[data-w353yr="104:FY28"]'); await f.page.waitForTimeout(300);   /* wave353: open FY28 first */
   await f.page.click('[data-w205addms="104:FY28"]'); await f.page.waitForTimeout(400);
   r = await f.ev(() => ({ el: !!document.querySelector('[data-w205k="milestone:5555:body"]'), focus: document.activeElement && document.activeElement.getAttribute('data-w205k') }));
   ok(r.el && r.focus === 'milestone:5555:body', 'milestones: Add a milestone opens an empty one, ready to type');
@@ -305,7 +306,7 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   /* ================= a member (Samson, HR): reads, comments, links; edits nothing ================= */
   f = await boot(browser, 'member');
   r = await f.ev(() => ({ rw: document.querySelectorAll('#w205 textarea.w205ed:not([readonly])').length, ro: document.querySelectorAll('#w205 textarea.w205ed[readonly]').length, note: (document.querySelector('#w205 .w205ro') || {}).textContent || '', addOwner: document.querySelectorAll('[data-w205addowner]').length, addMs: document.querySelectorAll('[data-w205addms]').length, link: document.querySelectorAll('[data-w205link]').length, approve: !!document.querySelector('[data-w205approve]'), sel: document.querySelectorAll('#w205 select[data-w205k]:not([disabled])').length }));
-  ok(r.rw === 0 && r.ro > 100 && r.sel === 0, 'member: every field is read only (owners and admins edit)');
+  ok(r.rw === 0 && r.ro > 60 && r.sel === 0, 'member: every field is read only (owners and admins edit; one year open, wave353)');
   ok(/owners and the admins edit it; you can comment and link projects/.test(r.note), 'member: the page says why');
   ok(r.addOwner === 0 && r.addMs === 0 && !r.approve, 'member: no owner, milestone or approval controls');
   ok(r.link >= 5, 'member: Link a project is there (departments own projects)');

@@ -1,0 +1,161 @@
+/* =====================================================================
+   WA v353 (18/11/26): a project's milestones on its own page.
+   Steel and Ian (16/11/26): "the open to done ratio is maybe not the best thing to show"; a project's progress is the
+   milestones it is hitting ("eight milestones completed out of ten"), with the next one up, a timeline of its
+   milestones, and a report to download. Tasks keep their own bar.
+   On #project/<id>, under the goal line: the milestones the project moves (project_milestones, wave353), each with its
+   goal, its year and quarter, its status and, when the Hub counts it, the live number against its target; the
+   Key events the project runs (fund_events.project_id); "Link milestones" opens the Strategy app's link sheet; the
+   report downloads as a CSV. All motion is transform and opacity, and none for reduced motion.
+   Test hook: window.w353p { inject, state }.
+   ===================================================================== */
+(function () {
+  if (window.__wa353p) return; window.__wa353p = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', TEAL = '#2A8C7A', MUTED = '#585B57', EASE = 'cubic-bezier(.23,1,.32,1)';
+  var P = { id: null, rows: [], goals: {}, mv: null, events: [], busy: false, last: null };
+  var Q_SPAN = { 1: 'Oct to Dec', 2: 'Jan to Mar', 3: 'Apr to Jun', 4: 'Jul to Sep' };
+
+  var css = document.createElement('style'); css.id = 'wa353pcss';
+  css.textContent = ''
+    + '#w353pm{border:1px solid rgba(16,63,57,.12);background:#FFFAF2;border-radius:16px;padding:14px 16px 12px;margin:0 0 16px;max-width:880px;}'
+    + '#w353pm .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px;}'
+    + '#w353pm h3{margin:0;font-size:15px;color:' + GREEN + ';flex:1;min-width:180px;}'
+    + '#w353pm .big{font-size:13px;color:' + MUTED + ';}#w353pm .big b{font-size:22px;color:' + GREEN + ';font-variant-numeric:tabular-nums;margin-right:3px;}'
+    + '#w353pm .bar{height:8px;border-radius:999px;background:rgba(16,63,57,.1);overflow:hidden;position:relative;margin:4px 0 10px;}'
+    + '#w353pm .bar i{position:absolute;inset:0;border-radius:inherit;background:' + TEAL + ';transform-origin:left center;transform:scaleX(var(--p,0));transition:transform 700ms ' + EASE + ';}'
+    + '@starting-style{#w353pm .bar i{transform:scaleX(0);}}'
+    + '#w353pm.all .bar i{background:linear-gradient(90deg,' + GOLD + ',#F0CF73,' + GOLD + ');}'
+    + '#w353pm .next{font-size:13px;color:' + GREEN + ';background:#fff;border:1px solid rgba(220,165,39,.45);border-radius:12px;padding:8px 11px;margin:0 0 10px;}'
+    + '#w353pm .next small{display:block;font-size:11.5px;color:' + MUTED + ';text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:2px;}'
+    + '#w353pm ol{list-style:none;margin:0;padding:0 0 0 4px;position:relative;}'
+    + '#w353pm ol:before{content:"";position:absolute;left:10px;top:6px;bottom:6px;width:2px;background:rgba(16,63,57,.12);border-radius:2px;}'
+    + '#w353pm li{position:relative;padding:4px 0 8px 28px;font-size:13.5px;color:#1F201E;}'
+    + '#w353pm li .d{position:absolute;left:3px;top:6px;width:16px;height:16px;border-radius:50%;border:2px solid rgba(16,63,57,.3);background:#fff;display:flex;align-items:center;justify-content:center;}'
+    + '#w353pm li.done .d{background:' + TEAL + ';border-color:' + TEAL + ';}#w353pm li.done .d:after{content:"";width:6px;height:3px;border:2px solid #fff;border-top:0;border-right:0;transform:translateY(-1px) rotate(-45deg);}'
+    + '#w353pm li.now .d{border-color:' + GOLD + ';box-shadow:0 0 0 3px rgba(220,165,39,.2);}'
+    + '#w353pm li.risk .d{border-color:#B3402F;}'
+    + '#w353pm li .m{font-size:11.5px;color:' + MUTED + ';display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:2px;}'
+    + '#w353pm li .m a{color:' + GREEN + ';font-weight:600;}'
+    + '#w353pm li .lv{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;color:' + MUTED + ';}'
+    + '#w353pm li .lv .bar{flex:1;max-width:200px;height:5px;margin:0;}'
+    + '#w353pm .evs{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px;}'
+    + '#w353pm .ev{font-size:12.5px;background:#fff;border:1px solid rgba(16,63,57,.1);border-radius:10px;padding:6px 9px;color:' + GREEN + ';}'
+    + '#w353pm .ft{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}'
+    + '#w353pm .b{border:1px solid rgba(16,63,57,.18);background:#fff;color:' + GREEN + ';border-radius:999px;padding:5px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:transform 160ms ' + EASE + ';}'
+    + '#w353pm .b:active{transform:scale(.97);}'
+    + '#w353pm .none{font-size:13px;color:' + MUTED + ';margin:2px 0 8px;}'
+    + '@media (prefers-reduced-motion:reduce){#w353pm .bar i{transition:none;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function pid() { var m = /^#project\/(\d+)/.exec(String(location.hash || '')); return m ? m[1] : null; }
+  function fyNow() { var d = new Date(), y = d.getFullYear() + (d.getMonth() >= 9 ? 1 : 0); return 'FY' + String(y).slice(2); }
+  function qNow() { var m = new Date().getMonth(); return m >= 9 ? 1 : m <= 2 ? 2 : m <= 5 ? 3 : 4; }
+  function fmtN(v, u) { if (v == null) return '–'; var s = Math.round(Number(v)).toLocaleString('en-CA'); return u === '$' ? '$' + s : u === '%' ? s + '%' : s; }
+  function order(a, b) { return String(a.fy).localeCompare(String(b.fy)) || ((a.quarter || 9) - (b.quarter || 9)) || (a.id - b.id); }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+
+  async function load(id) {
+    var q = function (p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function () { return { data: null }; }); };
+    var r = await Promise.all([
+      q(db.from('project_milestones').select('milestone_id').eq('project_id', Number(id))),
+      q(db.from('projects').select('id,name,goal_id,milestone_id').eq('id', Number(id)).maybeSingle()),
+      q(db.from('fund_events').select('id,title,start_date,season,status,target_min,target_max,raised').eq('project_id', Number(id)))
+    ]);
+    var ids = (r[0].data || []).map(function (x) { return x.milestone_id; });
+    var pr = r[1].data || {}; if (pr.milestone_id && ids.indexOf(pr.milestone_id) < 0) ids.push(pr.milestone_id);
+    var ms = [];
+    if (ids.length) { var r2 = await q(db.from('goal_milestones').select('id,goal_id,fy,quarter,body,status,measure_key,target_value,archived_at').in('id', ids)); ms = (r2.data || []).filter(function (m) { return !m.archived_at; }); }
+    var gids = {}; ms.forEach(function (m) { gids[m.goal_id] = 1; }); if (pr.goal_id) gids[pr.goal_id] = 1;
+    var goals = {}, gl = Object.keys(gids);
+    if (gl.length) { var r3 = await q(db.from('goals').select('id,number,title').in('id', gl.map(Number))); (r3.data || []).forEach(function (g) { goals[g.id] = g; }); }
+    var mv = null, units = {};
+    if (ms.some(function (m) { return m.measure_key && m.fy === fyNow(); })) {
+      var st = null; try { st = window.w205 && window.w205.state && window.w205.state(); } catch (e) { st = null; }
+      if (st && st.mv) mv = st.mv; else { var r4 = await q(db.rpc('wa353_measures')); mv = r4.data || null; }
+      var r5 = await q(db.from('goal_measures').select('key,unit')); (r5.data || []).forEach(function (x) { units[x.key] = x.unit; });
+    }
+    return { project: pr, rows: ms.sort(order), goals: goals, mv: mv, units: units, events: r[2].data || [] };
+  }
+  function itemHtml(m, d) {
+    var g = d.goals[m.goal_id] || {}, now = m.fy === fyNow() && Number(m.quarter) === qNow() && m.status !== 'done';
+    var x = d.mv && m.measure_key ? d.mv[m.measure_key] : null, live = '';
+    if (x && x.v != null && x.tracked !== false && m.target_value != null && m.fy === fyNow()) {
+      var p = Math.max(0, Math.min(100, Math.round(Number(x.v) / Number(m.target_value) * 100)));
+      live = '<div class="lv"><div class="bar"><i style="--p:' + (p / 100) + '"></i></div>' + fmtN(x.v, d.units[m.measure_key]) + ' of ' + fmtN(m.target_value, d.units[m.measure_key]) + ' · live</div>';
+    }
+    return '<li class="' + (m.status === 'done' ? 'done' : '') + (now ? ' now' : '') + (m.status === 'at risk' ? ' risk' : '') + '"><span class="d" aria-hidden="true"></span><span data-w198skip>' + E(m.body) + '</span>' +
+      '<div class="m"><span>' + E(m.fy) + (m.quarter ? ' Q' + m.quarter + ' (' + Q_SPAN[m.quarter] + ')' : '') + '</span><span>· ' + E(m.status ? m.status.charAt(0).toUpperCase() + m.status.slice(1) : 'Not started') + '</span>' +
+      (g.number ? '<span>· <a href="#orggoals/goal/' + E(g.id) + '">Goal ' + E(g.number) + '</a></span>' : '') + '</div>' + live + '</li>';
+  }
+  function html(d) {
+    var ms = d.rows, done = ms.filter(function (m) { return m.status === 'done'; }).length, pct = ms.length ? done / ms.length : 0;
+    var nx = ms.filter(function (m) { return m.status !== 'done'; })[0], g0 = d.goals[d.project.goal_id];
+    var head = '<div class="hd"><h3>Milestones this project moves</h3>' + (ms.length ? '<span class="big"><b>' + done + '</b>of ' + ms.length + ' reached</span>' : '') + '</div>';
+    var body = ms.length
+      ? '<div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="' + ms.length + '" aria-valuenow="' + done + '" aria-label="Milestones reached"><i style="--p:' + pct.toFixed(3) + '"></i></div>' +
+        (nx ? '<div class="next"><small>Next up</small><span data-w198skip>' + E(nx.body) + '</span> · ' + E(nx.fy) + (nx.quarter ? ' Q' + nx.quarter : '') + '</div>' : '<div class="next"><small>All reached</small>Every milestone this project moves is done.</div>') +
+        '<ol>' + ms.map(function (m) { return itemHtml(m, d); }).join('') + '</ol>'
+      : '<p class="none">' + (g0 ? 'It serves goal ' + E(g0.number) + ' as a whole. Link the milestones it moves so its progress shows here.' : 'Not linked to a goal yet. Link it to the goal and the milestones it moves.') + '</p>';
+    var evs = d.events.length ? '<div class="evs">' + d.events.map(function (e) {
+      var t = Number(e.target_max || e.target_min || 0);
+      return '<span class="ev"><b data-w198skip>' + E(e.title) + '</b> · ' + (e.raised != null ? fmtN(e.raised, '$') + ' raised' : 'not run yet') + (t ? ' of ' + fmtN(t, '$') : '') + '</span>';
+    }).join('') + '</div>' : '';
+    var ft = '<div class="ft">' + (staffOk() && window.w205 ? '<button type="button" class="b" data-w353plink="1">Link milestones</button>' : '') + (ms.length ? '<button type="button" class="b" data-w353pcsv="1">Download the milestone report</button>' : '') + '</div>';
+    return head + body + evs + ft;
+  }
+  async function inject() {
+    var sec = document.getElementById('projectpage'), id = pid();
+    if (!sec || !id || typeof db === 'undefined' || !db || P.busy) return;
+    P.busy = true;
+    try {
+      var d = await load(id); if (pid() !== id) return;
+      P.id = id; P.last = d;
+      var box = sec.querySelector('#w353pm');
+      if (!box) {
+        box = document.createElement('section'); box.id = 'w353pm'; box.setAttribute('aria-label', 'Milestones this project moves');
+        var card = sec.querySelector('.card') || sec;
+        var anchor = card.querySelector('.w207from') || card.querySelector('.w27-goal') || card.querySelector('.w206ng') || card.querySelector('.w27-desc');
+        if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor.nextSibling); else card.insertBefore(box, card.firstChild);
+      }
+      box.innerHTML = html(d);
+      var all = d.rows.length && d.rows.every(function (m) { return m.status === 'done'; });
+      box.classList.toggle('all', !!all);
+    } catch (e) { console.warn('wave353 project milestones', e); }
+    finally { P.busy = false; }
+  }
+  function csv() {
+    var d = P.last; if (!d) return;
+    var q = function (s) { s = String(s == null ? '' : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    var lines = [['Project', 'Goal', 'Year', 'Quarter', 'Milestone', 'Status', 'Live number', 'Target'].join(',')];
+    d.rows.forEach(function (m) {
+      var g = d.goals[m.goal_id] || {}, x = d.mv && m.measure_key ? d.mv[m.measure_key] : null;
+      lines.push([d.project.name, g.number ? 'Goal ' + g.number + ': ' + g.title : '', m.fy, m.quarter ? 'Q' + m.quarter : '', m.body, m.status || 'not started', x && x.v != null && m.fy === fyNow() ? x.v : '', m.target_value == null ? '' : m.target_value].map(q).join(','));
+    });
+    var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+    var dt = new Date(), dd = String(dt.getDate()).padStart(2, '0') + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getFullYear()).slice(2);
+    a.href = URL.createObjectURL(blob); a.download = dd + ' - ' + String(d.project.name || 'Project').replace(/[\\/:*?"<>|]/g, '') + ' milestones.csv';
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (t.closest('#w353pm [data-w353pcsv]')) { csv(); return; }
+    if (t.closest('#w353pm [data-w353plink]')) {
+      var d = P.last; if (!d || !window.w205) return;
+      Promise.resolve(window.w205.load()).then(function () { window.w205.open({ kind: 'link', goal: d.project.goal_id, project: Number(P.id), goalPick: d.project.goal_id, msPick: d.project.milestone_id }); });
+      return;
+    }
+    /* after a link is saved from the project page, read the milestones again */
+    if (pid() && t.closest('#w205drawer [data-w205dolink], #w205drawer [data-w205unlink]')) setTimeout(inject, 1400);
+  });
+  if (typeof wa27RenderProject === 'function') {
+    var __rp353 = wa27RenderProject;
+    wa27RenderProject = async function () {
+      var out = await __rp353.apply(this, arguments);
+      try { await inject(); } catch (e) { /* never break the page */ }
+      return out;
+    };
+  }
+  window.w353p = { inject: inject, state: function () { return P; } };
+})();
+
