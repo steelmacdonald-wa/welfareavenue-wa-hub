@@ -1,4 +1,4 @@
-// Welfare Avenue: jd-drive (v2, 03/10/26, wave199; v2: app_config.value is text, so the Unsorted folder id is parsed)
+// Welfare Avenue: jd-drive (v3, 26/11/26, wave361: Closed roles; v2, 03/10/26, wave199: app_config.value is text, so the Unsorted folder id is parsed)
 // The HR shared drive's positions, read and kept tidy by the Hub:
 //   *Recruitment* > Job descriptions > <Department> > <Position> > Resumes / the latest JD / Older JDs
 // One position folder = one row in hub_positions; its CVs and older JDs are rows in hub_position_files.
@@ -14,6 +14,9 @@
 //   {action:'upload', position_id, name, mime, content_b64, candidate_id?, add?}   a CV into Resumes
 //   {action:'move_file', file_id, position_id|null}  a CV to another position's Resumes (null: Unsorted Resumes)
 //   {action:'push', limit?}                          CVs already in the Hub (storage) copied into their position's Resumes
+//   {action:'file_by_stage', position_id?, dry_run?}   wave361: open positions at their department's top level, closed and filled ones in its
+//                                                    Closed roles folder (made when missing). Folders are only moved, never renamed or deleted.
+//                                                    sync reads the positions inside Closed roles too, and never takes that folder for a position.
 //   {action:'apply', ops:[{op:'move'|'rename'|'trash', id, parent?, name?}]}   secret only: the one-off reorganisation
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -118,6 +121,8 @@ function cleanName(file: string): string {
   return s.slice(0, 120) || file.slice(0, 120);
 }
 function isJd(f: F): boolean { return f.mimeType !== FOLDER; }
+const CLOSED = 'Closed roles', CLOSED_RE = /^\s*closed roles\s*$/i;   // wave361
+const OPEN_STAGES = ['requested', 'posted', 'interviewing', 'offer'], SHUT_STAGES = ['closed', 'filled'];
 
 // deno-lint-ignore no-explicit-any
 async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<any>) {
@@ -142,7 +147,11 @@ async function sync(who: string) {
     if (/^unsorted/i.test(d.name)) { unsorted = d; continue; }
     const key = (DEPTS.find(([, re]) => re.test(d.name)) || [null])[0];
     if (!key) continue;   // Templates & Other and anything else stays as it is
-    for (const p of await list(d.id)) if (p.mimeType === FOLDER) work.push({ dept: key, f: p });
+    for (const p of await list(d.id)) {
+      if (p.mimeType !== FOLDER) continue;
+      if (CLOSED_RE.test(p.name)) { for (const c of await list(p.id)) if (c.mimeType === FOLDER) work.push({ dept: key, f: c }); continue; }   // wave361: not a position; the closed and filled ones are inside
+      work.push({ dept: key, f: p });
+    }
   }
   // deno-lint-ignore no-explicit-any
   async function fileUp(pid: number | null, kind: string, f: F, pos?: any) {
@@ -187,6 +196,47 @@ async function sync(who: string) {
   return { ok: true, positions: seenPos.length, files: seenFiles.length, made, tidied, added, errors };
 }
 
+// wave361: where each position's folder belongs, by its stage. It is moved within its own department only; a folder found anywhere else is left alone.
+async function fileByStage(who: string, positionId: number | null, dry: boolean) {
+  const root = await rootId();
+  const depts = (await list(root)).filter(d => d.mimeType === FOLDER && DEPTS.some(([, re]) => re.test(d.name)));
+  const deptIds = new Set(depts.map(d => d.id));
+  const closedOf = new Map<string, string>(), deptOfClosed = new Map<string, string>();   // department folder -> its Closed roles folder, and back
+  for (const d of depts) { const c = (await list(d.id)).find(x => x.mimeType === FOLDER && CLOSED_RE.test(x.name)); if (c) { closedOf.set(d.id, c.id); deptOfClosed.set(c.id, d.id); } }
+  let q = svc.from('hub_positions').select('id,title,stage,folder_id').eq('gone', false).not('folder_id', 'is', null);
+  if (positionId) q = q.eq('id', positionId);
+  const { data: ps, error } = await q;
+  if (error) throw new Error(error.message);
+  const moves: unknown[] = [], skipped: unknown[] = [], errors: string[] = [], made: string[] = [];
+  let kept = 0;
+  // deno-lint-ignore no-explicit-any
+  const plan = await pool(ps || [], 6, async (p: any) => {
+    const want = OPEN_STAGES.includes(p.stage) ? 'open' : SHUT_STAGES.includes(p.stage) ? 'closed' : '';
+    if (!want) return { p, skip: 'stage ' + p.stage };
+    const parent = ((await meta(p.folder_id)).parents || [])[0] || '';
+    const dept = deptIds.has(parent) ? parent : deptOfClosed.get(parent) || '';
+    if (!dept) return { p, skip: 'not in a department folder or its Closed roles' };
+    return { p, want, dept, move: (want === 'closed') !== (parent !== dept) };
+  });
+  // deno-lint-ignore no-explicit-any
+  for (const x of plan as any[]) {   // one at a time: a department's Closed roles folder is made once
+    const p = x.p || {};
+    try {
+      if (x.error) throw new Error(x.error);
+      if (x.skip) { skipped.push({ id: p.id, title: p.title, why: x.skip }); continue; }
+      if (!x.move) { kept++; continue; }
+      const deptName = depts.find(d => d.id === x.dept)?.name || '';
+      let to = x.want === 'closed' ? closedOf.get(x.dept) || '' : x.dept;
+      if (!to && !dry) { to = (await mkdir(CLOSED, x.dept)).id; closedOf.set(x.dept, to); deptOfClosed.set(to, x.dept); made.push(deptName + '/' + CLOSED); }
+      if (!dry) await move(p.folder_id, to);
+      moves.push({ id: p.id, title: p.title, stage: p.stage, dept: deptName, to: x.want === 'closed' ? CLOSED : 'top level' });
+    } catch (e) { errors.push((p.title || '?') + ': ' + String((e as Error).message || e).slice(0, 160)); }
+  }
+  const out = { ok: true, dry_run: dry, at: new Date().toISOString(), by: who, checked: (ps || []).length, kept, made, moves, skipped, errors };
+  await svc.from('app_config').upsert({ key: 'jd_drive_file_by_stage', value: JSON.stringify(out) });   // app_config.value is text
+  return out;
+}
+
 async function uploadFile(parent: string, name: string, mime: string, bytes: Uint8Array): Promise<F> {
   const t = await googleToken(), boundary = 'wa199' + crypto.randomUUID();
   const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify({ name, parents: [parent] }) + '\r\n--' + boundary + '\r\nContent-Type: ' + (mime || 'application/octet-stream') + '\r\n\r\n';
@@ -211,6 +261,7 @@ Deno.serve(async (req) => {
 
     if (action === 'sync') return json(await sync(who));
     if (action === 'privacy') return json({ link_open: await linkOpen(root) });
+    if (action === 'file_by_stage') return json(await fileByStage(who, body.position_id ? Number(body.position_id) : null, body.dry_run === true));   // wave361
 
     if (action === 'create_position') {
       const title = String(body.title || '').trim().replace(/[\/\\]/g, '-').slice(0, 100), dept = String(body.dept || '');
